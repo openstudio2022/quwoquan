@@ -2,11 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
-import 'package:quwoquan_app/ui/content/article_detail_view.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
-import 'package:quwoquan_app/ui/content/post_view_projection.dart';
+import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
 
 /// 投射契约测试：
 /// - [ContentSurfaceViewMapper.fromDto]（统一展示模型，feed/detail/immersive/share 同源）
@@ -302,56 +302,68 @@ void main() {
       expect(r.pages.single.body, isEmpty);
     });
 
-    test('Markdown asset:// refs are resolved through articleAssetManifest', () {
-      final raw = Map<String, dynamic>.from(minArticle)
-        ..['articleMarkdown'] =
-            '---\n'
-            'title: Manifest 标题\n'
-            'cover_asset_id: cover\n'
-            '---\n\n'
-            '# Manifest 标题\n\n'
-            ':::figure id="cover" layout="fullWidth" caption="封面"\n'
-            'asset://cover\n'
-            ':::\n\n'
-            '首段正文。\n\n'
-            ':::figure id="fig1" layout="wrapLeft" caption="配图"\n'
-            'asset://fig1\n'
-            ':::\n';
-      raw['articleAssetManifest'] = <String, dynamic>{
-        'schemaVersion': 1,
-        'assets': <Map<String, dynamic>>[
-          {
-            'assetId': 'cover',
-            'objectKey': 'media/image/s/test/article/manifest/v1/cover.jpg',
-            'role': 'cover',
-          },
-          {
-            'assetId': 'fig1',
-            'objectKey': 'media/image/s/test/article/manifest/v1/fig1.jpg',
-            'role': 'figure',
-          },
-        ],
-      };
+    test(
+      'Markdown asset:// refs are resolved through articleAssetManifest',
+      () {
+        final raw = Map<String, dynamic>.from(minArticle)
+          ..['articleMarkdown'] =
+              '---\n'
+              'title: Manifest 标题\n'
+              'cover_asset_id: cover\n'
+              '---\n\n'
+              '# Manifest 标题\n\n'
+              ':::figure id="cover" layout="fullWidth" caption="封面"\n'
+              'asset://cover\n'
+              ':::\n\n'
+              '首段正文。\n\n'
+              ':::figure id="fig1" layout="wrapLeft" caption="配图"\n'
+              'asset://fig1\n'
+              ':::\n';
+        raw['articleAssetManifest'] = <String, dynamic>{
+          'schemaVersion': 1,
+          'assets': <Map<String, dynamic>>[
+            {
+              'assetId': 'cover',
+              'objectKey': 'media/image/s/test/article/manifest/v1/cover.jpg',
+              'role': 'cover',
+            },
+            {
+              'assetId': 'fig1',
+              'objectKey': 'media/image/s/test/article/manifest/v1/fig1.jpg',
+              'role': 'figure',
+            },
+          ],
+        };
 
-      final r = projectArticleDetailView(raw, fallbackArticleId: 'fb_manifest');
-      final imageNodes = r.document.nodes
-          .where((node) => node.isFigure)
-          .toList();
-      expect(
-        imageNodes.map((node) => node.imageUrl),
-        contains(resolvedMedia('media/image/s/test/article/manifest/v1/cover.jpg')),
-      );
-      expect(
-        imageNodes.map((node) => node.imageUrl),
-        contains(resolvedMedia('media/image/s/test/article/manifest/v1/fig1.jpg')),
-      );
-      expect(
-        r.pages.first.fragments
-            .where((fragment) => fragment.asset != null)
-            .map((fragment) => fragment.asset!.imageUrl),
-        contains(resolvedMedia('media/image/s/test/article/manifest/v1/cover.jpg')),
-      );
-    });
+        final r = projectArticleDetailView(
+          raw,
+          fallbackArticleId: 'fb_manifest',
+        );
+        final imageNodes = r.document.nodes
+            .where((node) => node.isFigure)
+            .toList();
+        expect(
+          imageNodes.map((node) => node.imageUrl),
+          contains(
+            resolvedMedia('media/image/s/test/article/manifest/v1/cover.jpg'),
+          ),
+        );
+        expect(
+          imageNodes.map((node) => node.imageUrl),
+          contains(
+            resolvedMedia('media/image/s/test/article/manifest/v1/fig1.jpg'),
+          ),
+        );
+        expect(
+          r.pages.first.fragments
+              .where((fragment) => fragment.asset != null)
+              .map((fragment) => fragment.asset!.imageUrl),
+          contains(
+            resolvedMedia('media/image/s/test/article/manifest/v1/cover.jpg'),
+          ),
+        );
+      },
+    );
 
     test('Markdown figure 直接媒体 key 可投射为可加载图片 URL', () {
       final raw = Map<String, dynamic>.from(minArticle)
@@ -405,7 +417,9 @@ void main() {
           (block) =>
               block.type == 'wrapped_paragraph' &&
               block.imageUrl ==
-                  resolvedMedia('media/image/s/test/article/document/v1/doc.jpg'),
+                  resolvedMedia(
+                    'media/image/s/test/article/document/v1/doc.jpg',
+                  ),
         ),
         isTrue,
       );

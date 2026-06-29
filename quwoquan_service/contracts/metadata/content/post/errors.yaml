@@ -324,39 +324,6 @@ errors:
       zh: "无权修改圈子分发关系"
       en: "Not allowed to modify circle distribution"
 
-  - code: CONTENT.USER.review_rating_required
-    kind: USER
-    reason: invalid_argument
-    http_status: 400
-    recovery_action: surface
-    dart_const: reviewRatingRequired
-    go_const: ErrReviewRatingRequired
-    user_message:
-      zh: "口碑评分必填，请打 1–5 星"
-      en: "Review rating is required (1–5 stars)"
-
-  - code: CONTENT.USER.review_poi_required
-    kind: USER
-    reason: invalid_argument
-    http_status: 400
-    recovery_action: surface
-    dart_const: reviewPoiRequired
-    go_const: ErrReviewPoiRequired
-    user_message:
-      zh: "口碑需绑定一个地点"
-      en: "A review must be attached to a place"
-
-  - code: CONTENT.USER.review_duplicate_per_poi
-    kind: USER
-    reason: conflict
-    http_status: 409
-    recovery_action: surface
-    dart_const: reviewDuplicatePerPoi
-    go_const: ErrReviewDuplicatePerPoi
-    user_message:
-      zh: "你已点评过该地点，请先删除原口碑再发布"
-      en: "You already reviewed this place; delete the existing review first"
-
   # ── 系统侧错误（SYSTEM）──────────────────────────────────────────────
 
   - code: CONTENT.SYSTEM.storage_write_failed

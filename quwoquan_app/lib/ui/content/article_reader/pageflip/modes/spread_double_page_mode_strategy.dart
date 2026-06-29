@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/article_reader_mode_strategy.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
+import 'package:quwoquan_app/components/pageflip/controller.dart';
 
 class SpreadDoublePageModeStrategy extends ArticleReaderModeStrategy {
   const SpreadDoublePageModeStrategy();

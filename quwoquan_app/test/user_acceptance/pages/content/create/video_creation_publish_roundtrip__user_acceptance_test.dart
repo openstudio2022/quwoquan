@@ -14,98 +14,120 @@ import 'package:quwoquan_app/components/media/picker/create_media_picker_present
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
+import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 
 void main() {
   group('video creation publish roundtrip', () {
-    testWidgets(
-      '现在开拍 -> 摄像模式 -> 录制 -> 预览确认 -> 下一步 回填视频到创作选择',
-      (tester) async {
-        final service = _FakeMediaPickerService(
-          albums: <AssetPathEntity>[_album('recent', '最近项目')],
-          assetsByAlbumId: <String, List<AssetEntity>>{
-            'recent': <AssetEntity>[_video('v1')],
-          },
-        );
+    setUp(() {
+      AppPermissionCoordinator.instance.ensureLifecycleAttached();
+      AppPermissionCoordinator.instance.phaseReaders[AppPermissionKind.photos] =
+          () async => AppPermissionPhase.granted;
+      AppPermissionCoordinator.instance.grantCheckers[AppPermissionKind
+          .photos] = () async =>
+          true;
+      AppPermissionCoordinator.instance.requesters[AppPermissionKind.photos] =
+          () async => true;
+    });
 
-        await tester.pumpWidget(
-          CupertinoApp(
-            home: CreateMediaPickerPage(
-              entryMode: MediaPickerEntryMode.video,
-              maxSelection: 1,
-              mediaPickerService: service,
-              cameraBuilder: (context, caller, entrySource, selectedCount) {
-                return CameraCapturePage(
-                  initialMode: MediaPickerEntryMode.video,
-                  allowVideoMode: true,
-                  caller: caller,
-                  entrySource: entrySource,
-                  selectedCountBeforeCapture: selectedCount,
-                  previewBuilder: _fakePreview,
-                  previewCameraDescriptions: _fakeBackAndFrontCameras,
-                  filterRepository: _FakeFilterRepository(),
-                  microphonePermissionRequest: _grantedMicrophone,
-                  videoRecordingStart: _fakeRecordingStart,
-                  videoRecordingStop: _fakeRecordingStop,
-                  videoPreviewBuilder: _fakeVideoPreview,
-                );
-              },
-            ),
+    tearDown(() {
+      AppPermissionCoordinator.instance.phaseReaders.remove(
+        AppPermissionKind.photos,
+      );
+      AppPermissionCoordinator.instance.grantCheckers.remove(
+        AppPermissionKind.photos,
+      );
+      AppPermissionCoordinator.instance.requesters.remove(
+        AppPermissionKind.photos,
+      );
+      AppPermissionCoordinator.instance.clearSession();
+    });
+
+    testWidgets('拍视频 -> 摄像模式 -> 录制 -> 预览确认 -> 下一步 回填视频到创作选择', (tester) async {
+      final service = _FakeMediaPickerService(
+        albums: <AssetPathEntity>[_album('recent', '最近项目')],
+        assetsByAlbumId: <String, List<AssetEntity>>{
+          'recent': <AssetEntity>[_video('v1')],
+        },
+      );
+
+      await tester.pumpWidget(
+        CupertinoApp(
+          home: CreateMediaPickerPage(
+            entryMode: MediaPickerEntryMode.video,
+            maxSelection: 1,
+            mediaPickerService: service,
+            cameraBuilder: (context, caller, entrySource, selectedCount) {
+              return CameraCapturePage(
+                initialMode: MediaPickerEntryMode.video,
+                allowVideoMode: true,
+                caller: caller,
+                entrySource: entrySource,
+                selectedCountBeforeCapture: selectedCount,
+                previewBuilder: _fakePreview,
+                previewCameraDescriptions: _fakeBackAndFrontCameras,
+                filterRepository: _FakeFilterRepository(),
+                microphonePermissionRequest: _grantedMicrophone,
+                videoRecordingStart: _fakeRecordingStart,
+                videoRecordingStop: _fakeRecordingStop,
+                videoPreviewBuilder: _fakeVideoPreview,
+              );
+            },
           ),
-        );
-        await tester.pumpAndSettle();
+        ),
+      );
+      await _pumpMediaPickerFrame(tester);
 
-        // 进入视频选择器后没有任何已选视频。
-        expect(_selectedThumbFinder, findsNothing);
+      // 进入视频选择器后没有任何已选视频。
+      expect(_selectedThumbFinder, findsNothing);
 
-        // 点击「现在开拍」Hero 进入摄像模式（不是拍照壳）。
-        await tester.tap(
-          find.byKey(const ValueKey<String>('media-picker-video-camera-hero')),
-        );
-        await tester.pumpAndSettle();
-        expect(find.text(UITextConstants.cameraVideoModeTitle), findsOneWidget);
-        expect(find.text(UITextConstants.cameraPhotoModeTitle), findsNothing);
-        expect(
-          find.byKey(const ValueKey<String>('camera-record-action')),
-          findsOneWidget,
-        );
+      // 点击「拍视频」宫格入口进入摄像模式（不是拍照壳）。
+      await tester.tap(
+        find.byKey(const ValueKey<String>('media-picker-camera-tile')),
+      );
+      await _pumpRouteFrame(tester);
+      expect(find.text(UITextConstants.cameraVideoModeTitle), findsOneWidget);
+      expect(find.text(UITextConstants.cameraPhotoModeTitle), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('camera-record-action')),
+        findsOneWidget,
+      );
 
-        // 录制越过最短时长后停止，进入预览确认。
-        await tester.tap(
-          find.byKey(const ValueKey<String>('camera-record-action')),
-        );
-        for (var i = 0; i < 4; i++) {
-          await tester.pump(const Duration(milliseconds: 400));
-        }
-        await tester.tap(
-          find.byKey(const ValueKey<String>('camera-record-action')),
-        );
-        await tester.pump();
-        await tester.pump();
-        await tester.pumpAndSettle();
-        expect(find.text(UITextConstants.cameraVideoNext), findsOneWidget);
+      // 录制越过最短时长后停止，进入预览确认。
+      await tester.tap(
+        find.byKey(const ValueKey<String>('camera-record-action')),
+      );
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 400));
+      }
+      await tester.tap(
+        find.byKey(const ValueKey<String>('camera-record-action')),
+      );
+      await tester.pump();
+      await tester.pump();
+      await _pumpRouteFrame(tester);
+      expect(find.text(UITextConstants.cameraVideoNext), findsOneWidget);
 
-        // 「下一步」把视频结果回填到创作选择，回到视频选择器。
-        await tester.tap(
-          find.byKey(const ValueKey<String>('camera-use-video-action')),
-        );
-        await tester.pumpAndSettle();
+      // 「下一步」把视频结果回填到创作选择，回到视频选择器。
+      await tester.tap(
+        find.byKey(const ValueKey<String>('camera-use-video-action')),
+      );
+      await _pumpMediaPickerFrame(tester);
 
-        expect(find.text(UITextConstants.mediaPickerVideoTitle), findsOneWidget);
-        expect(_selectedThumbFinder, findsOneWidget);
-        expect(
-          find.text(
-            mediaPickerCompletionLabel(
-              mode: MediaPickerEntryMode.video,
-              selectionCount: 1,
-            ),
+      expect(find.text(UITextConstants.mediaPickerVideoTitle), findsOneWidget);
+      expect(_selectedThumbFinder, findsOneWidget);
+      expect(
+        find.text(
+          mediaPickerCompletionLabel(
+            mode: MediaPickerEntryMode.video,
+            selectionCount: 1,
           ),
-          findsOneWidget,
-        );
-      },
-    );
+        ),
+        findsOneWidget,
+      );
+    });
 
     test('录制视频继续走发布 payload：远端视频与自动首帧封面无本地路径泄漏', () async {
       final repository = _RoundtripContentRepository();
@@ -114,7 +136,9 @@ void main() {
       });
       final uploads = <String>[];
       final state =
-          CreateEditorState.initial(editorKind: CreateEditorKind.media).copyWith(
+          CreateEditorState.initial(
+            editorKind: CreateEditorKind.media,
+          ).copyWith(
             mediaKind: CreateMediaKind.video,
             videoPath: '/tmp/recorded.mp4',
             originalVideoPath: '/tmp/recorded.mp4',
@@ -373,9 +397,87 @@ class _RoundtripFileStorageGateway implements FileStorageGateway {
       const <FileSystemEntry>[];
 }
 
+Future<void> _pumpMediaPickerFrame(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 700));
+  await tester.pump();
+}
+
+Future<void> _pumpRouteFrame(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 350));
+  await tester.pump();
+}
+
 const _transparentPngBytes = <int>[
-  137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
-  0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 13, 73, 68, 65, 84, 120,
-  156, 99, 248, 207, 192, 240, 31, 0, 5, 0, 1, 255, 137, 153, 61, 29, 0, 0, 0,
-  0, 73, 69, 78, 68, 174, 66, 96, 130,
+  137,
+  80,
+  78,
+  71,
+  13,
+  10,
+  26,
+  10,
+  0,
+  0,
+  0,
+  13,
+  73,
+  72,
+  68,
+  82,
+  0,
+  0,
+  0,
+  1,
+  0,
+  0,
+  0,
+  1,
+  8,
+  6,
+  0,
+  0,
+  0,
+  31,
+  21,
+  196,
+  137,
+  0,
+  0,
+  0,
+  13,
+  73,
+  68,
+  65,
+  84,
+  120,
+  156,
+  99,
+  248,
+  207,
+  192,
+  240,
+  31,
+  0,
+  5,
+  0,
+  1,
+  255,
+  137,
+  153,
+  61,
+  29,
+  0,
+  0,
+  0,
+  0,
+  73,
+  69,
+  78,
+  68,
+  174,
+  66,
+  96,
+  130,
 ];

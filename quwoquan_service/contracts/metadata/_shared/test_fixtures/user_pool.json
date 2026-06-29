@@ -12,7 +12,7 @@
     "groupAvatarMimeType": "image/png"
   },
   "statistics": {
-    "userCount": 108,
+    "userCount": 107,
     "postCount": 490,
     "circleCount": 78,
     "conversationCount": 167,
@@ -842,7 +842,7 @@
         "width": 1600,
         "height": 900,
         "sizeBytes": 2686629,
-        "sourceHash": "sha256:7b57689220155da2f05038aaf8a650dc5e1093a44ddd542017ff639b75b38b6f"
+        "sourceHash": "sha256:b1c3043df4163694cb4b0428b838d2f418f2a7fe33a9056643e078db29903ed0"
       },
       "bio": "视频剪辑与城市影像作者。",
       "subAccountRefs": [],
@@ -4851,8 +4851,8 @@
         "mimeType": "image/png",
         "width": 1600,
         "height": 900,
-        "sizeBytes": 2686628,
-        "sourceHash": "sha256:452de74cfb81238256a753c5dbd48d85edf27e1e5d7aa18ecdfb86bbe3659034"
+        "sizeBytes": 2686629,
+        "sourceHash": "sha256:f2a3f9838f85a0adfb0539a28e98c676ff3be2502a1570c1358a31867cb597ce"
       },
       "bio": "城市漫步 主题用户样本，覆盖作者、联系人、圈主与群成员。",
       "subAccountRefs": [
@@ -5566,8 +5566,8 @@
         "mimeType": "image/png",
         "width": 1600,
         "height": 900,
-        "sizeBytes": 2686628,
-        "sourceHash": "sha256:ec03245f33d2d6b92a0073d0a0941a6d88c99818d6ad160d6b77d6d1ff4b836d"
+        "sizeBytes": 2686629,
+        "sourceHash": "sha256:3c808dd62724f3b0a19835bfeb5fcd3aa711f0f7a67179a351114750c7e18d03"
       },
       "bio": "城市漫步 主题用户样本，覆盖作者、联系人、圈主与群成员。",
       "subAccountRefs": [
@@ -15998,8 +15998,8 @@
         "mimeType": "image/png",
         "width": 1600,
         "height": 900,
-        "sizeBytes": 2148229,
-        "sourceHash": "sha256:27fec2d789502793339ff62c150d3a7f6ea4bc7b7658aaf2cb455e2efca89475"
+        "sizeBytes": 2148230,
+        "sourceHash": "sha256:6db08fc699b9f3eba1b957acb74f98ea3a4accda0d2079f003b81657b077d743"
       },
       "bio": "科技 主题用户样本，覆盖作者、联系人、圈主与群成员。",
       "subAccountRefs": [
@@ -16734,8 +16734,8 @@
         "mimeType": "image/png",
         "width": 1600,
         "height": 900,
-        "sizeBytes": 2148229,
-        "sourceHash": "sha256:1e70db36c43047fc2b572eaa98c764789240a68b1366a6f32e47f30238a05d08"
+        "sizeBytes": 2148230,
+        "sourceHash": "sha256:342ce3cc7be27558096d0bc2035583ac22581f861d8b93eb5fb7779b876df10c"
       },
       "bio": "科技 主题用户样本，覆盖作者、联系人、圈主与群成员。",
       "subAccountRefs": [
@@ -18570,112 +18570,6 @@
         "postCount": 4,
         "circleCount": 4,
         "likeCount": 492
-      }
-    },
-    {
-      "userId": "fixture_user_travel_curator",
-      "displayName": "林墨",
-      "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
-      "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
-      "avatarMedia": {
-        "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
-        "version": 1,
-        "mimeType": "image/png",
-        "width": 512,
-        "height": 512,
-        "sizeBytes": 315882,
-        "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27"
-      },
-      "backgroundMedia": {
-        "objectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
-        "version": 1,
-        "mimeType": "image/png",
-        "width": 1600,
-        "height": 900,
-        "sizeBytes": 2522887,
-        "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
-      },
-      "bio": "旅行摄影策展人 · 杭州/成都双城 · 索尼 A7M4 + 胶片风格 · 主理旅行摄影圈与徒步摄影圈。",
-      "subAccountRefs": [],
-      "tags": [
-        "author",
-        "travel",
-        "curator"
-      ],
-      "primaryTheme": "travel",
-      "secondaryThemes": [
-        "photography",
-        "film_photo",
-        "hiking"
-      ],
-      "themeTags": [
-        "travel",
-        "photography",
-        "film_photo",
-        "hiking",
-        "landscape"
-      ],
-      "primaryRole": "leadAuthor",
-      "postThemeRefs": [
-        "travel",
-        "photography"
-      ],
-      "circleThemeRefs": [
-        "travel",
-        "photography"
-      ],
-      "groupPersonaMix": [
-        {
-          "role": "leadAuthor",
-          "count": 4,
-          "userIds": [
-            "fixture_user_travel_curator",
-            "fixture_user_lin",
-            "fixture_user_su",
-            "fixture_user_zhou"
-          ]
-        },
-        {
-          "role": "friendContact",
-          "count": 2,
-          "userIds": [
-            "fixture_user_friend",
-            "fixture_user_commenter"
-          ]
-        }
-      ],
-      "crossDomainRefs": {
-        "posts": [
-          "fixture_photo_003",
-          "fixture_video_001",
-          "fixture_post_travel_001",
-          "fixture_post_travel_011",
-          "fixture_post_travel_021",
-          "fixture_post_travel_031"
-        ],
-        "circles": [
-          "fixture_circle_travel_01"
-        ],
-        "conversations": [
-          "fixture_conv_travel_group",
-          "fixture_conv_direct_travel_01",
-          "fixture_conv_circle_travel",
-          "fixture_conv_travel_01",
-          "fixture_conv_travel_04",
-          "fixture_conv_travel_05",
-          "fixture_conv_travel_06"
-        ]
-      },
-      "sourceRefs": {
-        "avatarSourceId": "portrait_archived_travel_01",
-        "backgroundSourceId": "landscape_travel_01"
-      },
-      "stats": {
-        "followingCount": 182,
-        "followerCount": 5400,
-        "postCount": 48,
-        "circleCount": 6,
-        "likeCount": 12800
       }
     }
   ],
@@ -35600,8 +35494,8 @@
         "mimeType": "image/png",
         "width": 1280,
         "height": 720,
-        "sizeBytes": 1782766,
-        "sourceHash": "sha256:2d56f7c416769e2e3b49933e8a4a3bb09ee1e390480a8ccd546a450e7359d507"
+        "sizeBytes": 1782765,
+        "sourceHash": "sha256:15e707db0e21dd187b3a9a20a5b6b45797a1316a12c391fa2572b826b5dfbe84"
       },
       "images": [
         {
@@ -35610,8 +35504,8 @@
           "mimeType": "image/png",
           "width": 1280,
           "height": 720,
-          "sizeBytes": 1782766,
-          "sourceHash": "sha256:2d56f7c416769e2e3b49933e8a4a3bb09ee1e390480a8ccd546a450e7359d507"
+          "sizeBytes": 1782765,
+          "sourceHash": "sha256:15e707db0e21dd187b3a9a20a5b6b45797a1316a12c391fa2572b826b5dfbe84"
         },
         {
           "objectKey": "media/image/s/archived-image/post/fixture_video_002/v1/image-2.png",
@@ -35619,8 +35513,8 @@
           "mimeType": "image/png",
           "width": 1280,
           "height": 720,
-          "sizeBytes": 992785,
-          "sourceHash": "sha256:a8fd96fa49b270e9abd0dbe77a667f9b747017360f4d923dc80d3264cfc81a25"
+          "sizeBytes": 992784,
+          "sourceHash": "sha256:2bc77b34d628eb74ade0837b844feb00854a39f8f2d2553766f4c88bff21f380"
         }
       ]
     },
@@ -35737,8 +35631,8 @@
         "mimeType": "image/png",
         "width": 1280,
         "height": 720,
-        "sizeBytes": 992785,
-        "sourceHash": "sha256:5e7824ceedd012e4d58bfa26db2f1fb02fa698017b94a26dc41449631feae004"
+        "sizeBytes": 992784,
+        "sourceHash": "sha256:93d901f48b9ed783e4a597fca3770d2d7f9edfcaaa412c352e538c6761a50f61"
       },
       "images": [
         {
@@ -35747,8 +35641,8 @@
           "mimeType": "image/png",
           "width": 1280,
           "height": 720,
-          "sizeBytes": 992785,
-          "sourceHash": "sha256:5e7824ceedd012e4d58bfa26db2f1fb02fa698017b94a26dc41449631feae004"
+          "sizeBytes": 992784,
+          "sourceHash": "sha256:93d901f48b9ed783e4a597fca3770d2d7f9edfcaaa412c352e538c6761a50f61"
         }
       ]
     },
@@ -37988,7 +37882,7 @@
         "width": 1280,
         "height": 720,
         "sizeBytes": 992784,
-        "sourceHash": "sha256:fb124dfde355baf56a214e1cc485682d41c125f8195e8876683385f975f15fbd"
+        "sourceHash": "sha256:3d7707f56dfbea69115ce2612f669e4e915a98bc9d512b9fafa55dd2c9521ac1"
       },
       "images": [
         {
@@ -37998,7 +37892,7 @@
           "width": 1280,
           "height": 720,
           "sizeBytes": 992784,
-          "sourceHash": "sha256:fb124dfde355baf56a214e1cc485682d41c125f8195e8876683385f975f15fbd"
+          "sourceHash": "sha256:3d7707f56dfbea69115ce2612f669e4e915a98bc9d512b9fafa55dd2c9521ac1"
         }
       ]
     },
@@ -38143,7 +38037,7 @@
         "width": 1280,
         "height": 720,
         "sizeBytes": 1782765,
-        "sourceHash": "sha256:04b6832cbc53085f173d15fac7b516c4f95439971326e948931735b5fd79562c"
+        "sourceHash": "sha256:a95bb3e972cfab8567c9d87eb5967f32ac2d0ca1916b112bcee9d36be90d5d2e"
       },
       "images": [
         {
@@ -38153,7 +38047,7 @@
           "width": 1280,
           "height": 720,
           "sizeBytes": 1782765,
-          "sourceHash": "sha256:04b6832cbc53085f173d15fac7b516c4f95439971326e948931735b5fd79562c"
+          "sourceHash": "sha256:a95bb3e972cfab8567c9d87eb5967f32ac2d0ca1916b112bcee9d36be90d5d2e"
         }
       ]
     },
@@ -38453,7 +38347,7 @@
         "width": 1280,
         "height": 720,
         "sizeBytes": 992784,
-        "sourceHash": "sha256:60683ce76377e658e5bd787cba71af406c74b59ddd51ce4028bb2ea00d303b0c"
+        "sourceHash": "sha256:dbfd61b18293bced0e167e2dd7aa3fd3b6509739cfa64b10ba190d55ceabfe8d"
       },
       "images": [
         {
@@ -38463,7 +38357,7 @@
           "width": 1280,
           "height": 720,
           "sizeBytes": 992784,
-          "sourceHash": "sha256:60683ce76377e658e5bd787cba71af406c74b59ddd51ce4028bb2ea00d303b0c"
+          "sourceHash": "sha256:dbfd61b18293bced0e167e2dd7aa3fd3b6509739cfa64b10ba190d55ceabfe8d"
         }
       ]
     },
@@ -38608,7 +38502,7 @@
         "width": 1280,
         "height": 720,
         "sizeBytes": 1782765,
-        "sourceHash": "sha256:290efde66422d98c766eb19f30b37d8bd4c0804bfc1928b74a290e0f7390de8f"
+        "sourceHash": "sha256:bac568e1349b32b8b516c138954f5a27bbc9d171d7d7c448400b4a591b784f36"
       },
       "images": [
         {
@@ -38618,7 +38512,7 @@
           "width": 1280,
           "height": 720,
           "sizeBytes": 1782765,
-          "sourceHash": "sha256:290efde66422d98c766eb19f30b37d8bd4c0804bfc1928b74a290e0f7390de8f"
+          "sourceHash": "sha256:bac568e1349b32b8b516c138954f5a27bbc9d171d7d7c448400b4a591b784f36"
         }
       ]
     },
@@ -41837,7 +41731,7 @@
         "width": 1280,
         "height": 720,
         "sizeBytes": 1782765,
-        "sourceHash": "sha256:f0e62a77d66d6841009f12fbeb146705028eebd39ddff6ca07bd2eeaa62fce25"
+        "sourceHash": "sha256:b0f8f24e30d8db3ab6239f1183eb46ab0f203fb66071d466602faf868ab13ccc"
       },
       "images": [
         {
@@ -41847,7 +41741,7 @@
           "width": 1280,
           "height": 720,
           "sizeBytes": 1782765,
-          "sourceHash": "sha256:f0e62a77d66d6841009f12fbeb146705028eebd39ddff6ca07bd2eeaa62fce25"
+          "sourceHash": "sha256:b0f8f24e30d8db3ab6239f1183eb46ab0f203fb66071d466602faf868ab13ccc"
         }
       ]
     },
@@ -42302,7 +42196,7 @@
         "width": 1280,
         "height": 720,
         "sizeBytes": 1782765,
-        "sourceHash": "sha256:8eb742c8be2158010990a50249db30790d9a414da02b70b18c94169c5a716e6a"
+        "sourceHash": "sha256:4b475d858af3872ef8898823d7e3e3acac642b7eda44c1c7163e1b355e704822"
       },
       "images": [
         {
@@ -42312,7 +42206,7 @@
           "width": 1280,
           "height": 720,
           "sizeBytes": 1782765,
-          "sourceHash": "sha256:8eb742c8be2158010990a50249db30790d9a414da02b70b18c94169c5a716e6a"
+          "sourceHash": "sha256:4b475d858af3872ef8898823d7e3e3acac642b7eda44c1c7163e1b355e704822"
         }
       ]
     },
@@ -46150,8 +46044,8 @@
         "mimeType": "image/png",
         "width": 1280,
         "height": 720,
-        "sizeBytes": 1432099,
-        "sourceHash": "sha256:46f23df660f01dd489764b7fa7e35381b83808f14c52580a7722edc0c67775de"
+        "sizeBytes": 1432098,
+        "sourceHash": "sha256:4a3af1502fc167e644e579134d861873ecafaf1918332f9781e130e1314a3f55"
       },
       "images": [
         {
@@ -46160,8 +46054,8 @@
           "mimeType": "image/png",
           "width": 1280,
           "height": 720,
-          "sizeBytes": 1432099,
-          "sourceHash": "sha256:46f23df660f01dd489764b7fa7e35381b83808f14c52580a7722edc0c67775de"
+          "sizeBytes": 1432098,
+          "sourceHash": "sha256:4a3af1502fc167e644e579134d861873ecafaf1918332f9781e130e1314a3f55"
         }
       ]
     },
@@ -46616,7 +46510,7 @@
         "width": 1280,
         "height": 720,
         "sizeBytes": 1432098,
-        "sourceHash": "sha256:dc886bf7f06241bab376ca403c32eacd8035b9f544c4efbb65cbc1c6c5cb6016"
+        "sourceHash": "sha256:4d56889f08c8fd1f177353a6b887874814977f04a5690df9383be32d2023b586"
       },
       "images": [
         {
@@ -46626,7 +46520,7 @@
           "width": 1280,
           "height": 720,
           "sizeBytes": 1432098,
-          "sourceHash": "sha256:dc886bf7f06241bab376ca403c32eacd8035b9f544c4efbb65cbc1c6c5cb6016"
+          "sourceHash": "sha256:4d56889f08c8fd1f177353a6b887874814977f04a5690df9383be32d2023b586"
         }
       ]
     },
@@ -49906,7 +49800,7 @@
         "width": 512,
         "height": 512,
         "sizeBytes": 433384,
-        "sourceHash": "sha256:849ca22cef6aa9bd53d0b4320b3c859bb8b29d4709353d37c511eaaace9e75ba"
+        "sourceHash": "sha256:78139e92db83e3ed40175d365322fce65a7c18d58ba657f49c12e2fbf22d86a7"
       },
       "cover": {
         "objectKey": "media/image/s/archived-image/circle/fixture_circle_tech/v1/cover.png",
@@ -49915,7 +49809,7 @@
         "width": 1440,
         "height": 900,
         "sizeBytes": 1901856,
-        "sourceHash": "sha256:6c5b96942460d7045c38892c9241eb0443605e954bd633d8bc1979c7a04a2d77"
+        "sourceHash": "sha256:c2f13ead8af94a8cb25c2ebabb35b6a7b90d235dcce95f797549758fab595d22"
       }
     },
     "fixture_circle_life": {
@@ -49946,7 +49840,7 @@
         "width": 512,
         "height": 512,
         "sizeBytes": 523600,
-        "sourceHash": "sha256:8dd976396f17b1362f3981da82ada45f4d3c31c818c59286e0473ce455e86e19"
+        "sourceHash": "sha256:0d031ad0fbb711d3223a28df2671b0a8944b43b5e5c9f36ef428756997fd2602"
       },
       "cover": {
         "objectKey": "media/image/s/archived-image/circle/fixture_circle_city/v1/cover.png",
@@ -49955,7 +49849,7 @@
         "width": 1440,
         "height": 900,
         "sizeBytes": 2472778,
-        "sourceHash": "sha256:e3b85dd868cbcb98a181ae2c70f09743626f9e8f3eb5add8c3ac05c2fd4908a9"
+        "sourceHash": "sha256:6d920057e4942040325c4fe6cc2b6d4f893bc3ec44e5bd80460df096d1be0ca5"
       }
     },
     "fixture_circle_travel": {
@@ -50245,8 +50139,8 @@
         "mimeType": "image/png",
         "width": 512,
         "height": 512,
-        "sizeBytes": 523599,
-        "sourceHash": "sha256:031cd960460d3eeda1d03f2aabbdb5ba7bf32e299eb710c37b6c56fc6c9e1068"
+        "sizeBytes": 523600,
+        "sourceHash": "sha256:587b8f0dd86a8fecbe4c8c0c21e1b880530e318666c47d7e46fffa9ef90a2b56"
       },
       "cover": {
         "objectKey": "media/image/s/archived-image/circle/fixture_circle_citywalk_01/v1/cover.jpg",
@@ -50274,8 +50168,8 @@
         "mimeType": "image/png",
         "width": 1440,
         "height": 900,
-        "sizeBytes": 1336589,
-        "sourceHash": "sha256:e580037f769ec2b71d9fa358978c132346d69269864074c2417663dc25d9c223"
+        "sizeBytes": 1336590,
+        "sourceHash": "sha256:a26dad9bd8bfc98c7b8397b13db83384355f6f7101a3f915318d45b189d33702"
       }
     },
     "fixture_circle_citywalk_03": {
@@ -50305,8 +50199,8 @@
         "mimeType": "image/png",
         "width": 512,
         "height": 512,
-        "sizeBytes": 329775,
-        "sourceHash": "sha256:27d444f1f62844ebbbb746e1e4f85092bdc2d16c4a26823ed57d4e3da9a40b8a"
+        "sizeBytes": 329776,
+        "sourceHash": "sha256:4d371b204c52e6dcb8a7cb6a5f82bda38e1e93953e0c0ead09dc29e59308e88b"
       },
       "cover": {
         "objectKey": "media/image/s/archived-image/circle/fixture_circle_citywalk_04/v1/cover.png",
@@ -50314,8 +50208,8 @@
         "mimeType": "image/png",
         "width": 1440,
         "height": 900,
-        "sizeBytes": 1336589,
-        "sourceHash": "sha256:7e9ae7b64d084edbdbd14916d0b2575046c63ed262d6192296fa8d0b729e40b1"
+        "sizeBytes": 1336590,
+        "sourceHash": "sha256:a26dad9bd8bfc98c7b8397b13db83384355f6f7101a3f915318d45b189d33702"
       }
     },
     "fixture_circle_citywalk_05": {
@@ -50354,8 +50248,8 @@
         "mimeType": "image/png",
         "width": 1440,
         "height": 900,
-        "sizeBytes": 1336589,
-        "sourceHash": "sha256:03e56e4b74f696af47f748c0b0fa5f70e9ca3d9c0d35fd22cde0918cc715e05b"
+        "sizeBytes": 1336590,
+        "sourceHash": "sha256:2a0882329e1fa6b182602f41c21f26127e3cead6dda2a43ff0d265b55628fc57"
       }
     },
     "fixture_circle_food_01": {
@@ -51206,7 +51100,7 @@
         "width": 512,
         "height": 512,
         "sizeBytes": 433384,
-        "sourceHash": "sha256:7f5d1ce100dc48844dd80156ca18a9c8753ddf5c26872ba0104b0cf8cf704db9"
+        "sourceHash": "sha256:caa4b61c6c3fb70fda153f751c0620197b6c3bffa9d224b3c06550ab42c17645"
       },
       "cover": {
         "objectKey": "media/image/s/archived-image/circle/fixture_circle_tech_01/v1/cover.jpg",

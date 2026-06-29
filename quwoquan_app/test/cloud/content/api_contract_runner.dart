@@ -37,6 +37,8 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 
+import '../../support/api_contract/local_bad_certificate_overrides.dart';
+
 // dart-define 注入；本地执行时通过 make test-api-contract 传入。
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
@@ -45,6 +47,9 @@ const _apiContractEnv = String.fromEnvironment(
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
 const _localGammaT3Scope = String.fromEnvironment('LOCAL_GAMMA_T3_SCOPE');
+const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
+  'API_CONTRACT_ALLOW_BAD_CERT',
+);
 const _currentUserId = 'fixture_user_current';
 const _localGammaSeedImageUrl =
     'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png';
@@ -123,6 +128,9 @@ bool get _isLocalGammaContentOnly =>
 void main() {
   // ── 环境可达性探测：不可达则直接 fail ───────────────────────────────
   setUpAll(() async {
+    installLocalApiContractBadCertificateOverride(
+      enabled: _allowBadCertificateForLocalApiContract,
+    );
     if (_apiBase.isEmpty) {
       throw StateError('L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set');
     }
@@ -142,6 +150,7 @@ void main() {
 
   tearDownAll(() {
     if (_apiAvailable) _client.close();
+    restoreLocalApiContractBadCertificateOverride();
   });
 
   // ── 场景 1：feed_cursor_pagination_end_to_end ──────────────────────────────
@@ -498,39 +507,42 @@ void main() {
       );
     });
 
-    test('POST/DELETE /v1/user/sub-accounts/{targetSubAccountId}/block 可用', () async {
-      if (!_apiAvailable)
-        return markTestSkipped('$_apiContractEnv unavailable');
-      if (_isLocalGammaContentOnly) {
-        return markTestSkipped(
-          'local gamma content mirror excludes user routes',
+    test(
+      'POST/DELETE /v1/user/sub-accounts/{targetSubAccountId}/block 可用',
+      () async {
+        if (!_apiAvailable)
+          return markTestSkipped('$_apiContractEnv unavailable');
+        if (_isLocalGammaContentOnly) {
+          return markTestSkipped(
+            'local gamma content mirror excludes user routes',
+          );
+        }
+        const targetUserId = 'contract_block_target_001';
+        final blockResp = await _client
+            .post(
+              Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
+              headers: _authHeaders('user.block.create'),
+            )
+            .timeout(const Duration(seconds: 10));
+        expect(
+          [200, 201, 204].contains(blockResp.statusCode),
+          isTrue,
+          reason: 'block user route should succeed',
         );
-      }
-      const targetUserId = 'contract_block_target_001';
-      final blockResp = await _client
-          .post(
-            Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
-            headers: _authHeaders('user.block.create'),
-          )
-          .timeout(const Duration(seconds: 10));
-      expect(
-        [200, 201, 204].contains(blockResp.statusCode),
-        isTrue,
-        reason: 'block user route should succeed',
-      );
 
-      final unblockResp = await _client
-          .delete(
-            Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
-            headers: _authHeaders('user.block.delete'),
-          )
-          .timeout(const Duration(seconds: 10));
-      expect(
-        [200, 204].contains(unblockResp.statusCode),
-        isTrue,
-        reason: 'unblock user route should succeed',
-      );
-    });
+        final unblockResp = await _client
+            .delete(
+              Uri.parse('$_apiBase/v1/user/sub-accounts/$targetUserId/block'),
+              headers: _authHeaders('user.block.delete'),
+            )
+            .timeout(const Duration(seconds: 10));
+        expect(
+          [200, 204].contains(unblockResp.statusCode),
+          isTrue,
+          reason: 'unblock user route should succeed',
+        );
+      },
+    );
 
     test('PATCH /v1/user/settings/privacy 可写并回读 blockedKeywords', () async {
       if (!_apiAvailable)

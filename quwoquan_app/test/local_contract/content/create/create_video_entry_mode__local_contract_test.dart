@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,7 +19,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('相册入口始终打开混合媒体选择器', (tester) async {
+  testWidgets('照片入口打开图片选择器', (tester) async {
     final requestedModes = <MediaPickerEntryMode>[];
     await tester.pumpWidget(
       _buildHarness(
@@ -39,10 +39,32 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(requestedModes, <MediaPickerEntryMode>[MediaPickerEntryMode.mixed]);
+    expect(requestedModes, <MediaPickerEntryMode>[MediaPickerEntryMode.image]);
   });
 
-  testWidgets('相机入口默认拍照，由相机页负责切到录像', (tester) async {
+  testWidgets('视频入口打开视频选择器', (tester) async {
+    final requestedModes = <MediaPickerEntryMode>[];
+    await tester.pumpWidget(
+      _buildHarness(
+        initialAction: EditorStartAction.video,
+        mediaPickerLauncher:
+            (
+              context, {
+              required mode,
+              required maxSelection,
+              List<String> initialPaths = const <String>[],
+            }) async {
+              requestedModes.add(mode);
+              return null;
+            },
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requestedModes, <MediaPickerEntryMode>[MediaPickerEntryMode.video]);
+  });
+
+  testWidgets('老相机入口默认拍照，由相机页负责切到录像', (tester) async {
     MediaPickerEntryMode? openedMode;
     await tester.pumpWidget(
       _buildHarness(

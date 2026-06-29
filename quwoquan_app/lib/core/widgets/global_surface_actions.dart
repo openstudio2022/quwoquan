@@ -12,7 +12,7 @@ import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
 

@@ -160,12 +160,19 @@ def _seed_frozen_plan(plan_id: str = "plan_cli") -> dict:
     fp.save_plan(plan)
     return plan
 
+def _audit_entity_source_refs(task_id: str, batch_id: str, name: str) -> tuple[str, str]:
+    ent = batch_entity_object_dir(task_id, batch_id, "地点", "景区", name)
+    refs = read_json(ent / "1.download" / "source_refs.json")
+    row = (refs.get("sources") or [])[0]
+    source_ref = str(row["sourceRef"])
+    return source_ref, source_ref.rsplit("/", 1)[0]
+
 def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> None:
     from _common.batch_asset_registry import BatchAssetRegistry, allocate_post_asset_id
     from _common.batch_manifest import load_batch_manifest
 
     ent = batch_entity_object_dir(task_id, batch_id, "地点", "景区", name)
-    write_source_unit(
+    manifest = write_source_unit(
         ent,
         ordinal=1,
         source_id="overview_baike",
@@ -176,7 +183,10 @@ def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> 
         url=f"https://example.com/{name}",
         title=f"{name}百科",
         target_ref=f"/entity/地点/景区/{name}",
+        task_id=task_id,
+        batch_id=batch_id,
     )
+    source_ref = str(manifest["sourceRef"])
     write_json(
         ent / "_entity.json",
         {
@@ -211,12 +221,12 @@ def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> 
         ent / "2.quality" / "quality_analysis.json",
         {
             "entityRef": f"/entity/地点/景区/{name}",
-            "baseDraft": {"sourceRef": f"entities/地点/景区/{name}/1.download/sources/01.overview_baike/source.md"},
+            "baseDraft": {"sourceRef": source_ref},
             "candidateCount": 1,
-            "candidates": [{"sourceRef": f"entities/地点/景区/{name}/1.download/sources/01.overview_baike/source.md", "score": 0.9, "length": 100}],
+            "candidates": [{"sourceRef": source_ref, "score": 0.9, "length": 100}],
             "recommendation": "proceed",
             "issues": [],
-            "sourcePaths": [f"entities/地点/景区/{name}/1.download/sources/01.overview_baike/source.md"],
+            "sourcePaths": [source_ref],
         },
     )
     write_json(ent / "3.compose" / "entity_page_input.json", {"payload": {"name": name}})
@@ -242,9 +252,9 @@ def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> 
             "ref": f"/entity/地点/景区/{name}",
             "final": {"generator": "agent", "agentRunId": f"run-{name}", "entityRefs": [f"/entity/地点/景区/{name}"], "articleDigest": None},
             "agentInput": {"writingPack": f"entities/地点/景区/{name}/3.compose/entity_page_input.json"},
-            "originalSources": [{"path": f"entities/地点/景区/{name}/1.download/sources/01.overview_baike/source.md", "url": f"https://example.com/{name}"}],
+            "originalSources": [{"path": source_ref, "url": f"https://example.com/{name}"}],
             "gateResults": {"decision": "approved", "checks": {"entityPageQuality": True, "sourceReadiness": True}},
-            "citedSourcePaths": [f"entities/地点/景区/{name}/1.download/sources/01.overview_baike/source.md"],
+            "citedSourcePaths": [source_ref],
         },
     )
     write_json(
@@ -290,7 +300,7 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
     (obj / "4.draft" / "draft.article.md").write_text(article, encoding="utf-8")
     (obj / "1.download").mkdir(parents=True, exist_ok=True)
     (obj / "5.review").mkdir(parents=True, exist_ok=True)
-    source_ref = f"entities/地点/景区/{name}/1.download/sources/01.overview_baike/source.md"
+    source_ref, source_unit_ref = _audit_entity_source_refs(task_id, batch_id, name)
     source_md = f"# {name}\n\n概述"
     article_digest = compute_document_sha256(article)
     write_json(
@@ -378,7 +388,7 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
             "sources": [
                 {
                     "sourceRef": source_ref,
-                    "sourceUnitRef": f"entities/地点/景区/{name}/1.download/sources/01.overview_baike",
+                    "sourceUnitRef": source_unit_ref,
                     "sourceMarkdownSha256": sha256_text(source_md),
                 }
             ],
@@ -506,4 +516,3 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
 
 
 __all__ = sorted(name for name in globals() if name != "__all__" and not name.startswith("__"))
-

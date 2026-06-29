@@ -384,7 +384,6 @@ def _qunar_travelogue_sources(
     """Discover fetchable Qunar travelogue pages for article text evidence."""
     sources: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
-    image_index = 0
     # Composite scenic areas often have official operation names while UGC uses
     # sub-site or short destination names. Keep enough alias budget to reach
     # curated registry aliases without lowering the downstream entity gate.
@@ -426,10 +425,7 @@ def _qunar_travelogue_sources(
                 title_hit = any(_title_matches_entity(title, match_term) for match_term in match_terms)
                 if not (title_hit or route_hit):
                     continue
-                images = _image_window(authorized_images, image_index, count=_BASE_DRAFT_IMAGE_CANDIDATES)
-                if images:
-                    # 按实际取走的张数推进偏移，避免多个底稿源命中同一批授权图。
-                    image_index += len(images)
+                images: list[dict[str, Any]] = []
                 seen_ids.add(raw_id)
                 source = _source(
                     source_id=f"article_qunar_base_{len(sources) + 1}",
@@ -444,7 +440,7 @@ def _qunar_travelogue_sources(
                     ),
                     source_role="base",
                     images=images,
-                    image_evidence_mode="same_authorized_collection" if images else "",
+                    image_evidence_mode="",
                 )
                 source["title"] = title
                 source["authorName"] = _strip_html(str(row.get("userName") or ""))
@@ -452,6 +448,7 @@ def _qunar_travelogue_sources(
                 source["travelRoute"] = route[:20]
                 source["viewCount"] = row.get("viewCount") or 0
                 source["sourceUseMode"] = "factual_reference_only"
+                source["publishMediaMode"] = "text_only"
                 sources.append(source)
                 if len(sources) >= limit:
                     return sources

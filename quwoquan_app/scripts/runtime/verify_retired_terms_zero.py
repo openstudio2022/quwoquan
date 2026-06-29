@@ -65,7 +65,7 @@ TERMS = (
 )
 
 ALLOWLIST_PREFIXES = {
-    "quwoquan_app/test/ui/content/markdown/fixtures/",
+    "quwoquan_app/test/ui/content/article_render/markdown/fixtures/",
     # vendored 第三方插件源码/示例/测试不属于主仓业务命名治理范围。
     "quwoquan_app/vendor/",
     "quwoquan_data/runtime/",

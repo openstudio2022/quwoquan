@@ -17,7 +17,6 @@ class GeneratedPostRuntimeMetadata {
     'mediaItems': <Map<String, dynamic>>[],
     'mediaUrls': <String>[],
     'moderationStatus': 'pending',
-    'reviewAspects': <Map<String, dynamic>>[],
     'semanticMentions': <Map<String, dynamic>>[],
     'shareCount': 0,
     'tagRefs': <String>[],
@@ -39,7 +38,6 @@ class GeneratedPostRuntimeMetadata {
     'article': 'article',
     'image': 'image',
     'micro': 'micro',
-    'review': 'review',
     'video': 'video',
   };
 
@@ -49,7 +47,6 @@ class GeneratedPostRuntimeMetadata {
     'images': 'image',
     'micro': 'micro',
     'recommended': 'micro',
-    'review': 'review',
     'video': 'video',
   };
 
@@ -82,8 +79,6 @@ class GeneratedPostRuntimeMetadata {
     'body',
     'summary',
     'semanticMentions',
-    'rating',
-    'reviewAspects',
     'mediaUrls',
     'mediaItems',
     'coverUrl',

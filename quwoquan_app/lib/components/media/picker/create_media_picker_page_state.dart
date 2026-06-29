@@ -2,6 +2,7 @@ part of 'create_media_picker_page.dart';
 
 class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   static const int _pageSize = 80;
+  static const int _oneTapMovieMaxImages = 20;
   static const double _tabletFourColumnGridMinWidth =
       AppSpacing.expandedBreakpoint;
   static const double _desktopFiveColumnGridMinWidth =
@@ -287,6 +288,52 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       _selectedItems.add(item);
       _selectedById[item.id] = item;
     });
+  }
+
+  Future<void> _openOneTapMovie() async {
+    if (widget.entryMode != MediaPickerEntryMode.image) {
+      return;
+    }
+    final images = _selectedItems
+        .where((item) => item.isImage)
+        .take(_oneTapMovieMaxImages)
+        .toList(growable: false);
+    if (images.isEmpty) {
+      return;
+    }
+    final composed = await Navigator.of(context).push<OneTapMovieComposeResult>(
+      MaterialPageRoute<OneTapMovieComposeResult>(
+        settings: const RouteSettings(
+          name: PageAccessInternalRoutes.createMediaPickerOneTapMovie,
+        ),
+        fullscreenDialog: true,
+        builder: (_) => OneTapMoviePreviewPage(
+          items: images,
+          composer: widget.oneTapMovieComposer,
+        ),
+      ),
+    );
+    if (!mounted || composed == null) {
+      return;
+    }
+    final videoItem = widget.mediaPickerService
+        .fileToMediaItem(
+          filePath: composed.videoPath,
+          source: CreateMediaSource.generated,
+          type: CreateMediaType.video,
+        )
+        .copyWith(durationMs: composed.durationMs);
+    Navigator.of(context).pop(
+      CreateMediaPickerResult(
+        items: <CreateMediaItem>[
+          videoItem,
+          ...images,
+        ],
+        openOneTapMovie: true,
+        lockedSingleMedia: true,
+        oneTapMovieEffectId: composed.effectId,
+      ),
+    );
   }
 
   Widget _buildCameraPage(BuildContext context) {
@@ -575,13 +622,16 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     );
   }
 
-  Future<void> _editLatestSelectedImage() async {
+  Future<void> _openImageEditorForNextStep() async {
     final index = _selectedItems.lastIndexWhere((item) => item.isImage);
     if (index < 0) return;
-    await _editSelectedImageAt(index);
+    await _editSelectedImageAt(index, continueWhenDone: true);
   }
 
-  Future<void> _editSelectedImageAt(int selectedIndex) async {
+  Future<void> _editSelectedImageAt(
+    int selectedIndex, {
+    bool continueWhenDone = false,
+  }) async {
     if (selectedIndex < 0 || selectedIndex >= _selectedItems.length) {
       return;
     }
@@ -620,16 +670,27 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       result: result,
       fallbackSelectedIndex: selectedIndex,
       imageSelectedIndexes: imageSelectedIndexes,
+      continueWhenDone: continueWhenDone,
     );
     if (!mounted || edited == null) {
       return;
     }
-    final item = _selectedItems[edited.selectedIndex];
-    final editedItem = item.copyWith(path: edited.path);
     setState(() {
-      _selectedItems[edited.selectedIndex] = editedItem;
-      _selectedById[editedItem.id] = editedItem;
+      _selectedItems
+        ..clear()
+        ..addAll(edited.items);
+      _selectedById
+        ..clear()
+        ..addEntries(
+          edited.items.map((item) => MapEntry<String, CreateMediaItem>(
+                item.id,
+                item,
+              )),
+        );
     });
+    if (edited.continueToCreate) {
+      _finishSelection();
+    }
   }
 
   Widget _buildImageEditor(
@@ -649,17 +710,19 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     );
   }
 
-  _EditedPickerImage? _resolveEditedImageResult({
+  _EditedPickerImages? _resolveEditedImageResult({
     required Object? result,
     required int fallbackSelectedIndex,
     required List<int> imageSelectedIndexes,
+    required bool continueWhenDone,
   }) {
     if (result is String) {
       final path = result.trim();
       if (path.isEmpty) return null;
-      return _EditedPickerImage(
-        selectedIndex: fallbackSelectedIndex,
-        path: path,
+      return _EditedPickerImages(
+        items: _replaceSelectedImagePath(fallbackSelectedIndex, path),
+        currentImageIndex: imageSelectedIndexes.indexOf(fallbackSelectedIndex),
+        continueToCreate: continueWhenDone,
       );
     }
     if (result is Map) {
@@ -672,17 +735,79 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       if (imageIndex == null ||
           imageIndex < 0 ||
           imageIndex >= imageSelectedIndexes.length) {
-        return _EditedPickerImage(
-          selectedIndex: fallbackSelectedIndex,
-          path: rawPath,
+        return _EditedPickerImages(
+          items: _replaceSelectedImagePath(fallbackSelectedIndex, rawPath),
+          currentImageIndex: imageSelectedIndexes.indexOf(fallbackSelectedIndex),
+          continueToCreate: continueWhenDone,
         );
       }
-      return _EditedPickerImage(
-        selectedIndex: imageSelectedIndexes[imageIndex],
-        path: rawPath,
+      final rawPaths = (result['paths'] as List?)
+          ?.map((entry) => entry.toString().trim())
+          .where((path) => path.isNotEmpty)
+          .toList(growable: false);
+      final action = result['action']?.toString().trim();
+      return _EditedPickerImages(
+        items: _applyEditedImagePaths(
+          imageSelectedIndexes: imageSelectedIndexes,
+          editedImageIndex: imageIndex,
+          editedPath: rawPath,
+          editedPaths: rawPaths,
+        ),
+        currentImageIndex: imageIndex,
+        continueToCreate:
+            continueWhenDone || action == 'continueToCreate',
       );
     }
     return null;
+  }
+
+  List<CreateMediaItem> _replaceSelectedImagePath(int selectedIndex, String path) {
+    final next = List<CreateMediaItem>.from(_selectedItems);
+    final item = next[selectedIndex];
+    next[selectedIndex] = item.copyWith(path: path);
+    return next;
+  }
+
+  List<CreateMediaItem> _applyEditedImagePaths({
+    required List<int> imageSelectedIndexes,
+    required int editedImageIndex,
+    required String editedPath,
+    required List<String>? editedPaths,
+  }) {
+    final sanitizedPaths =
+        editedPaths != null && editedPaths.length == imageSelectedIndexes.length
+        ? editedPaths
+        : <String>[
+            for (final index in imageSelectedIndexes) _selectedItems[index].path,
+          ];
+    final originalImageItems = <CreateMediaItem>[
+      for (final index in imageSelectedIndexes) _selectedItems[index],
+    ];
+    final remainingByPath = <String, List<CreateMediaItem>>{};
+    for (final item in originalImageItems) {
+      remainingByPath.putIfAbsent(item.path, () => <CreateMediaItem>[]).add(item);
+    }
+    final fallbackEdited = originalImageItems[editedImageIndex].copyWith(
+      path: editedPath,
+    );
+    final nextImageItems = <CreateMediaItem>[];
+    for (var i = 0; i < sanitizedPaths.length; i += 1) {
+      final path = sanitizedPaths[i];
+      final queue = remainingByPath[path];
+      final matched = queue == null || queue.isEmpty ? null : queue.removeAt(0);
+      final fallback = i == editedImageIndex
+          ? fallbackEdited
+          : originalImageItems[i.clamp(0, originalImageItems.length - 1)];
+      nextImageItems.add((matched ?? fallback).copyWith(path: path));
+    }
+    if (_selectedItems.length == imageSelectedIndexes.length) {
+      return nextImageItems;
+    }
+    final next = List<CreateMediaItem>.from(_selectedItems);
+    for (var i = 0; i < imageSelectedIndexes.length; i += 1) {
+      next[imageSelectedIndexes[i]] = nextImageItems[i];
+    }
+    return next;
   }
 
   @override
@@ -773,8 +898,6 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           child: Column(
             children: [
               _buildTopBar(fg, sub),
-              if (widget.entryMode == MediaPickerEntryMode.video)
-                _buildVideoShootHero(isDark),
               Expanded(child: _buildGrid(list, isDark)),
               if (_selectedItems.isNotEmpty) _buildSelectedStrip(sub, isDark),
               _buildBottomActions(isDark),
@@ -847,9 +970,50 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
               ),
               SizedBox(height: AppSpacing.intraGroupSm),
               Text(
-                widget.entryMode == MediaPickerEntryMode.mixed
-                    ? UITextConstants.mediaPickerMixedCameraEntry
-                    : UITextConstants.mediaPickerCameraEntry,
+                switch (widget.entryMode) {
+                  MediaPickerEntryMode.video =>
+                    UITextConstants.mediaPickerVideoCameraEntry,
+                  MediaPickerEntryMode.mixed =>
+                    UITextConstants.mediaPickerMixedCameraEntry,
+                  MediaPickerEntryMode.image =>
+                    UITextConstants.mediaPickerCameraEntry,
+                },
+                style: TextStyle(
+                  color: AppColorsFunctional.getColor(
+                    isDark,
+                    ColorType.foregroundPrimary,
+                  ),
+                  fontSize: AppTypography.base,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOneTapMovieTile(bool isDark) {
+    return GestureDetector(
+      key: const ValueKey<String>('media-picker-one-tap-movie-tile'),
+      onTap: _openOneTapMovie,
+      child: Container(
+        color: AppColors.black,
+        alignment: Alignment.center,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                CupertinoIcons.sparkles,
+                size: AppSpacing.iconLarge + AppSpacing.intraGroupSm,
+                color: AppColors.white,
+              ),
+              SizedBox(height: AppSpacing.intraGroupSm),
+              Text(
+                UITextConstants.mediaPickerOneTapMovie,
                 style: TextStyle(
                   color: AppColorsFunctional.getColor(
                     isDark,

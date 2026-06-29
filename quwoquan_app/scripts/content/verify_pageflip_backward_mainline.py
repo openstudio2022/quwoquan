@@ -5,8 +5,8 @@ This script enforces the architectural rules in
 `.cursor/rules/12-pageflip-backward-mainline.mdc`:
 
 1. Forbidden symbols (retired resolvers, host bypass branches, projected-frame
-   polygon fields, deprecated soft helpers) must not exist anywhere under
-   `quwoquan_app/lib/ui/content/...`.
+   polygon fields, deprecated soft helpers) must not exist anywhere under the
+   generic pageflip engine, article-reader host, or test harness.
 2. The retired full-page previous-front baseline
    `ValueKey('article_backward_previous_front_baseline')` must not exist in lib.
 3. The portrait BACK invariant must hold:
@@ -38,9 +38,11 @@ APP_LIB = ROOT / "quwoquan_app" / "lib"
 APP_TEST = ROOT / "quwoquan_app" / "test"
 
 UI_PAGEFLIP_DIRS = [
-    APP_LIB / "ui" / "content" / "pageflip",
-    APP_LIB / "ui" / "content" / "article_reader" / "pageflip",
     APP_LIB / "components" / "pageflip",
+    APP_LIB / "ui" / "content" / "article_reader" / "pageflip",
+    # Diagnostics/test harness relocated out of lib/ into test support; forbidden
+    # BACK symbols must still be guarded there (R-PAGEFLIP-001/002 收口).
+    APP_TEST / "support" / "pageflip",
 ]
 
 HOST_PATH = (
@@ -82,13 +84,13 @@ PARTITION_PATH = (
 PAGEFLIP_WIDGET_TEST_PATH = (
     APP_TEST / "components" / "pageflip" / "pageflip_widget_test.dart"
 )
-RENDER_FRAME_PATH = APP_LIB / "ui" / "content" / "pageflip" / "render_frame.dart"
-GEOMETRY_PATH = APP_LIB / "ui" / "content" / "pageflip" / "geometry.dart"
+RENDER_FRAME_PATH = APP_LIB / "components" / "pageflip" / "render_frame.dart"
+GEOMETRY_PATH = APP_LIB / "components" / "pageflip" / "geometry.dart"
 RENDER_FRAME_BUILDER_PATH = (
-    APP_LIB / "ui" / "content" / "pageflip" / "backward_render_frame_builder.dart"
+    APP_LIB / "components" / "pageflip" / "backward_render_frame_builder.dart"
 )
 OLD_BACKWARD_LEAF_RENDERER_PATH = (
-    APP_LIB / "ui" / "content" / "pageflip" / "backward_leaf_renderer.dart"
+    APP_LIB / "components" / "pageflip" / "backward_leaf_renderer.dart"
 )
 
 # Symbols whose mere presence anywhere in pageflip code indicates a regression
@@ -1021,7 +1023,7 @@ def _check_recto_verso_split_in_host() -> list[str]:
             f"{HOST_PATH.relative_to(ROOT)}: BACK diagnostics must not accept "
             "`sourceAreaPointUv`; dynamic source-area UV was the texture-scanning regression."
         )
-    diagnostics_path = APP_LIB / "components" / "pageflip" / "src" / "debug" / "pageflip_diagnostics.dart"
+    diagnostics_path = APP_TEST / "support" / "pageflip" / "src" / "debug" / "pageflip_diagnostics.dart"
     if diagnostics_path.exists():
         diagnostics_text = _strip_comments(diagnostics_path.read_text(encoding="utf-8"))
         for marker in (
@@ -1059,7 +1061,7 @@ def _check_recto_verso_split_in_host() -> list[str]:
                 f"{HOST_PATH.relative_to(ROOT)}: forbidden unified-back source marker `{marker}`; "
                 "BACK recto/front and verso/back diagnostics must remain separate."
             )
-    texture_path = APP_LIB / "ui" / "content" / "pageflip" / "page_surface_snapshot.dart"
+    texture_path = APP_LIB / "components" / "pageflip" / "page_surface_snapshot.dart"
     if texture_path.exists():
         texture_text = _strip_comments(texture_path.read_text(encoding="utf-8"))
         binding_body = _extract_method_body(
@@ -1094,7 +1096,7 @@ def _check_recto_verso_split_in_host() -> list[str]:
 
 def _check_backward_texture_binding() -> list[str]:
     violations: list[str] = []
-    snapshot_path = APP_LIB / "ui" / "content" / "pageflip" / "page_surface_snapshot.dart"
+    snapshot_path = APP_LIB / "components" / "pageflip" / "page_surface_snapshot.dart"
     if not snapshot_path.exists():
         violations.append(f"missing snapshot binding: {snapshot_path.relative_to(ROOT)}")
         return violations

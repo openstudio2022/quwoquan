@@ -3,7 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/components/media/picker/one_tap_movie_composer.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -14,9 +16,11 @@ class OneTapMoviePreviewPage extends StatefulWidget {
   const OneTapMoviePreviewPage({
     super.key,
     required this.items,
+    this.composer = const MethodChannelOneTapMovieComposer(),
   });
 
   final List<CreateMediaItem> items;
+  final OneTapMovieComposer composer;
 
   @override
   State<OneTapMoviePreviewPage> createState() => _OneTapMoviePreviewPageState();
@@ -27,6 +31,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
   static const int _secondsPerImage = 3;
   Timer? _timer;
   bool _playing = true;
+  bool _composing = false;
   Duration _position = Duration.zero;
 
   List<CreateMediaItem> get _images =>
@@ -51,21 +56,18 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
 
   void _startTicker() {
     _timer?.cancel();
-    _timer = Timer.periodic(
-      const Duration(milliseconds: _frameStepMs),
-      (_) {
-        if (!_playing || !mounted) return;
-        final next = _position + const Duration(milliseconds: _frameStepMs);
-        if (next >= _totalDuration) {
-          setState(() {
-            _position = _totalDuration;
-            _playing = false;
-          });
-          return;
-        }
-        setState(() => _position = next);
-      },
-    );
+    _timer = Timer.periodic(const Duration(milliseconds: _frameStepMs), (_) {
+      if (!_playing || !mounted) return;
+      final next = _position + const Duration(milliseconds: _frameStepMs);
+      if (next >= _totalDuration) {
+        setState(() {
+          _position = _totalDuration;
+          _playing = false;
+        });
+        return;
+      }
+      setState(() => _position = next);
+    });
   }
 
   void _togglePlay() {
@@ -85,23 +87,50 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
     });
   }
 
+  Future<void> _composeAndContinue() async {
+    if (_images.isEmpty || _composing) {
+      return;
+    }
+    setState(() {
+      _composing = true;
+      _playing = false;
+    });
+    try {
+      final result = await widget.composer.compose(images: _images);
+      if (!mounted) return;
+      Navigator.of(context).pop(result);
+    } on UnsupportedError {
+      if (!mounted) return;
+      AppToast.show(context, UITextConstants.mediaPickerOneTapMovieUnavailable);
+      setState(() => _composing = false);
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.show(context, UITextConstants.mediaPickerOneTapMovieFailed);
+      setState(() => _composing = false);
+    }
+  }
+
   int get _currentImageIndex {
     if (_images.isEmpty) return 0;
     final perImageMs = (_secondsPerImage * 1000);
-    final index = (_position.inMilliseconds ~/ perImageMs).clamp(0, _images.length - 1);
+    final index = (_position.inMilliseconds ~/ perImageMs).clamp(
+      0,
+      _images.length - 1,
+    );
     return index;
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final bg = AppColors.black;
     final fg = AppColors.white;
     final progress = _totalDuration.inMilliseconds == 0
         ? 0.0
-        : (_position.inMilliseconds / _totalDuration.inMilliseconds)
-            .clamp(0.0, 1.0);
+        : (_position.inMilliseconds / _totalDuration.inMilliseconds).clamp(
+            0.0,
+            1.0,
+          );
     final current = _images.isEmpty ? null : _images[_currentImageIndex];
     return AppScaffold(
       backgroundColor: bg,
@@ -114,25 +143,49 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                 children: [
                   CupertinoButton(
                     padding: EdgeInsets.zero,
-                    onPressed: () => Navigator.of(context).pop(false), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
+                    onPressed: () => Navigator.of(context).pop(),
+                    minimumSize: Size(
+                      AppSpacing.minInteractiveSize,
+                      AppSpacing.minInteractiveSize,
+                    ),
                     child: Icon(CupertinoIcons.back, color: fg),
                   ),
                   const Spacer(),
                   CupertinoButton(
                     padding: EdgeInsets.zero,
-                    onPressed: _images.isEmpty
+                    onPressed: _images.isEmpty || _composing
                         ? null
-                        : () => Navigator.of(context).pop(true), minimumSize: Size(AppSpacing.minInteractiveSize, AppSpacing.minInteractiveSize),
-                    child: Text(
-                      UITextConstants.mediaPickerNextStep,
-                      style: TextStyle(
-                        color: _images.isEmpty
-                            ? AppColors.white.withValues(alpha: 0.54)
-                            : AppColors.white,
-                        fontSize: AppTypography.base,
-                        fontWeight: FontWeight.w700,
-                      ),
+                        : _composeAndContinue,
+                    minimumSize: Size(
+                      AppSpacing.minInteractiveSize,
+                      AppSpacing.minInteractiveSize,
                     ),
+                    child: _composing
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const CupertinoActivityIndicator(radius: 8),
+                              SizedBox(width: AppSpacing.intraGroupXs),
+                              Text(
+                                UITextConstants.mediaPickerOneTapMovieComposing,
+                                style: TextStyle(
+                                  color: AppColors.white.withValues(alpha: 0.7),
+                                  fontSize: AppTypography.base,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          )
+                        : Text(
+                            UITextConstants.mediaPickerNextStep,
+                            style: TextStyle(
+                              color: _images.isEmpty
+                                  ? AppColors.white.withValues(alpha: 0.54)
+                                  : AppColors.white,
+                              fontSize: AppTypography.base,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                   SizedBox(width: AppSpacing.intraGroupSm),
                 ],
@@ -141,10 +194,14 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
             Expanded(
               child: Center(
                 child: Container(
-                  margin: EdgeInsets.symmetric(horizontal: AppSpacing.containerLg),
+                  margin: EdgeInsets.symmetric(
+                    horizontal: AppSpacing.containerLg,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.black,
-                    borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.largeBorderRadius,
+                    ),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: AspectRatio(
@@ -162,13 +219,16 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                         : Image.file(
                             File(current.path),
                             fit: BoxFit.contain,
-                            errorBuilder: (context, error, stackTrace) => Center(
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                color: AppColors.white.withValues(alpha: 0.7),
-                                size: AppSpacing.iconLarge,
-                              ),
-                            ),
+                            errorBuilder: (context, error, stackTrace) =>
+                                Center(
+                                  child: Icon(
+                                    Icons.broken_image_outlined,
+                                    color: AppColors.white.withValues(
+                                      alpha: 0.7,
+                                    ),
+                                    size: AppSpacing.iconLarge,
+                                  ),
+                                ),
                           ),
                   ),
                 ),
@@ -186,7 +246,9 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                   GestureDetector(
                     onTap: _togglePlay,
                     child: Icon(
-                      _playing ? CupertinoIcons.pause : CupertinoIcons.play_arrow,
+                      _playing
+                          ? CupertinoIcons.pause
+                          : CupertinoIcons.play_arrow,
                       color: AppColors.white,
                       size: AppSpacing.iconMedium,
                     ),

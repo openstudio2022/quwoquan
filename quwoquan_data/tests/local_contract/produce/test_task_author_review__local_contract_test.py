@@ -904,7 +904,9 @@ def test_completion_gate_blocks_active_failed_agent_run():
     issues = run_mod._workflow_completion_issues(ctx, state)
     assert "lastAgentRun.infrastructureFailures=1" in issues
 
-def test_produce_review_bulk_failure_does_not_invalidate_drafts(monkeypatch):
+def test_produce_review_bulk_failure_retries_within_bounded_budget(monkeypatch):
+    # 底稿中心快速失败：移除 20% bulk-repair 闸门后，批量失败不再阻塞整批等待人工诊断；
+    # 失败 ref 一律按有界 ReAct 预算重写（写 repair report + invalidate + requeue）。
     task_id = _make_task()
     ctx = _ctx(task_id, "bulk_review")
     refs = [f"ref_{idx}" for idx in range(47)]
@@ -916,16 +918,20 @@ def test_produce_review_bulk_failure_does_not_invalidate_drafts(monkeypatch):
         lambda *_args, **_kwargs: (refs, {ref: ["travelogueDensity: opening lacks a real hook"] for ref in refs}),
     )
     monkeypatch.setattr(
-        "task.run._content_issue_matchers",
-        lambda *_args, **_kwargs: {f"ref_{idx}": {f"ref_{idx}"} for idx in range(50)},
-    )
-    monkeypatch.setattr(
         "task.run._write_retry_reports_for_refs",
         lambda _ctx, *, refs, issue_map, target_stage: reports.extend(refs),
     )
     monkeypatch.setattr(
         "task.run._invalidate_ref_for_retry",
         lambda _ctx, ref: invalidated.append(ref) or True,
+    )
+    monkeypatch.setattr(
+        "task.run._purge_author_queue_for_stale_workflow",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "task.object_queue.requeue_refs",
+        lambda _task, _batch, reset, _stage, reason=None: list(reset),
     )
 
     prepared = run_mod._prepare_produce_review_retry(
@@ -941,7 +947,80 @@ def test_produce_review_bulk_failure_does_not_invalidate_drafts(monkeypatch):
         "produce_compose",
     )
 
-    assert prepared is False
-    assert reports == []
-    assert invalidated == []
+    assert prepared is True
+    assert sorted(reports) == sorted(refs)
+    assert sorted(invalidated) == sorted(refs)
+
+
+def test_produce_review_budget_exhaustion_abandons_when_partial_allowed(monkeypatch):
+    # 底稿中心快速失败：produce_review 有界重试耗尽后，allowPartialContent 下弃稿仍未过门的
+    # 对象并重跑剩余内容，而非整批转人工空转。
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    batch_id = "review_budget_exhaustion"
+    ensure_batch_layout(task_id, batch_id, "produce")
+    ctx = _ctx(task_id, batch_id)
+    bad_ref = "ref_persistent_fail"
+
+    monkeypatch.setattr(
+        "task.run._produce_review_retry_refs",
+        lambda *_args, **_kwargs: ([bad_ref], {bad_ref: ["travelogueDensity: opening lacks a real hook"]}),
+    )
+
+    result = run_mod.StageResult(
+        "produce_review",
+        run_mod.AUTO,
+        "failed",
+        "发布门未过",
+        fallback_stage="produce_compose",
+        issues=[f"{bad_ref}: travelogueDensity"],
+    )
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["reactRewinds"] = {"produce_review": run_mod.MAX_REACT_REWINDS}
+    run_mod.save_workflow_state(state)
+    completed = set(run_mod.STAGE_NAMES)
+
+    completed, ok = run_mod._react_rewind(ctx, state, completed, result)
+    assert ok is True
+    assert "produce_review" not in completed
+    abandoned = {
+        str(row.get("ref")): row
+        for row in run_mod.load_workflow_state(task_id, batch_id).get("abandonedContentObjects", [])
+    }
+    assert bad_ref in abandoned
+    assert abandoned[bad_ref]["stage"] == "produce_review"
+
+
+def test_produce_review_budget_exhaustion_manual_when_partial_disallowed(monkeypatch):
+    # 不允许部分交付时，保持原有“转人工”语义，不擅自弃稿。
+    task_id = _make_task(workflow_policy={"allowPartialContent": False})
+    batch_id = "review_budget_exhaustion_strict"
+    ensure_batch_layout(task_id, batch_id, "produce")
+    ctx = _ctx(task_id, batch_id)
+    bad_ref = "ref_persistent_fail_strict"
+
+    monkeypatch.setattr(
+        "task.run._produce_review_retry_refs",
+        lambda *_args, **_kwargs: ([bad_ref], {bad_ref: ["travelogueDensity: opening lacks a real hook"]}),
+    )
+
+    result = run_mod.StageResult(
+        "produce_review",
+        run_mod.AUTO,
+        "failed",
+        "发布门未过",
+        fallback_stage="produce_compose",
+        issues=[f"{bad_ref}: travelogueDensity"],
+    )
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["reactRewinds"] = {"produce_review": run_mod.MAX_REACT_REWINDS}
+    run_mod.save_workflow_state(state)
+    completed = set(run_mod.STAGE_NAMES)
+
+    completed, ok = run_mod._react_rewind(ctx, state, completed, result)
+    assert ok is False
+    abandoned = {
+        str(row.get("ref"))
+        for row in run_mod.load_workflow_state(task_id, batch_id).get("abandonedContentObjects", [])
+    }
+    assert bad_ref not in abandoned
 

@@ -41,26 +41,26 @@ func PrimaryText(helpType string, action string, count int64, perspective ActorP
 	case HelpDecision:
 		switch strings.TrimSpace(action) {
 		case "visit_place":
-			return subject + "通过" + actorPronoun(perspective) + "的内容去了相关地点"
+			return subject + "通过" + actorPronoun(perspective) + "的记录去了相关地点"
 		default:
-			return subject + "通过" + actorPronoun(perspective) + "的内容关注了相关对象"
+			return subject + "通过" + actorPronoun(perspective) + "的记录关注了相关对象"
 		}
 	case HelpKnowledge:
 		switch strings.TrimSpace(action) {
 		case "quote_answer":
 			return subject + "引用了" + actorPronoun(perspective) + "的回答"
 		default:
-			return subject + "读完了" + actorPronoun(perspective) + "的内容"
+			return subject + "读完了" + actorPronoun(perspective) + "的记录"
 		}
 	case HelpSpread:
 		switch strings.TrimSpace(action) {
 		case "active_participation":
 			return subject + "最近参与了这里"
 		default:
-			return subject + "转发了" + actorPronoun(perspective) + "的内容"
+			return subject + "转发了" + actorPronoun(perspective) + "的记录"
 		}
 	case HelpAudience:
-		return subject + "看过" + actorPronoun(perspective) + "的内容"
+		return subject + "看过" + actorPronoun(perspective) + "的记录"
 	default:
 		return ""
 	}
@@ -75,7 +75,7 @@ func representativeSubject(count int64) string {
 
 func actorPronoun(perspective ActorPerspective) string {
 	if perspective == ActorSelf {
-		return "我"
+		return "你"
 	}
 	return "TA"
 }

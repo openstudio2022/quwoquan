@@ -255,8 +255,7 @@ def build_site_content_plan(
         entity_ref = f"/entity/{entity_domain}/{entity_leaf_type}/{entity_name}"
         object_dir = resolve_entity_object_dir(task_id, target_batch, entity_ref)
         source_ordinal = len(items) + 1
-        unit_dir = object_dir / "1.download" / "sources" / f"{source_ordinal:02d}.{source_id}"
-        write_source_unit(
+        manifest = write_source_unit(
             object_dir,
             ordinal=source_ordinal,
             source_id=source_id,
@@ -287,7 +286,7 @@ def build_site_content_plan(
             batch_id=target_batch,
             build_variants=False,
         )
-        source_ref = relative_batch_ref(unit_dir / "source.md", task_id, target_batch)
+        source_ref = str(manifest.get("sourceRef") or "")
         title = _content_plan_title(candidate, entity_name, intent)
         brief = resolve_compose_brief(
             registry,
@@ -344,8 +343,10 @@ def build_site_content_plan(
         if validation_target_key not in validation_target_keys:
             validation_target_keys.add(validation_target_key)
             validation_targets.append({"entityType": validation_target_key[0], "name": validation_target_key[1]})
-        outputs.append(str(unit_dir / "source.md"))
-        outputs.append(str(unit_dir / "meta.json"))
+        outputs.append(str(batch_root(task_id, target_batch) / source_ref))
+        source_unit_ref = str(manifest.get("sourceUnitRef") or "").strip()
+        if source_unit_ref:
+            outputs.append(str(batch_root(task_id, target_batch) / source_unit_ref / "meta.json"))
 
     if not items:
         blockers.append("content_plan produced no eligible items")

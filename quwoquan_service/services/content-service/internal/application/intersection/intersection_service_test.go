@@ -3,6 +3,7 @@ package intersection
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -636,6 +637,184 @@ func TestIntersectionService_ListFiltersAndPaginates(t *testing.T) {
 	}
 	if len(page) != 1 || page[0].IntersectionID != "c" {
 		t.Fatalf("sourceRef filter mismatch: %+v", page)
+	}
+}
+
+func TestIntersectionService_ListDedupeBeforeBucketAndPagination(t *testing.T) {
+	now := time.Date(2026, 6, 9, 12, 0, 0, 0, time.UTC)
+	points := func(prefix, dimension string, count int) []IntersectionPointView {
+		out := make([]IntersectionPointView, 0, count)
+		for i := 0; i < count; i++ {
+			out = append(out, IntersectionPointView{
+				PointID:    fmt.Sprintf("%s_%d", prefix, i),
+				PointClass: "fact",
+				Dimension:  dimension,
+				Visibility: "public",
+			})
+		}
+		return out
+	}
+	dupe := func(id string, strength float64, bucket string, anchor float64, total int) IntersectionReasonView {
+		return IntersectionReasonView{
+			IntersectionID:     id,
+			IntersectionClass:  "fact",
+			Dimension:          "relationship",
+			Kind:               "sharedFollowees",
+			ObjectKind:         "person",
+			ActionTargetID:     "u_same",
+			Strength:           strength,
+			TimeBucket:         bucket,
+			AnchorUserWeight:   anchor,
+			IntersectionPoints: points(id, "relationship", total),
+			PrimaryText:        "你和林清越等8位用户都关注「胶片摄影」",
+			FreshAt:            now.Add(-time.Hour).Format(time.RFC3339),
+		}
+	}
+	src := stubSource{facts: []IntersectionReasonView{
+		dupe("low_strength_today", 0.7, "today", 0.9, 9),
+		dupe("winner_strength", 0.9, "last7Days", 0.1, 1),
+		{
+			IntersectionID:     "bucket_today",
+			IntersectionClass:  "fact",
+			Dimension:          "location",
+			Kind:               "coVisitedEntity",
+			ObjectKind:         "place",
+			ActionTargetID:     "place_today",
+			Strength:           0.8,
+			TimeBucket:         "today",
+			AnchorUserWeight:   0.1,
+			IntersectionPoints: points("bucket_today", "location", 1),
+			PrimaryText:        "你和王然等3位用户都去过「西湖」",
+			FreshAt:            now.Add(-2 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			IntersectionID:     "bucket_last7",
+			IntersectionClass:  "fact",
+			Dimension:          "location",
+			Kind:               "coVisitedEntity",
+			ObjectKind:         "place",
+			ActionTargetID:     "place_last7",
+			Strength:           0.8,
+			TimeBucket:         "last7Days",
+			AnchorUserWeight:   0.9,
+			IntersectionPoints: points("bucket_last7", "location", 10),
+			PrimaryText:        "你和6位用户都去过「798艺术区」",
+			FreshAt:            now.Add(-72 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			IntersectionID:     "anchor_winner",
+			IntersectionClass:  "fact",
+			Dimension:          "content",
+			Kind:               "coCommented",
+			ObjectKind:         "circle",
+			ActionTargetID:     "circle_anchor",
+			Strength:           0.6,
+			TimeBucket:         "yesterday",
+			AnchorUserWeight:   0.8,
+			IntersectionPoints: points("anchor_winner", "content", 2),
+			PrimaryText:        "你和周屿等4位用户参与了「周末街拍讨论」",
+			FreshAt:            now.Add(-26 * time.Hour).Format(time.RFC3339),
+		},
+		{
+			IntersectionID:     "count_winner",
+			IntersectionClass:  "fact",
+			Dimension:          "content",
+			Kind:               "coCommented",
+			ObjectKind:         "circle",
+			ActionTargetID:     "circle_count",
+			Strength:           0.6,
+			TimeBucket:         "yesterday",
+			AnchorUserWeight:   0.8,
+			IntersectionPoints: points("count_winner", "content", 8),
+			PrimaryText:        "你和8位用户参与了「胶片相机推荐」讨论",
+			FreshAt:            now.Add(-28 * time.Hour).Format(time.RFC3339),
+		},
+	}}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+
+	page, nextCursor, hasMore, err := svc.List(context.Background(), "viewer1", IntersectionListQuery{Limit: 3})
+	if err != nil {
+		t.Fatalf("list page 1: %v", err)
+	}
+	if !hasMore || strings.TrimSpace(nextCursor) == "" {
+		t.Fatalf("expected pagination after dedupe, next=%q hasMore=%v", nextCursor, hasMore)
+	}
+	gotIDs := []string{page[0].IntersectionID, page[1].IntersectionID, page[2].IntersectionID}
+	wantIDs := []string{"winner_strength", "bucket_today", "bucket_last7"}
+	for i := range wantIDs {
+		if gotIDs[i] != wantIDs[i] {
+			t.Fatalf("page 1 order mismatch: got %v want %v", gotIDs, wantIDs)
+		}
+	}
+	if page[0].DedupeKey != "viewer1:u_same:person:sharedFollowees" {
+		t.Fatalf("dedupeKey must be returned from canonical tuple, got %q", page[0].DedupeKey)
+	}
+	for _, item := range page {
+		if item.IntersectionID == "low_strength_today" {
+			t.Fatalf("dedupe must keep stronger duplicate, got %+v", page)
+		}
+	}
+
+	page2, _, hasMore, err := svc.List(context.Background(), "viewer1", IntersectionListQuery{
+		Cursor: nextCursor,
+		Limit:  3,
+	})
+	if err != nil {
+		t.Fatalf("list page 2: %v", err)
+	}
+	if hasMore {
+		t.Fatalf("unexpected third page: %+v", page2)
+	}
+	if len(page2) != 2 || page2[0].IntersectionID != "count_winner" || page2[1].IntersectionID != "anchor_winner" {
+		t.Fatalf("page 2 order/count mismatch: %+v", page2)
+	}
+}
+
+func TestIntersectionService_ListDerivesExclusiveTimeBuckets(t *testing.T) {
+	now := time.Date(2026, 6, 29, 12, 0, 0, 0, time.UTC)
+	item := func(id string, fresh time.Time) IntersectionReasonView {
+		return IntersectionReasonView{
+			IntersectionID:    id,
+			IntersectionClass: "fact",
+			Dimension:         "location",
+			Kind:              "coVisitedEntity",
+			ObjectKind:        "place",
+			ActionTargetID:    id,
+			Strength:          0.5,
+			PrimaryText:       "你和3位用户都去过「西湖」",
+			FreshAt:           fresh.Format(time.RFC3339),
+		}
+	}
+	src := stubSource{facts: []IntersectionReasonView{
+		item("today", now.Add(-time.Hour)),
+		item("yesterday", now.AddDate(0, 0, -1)),
+		item("last7", now.AddDate(0, 0, -3)),
+		item("this_month", now.AddDate(0, 0, -10)),
+		item("last_month", time.Date(2026, 5, 20, 9, 0, 0, 0, time.UTC)),
+	}}
+	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
+	fixedNow(svc, now)
+
+	page, _, _, err := svc.List(context.Background(), "viewer1", IntersectionListQuery{Limit: 10})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	got := map[string]string{}
+	for _, item := range page {
+		got[item.IntersectionID] = item.TimeBucket
+	}
+	want := map[string]string{
+		"today":      "today",
+		"yesterday":  "yesterday",
+		"last7":      "last7Days",
+		"this_month": "thisMonth",
+		"last_month": "lastMonth",
+	}
+	for id, bucket := range want {
+		if got[id] != bucket {
+			t.Fatalf("%s bucket = %q, want %q; all=%v", id, got[id], bucket, got)
+		}
 	}
 }
 

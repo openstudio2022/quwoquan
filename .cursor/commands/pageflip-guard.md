@@ -7,7 +7,7 @@ description: 前后翻组件几何/视觉变更前的强制审视入口，防止
 
 `/pageflip-guard` 用于任何触及以下路径的任务：
 
-- `quwoquan_app/lib/ui/content/pageflip/**`
+- `quwoquan_app/lib/components/pageflip/**`
 - `quwoquan_app/lib/ui/content/article_reader/pageflip/**`
 - `quwoquan_app/test/**/pageflip/**`
 

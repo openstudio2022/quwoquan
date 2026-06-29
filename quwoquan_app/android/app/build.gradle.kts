@@ -16,6 +16,8 @@ val localEnvCaEnvVar = "QWQ_ANDROID_LOCAL_ENV_CA_PATH"
 val localEnvCaRequiredEnvVar = "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED"
 val androidLocalAutoPrepareEnvVar = "QWQ_ANDROID_LOCAL_AUTO_PREPARE"
 val androidLocalAutoReverseEnvVar = "QWQ_ANDROID_LOCAL_AUTO_REVERSE"
+val androidAbiSplitsEnvVar = "QWQ_ANDROID_ABI_SPLITS"
+val androidAbiSplitsEnabled = envFlagEnabled(androidAbiSplitsEnvVar, false)
 val alphaLocalCaCert =
     repoRootDir.resolve(
         "state/local/alpha_stack/caddy-data/caddy/pki/authorities/local/root.crt",
@@ -65,8 +67,10 @@ android {
         testInstrumentationRunner = "pl.leancode.patrol.PatrolJUnitRunner"
         testInstrumentationRunnerArguments["clearPackageData"] = "true"
         ndk {
-            // splits.abi 与 Flutter 默认 abiFilters 冲突；清掉后者由 split 决定 ABI。
-            abiFilters.clear()
+            if (androidAbiSplitsEnabled) {
+                // splits.abi 与 Flutter 默认 abiFilters 冲突；显式拆包时由 split 决定 ABI。
+                abiFilters.clear()
+            }
         }
     }
 
@@ -82,10 +86,12 @@ android {
 
     splits {
         abi {
-            isEnable = true
-            reset()
-            include("armeabi-v7a", "arm64-v8a", "x86_64")
-            isUniversalApk = false
+            isEnable = androidAbiSplitsEnabled
+            if (androidAbiSplitsEnabled) {
+                reset()
+                include("armeabi-v7a", "arm64-v8a", "x86_64")
+                isUniversalApk = false
+            }
         }
     }
 }

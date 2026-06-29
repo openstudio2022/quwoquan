@@ -4,8 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/ui/content/article_detail_view.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 
 class ArticleContentSurface extends StatelessWidget {
   const ArticleContentSurface({

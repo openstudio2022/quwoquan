@@ -35,7 +35,7 @@ from _common import content_object
 from _common.article_package import compute_document_sha256
 from _common.batch_asset_registry import allocate_post_asset_id, load_batch_asset_registry
 from _common.batch_manifest import load_batch_manifest, write_batch_manifest
-from _common.io import write_json
+from _common.io import read_json, write_json
 from _common.paths import (
     batch_entity_object_dir,
     batch_manifest_path,
@@ -110,7 +110,7 @@ def _build_entity(
          "caption": f"{name}实景{i}", "relevance": f"{name}核心体验配图", "slug": name}
         for i in range(1, 4)
     ]
-    write_source_unit(
+    source_manifest = write_source_unit(
         obj,
         ordinal=1,
         source_id="overview_baike",
@@ -127,6 +127,8 @@ def _build_entity(
         task_id=task,
         batch_id=batch,
     )
+    source_ref = str(source_manifest["sourceRef"])
+    source_unit_ref = str(source_manifest["sourceUnitRef"])
     # 实体成品（落对象根，与 publish 同构）
     cands = object_image_candidates(obj, task, batch)
     assets_dir = obj / "assets"
@@ -154,7 +156,6 @@ def _build_entity(
             "sourceRef": cand["sourceRef"],
         })
         page_figs.append(f':::figure id="fig{i}" layout="{"fullWidth" if i == 1 else "gallery"}" caption="{cand["caption"] or name+"实景"}"\nasset://{asset_id}\n:::')
-    source_ref = relative_batch_ref(obj / "1.download" / "sources" / "01.overview_baike" / "source.md", task, batch)
     page_md = (
         f"# {name}\n\n"
         f"{spec['source_md'].split(chr(10), 2)[-1].strip()}\n\n"
@@ -278,8 +279,10 @@ def _build_post(task: str, batch: str, *, global_batch_seq: int, asset_registry)
     (post / "4.draft" / "draft.article.md").write_text(article_md, encoding="utf-8")
     render_profile = {"template": "journal", "fontPreset": "handwritten"}
     article_digest = compute_document_sha256(article_md)
-    source_ref = relative_batch_ref(ent / "1.download" / "sources" / "01.overview_baike" / "source.md", task, batch)
-    source_unit_ref = relative_batch_ref(ent / "1.download" / "sources" / "01.overview_baike", task, batch)
+    source_refs = read_json(ent / "1.download" / "source_refs.json")
+    source_row = (source_refs.get("sources") or [])[0]
+    source_ref = str(source_row["sourceRef"])
+    source_unit_ref = str(source_row.get("sourceUnitRef") or source_ref.rsplit("/", 1)[0])
     # 单底稿零参考宪法 v2：source_refs.json 只登记唯一底稿来源，
     # 禁止 citedSourceRefs / sourcePaths 等第二来源或全量索引字段。
     write_json(post / "1.download" / "source_refs.json", {

@@ -1090,11 +1090,31 @@ class PrototypeMockData {
   }
 
   /// Mock 联系人头像 object key（与 [ChatMockData.avatarFor] 契约一致）。
-  static String mockChatContactAvatarFor(String userId) =>
-      'media/avatar/s/mock/user/$userId/v1/avatar.png';
+  static String mockChatContactAvatarFor(String userId) {
+    const avatars = <String, String>{
+      'user_001':
+          'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+      'user_002':
+          'media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png',
+      'user_003':
+          'media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png',
+      'user_004':
+          'media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png',
+    };
+    return avatars[userId] ??
+        'media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png';
+  }
 
-  static String mockChatCircleAvatarFor(String circleId) =>
-      'media/avatar/s/archived-avatar/circle/$circleId/v1/avatar.png';
+  static String mockChatCircleAvatarFor(String circleId) {
+    const avatars = <String, String>{
+      'circle_1':
+          'media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png',
+      'circle_2':
+          'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+    };
+    return avatars[circleId] ??
+        'media/avatar/s/archived-avatar/circle/fixture_circle_life/v1/avatar.png';
+  }
 
   /// 联系人 Tab - 联系人（含趣聊中的会话对象，至少两屏；1:1 MockMessageData MOCK_CONTACTS 扩展）
   static List<Map<String, dynamic>> get chatMockContacts {

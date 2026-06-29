@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 
 void main() {
   test('环绕布局在有一行配文时会按整行提升右侧高度并保留段落级续写间距', () {

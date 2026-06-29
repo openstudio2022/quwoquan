@@ -328,7 +328,7 @@ class FeedItemDto {
   String get displayFormat {
     if (type == 'video' || (videoUrl != null && videoUrl!.isNotEmpty)) return 'video';
     if (type == 'article') return 'note';
-    if (type == 'image' || type == 'photo') return 'image';
+    if (type == 'image') return 'image';
     if (imageUrls.isNotEmpty) return 'image';
     return 'note';
   }

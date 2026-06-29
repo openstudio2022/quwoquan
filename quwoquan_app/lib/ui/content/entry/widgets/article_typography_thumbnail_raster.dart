@@ -4,8 +4,8 @@ import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/rendering.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 /// 与创作页排版工具栏 tab 对齐。

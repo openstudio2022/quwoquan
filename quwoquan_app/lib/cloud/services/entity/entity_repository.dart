@@ -17,7 +17,10 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_rollout_context.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_relation_edge.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_impact_item.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 
@@ -53,6 +56,8 @@ abstract class HomepageRepository {
   });
 
   Future<HomepageReviewSummaryData> getHomepageReviewSummary(String homepageId);
+
+  Future<EntityImpactSummary> getEntityImpact(String homepageId);
 
   Future<List<HomepageRelatedGroupSummary>> getHomepageRelatedGroups(
     String homepageId,
@@ -313,6 +318,82 @@ class MockHomepageRepository implements HomepageRepository {
       return rs;
     }
     return HomepageReviewSummaryData();
+  }
+
+  @override
+  Future<EntityImpactSummary> getEntityImpact(String homepageId) async {
+    final homepage = _requireHomepage(homepageId);
+    return _entityImpactFromHomepage(homepage);
+  }
+
+  /// 由已 contract-seed 的 [HomepageDetail] 真实字段派生「影响力」事实行，
+  /// 与圈子影响卡同源（从 stats 派生）：关注连接 / 口碑评价 / 相关圈子讨论。
+  /// 不伪造数字——无可派生事实（候选主页无口碑/相关圈子）时返回空 items，端侧整卡不展示（G2）。
+  static EntityImpactSummary _entityImpactFromHomepage(HomepageDetail homepage) {
+    final followerCount = homepage.followerCount;
+    final ratingCount = homepage.reviewSummary?.ratingCount ?? 0;
+    final discussionCount = homepage.relatedGroups.fold<int>(
+      0,
+      (sum, group) => sum + group.memberCount,
+    );
+    final items = <EntityImpactItem>[
+      if (followerCount > 0)
+        EntityImpactItem(
+          helpType: 'relationship',
+          action: 'establish_connection',
+          intersectionDimension: 'relationship',
+          source: 'homepage_followers',
+          count: followerCount,
+          primaryText: '$followerCount人因这里建立了关注连接',
+          subtitleText: '关注的人也在看这里',
+          iconKey: 'connect',
+          impactId: 'homepage_${homepage.id}_relationship',
+          countObjectKind: 'user',
+          primarySpans: <IntersectionTextSpan>[
+            IntersectionTextSpan(text: '$followerCount', role: 'count'),
+            IntersectionTextSpan(text: '人因这里建立了关注连接', role: 'plain'),
+          ],
+        ),
+      if (ratingCount > 0)
+        EntityImpactItem(
+          helpType: 'decision',
+          action: 'leave_review',
+          intersectionDimension: 'decision',
+          source: 'homepage_reviews',
+          count: ratingCount,
+          primaryText: '$ratingCount人为这里留下了真实评价',
+          subtitleText: '帮助更多人做决定',
+          iconKey: 'star',
+          impactId: 'homepage_${homepage.id}_decision',
+          countObjectKind: 'review',
+          primarySpans: <IntersectionTextSpan>[
+            IntersectionTextSpan(text: '$ratingCount', role: 'count'),
+            IntersectionTextSpan(text: '人为这里留下了真实评价', role: 'plain'),
+          ],
+        ),
+      if (discussionCount > 0)
+        EntityImpactItem(
+          helpType: 'community',
+          action: 'start_discussion',
+          intersectionDimension: 'content',
+          source: 'homepage_related_groups',
+          count: discussionCount,
+          primaryText: '$discussionCount人在相关圈子里讨论这里',
+          subtitleText: '讨论在这里沉淀',
+          iconKey: 'discussion',
+          impactId: 'homepage_${homepage.id}_community',
+          countObjectKind: 'user',
+          primarySpans: <IntersectionTextSpan>[
+            IntersectionTextSpan(text: '$discussionCount', role: 'count'),
+            IntersectionTextSpan(text: '人在相关圈子里讨论这里', role: 'plain'),
+          ],
+        ),
+    ];
+    return EntityImpactSummary(
+      homepageId: homepage.id,
+      total: followerCount + ratingCount + discussionCount,
+      items: items,
+    );
   }
 
   @override

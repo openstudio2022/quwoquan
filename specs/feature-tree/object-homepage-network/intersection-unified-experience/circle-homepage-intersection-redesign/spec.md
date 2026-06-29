@@ -8,16 +8,21 @@
 
 ## 功能说明
 
-圈子主页（`CircleShell`）沿用他人主页同壳同口径重做交集体验与记录流，统一结构为「身份 → 为什么推荐这个圈子 → 这个圈子帮助了很多人 → 记录·讨论·成员」。规格真相源见 [intersection-definition-and-application.md](../../../../product/intersection-definition-and-application.md) §17.7。
+圈子主页（`CircleShell`）与「我的主页/他人主页」同壳同语义 token 重做，统一结构为「身份 → 我的交集 → 影响力 → 记录·讨论·成员」。规格真相源见 [intersection-definition-and-application.md](../../../../product/intersection-definition-and-application.md) §17.7 与 §17.8（双模块口径）。两个核心维度：
+
+- **我的交集 = 我与这个圈子客观存在、可枚举、可解释、可行动的真实连接点**（圈子里你认识的人、你已加入/讨论过、你关注的话题在这里）。
+- **影响力 = 这个圈子帮助他人产生连接、内容传播、讨论沉淀的能力**，同样可证、可枚举、可解释、可行动。
 
 ## 范围
 
-- 交集卡标题：`与你的交集` → `为什么推荐这个圈子` 列表入口（结论句 + 辅助说明 + 查看更多，主谓宾单句）；可见结论只读 `IntersectionReason.primaryText/primarySpans`，禁止用 `EvidenceGroup` 或 `intersectionPoints` 本地拼主句。
-- 价值卡：自建影响力卡收敛为 `AuthorImpactCard` 同构，标题 `这个圈子帮助了很多人`，去好友化/去收藏。
-- 一级 tab：`内容 → 记录`（metadata-first，新 label_key，不连带实体页）。
-- 记录流：二级过滤（全部/图片/视频/长文）去胶囊改最右侧过滤图标；网格改双列瀑布；卡内唯一交集句。
-- 头部：头像簇 +「N 成员」单计数；圈子独立头像字段（契约预留 + alpha mock，缺省回退封面）；认证标识沿用。
-- 用户语言禁词：移除「实体/Entity/Circle/交集/影响力」，`42个实体正在被讨论` → `42个话题正在被讨论`。
+- 我的交集卡：标题由「为什么推荐这个圈子」改为「我的交集」，与我的主页同壳，渲染共享 `ObjectIntersectionPreviewCard`（objectBType=circle、`objectSharedReasonsProvider` 单一真相源）：单列预览句（蓝色可点击锚点）+ 弱入口「查看全部」；可见结论只读 `IntersectionReason.primaryText/primarySpans`，禁止用 `EvidenceGroup` 或 `intersectionPoints` 本地拼主句。
+- 影响力卡：标题由「这个圈子帮助了很多人」改为「影响力」，`AuthorImpactCard` 同构（`IntersectionStatementCard` + `circleImpactProvider`），去好友化/去收藏；句内数字可下钻来源明细；无可枚举影响事实不展示。
+- 头部：移除成员头像簇（你认识的人收敛进我的交集模块）；保留圈子独立头像（缺省回退封面）+「N 成员」单计数 + 认证标识。
+- 核心动作：主按钮「加入圈子」，次按钮由「私信」改为「进入讨论」（切换到讨论 tab）。
+- 一级 tab：`记录/讨论/成员`（metadata-first label_key）。
+- 记录流：二级过滤（全部/图片/视频/长文）去胶囊改最右侧过滤图标；网格改双列瀑布；卡内唯一交集句（封面→交集句→标题→作者→赞）。
+- 清理：删除 `section_interaction`/`circle_stats_row` 死代码与硬编码中文字面量（统一语义 token）。
+- 用户语言禁词：移除「实体/Entity/Circle/为什么推荐」，`42个实体正在被讨论` → `42个话题正在被讨论`。
 
 ## Out of Scope
 
@@ -26,7 +31,8 @@
 
 ## 验收标准概要
 
-- A1：交集卡标题为「为什么推荐这个圈子」，列表入口每行单结论句 + 至多一条辅助说明 + 查看更多。
-- A2：价值卡标题「这个圈子帮助了很多人」，与 `AuthorImpactCard` 同构，文案去好友化/去收藏。
-- A3：一级 tab 显示「记录」；记录流二级过滤在最右侧、非胶囊；双列瀑布；卡内有且仅一条交集句。
-- A4：头部头像簇 +「N 成员」单计数；圈子独立头像（缺省回退封面）；无禁用术语外露。
+- A1：我的交集卡走共享 `ObjectIntersectionPreviewCard`（objectBType=circle）单一真相源，标题「我的交集」，单列预览句（蓝锚点）+「查看全部」；无交集三态降级不占位。
+- A2：影响力卡标题「影响力」，与 `AuthorImpactCard` 同构，文案去好友化/去收藏，无影响事实不展示。
+- A3：头部移除成员头像簇、保留圈子独立头像（缺省回退封面）+「N 成员」单计数；次按钮「进入讨论」。
+- A4：一级 tab 显示「记录」；记录流二级过滤在最右侧、非胶囊；双列瀑布；卡内有且仅一条交集句。
+- A5：删除 `section_interaction`/`circle_stats_row` 死代码与中文字面量；无禁用术语外露（为什么推荐/影响力泛词→我的交集/影响力模块标题）。

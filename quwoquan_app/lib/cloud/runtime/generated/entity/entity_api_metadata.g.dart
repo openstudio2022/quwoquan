@@ -15,6 +15,7 @@ class EntityApiMetadata {
     'CreateHomepageClaimRequest': '/v1/homepages/{homepageId}/claim-requests',
     'CreateHomepageStatusReport': '/v1/homepages/{homepageId}/status-reports',
     'FollowHomepage': '/v1/homepages/{homepageId}/follow',
+    'GetEntityImpact': '/v1/homepages/{homepageId}/impact',
     'GetHomepageDetail': '/v1/homepages/{homepageId}',
     'GetHomepageIntroduction': '/v1/homepages/{homepageId}/introduction',
     'GetHomepageRelatedGroups': '/v1/homepages/{homepageId}/related-groups',
@@ -35,6 +36,7 @@ class EntityApiMetadata {
     'CreateHomepageClaimRequest': 'POST',
     'CreateHomepageStatusReport': 'POST',
     'FollowHomepage': 'POST',
+    'GetEntityImpact': 'GET',
     'GetHomepageDetail': 'GET',
     'GetHomepageIntroduction': 'GET',
     'GetHomepageRelatedGroups': 'GET',
@@ -56,6 +58,7 @@ class EntityApiMetadata {
     'CreateHomepageClaimRequest': 'required',
     'CreateHomepageStatusReport': 'required',
     'FollowHomepage': 'required',
+    'GetEntityImpact': 'required',
     'GetHomepageDetail': 'public',
     'GetHomepageIntroduction': 'public',
     'GetHomepageRelatedGroups': 'public',
@@ -83,6 +86,7 @@ class EntityApiMetadata {
   static const String createHomepageClaimRequestOperation = 'CreateHomepageClaimRequest';
   static const String createHomepageStatusReportOperation = 'CreateHomepageStatusReport';
   static const String followHomepageOperation = 'FollowHomepage';
+  static const String getEntityImpactOperation = 'GetEntityImpact';
   static const String getHomepageDetailOperation = 'GetHomepageDetail';
   static const String getHomepageIntroductionOperation = 'GetHomepageIntroduction';
   static const String getHomepageRelatedGroupsOperation = 'GetHomepageRelatedGroups';
@@ -113,6 +117,12 @@ class EntityApiMetadata {
   static const String followHomepagePathTemplate = '/v1/homepages/{homepageId}/follow';
   static String followHomepagePath({required String homepageId}) {
     return _fillPath(followHomepagePathTemplate, <String, String>{
+      'homepageId': homepageId,
+    });
+  }
+  static const String getEntityImpactPathTemplate = '/v1/homepages/{homepageId}/impact';
+  static String getEntityImpactPath({required String homepageId}) {
+    return _fillPath(getEntityImpactPathTemplate, <String, String>{
       'homepageId': homepageId,
     });
   }

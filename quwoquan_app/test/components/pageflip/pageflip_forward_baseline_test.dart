@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/geometry.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 void main() {
   group('Forward pageflip baseline', () {

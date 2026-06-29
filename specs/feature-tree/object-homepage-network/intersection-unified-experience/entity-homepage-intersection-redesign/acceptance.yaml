@@ -7,30 +7,32 @@ node:
   parent_domain_service: object-homepage-network
   parent_business_capability: intersection-unified-experience
 scope:
-  summary: 实体主页沿用他人主页同壳同口径重做交集卡、关于这里卡、记录流与头部。
+  summary: 实体主页与我的主页同壳同语义 token 重做为「身份 → 我的交集 → 影响力 → 关于这里 → 记录/讨论/相关圈子」双模块结构。
   in_scope:
-  - 交集卡切 ObjectIntersectionSection（objectBType=homepage）单一真相源，标题「为什么推荐这里」。
-  - 关于这里卡标题「关于这里」，2~4 行 + 缩略图 + 查看更多介绍。
-  - 一级 tab 改记录/讨论/相关圈子；记录流单列改双列瀑布 + PostBaseDto 流 + 卡内交集句。
-  - 二级过滤新建（右侧漏斗 + ActionSheet，非胶囊），过滤项进 homepage_sub_tabs。
+  - 我的交集卡标题由「为什么推荐这里」改「我的交集」，渲染共享 ObjectIntersectionPreviewCard（objectBType=homepage、objectSharedReasonsProvider 单一真相源）：单列预览句 + 蓝锚点 + 查看全部。
+  - 影响力卡新增，标题「影响力」，IntersectionStatementCard + entityImpactProvider，逐条只读 EntityImpactItem，句内数字下钻影响明细，无事实不展示。
+  - 关于这里卡标题「关于这里」，2~4 行 + 缩略图 + 查看更多介绍，下沉到双模块之下。
+  - 核心动作主按钮关注、次按钮改「发记录」；移除首屏常驻「想去·结伴」入口。
+  - 一级 tab 记录/讨论/相关圈子；记录流双列瀑布 + 卡内唯一交集句（封面→交集句→标题→作者→赞）。
+  - 二级过滤（右侧漏斗 + ActionSheet，非胶囊），过滤项进 homepage_sub_tabs。
   - 相关圈子卡片化并进入圈子主页；公开路径移除内部运维字段。
   - 头部头像簇 + N 关注单计数 + verified + 成立年份（契约预留 + alpha mock）。
-  - 用户语言禁词清理（实体/Entity/兴趣圈/影响力/同趣事实化）。
+  - 用户语言禁词清理（实体/Entity/为什么推荐/兴趣圈/同趣事实化）。
   out_of_scope:
-  - 云侧 Homepage/Entity 服务、排序、图谱实现。
+  - 云侧 Homepage/Entity 服务、排序、图谱实现（含 entity impact GetEntityImpact Go handler 暂缓，仅端契约 + alpha mock）。
   - AB / 特征 / 召回系统。
 gwt_acceptance:
   GWT1:
-    title: 为什么推荐这里单一真相源 GWT
+    title: 我的交集卡单一真相源 GWT
     given:
-    - alpha mock homepage fixtures 含主谓宾 primaryText。
+    - alpha mock homepage fixtures 含主谓宾 primaryText 与蓝锚点 primarySpans。
     when:
-    - 渲染实体主页交集卡。
+    - 渲染实体主页「我的交集」卡。
     then:
-    - 交集卡走 ObjectIntersectionSection（objectBType=homepage），标题「为什么推荐这里」，列表入口每行单结论句
-      + 至多一条辅助说明 + 查看更多。
+    - 我的交集卡走共享 ObjectIntersectionPreviewCard（objectBType=homepage、objectSharedReasonsProvider），标题「我的交集」，单列预览句（蓝色可点击锚点）
+      + 弱入口「查看全部」。
     done_when:
-    - 弃 bundle 直出，统一走 objectSharedReasons provider。
+    - 弃 bundle 直出与「为什么推荐这里」标题，统一走 objectSharedReasons provider 与我的主页同壳。
     edge_cases:
     - 无交集事实时三态降级不占位。
     contract_refs:
@@ -219,6 +221,45 @@ gwt_acceptance:
       剩余阻断是 gamma-local health、seed viewer 关系、`/v1/homepages/{id}/related-groups`
       与 circle detail populated 探针；由 `object-homepage-gamma-real-data-closure` 与 R-IX05
       继续追踪。'
+  GWT6:
+    title: 影响力卡可枚举可下钻 GWT
+    given:
+    - alpha mock 提供实体影响力数据（EntityImpactSummary 含主谓宾 primaryText + 数字 spans + 来源）。
+    when:
+    - 渲染实体主页「影响力」卡并点击句内数字片段。
+    then:
+    - 影响力卡标题「影响力」，与 AuthorImpactCard/圈子影响卡同构（IntersectionStatementCard），逐条只读云侧
+      EntityImpactItem.primaryText/primarySpans；点击数字片段进入「影响明细」sheet 展示来源摘要与样本视觉。
+    done_when:
+    - 影响力数据来自 entityImpactProvider（alpha contract-seed mock），无可枚举影响事实时整卡不展示，无主观营销语。
+    edge_cases:
+    - 无影响力事实时不展示影响力卡。
+    contract_refs:
+    - entity/homepage/projections/entity_impact_item.yaml
+    - entity/homepage/projections/entity_impact_summary.yaml
+    performance_points: []
+    tests:
+      planned:
+      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt6_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.gwt6_local_contract
+        envs: *id001
+      supporting:
+      - layer: local_contract
+        suite: contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
+        envs: *id001
+    notes:
+    - '[recorded] 2026-06-29：本节点由「为什么推荐这里」单交集卡 re-PRD 为「我的交集 + 影响力」双模块，新增实体影响力端契约（entity_impact_item/summary
+      + GetEntityImpact，下钻复用与圈子同构的影响明细 sheet，不引入独立分页 evidence 端点），云侧 Go handler 暂缓；上方早期 [migrated_from_recorded]「为什么推荐这里」绿测记录为被取代的旧口径，待 local_contract 重写转绿后回填。'
+    - '[recorded] PENDING api_integration：gamma 实体影响力真实链路待云侧 entity impact handler 落地后由 api_integration 收口。'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

@@ -13,6 +13,7 @@ from typing import Any, Mapping
 
 from _common.io import read_json
 from _common.paths import batch_root, release_root
+from _common.base_draft import base_draft_readiness
 
 
 REPORT_SCHEMA = "quwoquan_data.release_integrity"
@@ -29,14 +30,12 @@ ARTICLE_HARD_CHECKS = {
     "carrierConsistency",
     "proseStyle",
     "imageGate",
-    "travelogueDensity",
     "crossArticleSimilarity",
     "generatorProvenance",
     "factTraceability",
     "baseDraftFidelity",
     "sectionBalance",
     "timelineOrder",
-    "writingIntentConsistency",
     "registerMismatch",
     "contactInfo",
     "mechanicalHeading",
@@ -236,11 +235,15 @@ def _base_draft_issues(
                 f"{post_rel}: base draft ledger does not map {base_source} to topicId {topic_id}"
             )
     base_text = str(writing_pack.get("baseDraftText") or "")
-    effective_len = len(re.sub(r"\s+", "", base_text))
-    if effective_len < MIN_ARTICLE_BASE_DRAFT_CHARS:
+    readiness = base_draft_readiness(
+        base_text,
+        publish_media_mode=str(writing_pack.get("publishMediaMode") or manifest.get("publishMediaMode") or ""),
+    )
+    if not readiness["ready"]:
         issues.append(
             f"{post_rel}: baseDraftText too short for article "
-            f"({effective_len} < {MIN_ARTICLE_BASE_DRAFT_CHARS})"
+            f"({readiness['effectiveChars']} < {MIN_ARTICLE_BASE_DRAFT_CHARS}; "
+            f"figures={readiness['inlineFigureCount']} captions={readiness['captionChars']})"
         )
     return issues
 

@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/book_layout.dart';
+import 'package:quwoquan_app/components/pageflip/controller.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 enum ArticleReaderFlipMode { singlePage, spreadDoublePage }
 

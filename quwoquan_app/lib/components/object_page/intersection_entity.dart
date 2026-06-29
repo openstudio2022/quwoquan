@@ -440,6 +440,11 @@ class _Avatar extends StatelessWidget {
         return CupertinoIcons.camera_fill;
       case UnifiedObjectKind.gear:
         return CupertinoIcons.bag_fill;
+      // §22.2 行程/活动 objectKind（结构就位，保持图标语义可辨识）。
+      case UnifiedObjectKind.trip:
+        return CupertinoIcons.map_fill;
+      case UnifiedObjectKind.meetup:
+        return CupertinoIcons.person_2_fill;
     }
   }
 }

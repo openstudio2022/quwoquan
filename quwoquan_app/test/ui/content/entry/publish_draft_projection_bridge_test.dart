@@ -1,9 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_post_mutation_wires.g.dart';
-import 'package:quwoquan_app/ui/content/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/entry/publish_draft_projection_bridge.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 

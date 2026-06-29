@@ -15,7 +15,7 @@ import tempfile
 from threading import Lock
 from typing import Any, Mapping
 
-from _common.paths import ensure_batch_layout, batch_root, source_unit_dir
+from _common.paths import ensure_batch_layout, batch_root, batch_source_unit_dir
 from _common.io import read_json, write_json
 from _common.batch_manifest import write_batch_manifest, write_source_catalog
 from _common.content_evidence import clean_source_markdown, score_source_markdown
@@ -51,6 +51,7 @@ from vertical.license import normalize_rights_payload, validate_image_rights
 
 from download.handler_plan import *  # noqa: F403
 from download.handler_images import *  # noqa: F403
+from download.handler_images import _find_source_unit_by_plan_key  # noqa: F401
 from download import handler_bridge
 
 def _fetch_download_entity(
@@ -301,26 +302,34 @@ def _fetch_download_entity(
             candidate_quality=quality,
         )
         if cached_quality is not None:
-            print(
-                "[download] Preserve better cached source "
-                f"{entity_id}/{source['source_id']}: "
-                f"{cached_quality.get('quality')}({cached_quality.get('score')}) > "
-                f"{quality.get('quality')}({quality.get('score')})",
-                flush=True,
+            unit = _find_source_unit_by_plan_key(
+                object_dir,
+                ordinal=ordinal,
+                source_id=source["source_id"],
+                url=source["url"],
             )
-            unit = source_unit_dir(object_dir, ordinal, source["source_id"])
-            source_md = (unit / "source.md").read_text(encoding="utf-8")
-            clean_path = unit / "source.clean.md"
-            clean_md = clean_path.read_text(encoding="utf-8") if clean_path.is_file() else ""
-            page_path = find_source_unit_raw_snapshot(unit)
-            html_bytes = page_path.read_bytes() if page_path else None
-            # 复用既有原始快照格式，避免缓存恢复后又写错扩展名。
-            raw_format = (
-                "mediawiki_api_json"
-                if page_path is not None and page_path.name == "page.raw.json"
-                else raw_format
-            )
-            quality = {**cached_quality, "retainedFromCache": True}
+            if unit is None:
+                cached_quality = None
+            else:
+                source_md = (unit / "source.md").read_text(encoding="utf-8")
+                clean_path = unit / "source.clean.md"
+                clean_md = clean_path.read_text(encoding="utf-8") if clean_path.is_file() else ""
+                page_path = find_source_unit_raw_snapshot(unit)
+                html_bytes = page_path.read_bytes() if page_path else None
+                # 复用既有原始快照格式，避免缓存恢复后又写错扩展名。
+                raw_format = (
+                    "mediawiki_api_json"
+                    if page_path is not None and page_path.name == "page.raw.json"
+                    else raw_format
+                )
+                print(
+                    "[download] Preserve better cached source "
+                    f"{entity_id}/{source['source_id']}: "
+                    f"{cached_quality.get('quality')}({cached_quality.get('score')}) > "
+                    f"{quality.get('quality')}({quality.get('score')})",
+                    flush=True,
+                )
+                quality = {**cached_quality, "retainedFromCache": True}
         source_images, source_image_issues, source_image_funnel = _download_source_unit_images(
             source,
             task_id=task_id,
@@ -335,7 +344,7 @@ def _fetch_download_entity(
                 f"sourceImage:{source['source_id']}: {issue}"
                 for issue in source_image_issues
             )
-        write_source_unit(
+        manifest = write_source_unit(
             object_dir,
             ordinal=ordinal,
             source_id=source["source_id"],
@@ -346,6 +355,7 @@ def _fetch_download_entity(
             platform=source.get("platform") or "web",
             source_category=source.get("category") or source.get("platform") or "web",
             source_use_mode=source.get("sourceUseMode") or "",
+            publish_media_mode=source.get("publishMediaMode") or "",
             source_role=source.get("sourceRole") or "",
             image_evidence_mode=source.get("imageEvidenceMode") or "",
             research_lane=source.get("researchLane") or "",
@@ -361,7 +371,7 @@ def _fetch_download_entity(
             batch_id=batch_id,
             build_variants=False,
         )
-        unit_dir = source_unit_dir(object_dir, ordinal, source["source_id"])
+        unit_dir = batch_source_unit_dir(task_id, batch_id, str(manifest.get("sourceUnitId") or ""))
         if str(quality.get("quality") or "") == "Reject":
             rejected_dir = _move_rejected_source_unit(object_dir, unit_dir, quality=quality)
             written_rejected_source_dirs.add(rejected_dir)
@@ -462,7 +472,7 @@ def _fetch_download_entity(
             "---\n\n"
             f"{entity_id} 图片来源集合，仅供结构化资产与授权链使用。\n"
         )
-        write_source_unit(
+        manifest = write_source_unit(
             object_dir,
             ordinal=len(sources) + offset,
             source_id=source_id,
@@ -490,7 +500,7 @@ def _fetch_download_entity(
             batch_id=batch_id,
             build_variants=False,
         )
-        written_source_dirs.add(source_unit_dir(object_dir, len(sources) + offset, source_id))
+        written_source_dirs.add(batch_source_unit_dir(task_id, batch_id, str(manifest.get("sourceUnitId") or "")))
     kept_images = len(pending_images)
     count_issue = None
     if image_lane_selected and required_images > 0 and kept_images < required_images:

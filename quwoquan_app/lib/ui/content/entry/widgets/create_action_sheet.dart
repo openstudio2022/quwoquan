@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 
 typedef CreateActionSelected = void Function(EditorStartAction action);
 
@@ -38,9 +38,10 @@ class CreateActionSheet extends StatelessWidget {
     final primaryText =
         SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
 
-    final actions = <_SheetActionSpec>[
+    final createActions = <_SheetActionSpec>[
       _SheetActionSpec(
         label: UITextConstants.createActionPostPhotoShort,
+        subtitle: UITextConstants.createActionPhotoSubtitle,
         labelKey: TestKeys.createActionGallery,
         onPressed: () => onCreateAction(EditorStartAction.gallery),
       ),
@@ -48,13 +49,30 @@ class CreateActionSheet extends StatelessWidget {
         label: UITextConstants.createActionPostVideoShort,
         subtitle: UITextConstants.createActionCameraSubtitle,
         labelKey: TestKeys.createActionCapture,
-        onPressed: () => onCreateAction(EditorStartAction.capture),
+        onPressed: () => onCreateAction(EditorStartAction.video),
       ),
       _SheetActionSpec(
         label: UITextConstants.createActionWriteLong,
         labelKey: TestKeys.createActionWrite,
         onPressed: () => onCreateAction(EditorStartAction.write),
       ),
+    ];
+    final socialActions = <_SheetActionSpec>[
+      if (onAddContact != null)
+        _SheetActionSpec(
+          label: UITextConstants.createActionAddContactShort,
+          onPressed: onAddContact!,
+        ),
+      if (onStartGroupChat != null)
+        _SheetActionSpec(
+          label: UITextConstants.createActionCreateGroupShort,
+          onPressed: onStartGroupChat!,
+        ),
+      if (onCreateCircle != null)
+        _SheetActionSpec(
+          label: UITextConstants.createActionCreateCircleShort,
+          onPressed: onCreateCircle!,
+        ),
     ];
 
     return AppBottomModalSurface(
@@ -88,29 +106,21 @@ class CreateActionSheet extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      ConversationSheetListCard(
+                      _SheetActionListCard(
                         isDark: isDark,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            for (var i = 0; i < actions.length; i++) ...[
-                              _SheetActionListRow(
-                                spec: actions[i],
-                                labelColor: primaryText,
-                                subtitleColor:
-                                    SettingsSemanticConstants.conversationSheetSecondaryLabelColor(
-                                      isDark,
-                                    ),
-                              ),
-                              if (i != actions.length - 1)
-                                ConversationSheetDivider(
-                                  isDark: isDark,
-                                  dividerLeftInset: 0,
-                                ),
-                            ],
-                          ],
-                        ),
+                        actions: createActions,
+                        labelColor: primaryText,
                       ),
+                      if (socialActions.isNotEmpty) ...[
+                        const SizedBox(
+                          height: AppSpacing.createActionSheetGroupTrailingGap,
+                        ),
+                        _SheetActionListCard(
+                          isDark: isDark,
+                          actions: socialActions,
+                          labelColor: primaryText,
+                        ),
+                      ],
                       const SizedBox(
                         height: AppSpacing.createActionSheetGroupTrailingGap,
                       ),
@@ -126,6 +136,42 @@ class CreateActionSheet extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _SheetActionListCard extends StatelessWidget {
+  const _SheetActionListCard({
+    required this.isDark,
+    required this.actions,
+    required this.labelColor,
+  });
+
+  final bool isDark;
+  final List<_SheetActionSpec> actions;
+  final Color labelColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConversationSheetListCard(
+      isDark: isDark,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < actions.length; i++) ...[
+            _SheetActionListRow(
+              spec: actions[i],
+              labelColor: labelColor,
+              subtitleColor:
+                  SettingsSemanticConstants.conversationSheetSecondaryLabelColor(
+                    isDark,
+                  ),
+            ),
+            if (i != actions.length - 1)
+              ConversationSheetDivider(isDark: isDark, dividerLeftInset: 0),
+          ],
+        ],
       ),
     );
   }

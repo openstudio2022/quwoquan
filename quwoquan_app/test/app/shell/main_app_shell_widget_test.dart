@@ -589,7 +589,23 @@ void main() {
         findsOneWidget,
       );
       expect(
+        find.text(UITextConstants.createActionPhotoSubtitle),
+        findsOneWidget,
+      );
+      expect(
         find.text(UITextConstants.createActionCameraSubtitle),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.createActionAddContactShort),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.createActionCreateGroupShort),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.createActionCreateCircleShort),
         findsOneWidget,
       );
     });
@@ -613,7 +629,7 @@ void main() {
       expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
       expect(
         find.text(UITextConstants.createActionAddContactShort),
-        findsNothing,
+        findsOneWidget,
       );
 
       // 选具体创作动作时才触发登录。

@@ -16,9 +16,11 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/core/widgets/app_list_page_semantics.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/user/pages/my_intersection_inbox_page.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
+import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_timeline.dart';
 
 void main() {
   testWidgets('我的交集列表：展示筛选、时间桶和事实行，并打开即 visit 清零', (tester) async {
@@ -45,21 +47,19 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    // 交集 tab 选中：导航标题 + body 一级 tab 同名各一处。
-    expect(
-      find.text(UITextConstants.profileTabIntersection),
-      findsNWidgets(2),
-    );
+    // 交集/影响力已收敛到 nav center compact switch；body 不再重复一级 segmented。
+    expect(find.text(UITextConstants.profileTabIntersection), findsOneWidget);
     expect(find.text(UITextConstants.profileTabImpact), findsOneWidget);
+    expect(
+      find.byWidgetPredicate((widget) => widget is AppSegmentedChoiceBar),
+      findsNothing,
+    );
     expect(find.text(DiscoveryFeedText.intersectionFilterAll), findsOneWidget);
     expect(
       find.text(DiscoveryFeedText.intersectionFilterPeople),
       findsOneWidget,
     );
-    expect(
-      find.text(DiscoveryFeedText.intersectionTimeBucketToday),
-      findsOneWidget,
-    );
+    expect(find.text('今天 1条'), findsOneWidget);
     expect(find.text('你和林清越等4位用户都关注「黄金投资圈」'), findsOneWidget);
     expect(find.text(UITextConstants.follow), findsNothing);
     expect(repo.visitedDimension, '');
@@ -106,7 +106,7 @@ void main() {
     expect(find.text('你和小航等2位校友都去过「西湖」'), findsNothing);
   });
 
-  testWidgets('我的交集时间轴：跨 5 年展示有 item 的桶，空时间段隐藏', (tester) async {
+  testWidgets('我的交集时间轴：仅展示最近 5 个互斥时间桶，旧年份桶隐藏', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -122,19 +122,16 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     final year = DateTime.now().year;
-    // 有 item 的桶渲染（今天 + N-2 年 + N-4 年）。
+    expect(find.text('今天 1条'), findsOneWidget);
+    expect(find.text('${year - 2} 年'), findsNothing);
+    expect(find.text('${year - 4} 年'), findsNothing);
     expect(
-      find.text(DiscoveryFeedText.intersectionTimeBucketToday),
+      find.text('- ${DiscoveryFeedText.intersectionTimelineRecentLimitNote} -'),
       findsOneWidget,
     );
-    expect(find.text('${year - 2} 年'), findsOneWidget);
-    expect(find.text('${year - 4} 年'), findsOneWidget);
-    // 空时间段隐藏（N-1 / N-3 年无 item，不渲染表头）。
-    expect(find.text('${year - 1} 年'), findsNothing);
-    expect(find.text('${year - 3} 年'), findsNothing);
   });
 
-  testWidgets('我的交集：代表人纯文本蓝字 + 生命周期弱标 + 行动 pill 同行呈现', (tester) async {
+  testWidgets('我的交集：紧凑 row 不展示 secondary、生命周期弱标和行动 pill', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -149,17 +146,15 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 
-    // 代表人是句中可点纯文本（无头像 Image）。
     expect(find.textContaining('王然'), findsOneWidget);
-    // 生命周期弱标：reactivated → 「重新活跃」。
     expect(
       find.text(DiscoveryFeedText.intersectionLifecycleReactivated),
-      findsOneWidget,
+      findsNothing,
     );
-    // 行动建议 pill。
-    expect(find.text('进入讨论'), findsOneWidget);
-    // 行内不出现任何网络图片（代表人改纯文本后，交集行无头像）。
+    expect(find.text('进入讨论'), findsNothing);
     expect(find.byType(Image), findsNothing);
+    final rowSize = tester.getSize(find.byType(IntersectionCompactTimelineRow));
+    expect(rowSize.height, inInclusiveRange(60, 64));
   });
 
   testWidgets('filter=impact 时直达影响力一级 tab', (tester) async {
@@ -193,8 +188,14 @@ void main() {
     await tester.pump(const Duration(milliseconds: 50));
 
     expect(find.text(UITextConstants.profileTabIntersection), findsOneWidget);
-    // 影响力 tab 选中：导航标题 + body 一级 tab 同名各一处。
-    expect(find.text(UITextConstants.profileTabImpact), findsNWidgets(2));
+    expect(find.text(UITextConstants.profileTabImpact), findsOneWidget);
+    expect(find.text(DiscoveryFeedText.impactFilterRecords), findsOneWidget);
+    expect(
+      find.text(DiscoveryFeedText.impactFilterDiscussions),
+      findsOneWidget,
+    );
+    expect(find.text(DiscoveryFeedText.impactFilterHomepage), findsOneWidget);
+    expect(find.text('内容'), findsNothing);
     expect(find.text('8人因为你的记录收藏了路线'), findsOneWidget);
     expect(find.text(DiscoveryFeedText.intersectionFilterPeople), findsNothing);
   });

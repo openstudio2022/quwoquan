@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
-import 'package:quwoquan_app/components/comment_system/comment_input_overlay.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
 import 'package:quwoquan_app/core/auth/auth_continuation.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -21,7 +21,10 @@ void main() {
       expect(container.read(authContinuationProvider), isNull);
 
       controller.set(
-        const SubmitCommentContinuation(content: '游客想说的话', replyToCommentId: 'c1'),
+        const SubmitCommentContinuation(
+          content: '游客想说的话',
+          replyToCommentId: 'c1',
+        ),
       );
       expect(container.read(authContinuationProvider), isNotNull);
 
@@ -40,9 +43,7 @@ void main() {
   });
 
   group('评论统一输入浮层登录续接', () {
-    testWidgets('游客输入评论点提交→登记续接并引导登录→登录后同一浮层续提原文本', (
-      tester,
-    ) async {
+    testWidgets('游客输入评论点提交→登记续接并引导登录→登录后同一浮层续提原文本', (tester) async {
       AuthGate.resetDebounce();
       final submitted = <CommentComposerPayload>[];
       final container = ProviderContainer(
@@ -132,7 +133,8 @@ void main() {
 /// 可控测试会话：初始为游客，调用 [loginNow] 翻转为已认证以触发登录后续接。
 class _FlippableSession extends AuthSessionController {
   @override
-  AuthSessionState build() => const AuthSessionState(status: AuthSessionStatus.guest);
+  AuthSessionState build() =>
+      const AuthSessionState(status: AuthSessionStatus.guest);
 
   void loginNow() {
     state = const AuthSessionState(

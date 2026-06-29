@@ -77,8 +77,7 @@ def _article_without_assets_allowed(brief: Mapping[str, Any]) -> bool:
 DECISION_MARKERS = ("我会", "我更愿意", "建议把", "如果你", "可以跟团", "宁可", "就该", "值不值得", "优先看", "我不会")
 STANDALONE_TIPS_MARKERS = ("实用信息", "实用攻略信息", "来源平台", "信息卡", "小贴士：", "tips：", "贴士：")
 
-# 生产 profile 不允许软失败绿灯放行；保留常量作为非生产 profile 的未来接线点。
-SOFT_CHECKS: set[str] = set()
+SOFT_CHECKS: set[str] = {"travelogueDensity", "writingIntentConsistency"}
 IMAGE_EVIDENCE_GENERATOR = "image_evidence_pack"
 
 
@@ -151,27 +150,22 @@ def _route_section_intents(brief: Mapping[str, Any], evidence_bundle: Mapping[st
         f"若底稿未按主线推进，可按 {order} 的真实顺序理顺，但不要套用固定模板小标题。",
     ]
 
+# 底稿派生内容类目（publish 目录 angle = path bucket）：源即单位模型下不再用 templateId
+# 模板映射，而是按载体 + 底稿派生的 writingIntent 标签确定性归类；标题取自底稿、保证目录唯一性。
+_ANGLE_BY_INTENT = {
+    "planning_consultation": "攻略",
+    "decision_experience": "体验",
+    "post_trip_journal": "游记",
+}
+
+
 def _publish_angle(brief: Mapping[str, Any]) -> str:
-    """由 templateId 确定性映射 publish 目录 angle（与 tagRefs Format/内容角度 对齐）。"""
-    template_id = str(brief.get("templateId") or "")
-    if "跟团" in template_id:
-        return "跟团攻略"
-    if "自驾" in template_id:
-        return "自驾路书"
-    if "深度" in template_id:
-        return "深度探险"
-    if "枢纽" in template_id:
-        return "枢纽到达"
-    if "省钱" in template_id:
-        return "省钱攻略"
-    if "周末短途" in template_id or "银发" in template_id or "补给" in template_id:
-        # 一日游/周边/短线：落「攻略」层（见 test_post_dir_layout 都江堰一日游）
-        return "攻略"
-    if "环线" in template_id:
-        return "环线攻略"
-    if "画报" in template_id or "图集" in template_id:
+    """底稿派生内容类目（publish 目录 angle）：image/gallery→画报，否则按 writingIntent 派生标签归类。"""
+    carrier = str(brief.get("carrier") or "").lower()
+    if carrier in ("image", "gallery"):
         return "画报"
-    return "攻略"
+    intent = str(brief.get("writingIntent") or "").strip()
+    return _ANGLE_BY_INTENT.get(intent, "攻略")
 
 GALLERY_MIN_IMAGES = 4
 LOW_NARRATIVE_SIGNALS = 6

@@ -259,24 +259,16 @@ def _image_story_spine(
 def _attach_base_draft_text(task_id: str, batch_id: str, pack: dict[str, Any]) -> None:
     """把底稿正文内联进 writing pack，供 prompt 渲染「在此基础上适度加工」。
 
-    底稿按 writingIntent 主线 + 实体名收窄到对齐段，prompt 与 review 门
-    （review_route_draft 的 baseDraftFidelity）消费同一份对齐底稿，避免聚焦文章
-    因整篇多主题游记作分母而永远摸不到贴合度下限（R-CS01）。
+    底稿中心 1:1：内联整篇单一底稿正文，prompt 与 review 门（baseDraftFidelity）消费同一份
+    整篇底稿；成品只来自这一篇底稿，不再按 writingIntent 收窄分母（避免误杀，也防逐字照搬）。
     """
-    from _common.base_draft import base_source_use_mode, load_intent_aligned_base_draft_text
-    from _common.writing_pack import primary_entity_name
+    from _common.base_draft import base_source_use_mode, load_base_draft_text
 
     base_ref = str(pack.get("baseSourceRef") or "")
     if not base_ref:
         return
     pack["sourceUseMode"] = base_source_use_mode(task_id, batch_id, base_ref)
-    text = load_intent_aligned_base_draft_text(
-        task_id,
-        batch_id,
-        base_ref,
-        writing_intent=pack.get("writingIntent"),
-        entity_name=primary_entity_name(pack),
-    ).strip()
+    text = load_base_draft_text(task_id, batch_id, base_ref).strip()
     if text:
         pack["baseDraftText"] = text[:4000]
 

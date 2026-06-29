@@ -1,6 +1,5 @@
 // ignore_for_file: deprecated_member_use, overridden_fields
 
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
@@ -14,7 +13,7 @@ import 'package:quwoquan_app/components/content/media_post_card.dart';
 class ImagePostCard extends MediaPostCard {
   @override
   final bool isFirstPost;
-  
+
   // 静态Map来存储每个post的展开状态
   static final Map<String, bool> _expandedStates = {};
 
@@ -40,7 +39,7 @@ class ImagePostCard extends MediaPostCard {
   @override
   Widget buildMediaContent(BuildContext context, bool isDark) {
     final images = post.mediaImageUrls;
-    
+
     if (images.isEmpty) {
       return const SizedBox.shrink(); // 不显示任何内容
     }
@@ -55,12 +54,12 @@ class ImagePostCard extends MediaPostCard {
   Widget _buildImageCaption(BuildContext context, bool isDark) {
     final title = presentation.title;
     final content = presentation.body;
-    
+
     // 如果标题和配文都为空，不显示
     if (title.isEmpty && content.isEmpty) {
       return const SizedBox.shrink();
     }
-    
+
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: AppSpacing.contentSpacingMd.w,
@@ -84,7 +83,7 @@ class ImagePostCard extends MediaPostCard {
                 ),
               ),
             ),
-          
+
           // 配文
           if (content.isNotEmpty)
             _buildExpandableContent(context, isDark, content),
@@ -94,14 +93,18 @@ class ImagePostCard extends MediaPostCard {
   }
 
   /// 构建可展开的配文内容
-  Widget _buildExpandableContent(BuildContext context, bool isDark, String content) {
+  Widget _buildExpandableContent(
+    BuildContext context,
+    bool isDark,
+    String content,
+  ) {
     final postId = post.id;
-    
+
     return StatefulBuilder(
       builder: (context, setState) {
         // 使用静态Map来管理展开状态，确保状态持久化
         final isExpanded = _expandedStates[postId] ?? false;
-        
+
         return LayoutBuilder(
           builder: (context, constraints) {
             final textPainter = TextPainter(
@@ -118,31 +121,47 @@ class ImagePostCard extends MediaPostCard {
               maxLines: isExpanded ? null : 2, // 展开时无限制行数
               textDirection: TextDirection.ltr,
             );
-            
+
             textPainter.layout(maxWidth: constraints.maxWidth);
             final isOverflow = textPainter.didExceedMaxLines;
-            
+
             return GestureDetector(
-              onTap: isOverflow ? () {
-                setState(() {
-                  _expandedStates[postId] = !isExpanded;
-                });
-              } : null,
+              onTap: isOverflow
+                  ? () {
+                      setState(() {
+                        _expandedStates[postId] = !isExpanded;
+                      });
+                    }
+                  : null,
               child: isOverflow
                   ? Text.rich(
                       TextSpan(
                         children: [
                           TextSpan(
-                            text: isExpanded ? content : () {
-                              // 简单粗暴的方法：少显示更多字符，为"全文"留出足够空间
-                              // 直接减少更多字符，避免精确计算
-                              final truncatedLength = textPainter.getPositionForOffset(
-                                Offset(constraints.maxWidth, textPainter.height * 2)
-                              ).offset - 8; // 减少8个字符的位置，为"全文"留出空间
-                              
-                              final truncatedText = content.substring(0, truncatedLength > 0 ? truncatedLength : content.length);
-                              return '$truncatedText...';
-                            }(),
+                            text: isExpanded
+                                ? content
+                                : () {
+                                    // 简单粗暴的方法：少显示更多字符，为"全文"留出足够空间
+                                    // 直接减少更多字符，避免精确计算
+                                    final truncatedLength =
+                                        textPainter
+                                            .getPositionForOffset(
+                                              Offset(
+                                                constraints.maxWidth,
+                                                textPainter.height * 2,
+                                              ),
+                                            )
+                                            .offset -
+                                        8; // 减少8个字符的位置，为"全文"留出空间
+
+                                    final truncatedText = content.substring(
+                                      0,
+                                      truncatedLength > 0
+                                          ? truncatedLength
+                                          : content.length,
+                                    );
+                                    return '$truncatedText...';
+                                  }(),
                             style: TextStyle(
                               fontSize: AppTypography.base,
                               fontWeight: AppTypography.normal,
@@ -155,7 +174,10 @@ class ImagePostCard extends MediaPostCard {
                             text: isExpanded ? '收起' : '全文',
                             style: TextStyle(
                               fontSize: AppTypography.base,
-                              color: AppColorsFunctional.getColor(isDark, ColorType.primary),
+                              color: AppColorsFunctional.getColor(
+                                isDark,
+                                ColorType.primary,
+                              ),
                               fontWeight: AppTypography.medium,
                             ),
                           ),
@@ -179,17 +201,22 @@ class ImagePostCard extends MediaPostCard {
     );
   }
 
-
   /// 构建单张图片内容
   Widget _buildSingleImageContent(
-      BuildContext context, bool isDark, List<String> images) {
+    BuildContext context,
+    bool isDark,
+    List<String> images,
+  ) {
     return GestureDetector(
       onTap: () => _showMediaViewer(context),
       child: AspectRatio(
         aspectRatio: 1.0, // Instagram风格的正方形图片
         child: Container(
           width: double.infinity,
-          color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary), // Post卡片使用稍微明亮一点的黑色 (#262626)，与原型一致
+          color: AppColorsFunctional.getColor(
+            isDark,
+            ColorType.backgroundSecondary,
+          ), // Post卡片使用稍微明亮一点的黑色 (#262626)，与原型一致
           child: Stack(
             children: [
               // 图片 - 移除圆角效果
@@ -198,15 +225,14 @@ class ImagePostCard extends MediaPostCard {
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: double.infinity,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return _buildLoadingPlaceholder(context, isDark);
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return _buildErrorPlaceholder(context, isDark);
-              },
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return _buildLoadingPlaceholder(context, isDark);
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildErrorPlaceholder(context, isDark);
+                },
               ),
-              
             ],
           ),
         ),
@@ -216,7 +242,10 @@ class ImagePostCard extends MediaPostCard {
 
   /// 构建多张图片内容
   Widget _buildMultiImageContent(
-      BuildContext context, bool isDark, List<String> images) {
+    BuildContext context,
+    bool isDark,
+    List<String> images,
+  ) {
     return _MultiImageContent(
       images: images,
       isDark: isDark,
@@ -271,18 +300,18 @@ class _MultiImageContentState extends State<_MultiImageContent> {
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: 0);
-    
+
     // 异步预加载前3张图片
     _preloadImagesAsync();
   }
-  
+
   /// 异步预加载图片（最多3张）
   void _preloadImagesAsync() {
     if (widget.images.isEmpty) return;
-    
+
     // 预加载前3张图片
     final imagesToPreload = widget.images.take(3).toList();
-    
+
     for (int i = 0; i < imagesToPreload.length; i++) {
       final imageUrl = imagesToPreload[i];
       // 异步预加载，不阻塞UI
@@ -297,15 +326,15 @@ class _MultiImageContentState extends State<_MultiImageContent> {
       });
     }
   }
-  
+
   /// 智能预加载：根据当前位置预加载相邻图片
   void _smartPreloadImages(int currentIndex) {
     if (widget.images.length <= 1) return;
-    
+
     // 预加载当前图片的前后各1张图片
     final startIndex = (currentIndex - 1).clamp(0, widget.images.length - 1);
     final endIndex = (currentIndex + 2).clamp(0, widget.images.length);
-    
+
     for (int i = startIndex; i < endIndex; i++) {
       if (i != currentIndex && i < widget.images.length) {
         final imageUrl = widget.images[i];
@@ -367,7 +396,10 @@ class _MultiImageContentState extends State<_MultiImageContent> {
             aspectRatio: 1.0,
             child: Container(
               width: double.infinity,
-              color: AppColorsFunctional.getColor(widget.isDark, ColorType.backgroundPrimary),
+              color: AppColorsFunctional.getColor(
+                widget.isDark,
+                ColorType.backgroundPrimary,
+              ),
               child: NotificationListener<ScrollNotification>(
                 onNotification: _handleScrollNotification,
                 child: PageView.builder(
@@ -376,7 +408,7 @@ class _MultiImageContentState extends State<_MultiImageContent> {
                     setState(() {
                       _currentIndex = index;
                     });
-                    
+
                     // 智能预加载：滑动到第二张图片时开始预加载
                     if (index >= 1) {
                       _smartPreloadImages(index);
@@ -384,10 +416,8 @@ class _MultiImageContentState extends State<_MultiImageContent> {
                   },
                   physics: const ClampingScrollPhysics(),
                   itemCount: widget.images.length,
-                  itemBuilder: (context, index) => _buildImageItem(
-                    widget.images[index],
-                    widget.isDark,
-                  ),
+                  itemBuilder: (context, index) =>
+                      _buildImageItem(widget.images[index], widget.isDark),
                 ),
               ),
             ),
@@ -397,9 +427,7 @@ class _MultiImageContentState extends State<_MultiImageContent> {
         // 页面指示器（放在图片下方）
         if (widget.images.length > 1)
           Padding(
-            padding: EdgeInsets.symmetric(
-              vertical: AppSpacing.sm,
-            ),
+            padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
             child: _buildPageIndicator(
               context,
               widget.isDark,
@@ -423,7 +451,10 @@ class _MultiImageContentState extends State<_MultiImageContent> {
     return Container(
       width: double.infinity,
       height: double.infinity,
-      color: AppColorsFunctional.getColor(isDark, ColorType.backgroundSecondary), // 预填充背景色
+      color: AppColorsFunctional.getColor(
+        isDark,
+        ColorType.backgroundSecondary,
+      ), // 预填充背景色
       child: AppCachedNetworkImage(
         imageUrl: imageUrl,
         imageUrlCandidates: candidates,
@@ -493,12 +524,9 @@ class _MultiImageContentState extends State<_MultiImageContent> {
   }
 
   /// 构建单个指示器圆点
-  Widget _buildIndicatorDot({
-    required bool isActive,
-    required bool isDark,
-  }) {
+  Widget _buildIndicatorDot({required bool isActive, required bool isDark}) {
     // 浅色模式使用深色dot，深色模式使用浅色dot
-    final dotColor = isDark 
+    final dotColor = isDark
         ? AppColorsFunctional.getColor(isDark, ColorType.white)
         : AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary);
 
@@ -517,7 +545,11 @@ class _MultiImageContentState extends State<_MultiImageContent> {
 }
 
 /// 构建图片加载占位符（顶层函数，供多个组件共享）
-Widget _buildImageLoadingPlaceholder(BuildContext context, bool isDark, [double? progress]) {
+Widget _buildImageLoadingPlaceholder(
+  BuildContext context,
+  bool isDark, [
+  double? progress,
+]) {
   return Container(
     width: double.infinity,
     height: double.infinity,
@@ -537,7 +569,10 @@ Widget _buildImageLoadingPlaceholder(BuildContext context, bool isDark, [double?
             UITextConstants.loading,
             style: TextStyle(
               fontSize: AppTypography.xs,
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundTertiary),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundTertiary,
+              ),
             ),
           ),
         ],
@@ -574,7 +609,10 @@ Widget _buildImageErrorPlaceholder(BuildContext context, bool isDark) {
             UITextConstants.contentNotLoadedYet,
             style: TextStyle(
               fontSize: AppTypography.sm,
-              color: AppColorsFunctional.getColor(isDark, ColorType.foregroundSecondary),
+              color: AppColorsFunctional.getColor(
+                isDark,
+                ColorType.foregroundSecondary,
+              ),
             ),
           ),
         ],

@@ -164,15 +164,20 @@ def test_object_index_written_per_object():
     assert idx["publishTargetRef"] == "posts/article/攻略/都江堰一日游怎么玩/1", idx["publishTargetRef"]
 
 
-def test_publish_angle_maps_trip_semantics_not_all_loop():
+def test_publish_angle_derives_category_from_carrier_and_intent():
+    """底稿中心：angle 为底稿派生类目（载体 + writingIntent 标签），不再用 templateId 模板。"""
     from produce.route_workflow import _publish_angle
 
-    assert _publish_angle({"templateId": "线路_周末短途"}) == "攻略"
-    assert _publish_angle({"templateId": "线路_银发慢游"}) == "攻略"
-    assert _publish_angle({"templateId": "线路_补给避险"}) == "攻略"
-    assert _publish_angle({"templateId": "线路_环线攻略"}) == "环线攻略"
-    assert _publish_angle({"templateId": "线路_自驾路书"}) == "自驾路书"
-    assert _publish_angle({"templateId": "线路_枢纽到达"}) == "枢纽到达"
+    # 图片/画报作品落「画报」类目。
+    assert _publish_angle({"carrier": "image"}) == "画报"
+    assert _publish_angle({"carrier": "gallery"}) == "画报"
+    # 文章按底稿派生的 writingIntent 标签归类。
+    assert _publish_angle({"carrier": "article", "writingIntent": "planning_consultation"}) == "攻略"
+    assert _publish_angle({"carrier": "article", "writingIntent": "decision_experience"}) == "体验"
+    assert _publish_angle({"carrier": "article", "writingIntent": "post_trip_journal"}) == "游记"
+    # 缺失/未知 intent 回退「攻略」，templateId 不再影响 angle。
+    assert _publish_angle({"carrier": "article"}) == "攻略"
+    assert _publish_angle({"templateId": "线路_自驾路书"}) == "攻略"
 
 
 def test_promote_rglob_locates_object_layout():

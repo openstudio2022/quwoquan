@@ -59,12 +59,6 @@ extension ContentErrorCodeExt on ContentErrorCode {
         return 'CONTENT.USER.content_deleted';
       case ContentErrorCode.circleDistributionForbidden:
         return 'CONTENT.USER.circle_distribution_forbidden';
-      case ContentErrorCode.reviewRatingRequired:
-        return 'CONTENT.USER.review_rating_required';
-      case ContentErrorCode.reviewPoiRequired:
-        return 'CONTENT.USER.review_poi_required';
-      case ContentErrorCode.reviewDuplicatePerPoi:
-        return 'CONTENT.USER.review_duplicate_per_poi';
       case ContentErrorCode.storageWriteFailed:
         return 'CONTENT.SYSTEM.storage_write_failed';
       case ContentErrorCode.internalError:

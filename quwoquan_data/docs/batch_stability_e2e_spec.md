@@ -31,7 +31,7 @@
 
 ### 4.2 download_fetch
 
-- 来源单元落在 `1.download/sources/{NN}.{kind}/`。
+- 来源单元落在批次级 `sources/{sourceUnitId}/`，对象只保存 `1.download/source_refs.json` 软引用。
 - 图片通过下载门、像素门、相关性门、版权门。
 
 ### 4.3 build_homepage

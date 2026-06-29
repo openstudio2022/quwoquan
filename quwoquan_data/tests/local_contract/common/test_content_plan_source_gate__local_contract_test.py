@@ -68,8 +68,13 @@ def test_content_plan_blocks_missing_creator_assignment_when_required():
     assert any("creatorAssignment.authorId required" in issue for issue in issues), issues
     assert any("creatorAssignment.creatorProfileId required" in issue for issue in issues), issues
 
-def test_content_plan_blocks_weak_focus_source_unit_as_primary_evidence():
-    batch = "weak_focus_primary_gate"
+def test_content_plan_accepts_off_entity_source_as_multi_tag_work():
+    """底稿中心 1:1：实体退化为多标签后，多目的地/弱主体底稿不再被 entity_focus_gate 误杀。
+
+    原 `test_content_plan_blocks_weak_focus_source_unit_as_primary_evidence` 断言 off_entity/weak
+    会被弃稿；新模型下文章/图片只来自单一底稿、实体作为标签集合，不应再出现 entity_focus_gate 阻断。
+    """
+    batch = "off_entity_multi_tag_accept"
     entity = "九寨沟"
     root = batch_root(TASK, batch)
     article_dir = root / "entities/地点/景区/九寨沟/1.download/sources/01.weak_article"
@@ -186,9 +191,8 @@ def test_content_plan_blocks_weak_focus_source_unit_as_primary_evidence():
 
     issues = cp.validate_content_plan(TASK, batch, spec)
 
-    assert any("entity_focus_gate blocked article primary source" in issue for issue in issues), issues
-    assert any("entity_focus_gate score 0.15 < 0.20" in issue for issue in issues), issues
-    assert any("entity_focus_gate blocked image primary source" in issue for issue in issues), issues
+    # 底稿中心：不得再出现任何 entity_focus_gate 阻断（弱主体/off_entity 仍可成稿，实体作多标签）。
+    assert not any("entity_focus_gate" in issue for issue in issues), issues
 
 def test_content_plan_quotas_required_includes_image_works():
     spec = {"content": {"modalityContract": "separated_research", "quotas": {"imageWorksPerTarget": 2}}}

@@ -108,12 +108,38 @@ def normalize_writing_intent(value: Any) -> str | None:
 
 
 def writing_intent_issues(value: Any) -> list[str]:
-    """校验 writingIntent 字段本身是否合法（契约门，content_plan/brief 用）。"""
+    """校验 writingIntent 字段本身是否合法（契约门，content_plan/brief 用）。
+
+    底稿中心模型：writingIntent 是底稿派生的可选标签——缺失不再报错（空=未派生/未知），
+    仅当给出了**非法**取值时报错。
+    """
     if not value:
-        return [f"writingIntent missing (must be one of {'|'.join(sorted(WRITING_INTENTS))})"]
+        return []
     if normalize_writing_intent(value) is None:
         return [f"writingIntent invalid: {value!r}; allowed={sorted(WRITING_INTENTS)}"]
     return []
+
+
+# 顶层三大主线：用于从底稿正文派生 publish 类目（angle）与软标签。
+_TOP_LEVEL_INTENTS = ("planning_consultation", "decision_experience", "post_trip_journal")
+
+
+def derive_writing_intent(text: str, *, default: str = "planning_consultation") -> str:
+    """从单一底稿正文派生最贴合的 writingIntent 标签（命中结构桶最多者）。
+
+    底稿中心模型下 writingIntent 不再硬阻断，只作 publish 类目与软评分提示；
+    在三大顶层主线（攻略/体验/游记）间择优，无明显信号时回退 default。
+    """
+    compact = re.sub(r"\s+", "", str(text or ""))
+    if not compact:
+        return default
+    best_intent, best_hits = default, -1
+    for intent in _TOP_LEVEL_INTENTS:
+        spec = WRITING_INTENTS[intent]
+        hits = sum(1 for cues in spec["buckets"].values() if any(cue in compact for cue in cues))
+        if hits > best_hits:
+            best_hits, best_intent = hits, intent
+    return best_intent
 
 
 # ---------------------------------------------------------------------------

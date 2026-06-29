@@ -329,7 +329,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - command: flutter test test/ui/content/markdown/article_markdown_codec_test.dart
+      - command: flutter test test/ui/content/article_render/markdown/article_markdown_codec_test.dart
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
       recorded: []
     status: pending_evidence
@@ -347,7 +347,7 @@ gwt_acceptance:
         envs: *id001
       supporting: []
     notes:
-    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/content/markdown/article_markdown_codec_test.dart
+    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/content/article_render/markdown/article_markdown_codec_test.dart
       test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
 execution:
   local_gate:

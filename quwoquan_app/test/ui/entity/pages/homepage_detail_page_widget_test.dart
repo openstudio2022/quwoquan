@@ -61,18 +61,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('西湖景区'), findsWidgets);
-    expect(find.text(UITextConstants.entityWhyRecommendTitle), findsOneWidget);
+    expect(find.text(UITextConstants.objectMyIntersectionsTitle), findsOneWidget);
+    expect(find.text(UITextConstants.objectImpactTitle), findsOneWidget);
+    expect(find.text(UITextConstants.entityWhyRecommendTitle), findsNothing);
     expect(find.text('认领主页'), findsNothing);
     expect(find.text(UITextConstants.follow), findsWidgets);
-    expect(find.text(UITextConstants.profileDirectMessage), findsWidgets);
+    expect(find.text(UITextConstants.entityActionPublishRecord), findsWidgets);
+    expect(find.text(UITextConstants.profileDirectMessage), findsNothing);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await tester.pumpAndSettle();
     expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
     expect(find.text(UITextConstants.objectTabDiscussion), findsWidgets);
     expect(find.text(UITextConstants.objectTabRelatedCircles), findsOneWidget);
-    expect(find.text(UITextConstants.entityAboutTitle), findsOneWidget);
+    expect(find.text(UITextConstants.entityAboutTitle), findsNothing);
     expect(find.text('实体介绍'), findsNothing);
-    expect(find.text(UITextConstants.objectIntroMoreLabel), findsOneWidget);
     expect(find.text('治理入口'), findsNothing);
     expect(find.text('统一对象键'), findsNothing);
     expect(find.text('对象页模板'), findsNothing);
@@ -187,7 +189,7 @@ void main() {
     expect(repository.lastRolloutCohort, 'city-hz');
     expect(find.text('认领主页'), findsNothing);
     expect(find.text(UITextConstants.follow), findsOneWidget);
-    expect(find.text(UITextConstants.profileDirectMessage), findsOneWidget);
+    expect(find.text(UITextConstants.entityActionPublishRecord), findsOneWidget);
   });
 
   testWidgets('认识摘要卡使用 introduction summary 并跳转介绍页', (tester) async {
@@ -230,12 +232,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('真实 introduction summary'), findsOneWidget);
-    final introButton = find.byKey(
-      const ValueKey<String>('homepage-introduction-entry-button'),
-    );
-    await tester.ensureVisible(introButton);
-    await tester.pumpAndSettle();
-    tester.widget<CupertinoButton>(introButton).onPressed?.call();
+    final introCard = find.byKey(const ValueKey<String>('profile-slogan-card'));
+    await tester.ensureVisible(introCard);
+    await tester.tap(introCard);
     await tester.pumpAndSettle();
     expect(find.text('介绍页:homepage_sight_west_lake'), findsOneWidget);
   });

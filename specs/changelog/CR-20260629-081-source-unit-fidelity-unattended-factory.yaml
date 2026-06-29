@@ -1,0 +1,73 @@
+id: CR-20260629-081-source-unit-fidelity-unattended-factory
+title: 底稿忠实重构与无人托管知识工厂 source-unit 合约闭环
+slug: source-unit-fidelity-unattended-factory
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity
+  - quwoquan_data/scripts/_common/source_unit.py
+  - quwoquan_data/scripts/download
+  - quwoquan_data/scripts/produce
+  - quwoquan_data/scripts/task
+  - quwoquan_data/scripts/env
+  - agent_ops/runners/cs100_author_resume_loop.sh
+
+entries:
+  - timestamp: "2026-06-29T16:40:00+08:00"
+    summary: |
+      将来源单元物理真相源从实体对象 `1.download/sources/{NN}.{kind}` 迁到批次级
+      `sources/{sourceUnitId}`，实体/作品对象仅保留 `1.download/source_refs.json` 软引用；
+      同步 `meta.relevance.targetRefs/entityTags/semanticMentions/coverageTargets` 与
+      `publishMediaMode`，并让 content_plan、route analysis、release integrity、scale readiness
+      都按单一 `baseSourceRef` 取证。新增 `env cursor-probe` N 次探针报告与
+      `task scaled-e2e run` 串联入口；managed-local stale `controllerYield` 恢复下沉到 CLI，
+      shell runner 不再手工改 workflow JSON。
+    reason: |
+      旧实现把 source pool 绑定到实体目录，导致跨实体证据聚合、UGC 文本与 Wikimedia/官方图替换、
+      HTML 图片丢失、600 字硬门误伤富图文底稿，以及 controllerYield 残留必须人工清理。
+      本轮按“底稿忠实 + 同源媒体 + 无人托管”约束，把底稿、源图、证据链、运行恢复和放量入口统一到可审计 CLI 合约。
+    change_type:
+      - contract
+      - architecture
+      - data_pipeline
+      - test
+      - operations
+    changed_documents:
+      - path: quwoquan_data/docs/pipeline_directory_layout_spec.md
+        sections:
+          - "source unit 物理真相源改为 sources/{sourceUnitId}"
+          - "对象级 source_refs.json 仅保存软引用索引"
+      - path: quwoquan_data/docs/content_pipeline_spec.md
+        sections:
+          - "download 输出改为 source_refs.json + 批次级 source pool"
+      - path: specs/feature-tree/runtime/runtime-data-engineering/geo-content-trinity/workflow.md
+        sections:
+          - "content_plan 输入改为 source_refs.json 指向的 canonical source unit"
+      - path: quwoquan_data/schema/produce/content_plan_packet.schema.json
+        sections:
+          - "baseSourceRef 描述改为 batch 相对 sources/{sourceUnitId}/source.md"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: true
+    test_evidence:
+      recorded:
+        - "pytest: local_contract/env/test_cursor_probe__local_contract_test.py"
+        - "pytest: local_contract/task/test_scaled_e2e_run__local_contract_test.py"
+        - "pytest: local_contract/task/test_workflow_state_machine__local_contract_test.py::test_recover_stale_controller_yield_clears_dead_controller"
+        - "pytest: local_contract/task/test_workflow_state_machine__local_contract_test.py::test_recover_controller_yield_keeps_live_controller"
+        - "pytest: download/test_fetch_registry_dispatch.py::test_generic_html_extractor_preserves_inline_images_as_figures"
+        - "pytest: common/test_source_unit_evidence_chain.py"
+        - "pytest: local_contract/common/test_auto_content_plan__local_contract_test.py"
+        - "pytest: local_contract/common/test_content_plan_source_gate__local_contract_test.py"
+        - "pytest: produce/test_route_assets_layout.py produce/test_route_brief_and_evidence.py verify/test_release_integrity_gate.py download/test_download_gate.py"
+        - "真实 P0: python quwoquan_data/scripts/cli.py env cursor-probe --model composer-2.5 --attempts 20 --startup-timeout-seconds 45 --report-out artifacts/cursor_probe_20260629_n20.json（GATE_BLOCK: authFailures=0, true5xxRate=1.0, startupLatencyP95=44.9101）"
+    notes:
+      - "N=20 真实 Cursor probe 已确认凭据不是 blocker；当前 blocker 为 Cursor startup true 5xx 100%，禁止据此进入百级商业结论。"
+      - "百级商业 go 结论必须来自 fresh run 的 scale-readiness report；本 CR 只登记代码与契约闭环。"

@@ -4,7 +4,7 @@
 /// 两侧在同一文档、同一宽度下产出一致的图片宽度、gap、分割点。
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 
 void main() {
   const bodyStyle = TextStyle(fontSize: 16, height: 1.6);

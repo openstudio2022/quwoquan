@@ -48,13 +48,19 @@ Map<String, dynamic> _omitNullMapValues(Map<String, dynamic> source) {
 /// `MockUserProfileRepository`、`MockUserRepository` 等 mock 链路都必须复用它，
 /// 避免再次出现「主页资料已更新，但 active persona 仍读旧静态 JSON」的双真相源。
 SubAccountProfileWireDto resolveMockUserProfileWire(String userId) {
+  final overrideWire = MockUserProfileRepository._profileOverrides[userId];
+  if (overrideWire != null) {
+    return overrideWire;
+  }
+  final contractWire = _contractProfileWireByUserId[userId];
+  if (contractWire != null) {
+    return contractWire;
+  }
   final creatorWire = PrefabUserResolver.creatorProfileWireFor(userId);
   if (creatorWire != null) {
     return SubAccountProfileWireDto.fromMap(creatorWire);
   }
-  return MockUserProfileRepository._profileOverrides[userId] ??
-      _contractProfileWireByUserId[userId] ??
-      SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
+  return SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
 }
 
 int _decodeCursorOffset(String? cursor) {

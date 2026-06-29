@@ -9,14 +9,14 @@ import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
-import 'package:quwoquan_app/components/comment_system/comment_input_overlay.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
 import 'package:quwoquan_app/components/comment_system/comment_composer_models.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/input/unified_emoji_picker.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/providers/comment_provider.dart';
+import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -277,10 +277,7 @@ Future<void> testCommentComposerMentionsAndAttachment(
   expect(find.byKey(TestKeys.commentInputOverlay), findsOneWidget);
   expect(find.byKey(TestKeys.commentTextField), findsOneWidget);
 
-  await tester.enterText(
-    find.byKey(TestKeys.commentTextField),
-    '很喜欢这张图',
-  );
+  await tester.enterText(find.byKey(TestKeys.commentTextField), '很喜欢这张图');
   await tester.pump();
 
   await tester.tap(find.byKey(TestKeys.commentAtXiaoquButton));

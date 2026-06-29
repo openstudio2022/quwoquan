@@ -132,6 +132,13 @@ def _seed_object_plan(top_level: bool, source_count: int = 1) -> None:
     write_json(obj / STAGE_DOWNLOAD / "source_plan.json", _doc(top_level, source_count))
 
 
+def _source_units_by_source_id(obj: Path) -> dict[str, Path]:
+    return {
+        str(read_json(unit / "meta.json").get("sourceId") or ""): unit
+        for unit in iter_source_units(obj)
+    }
+
+
 def test_curated_reads_object_plan_top_level_and_envelope():
     _seed_object_plan(top_level=True)
     assert len(curated_sources_for_entity(_TASK, _BATCH, _EID, "景区")) == 1
@@ -295,7 +302,7 @@ def test_article_scoped_source_plan_gate_does_not_require_homepage_core_category
 
 
 def test_handle_download_produces_source_unit_from_preset_plan():
-    # 对象同构新布局：来源写成 entities/{domain}/{type}/{name}/1.download/sources/01.s1/。
+    # Source unit 物理真相源写入 batch-level sources/{sourceUnitId}/，对象只保存软引用索引。
     _seed_object_plan(top_level=True, source_count=3)
     args = argparse.Namespace(task=_TASK, batch=_BATCH, entity_ids=_EID, entity_type="景区")
     original_fetch = handler_mod.fetch_source_payload
@@ -338,14 +345,24 @@ def test_handle_download_produces_source_unit_from_preset_plan():
     obj = resolve_entity_object_dir(_TASK, _BATCH, _EID, etype_hint="景区")
     units = iter_source_units(obj)
     assert units, f"no source unit under {obj}"
-    assert [unit.name for unit in units[:3]] == ["01.s1", "02.s2", "03.s3"], units
-    assert len(units) == 4 and units[3].name.startswith("04.image_"), units
-    assert (units[3] / "assets" / "index.json").is_file()
-    src_md = units[0] / "source.md"
-    clean_md = units[0] / "source.clean.md"
+    refs = read_json(obj / STAGE_DOWNLOAD / "source_refs.json")
+    rows = refs.get("sources") or []
+    assert [row.get("sourceId") for row in rows[:3]] == ["s1", "s2", "s3"], rows
+    assert len(rows) == 4 and str(rows[3].get("sourceId") or "").startswith("image_"), rows
+    assert all(str(row.get("sourceRef") or "").startswith("sources/su_") for row in rows), rows
+    assert all(str(row.get("sourceRef") or "").endswith("/source.md") for row in rows), rows
+    assert not (obj / STAGE_DOWNLOAD / "sources").exists()
+
+    by_source_id = _source_units_by_source_id(obj)
+    assert {"s1", "s2", "s3"}.issubset(by_source_id), by_source_id
+    image_id = str(rows[3]["sourceId"])
+    assert by_source_id[image_id].parent.name == "sources"
+    assert (by_source_id[image_id] / "assets" / "index.json").is_file()
+    src_md = by_source_id["s1"] / "source.md"
+    clean_md = by_source_id["s1"] / "source.clean.md"
     assert src_md.is_file(), f"missing {src_md}"
     assert clean_md.is_file(), f"missing {clean_md}"
-    assert (units[0] / "meta.json").is_file()
+    assert (by_source_id["s1"] / "meta.json").is_file()
     source_text = src_md.read_text(encoding="utf-8")
     clean_text = clean_md.read_text(encoding="utf-8")
     assert _BODY_MARK in source_text
@@ -503,7 +520,7 @@ def test_lane_scoped_homepage_download_preserves_other_lanes():
 
         obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
         previous_other_lane_units = {
-            unit.name
+            str(read_json(unit / "meta.json").get("sourceId") or "")
             for unit in iter_source_units(obj)
             if read_json(unit / "meta.json").get("researchLane") in {"article", "image"}
         }
@@ -546,15 +563,15 @@ def test_lane_scoped_homepage_download_preserves_other_lanes():
         handler_mod.fetch_image_payload = original_image_fetch
 
     obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
-    current_units = {unit.name for unit in iter_source_units(obj)}
+    current_units = _source_units_by_source_id(obj)
     current_other_lane_units = {
-        unit.name
+        str(read_json(unit / "meta.json").get("sourceId") or "")
         for unit in iter_source_units(obj)
         if read_json(unit / "meta.json").get("researchLane") in {"article", "image"}
     }
     assert previous_other_lane_units.issubset(current_other_lane_units)
-    assert any(name.endswith(".home_new") for name in current_units)
-    assert not any(name.endswith(".home_old") for name in current_units)
+    assert "home_new" in current_units
+    assert "home_old" not in current_units
     assert image_calls == []
 
 

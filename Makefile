@@ -15,6 +15,7 @@
 .PHONY: verify-app-startup-ttid
 .PHONY: verify-app-lib-no-test-import
 .PHONY: verify-app-page-horizontal-quality
+.PHONY: verify-app-content-ui-boundaries
 .PHONY: verify-app-remote-config-contract
 .PHONY: verify-app-native-edge-navigation
 .PHONY: verify-app-pageflip-back-mainline
@@ -137,6 +138,9 @@ verify-app-lib-test-only-symbols:
 # lib 不得 import test/ 树（见 specs/gates/mock_test_separation_roadmap.md）
 verify-app-lib-no-test-import:
 	@python3 quwoquan_app/scripts/runtime/verify_lib_no_import_test_tree.py
+
+verify-app-content-ui-boundaries:
+	@python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py
 
 verify-app-remote-config-contract:
 	@python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py

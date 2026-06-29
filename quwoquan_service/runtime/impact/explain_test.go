@@ -24,10 +24,10 @@ func TestPrimaryTextCircleActions(t *testing.T) {
 }
 
 func TestPrimaryTextAuthorPerspective(t *testing.T) {
-	if got := PrimaryText(HelpDecision, "", 7, ActorTA); got != "一位用户等7人通过TA的内容关注了相关对象" {
+	if got := PrimaryText(HelpDecision, "", 7, ActorTA); got != "一位用户等7人通过TA的记录关注了相关对象" {
 		t.Fatalf("TA perspective = %q", got)
 	}
-	if got := PrimaryText(HelpDecision, "", 7, ActorSelf); got != "一位用户等7人通过我的内容关注了相关对象" {
+	if got := PrimaryText(HelpDecision, "", 7, ActorSelf); got != "一位用户等7人通过你的记录关注了相关对象" {
 		t.Fatalf("self perspective = %q", got)
 	}
 }

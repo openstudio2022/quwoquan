@@ -64,10 +64,10 @@ VALID_EXPERIENCE_CLAIM_MODES = {
 STAGE_EVIDENCE_CONTRACT = {
     "download": {
         "input": "entities/{domain}/{type}/{name}/1.download/source_plan.json",
-        "output": "entities/{domain}/{type}/{name}/1.download/sources/{NN}.{kind}/source.md + assets/",
+        "output": "sources/{sourceUnitId}/source.md + assets/ and entities/{domain}/{type}/{name}/1.download/source_refs.json",
     },
     "quality_analysis": {
-        "input": "entities/{domain}/{type}/{name}/1.download/sources/{NN}.{kind}/source.md",
+        "input": "entities/{domain}/{type}/{name}/1.download/source_refs.json -> sources/{sourceUnitId}/source.md",
         "output": "posts/{contentType}/{angle}/{title}/{seq}/2.quality/quality_analysis.json.payload.evidenceBundle",
     },
     "agent_draft": {

@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 /// 文章预览：横向翻页 + 书本透视（对标作品沉浸浏览的深色底与跟手分页）。

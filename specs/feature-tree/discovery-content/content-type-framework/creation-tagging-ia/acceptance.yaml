@@ -10,7 +10,7 @@ scope:
   summary: 冻结创作侧打标 IA：各类型编辑页内联打标区，打标全类型可选、不强制，由自动打标（转发识别+内容识别）辅助， 手动 UI 作确认/修正层。首发芯片集来自
     tag_ref_migration launch 子集，搜索补充在 C2 后 flag 灰度。 tagRefs 经 CreatePost 注入，使「打标→content.tagRefs→交集归因」可还原。
   in_scope:
-  - 各类型编辑页内联打标区（图文/视频/口碑），打标可选不拦截发布
+  - 各类型编辑页内联打标区（图文/视频），打标可选不拦截发布
   - 自动打标建议 suggestedTagRefs 消费 + 可编辑/可删除芯片（确认/修正层）
   - 交互形态：launch 子集芯片 + 自动建议多选 ≤5；C2 后 flag 灰度搜索补充
   - 首发标签子集引用 tag_ref_migration launch 项（不另建第二套）
@@ -24,13 +24,13 @@ gwt_acceptance:
   GWT1:
     title: 各类型编辑页内联打标区，打标可选不拦截发布
     given:
-    - 用户在图文/视频/口碑编辑页创作。
+    - 用户在图文/视频编辑页创作。
     when:
     - 未选任何标签直接发布。
     then:
     - 发布成功，不因缺标签被拦截；打标区为可选内联区域。
     done_when:
-    - 三类型编辑页打标可选路径 widget 测试通过。
+    - 各类型编辑页打标可选路径 widget 测试通过。
     edge_cases:
     - 自动建议拉取超时时只显首发子集芯片，不阻断发布。
     contract_refs: []

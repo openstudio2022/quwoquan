@@ -241,7 +241,6 @@ class MediaViewerExtra {
     required this.posts,
     this.dtoPosts = const <PostBaseDto>[],
     required this.initialIndex,
-    required this.category,
     this.initialImageIndex = 0,
     this.source = 'default',
     this.circleId,
@@ -256,9 +255,11 @@ class MediaViewerExtra {
 
   final List<ContentSurfaceView> posts;
   final List<PostBaseDto> dtoPosts;
-  final int initialIndex; // post index for moment, image index for photo
-  final String category; // 'photo' | 'video' | 'moment'
-  /// 同微趣内图片索引（nested 模式使用，默认为 0）
+
+  /// 入口 post 在列表中的序号（沉浸器初始定位用）。
+  final int initialIndex;
+
+  /// 单帖内图片索引（nested 模式使用，默认为 0）。
   final int initialImageIndex;
   final String source;
   final String? circleId;
@@ -278,7 +279,6 @@ class MediaViewerExtra {
       posts: posts,
       dtoPosts: dtoPosts,
       initialIndex: initialIndex,
-      category: category,
       initialImageIndex: initialImageIndex,
       source: source,
       circleId: circleId,

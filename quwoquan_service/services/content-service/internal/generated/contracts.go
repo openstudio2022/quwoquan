@@ -112,5 +112,4 @@ var AllowedContentTypes = map[string]struct{}{
 	"video":   {},
 	"micro":   {},
 	"article": {},
-	"review":  {},
 }

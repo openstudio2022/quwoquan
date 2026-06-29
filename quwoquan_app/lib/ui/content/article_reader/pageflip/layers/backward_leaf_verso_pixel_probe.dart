@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart';
-import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
+import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
 
 @immutable
 class BackwardVersoPixelProbe {

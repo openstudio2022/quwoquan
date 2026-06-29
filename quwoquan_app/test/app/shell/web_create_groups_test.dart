@@ -11,7 +11,7 @@ void main() {
   });
 
   group('Web 添加页', () {
-    testWidgets('按内容创作/社交关系两组呈现，含发起讨论，且无小趣创作助手', (tester) async {
+    testWidgets('按创作方式/社交关系两组呈现，且无小趣创作助手', (tester) async {
       WebShellTestHarness.suppressExpectedErrors();
       WebShellTestHarness.useWideViewport(tester);
 
@@ -31,7 +31,11 @@ void main() {
 
       // 内容创作组卡片。
       expect(
-        find.byKey(const ValueKey<String>('web-create-card-gallery')),
+        find.byKey(const ValueKey<String>('web-create-card-album')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('web-create-card-camera')),
         findsOneWidget,
       );
       expect(
@@ -39,11 +43,24 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const ValueKey<String>('web-create-card-drafts')),
+        find.text(UITextConstants.webPcCreateGalleryTitle),
         findsOneWidget,
       );
+      expect(
+        find.text(UITextConstants.webPcCreateGallerySubtitle),
+        findsOneWidget,
+      );
+      expect(find.text(UITextConstants.webPcCreateCameraTitle), findsOneWidget);
+      expect(
+        find.text(UITextConstants.webPcCreateCameraSubtitle),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('web-create-card-drafts')),
+        findsNothing,
+      );
 
-      // 社交关系组：发起讨论 / 添加联系人 / 创建圈子。
+      // 社交关系组：添加联系人 / 发起群聊 / 创建圈子。
       expect(
         find.byKey(const ValueKey<String>('web-create-card-group-chat')),
         findsOneWidget,

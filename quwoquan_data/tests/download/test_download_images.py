@@ -30,7 +30,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import STAGE_DOWNLOAD, batch_root, ensure_batch_layout  # noqa: E402
-from _common.source_unit import resolve_entity_object_dir  # noqa: E402
+from _common.source_unit import iter_source_units, resolve_entity_object_dir  # noqa: E402
 import download.fetch as fetch_mod  # noqa: E402
 import download.handler as handler_mod  # noqa: E402
 from download.handler import handle_download  # noqa: E402
@@ -99,6 +99,13 @@ def _real_jpeg(seed: int, *, size=(800, 600)) -> bytes:
     buf = _io.BytesIO()
     Image.fromarray(arr, "RGB").save(buf, format="JPEG", quality=85)
     return buf.getvalue()
+
+
+def _source_units_by_source_id(obj: Path) -> dict[str, Path]:
+    return {
+        str(read_json(unit / "meta.json").get("sourceId") or ""): unit
+        for unit in iter_source_units(obj)
+    }
 
 
 def test_sniff_image_ext():
@@ -240,23 +247,26 @@ def test_image_check_temp_file_is_ephemeral():
 
 
 def test_repeated_fetch_preserves_better_same_url_source_unit():
-    from _common.paths import source_unit_dir
+    from _common.source_unit import write_source_unit
 
+    batch = "b_source_cache"
     object_dir = resolve_entity_object_dir(
-        _TASK, "b_source_cache", _EID, etype_hint="景区"
+        _TASK, batch, _EID, etype_hint="景区"
     )
-    unit = source_unit_dir(object_dir, 1, "stable_source")
-    unit.mkdir(parents=True, exist_ok=True)
-    write_json(unit / "meta.json", {"url": "https://example.test/source"})
-    write_json(
-        unit / "source.quality.json",
-        {
+    write_source_unit(
+        object_dir,
+        ordinal=1,
+        source_id="stable_source",
+        source_md="previous retained source",
+        url="https://example.test/source",
+        quality={
             "quality": "B-fact",
             "score": 82,
             "statusCode": 200,
         },
+        task_id=_TASK,
+        batch_id=batch,
     )
-    (unit / "source.md").write_text("previous retained source", encoding="utf-8")
 
     cached = handler_mod._cached_source_quality_if_better(
         object_dir,
@@ -277,21 +287,34 @@ def test_repeated_fetch_preserves_better_same_url_source_unit():
 
 
 def test_prune_stale_source_units_removes_dirs_absent_from_current_plan():
-    from _common.paths import source_unit_dir
+    from _common.source_unit import write_source_unit
 
+    batch = "b_prune_stale_source_units"
     object_dir = resolve_entity_object_dir(
-        _TASK, "b_prune_stale_source_units", _EID, etype_hint="景区"
+        _TASK, batch, _EID, etype_hint="景区"
     )
-    keep = source_unit_dir(object_dir, 1, "current_source")
-    stale = source_unit_dir(object_dir, 2, "old_image_collection")
-    keep.mkdir(parents=True, exist_ok=True)
-    stale.mkdir(parents=True, exist_ok=True)
-    (keep / "source.md").write_text("current", encoding="utf-8")
-    (stale / "source.md").write_text("stale", encoding="utf-8")
+    keep_manifest = write_source_unit(
+        object_dir,
+        ordinal=1,
+        source_id="current_source",
+        source_md="current",
+        task_id=_TASK,
+        batch_id=batch,
+    )
+    stale_manifest = write_source_unit(
+        object_dir,
+        ordinal=2,
+        source_id="old_image_collection",
+        source_md="stale",
+        task_id=_TASK,
+        batch_id=batch,
+    )
+    keep = batch_root(_TASK, batch) / keep_manifest["sourceUnitRef"]
+    stale = batch_root(_TASK, batch) / stale_manifest["sourceUnitRef"]
 
     pruned = handler_mod._prune_stale_source_units(object_dir, {keep})
 
-    assert pruned == ["02.old_image_collection"]
+    assert pruned == [stale.name]
     assert keep.is_dir()
     assert not stale.exists()
 
@@ -425,8 +448,12 @@ def test_handle_download_fetches_images_into_source_unit():
     obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
     units = iter_source_units(obj)
     assert units, f"no source unit under {obj}"
-    names = [unit.name for unit in units]
-    assert names[:3] == ["01.s1", "02.s2", "03.s3"], names
+    refs = read_json(obj / STAGE_DOWNLOAD / "source_refs.json")
+    rows = refs.get("sources") or []
+    assert [row.get("sourceId") for row in rows[:3]] == ["s1", "s2", "s3"], rows
+    assert all(str(row.get("sourceRef") or "").startswith("sources/su_") for row in rows), rows
+    assert all(str(row.get("sourceRef") or "").endswith("/source.md") for row in rows), rows
+    assert not (obj / STAGE_DOWNLOAD / "sources").exists()
     asset_units = [unit for unit in units if (unit / "assets" / "index.json").is_file()]
     assert len(asset_units) == 2, asset_units
     all_assets = []
@@ -620,7 +647,7 @@ def test_failed_image_lane_repair_preserves_previous_image_source_units():
 
         obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
         previous_image_units = {
-            unit.name
+            str(read_json(unit / "meta.json").get("sourceUnitId") or "")
             for unit in iter_source_units(obj)
             if read_json(unit / "meta.json").get("researchLane") == "image"
         }
@@ -654,7 +681,7 @@ def test_failed_image_lane_repair_preserves_previous_image_source_units():
 
     obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
     current_image_units = {
-        unit.name
+        str(read_json(unit / "meta.json").get("sourceUnitId") or "")
         for unit in iter_source_units(obj)
         if read_json(unit / "meta.json").get("researchLane") == "image"
     }
@@ -746,11 +773,13 @@ def test_handle_download_isolates_rejected_sources_when_retained_bundle_is_suffi
         handler_mod.fetch_source_payload = orig_source
 
     obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
-    source_names = [unit.name for unit in iter_source_units(obj)]
-    assert "04.s_bad" not in source_names
-    rejected = obj / "1.download" / "rejected_sources" / "04.s_bad"
-    assert rejected.is_dir()
-    assert (rejected / "source.quality.json").is_file()
+    source_ids = set(_source_units_by_source_id(obj))
+    assert "s_bad" not in source_ids
+    rejected_quality = [
+        read_json(path)
+        for path in (obj / "1.download" / "rejected_sources").glob("*/source.quality.json")
+    ]
+    assert any(row.get("sourceId") == "s_bad" and row.get("quality") == "Reject" for row in rejected_quality)
 
 
 def test_handle_download_blocks_unsafe_images_before_persist():
@@ -848,8 +877,8 @@ def test_handle_download_blocks_unsafe_images_before_persist():
     obj = resolve_entity_object_dir(_TASK, batch, _EID, etype_hint="景区")
     units = iter_source_units(obj)
     assert units, f"no source unit under {obj}"
-    assets_dir = units[0] / "assets"
-    assert not assets_dir.exists(), f"unsafe images should not persist into assets: {assets_dir}"
+    asset_dirs = [unit / "assets" for unit in units if (unit / "assets").exists()]
+    assert asset_dirs == [], f"unsafe images should not persist into assets: {asset_dirs}"
 
 
 def _run_all() -> None:

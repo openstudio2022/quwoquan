@@ -757,12 +757,16 @@ prepare_media_root() {
   local media="${LOCAL_GAMMA_MEDIA_ROOT}"
   local canonical_media_root="$ROOT/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
   local required_sample="$media/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png"
+  local required_avatar="$media/media/avatar/s/archived-avatar/circle/fixture_circle_coffee_04/v1/avatar.png"
+  local required_video="$media/media/video/s/archived-video/beta-sample.mp4"
+  local media_file_count=0
   if [[ -d "$media/media" ]]; then
-    if [[ -f "$required_sample" ]]; then
-      echo "[local-gamma] reuse pre-synced gamma curated media bundle: $media"
+    media_file_count="$(find "$media/media" -type f | wc -l | tr -d '[:space:]')"
+    if [[ -f "$required_sample" && -f "$required_avatar" && -f "$required_video" && "$media_file_count" -ge 1000 ]]; then
+      echo "[local-gamma] reuse pre-synced full shared media bundle: $media"
       return 0
     fi
-    echo "[local-gamma] gamma media root exists but key sample is missing; rebuilding bundle: $required_sample" >&2
+    echo "[local-gamma] gamma media root is incomplete; rebuilding full shared media bundle: $media (files=$media_file_count)" >&2
     rm -rf "$media"
   fi
   if [[ "$ENABLE_FIXTURE_SEEDS" != "1" ]]; then
@@ -770,8 +774,8 @@ prepare_media_root() {
     return 1
   fi
   if [[ -d "$canonical_media_root" ]]; then
-    python3 "$ROOT/quwoquan_service/scripts/seed/build_gamma_curated_fixture_bundle.py" \
-      --output-media-root "$media" >/dev/null
+    mkdir -p "$media"
+    cp -R "$canonical_media_root/." "$media/"
     return 0
   fi
   echo "[local-gamma] FAIL: curated gamma media bundle is unavailable; sync state/local/gamma/media first" >&2

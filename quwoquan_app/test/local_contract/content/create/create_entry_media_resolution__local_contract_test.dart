@@ -9,7 +9,7 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,33 +19,30 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test(
-    'mixed gallery result uses the first media type as route resolution',
-    () {
-      final imageA = _item('image_a', CreateMediaType.image);
-      final imageB = _item('image_b', CreateMediaType.image);
-      final video = _item('video_a', CreateMediaType.video);
+  test('media result uses the first media type as route resolution', () {
+    final imageA = _item('image_a', CreateMediaType.image);
+    final imageB = _item('image_b', CreateMediaType.image);
+    final video = _item('video_a', CreateMediaType.video);
 
-      expect(
-        resolveCreateEntryMediaResolution(const <CreateMediaItem>[]),
-        CreateEntryMediaResolution.empty,
-      );
-      expect(
-        resolveCreateEntryMediaResolution(<CreateMediaItem>[imageA, imageB]),
-        CreateEntryMediaResolution.imageBatch,
-      );
-      expect(
-        resolveCreateEntryMediaResolution(<CreateMediaItem>[video]),
-        CreateEntryMediaResolution.video,
-      );
-      expect(
-        resolveCreateEntryMediaResolution(<CreateMediaItem>[imageA, video]),
-        CreateEntryMediaResolution.imageBatch,
-      );
-    },
-  );
+    expect(
+      resolveCreateEntryMediaResolution(const <CreateMediaItem>[]),
+      CreateEntryMediaResolution.empty,
+    );
+    expect(
+      resolveCreateEntryMediaResolution(<CreateMediaItem>[imageA, imageB]),
+      CreateEntryMediaResolution.imageBatch,
+    );
+    expect(
+      resolveCreateEntryMediaResolution(<CreateMediaItem>[video]),
+      CreateEntryMediaResolution.video,
+    );
+    expect(
+      resolveCreateEntryMediaResolution(<CreateMediaItem>[imageA, video]),
+      CreateEntryMediaResolution.imageBatch,
+    );
+  });
 
-  testWidgets('gallery image result enters image media editor state', (
+  testWidgets('photo entry image result enters image media editor state', (
     tester,
   ) async {
     final requestedModes = <MediaPickerEntryMode>[];
@@ -77,7 +74,7 @@ void main() {
     );
     final state = container.read(createEditorProvider);
 
-    expect(requestedModes, <MediaPickerEntryMode>[MediaPickerEntryMode.mixed]);
+    expect(requestedModes, <MediaPickerEntryMode>[MediaPickerEntryMode.image]);
     expect(state.editorKind, CreateEditorKind.media);
     expect(state.draftFlowKind, CreateDraftFlowKind.image);
     expect(state.mediaKind, CreateMediaKind.images);

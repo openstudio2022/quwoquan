@@ -81,6 +81,8 @@ def _seed_images() -> None:
             target_ref=f"/entity/地点/景区/{name}",
             relevance=f"{name} 的实景图片",
             images=images,
+            task_id=TASK,
+            batch_id=BATCH,
         )
 
 
@@ -109,7 +111,7 @@ def test_node_images_bound_to_their_entity():
     assets = _build()
     for asset in assets:
         if asset.get("role") == "node":
-            assert asset["entityName"] in asset["sourcePath"], asset
+            assert asset["entityName"] in asset["alignmentEvidence"], asset
 
 
 def test_cross_entity_dedup_no_duplicate_source():
@@ -155,7 +157,8 @@ def test_article_auto_selects_from_base_source_ignoring_asset_refs():
 
     selected = [asset["sourceAssetRef"] for asset in assets]
     assert selected, "article 应从底稿来源选出图片"
-    assert all(entity in ref for ref in selected), selected
+    source_unit_ref = Path(declared["sourceRef"]).parent.as_posix()
+    assert all(ref.startswith(f"{source_unit_ref}/assets/") for ref in selected), selected
 
 
 def _run_all() -> None:

@@ -135,12 +135,12 @@ class _HomepageActionBar extends StatelessWidget {
   const _HomepageActionBar({
     required this.isFollowing,
     required this.onToggleFollow,
-    required this.onMessageOwner,
+    required this.onPublishRecord,
   });
 
   final bool isFollowing;
   final VoidCallback onToggleFollow;
-  final VoidCallback onMessageOwner;
+  final VoidCallback? onPublishRecord;
 
   @override
   Widget build(BuildContext context) {
@@ -196,9 +196,9 @@ class _HomepageActionBar extends StatelessWidget {
         SizedBox(width: AppSpacing.sm),
         Expanded(
           child: outlined(
-            label: UITextConstants.profileDirectMessage,
-            icon: CupertinoIcons.chat_bubble,
-            onPressed: onMessageOwner,
+            label: UITextConstants.entityActionPublishRecord,
+            icon: CupertinoIcons.pencil,
+            onPressed: onPublishRecord,
           ),
         ),
       ],

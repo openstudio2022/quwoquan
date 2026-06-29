@@ -6,7 +6,7 @@ from support.content_plan_source_reject_fixtures import *  # noqa: F401,F403
 
 
 
-def test_content_plan_enforces_per_target_2_plus_2_distribution():
+def test_content_plan_separated_research_has_no_per_target_quota_floor():
     batch = "per_target_quotas"
     entity = "四姑娘山"
     items = []
@@ -130,10 +130,13 @@ def test_content_plan_enforces_per_target_2_plus_2_distribution():
         batch_content_plan_packet_path(TASK, batch),
         {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items[:-1]},
     )
+    # 底稿中心：separated_research 下配额降级为车道开关，不存在 per-target 数量地板；
+    # 删掉一件图片作品后不再触发 imageWorksPerTarget / entityArticlesPerTarget 配额报错。
     issues = cp.validate_content_plan(TASK, batch, spec)
-    assert any("imageWorksPerTarget quota 2" in issue for issue in issues), issues
+    assert not any("imageWorksPerTarget quota" in issue for issue in issues), issues
+    assert not any("entityArticlesPerTarget quota" in issue for issue in issues), issues
 
-def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
+def test_content_plan_separated_research_keeps_image_lane_without_angle_coverage():
     batch = "per_target_4_plus_1"
     entity = "九寨沟"
     article_intents = [
@@ -291,8 +294,11 @@ def test_content_plan_enforces_required_angles_for_4_plus_1_distribution():
             ]
         },
     )
+    # 底稿中心：writingIntent 降为派生可选标签，不再有 acceptance.requiredAngles 角度覆盖硬门，
+    # 也不再有 entityArticlesPerTarget 配额地板；缺角度/缺篇数都不阻断。
     issues = cp.validate_content_plan(TASK, batch, spec)
-    assert any("acceptance.requiredAngles" in issue for issue in issues), issues
+    assert not any("acceptance.requiredAngles" in issue for issue in issues), issues
+    assert not any("entityArticlesPerTarget quota" in issue for issue in issues), issues
     partial_spec = {**spec, "workflowPolicy": {"allowContentQuotaShortfall": True}}
     assert cp.validate_content_plan(TASK, batch, partial_spec) == []
 

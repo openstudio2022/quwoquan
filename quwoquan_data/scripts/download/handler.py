@@ -22,7 +22,7 @@ def handle_download(args: argparse.Namespace) -> None:
     2. fetch: Script executes HTTP fetches + text extraction
     3. source_screen: Agent screens quality/relevance/copyright
 
-    Output: batches/{batch_id}/entities/{domain}/{type}/{entity}/1.download/sources/{NN}.{source_id}/source.md
+    Output: batches/{batch_id}/sources/{sourceUnitId}/source.md + entity `1.download/source_refs.json`
     """
     task_id = args.task
     batch_id = args.batch

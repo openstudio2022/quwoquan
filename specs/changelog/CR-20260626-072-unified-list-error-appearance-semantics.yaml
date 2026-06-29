@@ -39,13 +39,13 @@ entries:
           - 非功能目标
       - path: specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality-matrix.md
         sections:
-          - content/work_browser_entry_page
+          - discovery/work_browser_entry_page
           - user/profile_stats_page
           - user/my_intersection_inbox_page
           - intersection/object_intersection_list_page
       - path: specs/gates/metadata_driven_ui_gap_inventory.yaml
         sections:
-          - content/work_browser_entry_page
+          - discovery/work_browser_entry_page
           - user/profile_stats_page
           - user/my_intersection_inbox_page
           - intersection/object_intersection_list_page
@@ -66,7 +66,7 @@ entries:
       - "通过：bash quwoquan_service/scripts/contract/verify_contract_metadata.sh"
       - "通过：dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart"
       - "通过：cd quwoquan_app && flutter test test/core/widgets/app_list_page_semantics_test.dart test/core/widgets/error_states/app_error_states_test.dart test/core/errors/ui_error_semantics_test.dart"
-      - "通过：cd quwoquan_app && flutter test test/ui/user/pages/profile_stats_page_test.dart test/ui/user/pages/my_intersection_inbox_page_test.dart test/ui/intersection/pages/object_intersection_list_page_test.dart test/ui/content/pages/work_browser_entry_page_test.dart"
+      - "通过：cd quwoquan_app && flutter test test/ui/user/pages/profile_stats_page_test.dart test/ui/user/pages/my_intersection_inbox_page_test.dart test/ui/intersection/pages/object_intersection_list_page_test.dart test/ui/discovery/pages/work_browser_entry_page_test.dart"
       - "通过：make verify-app-page-horizontal-quality"
       - "通过：bash agent_ops/scaffold/verify_acceptance_standard.sh"
     notes:

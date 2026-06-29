@@ -273,7 +273,7 @@
 | 沉浸页壳 | `quwoquan_app/lib/ui/content/entry/pages/create_page.dart`（`_buildImmersiveArticlePage`） |
 | 文章编辑主体 | `quwoquan_app/lib/ui/content/entry/widgets/article_editor.dart` |
 | 底部工具栏与面板 | `quwoquan_app/lib/ui/content/entry/widgets/article_editor_accessory_panels.dart` |
-| 分页与画布 | `quwoquan_app/lib/ui/content/article_pagination_engine.dart`、`article_paged_canvas.dart` |
+| 分页与画布 | `quwoquan_app/lib/ui/content/article_render/services/article_pagination_engine.dart`、`article_paged_canvas.dart` |
 | 阅读态环绕 | `quwoquan_app/lib/ui/content/widgets/article_content_block_renderer.dart`（`ArticleWrappedParagraph`） |
 
 ---

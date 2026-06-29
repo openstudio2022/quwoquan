@@ -1237,6 +1237,51 @@ flowchart LR
 
 ---
 
+### 17.8 实体 / 圈子主页双模块 re-PRD（2026-06，取代 §17.7 标题与结构口径）
+
+> 本节为 §17.7 的口径升级，**取代** §17.7 中实体/圈子主页的「为什么推荐」标题与「价值说明」表述。实体与圈子主页与「我的主页」同壳同语义 token，统一收敛为两个核心维度模块：
+
+```text
+头部身份
+  ↓
+我的交集    = 我与这个对象 / 圈子客观存在、可枚举、可解释、可行动的真实连接
+  ↓
+影响力      = 这个对象 / 圈子帮助他人产生连接、内容传播、讨论沉淀的能力（可证、可枚举、可解释、可行动）
+  ↓
+Tab 内容区
+```
+
+**统一模块标题（取代 §17.7 表格的「为什么推荐」「价值说明」两列）**：
+
+| 页面 | 第一模块标题 | 第二模块标题 | 渲染积木 |
+|---|---|---|---|
+| 我的主页 | 我的交集 | 我的影响力 | `ObjectIntersectionPreviewCard`* / `AuthorImpactCard` |
+| 他人主页 | 我与TA的交集 | TA的影响力 | `ObjectIntersectionPreviewCard`* / `AuthorImpactCard` |
+| 圈子主页 | 我的交集 | 影响力 | `ObjectIntersectionPreviewCard` / `AuthorImpactCard`(circleImpactProvider) |
+| 实体主页 | 我的交集 | 影响力 | `ObjectIntersectionPreviewCard` / `IntersectionStatementCard`(entityImpactProvider) |
+
+`*` 我的/他人主页保留既有 `MyIntersectionInboxCard` / `OtherProfileIntersectionCard` 入口，统一委托共享 `ObjectIntersectionPreviewCard` 渲染积木，保证四页同壳同 token。
+
+**用户可见用语口径升级**：
+
+- 「我的交集」「影响力」自本节起为**用户可见的模块标题**（合法），不再列入 §17.7 用户可见禁词；§17.7 禁词表对实体/圈子页的「交集/影响力」拦截作废。
+- 仍禁用：`实体 / Entity / Circle / 为什么推荐 / 兴趣圈`；圈子「相关圈子」、实体「相关圈子」沿用。
+
+**核心动作（取代 §17.7 结构行的次按钮口径）**：
+
+| 页面 | 主按钮 | 次按钮 |
+|---|---|---|
+| 实体主页 | 关注 | 发记录（围绕这里沉淀记录） |
+| 圈子主页 | 加入圈子 | 进入讨论（切换到讨论 tab） |
+
+**实体主页结构（升级）**：封面 → 头部（头像簇 +「N 关注」单计数 + 认证 + 成立年份）→ 关注 / 发记录 →「我的交集」预览卡（单列结论句 + 蓝锚点 + 查看全部）→「影响力」卡（可枚举、句内数字下钻明细）→「关于这里」摘要卡（2~4 行 + 缩略图 + 查看更多介绍）→ 记录 | 讨论 | 相关圈子 → 记录流（双列瀑布，封面→交集句→标题→作者→赞）。**移除首屏常驻「想去·正在去·结伴」入口**。
+
+**圈子主页结构（升级）**：封面 → 头部（圈子独立头像 + 名称 + 认证 +「N 成员」单计数，**移除成员头像簇**）→ 加入圈子 / 进入讨论 →「我的交集」预览卡 →「影响力」卡（`AuthorImpactCard` 同构，circleImpactProvider）→ 记录 | 讨论 | 成员 → 记录流（双列瀑布，卡内唯一交集句）。圈子里「你认识的人」从头部成员簇收敛进「我的交集」模块表达。
+
+**实体影响力端契约（新增，云侧 Go handler 暂缓）**：实体主页「影响力」模块需要专属契约，定义于 `entity/homepage/projections/entity_impact_item.yaml`、`entity_impact_summary.yaml`、`entity_impact_evidence.yaml`，operation `GetEntityImpact` / `ListEntityImpactEvidence`，与 `author_impact_item` / `circle_impact_item` 单通道（`primaryText` + `primarySpans`，禁 `displayText`）对称。端侧 `entityImpactProvider` + alpha contract-seed mock 驱动高保；云侧实现待 WP-D。
+
+---
+
 ## 18. 六场景优先级、G2 裁决与契约收口（2026 交集统一规格）
 
 > 本章是六场景并行实现会话的**优先级与门禁真相源**。云侧 Explain/Ranking 全链路愿景见 §19。

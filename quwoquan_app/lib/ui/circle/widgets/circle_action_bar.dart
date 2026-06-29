@@ -10,18 +10,16 @@ class CircleActionBar extends StatelessWidget {
     required this.role,
     required this.joinStatus,
     this.joinPolicy = 'open',
-    this.hasConversation = false,
     this.onJoinCircle,
-    this.onOpenChat,
+    this.onEnterDiscussion,
   });
 
   final bool isDark;
   final CircleRole role;
   final String joinStatus;
   final String joinPolicy;
-  final bool hasConversation;
   final VoidCallback? onJoinCircle;
-  final VoidCallback? onOpenChat;
+  final VoidCallback? onEnterDiscussion;
 
   @override
   Widget build(BuildContext context) {
@@ -93,9 +91,9 @@ class CircleActionBar extends StatelessWidget {
         SizedBox(width: AppSpacing.sm),
         Expanded(
           child: neutralAction(
-            label: UITextConstants.profileDirectMessage,
-            icon: CupertinoIcons.chat_bubble,
-            onPressed: hasConversation ? onOpenChat : null,
+            label: UITextConstants.circleActionEnterDiscussion,
+            icon: CupertinoIcons.chat_bubble_2,
+            onPressed: onEnterDiscussion,
           ),
         ),
       ],

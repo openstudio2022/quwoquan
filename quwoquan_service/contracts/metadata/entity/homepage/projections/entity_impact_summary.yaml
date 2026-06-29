@@ -1,0 +1,36 @@
+version: 1
+read_model: EntityImpactSummary
+description: |
+  实体（共享主页）影响摘要（GetEntityImpact 响应真相源）。
+  回答「这个地方/对象帮助用户建立了什么连接、沉淀了什么记录与讨论」：items 为按 count 降序的影响事实行，
+  端侧实体主页「影响力」模块取前 3 条 primaryText 渲染。
+  强调连接型帮助结果，不下发热度榜、收藏数或运营指标。
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: EntityImpactSummary
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/entity_impact_summary.g.dart
+  dart_imports:
+    - entity_impact_item.g.dart
+  fields:
+    - name: homepageId
+      dart_type: String
+      nullable: false
+      source: homepageId
+      aliases: [homepageId]
+      default: "''"
+    - name: total
+      dart_type: int
+      nullable: false
+      source: total
+      aliases: [total]
+      default: "0"
+    - name: items
+      dart_type: List<EntityImpactItem>
+      nullable: false
+      source: items
+      aliases: [items]
+      list_element_dart_class: EntityImpactItem

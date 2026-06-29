@@ -84,8 +84,8 @@ gwt_acceptance:
       quwoquan_app/lib/core/services/cache/cached_content_repository.dart quwoquan_app/lib/core/services/cache/cache_management_service.dart
       quwoquan_app/lib/cloud/media/media_download_cache.dart quwoquan_app/lib/core/providers/app_providers.dart
       quwoquan_app/lib/core/providers/app_providers_client_sync.dart quwoquan_app/lib/quwoquan_app_shell.dart
-      quwoquan_app/lib/components/comment_system/comment_input_overlay.dart quwoquan_app/lib/components/comment_system/comment_thread_view.dart
-      quwoquan_app/lib/ui/circle/widgets/section_members.dart quwoquan_app/lib/ui/content/widgets/record_post_card.dart
+      quwoquan_app/lib/ui/content/comments/widgets/comment_input_overlay.dart quwoquan_app/lib/ui/content/comments/widgets/comment_thread_view.dart
+      quwoquan_app/lib/ui/circle/widgets/section_members.dart quwoquan_app/lib/components/content/record_post_card.dart
       quwoquan_app/lib/ui/search/pages/global_search_page.dart quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
       quwoquan_app/lib/ui/user/pages/login_page.dart quwoquan_app/lib/ui/user/widgets/profile_interaction_tab.dart
       quwoquan_app/lib/ui/chat/widgets/message/chat_message_bubble.dart quwoquan_app/test/core/services/content_cache_services_test.dart

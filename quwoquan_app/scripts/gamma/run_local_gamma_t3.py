@@ -2,8 +2,10 @@
 """Run local-gamma T3 checks against the Docker mirror."""
 
 import argparse
+import contextlib
 import json
 import os
+import socket
 import ssl
 import subprocess
 import sys
@@ -12,6 +14,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
+from urllib.parse import urlsplit, urlunsplit
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -19,6 +22,34 @@ MANIFEST = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/app
 METADATA_ROOT = ROOT / "quwoquan_service/contracts/metadata"
 COMPOSE_FILE = ROOT / "quwoquan_service/docker-compose.gamma-local.yaml"
 CONTENT_SERVICE_YAML = METADATA_ROOT / "content/post/service.yaml"
+
+
+@contextlib.contextmanager
+def local_gamma_dns_override():
+    original_getaddrinfo = socket.getaddrinfo
+
+    def getaddrinfo(host: object, *args: object, **kwargs: object):
+        if isinstance(host, str) and host.endswith(".quwoquan-env.test"):
+            host = "127.0.0.1"
+        return original_getaddrinfo(host, *args, **kwargs)
+
+    socket.getaddrinfo = getaddrinfo  # type: ignore[assignment]
+    try:
+        yield
+    finally:
+        socket.getaddrinfo = original_getaddrinfo  # type: ignore[assignment]
+
+
+def flutter_contract_base_url(url: str) -> str:
+    parsed = urlsplit(url)
+    host = parsed.hostname or ""
+    if host.endswith(".quwoquan-env.test"):
+        local_host = host.replace(".quwoquan-env.test", ".localhost")
+        port = f":{parsed.port}" if parsed.port else ""
+        return urlunsplit(
+            (parsed.scheme, f"{local_host}{port}", parsed.path, parsed.query, parsed.fragment)
+        )
+    return url
 
 
 def default_test_auth_token() -> str:
@@ -34,15 +65,17 @@ def http_get(url: str, timeout: int = 5) -> Tuple[int, bytes]:
     ctx = ssl._create_unverified_context()
     # Carry the fixture viewer id so header-scoped reads (e.g. GET /v1/me,
     # 我的主页) resolve the current user. Public reads simply ignore it.
-    req = urllib.request.Request(
-        url,
-        headers={
+    request_headers = {
             "X-Test-Local-Gamma": "true",
             "X-Client-User-Id": "fixture_user_current",
-        },
+    }
+    req = urllib.request.Request(
+        url,
+        headers=request_headers,
     )
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        return resp.status, resp.read()
+    with local_gamma_dns_override():
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            return resp.status, resp.read()
 
 
 def http_request(
@@ -70,8 +103,9 @@ def http_request(
         headers=request_headers,
         method=method,
     )
-    with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
-        return resp.status, resp.read()
+    with local_gamma_dns_override():
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            return resp.status, resp.read()
 
 
 def wait_url(url: str, timeout_seconds: int) -> Dict[str, Any]:
@@ -523,14 +557,17 @@ def endpoint_checks(
 
 def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) -> List[Dict[str, Any]]:
     checks = []  # type: List[Dict[str, Any]]
+    flutter_base_url = flutter_contract_base_url(base_url)
+    flutter_product_ops_base_url = flutter_contract_base_url(product_ops_base_url)
     cases = [
         {
             "name": "content_api_contract",
             "path": "test/cloud/content/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
-                f"--dart-define=API_CONTRACT_BASE_URL={base_url}",
+                f"--dart-define=API_CONTRACT_BASE_URL={flutter_base_url}",
                 "--dart-define=LOCAL_GAMMA_T3_SCOPE=content",
+                "--dart-define=API_CONTRACT_ALLOW_BAD_CERT=true",
                 f"--dart-define=TEST_AUTH_TOKEN={token}",
             ],
         },
@@ -539,7 +576,8 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
             "path": "test/cloud/chat/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
-                f"--dart-define=API_CONTRACT_BASE_URL={base_url}",
+                f"--dart-define=API_CONTRACT_BASE_URL={flutter_base_url}",
+                "--dart-define=API_CONTRACT_ALLOW_BAD_CERT=true",
                 f"--dart-define=TEST_AUTH_TOKEN={token}",
             ],
         },
@@ -548,7 +586,8 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
             "path": "test/cloud/ops/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
-                f"--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL={product_ops_base_url}",
+                f"--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL={flutter_product_ops_base_url}",
+                "--dart-define=API_CONTRACT_ALLOW_BAD_CERT=true",
             ],
         },
     ]

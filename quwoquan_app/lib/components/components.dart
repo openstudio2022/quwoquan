@@ -67,9 +67,7 @@ export 'media/shared/viewer/media_caption_widgets.dart';
 // AuthorProfile 已迁移至 lib/ui/user/pages/author_profile_page.dart
 
 // ==================== 评论系统组件 ====================
-export 'comment_system/comment_viewer.dart';
 export 'comment_system/comment_models.dart';
-export 'comment_system/comment_viewer_modal.dart';
 
 // ==================== 嵌入式成员搜索 ====================
 export 'search/search_embedded.dart';

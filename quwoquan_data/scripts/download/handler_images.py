@@ -15,7 +15,7 @@ import tempfile
 from threading import Lock
 from typing import Any, Mapping
 
-from _common.paths import ensure_batch_layout, batch_root, source_unit_dir
+from _common.paths import ensure_batch_layout, batch_root
 from _common.io import read_json, write_json
 from _common.batch_manifest import write_batch_manifest, write_source_catalog
 from _common.content_evidence import clean_source_markdown, score_source_markdown
@@ -29,6 +29,7 @@ from _common.source_catalog import (
 )
 from _common.source_unit import (
     find_source_unit_raw_snapshot,
+    iter_source_units,
     resolve_entity_object_dir,
     slugify,
     write_source_unit,
@@ -169,7 +170,13 @@ def _cached_source_image_payload(
     source_id: str,
     spec: Mapping[str, Any],
 ) -> dict[str, Any] | None:
-    unit = source_unit_dir(object_dir, ordinal, source_id)
+    unit = _find_source_unit_by_plan_key(
+        object_dir,
+        ordinal=ordinal,
+        source_id=source_id,
+    )
+    if unit is None:
+        return None
     index_path = unit / "assets" / "index.json"
     if not index_path.is_file():
         return None
@@ -228,13 +235,8 @@ def _image_lane_source_unit_dirs(object_dir: Path) -> set[Path]:
     source-plan commit path.
     """
 
-    sources_root = object_dir / "1.download" / "sources"
-    if not sources_root.is_dir():
-        return set()
     out: set[Path] = set()
-    for child in sources_root.iterdir():
-        if not child.is_dir():
-            continue
+    for child in iter_source_units(object_dir):
         try:
             meta = read_json(child / "meta.json")
         except (OSError, ValueError, TypeError):
@@ -307,6 +309,27 @@ def _cached_image_lane_payload(object_dir: Path, spec: Mapping[str, Any]) -> dic
             }
     return None
 
+def _find_source_unit_by_plan_key(
+    object_dir: Path,
+    *,
+    ordinal: int,
+    source_id: str,
+    url: str = "",
+) -> Path | None:
+    for unit in iter_source_units(object_dir):
+        try:
+            meta = read_json(unit / "meta.json")
+        except (OSError, ValueError, TypeError):
+            meta = {}
+        if int(meta.get("ordinal") or 0) != int(ordinal):
+            continue
+        if str(meta.get("sourceId") or "") != str(source_id or ""):
+            continue
+        if url and str(meta.get("url") or "") != str(url or ""):
+            continue
+        return unit
+    return None
+
 def _cached_source_quality_if_better(
     object_dir: Path,
     *,
@@ -320,7 +343,14 @@ def _cached_source_quality_if_better(
     Repeated runs must be monotonic: a transient block/probe page cannot replace
     a previously retained source unit with Reject or a lower-quality result.
     """
-    unit = source_unit_dir(object_dir, ordinal, source_id)
+    unit = _find_source_unit_by_plan_key(
+        object_dir,
+        ordinal=ordinal,
+        source_id=source_id,
+        url=url,
+    )
+    if unit is None:
+        return None
     meta_path = unit / "meta.json"
     quality_path = unit / "source.quality.json"
     source_path = unit / "source.md"
@@ -356,14 +386,9 @@ def _prune_stale_source_units(
     source units written in this run.
     """
 
-    sources_root = object_dir / "1.download" / "sources"
-    if not sources_root.is_dir():
-        return []
     keep = {path.resolve() for path in written_dirs}
     pruned: list[str] = []
-    for child in sorted(sources_root.iterdir(), key=lambda path: path.name):
-        if not child.is_dir():
-            continue
+    for child in sorted(iter_source_units(object_dir), key=lambda path: path.name):
         if child.resolve() in keep:
             continue
         try:

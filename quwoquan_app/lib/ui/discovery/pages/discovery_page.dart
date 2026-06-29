@@ -14,14 +14,14 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_viewer_modal.dart';
 import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/core/models/visit_models.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
-import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
+import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_sheet.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
@@ -931,7 +931,6 @@ class _DiscoveryPageState extends ConsumerState<DiscoveryPage>
         extra: MediaViewerExtra(
           posts: postViews,
           initialIndex: initialIndex,
-          category: category ?? post.displayFormat,
           initialImageIndex: isMoment ? mediaIndex : 0,
           interactionSnapshot: interactionSnapshot,
           feedRequestId: navFeedRequestId,

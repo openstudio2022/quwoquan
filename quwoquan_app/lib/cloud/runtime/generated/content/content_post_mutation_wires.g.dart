@@ -41,8 +41,6 @@ class CreatePostRequestWire {
     this.body,
     this.summary,
     this.semanticMentions,
-    this.rating,
-    this.reviewAspects,
     this.mediaUrls,
     this.mediaItems,
     this.coverUrl,
@@ -81,8 +79,6 @@ class CreatePostRequestWire {
   final String? body;
   final String? summary;
   final List<CloudJsonMap>? semanticMentions;
-  final String? rating;
-  final List<CloudJsonMap>? reviewAspects;
   final List<String>? mediaUrls;
   final List<CloudJsonMap>? mediaItems;
   final String? coverUrl;
@@ -122,8 +118,6 @@ class CreatePostRequestWire {
     _mutationPutOpt(m, 'body', body);
     _mutationPutOpt(m, 'summary', summary);
     if (semanticMentions != null) m['semanticMentions'] = semanticMentions!;
-    _mutationPutOpt(m, 'rating', rating);
-    if (reviewAspects != null) m['reviewAspects'] = reviewAspects!;
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
     if (mediaItems != null) m['mediaItems'] = mediaItems!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
@@ -165,8 +159,6 @@ class CreatePostRequestWire {
       body: m['body']?.toString(),
       summary: m['summary']?.toString(),
       semanticMentions: _mutationMapList(m['semanticMentions']),
-      rating: m['rating']?.toString(),
-      reviewAspects: _mutationMapList(m['reviewAspects']),
       mediaUrls: _mutationStringList(m['mediaUrls']),
       mediaItems: _mutationMapList(m['mediaItems']),
       coverUrl: m['coverUrl']?.toString(),
@@ -209,8 +201,6 @@ class UpdatePostRequestWire {
     this.body,
     this.summary,
     this.semanticMentions,
-    this.rating,
-    this.reviewAspects,
     this.mediaUrls,
     this.mediaItems,
     this.coverUrl,
@@ -241,8 +231,6 @@ class UpdatePostRequestWire {
   final String? body;
   final String? summary;
   final List<CloudJsonMap>? semanticMentions;
-  final String? rating;
-  final List<CloudJsonMap>? reviewAspects;
   final List<String>? mediaUrls;
   final List<CloudJsonMap>? mediaItems;
   final String? coverUrl;
@@ -274,8 +262,6 @@ class UpdatePostRequestWire {
     _mutationPutOpt(m, 'body', body);
     _mutationPutOpt(m, 'summary', summary);
     if (semanticMentions != null) m['semanticMentions'] = semanticMentions!;
-    _mutationPutOpt(m, 'rating', rating);
-    if (reviewAspects != null) m['reviewAspects'] = reviewAspects!;
     if (mediaUrls != null) m['mediaUrls'] = mediaUrls!;
     if (mediaItems != null) m['mediaItems'] = mediaItems!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
@@ -309,8 +295,6 @@ class UpdatePostRequestWire {
       body: m['body']?.toString(),
       summary: m['summary']?.toString(),
       semanticMentions: _mutationMapList(m['semanticMentions']),
-      rating: m['rating']?.toString(),
-      reviewAspects: _mutationMapList(m['reviewAspects']),
       mediaUrls: _mutationStringList(m['mediaUrls']),
       mediaItems: _mutationMapList(m['mediaItems']),
       coverUrl: m['coverUrl']?.toString(),
@@ -446,8 +430,6 @@ class PromotePostToWorkRequestWire {
     this.title,
     this.summary,
     this.semanticMentions,
-    this.rating,
-    this.reviewAspects,
     this.coverUrl,
     this.articleMarkdown,
     this.articleMarkdownVersion,
@@ -467,8 +449,6 @@ class PromotePostToWorkRequestWire {
   final String? title;
   final String? summary;
   final List<CloudJsonMap>? semanticMentions;
-  final String? rating;
-  final List<CloudJsonMap>? reviewAspects;
   final String? coverUrl;
   final String? articleMarkdown;
   final String? articleMarkdownVersion;
@@ -489,8 +469,6 @@ class PromotePostToWorkRequestWire {
     _mutationPutOpt(m, 'title', title);
     _mutationPutOpt(m, 'summary', summary);
     if (semanticMentions != null) m['semanticMentions'] = semanticMentions!;
-    _mutationPutOpt(m, 'rating', rating);
-    if (reviewAspects != null) m['reviewAspects'] = reviewAspects!;
     _mutationPutOpt(m, 'coverUrl', coverUrl);
     _mutationPutOpt(m, 'articleMarkdown', articleMarkdown);
     _mutationPutOpt(m, 'articleMarkdownVersion', articleMarkdownVersion);
@@ -513,8 +491,6 @@ class PromotePostToWorkRequestWire {
       title: m['title']?.toString(),
       summary: m['summary']?.toString(),
       semanticMentions: _mutationMapList(m['semanticMentions']),
-      rating: m['rating']?.toString(),
-      reviewAspects: _mutationMapList(m['reviewAspects']),
       coverUrl: m['coverUrl']?.toString(),
       articleMarkdown: m['articleMarkdown']?.toString(),
       articleMarkdownVersion: m['articleMarkdownVersion']?.toString(),

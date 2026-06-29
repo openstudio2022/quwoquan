@@ -595,7 +595,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             .toList(growable: false),
         dtoPosts: viewerDtos,
         initialIndex: initialIndex,
-        category: 'circle',
         source: 'circle',
         circleId: widget.circleId,
         rawPostsById: rawPostsById,

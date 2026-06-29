@@ -6,6 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 
+import '../../support/api_contract/local_bad_certificate_overrides.dart';
+
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
@@ -13,8 +15,12 @@ const _apiContractEnv = String.fromEnvironment(
 const _productOpsBase = String.fromEnvironment(
   'API_CONTRACT_PRODUCT_OPS_BASE_URL',
 );
+const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
+  'API_CONTRACT_ALLOW_BAD_CERT',
+);
 
 late http.Client _client;
+bool _clientInitialized = false;
 
 Map<String, String> _headers(String pageId) => <String, String>{
   ...CloudRequestHeaders.forPage(pageId),
@@ -23,6 +29,9 @@ Map<String, String> _headers(String pageId) => <String, String>{
 
 void main() {
   setUpAll(() async {
+    installLocalApiContractBadCertificateOverride(
+      enabled: _allowBadCertificateForLocalApiContract,
+    );
     if (_productOpsBase.isEmpty) {
       throw StateError(
         'L3: ${_apiContractEnv.toUpperCase()}_PRODUCT_OPS_BASE_URL not set',
@@ -41,10 +50,12 @@ void main() {
       throw StateError('L3: product-ops $_apiContractEnv unreachable ($error)');
     }
     _client = http.Client();
+    _clientInitialized = true;
   });
 
   tearDownAll(() {
-    _client.close();
+    if (_clientInitialized) _client.close();
+    restoreLocalApiContractBadCertificateOverride();
   });
 
   group('ops_event_ingestion_end_to_end', () {

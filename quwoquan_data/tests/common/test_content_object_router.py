@@ -36,11 +36,23 @@ _BATCH = "co_b1"
 
 
 def test_compute_coords_from_brief_is_deterministic():
-    brief = {"titleHint": "峨眉山·攻略", "templateId": "景区_深度_体验"}
+    # 底稿中心：angle 由 carrier + 底稿派生 writingIntent 决定，不再由 templateId 关键词映射。
+    brief = {"titleHint": "峨眉山·行前安排", "carrier": "article", "writingIntent": "planning_consultation"}
     c = co.compute_content_coords(brief, "article")
     assert c["contentType"] == "article"
-    assert c["title"] == "峨眉山·攻略"
-    assert c["angle"] == "深度探险", c  # templateId 含「深度」→ 深度探险
+    assert c["title"] == "峨眉山·行前安排"
+    assert c["angle"] == "攻略", c  # planning_consultation → 攻略
+    assert co.compute_content_coords(
+        {"titleHint": "峨眉山·值不值得去", "carrier": "article", "writingIntent": "decision_experience"},
+        "article",
+    )["angle"] == "体验"
+    assert co.compute_content_coords(
+        {"titleHint": "峨眉山·六日游记", "carrier": "article", "writingIntent": "post_trip_journal"},
+        "article",
+    )["angle"] == "游记"
+    assert co.compute_content_coords(
+        {"titleHint": "峨眉山·光影画报", "carrier": "image"}, "image"
+    )["angle"] == "画报"
 
 
 def test_compute_coords_rejects_empty_title_hint():
@@ -53,11 +65,11 @@ def test_compute_coords_rejects_empty_title_hint():
 
 
 def test_register_and_resolve_object_dirs():
-    brief = {"titleHint": "峨眉山·攻略", "templateId": "景区环线攻略"}
+    brief = {"titleHint": "峨眉山·行前安排", "carrier": "article", "writingIntent": "planning_consultation"}
     ref = "地点_景区__峨眉山"
     coords = co.register_from_brief(_TASK, _BATCH, ref, brief)
     assert coords["seq"] == 1
-    assert coords["angle"] == "环线攻略"
+    assert coords["angle"] == "攻略"
     # 路由索引落 _shared
     idx = co.index_path(_TASK, _BATCH)
     assert idx.parent.name == "_shared"
@@ -65,7 +77,7 @@ def test_register_and_resolve_object_dirs():
     # 对象目录 = posts/{type}/{angle}/{title}/{seq}
     obj = co.content_object_dir(_TASK, _BATCH, ref)
     rel = obj.relative_to(batch_root(_TASK, _BATCH)).as_posix()
-    assert rel == "posts/article/环线攻略/峨眉山·攻略/1", rel
+    assert rel == "posts/article/攻略/峨眉山·行前安排/1", rel
     # 阶段目录带序号
     assert co.content_object_stage_dir(_TASK, _BATCH, ref, "3.compose").name == "3.compose"
     assert co.content_object_stage_dir(_TASK, _BATCH, ref, "4.draft").parent == obj

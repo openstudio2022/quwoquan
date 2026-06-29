@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Pageflip Backward Mainline (Native BACK)
 
-当任务触及 `quwoquan_app/lib/ui/content/pageflip/**`、`quwoquan_app/lib/ui/content/article_reader/pageflip/**`、`quwoquan_app/test/**/pageflip/**` 时，必须遵守本规则。本规则是 [11-pageflip-geometry-guardrails.mdc](11-pageflip-geometry-guardrails.mdc) 在 BACK 方向上的强收紧版，凡两者冲突以本规则为准。
+当任务触及 `quwoquan_app/lib/components/pageflip/**`、`quwoquan_app/lib/ui/content/article_reader/pageflip/**`、`quwoquan_app/test/**/pageflip/**` 时，必须遵守本规则。本规则是 [11-pageflip-geometry-guardrails.mdc](11-pageflip-geometry-guardrails.mdc) 在 BACK 方向上的强收紧版，凡两者冲突以本规则为准。
 
 ## 几何真相源（与业界 page-flip / 当前前翻代码逐点对齐）
 

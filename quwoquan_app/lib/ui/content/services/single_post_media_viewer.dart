@@ -4,11 +4,10 @@ import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.da
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
-import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 
 /// 由「单帖详情」构造沉浸式浏览器路由参数。
 ///
@@ -27,7 +26,6 @@ MediaViewerExtra buildSinglePostMediaViewerExtra(
   final raw = detail.mergedArticleWireMap;
   final snapshot = buildMediaViewerInteractionSnapshot(
     posts: <PostBaseDto>[dto],
-    discoveryState: ref.read(discoveryStateProvider),
     relationshipState: ref.read(userRelationshipStateProvider),
     postInteractionState: ref.read(postInteractionStateProvider),
   );
@@ -37,9 +35,6 @@ MediaViewerExtra buildSinglePostMediaViewerExtra(
     ],
     dtoPosts: <PostBaseDto>[dto],
     initialIndex: 0,
-    category: dto.isVideoLike
-        ? 'video'
-        : (dto.identity == 'moment' ? 'moment' : 'photo'),
     source: source,
     rawPostsById: <String, MediaViewerPostWireRow>{
       dto.id: MediaViewerPostWireRow.fromDynamicMap(

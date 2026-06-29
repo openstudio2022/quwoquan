@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Fail if post_view_projection.dart reintroduces bare string keys on card/block maps.
 
-Run from repo root: python3 scripts/verify_post_view_projection_wire_keys.py
+Run from repo root:
+  python3 quwoquan_app/scripts/content/verify_post_view_projection_wire_keys.py
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ TARGET = (
     / "lib"
     / "ui"
     / "content"
+    / "services"
     / "post_view_projection.dart"
 )
 
@@ -26,6 +28,13 @@ FORBIDDEN = re.compile(
 
 
 def main() -> int:
+    if not TARGET.exists():
+        print(
+            f"verify_post_view_projection_wire_keys: target missing: "
+            f"{TARGET.relative_to(ROOT)}",
+            file=sys.stderr,
+        )
+        return 1
     text = TARGET.read_text(encoding="utf-8")
     bad = FORBIDDEN.findall(text)
     if bad:

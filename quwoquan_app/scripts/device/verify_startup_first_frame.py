@@ -26,7 +26,9 @@ from PIL import Image, ImageStat
 APP_DIR = Path(__file__).resolve().parents[2]
 DEFAULT_ANDROID_PACKAGE = "com.quwoquan.quwoquan_app"
 DEFAULT_ANDROID_ACTIVITY = "com.quwoquan.quwoquan_app/.MainActivity"
-DEFAULT_ANDROID_APK = APP_DIR / "build/app/outputs/flutter-apk/app-debug.apk"
+DEFAULT_ANDROID_APK_DIR = APP_DIR / "build/app/outputs/flutter-apk"
+DEFAULT_ANDROID_APK = DEFAULT_ANDROID_APK_DIR / "app-debug.apk"
+DEFAULT_ANDROID_APK_METADATA = APP_DIR / "build/app/outputs/apk/debug/output-metadata.json"
 DEFAULT_IOS_BUNDLE = "com.example.quwoquanApp"
 DEFAULT_IOS_APP = APP_DIR / "build/ios/iphonesimulator/Runner.app"
 DEFAULT_OUTPUT_DIR = APP_DIR / "artifacts/startup_first_frame/probe"
@@ -85,6 +87,62 @@ def run(
         stderr=subprocess.STDOUT,
         timeout=timeout,
     )
+
+
+def read_android_device_abi(device: str) -> str:
+    abi = run(
+        ["adb", "-s", device, "shell", "getprop", "ro.product.cpu.abi"],
+        timeout=15,
+    ).stdout.strip()
+    if not abi:
+        raise RuntimeError(f"Unable to resolve Android ABI for device {device}")
+    return abi
+
+
+def resolve_android_apk(apk: Path, device: str) -> Path:
+    if apk.exists():
+        return apk
+
+    default_apk_requested = (
+        apk.resolve(strict=False) == DEFAULT_ANDROID_APK.resolve(strict=False)
+    )
+    if default_apk_requested:
+        abi = read_android_device_abi(device)
+        if DEFAULT_ANDROID_APK_METADATA.exists():
+            metadata = json.loads(
+                DEFAULT_ANDROID_APK_METADATA.read_text(encoding="utf-8")
+            )
+            for element in metadata.get("elements", []):
+                filters = {
+                    item.get("filterType"): item.get("value")
+                    for item in element.get("filters", [])
+                }
+                if filters.get("ABI") != abi:
+                    continue
+                output_file = element.get("outputFile")
+                if not output_file:
+                    continue
+                for base_dir in (
+                    DEFAULT_ANDROID_APK_DIR,
+                    DEFAULT_ANDROID_APK_METADATA.parent,
+                ):
+                    candidate = base_dir / output_file
+                    if candidate.exists():
+                        return candidate
+
+        candidate = DEFAULT_ANDROID_APK_DIR / f"app-{abi}-debug.apk"
+        if candidate.exists():
+            return candidate
+
+        available = ", ".join(
+            path.name for path in sorted(DEFAULT_ANDROID_APK_DIR.glob("app-*-debug.apk"))
+        )
+        raise FileNotFoundError(
+            "Android install requested but default app-debug.apk was not found; "
+            f"device ABI is {abi}, available split APKs: {available or 'none'}"
+        )
+
+    raise FileNotFoundError(f"Android install requested but APK was not found: {apk}")
 
 
 def analyze_screenshot(path: Path, offset_ms: int | None = None) -> ScreenshotAnalysis:
@@ -205,7 +263,8 @@ def resolve_first_visible_ms(
 
 def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
     apk = Path(args.android_apk)
-    if args.android_install and apk.exists():
+    if args.android_install:
+        apk = resolve_android_apk(apk, args.android_device)
         install = run(
             ["adb", "-s", args.android_device, "install", "-r", "-d", str(apk)],
             check=False,
@@ -318,6 +377,7 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     return {
         "platform": "android",
         "device": args.android_device,
+        "apk": str(apk) if args.android_install else None,
         "passed": passed,
         "visibleByMs": args.android_visible_by_ms,
         "firstVisibleMs": first_visible,

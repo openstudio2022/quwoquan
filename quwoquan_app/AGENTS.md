@@ -12,7 +12,7 @@
 - 触及 `lib/ui/**/pages/**` 或 `lib/app/shell/*.dart`：补读 `.cursor/rules/09-page-horizontal-quality.mdc`
 - 触及登录入口、登录成功/关闭回退路径：补读 `.cursor/rules/15-auth-entry-no-loop.mdc`
 - 触及平台差异、Web/鸿蒙能力：补读 `.cursor/rules/14-cross-platform-portability.mdc`
-- 触及 pageflip：补读 `.cursor/rules/11-pageflip-geometry-guardrails.mdc`；若为 BACK 方向，再补读 `.cursor/rules/12-pageflip-backward-mainline.mdc`
+- 触及 `lib/components/pageflip/**` 或 `lib/ui/content/article_reader/pageflip/**`：补读 `.cursor/rules/11-pageflip-geometry-guardrails.mdc`；若为 BACK 方向，再补读 `.cursor/rules/12-pageflip-backward-mainline.mdc`
 
 ## App 端硬约束
 

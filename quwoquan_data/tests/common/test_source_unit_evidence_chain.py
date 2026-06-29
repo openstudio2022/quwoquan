@@ -96,13 +96,15 @@ def test_source_unit_layout_no_loose_images():
     units = iter_source_units(obj)
     assert len(units) == 1, units
     unit = units[0]
-    assert unit.name == "01.overview_baike", unit
+    assert unit.resolve().relative_to(batch_root(TASK, BATCH).resolve()).as_posix().startswith("sources/su_"), unit
     assert (unit / "meta.json").is_file()
     assert (unit / "assets" / "index.json").is_file()
     assert (unit / "assets").is_dir()
+    assert (obj / "1.download" / "source_refs.json").is_file()
     # 对象级别不得出现散落 images/
     assert not (obj / "images").exists()
     assert not (obj / "1.download" / "images").exists()
+    assert not (obj / "1.download" / "sources").exists()
 
 
 def test_object_image_candidates_carry_relative_refs():
@@ -111,7 +113,8 @@ def test_object_image_candidates_carry_relative_refs():
     cands = object_image_candidates(obj, TASK, BATCH)
     assert len(cands) == 2, cands
     for c in cands:
-        assert c["sourceAssetRef"].startswith("entities/地点/景区/海螺沟/1.download/sources/01.overview_baike/assets/"), c
+        assert c["sourceRef"].startswith("sources/su_"), c
+        assert c["sourceAssetRef"].startswith("sources/su_"), c
         assert not c["sourceAssetRef"].startswith("/")
         assert "/Users/" not in c["sourceAssetRef"]
 
@@ -127,7 +130,7 @@ def test_route_assets_to_post_assets_traceable():
         assert a["fileName"] == f"{a['assetId']}{Path(a['fileName']).suffix}", a
         assert a["entityName"] in a["assetId"], a
         assert not a["assetId"].startswith("data_asset_"), a
-        assert a["sourceAssetRef"].startswith("entities/"), a
+        assert a["sourceAssetRef"].startswith("sources/su_"), a
         assert not a["sourceAssetRef"].startswith("/"), a
     # copy 到 post assets/，文件名即 assetId
     post_assets = batch_root(TASK, BATCH) / "posts" / "article" / "环线" / "海螺沟环线" / "1" / "assets"

@@ -4,11 +4,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 
 void main() {
-  testWidgets('创作首层入口仅暴露三种开始动作，不再暴露旧六宫格 taxonomy', (tester) async {
+  testWidgets('首层入口保留三种创作动作与社交动作，不再暴露旧六宫格 taxonomy', (tester) async {
     EditorStartAction? selectedAction;
 
     await tester.pumpWidget(
@@ -42,6 +42,10 @@ void main() {
       findsOneWidget,
     );
     expect(
+      find.text(UITextConstants.createActionPhotoSubtitle),
+      findsOneWidget,
+    );
+    expect(
       find.text(UITextConstants.createActionPostVideoShort),
       findsOneWidget,
     );
@@ -53,11 +57,15 @@ void main() {
     expect(find.text(UITextConstants.createActionResumeDraft), findsNothing);
     expect(
       find.text(UITextConstants.createActionAddContactShort),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       find.text(UITextConstants.createActionCreateGroupShort),
-      findsNothing,
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionCreateCircleShort),
+      findsOneWidget,
     );
     expect(find.text('发图片'), findsNothing);
     expect(find.text('发视频'), findsNothing);
@@ -75,6 +83,6 @@ void main() {
     await tester.tap(find.byKey(TestKeys.createActionCapture));
     await tester.pump();
 
-    expect(selectedAction, EditorStartAction.capture);
+    expect(selectedAction, EditorStartAction.video);
   });
 }

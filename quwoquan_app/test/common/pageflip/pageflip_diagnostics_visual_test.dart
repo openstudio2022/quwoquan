@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/components/pageflip/controller.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 
 /// 路线 B 后翻可视回放（单页竖屏）锁主线不变量：

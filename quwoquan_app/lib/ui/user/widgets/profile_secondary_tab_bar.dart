@@ -133,7 +133,7 @@ class ProfileSecondaryTabBar extends StatelessWidget {
                               color: selected
                                   ? selectedForeground
                                   : fgSecondary,
-                              letterSpacing: -0.08,
+                              letterSpacing: 0,
                             ),
                           ),
                         ),

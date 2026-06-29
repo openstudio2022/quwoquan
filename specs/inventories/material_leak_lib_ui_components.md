@@ -40,8 +40,8 @@
 | `quwoquan_app/lib/components/avatar/group_avatar_grid.dart` | components | full | yes | — |
 | `quwoquan_app/lib/components/avatar/rounded_square_avatar.dart` | components | full | yes | — |
 | `quwoquan_app/lib/components/comment_system/comment_models.dart` | components | full | no | — |
-| `quwoquan_app/lib/components/comment_system/comment_viewer.dart` | components | full | yes | — |
-| `quwoquan_app/lib/components/comment_system/comment_viewer_modal.dart` | components | full | yes | — |
+| `quwoquan_app/lib/ui/content/comments/widgets/comment_viewer.dart` | content | full | yes | — |
+| `quwoquan_app/lib/ui/content/comments/widgets/comment_viewer_modal.dart` | content | full | yes | — |
 | `quwoquan_app/lib/components/content/image_post_card.dart` | components | full | yes | — |
 | `quwoquan_app/lib/components/content/media_post_card.dart` | components | full | yes | — |
 | `quwoquan_app/lib/components/content/video_post_card.dart` | components | full | yes | — |
@@ -232,9 +232,9 @@
 - `quwoquan_app/lib/ui/circle/widgets/circle_media_image.dart`
 - `quwoquan_app/lib/ui/circle/widgets/home_circles_category_tab.dart`
 - `quwoquan_app/lib/ui/circle/widgets/media_viewer_result_absorber.dart`
-- `quwoquan_app/lib/ui/content/article_detail_view.dart`
+- `quwoquan_app/lib/ui/content/article_render/models/article_detail_view.dart`
 - `quwoquan_app/lib/ui/content/article_document_models.dart`
-- `quwoquan_app/lib/ui/content/article_pagination_engine.dart`
+- `quwoquan_app/lib/ui/content/article_render/services/article_pagination_engine.dart`
 - `quwoquan_app/lib/ui/content/article_presentation_models.dart`
 - `quwoquan_app/lib/ui/content/entry/models/create_editor_models.dart`
 - `quwoquan_app/lib/ui/content/entry/models/publish_settings_models.dart`
@@ -246,10 +246,10 @@
 - `quwoquan_app/lib/ui/content/entry/widgets/article_editor_accessory_panels.dart`
 - `quwoquan_app/lib/ui/content/entry/widgets/create_action_sheet.dart`
 - `quwoquan_app/lib/ui/content/pages/photo_detail_page.dart`
-- `quwoquan_app/lib/ui/content/pages/unified_media_viewer_page.dart`
+- `quwoquan_app/lib/ui/discovery/pages/unified_media_viewer_page.dart`
 - `quwoquan_app/lib/ui/content/pages/video_detail_page.dart`
 - `quwoquan_app/lib/ui/content/post_summary_view.dart`
-- `quwoquan_app/lib/ui/content/post_view_projection.dart`
+- `quwoquan_app/lib/ui/content/services/post_view_projection.dart`
 - `quwoquan_app/lib/ui/content/providers/comment_provider.dart`
 - `quwoquan_app/lib/ui/content/share/content_share_template.dart`
 - `quwoquan_app/lib/ui/content/widgets/article_content_block_renderer.dart`

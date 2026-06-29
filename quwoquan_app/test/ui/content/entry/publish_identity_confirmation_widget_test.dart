@@ -16,7 +16,7 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
@@ -115,6 +115,22 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> markForegroundAuthCheckNow() async {}
 }
 
+class _AuthenticatedSession extends AuthSessionController {
+  @override
+  AuthSessionState build() {
+    return const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      ownerId: 'user_001',
+      activeSubAccountId: 'user_001',
+      accountState: 'active',
+      identityOrigin: 'phone',
+      installId: 'install-id',
+    );
+  }
+}
+
 /// 在 pump 期间主动 watch 登录态，让创作页发布/选图的 requireLogin 在已登录态放行。
 class _AuthWarmup extends ConsumerWidget {
   const _AuthWarmup({required this.child});
@@ -154,6 +170,7 @@ Widget _buildApp(_TrackingContentRepository repository) {
       contentRepositoryProvider.overrideWithValue(repository),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),
@@ -193,6 +210,7 @@ Widget _buildRouterApp(_TrackingContentRepository repository) {
       contentRepositoryProvider.overrideWithValue(repository),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
     ],
     child: ScreenUtilInit(
       designSize: const Size(390, 844),

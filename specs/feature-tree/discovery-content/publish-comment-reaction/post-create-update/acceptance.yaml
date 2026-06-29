@@ -7,11 +7,11 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: publish-comment-reaction
 scope:
-  summary: 内容创建、媒体发布与发布后回读验收；本轮覆盖图片与视频作品商用创作链路，并对齐全局混合相册/可切相机入口的结果分流。
+  summary: 内容创建、媒体发布与发布后回读验收；本轮覆盖图片与视频作品商用创作链路，并对齐全局照片入口、视频入口与旧相机兼容入口的结果分流。
   in_scope:
   - 图片作品从相册选择、拍摄、编辑、排序、完成回填到发布的端侧主链路。
   - 图片发布远端媒体上传、完成、绑定、发布与展示回读契约。
-  - 全局相册/相机入口按真实结果进入图片或视频发布子流程，最终 payload 语义互斥。
+  - 全局照片/视频入口按发布目标进入图片或视频发布子流程，最终 payload 语义互斥。
   - 视频作品从相册选择、拍摄、选封面、完成回填到发布的端侧主链路。
   - 视频封面字段、封面策略、远端发布 payload 与发布后 feed 回读契约。
   out_of_scope:
@@ -68,9 +68,9 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
-        suite: creation_mixed_media_picker
+        suite: create_entry_media_resolution
         cases:
-        - local_contract.discovery_content.publish_comment_reaction.post_create_update.mixed_gallery_photo_result_enters_photo_flow_without_mixed_payload
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.photo_entry_image_result_enters_photo_flow
         envs: &id001
         - local
       - layer: local_contract
@@ -121,7 +121,7 @@ gwt_acceptance:
     - 2026-06-22 已记录图片模式展示规则、相册目录切换、视频防穿透、宫格选择、底部删除与完成回填 widget 合同；真实拖拽手势由后续真机巡检继续覆盖。
     - 2026-06-23 新增跨页面 user_acceptance：重入图片选择器不预选旧图，但确认后会把新图追加到已有图片末尾，不覆盖第一次选择。
     - 2026-06-25 补充缩略条左对齐、悬停即时让位、图片创作标题与创作页图片网格重排 local_contract；仍未覆盖真机触控与长列表惯性拖拽。
-    - 2026-06-28 对齐全局 mixed gallery：选择图片后进入图片 flow，图片/视频互斥仍以最终媒体类型和 payload 为准。
+    - 2026-06-28 对齐全局照片入口：选择图片后进入图片 flow，图片/视频互斥仍以最终媒体类型和 payload 为准。
   GWT2:
     title: 图片拍摄为高保黑色拍照确认流并统一进图片编辑页
     given:
@@ -250,12 +250,14 @@ gwt_acceptance:
   GWT4:
     title: 视频选择与拍摄进入深色视频选封面主链路
     given:
-    - "用户已登录，并从视频作品入口进入 `/create?type=video`，或从全局 `/create?type=gallery|capture` 得到视频结果。"
+    - "用户已登录，并从视频作品入口进入 `/create?type=video`，或从旧相机兼容入口 `/create?type=capture` 得到视频结果。"
     - 设备相册或相机权限可用，至少存在一个可选择视频或可录制视频。
     when:
-    - 用户打开视频选择器选择一个视频，或从视频入口进入相机拍摄一段视频。
+    - 用户打开视频选择器选择一个视频，点击 `拍视频` 进入相机拍摄一段视频，或点击 `一键成片` 选择图片生成视频。
     then:
-    - 视频选择器使用深色 iOS 全屏选择态，顶部含取消与相机入口，上半区为“现在开拍”，下半区为“全部视频”三列视频缩略图。
+    - 视频选择器使用深色 iOS 全屏选择态，布局与图片选择器一致：顶部为取消和居中 `全部视频`，主体为三列宫格。
+    - 宫格第 1 格为 `拍视频`，第 2 格为 `一键成片`，其余格仅展示视频资源；图片资源不得在视频资源格中出现。
+    - 点击 `一键成片` 后进入图片选择器，至少选择 1 张图片后进入预览；生成本地视频成功后直接进入视频编辑/选封面页，不回到视频选择器停留。
     - 视频缩略图展示时长，选中态清晰；选择单个视频后进入视频编辑/选封面页，不直接写入发布 payload。
     - 视频入口进入相机时默认后置摄像头，顶部为返回/“摄像模式”/灯光，底部仅保留滤镜/蓝色录像按钮/翻转，不出现拍照模式标题或白色快门。
     - 全局 `/create?type=capture` 默认拍照但可切到录像；录像完成后进入同一视频预览确认和视频编辑/选封面页。
@@ -263,11 +265,12 @@ gwt_acceptance:
     - 录制停止后先进入视频预览确认（自动播放/重拍/下一步），下一步进入同一视频编辑/选封面页，不回落到图片确认流或浅色不可用页。
     - 滤镜复用 `filter_presets.json` 的 `camera_photo` 集合与拍照同源；麦克风被拒时允许继续无声录制，不整体阻断视频入口。
     done_when:
-    - 相册视频与拍摄视频均能进入统一视频编辑状态，包含 `videoPath`、`durationMs` 和默认封面候选。
+    - 相册视频、拍摄视频与一键成片视频均能进入统一视频编辑状态，包含 `videoPath`、`durationMs` 和默认封面候选。
     edge_cases:
     - 相册权限未授权时展示深色权限态与恢复动作。
     - 相机权限拒绝时展示深色页级权限态与去设置/返回动作。
     - 麦克风权限拒绝时允许继续无声录制，不阻断进入相机。
+    - 一键成片未选择图片时不得生成；平台不支持或生成失败时展示明确不可用/失败提示，不伪造 video result。
     - 相机不可用或录制失败时展示结构化深色错误态并隐藏录制/翻转等无意义控件，不丢失创作上下文。
     contract_refs:
     - quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
@@ -297,9 +300,9 @@ gwt_acceptance:
     test_evidence:
       primary:
       - layer: local_contract
-        suite: creation_mixed_media_picker
+        suite: create_video_entry_mode
         cases:
-        - local_contract.discovery_content.publish_comment_reaction.post_create_update.mixed_gallery_video_result_enters_video_flow_without_photo_payload
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.video_entry_opens_video_picker
         envs: *id001
       - layer: local_contract
         suite: camera_capture_mode_switch
@@ -309,12 +312,14 @@ gwt_acceptance:
       - layer: local_contract
         suite: create_entry_media_resolution
         cases:
-        - local_contract.discovery_content.publish_comment_reaction.post_create_update.gallery_video_result_resolves_to_video_flow
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.video_result_resolves_to_video_flow
         envs: *id001
       - layer: local_contract
         suite: video_media_picker_dark_flow
         cases:
         - local_contract.discovery_content.publish_comment_reaction.post_create_update.video_picker_enters_cover_editor
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.video_grid_camera_one_tap_movie_and_video_assets
+        - local_contract.discovery_content.publish_comment_reaction.post_create_update.one_tap_movie_returns_generated_video_result
         envs: *id001
       - layer: local_contract
         suite: video_camera_capture_flow
@@ -349,6 +354,7 @@ gwt_acceptance:
     - 2026-06-22 已记录视频选择器深色全屏、现在开拍、全部视频过滤图片、视频相机固定视频模式的 local_contract；gamma api_integration 与 user_acceptance 证据尚未落盘，状态保持 partial，真机前置摄像头与实际录制链路仍由后续设备矩阵/UAT 覆盖。
     - 2026-06-23 冻结高保视频摄像模式：默认后置摄像头、顶部返回/“摄像模式”/灯光、底部滤镜/蓝色录像按钮/翻转，最短 1 秒/最长 60 秒录制状态机、录制中锁定翻转与滤镜、灯光（补光灯）off/on 前置置灰；相机权限页级阻断、麦克风拒绝可继续无声录制、模拟器/无相机走深色错误态隐藏无意义控件；录后视频预览确认（自动播放/重拍/下一步）再进 `VideoEditorPage`；与拍照共享高保壳但路由结果/状态机/埋点前缀独立。新增 fake camera/recording 注入、video_camera_hifi_layout、capture_camera_photo_video_independence 与 video_creation_publish_roundtrip 证据；gamma read model 仍由 GWT5/GWT6 pending 覆盖。
     - 2026-06-28 视频专用调用继续 videoOnly；全局 gallery/capture 得到视频结果后也进入视频编辑/选封面主链路。
+    - 2026-06-29 视频选择器取消大 hero，改为与图片选择器一致的三列宫格：`拍视频`、`一键成片`、全部视频资源；一键成片生成后以本地 video result 直达视频编辑。
   GWT5:
     title: 视频选封面与发布 payload 使用同源远端封面契约
     given:

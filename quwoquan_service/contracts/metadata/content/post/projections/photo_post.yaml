@@ -76,7 +76,7 @@ client_projection:
       nullable: false
       source: contentType
       aliases: [contentType, category]
-      default: "'photo'"
+      default: "'image'"
 
     - name: identity
       dart_type: String

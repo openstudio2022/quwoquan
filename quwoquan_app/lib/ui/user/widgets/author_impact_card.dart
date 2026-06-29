@@ -10,7 +10,7 @@ import 'package:quwoquan_app/components/object_page/intersection_target_navigato
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_evidence.dart';
-import 'package:quwoquan_app/ui/user/widgets/intersection_statement_card.dart';
+import 'package:quwoquan_app/components/object_page/intersection_statement_card.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
 /// 影响力摘要模块（他人主页 / 我的主页双视角，可解释）。

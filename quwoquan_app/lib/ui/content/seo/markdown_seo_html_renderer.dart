@@ -1,8 +1,8 @@
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/core/links/app_public_content_links.dart';
 import 'package:quwoquan_app/core/media/asset_url_resolver.dart';
-import 'package:quwoquan_app/ui/content/markdown/qwq_markdown_ast.dart';
-import 'package:quwoquan_app/ui/content/markdown/qwq_markdown_parser.dart';
+import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown_ast.dart';
+import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown_parser.dart';
 
 class SeoHtmlDocument {
   const SeoHtmlDocument({

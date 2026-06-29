@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
+import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
 
 /// post → 作者主页的交集高亮意图（§7.3 旅程无断点）。
 ///
@@ -89,16 +89,18 @@ class ObjectIntersectionQuery {
 
 /// 对象页「你和这里 / 你们」的交集唯一来源：后端 intersectionRepository。
 /// App 不再在 provider 层把 tag-service/shared-tags 合并成第二条 reason 主链。
-final objectSharedReasonsProvider = FutureProvider.family<
-    List<IntersectionReason>,
-    ObjectIntersectionQuery>((ref, q) async {
-  if (!q.isResolvable) {
-    return const <IntersectionReason>[];
-  }
-  final intersectionRepo = ref.watch(intersectionRepositoryProvider);
-  return intersectionRepo.getObjectIntersections(
-    objectId: q.objectBId,
-    objectType: q.objectBType,
-    limit: q.limit,
-  );
-});
+final objectSharedReasonsProvider =
+    FutureProvider.family<List<IntersectionReason>, ObjectIntersectionQuery>((
+      ref,
+      q,
+    ) async {
+      if (!q.isResolvable) {
+        return const <IntersectionReason>[];
+      }
+      final intersectionRepo = ref.watch(intersectionRepositoryProvider);
+      return intersectionRepo.getObjectIntersections(
+        objectId: q.objectBId,
+        objectType: q.objectBType,
+        limit: q.limit,
+      );
+    });

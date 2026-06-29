@@ -388,7 +388,7 @@ route_only:
 - route_id: workBrowser
   owner: content
   source_tests:
-  - quwoquan_app/test/ui/content/pages/work_browser_entry_page_test.dart
+  - quwoquan_app/test/ui/discovery/pages/work_browser_entry_page_test.dart
 - route_id: assistant
   owner: assistant
   source_tests:

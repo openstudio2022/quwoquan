@@ -5,6 +5,70 @@ from __future__ import annotations
 from support.task_workflow_fixtures import *  # noqa: F401,F403
 
 
+def _write_content_plan_source(
+    object_dir,
+    *,
+    task_id: str,
+    batch_id: str,
+    ordinal: int,
+    source_id: str,
+    body: str,
+    title: str,
+    lane: str = "article",
+    quality: float = 0.9,
+    asset_name: str = "",
+    asset_bytes: bytes | None = None,
+    collection_id: str = "",
+    caption: str = "",
+    license_value: str = "CC-BY-SA 4.0",
+    usage_scope: str = "app_publish",
+):
+    images = []
+    if asset_bytes is not None:
+        images.append(
+            {
+                "bytes": asset_bytes,
+                "ext": Path(asset_name).suffix or ".jpg",
+                "slug": Path(asset_name).stem or source_id,
+                "sourceCollectionId": collection_id,
+                "caption": caption,
+                "license": license_value,
+                "credit": "测试来源",
+                "sourceUrl": f"https://example.test/{source_id}",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "usageScope": usage_scope,
+            }
+        )
+    return write_structured_source_unit(
+        object_dir,
+        ordinal=ordinal,
+        source_id=source_id,
+        source_md=body,
+        clean_md=body,
+        quality={
+            "sourceId": source_id,
+            "quality": "A-story" if lane == "article" else "B-fact",
+            "score": quality * 10,
+            "sourceQualityScore": quality,
+        },
+        platform="fixture",
+        source_category="travelogue" if lane == "article" else "image_collection",
+        source_use_mode="factual_reference_only",
+        publish_media_mode="same_source_media" if images else "text_only",
+        source_role="base" if lane == "article" else "",
+        research_lane=lane,
+        license_value=license_value,
+        url=f"https://example.test/{source_id}",
+        title=title,
+        target_ref=f"/entity/地点/景区/{_EID}",
+        relevance=f"{_EID} fixture",
+        images=images,
+        task_id=task_id,
+        batch_id=batch_id,
+        build_variants=False,
+    )
+
+
 
 def test_auto_content_plan_article_sources_reserve_unique_asset_refs():
     task_id = _make_task()
@@ -21,7 +85,6 @@ def test_auto_content_plan_article_sources_reserve_unique_asset_refs():
     batch_id = "content_plan_article_dedupe_by_source_ref"
     ctx = _ctx(task_id, batch_id)
     object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
-    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
     repeated_body = "\n".join(
         [
             f"{_EID}是测试省核心景区，行前需要核对开放时间、门票预约、交通接驳和天气情况。",
@@ -38,39 +101,20 @@ def test_auto_content_plan_article_sources_reserve_unique_asset_refs():
         * 8
     )
     for index in range(1, 5):
-        source_dir = sources_dir / f"{index:02d}.article_fixture_{index}"
-        (source_dir / "assets").mkdir(parents=True, exist_ok=True)
-        write_json(
-            source_dir / "meta.json",
-            {
-                "sourceId": f"article_fixture_{index}",
-                "researchLane": "article",
-                "sourceRole": "base",
-                "sourceUseMode": "factual_reference_only",
-                "category": "travelogue",
-                "title": f"测试底稿 {index}",
-                "sourceQualityScore": 0.9,
-            },
-        )
-        (source_dir / "source.md").write_text(repeated_body, encoding="utf-8")
-        (source_dir / "assets" / "shared.jpg").write_bytes(_real_jpeg(300 + index))
-        write_json(
-            source_dir / "assets" / "index.json",
-            {
-                "assets": [
-                    {
-                        "fileName": "shared.jpg",
-                        "sha256": f"sha256:article-image-sha-{index}",
-                        "sourceCollectionId": f"article-collection-{index}",
-                        "caption": f"{_EID} 共享测试图",
-                        "license": "reference_only",
-                        "credit": "测试来源",
-                        "sourceUrl": f"https://example.test/{index}",
-                        "termsUrl": "https://example.test/terms",
-                        "usageScope": "factual_reference_only",
-                    }
-                ]
-            },
+        _write_content_plan_source(
+            object_dir,
+            task_id=task_id,
+            batch_id=batch_id,
+            ordinal=index,
+            source_id=f"article_fixture_{index}",
+            body=repeated_body,
+            title=f"测试底稿 {index}",
+            asset_name="shared.jpg",
+            asset_bytes=_real_jpeg(300 + index),
+            collection_id=f"article-collection-{index}",
+            caption=f"{_EID} 共享测试图",
+            license_value="reference_only",
+            usage_scope="factual_reference_only",
         )
 
     issues = run_mod._auto_content_plan(ctx, spec)
@@ -78,9 +122,18 @@ def test_auto_content_plan_article_sources_reserve_unique_asset_refs():
     assert issues == [], issues
     packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
     article_items = [item for item in packet["items"] if item["carrier"] == "article"]
-    assert [item["writingIntent"] for item in article_items] == spec["acceptance"]["requiredAngles"]
+    # 底稿中心 1:1：4 个合格 article source unit -> 4 篇，各绑定唯一底稿与唯一源图。
+    assert len(article_items) == 4
     assert len({item["baseSourceRef"] for item in article_items}) == 4
     assert len({item["assetRefs"][0] for item in article_items}) == 4
+    # 标题取自底稿（meta.title），不再用 {实体}·{角度} 模板。
+    assert all(item["title"].startswith("测试底稿") for item in article_items), [
+        item["title"] for item in article_items
+    ]
+    # writingIntent 是底稿派生的合法标签；实体退化为含本实体的多标签。
+    valid_intents = {"planning_consultation", "decision_experience", "post_trip_journal"}
+    assert all(item["writingIntent"] in valid_intents for item in article_items)
+    assert all(_EID in item["entityTags"] for item in article_items)
 
 def test_auto_content_plan_preserves_site_supply_source_site_provenance():
     task_id = _make_task()
@@ -92,8 +145,6 @@ def test_auto_content_plan_preserves_site_supply_source_site_provenance():
     batch_id = "content_plan_preserves_site_source"
     ctx = _ctx(task_id, batch_id)
     object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
-    source_dir = object_dir / STAGE_DOWNLOAD / "sources" / "01.article_site_base"
-    (source_dir / "assets").mkdir(parents=True, exist_ok=True)
     repeated_body = "\n".join(
         [
             f"{_EID}是测试省核心景区，行前需要核对开放时间、门票预约、交通接驳和天气情况。",
@@ -109,38 +160,21 @@ def test_auto_content_plan_preserves_site_supply_source_site_provenance():
         ]
         * 8
     )
-    (source_dir / "source.md").write_text(repeated_body, encoding="utf-8")
-    write_json(
-        source_dir / "meta.json",
-        {
-            "sourceId": "article_site_base",
-            "researchLane": "article",
-            "sourceRole": "base",
-            "sourceUseMode": "factual_reference_only",
-            "category": "wikivoyage",
-            "title": "网站线文章底稿",
-            "sourceQualityScore": 0.9,
-        },
+    _write_content_plan_source(
+        object_dir,
+        task_id=task_id,
+        batch_id=batch_id,
+        ordinal=1,
+        source_id="article_site_base",
+        body=repeated_body,
+        title="网站线文章底稿",
+        asset_name="site.jpg",
+        asset_bytes=_real_jpeg(310),
+        collection_id="site-source-collection",
+        caption=f"{_EID} 来源图",
+        license_value="reference_only",
+        usage_scope="factual_reference_only",
     )
-    write_json(
-        source_dir / "assets" / "index.json",
-        {
-            "assets": [
-                {
-                    "fileName": "site.jpg",
-                    "sha256": "sha256:site-source-image",
-                    "sourceCollectionId": "site-source-collection",
-                    "caption": f"{_EID} 来源图",
-                    "license": "reference_only",
-                    "credit": "测试来源",
-                    "sourceUrl": "https://example.test/site-source",
-                    "termsUrl": "https://example.test/terms",
-                    "usageScope": "factual_reference_only",
-                }
-            ]
-        },
-    )
-    (source_dir / "assets" / "site.jpg").write_bytes(_real_jpeg(310))
     shared = batch_root(task_id, batch_id) / "_shared"
     shared.mkdir(parents=True, exist_ok=True)
     write_json(
@@ -169,7 +203,6 @@ def test_auto_content_plan_preserves_site_supply_source_site_provenance():
 
 def test_site_supply_dynamic_content_plan_uses_packet_targets_and_skips_legacy_plan():
     from _common.content_object import iter_content_refs, write_brief_object
-    from _common.paths import relative_batch_ref, source_unit_dir
     from _common.source_unit import write_source_unit
 
     task_id = _make_task()
@@ -193,12 +226,11 @@ def test_site_supply_dynamic_content_plan_uses_packet_targets_and_skips_legacy_p
         entity_ref = f"/entity/地点/景区/{name}"
         object_dir = resolve_entity_object_dir(task_id, batch_id, entity_ref)
         source_id = f"wikivoyage_dynamic_{idx}"
-        source_dir = source_unit_dir(object_dir, idx, source_id)
         body = (
             f"{name}是维基导游站点线动态候选，用于验证 content_plan packet 自带实体集合。"
             f"{name}的行前信息包含交通、季节、开放条件和游览动线，正文必须独立表达。"
         ) * 8
-        write_source_unit(
+        manifest = write_source_unit(
             object_dir,
             ordinal=idx,
             source_id=source_id,
@@ -229,7 +261,7 @@ def test_site_supply_dynamic_content_plan_uses_packet_targets_and_skips_legacy_p
             batch_id=batch_id,
             build_variants=False,
         )
-        source_ref = relative_batch_ref(source_dir / "source.md", task_id, batch_id)
+        source_ref = manifest["sourceRef"]
         write_brief_object(
             task_id,
             batch_id,
@@ -296,52 +328,28 @@ def test_auto_content_plan_image_work_does_not_let_article_evidence_consume_publ
     batch_id = "content_plan_image_avoids_article_asset"
     ctx = _ctx(task_id, batch_id)
     object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
-    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
     article_image = _real_jpeg(211)
-    article_digest = hashlib.sha256(article_image).hexdigest()
-    article_dir = sources_dir / "01.article_base"
-    (article_dir / "assets").mkdir(parents=True, exist_ok=True)
-    (article_dir / "source.md").write_text(
-        "\n".join(
-            [
-                f"{_EID}行前需要核对开放时间、门票预约、交通接驳和天气情况，并把停车、接驳车、返程末班都写入计划。",
-                f"{_EID}适合把入口动线、核心观景点、返程交通和周边餐饮拆开记录，亲子或老人同行时还要降低坡道路段强度。",
-                f"{_EID}不同季节体验差异明显，需要结合现场排队、道路坡度、遮阴条件和雨天湿滑风险来判断值不值得去。",
-            ]
-            * 90
-        ),
-        encoding="utf-8",
+    article_body = "\n".join(
+        [
+            f"{_EID}行前需要核对开放时间、门票预约、交通接驳和天气情况，并把停车、接驳车、返程末班都写入计划。",
+            f"{_EID}适合把入口动线、核心观景点、返程交通和周边餐饮拆开记录，亲子或老人同行时还要降低坡道路段强度。",
+            f"{_EID}不同季节体验差异明显，需要结合现场排队、道路坡度、遮阴条件和雨天湿滑风险来判断值不值得去。",
+        ]
+        * 90
     )
-    write_json(
-        article_dir / "meta.json",
-        {
-            "sourceId": "article_base",
-            "researchLane": "article",
-            "sourceRole": "base",
-            "sourceUseMode": "factual_reference_only",
-            "category": "travelogue",
-            "title": "有图文章底稿",
-            "sourceQualityScore": 0.9,
-        },
-    )
-    (article_dir / "assets" / "article.jpg").write_bytes(article_image)
-    write_json(
-        article_dir / "assets" / "index.json",
-        {
-            "assets": [
-                {
-                    "fileName": "article.jpg",
-                    "sha256": f"sha256:{article_digest}",
-                    "sourceCollectionId": "article:collection",
-                    "caption": f"{_EID} 文章源图",
-                    "license": "CC-BY-SA 4.0",
-                    "credit": "测试作者",
-                    "sourceUrl": "https://example.test/article-image",
-                    "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                    "usageScope": "factual_reference_only",
-                }
-            ]
-        },
+    _write_content_plan_source(
+        object_dir,
+        task_id=task_id,
+        batch_id=batch_id,
+        ordinal=1,
+        source_id="article_base",
+        body=article_body,
+        title="有图文章底稿",
+        asset_name="article.jpg",
+        asset_bytes=article_image,
+        collection_id="article:collection",
+        caption=f"{_EID} 文章源图",
+        usage_scope="factual_reference_only",
     )
     for index, (source_name, image_bytes, collection_id) in enumerate(
         [
@@ -350,39 +358,19 @@ def test_auto_content_plan_image_work_does_not_let_article_evidence_consume_publ
         ],
         start=2,
     ):
-        source_dir = sources_dir / source_name
-        assets_dir = source_dir / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
-        asset_name = "image.jpg"
-        (source_dir / "source.md").write_text(f"# {_EID} 图片 {index}", encoding="utf-8")
-        (assets_dir / asset_name).write_bytes(image_bytes)
-        digest = hashlib.sha256(image_bytes).hexdigest()
-        write_json(
-            source_dir / "meta.json",
-            {
-                "sourceId": source_name,
-                "researchLane": "image",
-                "title": f"图片 {index}",
-                "sourceCollectionId": collection_id,
-            },
-        )
-        write_json(
-            assets_dir / "index.json",
-            {
-                "assets": [
-                    {
-                        "fileName": asset_name,
-                        "sha256": f"sha256:{digest}",
-                        "sourceCollectionId": collection_id,
-                        "caption": f"{_EID} 图片 {index}",
-                        "license": "CC-BY-SA 4.0",
-                        "credit": "测试摄影师",
-                        "sourceUrl": f"https://example.test/image/{index}",
-                        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                        "usageScope": "app_publish",
-                    }
-                ]
-            },
+        _write_content_plan_source(
+            object_dir,
+            task_id=task_id,
+            batch_id=batch_id,
+            ordinal=index,
+            source_id=source_name.split(".", 1)[1],
+            body=f"# {_EID} 图片 {index}",
+            title=f"图片 {index}",
+            lane="image",
+            asset_name="image.jpg",
+            asset_bytes=image_bytes,
+            collection_id=collection_id,
+            caption=f"{_EID} 图片 {index}",
         )
 
     issues = run_mod._auto_content_plan(ctx, spec)
@@ -405,7 +393,6 @@ def test_auto_content_plan_allows_text_only_article_base_without_source_assets()
     batch_id = "content_plan_article_allows_text_only_source"
     ctx = _ctx(task_id, batch_id)
     object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
-    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
     repeated_body = "\n".join(
         [
             f"{_EID}行前需要核对开放时间、门票预约、交通接驳和天气情况，并把停车、接驳车、返程末班都写入计划。",
@@ -422,55 +409,34 @@ def test_auto_content_plan_allows_text_only_article_base_without_source_assets()
         ],
         start=1,
     ):
-        source_dir = sources_dir / f"{index:02d}.{source_id}"
-        source_dir.mkdir(parents=True, exist_ok=True)
-        write_json(
-            source_dir / "meta.json",
-            {
-                "sourceId": source_id,
-                "researchLane": "article",
-                "sourceRole": "base",
-                "sourceUseMode": "factual_reference_only",
-                "category": "travelogue",
-                "title": f"测试底稿 {index}",
-                "sourceQualityScore": quality,
-            },
+        data = _real_jpeg(120 + index) if has_asset else None
+        _write_content_plan_source(
+            object_dir,
+            task_id=task_id,
+            batch_id=batch_id,
+            ordinal=index,
+            source_id=source_id,
+            body=repeated_body,
+            title=f"测试底稿 {index}",
+            quality=quality,
+            asset_name="source.jpg",
+            asset_bytes=data,
+            collection_id="article-source-with-image" if has_asset else "",
+            caption=f"{_EID} 图文底稿配图",
         )
-        (source_dir / "source.md").write_text(repeated_body, encoding="utf-8")
-        if has_asset:
-            assets_dir = source_dir / "assets"
-            assets_dir.mkdir(parents=True, exist_ok=True)
-            asset_name = "source.jpg"
-            data = _real_jpeg(120 + index)
-            (assets_dir / asset_name).write_bytes(data)
-            write_json(
-                assets_dir / "index.json",
-                {
-                    "assets": [
-                        {
-                            "fileName": asset_name,
-                            "sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
-                            "sourceCollectionId": "article-source-with-image",
-                            "caption": f"{_EID} 图文底稿配图",
-                            "license": "CC-BY-SA 4.0",
-                            "credit": "测试摄影师",
-                            "sourceUrl": "https://example.test/source-image",
-                            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                            "usageScope": "app_publish",
-                        }
-                    ]
-                },
-            )
 
     issues = run_mod._auto_content_plan(ctx, spec)
 
     assert issues == []
     packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
     article_items = [item for item in packet["items"] if item["carrier"] == "article"]
-    assert len(article_items) == 1
-    assert "article_without_image" in article_items[0]["baseSourceRef"]
-    assert article_items[0]["assetRefs"] == []
-    assert article_items[0]["publishMediaMode"] == "text_only"
+    # 底稿中心 1:1：两个合格 article source 各成一篇；无源图者 text_only，有源图者绑定源图。
+    assert len(article_items) == 2
+    by_title = {item["title"]: item for item in article_items}
+    text_only_item = by_title["测试底稿 1"]
+    assert text_only_item["assetRefs"] == []
+    assert text_only_item["publishMediaMode"] == "text_only"
+    assert by_title["测试底稿 2"]["assetRefs"]
     diagnostics = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
     target_diag = diagnostics["targets"][_EID]
     assert target_diag["articleImageSoftWarnings"]["no_source_assets"] == 1
@@ -489,7 +455,6 @@ def test_auto_content_plan_allows_article_base_reusing_source_image_as_text_only
     batch_id = "content_plan_article_source_image_soft_unique"
     ctx = _ctx(task_id, batch_id)
     object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
-    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
     body = "\n".join(
         [
             f"{_EID}图文底稿同时包含文字判断与现场配图，需要核对交通、预约、停留时长、季节变化和返程安排。",
@@ -504,43 +469,20 @@ def test_auto_content_plan_allows_article_base_reusing_source_image_as_text_only
         ("02.article_b_same_image", "article_b_same_image", duplicate_image, 0.90),
         ("03.article_c_unique_image", "article_c_unique_image", _real_jpeg(532), 0.80),
     ]
-    for source_dir_name, source_id, image_bytes, quality in source_specs:
-        source_dir = sources_dir / source_dir_name
-        assets_dir = source_dir / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
-        (source_dir / "source.md").write_text(body, encoding="utf-8")
-        write_json(
-            source_dir / "meta.json",
-            {
-                "sourceId": source_id,
-                "researchLane": "article",
-                "sourceRole": "base",
-                "sourceUseMode": "factual_reference_only",
-                "category": "travelogue",
-                "title": source_id,
-                "sourceQualityScore": quality,
-            },
-        )
-        asset_name = "source.jpg"
-        (assets_dir / asset_name).write_bytes(image_bytes)
-        digest = hashlib.sha256(image_bytes).hexdigest()
-        write_json(
-            assets_dir / "index.json",
-            {
-                "assets": [
-                    {
-                        "fileName": asset_name,
-                        "sha256": f"sha256:{digest}",
-                        "sourceCollectionId": f"article:{source_id}",
-                        "caption": f"{_EID} 图文底稿源图",
-                        "license": "CC-BY-SA 4.0",
-                        "credit": "测试摄影师",
-                        "sourceUrl": f"https://example.test/article/{source_id}",
-                        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                        "usageScope": "app_publish",
-                    }
-                ]
-            },
+    for idx, (_source_dir_name, source_id, image_bytes, quality) in enumerate(source_specs, start=1):
+        _write_content_plan_source(
+            object_dir,
+            task_id=task_id,
+            batch_id=batch_id,
+            ordinal=idx,
+            source_id=source_id,
+            body=body,
+            title=f"测试底稿第{idx}篇",
+            quality=quality,
+            asset_name="source.jpg",
+            asset_bytes=image_bytes,
+            collection_id=f"article:{source_id}",
+            caption=f"{_EID} 图文底稿源图",
         )
 
     issues = run_mod._auto_content_plan(ctx, spec)
@@ -548,12 +490,13 @@ def test_auto_content_plan_allows_article_base_reusing_source_image_as_text_only
     assert issues == [], issues
     packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
     article_items = [item for item in packet["items"] if item["carrier"] == "article"]
-    assert len(article_items) == 2
-    assert "article_a" in article_items[0]["baseSourceRef"]
-    assert "article_b_same_image" in article_items[1]["baseSourceRef"]
-    assert article_items[0].get("assetRefs")
-    assert article_items[1].get("assetRefs") == []
-    assert article_items[1]["publishMediaMode"] == "text_only"
+    # 底稿中心 1:1：3 个合格 article source 各成一篇；复用同一物理源图者降级 text_only。
+    assert len(article_items) == 3
+    by_title = {item["title"]: item for item in article_items}
+    assert by_title["测试底稿第1篇"].get("assetRefs")  # 最优先获得去重源图
+    assert by_title["测试底稿第2篇"].get("assetRefs") == []  # 同图被占用 -> text_only
+    assert by_title["测试底稿第2篇"]["publishMediaMode"] == "text_only"
+    assert by_title["测试底稿第3篇"].get("assetRefs")  # 独立源图自成一篇
     diagnostics = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
     assert diagnostics["schemaVersion"] == "quwoquan_data.content_plan_source_diagnostics"
     target_diag = diagnostics["targets"][_EID]
@@ -570,43 +513,23 @@ def test_auto_content_plan_disambiguates_duplicate_image_captions():
     batch_id = "content_plan_duplicate_image_caption_titles"
     ctx = _ctx(task_id, batch_id)
     object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
-    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
     shared_caption_prefix = "共享景观" * 16
     for index in range(1, 3):
-        source_dir = sources_dir / f"{index:02d}.image_fixture_{index}"
-        assets_dir = source_dir / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
         asset_name = f"image_{index}.jpg"
         asset_bytes = _real_jpeg(80 + index)
-        (assets_dir / asset_name).write_bytes(asset_bytes)
-        digest = hashlib.sha256(asset_bytes).hexdigest()
-        write_json(
-            source_dir / "meta.json",
-            {
-                "sourceId": f"image_fixture_{index}",
-                "researchLane": "image",
-                "title": "共享景观",
-                "sourceCollectionId": f"fixture:image:{index}",
-            },
-        )
-        (source_dir / "source.md").write_text(f"# {_EID} 共享景观图 {index}", encoding="utf-8")
-        write_json(
-            assets_dir / "index.json",
-            {
-                "assets": [
-                    {
-                        "fileName": asset_name,
-                        "sha256": f"sha256:{digest}",
-                        "sourceCollectionId": f"fixture:image:{index}",
-                        "caption": f"{shared_caption_prefix}{index}",
-                        "license": "CC-BY-SA 4.0",
-                        "credit": f"测试摄影师{index}",
-                        "sourceUrl": f"https://example.test/image/{index}",
-                        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                        "usageScope": "app_publish",
-                    }
-                ]
-            },
+        _write_content_plan_source(
+            object_dir,
+            task_id=task_id,
+            batch_id=batch_id,
+            ordinal=index,
+            source_id=f"image_fixture_{index}",
+            body=f"# {_EID} 共享景观图 {index}",
+            title="共享景观",
+            lane="image",
+            asset_name=asset_name,
+            asset_bytes=asset_bytes,
+            collection_id=f"fixture:image:{index}",
+            caption=f"{shared_caption_prefix}{index}",
         )
 
     issues = run_mod._auto_content_plan(ctx, spec)
@@ -630,7 +553,6 @@ def test_auto_content_plan_skips_image_assets_blocked_by_safety_gate():
     batch_id = "content_plan_image_safety_prefilter"
     ctx = _ctx(task_id, batch_id)
     object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
-    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
     fixtures = [
         (
             "01.image_bad",
@@ -648,38 +570,19 @@ def test_auto_content_plan_skips_image_assets_blocked_by_safety_gate():
         ),
     ]
     for index, (source_name, asset_name, asset_bytes, collection_id, caption) in enumerate(fixtures, start=1):
-        source_dir = sources_dir / source_name
-        assets_dir = source_dir / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
-        (source_dir / "source.md").write_text(f"# {_EID} {caption}", encoding="utf-8")
-        (assets_dir / asset_name).write_bytes(asset_bytes)
-        digest = hashlib.sha256(asset_bytes).hexdigest()
-        write_json(
-            source_dir / "meta.json",
-            {
-                "sourceId": source_name,
-                "researchLane": "image",
-                "title": caption,
-                "sourceCollectionId": collection_id,
-            },
-        )
-        write_json(
-            assets_dir / "index.json",
-            {
-                "assets": [
-                    {
-                        "fileName": asset_name,
-                        "sha256": f"sha256:{digest}",
-                        "sourceCollectionId": collection_id,
-                        "caption": caption,
-                        "license": "CC-BY-SA 4.0",
-                        "credit": f"测试摄影师{index}",
-                        "sourceUrl": f"https://example.test/image/{index}",
-                        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                        "usageScope": "app_publish",
-                    }
-                ]
-            },
+        _write_content_plan_source(
+            object_dir,
+            task_id=task_id,
+            batch_id=batch_id,
+            ordinal=index,
+            source_id=source_name.split(".", 1)[1],
+            body=f"# {_EID} {caption}",
+            title=caption,
+            lane="image",
+            asset_name=asset_name,
+            asset_bytes=asset_bytes,
+            collection_id=collection_id,
+            caption=caption,
         )
 
     issues = run_mod._auto_content_plan(ctx, spec)
@@ -689,7 +592,7 @@ def test_auto_content_plan_skips_image_assets_blocked_by_safety_gate():
     image_items = [item for item in packet["items"] if item["carrier"] == "image"]
     assert len(image_items) == 1
     assert image_items[0]["sourceCollectionId"] == "fixture:image:a_safe"
-    assert image_items[0]["assetRefs"][0].endswith("/safe.jpg")
+    assert image_items[0]["assetRefs"][0].endswith("safe.jpg")
     diagnostics = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
     target_diag = diagnostics["targets"][_EID]
     assert target_diag["rawImageAssets"] == 2
@@ -735,4 +638,3 @@ def test_image_content_plan_override_clears_stale_article_base_source():
     assert "baseSourceRef" not in merged
     assert "_contentPlanBaseSourceLocked" not in merged
     assert merged["sourceCollectionId"] == "daochengyading:image:wikimedia"
-

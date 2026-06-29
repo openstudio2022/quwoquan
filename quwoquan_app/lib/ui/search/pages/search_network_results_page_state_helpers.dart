@@ -676,9 +676,6 @@ extension _SearchNetworkResultsPageStateHelpers
           ],
           dtoPosts: <PostBaseDto>[dto],
           initialIndex: 0,
-          category: dto.isVideoLike
-              ? 'video'
-              : (dto.identity == 'moment' ? 'moment' : 'photo'),
           source: 'global-search-network',
           rawPostsById: searchNetworkSinglePostMediaRaws(dto: dto, wire: raw),
           interactionSnapshot: interactionSnapshot,

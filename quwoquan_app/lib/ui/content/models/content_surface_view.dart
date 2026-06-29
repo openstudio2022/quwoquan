@@ -1,7 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/ui/content/article_detail_view.dart';
-import 'package:quwoquan_app/ui/content/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 
 /// 统一内容展示种类（媒体形态）。
 ///

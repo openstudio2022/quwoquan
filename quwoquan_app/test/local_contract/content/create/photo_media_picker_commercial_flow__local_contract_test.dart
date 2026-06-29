@@ -9,11 +9,36 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 
 void main() {
   group('photo media picker commercial flow', () {
+    setUp(() {
+      AppPermissionCoordinator.instance.ensureLifecycleAttached();
+      AppPermissionCoordinator.instance.phaseReaders[AppPermissionKind.photos] =
+          () async => AppPermissionPhase.granted;
+      AppPermissionCoordinator.instance.grantCheckers[AppPermissionKind
+          .photos] = () async =>
+          true;
+      AppPermissionCoordinator.instance.requesters[AppPermissionKind.photos] =
+          () async => true;
+    });
+
+    tearDown(() {
+      AppPermissionCoordinator.instance.phaseReaders.remove(
+        AppPermissionKind.photos,
+      );
+      AppPermissionCoordinator.instance.grantCheckers.remove(
+        AppPermissionKind.photos,
+      );
+      AppPermissionCoordinator.instance.requesters.remove(
+        AppPermissionKind.photos,
+      );
+      AppPermissionCoordinator.instance.clearSession();
+    });
+
     test('图片模式隐藏视频分类与一键成片，只显示编辑图片和完成', () {
       final categories = mediaPickerCategoriesForEntryMode(
         MediaPickerEntryMode.image,
@@ -74,17 +99,17 @@ void main() {
     testWidgets('相册下拉展示目录并切换当前图片集合，图片模式过滤视频', (tester) async {
       final service = _FakeMediaPickerService(
         albums: <AssetPathEntity>[
-          _album('recent', '最近项目'),
+          _album('recent', '最近项目', isAll: true),
           _album('travel', '旅行'),
         ],
         assetsByAlbumId: <String, List<AssetEntity>>{
-          'recent': <AssetEntity>[_image('a1'), _video('v1')],
+          'recent': <AssetEntity>[_image('a1'), _image('a2'), _video('v1')],
           'travel': <AssetEntity>[_image('b1')],
         },
       );
 
       await tester.pumpWidget(_pickerApp(service: service));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       expect(find.text(UITextConstants.mediaPickerCategoryAll), findsNothing);
       expect(find.text(UITextConstants.mediaPickerCategoryPhoto), findsNothing);
@@ -94,8 +119,13 @@ void main() {
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey<String>('media-picker-asset-a1')),
+        find.byKey(const ValueKey<String>('media-picker-camera-tile')),
         findsOneWidget,
+      );
+      expect(find.text(UITextConstants.mediaPickerOneTapMovie), findsNothing);
+      expect(
+        find.text(UITextConstants.mediaPickerVideoCameraEntry),
+        findsNothing,
       );
       expect(
         find.byKey(const ValueKey<String>('media-picker-asset-v1')),
@@ -103,7 +133,7 @@ void main() {
       );
 
       await tester.tap(find.text(UITextConstants.mediaPickerPhotoTitle));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       // 相册改为顶部锚定下滑浮层（替代贴底 modal sheet），不再展示「选择相册」标题。
       expect(
@@ -123,7 +153,7 @@ void main() {
       await tester.tap(
         find.byKey(const ValueKey<String>('media-picker-album-travel')),
       );
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       expect(
         find.byKey(const ValueKey<String>('media-picker-asset-a1')),
@@ -154,7 +184,7 @@ void main() {
       );
 
       await tester.pumpWidget(_pickerApp(service: service));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       expect(
         find.byKey(const ValueKey<String>('media-picker-asset-c1')),
@@ -162,7 +192,7 @@ void main() {
       );
 
       await tester.tap(find.text(UITextConstants.mediaPickerPhotoTitle));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       expect(find.text('相机 (1)'), findsOneWidget);
       expect(find.text('最近项目 (2)'), findsOneWidget);
@@ -198,10 +228,10 @@ void main() {
       );
 
       await tester.pumpWidget(_pickerApp(service: service));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       await tester.tap(find.text(UITextConstants.mediaPickerPhotoTitle));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       final allLabel = '${UITextConstants.mediaPickerAlbumAllPhotos} (2)';
       // isAll 相册统一显示为「全部照片」，且即使图片数最少也置顶。
@@ -233,7 +263,7 @@ void main() {
       );
 
       await tester.pumpWidget(_pickerApp(service: service));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       final cameraTop = tester
           .getTopLeft(
@@ -281,7 +311,7 @@ void main() {
       );
 
       await tester.pumpWidget(_pickerApp(service: service));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       final cameraTop = tester
           .getTopLeft(
@@ -321,7 +351,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       final title = tester.widget<Text>(
         find.text(UITextConstants.mediaPickerPhotoTitle),
@@ -370,10 +400,10 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       await tester.tap(find.text(UITextConstants.mediaPickerPhotoTitle));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       // 浮层强制深色：相册行文案颜色取深色前景。
       final rowLabel = tester.widget<Text>(find.text('相册0 (1)'));
@@ -418,7 +448,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       expect(find.text('完成(0)'), findsOneWidget);
       expect(
@@ -463,13 +493,13 @@ void main() {
         ),
       );
       await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       for (final id in <String>['a1', 'a2', 'a3', 'a4']) {
         await tester.tap(
           find.byKey(ValueKey<String>('media-picker-asset-$id')),
         );
-        await tester.pumpAndSettle();
+        await _pumpMediaPickerFrame(tester);
       }
 
       final stripRect = tester.getRect(find.byType(MediaReorderableView));
@@ -527,9 +557,9 @@ void main() {
       expect(fourthRect.left, closeTo(positionsBefore[orderedIds[2]]!.left, 1));
 
       await gesture.up();
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('完成(4)'));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
+      await tester.tap(_completeImageActionFinder());
+      await _pumpMediaPickerFrame(tester);
 
       expect(picked?.items.map((item) => item.id).toList(), <String>[
         orderedIds[1],
@@ -570,27 +600,27 @@ void main() {
         ),
       );
       await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('media-picker-asset-a1')),
       );
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
       expect(find.text('完成(1)'), findsOneWidget);
       expect(find.text('1'), findsWidgets);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('media-picker-selected-delete-a1')),
       );
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
       expect(find.text('完成(0)'), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('media-picker-asset-a2')),
       );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('完成(1)'));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
+      await tester.tap(_completeImageActionFinder());
+      await _pumpMediaPickerFrame(tester);
 
       expect(picked?.items.map((item) => item.id).toList(), <String>['a2']);
       expect(picked?.items.single.path, '/tmp/a2.jpg');
@@ -637,29 +667,29 @@ void main() {
         ),
       );
       await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('media-picker-asset-a1')),
       );
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
       await tester.tap(
         find.byKey(const ValueKey<String>('media-picker-asset-a2')),
       );
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('media-picker-asset-a1')),
       );
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
 
       expect(editorRequest?.initialPath, '/tmp/a1.jpg');
       expect(editorRequest?.imagePaths, <String>['/tmp/a1.jpg', '/tmp/a2.jpg']);
 
       await tester.tap(find.text('save edit'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('完成(2)'));
-      await tester.pumpAndSettle();
+      await _pumpMediaPickerFrame(tester);
+      await tester.tap(_completeImageActionFinder());
+      await _pumpMediaPickerFrame(tester);
 
       expect(picked?.items.map((item) => item.path).toList(), <String>[
         '/tmp/a1.jpg',
@@ -680,6 +710,18 @@ Widget _pickerApp({
       mediaPickerService: service,
       imageEditorBuilder: imageEditorBuilder,
     ),
+  );
+}
+
+Future<void> _pumpMediaPickerFrame(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 700));
+  await tester.pump();
+}
+
+Finder _completeImageActionFinder() {
+  return find.byKey(
+    const ValueKey<String>('media-picker-bottom-action-completeImage'),
   );
 }
 
@@ -741,12 +783,27 @@ class _FakeMediaPickerService extends MediaPickerService {
     if (page > 0) {
       return const <AssetEntity>[];
     }
-    return assetsByAlbumId[album.id] ?? const <AssetEntity>[];
+    return _assetsForAlbum(album);
   }
 
   @override
   Future<int> loadAlbumAssetCount(AssetPathEntity album) async {
-    return assetsByAlbumId[album.id]?.length ?? 0;
+    return _assetsForAlbum(album).length;
+  }
+
+  List<AssetEntity> _assetsForAlbum(AssetPathEntity album) {
+    final assets = assetsByAlbumId[album.id] ?? const <AssetEntity>[];
+    return switch (album.type) {
+      RequestType.image =>
+        assets
+            .where((asset) => asset.type == AssetType.image)
+            .toList(growable: false),
+      RequestType.video =>
+        assets
+            .where((asset) => asset.type == AssetType.video)
+            .toList(growable: false),
+      _ => assets,
+    };
   }
 
   @override

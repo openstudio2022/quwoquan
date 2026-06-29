@@ -570,7 +570,7 @@ String _postSeedPreviewMediaKind(Map<String, dynamic>? post) {
   if (contentType == 'video') {
     return 'video';
   }
-  if (contentType == 'image' || contentType == 'photo') {
+  if (contentType == 'image') {
     return 'image';
   }
   final image = _postSeedPreviewImageUrl(post);

@@ -139,6 +139,8 @@ def resolve_data_agent_python(*, include_current: bool = True) -> Path | None:
 def agent_command_needs_bootstrap(argv: list[str]) -> bool:
     """Detect CLI commands that must run inside the data agent interpreter."""
     args = list(argv[1:])
+    if len(args) >= 3 and args[:3] == ["task", "scaled-e2e", "run"]:
+        return True
     if len(args) >= 3 and args[:3] == ["task", "scaled-e2e", "author-runner"]:
         return True
     if len(args) >= 2 and args[:2] == ["task", "run"] and "--managed" in args:
@@ -541,7 +543,12 @@ def cursor_startup_probe(
     short subprocess so a stuck SDK call cannot wedge the parent readiness gate.
     """
 
-    key = os.environ.get("CURSOR_API_KEY")
+    try:
+        from _common.cursor_credentials import resolve_cursor_api_key
+    except Exception:  # noqa: BLE001
+        from cursor_credentials import resolve_cursor_api_key  # type: ignore
+    # reload 最新 key（key 文件优先）并回写 os.environ，子进程探针继承轮换后的 key。
+    key = resolve_cursor_api_key()
     if not key:
         return {
             "checked": False,
@@ -794,6 +801,160 @@ except Exception as exc:
         "attemptCount": len(attempts),
         "attempts": attempts,
         "issues": issues,
+    }
+
+
+def _cursor_probe_attempt_has_5xx(payload: Mapping[str, object]) -> bool:
+    rows = list(payload.get("attempts") or []) if isinstance(payload.get("attempts"), list) else []
+    candidates: list[Mapping[str, object]] = [payload]
+    candidates.extend(row for row in rows if isinstance(row, Mapping))
+    for row in candidates:
+        status = row.get("httpStatus")
+        try:
+            status_int = int(status) if status is not None else 0
+        except (TypeError, ValueError):
+            status_int = 0
+        if 500 <= status_int < 600:
+            return True
+        if str(row.get("errorClass") or "") == "InternalServerError":
+            return True
+        if str(row.get("errorCode") or "") == "internal":
+            return True
+    return False
+
+
+def _cursor_probe_attempt_is_auth(payload: Mapping[str, object]) -> bool:
+    try:
+        from _common.cursor_credentials import is_cursor_auth_error
+    except Exception:  # noqa: BLE001
+        from cursor_credentials import is_cursor_auth_error  # type: ignore
+    rows = list(payload.get("attempts") or []) if isinstance(payload.get("attempts"), list) else []
+    candidates: list[Mapping[str, object]] = [payload]
+    candidates.extend(row for row in rows if isinstance(row, Mapping))
+    for row in candidates:
+        if is_cursor_auth_error(
+            str(row.get("error") or row.get("status") or ""),
+            code=str(row.get("errorCode") or ""),
+            status=row.get("httpStatus"),
+        ):
+            return True
+    return False
+
+
+def _cursor_probe_attempt_is_bridge_disconnect(payload: Mapping[str, object]) -> bool:
+    rows = list(payload.get("attempts") or []) if isinstance(payload.get("attempts"), list) else []
+    candidates: list[Mapping[str, object]] = [payload]
+    candidates.extend(row for row in rows if isinstance(row, Mapping))
+    markers = (
+        "connection refused",
+        "connecterror",
+        "connection reset",
+        "server disconnected",
+        "remoteprotocolerror",
+        "bridge request failed",
+        "exited before discovery",
+        "failed before discovery",
+    )
+    for row in candidates:
+        text = f"{row.get('errorClass') or ''} {row.get('error') or ''}".casefold()
+        if any(marker in text for marker in markers):
+            return True
+    return False
+
+
+def _p95(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    index = max(0, min(len(ordered) - 1, int(len(ordered) * 0.95 + 0.999999) - 1))
+    return round(ordered[index], 4)
+
+
+def cursor_startup_probe_suite(
+    *,
+    model: str = DEFAULT_CURSOR_STARTUP_MODEL,
+    runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
+    attempts: int = 20,
+    timeout_seconds: float = 45.0,
+    cwd: Path | None = None,
+) -> dict:
+    """Run repeated Cursor startup probes and classify admission blockers.
+
+    This is the formal P0 report used before scaled authoring.  A single
+    preflight can hide intermittent startup failures; the suite reports auth
+    failures separately from true Cursor 5xx and local bridge disconnects.
+    """
+    total = max(1, int(attempts or 1))
+    started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    rows: list[dict] = []
+    latencies: list[float] = []
+    success_count = 0
+    auth_failures = 0
+    true_5xx_count = 0
+    bridge_disconnect_count = 0
+    for index in range(1, total + 1):
+        begin = time.monotonic()
+        payload = cursor_startup_probe(
+            model=model,
+            runtime=runtime,
+            timeout_seconds=timeout_seconds,
+            cwd=cwd,
+        )
+        elapsed = round(time.monotonic() - begin, 4)
+        latencies.append(elapsed)
+        ready = bool(payload.get("ready"))
+        has_auth = _cursor_probe_attempt_is_auth(payload)
+        has_5xx = _cursor_probe_attempt_has_5xx(payload)
+        has_bridge_disconnect = _cursor_probe_attempt_is_bridge_disconnect(payload)
+        if ready:
+            success_count += 1
+        if has_auth:
+            auth_failures += 1
+        if has_5xx:
+            true_5xx_count += 1
+        if has_bridge_disconnect:
+            bridge_disconnect_count += 1
+        rows.append(
+            {
+                "attempt": index,
+                "ready": ready,
+                "latencySeconds": elapsed,
+                "status": payload.get("status"),
+                "errorClass": _redact_secret_value(payload.get("errorClass")),
+                "errorCode": payload.get("errorCode"),
+                "httpStatus": payload.get("httpStatus"),
+                "authFailure": has_auth,
+                "true5xx": has_5xx,
+                "bridgeDisconnect": has_bridge_disconnect,
+                "attemptCount": payload.get("attemptCount"),
+            }
+        )
+    true_5xx_rate = round(true_5xx_count / total, 4)
+    bridge_disconnect_rate = round(bridge_disconnect_count / total, 4)
+    issues: list[str] = []
+    if auth_failures:
+        issues.append(f"Cursor auth failures observed: {auth_failures}/{total}")
+    if true_5xx_rate >= 0.10:
+        issues.append(f"Cursor true 5xx rate {true_5xx_rate:.2%} >= 10%")
+    if success_count == 0:
+        issues.append("Cursor startup probe never succeeded")
+    return {
+        "schemaVersion": "quwoquan_data.cursor_startup_probe_suite/1",
+        "model": model,
+        "runtime": runtime,
+        "attempts": total,
+        "successCount": success_count,
+        "authFailures": auth_failures,
+        "true5xxCount": true_5xx_count,
+        "true5xxRate": true_5xx_rate,
+        "bridgeDisconnectCount": bridge_disconnect_count,
+        "bridgeDisconnectRate": bridge_disconnect_rate,
+        "startupLatencyP95": _p95(latencies),
+        "ready": not issues,
+        "issues": issues,
+        "startedAt": started_at,
+        "finishedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "results": rows,
     }
 
 

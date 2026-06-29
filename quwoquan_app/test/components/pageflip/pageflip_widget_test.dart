@@ -5,9 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/pageflip/pageflip.dart';
+import '../../support/pageflip/pageflip.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_stage_widgets.dart';
@@ -15,10 +15,10 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
-import 'package:quwoquan_app/ui/content/pageflip/curl_renderer.dart';
-import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/controller.dart';
+import 'package:quwoquan_app/components/pageflip/curl_renderer.dart';
+import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 void main() {
   testWidgets('PageflipWidget pumps and renders the current page', (

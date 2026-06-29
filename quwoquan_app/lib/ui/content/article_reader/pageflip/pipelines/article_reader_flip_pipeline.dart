@@ -1,9 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/article_reader_mode_strategy.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
-import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
-import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/controller.dart';
+import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
+import 'package:quwoquan_app/components/pageflip/render_frame.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 @immutable
 class ArticleFlipPipelineInput {

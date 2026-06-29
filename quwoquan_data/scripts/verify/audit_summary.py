@@ -305,7 +305,7 @@ def _manual_checklist(
                         str(article.get("baseSourceRef") or ""),
                     ],
                     "whatToCheck": "核对文章对象是否自持底稿/引证来源镜像，并且都能回查到实体来源单元。",
-                    "passCondition": "baseSourceRef、citedSourceRefs、sources[*].sourceRef 全部非空、为 batch 相对路径、且指向 entities/.../1.download/sources/**/source.md。",
+                    "passCondition": "baseSourceRef、citedSourceRefs、sources[*].sourceRef 全部非空、为 batch 相对路径、且指向 sources/{sourceUnitId}/source.md。",
                 },
                 {
                     "id": "article-light-edit",
@@ -341,10 +341,10 @@ def _manual_checklist(
                     "target": f"{focus_name}实体对象",
                     "paths": [
                         f"{entity_path}/2.quality/quality_analysis.json",
-                        f"{entity_path}/1.download/sources/",
+                        f"{entity_path}/1.download/source_refs.json",
                     ],
                     "whatToCheck": "确认实体主页的底稿选择与来源准备阶段完整，且不是空源硬产主页。",
-                    "passCondition": "quality_analysis.recommendation=proceed；baseDraft.sourceRef 可读；sourcePaths 非空；1.download/sources/**/source.md 至少有 1 个真实来源单元。",
+                    "passCondition": "quality_analysis.recommendation=proceed；baseDraft.sourceRef 可读；sourcePaths 非空；source_refs.json 至少指向 1 个真实来源单元。",
                 },
                 {
                     "id": "entity-review-chain",

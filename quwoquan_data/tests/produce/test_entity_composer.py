@@ -32,7 +32,7 @@ import cv2  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common.io import write_json  # noqa: E402
+from _common.io import read_json, write_json  # noqa: E402
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_inputs_dir,
@@ -81,6 +81,9 @@ TASK = "实体冷启动_gwt"
 BATCH = "pilot"
 REF = "三星堆博物馆_体验"
 ENTITY = "三星堆博物馆"
+
+def _source_unit_for_ref(source_ref: str) -> Path:
+    return (batch_root(TASK, BATCH) / source_ref).parent
 
 SOURCE_TEXT = """---
 url: https://example.com/sanxingdui
@@ -294,7 +297,13 @@ def test_compose_brief_persists_reassigned_base_source_ref():
     _seed_sources()
     brief = _entity_brief()
     write_brief_object(TASK, BATCH, REF, brief, content_type="article")
-    initial_ref = "entities/地点/博物馆/三星堆博物馆/1.download/sources/01.curated_story/source.md"
+    obj = resolve_entity_object_dir(TASK, BATCH, ENTITY, etype_hint="博物馆")
+    source_refs = read_json(obj / "1.download" / "source_refs.json")
+    initial_ref = next(
+        row["sourceRef"]
+        for row in source_refs["sources"]
+        if row.get("sourceId") == "curated_story"
+    )
     save_base_draft_ledger(
         TASK,
         BATCH,
@@ -304,11 +313,10 @@ def test_compose_brief_persists_reassigned_base_source_ref():
         },
     )
 
-    obj = resolve_entity_object_dir(TASK, BATCH, ENTITY, etype_hint="博物馆")
     image_root = Path(tempfile.mkdtemp(prefix="entity_composer_reassign_sources_"))
     image_path = image_root / f"{ENTITY}_reassigned.jpg"
     _clean_image(image_path, seed=8)
-    write_source_unit(
+    story_manifest = write_source_unit(
         obj,
         ordinal=2,
         source_id="museum_story",
@@ -343,10 +351,12 @@ def test_compose_brief_persists_reassigned_base_source_ref():
     )
     persisted = read_brief_object(TASK, BATCH, REF)
     assert persisted is not None
-    assert persisted["baseSourceRef"].endswith("02.museum_story/source.md"), persisted["baseSourceRef"]
+    assert persisted["baseSourceRef"].startswith("sources/su_"), persisted["baseSourceRef"]
+    persisted_meta = read_json(_source_unit_for_ref(persisted["baseSourceRef"]) / "meta.json")
+    assert persisted_meta["sourceId"] == "museum_story"
 
 
-def test_entity_article_falls_back_to_article_lane_visual_support_when_base_image_missing():
+def test_entity_article_blocks_cross_source_visual_support_when_base_image_missing():
     _seed_sources()
     brief = _entity_brief()
     obj = resolve_entity_object_dir(TASK, BATCH, ENTITY, etype_hint="地点/博物馆")
@@ -355,7 +365,7 @@ def test_entity_article_falls_back_to_article_lane_visual_support_when_base_imag
     for dirname in ("30.no_image_base_for_fallback", "31.article_visual_support_for_fallback"):
         shutil.rmtree(obj / "1.download" / "sources" / dirname, ignore_errors=True)
 
-    write_source_unit(
+    base_manifest = write_source_unit(
         obj,
         ordinal=30,
         source_id="no_image_base_for_fallback",
@@ -375,7 +385,7 @@ def test_entity_article_falls_back_to_article_lane_visual_support_when_base_imag
     image_root = Path(tempfile.mkdtemp(prefix="entity_visual_support_"))
     image_path = image_root / f"{ENTITY}_visual_support.jpg"
     _clean_image(image_path, seed=13)
-    write_source_unit(
+    visual_manifest = write_source_unit(
         obj,
         ordinal=31,
         source_id="article_visual_support_for_fallback",
@@ -403,18 +413,15 @@ def test_entity_article_falls_back_to_article_lane_visual_support_when_base_imag
             }
         ],
     )
-    base_ref = "entities/地点/博物馆/三星堆博物馆/1.download/sources/30.no_image_base_for_fallback/source.md"
-    brief["baseSourceRef"] = base_ref
+    brief["baseSourceRef"] = base_manifest["sourceRef"]
 
     quality = analyze_route_ref(TASK, BATCH, REF, brief)
-    pack = build_entity_writing_pack(TASK, BATCH, REF, brief, quality)
-
-    assert pack["assets"], "article compose should recover with same-entity article-lane visual support"
-    asset = pack["assets"][0]
-    assert asset["sourceRef"].endswith("31.article_visual_support_for_fallback/source.md")
-    assert asset["sourceAssetRef"].endswith("31.article_visual_support_for_fallback/assets/001_article_visual_support_for_fallback.jpg")
-    assert asset["researchLane"] == "article"
-    assert asset["authorizationProof"] == "https://example.com/proof"
+    try:
+        build_entity_writing_pack(TASK, BATCH, REF, brief, quality)
+    except RuntimeError as exc:
+        assert "article base draft source has no usable source images" in str(exc)
+    else:
+        raise AssertionError("cross-source article visual support must not replace base source images")
 
 
 def _run_all() -> None:

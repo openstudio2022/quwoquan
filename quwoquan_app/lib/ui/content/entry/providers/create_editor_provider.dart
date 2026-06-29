@@ -1,12 +1,12 @@
 import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/ui/content/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/entry/models/article_editor_projection.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_undo_snapshot.dart';
-import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_editor_projection.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_undo_snapshot.dart';
+import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 
 part 'create_editor_provider_article_helpers.dart';
 
@@ -151,6 +151,12 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
         state = state.copyWith(
           editorKind: CreateEditorKind.media,
           draftFlowKind: CreateDraftFlowKind.image,
+        );
+        return;
+      case EditorStartAction.video:
+        state = state.copyWith(
+          editorKind: CreateEditorKind.media,
+          draftFlowKind: CreateDraftFlowKind.video,
         );
         return;
       case EditorStartAction.capture:

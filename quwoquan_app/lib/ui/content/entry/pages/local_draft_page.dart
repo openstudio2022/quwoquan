@@ -11,7 +11,7 @@ import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
 

@@ -13,8 +13,7 @@ PY="${REPO_ROOT}/quwoquan_data/.venv/bin/python"
 LOG="${QWQ_DATA_ROOT}/cs100_fresh_author_run.log"
 LOCK="${QWQ_DATA_ROOT}/cs100_author_resume.pid"
 TASK='旅行/地域/四川省/景区/四川景点fresh scale100'
-BATCH='fresh_cs100verify_20260626'
-STATE_JSON="${QWQ_DATA_ROOT}/runtime/batches/四川景点freshscale10-26aad552__${BATCH}/_shared/task_workflow_state.json"
+BATCH="${CS100_BATCH:-fresh_cs100verify_20260629}"
 MAX_ROUNDS="${1:-200}"
 if [[ -f "$LOCK" ]]; then
   oldpid="$(cat "$LOCK" 2>/dev/null || true)"
@@ -29,23 +28,6 @@ round=0
 while (( round < MAX_ROUNDS )); do
   round=$((round + 1))
   echo "=== cs100 author resume round ${round}/${MAX_ROUNDS} $(date -Iseconds) ===" | tee -a "$LOG"
-  # Clear stale controller yield / lease left by SIGTERM so managed resume can run agents.
-  "$PY" - <<PY
-import json
-from pathlib import Path
-p = Path("${STATE_JSON}")
-if p.exists():
-    s = json.loads(p.read_text())
-    if s.get("controllerYield") or (
-        s.get("status") == "repairing" and s.get("waitingCheckpoint") == "produce_author"
-    ):
-        s.pop("controllerYield", None)
-        s.pop("activeAgentScheduler", None)
-        s["status"] = "waiting_agent"
-        s["heartbeatAt"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
-        p.write_text(json.dumps(s, ensure_ascii=False, indent=2) + "\n")
-        (p.parent / "controller_lease.json").unlink(missing_ok=True)
-PY
   if rg -q 'WORKFLOW COMPLETE' "$LOG" 2>/dev/null; then
     echo "cs100 workflow complete" | tee -a "$LOG"
     exit 0

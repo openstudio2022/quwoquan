@@ -65,9 +65,13 @@ scope:
   - entityType: 地点/景区
     name: 四川景区24
 provenance:
-  createdAt: '2026-06-26T10:27:21.340716+00:00'
+  createdAt: '2026-06-29T12:11:05.469666+00:00'
   createdBy: task new
 content:
+  angles:
+  - 体验
+  - 美图
+  - 攻略
   modalityContract: separated_research
   queueBackend: reliabletask
   research:

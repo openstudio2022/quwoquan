@@ -53,7 +53,7 @@
 ## 4. 改动范围
 
 - `quwoquan_app/lib/ui/content/entry/`（create_page 协调层、发布确认组件、publish_settings_models、create_page_remote_helpers、行内提及 picker）
-- `quwoquan_app/lib/ui/content/markdown/`（front matter 与 entity inline span codec）
+- `quwoquan_app/lib/ui/content/article_render/markdown/`（front matter 与 entity inline span codec）
 - `quwoquan_app/lib/cloud/services/content/`（summary API 与 CreatePost wire 出口）
 - 对应测试（codec 往返、payload 契约、provider/editor/widget）
 - **禁止**改 `lib/ui/discovery/**`、`works_immersive_viewer.dart`、`lib/components/object_page/**`

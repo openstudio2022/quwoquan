@@ -640,6 +640,16 @@ areas:
       target_path: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:components
+    - current_path: quwoquan_app/test/components/content/content_time_label_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/content/content_time_label__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:components
+    - current_path: quwoquan_app/test/components/content/intersection_reason_chip_widget_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/content/intersection_reason_chip_widget__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:components
     - current_path: quwoquan_app/test/components/content/post/comment_input_bar_widget_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/components/content/post/comment_input_bar_widget__local_contract_test.dart
@@ -730,9 +740,19 @@ areas:
       target_path: quwoquan_app/test/local_contract/components/pageflip/backward_sheet_partition_contract__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:components
+    - current_path: quwoquan_app/test/components/pageflip/curl_renderer_root_cause_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/pageflip/curl_renderer_root_cause__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:components
     - current_path: quwoquan_app/test/components/pageflip/pageflip_contract_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/components/pageflip/pageflip_contract__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:components
+    - current_path: quwoquan_app/test/components/pageflip/pageflip_core_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/pageflip/pageflip_core__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:components
     - current_path: quwoquan_app/test/components/pageflip/pageflip_forward_baseline_test.dart
@@ -743,6 +763,11 @@ areas:
     - current_path: quwoquan_app/test/components/pageflip/pageflip_widget_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/components/pageflip/pageflip_widget__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:components
+    - current_path: quwoquan_app/test/components/pageflip/release_policy_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/components/pageflip/release_policy__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:components
     - current_path: quwoquan_app/test/core/app_content_prototype_bundle_test.dart
@@ -1305,16 +1330,6 @@ areas:
       target_path: quwoquan_app/test/local_contract/ui/content/article_document_models__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/article_flow_layout_engine_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/article_flow_layout_engine__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/article_pagination_engine_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/article_pagination_engine__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/content/article_presentation_models_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/content/article_presentation_models__local_contract_test.dart
@@ -1323,6 +1338,36 @@ areas:
     - current_path: quwoquan_app/test/ui/content/article_reader/article_reader_architecture_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/content/article_reader/article_reader_architecture__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
+    - current_path: quwoquan_app/test/ui/content/article_render/markdown/article_markdown_codec_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_render/markdown/article_markdown_codec__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
+    - current_path: quwoquan_app/test/ui/content/article_render/markdown/qwq_markdown_generated_package_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_render/markdown/qwq_markdown_generated_package__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
+    - current_path: quwoquan_app/test/ui/content/article_render/markdown/qwq_markdown_pagination_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_render/markdown/qwq_markdown_pagination__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
+    - current_path: quwoquan_app/test/ui/content/article_render/markdown/qwq_markdown_parser_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_render/markdown/qwq_markdown_parser__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
+    - current_path: quwoquan_app/test/ui/content/article_render/services/article_flow_layout_engine_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_render/services/article_flow_layout_engine__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
+    - current_path: quwoquan_app/test/ui/content/article_render/services/article_pagination_engine_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/content/article_render/services/article_pagination_engine__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/content/article_wrap_geometry_consistency_test.dart
@@ -1380,16 +1425,6 @@ areas:
       target_path: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/entry_location_error_journey__user_acceptance_test.dart
       migration_status: bridged
       classification_basis: app:user_acceptance:ui
-    - current_path: quwoquan_app/test/ui/content/entry/models/create_editor_models_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/entry/models/create_editor_models__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/entry/models/creation_template_track_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/entry/models/creation_template_track__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/content/entry/providers/article_gap_materialization_regression_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/content/entry/providers/article_gap_materialization_regression__local_contract_test.dart
@@ -1455,54 +1490,24 @@ areas:
       target_path: quwoquan_app/test/local_contract/ui/content/guest_device_interaction__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/markdown/article_markdown_codec_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/markdown/article_markdown_codec__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/markdown/qwq_markdown_generated_package_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/markdown/qwq_markdown_generated_package__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/markdown/qwq_markdown_pagination_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/markdown/qwq_markdown_pagination__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/markdown/qwq_markdown_parser_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/markdown/qwq_markdown_parser__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/content/models/content_surface_view_mapper_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/content/models/content_surface_view_mapper__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/models/content_time_label_test.dart
+    - current_path: quwoquan_app/test/ui/content/models/create_editor_models_test.dart
       layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/models/content_time_label__local_contract_test.dart
+      target_path: quwoquan_app/test/local_contract/ui/content/models/create_editor_models__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/pageflip/curl_renderer_root_cause_test.dart
+    - current_path: quwoquan_app/test/ui/content/models/creation_template_track_test.dart
       layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/pageflip/curl_renderer_root_cause__local_contract_test.dart
+      target_path: quwoquan_app/test/local_contract/ui/content/models/creation_template_track__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/pageflip/pageflip_core_test.dart
+    - current_path: quwoquan_app/test/ui/content/models/post_read_ui_bundle_test.dart
       layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/pageflip/pageflip_core__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/pageflip/release_policy_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/pageflip/release_policy__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/pages/work_browser_entry_page_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/pages/work_browser_entry_page__local_contract_test.dart
+      target_path: quwoquan_app/test/local_contract/ui/content/models/post_read_ui_bundle__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/content/post/contract/content_runtime_config_provider_test.dart
@@ -1518,11 +1523,6 @@ areas:
     - current_path: quwoquan_app/test/ui/content/post/contract/post_view_projection_contract_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/content/post/contract/post_view_projection_contract__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/post_read_ui_bundle_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/post_read_ui_bundle__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/content/seo/markdown_seo_html_renderer_test.dart
@@ -1543,11 +1543,6 @@ areas:
     - current_path: quwoquan_app/test/ui/content/share/share_unified_surface_parity_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/content/share/share_unified_surface_parity__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/content/widgets/intersection_reason_chip_widget_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/content/widgets/intersection_reason_chip_widget__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/discovery/discovery_content_identity_widget_test.dart
@@ -1593,6 +1588,11 @@ areas:
     - current_path: quwoquan_app/test/ui/discovery/home_page_widget_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/discovery/home_page_widget__local_contract_test.dart
+      migration_status: bridged
+      classification_basis: app:local_contract:ui
+    - current_path: quwoquan_app/test/ui/discovery/pages/work_browser_entry_page_test.dart
+      layer: local_contract
+      target_path: quwoquan_app/test/local_contract/ui/discovery/pages/work_browser_entry_page__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/discovery/post/contract/discovery_feed_query_contract_test.dart

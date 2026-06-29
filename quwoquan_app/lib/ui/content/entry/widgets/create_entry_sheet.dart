@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 
 class CreateEntrySheet extends StatelessWidget {
@@ -35,7 +35,7 @@ class CreateEntrySheet extends StatelessWidget {
       onContinueFromDraft: onContinueFromDraft,
       onStartGroupChat: onStartGroupChat ?? onClose,
       onAddContact: onAddContact ?? onClose,
-      onCreateCircle: onCreateCircle,
+      onCreateCircle: onCreateCircle ?? onClose,
       onCancel: onClose,
       priority: priority,
     );

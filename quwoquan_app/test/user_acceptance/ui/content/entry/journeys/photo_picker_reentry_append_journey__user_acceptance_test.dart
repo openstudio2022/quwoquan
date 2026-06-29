@@ -20,7 +20,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';

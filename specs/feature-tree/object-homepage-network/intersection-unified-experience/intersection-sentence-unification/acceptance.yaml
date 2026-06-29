@@ -33,7 +33,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/content/widgets/intersection_reason_chip_widget_test.dart
+      - file: quwoquan_app/test/components/content/intersection_reason_chip_widget_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -51,7 +51,7 @@ gwt_acceptance:
         envs: *id001
       supporting: []
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/content/widgets/intersection_reason_chip_widget_test.dart（统一
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/components/content/intersection_reason_chip_widget_test.dart（统一
       IntersectionReasonChip 单条蓝色主谓宾句、单行省略、weightTier 轻重分化、无来源不占位、双主题只读，2026-06-16
       green）'
   GWT2:

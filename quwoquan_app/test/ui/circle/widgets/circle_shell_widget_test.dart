@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_summary.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -17,6 +18,11 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
+
+class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
+  @override
+  bool build() => true;
+}
 
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();
@@ -71,6 +77,7 @@ Widget _scopedApp({CircleRepository? mock, VoidCallback? onBack}) {
   final repo = mock ?? MockCircleRepository();
   return ProviderScope(
     overrides: [
+      startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
       circleRepositoryProvider.overrideWithValue(repo),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
     ],
@@ -105,12 +112,13 @@ Future<void> _pumpShell(
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(_scopedApp(mock: mock, onBack: onBack));
+  final container = ProviderScope.containerOf(
+    tester.element(find.byType(CircleShell)),
+  );
   // CircleShell 不主动 watch 登录态，这里显式触发 auth session 构建并 hydrate，
   // 让加入/关注按钮的 requireLogin 在已登录态下放行。
-  ProviderScope.containerOf(
-    tester.element(find.byType(CircleShell)),
-  ).read(authSessionControllerProvider);
-  await tester.pump();
+  await container.read(authSessionControllerProvider.notifier).restore();
+  await tester.pumpAndSettle();
   await tester.pump(const Duration(milliseconds: 350));
 }
 
@@ -170,7 +178,9 @@ void main() {
     testWidgets('圈子影响展示云侧 displayText，最多三条且不本地拼装', (tester) async {
       await _pumpShell(tester, mock: _ImpactCircleRepository());
 
-      expect(find.text(UITextConstants.circleImpactTitle), findsOneWidget);
+      expect(find.text(UITextConstants.objectImpactTitle), findsOneWidget);
+      expect(find.text(UITextConstants.objectMyIntersectionsTitle), findsOneWidget);
+      expect(find.text(UITextConstants.circleWhyRecommendTitle), findsNothing);
       expect(find.text('12人在这里建立了新连接'), findsOneWidget);
       expect(find.text('5个讨论正在这里发生'), findsOneWidget);
       expect(find.text('3人最近参与了这里'), findsOneWidget);
@@ -194,14 +204,14 @@ void main() {
     testWidgets('圈子影响为空时整体收起', (tester) async {
       await _pumpShell(tester, mock: _EmptyImpactCircleRepository());
 
-      expect(find.text(UITextConstants.circleImpactTitle), findsNothing);
+      expect(find.text(UITextConstants.objectImpactTitle), findsNothing);
     });
 
     testWidgets('圈子影响错误时不阻塞主页并收起影响卡', (tester) async {
       await _pumpShell(tester, mock: _ImpactErrorCircleRepository());
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text(UITextConstants.circleImpactTitle), findsNothing);
+      expect(find.text(UITextConstants.objectImpactTitle), findsNothing);
     });
 
     testWidgets('私密圈子游客访问时显示内容门禁', (tester) async {
@@ -291,7 +301,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(CircleActionBar),
-          matching: find.text(UITextConstants.profileDirectMessage),
+          matching: find.text(UITextConstants.circleActionEnterDiscussion),
         ),
         findsOneWidget,
       );

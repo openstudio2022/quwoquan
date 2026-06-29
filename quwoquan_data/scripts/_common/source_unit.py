@@ -1,9 +1,10 @@
 """来源单元 + 对象证据链统一读写（真相源：docs/pipeline_directory_layout_spec.md）。
 
-替代「对象级散落 images/ + 来源与图片分离」的旧布局。每个来源是一个自包含、
-编号、带类目与相关性说明的单元（命名/文件名对齐 docs/pipeline_directory_layout_spec.md §0/§3）：
+替代「对象级散落 images/ + 实体目录承载来源」的旧布局。每个来源是一个自包含、
+稳定 ID、带类目与相关性说明的单元；实体/作品对象只保存 `1.download/source_refs.json`
+软引用索引：
 
-    {object}/1.download/sources/{NN}.{sourceKind}/
+    sources/{sourceUnitId}/
         meta.json            # url/title/sourceKind/relevance（与对象相关性）
         source.md            # 原文
         source.clean.md      # 清洗正文
@@ -18,6 +19,7 @@ post assets/{assetId} -> manifest.sourceAssetRef（相对 batch 根）。
 from __future__ import annotations
 
 import hashlib
+import os
 import re
 import shutil
 from pathlib import Path
@@ -30,6 +32,8 @@ from _common.paths import (
     STAGE_DOWNLOAD,
     batch_entity_object_dir,
     batch_root,
+    batch_source_unit_dir,
+    batches_root,
     relative_batch_ref,
     source_unit_dir,
 )
@@ -39,6 +43,7 @@ SOURCE_UNIT_MANIFEST = "meta.json"
 SOURCE_UNIT_ASSET_INDEX = "assets/index.json"
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 _UNIT_RE = re.compile(r"^(\d{2})\.(.+)$")
+OBJECT_SOURCE_REFS = "1.download/source_refs.json"
 
 
 def slugify(value: str) -> str:
@@ -115,6 +120,68 @@ def _raise_if_scenic_location_type_conflict(
 
 
 # ─── 写：来源单元 ──────────────────────────────────────────────────
+def _batch_root_for_object_dir(object_dir: Path) -> Path | None:
+    root = batches_root().resolve()
+    path = object_dir.resolve()
+    for parent in (path, *path.parents):
+        try:
+            if parent.parent.resolve() == root:
+                return parent
+        except OSError:
+            continue
+    return None
+
+
+def _object_source_refs_path(object_dir: Path) -> Path:
+    return object_dir / OBJECT_SOURCE_REFS
+
+
+def _relative_ref_for_batch_root(target: Path, batch_root_path: Path) -> str:
+    return os.path.relpath(Path(target).resolve(), Path(batch_root_path).resolve()).replace(os.sep, "/")
+
+
+def _record_object_source_ref(
+    object_dir: Path,
+    *,
+    task_id: str = "",
+    batch_id: str = "",
+    batch_root_path: Path | None = None,
+    source_ref: str,
+    meta_ref: str,
+    manifest: Mapping[str, Any],
+) -> None:
+    path = _object_source_refs_path(object_dir)
+    payload = read_json(path) if path.is_file() else {}
+    if not isinstance(payload, dict):
+        payload = {}
+    payload.setdefault("schemaVersion", "quwoquan_data.object_source_refs/1")
+    try:
+        if task_id and batch_id:
+            payload["objectRef"] = relative_batch_ref(object_dir, task_id, batch_id)
+        elif batch_root_path is not None:
+            payload["objectRef"] = _relative_ref_for_batch_root(object_dir, batch_root_path)
+        else:
+            payload["objectRef"] = ""
+    except Exception:  # noqa: BLE001
+        payload["objectRef"] = ""
+    rows = [row for row in (payload.get("sources") or []) if isinstance(row, dict)]
+    row = {
+        "sourceUnitId": str(manifest.get("sourceUnitId") or ""),
+        "sourceRef": source_ref,
+        "metaRef": meta_ref,
+        "sourceId": str(manifest.get("sourceId") or ""),
+        "ordinal": int(manifest.get("ordinal") or 0),
+        "researchLane": str(manifest.get("researchLane") or ""),
+        "sourceUseMode": str(manifest.get("sourceUseMode") or ""),
+        "publishMediaMode": str(manifest.get("publishMediaMode") or ""),
+        "targetRefs": list((manifest.get("relevance") or {}).get("targetRefs") or []),
+    }
+    rows = [existing for existing in rows if str(existing.get("sourceRef") or "") != source_ref]
+    rows.append(row)
+    payload["sources"] = sorted(rows, key=lambda item: (int(item.get("ordinal") or 0), str(item.get("sourceRef") or "")))
+    write_json(path, payload)
+
+
 def write_source_unit(
     object_dir: Path,
     *,
@@ -127,6 +194,7 @@ def write_source_unit(
     platform: str = "",
     source_category: str = "",
     source_use_mode: str = "",
+    publish_media_mode: str = "",
     source_role: str = "",
     image_evidence_mode: str = "",
     research_lane: str = "",
@@ -149,9 +217,20 @@ def write_source_unit(
     生产 download 主链路可传 build_variants=False，把 WebP 物理变体延后到
     media/release 阶段；原图、尺寸、hash、授权链仍在本阶段闭合。
     """
-    unit = source_unit_dir(object_dir, ordinal, source_id)
     from _common.paths import STAGE_DOWNLOAD, ensure_object_stages
 
+    snapshot_hash = "sha256:" + hashlib.sha256(source_md.encode("utf-8")).hexdigest()
+    source_unit_id = og.source_unit_id(
+        canonical_url=url,
+        snapshot_hash=snapshot_hash,
+        source_ref=f"{ordinal:02d}.{source_id}",
+    )
+    inferred_batch_root = _batch_root_for_object_dir(object_dir) if not (task_id and batch_id) else None
+    unit = (
+        batch_source_unit_dir(task_id, batch_id, source_unit_id)
+        if task_id and batch_id
+        else (inferred_batch_root / "sources" / source_unit_id if inferred_batch_root is not None else source_unit_dir(object_dir, ordinal, source_id))
+    )
     ensure_object_stages(object_dir, through_stage=STAGE_DOWNLOAD)
     unit.mkdir(parents=True, exist_ok=True)
     (unit / "source.md").write_text(source_md, encoding="utf-8")
@@ -249,20 +328,21 @@ def write_source_unit(
             source_ref = relative_batch_ref(unit / "source.md", task_id, batch_id)
         except Exception:  # noqa: BLE001
             source_ref = ""
-    snapshot_hash = "sha256:" + hashlib.sha256(source_md.encode("utf-8")).hexdigest()
+    elif inferred_batch_root is not None:
+        try:
+            source_ref = _relative_ref_for_batch_root(unit / "source.md", inferred_batch_root)
+        except Exception:  # noqa: BLE001
+            source_ref = ""
     manifest = {
         "schemaVersion": "quwoquan_data.source_unit",
-        "sourceUnitId": og.source_unit_id(
-            canonical_url=url,
-            snapshot_hash=snapshot_hash,
-            source_ref=source_ref or str(unit),
-        ),
+        "sourceUnitId": source_unit_id,
         "sourceId": source_id,
         "ordinal": ordinal,
         "sourceKind": source_category or platform or "web",
         "category": source_category or platform or "web",
         "platform": platform or "web",
         "sourceUseMode": source_use_mode,
+        "publishMediaMode": publish_media_mode,
         "sourceRole": source_role,
         "imageEvidenceMode": image_evidence_mode,
         "researchLane": research_lane,
@@ -271,11 +351,30 @@ def write_source_unit(
         "snapshotHash": snapshot_hash,
         "title": title,
         "relevance": {
-            "targetRef": target_ref,
+            "targetRefs": [target_ref] if target_ref else [],
+            "entityTags": [target_ref] if target_ref else [],
+            "semanticMentions": [target_ref.rsplit("/", 1)[-1]] if target_ref else [],
+            "coverageTargets": [target_ref] if target_ref else [],
             "reason": relevance or "覆盖该对象的基础事实/交通/季节等",
         },
         "assetCount": len(asset_index),
     }
+    if source_ref:
+        manifest["sourceRef"] = source_ref
+        manifest["sourceUnitRef"] = str(Path(source_ref).parent)
+    if quality is not None:
+        raw_quality_score = (
+            quality.get("sourceQualityScore")
+            or quality.get("qualityScore")
+            or quality.get("score")
+            or quality.get("quality_score")
+        )
+        try:
+            quality_score = float(raw_quality_score)
+        except (TypeError, ValueError):
+            quality_score = 0.0
+        if quality_score:
+            manifest["sourceQualityScore"] = quality_score / 10.0 if quality_score > 1 else quality_score
     # 实体聚焦度落盘（单一真相源 _common.entity_focus）：仅文本 article 底稿需要，
     # 供选源弃稿门、content_plan 门与 scale_readiness 准出口径共同消费。图片相关性
     # 另有图像门把关，不在此落 verdict 以免误伤。
@@ -291,6 +390,21 @@ def write_source_unit(
     if asset_funnel:
         manifest["assetFunnel"] = dict(asset_funnel)
     write_json(unit / SOURCE_UNIT_MANIFEST, manifest)
+    if source_ref and (task_id and batch_id or inferred_batch_root is not None):
+        meta_ref = (
+            relative_batch_ref(unit / SOURCE_UNIT_MANIFEST, task_id, batch_id)
+            if task_id and batch_id
+            else _relative_ref_for_batch_root(unit / SOURCE_UNIT_MANIFEST, inferred_batch_root or unit.parent)
+        )
+        _record_object_source_ref(
+            object_dir,
+            task_id=task_id,
+            batch_id=batch_id,
+            source_ref=source_ref,
+            meta_ref=meta_ref,
+            batch_root_path=inferred_batch_root,
+            manifest=manifest,
+        )
     return manifest
 
 
@@ -301,11 +415,25 @@ def _ext_from_name(name: str) -> str:
 
 # ─── 读：来源单元与候选图（含证据链相对引用）────────────────────────
 def iter_source_units(object_dir: Path) -> list[Path]:
-    base = object_dir / STAGE_DOWNLOAD / "sources"
-    if not base.is_dir():
+    refs_path = _object_source_refs_path(object_dir)
+    if not refs_path.is_file():
         return []
-    units = [d for d in base.iterdir() if d.is_dir() and _UNIT_RE.match(d.name)]
-    return sorted(units, key=lambda d: d.name)
+    batch_dir = _batch_root_for_object_dir(object_dir)
+    if batch_dir is None:
+        return []
+    payload = read_json(refs_path)
+    units: list[Path] = []
+    for row in payload.get("sources") or []:
+        if not isinstance(row, Mapping):
+            continue
+        ref = str(row.get("sourceRef") or "").strip()
+        if not ref:
+            continue
+        source_md = batch_dir / ref
+        unit = source_md.parent
+        if source_md.is_file() and (unit / SOURCE_UNIT_MANIFEST).is_file():
+            units.append(unit)
+    return sorted(set(units), key=lambda d: d.name)
 
 
 def find_entity_object_dirs(
@@ -334,8 +462,8 @@ def find_entity_object_dirs(
     if etype_hint:
         return [resolve_entity_object_dir(task_id, batch_id, raw, etype_hint=etype_hint)]
     out: list[Path] = []
-    for src_dir in entities_root.rglob(f"{raw}/{STAGE_DOWNLOAD}/sources"):
-        obj = src_dir.parent.parent
+    for refs_path in entities_root.rglob("source_refs.json"):
+        obj = refs_path.parent.parent
         if obj.name == raw:
             out.append(obj)
     unique = sorted(set(out))

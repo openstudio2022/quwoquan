@@ -39,6 +39,10 @@ void main() {
       find.text(UITextConstants.createActionPostPhotoShort),
       findsOneWidget,
     );
+    expect(
+      find.text(UITextConstants.createActionPhotoSubtitle),
+      findsOneWidget,
+    );
     expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
     expect(find.text(UITextConstants.createActionResumeDraft), findsNothing);
     expect(
@@ -47,6 +51,18 @@ void main() {
     );
     expect(
       find.text(UITextConstants.createActionPostVideoShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionAddContactShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionCreateGroupShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionCreateCircleShort),
       findsOneWidget,
     );
     expect(find.text('发点滴'), findsNothing);

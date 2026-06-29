@@ -6,12 +6,12 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/article_image_intrinsic_registry.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/article_theme.dart';
-import 'package:quwoquan_app/ui/content/entry/models/article_editor_projection.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/article_render/services/article_image_intrinsic_registry.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_theme.dart';
+import 'package:quwoquan_app/ui/content/models/article_editor_projection.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_editor_accessory_panels.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/article_wrap_paragraph_editor.dart';
 

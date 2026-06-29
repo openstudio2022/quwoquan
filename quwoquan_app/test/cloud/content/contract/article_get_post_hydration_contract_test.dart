@@ -7,8 +7,8 @@ import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
-import 'package:quwoquan_app/ui/content/article_detail_view.dart';
-import 'package:quwoquan_app/ui/content/post_view_projection.dart';
+import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
+import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
 
 void main() {
   group('Article getPost hydration contract', () {

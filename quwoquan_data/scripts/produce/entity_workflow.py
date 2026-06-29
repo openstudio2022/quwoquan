@@ -294,6 +294,10 @@ def _same_source_unit(a: str, b: str) -> bool:
 
     def unit(ref: str) -> str:
         text = str(ref or "").replace("\\", "/")
+        if "/assets/" in text:
+            return text.split("/assets/", 1)[0]
+        if text.endswith("/source.md") or text.endswith("/meta.json"):
+            return text.rsplit("/", 1)[0]
         if marker in text:
             head, tail = text.split(marker, 1)
             return head + marker + tail.split("/", 1)[0]
@@ -480,21 +484,15 @@ def review_entity_draft(
     from _common.base_draft import (
         base_draft_fidelity_issues,
         base_source_use_mode,
-        load_intent_aligned_base_draft_text,
+        load_base_draft_text,
     )
-    from _common.writing_pack import primary_entity_name
 
     if carrier in ("image", "gallery"):
         fidelity = []
     else:
-        # 与 prompt 侧 baseDraftText 同源：同一份 writingIntent 主线对齐底稿作分母（R-CS01）。
-        base_text = load_intent_aligned_base_draft_text(
-            task_id,
-            batch_id,
-            brief.get("baseSourceRef"),
-            writing_intent=brief.get("writingIntent"),
-            entity_name=primary_entity_name(brief),
-        )
+        # 底稿中心 1:1：分母 = 整篇单一底稿（与 prompt 侧 baseDraftText 同源），
+        # 不再按 writingIntent 收窄——成品只来自这一篇底稿，整篇度量同时防误杀与防照搬。
+        base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
         source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
         fidelity = base_draft_fidelity_issues(
             body,

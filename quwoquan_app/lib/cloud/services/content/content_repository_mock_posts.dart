@@ -207,7 +207,7 @@ extension _MockContentPosts on MockContentRepository {
         '${authorId}_p1',
         payloadMerge: <String, dynamic>{
           ...base,
-          'contentType': 'photo',
+          'contentType': 'image',
           'body': '光影的节奏',
           'coverUrl':
               'media/image/s/mock/seed/p_1647956450271-2ff54205bebf/v1/image.jpg',

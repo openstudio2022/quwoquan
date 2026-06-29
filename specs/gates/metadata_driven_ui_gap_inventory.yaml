@@ -49,7 +49,7 @@ policy:
       Map<String,dynamic> 限单点适配器与 wire 解码，不跨层当业务状态；与 policy.p2_rolling_convergence_order 一致（assistant 域单独治理）。
   non_assistant_ui_wire_adapter_entrypoints:
     # 单点 raw map → ReadPresentation / DTO；页面不直接持匿名 Map 业务状态
-    - quwoquan_app/lib/ui/content/post_view_projection.dart
+    - quwoquan_app/lib/ui/content/services/post_view_projection.dart
     - quwoquan_app/lib/ui/circle/services/home_circles_hub_wire.dart
   non_assistant_weak_typing_p1_tranche_note: |
     里程碑「ContentRepository / UserProfileRepository 对外全 DTO 化」已完成：ContentPostDetailWireDto 嵌套子 projection（cards、circleSummaries）、
@@ -176,13 +176,13 @@ domains:
         target_dto: PostBaseDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
-      - path: quwoquan_app/lib/ui/content/pages/unified_media_viewer_page.dart
+      - path: quwoquan_app/lib/ui/discovery/pages/unified_media_viewer_page.dart
         status: compliant
         note: 薄壳→WorksImmersiveViewer；posts 上 readPresentation + rawPostsById wire；P6 仍 exempt，P2 语义见页面 doc 与 post_projection_spec §2
         target_dto: PostBaseDto
         target_read_projection: PostReadPresentation
         target_edit_draft: N/A
-      - path: quwoquan_app/lib/ui/content/pages/work_browser_entry_page.dart
+      - path: quwoquan_app/lib/ui/discovery/pages/work_browser_entry_page.dart
         status: compliant
         note: workBrowser 统一深链入口；无 extra 时经 ContentRepository 拉取/定位队列，有 extra 时复用 WorkBrowserItemDto/PostReadPresentation 沉浸壳；错误页按 sourceTheme/sourceAppearanceMode 保持来源明暗模式。
         target_dto: WorkBrowserItemDto

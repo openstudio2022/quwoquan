@@ -40,9 +40,6 @@ extension _CircleShellBuilders on _CircleShellState {
     required String? coverUrl,
   }) {
     final circle = state.circleData;
-    final defaultGroupConversationId =
-        state.defaultPublicGroup?.conversationId?.trim() ?? '';
-    final hasConversation = defaultGroupConversationId.isNotEmpty;
     final summarySurface = AppColors.iosProfileSurface(context);
     final summaryBorder = AppColors.iosSeparator(
       context,
@@ -82,7 +79,6 @@ extension _CircleShellBuilders on _CircleShellState {
               tags: circle?.tags ?? const [],
               badgeLabel: _badgeLabel(state),
               metaLine: _metaLine(state),
-              memberVisuals: _circleMemberClusterVisuals(),
               onTagTap: (tag) {
                 ref
                     .read(contentEngagementTrackerProvider)
@@ -95,18 +91,15 @@ extension _CircleShellBuilders on _CircleShellState {
               role: state.role,
               joinStatus: state.joinStatus,
               joinPolicy: circle?.joinPolicy ?? 'open',
-              hasConversation: hasConversation,
               onJoinCircle:
                   _isMemberLike(state) || state.joinStatus == 'pending'
                   ? null
                   : () => _gatedJoinCircle(context, notifier),
-              onOpenChat: hasConversation
-                  ? () => _openChat(context, defaultGroupConversationId)
-                  : null,
+              onEnterDiscussion: () => _changeTab('discussion'),
             ),
             SizedBox(height: AppSpacing.sm),
             _buildIntersectionCard(isDark),
-            _buildCircleImpactCard(context, isDark: isDark, state: state),
+            _buildCircleImpactCard(isDark),
             if (state.error != null && state.error!.trim().isNotEmpty) ...[
               SizedBox(height: AppSpacing.sm),
               AppSectionErrorCard(
@@ -135,190 +128,28 @@ extension _CircleShellBuilders on _CircleShellState {
     );
   }
 
-  /// 头部成员视觉簇：取「你 × 圈子」交集证据里的真实样本视觉（圈子里你认识的人）。
-  /// 优先结构化 [IntersectionVisual]（含 displayName/target，统一形状/降级/可点击）；
-  /// 过渡期回退裸 `sampleAvatarUrls` 包装为 avatar 视觉（N3 fixture 化结构化 sampleVisuals
-  /// 后回退分支自然消亡）。异步未就绪 / 无样本则返回空，头部不展示视觉簇（G2 不造假、不占位）。
-  List<IntersectionVisual> _circleMemberClusterVisuals() {
-    final query = ObjectIntersectionQuery(
-      objectAId: ref.watch(currentUserIdProvider),
-      objectAType: 'user',
-      objectBId: widget.circleId,
-      objectBType: 'circle',
-    );
-    final reasons = ref.watch(objectSharedReasonsProvider(query)).maybeWhen(
-          data: (data) => data,
-          orElse: () => const <IntersectionReason>[],
-        );
-    final visuals = <IntersectionVisual>[];
-    final seen = <String>{};
-    for (final reason in reasons) {
-      for (final point in reason.intersectionPoints) {
-        final pointVisuals = point.sampleVisuals.isNotEmpty
-            ? point.sampleVisuals
-            : point.sampleAvatarUrls
-                .where((url) => url.trim().isNotEmpty)
-                .map(
-                  (url) => IntersectionVisual(
-                    assetKind: 'avatar',
-                    imageUrl: url.trim(),
-                    displayName: point.sampleText.trim(),
-                  ),
-                )
-                .toList(growable: false);
-        for (final visual in pointVisuals) {
-          final dedupeKey = visual.imageUrl.trim().isNotEmpty
-              ? visual.imageUrl.trim()
-              : visual.displayName.trim();
-          if (dedupeKey.isEmpty || seen.contains(dedupeKey)) {
-            continue;
-          }
-          seen.add(dedupeKey);
-          visuals.add(visual);
-          if (visuals.length >= 4) {
-            return visuals;
-          }
-        }
-      }
-    }
-    return visuals;
-  }
-
-  /// 圈子连接卡：当前用户 × 圈子的事实交集（relationship/identity 优先）。
-  /// 无可解析交集（空/异步未就绪）则不占位（G2 不造假）。
+  /// 「我的交集」预览卡：viewer × 圈子，与实体/用户主页同壳。
   Widget _buildIntersectionCard(bool isDark) {
-    final query = ObjectIntersectionQuery(
-      objectAId: ref.watch(currentUserIdProvider),
-      objectAType: 'user',
-      objectBId: widget.circleId,
-      objectBType: 'circle',
-    );
-    return ObjectIntersectionSection(
-      query: query,
-      title: UITextConstants.circleWhyRecommendTitle,
-      isDark: isDark,
-      bottomPadding: AppSpacing.sm,
+    return ObjectIntersectionPreviewCard(
+      objectId: widget.circleId,
+      objectType: 'circle',
+      title: UITextConstants.objectMyIntersectionsTitle,
+      emptyText: UITextConstants.objectIntersectionEmptyCircle,
+      referralSource: ReferralSource.circlePost,
+      cardKey: const ValueKey<String>('circle-my-intersection-card'),
+      emptyKey: const ValueKey<String>('circle-my-intersection-empty'),
     );
   }
 
-  /// 圈子影响卡（架构基线 v2 §21.5 D 面）：接入统一交互子契约 + 四槽 + 传播视图，
-  /// 与「我的影响力」（[AuthorImpactCard]）同源（解决 G4 圈子影响表达不一致）。
-  Widget _buildCircleImpactCard(
-    BuildContext context, {
-    required bool isDark,
-    required CircleState state,
-  }) {
-    final asyncImpact = ref.watch(circleImpactProvider(widget.circleId));
-    final items = asyncImpact.maybeWhen(
-      data: (summary) => summary.items
-          .where((item) => item.primaryText.trim().isNotEmpty)
-          .take(3)
-          .toList(growable: false),
-      orElse: () => const <CircleImpactItem>[],
+  /// 「影响力」预览卡：与实体主页 / 用户主页同语义 token。
+  Widget _buildCircleImpactCard(bool isDark) {
+    return ObjectImpactPreviewCard(
+      objectId: widget.circleId,
+      target: ObjectImpactTarget.circle,
+      referralSource: ReferralSource.circlePost,
+      enumerableHint: UITextConstants.impactEnumerableHintCircle,
+      cardKey: const ValueKey<String>('circle-impact-card'),
     );
-    if (items.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final navigator = _circleImpactNavigator();
-    return IntersectionStatementCard(
-      topDivider: true,
-      title: UITextConstants.circleImpactTitle,
-      items: <IntersectionStatementItem>[
-        for (final item in items)
-          IntersectionStatementItem(
-            primaryText: item.primaryText.trim(),
-            subtitleText: item.subtitleText.trim().isNotEmpty
-                ? item.subtitleText.trim()
-                : item.source.trim(),
-            spans: item.primarySpans,
-            visuals: item.sampleVisuals,
-            iconKey: item.iconKey,
-            sourceRef: item.source,
-            dimension: item.intersectionDimension,
-            propagationPath: item.propagationPath,
-            onSpanTap: (span) =>
-                _onCircleImpactSpanTap(context, navigator, item, span),
-            onVisualTap: (visual) => navigator.open(
-              context,
-              visual.target,
-              attribution: _circleImpactAttribution(item),
-            ),
-            onPropagationTap: () => _showCircleImpactEvidence(context, item),
-            onTap: () => _showCircleImpactEvidence(context, item),
-          ),
-      ],
-    );
-  }
-
-  IntersectionTargetNavigator _circleImpactNavigator() =>
-      IntersectionTargetNavigator(
-        onTrack: (target, attribution) {
-          final id = target.objectId.trim();
-          if (id.isEmpty) {
-            return;
-          }
-          ref
-              .read(contentBehaviorTrackerProvider)
-              .trackClick(
-                id,
-                referralSource: ReferralSource.circlePost,
-                intersectionDimension: attribution.dimension,
-                intersectionSourceRef: attribution.sourceRef,
-                intersectionTagRefs: attribution.tagRefs,
-                intersectionEvidenceId: attribution.evidenceId,
-              );
-        },
-      );
-
-  IntersectionNavAttribution _circleImpactAttribution(CircleImpactItem item) {
-    final tagRef = item.tagRef.trim();
-    return IntersectionNavAttribution(
-      dimension: item.intersectionDimension,
-      sourceRef: item.source,
-      evidenceId: item.evidenceSnapshotId,
-      tagRefs: tagRef.isEmpty ? const <String>[] : <String>[tagRef],
-    );
-  }
-
-  void _onCircleImpactSpanTap(
-    BuildContext context,
-    IntersectionTargetNavigator navigator,
-    CircleImpactItem item,
-    IntersectionTextSpan span,
-  ) {
-    // 数字片段进影响明细（展示来源摘要）；名字 / 对象片段进对应主页。
-    if (span.role == 'count') {
-      _showCircleImpactEvidence(context, item);
-      return;
-    }
-    navigator.open(
-      context,
-      span.target,
-      attribution: _circleImpactAttribution(item),
-    );
-  }
-
-  Future<void> _showCircleImpactEvidence(
-    BuildContext context,
-    CircleImpactItem item,
-  ) {
-    return showAppActionSheet<void>(
-      context,
-      title: item.primaryText.trim(),
-      message: _circleImpactEvidenceMessage(item),
-      sections: const <AppActionSheetSection<void>>[],
-      cancelLabel: UITextConstants.confirm,
-    );
-  }
-
-  String _circleImpactEvidenceMessage(CircleImpactItem item) {
-    final source = item.source.trim().isEmpty
-        ? UITextConstants.circleImpactTitle
-        : item.source.trim();
-    if (item.count > 0) {
-      return '${UITextConstants.impactEnumerableHintCircle}\n$source · ${item.count}';
-    }
-    return '${UITextConstants.impactEnumerableHintCircle}\n$source';
   }
 
   Widget _buildBackgroundLayer({required Color bg, required String? coverUrl}) {

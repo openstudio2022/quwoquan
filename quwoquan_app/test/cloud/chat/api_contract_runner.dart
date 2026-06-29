@@ -31,12 +31,17 @@ import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 
+import '../../support/api_contract/local_bad_certificate_overrides.dart';
+
 const _apiContractEnv = String.fromEnvironment(
   'API_CONTRACT_ENV',
   defaultValue: 'gamma',
 );
 const _apiBase = String.fromEnvironment('API_CONTRACT_BASE_URL');
 const _testToken = String.fromEnvironment('TEST_AUTH_TOKEN');
+const _allowBadCertificateForLocalApiContract = bool.fromEnvironment(
+  'API_CONTRACT_ALLOW_BAD_CERT',
+);
 const _currentUserId = 'fixture_user_current';
 const _currentSubAccountId = 'fixture_user_current';
 
@@ -114,6 +119,9 @@ Future<Map<String, dynamic>> _sendMessage(
 
 void main() {
   setUpAll(() async {
+    installLocalApiContractBadCertificateOverride(
+      enabled: _allowBadCertificateForLocalApiContract,
+    );
     if (_apiBase.isEmpty) {
       markTestSkipped(
         'L3: ${_apiContractEnv.toUpperCase()}_BASE_URL not set — all api_contract tests skipped',
@@ -140,6 +148,7 @@ void main() {
 
   tearDownAll(() {
     if (_apiAvailable) _client.close();
+    restoreLocalApiContractBadCertificateOverride();
   });
 
   // ── 场景 1：list_conversations_contract ───────────────────────────────────

@@ -204,6 +204,10 @@ gwt_acceptance:
         - user_acceptance.page.myFootprint.empty_permission_error
         - user_acceptance.page.myFootprint.primary_cta
         - user_acceptance.page.myFootprint.trace_context
+        - user_acceptance.page.localDrafts.load_success
+        - user_acceptance.page.localDrafts.empty_permission_error
+        - user_acceptance.page.localDrafts.primary_cta
+        - user_acceptance.page.localDrafts.trace_context
         - user_acceptance.page.userProfile.load_success
         - user_acceptance.page.userProfile.empty_permission_error
         - user_acceptance.page.userProfile.primary_cta

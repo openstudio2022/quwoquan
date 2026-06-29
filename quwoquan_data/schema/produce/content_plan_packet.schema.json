@@ -25,16 +25,21 @@
             "items": { "type": "string" }
           },
           "entityRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+          "entityTags": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "底稿派生的实体多标签集合（可多）；entityRefs 的语义对齐，作为检索/可点击标签，不再作单实体聚焦弃稿门"
+          },
           "evidenceRefs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
           "rationale": { "type": "string" },
           "writingIntent": {
             "type": "string",
             "enum": ["planning_consultation", "decision_experience", "post_trip_journal"],
-            "description": "写作主线：单篇唯一。攻略/咨询=planning_consultation，决策体验=decision_experience，游后记录=post_trip_journal"
+            "description": "底稿派生的可选内容角度标签（不再单篇唯一/硬阻断）：攻略=planning_consultation，体验=decision_experience，游记=post_trip_journal"
           },
           "baseSourceRef": {
             "type": "string",
-            "description": "主底稿来源 ref（相对内容对象 1.download/sources/）；作为风格与事实锚点，其它来源只能补事实"
+            "description": "主底稿来源 ref（batch 相对 sources/{sourceUnitId}/source.md）；作为风格与事实锚点，其它来源只能补事实"
           },
           "sourceUseMode": {
             "type": "string",
@@ -57,7 +62,7 @@
               }
             },
             "else": {
-              "required": ["title", "writingIntent"],
+              "required": ["title"],
               "properties": {
                 "researchLane": { "enum": ["article"] }
               }

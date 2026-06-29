@@ -59,7 +59,7 @@
 - `quwoquan_app/lib/ui/discovery/widgets/dual_column_discovery_post_card.dart`
 - `quwoquan_app/lib/ui/discovery/widgets/intersection_spotlight_module.dart`
 - `quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart`（如需）
-- `quwoquan_app/lib/ui/content/widgets/intersection_reason_chip.dart`
+- `quwoquan_app/lib/components/content/intersection_reason_chip.dart`
 - `quwoquan_app/test/**` 对应 widget/golden 测试
 - **禁止**改 `works_immersive_viewer.dart`（归 WP7）、`lib/components/object_page/**`（归 WP3）
 
@@ -82,5 +82,5 @@
 
 - 已落地：`IntersectionReasonChip` 消费 `weightTier`，双列卡与首页多形态 feed 通过同一 chip 管线展示 heavy/light/空三态；spotlight 保持主交集品牌蓝、副交集次级灰，并保留曝光/点击归因路径。
 - 边界登记：原规格「四口径同源」修正为「卡片 chip 双口径同源 + 沉浸/详情 reasons 直出」，避免把详情解释层降格为卡片理由位。
-- 本地证据：`cd quwoquan_app && flutter test test/ui/content/widgets/intersection_reason_chip_widget_test.dart test/ui/discovery/home_intersection_multiform_feed_widget_test.dart`。
+- 本地证据：`cd quwoquan_app && flutter test test/components/content/intersection_reason_chip_widget_test.dart test/ui/discovery/home_intersection_multiform_feed_widget_test.dart`。
 - 仍需集成证据：gamma T3 spotlight 非空窗与真实推荐流曝光/点击归因留证，纳入 `90-integration-acceptance.md` C5。

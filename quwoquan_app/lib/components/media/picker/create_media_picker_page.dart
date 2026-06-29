@@ -9,6 +9,8 @@ import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
+import 'package:quwoquan_app/components/media/picker/one_tap_movie_composer.dart';
+import 'package:quwoquan_app/components/media/picker/one_tap_movie_preview_page.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
@@ -58,14 +60,18 @@ class CreateMediaPickerPage extends StatefulWidget {
     required this.maxSelection,
     this.initialSelection = const <CreateMediaItem>[],
     MediaPickerService? mediaPickerService,
+    OneTapMovieComposer? oneTapMovieComposer,
     this.imageEditorBuilder,
     this.cameraBuilder,
-  }) : mediaPickerService = mediaPickerService ?? const MediaPickerService();
+  }) : mediaPickerService = mediaPickerService ?? const MediaPickerService(),
+       oneTapMovieComposer =
+           oneTapMovieComposer ?? const MethodChannelOneTapMovieComposer();
 
   final MediaPickerEntryMode entryMode;
   final int maxSelection;
   final List<CreateMediaItem> initialSelection;
   final MediaPickerService mediaPickerService;
+  final OneTapMovieComposer oneTapMovieComposer;
   final CreateMediaPickerImageEditorBuilder? imageEditorBuilder;
   final CreateMediaPickerCameraBuilder? cameraBuilder;
 
@@ -82,9 +88,14 @@ class _AlbumSortEntry {
 }
 
 @immutable
-class _EditedPickerImage {
-  const _EditedPickerImage({required this.selectedIndex, required this.path});
+class _EditedPickerImages {
+  const _EditedPickerImages({
+    required this.items,
+    required this.currentImageIndex,
+    required this.continueToCreate,
+  });
 
-  final int selectedIndex;
-  final String path;
+  final List<CreateMediaItem> items;
+  final int currentImageIndex;
+  final bool continueToCreate;
 }

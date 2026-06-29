@@ -6,13 +6,13 @@
 - `L2_business_capability`: `content-type-framework`
 - `L3_story`: `creation-tagging-ia`
 
-本场景冻结**创作侧打标信息架构（IA）**：在内容创作流提供 tagRef 打标入口，使 `content.tagRefs` 成为「交集」归因的可信输入。打标对全部内容类型（含口碑 review）**可选、不强制**，由**自动打标（转发识别 + 内容识别）辅助**，手动 UI 作为对自动结果的**确认/修正层**。打标真相源唯一为数据工程 `publish/tags`（路径制 tagRef）；首发标签子集已冻结于 `_shared/tag_ref_migration.yaml` 的 `launch` 项。
+本场景冻结**创作侧打标信息架构（IA）**：在内容创作流提供 tagRef 打标入口，使 `content.tagRefs` 成为「交集」归因的可信输入。打标对全部内容类型（image/video/article/micro）**可选、不强制**，由**自动打标（转发识别 + 内容识别）辅助**，手动 UI 作为对自动结果的**确认/修正层**。打标真相源唯一为数据工程 `publish/tags`（路径制 tagRef）；首发标签子集已冻结于 `_shared/tag_ref_migration.yaml` 的 `launch` 项。
 
 ## 背景与动机
 
 「交集」是产品北极星：用户因共同的地点/事物/标签连接。`Post.tagRefs`（路径制 tagRef，E4 已硬切）+ `entityRefs`（POI）是交集召回与归因的核心输入。当前创作流（`create_page` / 各类型编辑页）**无打标入口**——`CreatePost.writable_fields` 已支持 `tagRefs`（payload 通道就绪），但端侧无 UI 注入，导致用户内容 `tagRefs` 长期为空、交集稀疏、归因链断裂。
 
-口碑（review，B1/C1）进一步放大这一缺口：口碑天然需要"地点 + 维度（旅行/摄影/美食…）"标签。因此创作打标 IA 是口碑与交集呈现的硬前置之一。
+带地点/事物的内容（如绑定 POI 的图文）尤其需要"地点 + 维度（旅行/摄影/美食…）"标签。因此创作打标 IA 是交集呈现的硬前置之一。
 
 ## 目标用户与核心问题
 
@@ -22,12 +22,12 @@
 ## 范围（In Scope）
 
 ### F1. 打标可选（全类型，无强制门槛）— 冻结
-- 图文（image/video/article）、微趣（micro）、口碑（review）创作均**可选打标**；发布不因缺标签被拦截。
+- 图文（image/video/article）、微趣（micro）创作均**可选打标**；发布不因缺标签被拦截。
 - 不引入"发布前至少 N 标签"硬门槛；标签密度由自动打标 + 推荐芯片自然提升。
 
 ### F2. 入口：各类型编辑页内联打标区 — 冻结
-- 打标区**内联在各类型编辑页**（图文/视频/口碑编辑页内），与既有发布前选择器（location/circle 独立页）形态区分：打标是编辑态内联、低摩擦勾选，不单开一页。
-- 口碑编辑页的打标区与 POI 选择联动（POI 自动带出地点维度建议）。
+- 打标区**内联在各类型编辑页**（图文/视频编辑页内），与既有发布前选择器（location/circle 独立页）形态区分：打标是编辑态内联、低摩擦勾选，不单开一页。
+- 绑定 POI 的内容编辑页打标区与 POI 选择联动（POI 自动带出地点维度建议）。
 
 ### F3. 自动打标辅助（确认/修正层）— 冻结 IA 契约
 - 创作页消费**自动打标建议** `suggestedTagRefs`（来源：转发识别 reshare-derived + 内容识别 content-recognition）。
@@ -106,7 +106,7 @@
 全类型可选、不设强制门槛；标签密度靠自动打标 + 推荐芯片自然提升，而非发布拦截。
 
 ### B3-D2 入口形态
-内联各类型编辑页（区别于 location/circle 的独立发布前选择页）；口碑编辑页打标区与 POI 选择联动。
+内联各类型编辑页（区别于 location/circle 的独立发布前选择页）；绑定 POI 的内容编辑页打标区与 POI 选择联动。
 
 ### B3-D3 自动打标辅助
 端侧消费 `suggestedTagRefs`（reshare-derived + content-recognition），以可编辑/可删除芯片呈现作为确认/修正层；模型/管线属 ML，本场景只冻结 IA 契约与"未确认不静默写入"语义。

@@ -163,10 +163,10 @@ posts/{contentType}/{angle}/{title}/{seq}/
 
 ## 3. 来源单元内聚契约（source unit）
 
-每个来源是一个**编号 + 类目**的自包含单元，替代旧「图片与来源分离」布局：
+每个来源是一个**稳定 sourceUnitId** 的批次级自包含单元，实体/内容对象只保留 `1.download/source_refs.json` 软引用索引，替代旧「实体目录承载来源 + 图片与来源分离」布局：
 
 ```
-{object}/1.download/sources/{NN}.{sourceKind}/
+sources/{sourceUnitId}/
   source.md            # 原文
   source.clean.md      # 清洗后正文
   source.quality.json  # 来源质量评分（score / retained / 信号命中）
@@ -177,7 +177,9 @@ posts/{contentType}/{angle}/{title}/{seq}/
 ```
 
 约束：
-- `NN` 从 `01` 递增（2 位补零，保证字典序 = 加入序）；`sourceKind` 取自 `_shared/source_catalog.json` 白名单（§7）。
+- `sourceUnitId` 由 canonical URL、source snapshot hash 与原始 source key 稳定派生；同一底稿内容跨对象只物理存一份。
+- 对象级 `1.download/source_refs.json` 记录 `sourceRef`、`metaRef`、`sourceId`、`ordinal`、`researchLane`、`sourceUseMode`、`publishMediaMode` 与 `targetRefs`。
+- `sourceKind` 取自 `_shared/source_catalog.json` 白名单（§7）。
 - **禁止对象级散落 `images/`**：任何图片必须归属某来源单元 `assets/`，并在 `assets/index.json` 标注 `relevance`（与对象相关性，便于人审）。
 - `meta.json.relevance` 解释「这条来源为何与该对象相关」，杜绝孤立无法判断相关性的来源。
 
@@ -255,7 +257,7 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 | 实体过程阶段 | `batch_entity_stage_dir(.., STAGE_*)` | 手拼 `/results/` `/inputs/` |
 | 内容对象根 | `batch_post_object_dir(.., angle, ..)` | `batch_command_root(..,'produce')/'posts'` |
 | 内容过程阶段 | `batch_post_stage_dir(.., STAGE_*)` | 手拼 produce 子目录 |
-| 来源单元 | `source_unit_dir(object_dir, seq, kind)` | 对象级 `images/`、自拼 sources 路径 |
+| 来源单元 | `batch_source_unit_dir(task_id, batch_id, sourceUnitId)` + 对象 `1.download/source_refs.json` | 对象级 `images/`、自拼 sources 路径 |
 | 相对引用 | `relative_batch_ref` / task 根等价 | 绝对路径、`os.path.join` 手拼 |
 
 禁止：
@@ -322,7 +324,7 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 
 | # | Given | When | Then（验收） | 门/测试 | 层 |
 |---|---|---|---|---|---|
-| A1 | 新批次跑 download | 写入来源 | 来源落 `{object}/1.download/sources/{NN}.{kind}/`，图片在来源单元 `assets/`，无对象级散 `images/` | `test_batch_object_paths` + download 门 | T1 |
+| A1 | 新批次跑 download | 写入来源 | 来源落 `sources/{sourceUnitId}/`，对象只写 `1.download/source_refs.json`，图片在来源单元 `assets/`，无对象级散 `images/` | `test_batch_object_paths` + download 门 | T1 |
 | A2 | 来源单元含图 | 写 `assets/index.json` | 每图有 `assetId/fileName/sha256/width/height/relevance/sourceUnitRef/variants` | 来源图门 | T1 |
 | A3 | 内容 materialize | 写成品 | 成品落 `posts/{type}/{angle}/{title}/{seq}/` 对象根，`asset://` 可直查文件 | `test_post_dir_layout`（扩展） | T2 |
 | A4 | manifest/provenance | 写出处 | 引用字段相对路径，无绝对路径 | 相对路径门 | T2 |
@@ -379,7 +381,7 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 | stage | 类型 | 对象 | 写入位置（对象优先） |
 |---|---|---|---|
 | download_plan | checkpoint | 实体 | `entities/{d}/{t}/{name}/1.download/source_plan.json` |
-| download_fetch | auto | 实体 | `entities/{d}/{t}/{name}/1.download/sources/{NN}.{kind}/` |
+| download_fetch | auto | 实体 | `sources/{sourceUnitId}/` + `entities/{d}/{t}/{name}/1.download/source_refs.json` |
 | build_prepare | auto | 实体 | `entities/{d}/{t}/{name}/3.build/entity_page_input.json` |
 | build_homepage | checkpoint | 实体 | 成品落 task 根 `entities/{d}/{t}/{name}/`（page.md/_entity.json/manifest.json/assets/） |
 | build_validate | auto | 实体 | 采纳门读 task 根成品 + batch 内 `2.quality/` |

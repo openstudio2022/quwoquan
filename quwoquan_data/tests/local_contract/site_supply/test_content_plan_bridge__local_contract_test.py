@@ -83,7 +83,7 @@ def test_content_plan_bridge_materializes_standard_batch_with_source_assets():
     assert packet["items"][0]["baseSourceRef"].endswith("/source.md")
     root = batch_root(task_id, target_batch)
     assert (root / "entities" / "地点" / "景区" / "九寨沟").is_dir()
-    asset_indexes = list(root.glob("entities/**/1.download/sources/*/assets/index.json"))
+    asset_indexes = list(root.glob("sources/*/assets/index.json"))
     assert len(asset_indexes) == 1
     asset = read_json(asset_indexes[0])["assets"][0]
     assert asset["license"] == "CC BY-SA 4.0"
@@ -327,4 +327,3 @@ def test_content_plan_bridge_blocks_unverified_raw_entity_for_scenic_type():
     assert not report["gate"]["passed"], report
     skipped = "\n".join("\n".join(issues) for issues in report["skipped"].values())
     assert "candidate lacks verified 地点/景区 mapping" in skipped
-

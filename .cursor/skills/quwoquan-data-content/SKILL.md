@@ -71,7 +71,7 @@ finalize 只据正文注入封面 `asset://`、映射结构化 `summary/conditio
 1. **generator 出处门**：`draft_meta`/manifest 必须 `generator=agent` 且带 `model` 与 `citedSourceRefs`；非 agent 直接 `revision_needed`，`materialize` 拒绝落地。
 2. **模板指纹门**：扫描旧脚本模板的强/弱指纹短语（`_common/template_fingerprints.py`），命中即判为机械拼接并阻断。
 3. **事实可回溯门**：`mustIncludeFacts` 必须在正文出现；正文中带单位的关键数值（票价/海拔/时长等）必须能在 source 证据中回溯。
-4. **底稿贴合度门 `baseDraftFidelity`**：对所有 article/route 底稿生效；下限防脱离底稿从零另写，上限仅兜底零加工整篇照搬。普通网页也必须在底稿基础上轻改，不得总结式重写。
+4. **底稿贴合度门 `baseDraftFidelity`**：对所有 article/route 底稿生效，**以整篇单一底稿为分母**（不再按 writingIntent/实体收窄底稿）；下限防脱离底稿从零另写，上限仅兜底零加工整篇照搬。普通网页也必须在底稿基础上轻改，不得总结式重写。
 
 ## Human-in-loop 标注 + 发布门（账本驱动）
 
@@ -159,15 +159,15 @@ python3 quwoquan_data/scripts/cli.py verify scale-readiness --task <task> --batc
 3. **真相源**：路径/错误码/字段/叙事契约/imagePolicy 先改 metadata/blueprint/schema，再 `template lint` / 业务逻辑；codegen 与 schema 不手绕。
 4. **三道真实性门**：generator 出处门 + 模板指纹门 + 事实可回溯门，review 与 verify 交付面强制；非 agent / 命中指纹 / 数值不可回溯一律阻断。
 5. **图片治理**：发布图必须过 `media check-images`；unsafe→改稿，needs_review(人脸/后端缺失)→人工复核，近重复→去重。
-6. **载体路由按底稿形态判定**：图片集合为主、只有标题或少量配文的底稿 → `image` 图片作品；图文混合编排且源图随正文共同构成底稿 → `article`；Wiki/百科/官方/政府/文旅等介绍实体本身的底稿 → entity homepage。不能只按目标内容类型混用来源；文章源图也是底稿的一部分，必须和 `baseSourceRef` 同源且一稿一用。
+6. **载体路由按底稿形态判定 + 全载体单源**：图片集合为主、只有标题或少量配文的底稿 → `image` 图片作品；图文混合编排且源图随正文共同构成底稿 → `article`；Wiki/百科/官方/政府/文旅等介绍实体本身的底稿 → entity homepage。不能只按目标内容类型混用来源。**article/image/video 一律一源一作品**：文章正文与源图、图片/视频作品的素材都必须和该作品的**单一 source unit**（`baseSourceRef`/`sourceCollectionId` 指向同一来源单元）同源，禁止跨 source unit 拼接，image/video **不再豁免** one-source-one-work。
 7. **修辞/结构骨架=软门（仅建议+降分，不阻断）**：开篇钩子、显式喜欢/不喜欢、取舍判断、口语化标题、章节镜像、分节形态等不再硬阻断忠实轻改稿；硬门保留真实性/反抄袭/反雷同/数值可回溯/图片/联系方式/语域/载体/路线覆盖/底稿贴合度。
 8. **Mock/来源隔离**：不泄露平台名/作者名/用户名/水印；来源痕迹必须改写。
-9. **证据后置篇目（content_plan）**：只冻结实体与 `content.quotas`；ref/title 在 download+build 后由 `content_plan_packet` 定义，禁止 download 前预置营销 ref。B 组线路须有来源联游互证。
+9. **证据后置篇目（content_plan，源即单位）**：download+build 后枚举**合格 source unit**，每个合格源 1:1 落一个 `content_plan_packet` item（不再按 `entityArticlesPerTarget`×`writingIntent` 角度配额 fan-out）；ref/title 由底稿派生（标题取自底稿），禁止 download 前预置营销 ref。实体主页仅取**百科/官方源**最佳一份。
 10. **Ralph 准出**：每阶段必须 hook-check gate；FAIL 写 repair 并 re-inject，禁止无 gate 证据 `--resume`。
 11. **人读与语气**：普通网页/百科/攻略进入底稿后也必须以底稿为骨架轻改，保留主要自然段、叙述顺序和关键细节；禁止把普通网页只当事实提纲另写一篇。禁止百科罗列、机械收尾、独立「实用信息」清单、统一模板小标题。
 14. **实体主页 = 多来源事实综合 + 必图 + 章节语义**：主页必须综合多个来源独立表达；SOP `guide.md` 的章节要点只是规范化参考，可按事实增减/合并；`概况`必备、其余章节有真实内容才写、无内容省略；`历史沿革`必须是真实历史。每个实体主页须配 ≥1 张权利和安全门均通过的真实图。
 12. **tagRefs 对齐 publish**：`brief.json` / manifest 的 `tagRefs` 必须指向 `publish/tags/**` 已发布路径（地理/玩法/内容角度等），禁止扁平省名/品类名；ship 前自检 `intersectionHints` 含 content+interest。
-13. **写作主线 + 公共/SOP/任务分工**：每篇 `writingIntent` 单一（攻略=planning_consultation｜体验=decision_experience｜游记=post_trip_journal），结构须与之匹配；垂类写法（题材矩阵、版面、语域禁忌）见垂类 SOP（`quwoquan_data/sop/**`），本批特例只写任务 `notes.md`，公共层不写具体 region/实体/batch。
+13. **底稿中心 1:1（源即单位）**：每个作品（article/image/video）只来自**单一 source unit**，禁跨底稿拼接；标题取自底稿（文章源无法提取标题→上游弃稿），实体为**多标签**（底稿提及的实体集合）。`writingIntent` **降级为底稿派生的可选分类标签**（攻略/体验/游记等），仅作内容角度提示与软评分，**不再作硬阻断门**，也不再驱动配额 fan-out；结构跟随底稿自身形态轻改。垂类写法（题材矩阵、版面、语域禁忌）见垂类 SOP（`quwoquan_data/sop/**`），本批特例只写任务 `notes.md`，公共层不写具体 region/实体/batch。
 
 ## 门禁
 

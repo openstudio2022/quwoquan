@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-06-28T08:41:32.544886Z
+updated_at: 2026-06-29T01:45:00.000000Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -893,13 +893,6 @@ features:
               name: markdown-article-kernel
               level: L3_story
               path: discovery-content/content-type-framework/markdown-article-kernel
-              domain: ""
-              status: specified
-              tags: []
-            - id: review-content-type
-              name: review-content-type
-              level: L3_story
-              path: discovery-content/content-type-framework/review-content-type
               domain: ""
               status: specified
               tags: []

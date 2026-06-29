@@ -14,9 +14,9 @@ import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_secondary_tab_bar.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
-import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
+import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
-import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
+import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
 
 /// 记录 Tab：统一承载 `全部 / 图片 / 视频 / 长文` 的内容筛选。
 class ProfileWorksTab extends ConsumerStatefulWidget {
@@ -342,7 +342,6 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         posts: postViews,
         dtoPosts: filtered,
         initialIndex: initialIndex,
-        category: isMoment ? 'profile_moment' : 'profile',
         initialImageIndex: 0,
         source: isMoment ? 'profile_moment' : 'profile',
         interactionSnapshot: interactionSnapshot,

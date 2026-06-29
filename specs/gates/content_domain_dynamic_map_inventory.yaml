@@ -31,7 +31,7 @@ wire_dual_load:
       已移除对外 operator []；沉浸器仍可用 toObjectMap 过渡。
 
 projection_ui:
-  - path: quwoquan_app/lib/ui/content/post_view_projection.dart
+  - path: quwoquan_app/lib/ui/content/services/post_view_projection.dart
     category: migrate_done_partially
     notes: |
       顶层键已 ArticleDetailWireKeys；cards[] / blocks[] 子键已 ArticleCardWireKeys / ArticleBlockWireKeys。

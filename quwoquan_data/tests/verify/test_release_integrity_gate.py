@@ -22,6 +22,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 from _common.io import write_json  # noqa: E402
 from _common.paths import batch_root, release_root  # noqa: E402
 from _common.release_integrity import scan_release_integrity, scan_runtime_batch_integrity  # noqa: E402
+from _common.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from build.homepage import _entity_base_draft  # noqa: E402
 from publish.assemble import assemble_release  # noqa: E402
 from publish.gate import _quota_issues  # noqa: E402
@@ -46,34 +47,45 @@ def _reset() -> None:
 
 
 def _seed_source(entity: str, unit: str, *, kind: str, source_use_mode: str = "licensed_adaptation") -> str:
-    root = batch_root(TASK, BATCH)
-    source_ref = f"entities/地点/景区/{entity}/1.download/sources/{unit}/source.md"
-    unit_dir = root / source_ref
-    _write(
-        unit_dir,
+    object_dir = resolve_entity_object_dir(TASK, BATCH, f"/entity/地点/景区/{entity}")
+    source_id = unit.split(".", 1)[-1]
+    body = (
         "# 来源\n\n"
         f"{entity}位于四川省阿坝藏族羌族自治州，属于高山峡谷型景区。"
         f"{entity}景区海拔跨度较大，游览线路通常围绕湖泊、森林和雪山展开。"
         f"{entity}在秋季以彩林景观受到关注，夏季则适合避暑和观水。"
         f"{entity}周边交通以成都方向进入为主，游客通常需要预留较完整的一天。"
-        f"{entity}因自然景观集中，适合实体主页介绍位置、景观类型、季节和交通条件。",
+        f"{entity}因自然景观集中，适合实体主页介绍位置、景观类型、季节和交通条件。"
     )
-    write_json(
-        unit_dir.parent / "meta.json",
-        {
-            "schemaVersion": "quwoquan_data.source_unit",
-            "sourceKind": kind,
-            "platform": kind,
-            "sourceUseMode": source_use_mode,
-            "researchLane": "homepage",
-            "authorizationProof": "fixture-proof",
-            "licenseSnapshot": "fixture-license",
-        },
+    manifest = write_source_unit(
+        object_dir,
+        ordinal=int(unit.split(".", 1)[0]) if unit.split(".", 1)[0].isdigit() else 1,
+        source_id=source_id,
+        source_md=body,
+        clean_md=body,
+        quality={"sourceId": source_id, "quality": "B-fact", "score": 5},
+        platform=kind,
+        source_category=kind,
+        source_use_mode=source_use_mode,
+        research_lane="homepage",
+        license_value="fixture-license",
+        url=f"https://example.test/{entity}/{source_id}",
+        title=f"{entity} {kind}",
+        target_ref=f"/entity/地点/景区/{entity}",
+        images=[
+            {
+                "bytes": b"image-" + unit.encode("utf-8"),
+                "ext": ".jpg",
+                "slug": "001",
+                "license": "CC-BY-SA 4.0",
+                "credit": "fixture",
+            }
+        ],
+        task_id=TASK,
+        batch_id=BATCH,
+        build_variants=False,
     )
-    asset = unit_dir.parent / "assets" / "001.jpg"
-    asset.parent.mkdir(parents=True, exist_ok=True)
-    asset.write_bytes(b"image-" + unit.encode("utf-8"))
-    return source_ref
+    return manifest["sourceRef"]
 
 
 def _seed_release_post(

@@ -5,8 +5,8 @@
 brief 阶段即可确定（全部来自 brief，不依赖 agent 创作）：
 
 - `contentType` = produce `--type`（默认 `article`）。
-- `angle` = `_publish_angle(brief)`（由 templateId 确定性映射，与 publishAngle 同源）。
-- `title` = `brief.titleHint`（= `{实体名}·{angle}`，与 publishTitle 同源）。
+- `angle` = `_publish_angle(brief)`（底稿派生内容类目：image→画报，否则按 writingIntent 派生标签）。
+- `title` = `brief.titleHint`（= 取自单一底稿的清洗标题 `extract_source_title`，与 publishTitle 同源；文章源取不出标题则上游弃稿）。
 - `seq` = 默认 `1`；同 `(type,angle,title)` 组多 ref 按 ref 稳定排序递增（与 promote/materialize 对齐）。
 
 `ref → coords` 路由持久化在 `batches/{batch}/_shared/content_object_index.json`，作为批次内

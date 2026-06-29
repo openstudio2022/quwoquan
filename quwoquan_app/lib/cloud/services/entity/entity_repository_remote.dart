@@ -222,6 +222,27 @@ class RemoteHomepageRepository implements HomepageRepository {
   }
 
   @override
+  Future<EntityImpactSummary> getEntityImpact(String homepageId) async {
+    final decoded = await _httpClient.getJson(
+      _uri(EntityApiMetadata.getEntityImpactPath(homepageId: homepageId)),
+      headers: _headersForSurface(
+        AppUiSurfaces.homepageDetail,
+        operationId: EntityApiMetadata.getEntityImpactOperation,
+        clientPageId: EntityRequestPageIds.getEntityImpact,
+      ),
+    );
+    return EntityImpactSummary.fromMap(
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: _contextForSurface(
+          AppUiSurfaces.homepageDetail,
+          operationId: EntityApiMetadata.getEntityImpactOperation,
+        ),
+      ),
+    );
+  }
+
+  @override
   Future<List<HomepageRelatedGroupSummary>> getHomepageRelatedGroups(
     String homepageId,
   ) async {

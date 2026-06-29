@@ -4,7 +4,7 @@ import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.da
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
-import 'package:quwoquan_app/ui/content/post_view_projection.dart';
+import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
 
 /// 统一展示模型的唯一映射器：`PostBaseDto (+ wire)` → [ContentSurfaceView]。
 ///

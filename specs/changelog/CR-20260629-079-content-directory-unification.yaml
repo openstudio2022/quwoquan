@@ -1,0 +1,75 @@
+id: CR-20260629-079-content-directory-unification
+title: content 客户端 UI 目录标准化归一（models 单一化 + reader→article_render 重命名 + 分层门禁固化，R-CONTENTDIR-001）
+slug: content-directory-unification
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-client-foundation
+  - quwoquan_app/lib/ui/content/models
+  - quwoquan_app/lib/ui/content/article_render
+  - quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py
+
+entries:
+  - timestamp: "2026-06-29T08:30:00+08:00"
+    summary: |
+      收口 R-CONTENTDIR-001：content 域目录标准化归一。①models 单一化——`reader/models/article_detail_view.dart`
+      与 `entry/models/*`（7 文件）全部上提 `lib/ui/content/models/`，删除 `entry/models/` 与 `reader/models/`
+      子目录；对应测试迁至 `test/ui/content/models/` 与 `test/local_contract/ui/content/models/`。
+      ②`reader/` → `article_render/` 重命名澄清（markdown codec/ast/pagination/parser + flow/pagination
+      services 渲染引擎层）；`article_reader/`（翻页书本阅读宿主，含 pageflip 宿主子树）名称保持，受
+      「冻结 pageflip 物理布局」红线约束本轮不重命名。③扩展边界门禁 [verify_content_ui_directory_boundaries.py]
+      固化三不变量：唯一 models 根 / pageflip 引擎仅被 article_reader 与 test 消费 / article_render 不得
+      依赖 article_reader；新增退役路径 `package:quwoquan_app/ui/content/reader/` 扫描。同步
+      test_directory_inventory、test_legacy_source_allowlist、file_line_budget_allowlist 路径。
+    reason: |
+      01-arch-constraints §2.4 要求 `lib/ui/{domain}/pages|providers|widgets|models`。content 域内存在三类
+      不归一：三个 models 目录（公共模型误置子域、域级 models 反向依赖 reader/models）；reader 与
+      article_reader 命名混淆未表达 host→engine 分层；双 pageflip host→engine 分层未被门禁固化。按折中档
+      + 冻结 pageflip 物理布局，先消除目录认知成本与层内倒置，以门禁防回退；两个 pageflip 物理合并在
+      后续 R-PAGEFLIP-002 / CR-20260629-080 中按逐帧同构像素回归标准独立收口。
+    change_type:
+      - architecture
+      - refactor
+      - test
+    changed_documents:
+      - path: quwoquan_app/lib/ui/content/models
+        sections:
+          - "唯一 models 根：接收 article_detail_view + entry/models 上提的 7 文件"
+      - path: quwoquan_app/lib/ui/content/article_render
+        sections:
+          - "自 lib/ui/content/reader/ git mv 重命名（markdown/ + services/ 子树）"
+      - path: quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py
+        sections:
+          - "扩展三不变量：唯一 models 根 / pageflip 引擎隔离 / article_render 不依赖 article_reader"
+          - "新增退役路径 package:quwoquan_app/ui/content/reader/"
+      - path: specs/gates/test_directory_inventory.yaml
+        sections:
+          - "entry/models 与 reader 测试路径同步为 content/models 与 article_render"
+      - path: specs/gates/test_legacy_source_allowlist.yaml
+        sections:
+          - "entry/models 与 reader 测试路径同步"
+      - path: specs/gates/file_line_budget_allowlist.yaml
+        sections:
+          - "create_editor_models.dart 路径更新为 content/models/"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+      rollout_impact: low
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
+        - "python3 quwoquan_app/scripts/content/verify_article_contract_purity.py（OK）"
+        - "python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py（OK）"
+        - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "article_render + content 契约套 158 过"
+        - "make verify-app-pageflip-back-mainline（66 过 / 3 跳，逐帧同构不变）"
+        - "dart analyze lib/ui/content 无新增 error，仅余预存在 warning/info"
+    notes:
+      - "纯目录归一 + import/门禁/清单同步；本 CR 执行时 pageflip 物理布局（content/pageflip 引擎 + article_reader/pageflip 宿主）零改动。"
+      - "article_reader/ 名称保持（内含 pageflip 宿主子树，受 freeze 约束）；article_render/ 与 article_reader/ 命名现表达 engine vs host 分层。"
+      - "双 pageflip 物理合并（生产引擎迁入 components/pageflip，旧 ui/content/pageflip 删除）已由 CR-20260629-080 / R-PAGEFLIP-002 续收口。"
+      - "R-CONTENTDIR-001 已收口（见 docs/outstanding_risks_backlog.md）。"

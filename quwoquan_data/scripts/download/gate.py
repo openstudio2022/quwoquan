@@ -104,12 +104,13 @@ def _lane_plan_has_payload(download_dir: Path, lane: str) -> bool:
     return any(isinstance(value, list) and value for value in (sources, image_urls, collections))
 
 
-def _has_lane_contract(sources_dir: Path) -> bool:
-    download_dir = sources_dir.parent
+def _has_lane_contract(object_dir: Path, source_units: list[Path]) -> bool:
+    download_dir = object_dir / "1.download"
     for lane in ("homepage", "article", "image"):
         if _lane_plan_has_payload(download_dir, lane):
             return True
-    for meta_path in sources_dir.glob("*/meta.json"):
+    for unit in source_units:
+        meta_path = unit / "meta.json"
         try:
             meta = read_json(meta_path)
         except Exception:  # noqa: BLE001
@@ -120,11 +121,17 @@ def _has_lane_contract(sources_dir: Path) -> bool:
 
 
 def _source_roots(task_id: str, batch_id: str) -> tuple[Path, list[Path]]:
+    from _common.source_unit import iter_source_units
+
     object_root = batch_root(task_id, batch_id) / "entities"
     if object_root.is_dir():
-        object_sources = [p for p in object_root.rglob("1.download/sources") if p.is_dir()]
-        if object_sources:
-            return object_root, sorted(object_sources)
+        object_dirs = [
+            p.parent.parent
+            for p in object_root.rglob("1.download/source_refs.json")
+            if p.is_file() and iter_source_units(p.parent.parent)
+        ]
+        if object_dirs:
+            return object_root, sorted(set(object_dirs))
 
     return object_root, []
 
@@ -156,6 +163,8 @@ def _entity_from_sources_dir(root: Path, sources_dir: Path) -> str:
         index = parts.index("1.download")
         if index > 0:
             return parts[index - 1]
+    if len(parts) >= 3:
+        return parts[-1]
     return ""
 
 
@@ -163,10 +172,10 @@ def _missing_sources_label(root: Path, entity: str) -> str:
     for candidate in root.glob(f"*/*/{entity}"):
         if candidate.is_dir():
             try:
-                return (candidate / "1.download" / "sources").relative_to(root).as_posix()
+                return (candidate / "1.download" / "source_refs.json").relative_to(root).as_posix()
             except ValueError:
                 break
-    return f"{entity}/1.download/sources"
+    return f"{entity}/1.download/source_refs.json"
 
 
 def _homepage_base_ready(
@@ -185,7 +194,7 @@ def _homepage_base_ready(
     try:
         from _common.base_draft import load_base_draft_text
 
-        source_ref = source_path.relative_to(batch_dir).as_posix()
+        source_ref = source_path.resolve().relative_to(batch_dir.resolve()).as_posix()
         text = load_base_draft_text(task_id, batch_id, source_ref)
     except Exception:  # noqa: BLE001
         return False
@@ -300,7 +309,7 @@ def _partial_content_soft_stage_issue(
 def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | None = None) -> list[str]:
     """Check download exit criteria.
 
-    只检查对象树 `entities/**/1.download/sources/`；每个对象至少需要 2 个可消费来源单元。
+    只检查对象树 `entities/**/1.download/source_refs.json` 指向的 canonical source units。
     """
     issues: list[str] = []
     requirements = download_requirements(task_id)
@@ -313,7 +322,7 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
             for entity in sorted(target_entities - _abandoned_entities(task_id, batch_id)):
                 issues.append(f"{_missing_sources_label(root, entity)}: sources directory missing")
             return issues
-        issues.append(f"No sources directory under {root}")
+        issues.append(f"No source_refs.json under {root}")
         return issues
 
     abandoned = _abandoned_entities(task_id, batch_id)
@@ -324,12 +333,14 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
                 issues.append(f"{_missing_sources_label(root, entity)}: sources directory missing")
     batch_dir = root.parent
     for sources_dir in sources_dirs:
+        from _common.source_unit import iter_source_units
+
         entity = _entity_from_sources_dir(root, sources_dir)
         if entity in abandoned:
             continue
         if target_entities is not None and entity not in target_entities:
             continue
-        source_units = [d for d in sources_dir.iterdir() if d.is_dir()]
+        source_units = iter_source_units(sources_dir)
         md_count = 0
         retained_count = 0
         lane_md_count = {"homepage": 0, "article": 0}
@@ -337,7 +348,7 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
         homepage_base_ready_count = 0
         image_hashes: set[str] = set()
         image_rights_issues: list[str] = []
-        lane_contract = _has_lane_contract(sources_dir)
+        lane_contract = _has_lane_contract(sources_dir, source_units)
         for sd in source_units:
             meta_path = sd / "meta.json"
             try:
@@ -384,7 +395,8 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
                         image_rights_issues.append(
                             f"{sd.name}/{asset.get('fileName') or '?'} missing image rights {missing}"
                         )
-        rel = sources_dir.relative_to(root).as_posix() if sources_dir.is_relative_to(root) else sources_dir.name
+        rel_obj = sources_dir.relative_to(root).as_posix() if sources_dir.is_relative_to(root) else sources_dir.name
+        rel = f"{rel_obj}/1.download/source_refs.json"
         if not allow_partial_content and md_count < requirements["minSources"]:
             issues.append(f"{rel}: only {md_count} sources (need >= {requirements['minSources']})")
         if not allow_partial_content and retained_count < requirements["minSources"]:
@@ -393,7 +405,7 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
                 f"(need >= {requirements['minSources']}; Reject/manual probe sources do not count)"
             )
         if lane_contract:
-            download_dir = sources_dir.parent
+            download_dir = sources_dir / "1.download"
             homepage_required = (
                 int(requirements.get("minHomepageSources") or 0) > 0
                 or _lane_plan_has_payload(download_dir, "homepage")

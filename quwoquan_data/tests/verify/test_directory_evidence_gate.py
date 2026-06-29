@@ -117,7 +117,7 @@ def test_gate_passes_clean_object():
     ent = batch_entity_object_dir(TASK, batch, "地点", "景区", "峨眉山")
     global_seq = int(load_batch_manifest(TASK, batch)["globalBatchSeq"])
     registry = BatchAssetRegistry(task_id=TASK, batch_id=batch, global_batch_seq=global_seq)
-    write_source_unit(
+    source_manifest = write_source_unit(
         ent,
         ordinal=1,
         source_id="overview_baike",
@@ -127,7 +127,21 @@ def test_gate_passes_clean_object():
         url="https://zh.wikipedia.org/wiki/峨眉山",
         title="峨眉山（百科）",
         target_ref="/entity/地点/景区/峨眉山",
+        images=[
+            {
+                "bytes": b"cover",
+                "ext": ".jpg",
+                "slug": "cover",
+                "license": "CC-BY-SA 4.0",
+                "termsUrl": "https://zh.wikipedia.org/wiki/Wikipedia:CC",
+                "caption": "峨眉山云海",
+            }
+        ],
+        build_variants=False,
     )
+    source_ref = str(source_manifest["sourceRef"])
+    source_unit_ref = str(source_manifest["sourceUnitRef"])
+    source_asset_ref = f"{source_unit_ref}/assets/001_cover.jpg"
     write_json(
         ent / "_entity.json",
         {
@@ -177,11 +191,11 @@ def test_gate_passes_clean_object():
         ent / "2.quality" / "quality_analysis.json",
         {
             "schemaVersion": "quwoquan.entity.quality_analysis",
-            "baseDraft": {"sourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md"},
+            "baseDraft": {"sourceRef": source_ref},
             "recommendation": "proceed",
-            "sourcePaths": ["entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md"],
-            "selectedBaseSourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md",
-            "selectedSourceRefs": ["entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md"],
+            "sourcePaths": [source_ref],
+            "selectedBaseSourceRef": source_ref,
+            "selectedSourceRefs": [source_ref],
             "selectionReason": "百科概述覆盖基础事实，作为主页底稿来源。",
         },
     )
@@ -194,19 +208,16 @@ def test_gate_passes_clean_object():
                     "assetId": asset_id,
                     "fileName": f"{asset_id}.jpg",
                     "role": "cover",
-                    "sourceRef": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md",
-                    "sourceAssetRef": "entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/assets/001_cover.jpg",
+                    "sourceRef": source_ref,
+                    "sourceAssetRef": source_asset_ref,
                     "termsUrl": "https://zh.wikipedia.org/wiki/Wikipedia:CC",
                 }
             ],
-            "citedSourceRefs": ["entities/地点/景区/峨眉山/1.download/sources/01.overview_baike/source.md"],
+            "citedSourceRefs": [source_ref],
         },
     )
     (ent / "assets").mkdir(parents=True, exist_ok=True)
     (ent / "assets" / f"{asset_id}.jpg").write_bytes(b"cover")
-    src_unit_assets = ent / "1.download" / "sources" / "01.overview_baike" / "assets"
-    src_unit_assets.mkdir(parents=True, exist_ok=True)
-    (src_unit_assets / "001_cover.jpg").write_bytes(b"cover")
     write_json(ent / "3.compose" / "entity_page_input.json", {"payload": {"name": "峨眉山"}})
     issues = validate_entity_pages(TASK, batch, _seed_homepage_spec("峨眉山"))
     assert not issues, issues
@@ -255,7 +266,7 @@ def test_gate_entity_homepage_writes_review_sidecars():
     )
     (ent / "assets").mkdir(parents=True, exist_ok=True)
     (ent / "assets" / f"{asset_id}.jpg").write_bytes(b"cover")
-    write_source_unit(
+    homepage_source_manifest = write_source_unit(
         ent,
         ordinal=2,
         source_id="baike_overview",
@@ -266,13 +277,20 @@ def test_gate_entity_homepage_writes_review_sidecars():
         url="https://baike.example.com/djy",
         title="都江堰百科",
         target_ref="/entity/地点/景区/都江堰",
+        images=[
+            {
+                "bytes": b"cover",
+                "ext": ".jpg",
+                "slug": "cover",
+                "license": "fixture-license",
+                "termsUrl": "https://baike.example.com/license",
+                "caption": "水利工程",
+            }
+        ],
+        build_variants=False,
     )
-    homepage_source_ref = (
-        "entities/地点/景区/都江堰/1.download/sources/02.baike_overview/source.md"
-    )
-    djy_src_assets = ent / "1.download" / "sources" / "02.baike_overview" / "assets"
-    djy_src_assets.mkdir(parents=True, exist_ok=True)
-    (djy_src_assets / "001_cover.jpg").write_bytes(b"cover")
+    homepage_source_ref = str(homepage_source_manifest["sourceRef"])
+    homepage_source_asset_ref = f"{homepage_source_manifest['sourceUnitRef']}/assets/001_cover.jpg"
     write_json(
         ent / "2.quality" / "quality_analysis.json",
         {
@@ -296,7 +314,7 @@ def test_gate_entity_homepage_writes_review_sidecars():
                     "role": "cover",
                     "caption": "水利工程",
                     "sourceRef": homepage_source_ref,
-                    "sourceAssetRef": "entities/地点/景区/都江堰/1.download/sources/02.baike_overview/assets/001_cover.jpg",
+                    "sourceAssetRef": homepage_source_asset_ref,
                     "termsUrl": "https://baike.example.com/license",
                 }
             ]
@@ -318,7 +336,7 @@ def test_gate_flags_missing_entity_review_sidecars():
     ent = batch_entity_object_dir(TASK, batch, "地点", "景区", "都江堰")
     global_seq = int(load_batch_manifest(TASK, batch)["globalBatchSeq"])
     registry = BatchAssetRegistry(task_id=TASK, batch_id=batch, global_batch_seq=global_seq)
-    write_source_unit(
+    source_manifest = write_source_unit(
         ent,
         ordinal=1,
         source_id="overview_baike",
@@ -330,6 +348,7 @@ def test_gate_flags_missing_entity_review_sidecars():
         title="都江堰百科",
         target_ref="/entity/地点/景区/都江堰",
     )
+    source_ref = str(source_manifest["sourceRef"])
     write_json(
         ent / "_entity.json",
         {
@@ -358,12 +377,12 @@ def test_gate_flags_missing_entity_review_sidecars():
         ent / "2.quality" / "quality_analysis.json",
         {
             "entityRef": "/entity/地点/景区/都江堰",
-            "baseDraft": {"sourceRef": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md"},
+            "baseDraft": {"sourceRef": source_ref},
             "candidateCount": 1,
             "candidates": [],
             "recommendation": "proceed",
             "issues": [],
-            "sourcePaths": ["entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md"],
+            "sourcePaths": [source_ref],
         },
     )
     # 故意不写 4.draft/page.md 与 5.review/*.json，让静态门直接报红。
@@ -486,7 +505,7 @@ def test_gate_passes_post_evidence_chain_sidecars():
     (post / "4.draft" / "draft.article.md").write_text(article, encoding="utf-8")
     source_md = "# 都江堰\n\n概述"
     ent = batch_entity_object_dir(TASK, batch, "地点", "景区", "都江堰")
-    write_source_unit(
+    source_manifest = write_source_unit(
         ent,
         ordinal=1,
         source_id="overview_baike",
@@ -498,9 +517,11 @@ def test_gate_passes_post_evidence_chain_sidecars():
         title="都江堰百科",
         target_ref="/entity/地点/景区/都江堰",
     )
+    source_ref = str(source_manifest["sourceRef"])
+    source_unit_ref = str(source_manifest["sourceUnitRef"])
     write_json(
         post / "manifest.json",
-        {"assets": [], "citedSourceRefs": ["entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md"]},
+        {"assets": [], "citedSourceRefs": [source_ref]},
     )
     for stage in ("1.download", "2.quality", "3.compose", "5.review"):
         (post / stage).mkdir(parents=True, exist_ok=True)
@@ -508,11 +529,11 @@ def test_gate_passes_post_evidence_chain_sidecars():
         post / "1.download" / "source_refs.json",
         {
             "schemaVersion": "quwoquan_data.source_refs/2",
-            "baseSourceRef": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md",
+            "baseSourceRef": source_ref,
             "sources": [
                 {
-                    "sourceRef": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike/source.md",
-                    "sourceUnitRef": "entities/地点/景区/都江堰/1.download/sources/01.overview_baike",
+                    "sourceRef": source_ref,
+                    "sourceUnitRef": source_unit_ref,
                     "role": "base",
                     "sourceFileSha256": sha256_text(source_md),
                 }
