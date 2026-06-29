@@ -533,7 +533,7 @@ def cursor_startup_probe(
     *,
     model: str = DEFAULT_CURSOR_STARTUP_MODEL,
     runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
-    timeout_seconds: float = 45.0,
+    timeout_seconds: float = 180.0,
     cwd: Path | None = None,
 ) -> dict:
     """Run a minimal real Cursor SDK Agent.prompt startup probe.
@@ -620,7 +620,7 @@ def _transient(exc) -> bool:
 # bridge is then stable.  Reusing one warm bridge mirrors the stable runtime
 # path and avoids relaunching a cold bridge per attempt.
 try:
-    bridge_timeout = max(10, int(float(os.environ.get("QWQ_CURSOR_BRIDGE_TIMEOUT", "30"))))
+    bridge_timeout = max(10, int(float(os.environ.get("QWQ_CURSOR_BRIDGE_TIMEOUT", "60"))))
     client = Client.launch_bridge(workspace=cwd, timeout=bridge_timeout, allow_api_key_env_fallback=True)
     if runtime == "cloud":
         opts = AgentOptions(api_key=api_key, model=model, cloud=CloudAgentOptions(repos=[]))
@@ -862,6 +862,23 @@ def _cursor_probe_attempt_is_bridge_disconnect(payload: Mapping[str, object]) ->
     return False
 
 
+def _cursor_probe_is_startup_timeout(payload: Mapping[str, object]) -> bool:
+    """探针终态是否是启动超时（subprocess.TimeoutExpired）。
+
+    冷启动期间子尝试可能短暂遇到 5xx/InternalServerError，但若整次探针最终在
+    预算内未拿到干净结论而是被超时切断，结论是 "startupTimeout"，不得据子尝试的
+    冷启动 5xx 把整次记为 true5xx——那是过度归因，会把"超时/延迟"问题误报成
+    "后端 5xx 不稳定"。timeout 单列，优先级高于 5xx。
+    """
+    if str(payload.get("status") or "") == "timeout":
+        return True
+    if str(payload.get("errorClass") or "") == "TimeoutExpired":
+        return True
+    if str(payload.get("errorCode") or "") == "timeout":
+        return True
+    return False
+
+
 def _p95(values: list[float]) -> float:
     if not values:
         return 0.0
@@ -875,14 +892,18 @@ def cursor_startup_probe_suite(
     model: str = DEFAULT_CURSOR_STARTUP_MODEL,
     runtime: str = DEFAULT_CURSOR_STARTUP_RUNTIME,
     attempts: int = 20,
-    timeout_seconds: float = 45.0,
+    timeout_seconds: float = 180.0,
     cwd: Path | None = None,
 ) -> dict:
     """Run repeated Cursor startup probes and classify admission blockers.
 
     This is the formal P0 report used before scaled authoring.  A single
-    preflight can hide intermittent startup failures; the suite reports auth
-    failures separately from true Cursor 5xx and local bridge disconnects.
+    preflight can hide intermittent startup failures; the suite assigns each
+    attempt exactly one *primary* class with precedence
+    ``ready > auth > startupTimeout > true5xx > bridgeDisconnect > other`` so
+    that a probe whose final verdict is a subprocess timeout is bucketed as
+    ``startupTimeout`` and is **never** counted as ``true5xx`` (cold-start 5xx
+    sub-attempts under a timeout are not a stable backend 5xx verdict).
     """
     total = max(1, int(attempts or 1))
     started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
@@ -891,7 +912,9 @@ def cursor_startup_probe_suite(
     success_count = 0
     auth_failures = 0
     true_5xx_count = 0
+    startup_timeout_count = 0
     bridge_disconnect_count = 0
+    cold_start_5xx_observed = 0
     for index in range(1, total + 1):
         begin = time.monotonic()
         payload = cursor_startup_probe(
@@ -904,16 +927,34 @@ def cursor_startup_probe_suite(
         latencies.append(elapsed)
         ready = bool(payload.get("ready"))
         has_auth = _cursor_probe_attempt_is_auth(payload)
-        has_5xx = _cursor_probe_attempt_has_5xx(payload)
+        is_startup_timeout = _cursor_probe_is_startup_timeout(payload)
+        raw_5xx = _cursor_probe_attempt_has_5xx(payload)
         has_bridge_disconnect = _cursor_probe_attempt_is_bridge_disconnect(payload)
+        # 单一 primary 归类（互斥），timeout 优先于 5xx：终态超时不计 5xx。
         if ready:
+            primary = "ready"
+        elif has_auth:
+            primary = "auth"
+        elif is_startup_timeout:
+            primary = "startupTimeout"
+        elif raw_5xx:
+            primary = "true5xx"
+        elif has_bridge_disconnect:
+            primary = "bridgeDisconnect"
+        else:
+            primary = "other"
+        if primary == "ready":
             success_count += 1
-        if has_auth:
+        elif primary == "auth":
             auth_failures += 1
-        if has_5xx:
+        elif primary == "startupTimeout":
+            startup_timeout_count += 1
+        elif primary == "true5xx":
             true_5xx_count += 1
-        if has_bridge_disconnect:
+        elif primary == "bridgeDisconnect":
             bridge_disconnect_count += 1
+        if raw_5xx:
+            cold_start_5xx_observed += 1
         rows.append(
             {
                 "attempt": index,
@@ -923,30 +964,43 @@ def cursor_startup_probe_suite(
                 "errorClass": _redact_secret_value(payload.get("errorClass")),
                 "errorCode": payload.get("errorCode"),
                 "httpStatus": payload.get("httpStatus"),
-                "authFailure": has_auth,
-                "true5xx": has_5xx,
-                "bridgeDisconnect": has_bridge_disconnect,
+                "primaryClass": primary,
+                "authFailure": primary == "auth",
+                "startupTimeout": primary == "startupTimeout",
+                "true5xx": primary == "true5xx",
+                "bridgeDisconnect": primary == "bridgeDisconnect",
+                "coldStart5xxObserved": raw_5xx,
                 "attemptCount": payload.get("attemptCount"),
             }
         )
     true_5xx_rate = round(true_5xx_count / total, 4)
+    startup_timeout_rate = round(startup_timeout_count / total, 4)
     bridge_disconnect_rate = round(bridge_disconnect_count / total, 4)
     issues: list[str] = []
     if auth_failures:
         issues.append(f"Cursor auth failures observed: {auth_failures}/{total}")
     if true_5xx_rate >= 0.10:
         issues.append(f"Cursor true 5xx rate {true_5xx_rate:.2%} >= 10%")
+    if startup_timeout_rate >= 0.50:
+        issues.append(
+            f"Cursor startup timeout rate {startup_timeout_rate:.2%} >= 50% "
+            f"(raise --startup-timeout-seconds / warm bridge reuse; not a backend 5xx)"
+        )
     if success_count == 0:
         issues.append("Cursor startup probe never succeeded")
     return {
-        "schemaVersion": "quwoquan_data.cursor_startup_probe_suite/1",
+        "schemaVersion": "quwoquan_data.cursor_startup_probe_suite/2",
         "model": model,
         "runtime": runtime,
         "attempts": total,
+        "timeoutSeconds": round(float(timeout_seconds), 4),
         "successCount": success_count,
         "authFailures": auth_failures,
         "true5xxCount": true_5xx_count,
         "true5xxRate": true_5xx_rate,
+        "startupTimeoutCount": startup_timeout_count,
+        "startupTimeoutRate": startup_timeout_rate,
+        "coldStart5xxObservedCount": cold_start_5xx_observed,
         "bridgeDisconnectCount": bridge_disconnect_count,
         "bridgeDisconnectRate": bridge_disconnect_rate,
         "startupLatencyP95": _p95(latencies),
