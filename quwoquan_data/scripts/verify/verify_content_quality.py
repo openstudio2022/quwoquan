@@ -114,8 +114,24 @@ def verify_posts(posts_root: Path, *, post_rels: set[str] | None = None) -> list
 
         for word in forbidden_phrase_hits(article):
             issues.append(f"{article_path}: forbidden phrase found: {word}")
-        if len(re.sub(r"\s+", "", article)) < 600:
-            issues.append(f"{article_path}: article body shorter than 600 non-space chars")
+        # 字数门形态自适应（唯一真相源 base_draft_readiness）：图片作品(image/gallery)
+        # 不受正文长度门约束；article 长文需≥600，图文混排正文≥200且有足量内联图/图注。
+        carrier = str(manifest.get("carrier") or "")
+        if carrier not in ("image", "gallery"):
+            from _common.base_draft import base_draft_readiness
+
+            readiness = base_draft_readiness(
+                article,
+                publish_media_mode=str(manifest.get("publishMediaMode") or ""),
+            )
+            if not readiness["ready"]:
+                issues.append(
+                    f"{article_path}: article body fails adaptive word gate "
+                    f"(form={readiness['sourceForm']} prose={readiness['proseChars']} "
+                    f"figures={readiness['inlineFigureCount']} effective={readiness['effectiveChars']}; "
+                    f"need long-form>={readiness['minTextChars']} or mixed prose>="
+                    f"{readiness['richMixedMinTextChars']}+figures>={readiness['richMixedMinFigures']})"
+                )
         if re.search(r"(?m)^标签[:：]", article):
             issues.append(f"{article_path}: standalone tag section is not allowed")
 

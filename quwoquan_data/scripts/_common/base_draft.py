@@ -42,8 +42,11 @@ _NGRAM = 3
 # 可作"以底稿为骨架轻改"的权利模式（产品裁定 full light-edit，licensed 与 factual 同等对待）。
 # 仅 blocked 不可作底稿；rights 准入校验另在 download/content_plan 层执行，与此复用策略解耦。
 ADAPTABLE_SOURCE_USE_MODES = ("licensed_adaptation", "factual_reference_only")
+# 字数门唯一真相源（形态自适应）：长文 article 正文≥600；图文混排正文≥200 且
+# 有足量内联图与图注（一篇真·图文底稿，而非图片占位）。任何 verify/review/run.py
+# 预检都必须经 base_draft_readiness 消费这些阈值，禁止在别处另起一份固定 600。
 ARTICLE_MIN_BASE_DRAFT_CHARS = 600
-RICH_MIXED_MIN_TEXT_CHARS = 180
+RICH_MIXED_MIN_TEXT_CHARS = 200
 RICH_MIXED_MIN_CAPTION_CHARS = 80
 RICH_MIXED_MIN_FIGURES = 3
 

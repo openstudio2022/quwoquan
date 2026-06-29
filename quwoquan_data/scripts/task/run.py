@@ -4310,7 +4310,7 @@ def _abandon_release_base_draft_shortfalls(
         ctx.batch_id,
         short_refs,
         stage="content_plan",
-        reason="baseDraftText_effective_length_below_600_release_gate; legacy_content_plan_revalidation",
+        reason="baseDraftText_below_adaptive_word_gate_release; legacy_content_plan_revalidation",
     )
     added = [str(ref) for ref in (report.get("added") or []) if str(ref).strip()]
     if added:
@@ -4325,11 +4325,16 @@ def _abandon_release_base_draft_shortfalls(
 
 
 def _content_plan_base_draft_shortfall_refs(ctx: PipelineContext, active_refs: Iterable[str]) -> list[str]:
-    """Lightweight preflight for article source sufficiency before expensive gates."""
+    """Lightweight preflight for article source sufficiency before expensive gates.
+
+    字数门形态自适应（唯一真相源 base_draft_readiness）：长文需正文≥600；图文混排
+    底稿正文≥200 且有足量内联图/图注即可。禁止在此另起固定 600 raw 门误杀图多文少
+    的真·图文底稿。
+    """
 
     from _common import content_object
+    from _common.base_draft import base_draft_readiness
     from _common.draft_io import read_writing_pack
-    from _common.release_integrity import MIN_ARTICLE_BASE_DRAFT_CHARS
 
     short_refs: list[str] = []
     for ref in active_refs:
@@ -4338,8 +4343,11 @@ def _content_plan_base_draft_shortfall_refs(ctx: PipelineContext, active_refs: I
             continue
         pack = read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}
         base_text = str(pack.get("baseDraftText") or "")
-        effective_len = len(re.sub(r"\s+", "", base_text))
-        if effective_len < MIN_ARTICLE_BASE_DRAFT_CHARS:
+        readiness = base_draft_readiness(
+            base_text,
+            publish_media_mode=str(pack.get("publishMediaMode") or ""),
+        )
+        if not readiness["ready"]:
             short_refs.append(str(ref))
     return short_refs
 
@@ -4359,7 +4367,7 @@ def _abandon_content_plan_base_draft_shortfalls(
         ctx.batch_id,
         short_refs,
         stage="content_plan",
-        reason=f"baseDraftText_effective_length_below_600_release_gate; {reason_suffix}",
+        reason=f"baseDraftText_below_adaptive_word_gate_release; {reason_suffix}",
     )
     added = [str(ref) for ref in (report.get("added") or []) if str(ref).strip()]
     if added and prune_materialized:
