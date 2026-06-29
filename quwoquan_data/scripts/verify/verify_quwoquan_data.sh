@@ -175,5 +175,20 @@ python3 quwoquan_data/tests/orchestrate/test_fanout_runner.py
 # 百科多层目录 + 章节配图 + 对象阶段树 + wikitext 锚点（新批次验收）
 python3 quwoquan_data/tests/local_contract/common/test_section_outline_and_placement__local_contract_test.py
 python3 quwoquan_data/tests/local_contract/common/test_object_stages_and_wikitext__local_contract_test.py
+# 底稿忠实重构 + 无人托管可靠性（P0 探针分类、key 单一真相源、scaled-e2e 续跑、
+# RC2/RC4/RC6 同源硬门、形态自适应字数门、实体聚焦、多地点 route 死代码收口）
+"$PYTEST_RUNNER" -m pytest -q \
+  quwoquan_data/tests/local_contract/env/test_cursor_probe__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_cursor_credentials__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_scaled_e2e_run__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_adaptive_word_gate__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_entity_focus__local_contract_test.py \
+  quwoquan_data/tests/local_contract/download/test_source_quality_gate__local_contract_test.py \
+  quwoquan_data/tests/local_contract/download/test_image_collection_gate__local_contract_test.py \
+  quwoquan_data/tests/local_contract/download/test_source_plan_registry_guidance__local_contract_test.py \
+  quwoquan_data/tests/local_contract/download/test_auto_research_article_homepage__local_contract_test.py \
+  quwoquan_data/tests/local_contract/download/test_auto_research_image_lane__local_contract_test.py \
+  quwoquan_data/tests/local_contract/download/test_auto_research_transport__local_contract_test.py \
+  quwoquan_data/tests/local_contract/produce/test_route_assets_layout__local_contract_test.py
 
 echo "[verify-quwoquan-data] PASSED"
