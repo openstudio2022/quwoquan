@@ -277,15 +277,6 @@ def _build_route_assets(
         for name, rows in raw_per_entity.items()
     }
     if base_source_ref and not any(per_entity.values()):
-        per_entity = {
-            name: [
-                candidate
-                for candidate in rows
-                if str(candidate.get("researchLane") or "") == "article"
-            ]
-            for name, rows in raw_per_entity.items()
-        }
-    if base_source_ref and not any(per_entity.values()):
         raise RuntimeError(f"{ref}: article base draft source has no usable source images")
 
     cover_layout = layouts[0] if layouts else "fullWidth"

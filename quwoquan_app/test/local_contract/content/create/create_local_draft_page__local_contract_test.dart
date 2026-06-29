@@ -11,7 +11,7 @@ import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/local_draft_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
@@ -74,9 +74,8 @@ CreateDraft _buildDraft({
   );
   final mediaKind = switch (flowKind) {
     CreateDraftFlowKind.article => CreateMediaKind.none,
-    CreateDraftFlowKind.image => imagePaths.isEmpty
-        ? CreateMediaKind.none
-        : CreateMediaKind.images,
+    CreateDraftFlowKind.image =>
+      imagePaths.isEmpty ? CreateMediaKind.none : CreateMediaKind.images,
     CreateDraftFlowKind.video => CreateMediaKind.video,
   };
   final state = baseState.copyWith(
@@ -95,6 +94,7 @@ CreateDraft _buildDraft({
 EditorStartAction? _actionFromType(String? raw) {
   return switch ((raw ?? '').trim()) {
     'gallery' => EditorStartAction.gallery,
+    'video' => EditorStartAction.video,
     'capture' => EditorStartAction.capture,
     'write' => EditorStartAction.write,
     _ => null,
@@ -174,10 +174,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(TestKeys.localDraftPage), findsOneWidget);
-      expect(find.text(UITextConstants.localDraftsDeviceOnlyNotice), findsOneWidget);
+      expect(
+        find.text(UITextConstants.localDraftsDeviceOnlyNotice),
+        findsOneWidget,
+      );
       expect(find.text(UITextConstants.localDraftMissingImage), findsOneWidget);
 
-      await tester.tap(find.byKey(const ValueKey<String>('local_draft_delete_draft_image')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('local_draft_delete_draft_image')),
+      );
       await tester.pumpAndSettle();
       expect(
         find.text(UITextConstants.localDraftDeleteConfirmTitle),
@@ -252,7 +257,10 @@ void main() {
         find.text(UITextConstants.localDraftUnavailableTitle),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.localDraftMissingVideoDesc), findsOneWidget);
+      expect(
+        find.text(UITextConstants.localDraftMissingVideoDesc),
+        findsOneWidget,
+      );
 
       await tester.tap(find.text(UITextConstants.localDraftDeleteAction));
       await tester.pumpAndSettle();

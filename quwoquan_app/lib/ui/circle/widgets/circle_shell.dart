@@ -7,20 +7,13 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_ui_config.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_item.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
-import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
+import 'package:quwoquan_app/components/object_page/object_impact_preview_card.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_preview_card.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
-import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/ui/user/widgets/intersection_statement_card.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
@@ -28,7 +21,6 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
-import 'package:quwoquan_app/ui/circle/providers/circle_impact_provider.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_page_tab.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
@@ -37,7 +29,7 @@ import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_members.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_entry_arguments.dart';
+import 'package:quwoquan_app/ui/content/models/create_entry_arguments.dart';
 
 part 'circle_shell_components.dart';
 part 'circle_shell_builders.dart';
@@ -136,12 +128,6 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     return formatCompactActionCount(parsed);
   }
 
-  String _joinPolicyLabel(String? joinPolicy) {
-    return joinPolicy == 'approval'
-        ? UITextConstants.circleJoinApproval
-        : UITextConstants.joinCircle;
-  }
-
   String _metaLine(CircleState state) {
     final circle = state.circleData;
     final cs = state.circleStats;
@@ -151,8 +137,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     final posts = _formatCount(cs.posts != 0 ? cs.posts : circle?.postCount);
     return <String>[
       '$members ${UITextConstants.circleMembers}',
-      '$posts ${UITextConstants.circlePosts}',
-      _joinPolicyLabel(circle?.joinPolicy),
+      '$posts ${UITextConstants.objectTabRecord}',
     ].join(' · ');
   }
 
@@ -210,10 +195,6 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         ),
       ),
     );
-  }
-
-  void _openChat(BuildContext context, String conversationId) {
-    context.push(AppRoutePaths.chatDetail(id: conversationId));
   }
 
   Future<void> _showMoreOptions(

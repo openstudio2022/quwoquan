@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
@@ -11,21 +10,21 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_ui_config.g
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
-import 'package:quwoquan_app/components/object_page/object_intersection_section.dart';
+import 'package:quwoquan_app/components/object_page/object_impact_preview_card.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_preview_card.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/constants/homepage_detail_text_constants.dart';
-import 'package:quwoquan_app/core/constants/plaza_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
-import 'package:quwoquan_app/ui/content/widgets/intersection_reason_chip.dart';
+import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
+import 'package:quwoquan_app/ui/user/widgets/profile_slogan_card.dart';
 
 part 'homepage_detail_shell_components.dart';
 part 'homepage_detail_shell_components2.dart';

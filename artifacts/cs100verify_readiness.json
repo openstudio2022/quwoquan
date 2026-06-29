@@ -1,58 +1,58 @@
 {
   "schemaVersion": "quwoquan_data.scale_readiness",
   "taskId": "旅行/地域/四川省/景区/四川景点fresh scale100",
-  "batchId": "fanout_cs100verify_placeholder",
+  "batchId": "fresh_cs100verify_20260626",
   "mode": "commercial",
   "dailyTarget": 100,
   "passed": false,
   "decision": "no_go",
   "expectedObjects": {
-    "homepage": 17,
-    "article": 68,
-    "image": 17,
+    "homepage": 14,
+    "article": 56,
+    "image": 14,
     "routeArticle": 0,
-    "total": 102
+    "total": 84
   },
   "qualityTarget": {
     "targetGoal": 100,
-    "minPassRate": 0.0,
-    "qualityPassedObjectCount": 0,
-    "targetSatisfactionRate": 0.0,
+    "minPassRate": 0.9,
+    "qualityPassedObjectCount": 63,
+    "targetSatisfactionRate": 0.63,
     "sourceReadyGoal": 120,
     "sourceReadyMultiplier": 1.2
   },
   "funnel": {
     "targeted": 100,
-    "sourceReady": 0,
-    "homepagePassed": 0,
-    "contentPlanned": 0,
-    "authored": 0,
-    "reviewPassed": 0,
-    "published": 0,
+    "sourceReady": 94,
+    "homepagePassed": 14,
+    "contentPlanned": 55,
+    "authored": 41,
+    "reviewPassed": 49,
+    "published": 63,
     "byObjectType": {
       "article": {
-        "planned": 0,
-        "authored": 0,
-        "published": 0
+        "planned": 41,
+        "authored": 41,
+        "published": 35
       },
       "image": {
-        "planned": 0,
-        "published": 0
+        "planned": 14,
+        "published": 14
       },
       "video": {
         "planned": 0,
         "published": 0
       },
       "homepage": {
-        "published": 0
+        "published": 14
       }
     }
   },
   "sourceAdmission": {
     "schemaVersion": "quwoquan_data.source_ready_admission/1",
     "targetEntityCount": 17,
-    "sourceReadyEntityCount": 0,
-    "sourceReadyObjectCapacity": 0,
+    "sourceReadyEntityCount": 12,
+    "sourceReadyObjectCapacity": 94,
     "requiredPerEntity": {
       "homepage": 1,
       "article": 4,
@@ -61,11 +61,11 @@
     "perEntity": [
       {
         "entity": "九寨沟",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 2,
+          "article": 13,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -73,16 +73,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 6
       },
       {
         "entity": "黄龙",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 6,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -90,16 +90,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 11
       },
       {
         "entity": "峨眉山",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 12,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -107,16 +107,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 5
       },
       {
         "entity": "乐山大佛",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 9,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -124,16 +124,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 7
       },
       {
         "entity": "青城山",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 5,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -141,16 +141,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 10
       },
       {
         "entity": "稻城亚丁",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 5,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -158,16 +158,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 12
       },
       {
         "entity": "海螺沟",
         "sourceReady": false,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 2,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -175,16 +175,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 4,
+        "focusBlockedSourceUnits": 16
       },
       {
         "entity": "剑门关",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 5,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -192,16 +192,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 13
       },
       {
         "entity": "阆中古城",
         "sourceReady": false,
         "counts": {
           "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "article": 12,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -209,16 +209,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 5,
+        "focusBlockedSourceUnits": 5
       },
       {
         "entity": "蜀南竹海",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 2,
+          "article": 10,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -226,16 +226,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 5
       },
       {
         "entity": "西岭雪山",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 12,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -243,16 +243,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 5
       },
       {
         "entity": "牛背山",
         "sourceReady": false,
         "counts": {
           "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "article": 10,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -260,16 +260,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 5,
+        "focusBlockedSourceUnits": 7
       },
       {
         "entity": "毕棚沟",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 6,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -277,16 +277,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 12
       },
       {
         "entity": "木格措",
         "sourceReady": false,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 1,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -294,16 +294,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 3,
+        "focusBlockedSourceUnits": 17
       },
       {
         "entity": "若尔盖花湖",
         "sourceReady": false,
         "counts": {
           "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "article": 6,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -311,16 +311,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 5,
+        "focusBlockedSourceUnits": 11
       },
       {
         "entity": "四姑娘山",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 6,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -328,16 +328,16 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 12
       },
       {
         "entity": "都江堰",
-        "sourceReady": false,
+        "sourceReady": true,
         "counts": {
-          "homepage": 0,
-          "article": 0,
-          "image": 0,
+          "homepage": 1,
+          "article": 5,
+          "image": 2,
           "video": 0
         },
         "needed": {
@@ -345,55 +345,57 @@
           "article": 4,
           "image": 1
         },
-        "readyCapacity": 0,
-        "focusBlockedSourceUnits": 0
+        "readyCapacity": 6,
+        "focusBlockedSourceUnits": 9
       }
     ]
   },
   "abandonment": {
-    "entityCount": 0,
-    "contentObjectCount": 0
+    "entityCount": 3,
+    "contentObjectCount": 15
   },
   "partialDelivery": {
     "mode": "commercial",
     "allowPartialContent": true,
-    "abandonedContentByType": {},
-    "abandonedContentRatio": 0.0,
+    "abandonedContentByType": {
+      "article": 15
+    },
+    "abandonedContentRatio": 0.1786,
     "maxTrialAbandonedContentRatio": 0.05,
     "delivered": {
-      "posts": 0,
-      "articles": 0,
-      "images": 0,
+      "posts": 49,
+      "articles": 35,
+      "images": 14,
       "videos": 0
     },
     "fulfillment": {
-      "article": 0.0,
-      "image": 0.0
+      "article": 0.625,
+      "image": 1.0
     }
   },
   "replacementClosure": {
     "baseTargetCount": 17,
     "requiredActiveTargets": 17,
-    "activeTargetCount": 17,
+    "activeTargetCount": 14,
     "replacementCount": 0,
-    "closed": true,
+    "closed": false,
     "objects": []
   },
   "runtimeIntegrity": {
     "passed": false,
     "stats": {
-      "postCount": 0,
-      "articleCount": 0,
-      "imageCount": 0,
+      "postCount": 49,
+      "articleCount": 35,
+      "imageCount": 14,
       "videoCount": 0,
-      "assetCount": 0
+      "assetCount": 114
     }
   },
   "contentQualityCoverage": {
-    "articlePosts": 0,
-    "articleMentionCoveredPosts": 0,
+    "articlePosts": 35,
+    "articleMentionCoveredPosts": 35,
     "articleMentionCoverage": 1.0,
-    "totalSemanticMentions": 0,
+    "totalSemanticMentions": 147,
     "worksVerdictPresent": 0,
     "nonWorkMaterialized": [],
     "nonWorkMaterializedCount": 0
@@ -401,42 +403,74 @@
   "creatorLoad": {
     "schemaVersion": "quwoquan_data.creator_load_report/1",
     "required": false,
-    "creatorCount": 0,
-    "plannedObjectCount": 0,
-    "publishedObjectCount": 0,
-    "maxPlannedPerCreator": 0,
-    "maxCreatorShare": 0.0,
+    "creatorCount": 2,
+    "plannedObjectCount": 55,
+    "publishedObjectCount": 49,
+    "maxPlannedPerCreator": 41,
+    "maxCreatorShare": 0.7455,
     "maxDailyPostsPerCreator": 1,
     "missingAssignmentRefs": [],
     "assignmentIssueCount": 0,
     "assignmentIssues": [],
-    "overloadedCreatorProfileIds": [],
-    "byCreator": []
+    "overloadedCreatorProfileIds": [
+      "qwq_creator_landscape_photographer_001",
+      "qwq_creator_travel_blogger_chuanxi_001"
+    ],
+    "byCreator": [
+      {
+        "creatorProfileId": "qwq_creator_landscape_photographer_001",
+        "planned": 14,
+        "published": 14,
+        "tokenLedgerEntries": 0,
+        "objectTypes": {
+          "image": 14
+        }
+      },
+      {
+        "creatorProfileId": "qwq_creator_travel_blogger_chuanxi_001",
+        "planned": 41,
+        "published": 35,
+        "tokenLedgerEntries": 0,
+        "objectTypes": {
+          "article": 41
+        }
+      }
+    ]
   },
   "sourceSufficiency": {
     "homepage": {
-      "passed": 0,
-      "targetCount": 17,
-      "rate": 0.0
+      "passed": 14,
+      "targetCount": 14,
+      "rate": 1.0
     },
     "article": {
-      "passed": 0,
-      "targetCount": 17,
-      "rate": 0.0
+      "passed": 14,
+      "targetCount": 14,
+      "rate": 1.0
     },
     "image": {
-      "passed": 17,
-      "targetCount": 17,
+      "passed": 14,
+      "targetCount": 14,
       "rate": 1.0
     }
   },
   "workflowState": {
-    "status": null,
+    "status": "manual_required",
     "waitingCheckpoint": null,
-    "nextAction": null,
-    "retryCounts": null,
-    "infrastructureRetryCounts": null,
-    "failedObjects": null
+    "nextAction": "发布门未过:\n  - posts/article/攻略/木格措·值不值得去/1: 木格措_detail_6_84cf690d missing image authorization proof or license snapshot\n  - posts/article/攻略/木格措·值不值得去/1: 木格措_closing_6_a1e41c6d missing image authorization proof or license snapshot\n  - release missing planned post ref(s): 剑门关_seasonal_timing, 峨眉山_decision_experience, 木格措_planning_consultation, 稻城亚丁_decision_experience, 蜀南竹海_planning_consultation, 黄龙_route_transport\n  - 剑门关_seasonal_timing: review_gate failed: baseDraftFidelity: base draft fidelity 54.0% < 55% (底稿留存率过低，疑似脱离底稿/从零另写，应在底稿基础上适度润色而非重写); creativeGovernance: personaBoundary: 虚拟/平台编辑作者不得伪装真实亲历，命中 去过.+之后\n  - 峨眉山_decision_experience: review_gate failed: baseDraftFidelity: base draft fidelity 46.8% < 55% (底稿留存率过低，疑似脱离底稿/从零另写，应在底稿基础上适度润色而非重写)\n  - 木格措_planning_consultation: review_gate failed: writingIntentConsistency: writingIntentConsistency: intent=planning_consultation expects >= 3 structural buckets, hit 2 (missing: transport, ticket)\n  - 稻城亚丁_decision_experience: review_gate failed: travelogueDensity: opening lacks a real hook for styleFamily '旅途随笔风'; adopt one of ['scene_immersion', 'personal_motivation', 'dialogue_quote'] (现为套路化/千篇一律开头)\n  - 蜀南竹海_planning_consultation: review_gate failed: provenanceRewrite: qwq_route_review: leaked base-draft identifier (base draft id); travelogueDensity: opening lacks a real hook for styleFamily '旅途随笔风'; adopt one of ['scene_immersion', 'personal_motivation', 'dialogue_quote'] (现为套路化/千篇一律开头)\n  - 黄龙_route_transport: review_gate failed: baseDraftFidelity: base draft fidelity 28.4% < 55% (底稿留存率过低，疑似脱离底稿/从零另写，应在底稿基础上适度润色而非重写)",
+    "retryCounts": {},
+    "infrastructureRetryCounts": {},
+    "failedObjects": [
+      "posts/article/攻略/木格措·值不值得去/1: 木格措_detail_6_84cf690d missing image authorization proof or license snapshot",
+      "posts/article/攻略/木格措·值不值得去/1: 木格措_closing_6_a1e41c6d missing image authorization proof or license snapshot",
+      "release missing planned post ref(s): 剑门关_seasonal_timing, 峨眉山_decision_experience, 木格措_planning_consultation, 稻城亚丁_decision_experience, 蜀南竹海_planning_consultation, 黄龙_route_transport",
+      "剑门关_seasonal_timing: review_gate failed: baseDraftFidelity: base draft fidelity 54.0% < 55% (底稿留存率过低，疑似脱离底稿/从零另写，应在底稿基础上适度润色而非重写); creativeGovernance: personaBoundary: 虚拟/平台编辑作者不得伪装真实亲历，命中 去过.+之后",
+      "峨眉山_decision_experience: review_gate failed: baseDraftFidelity: base draft fidelity 46.8% < 55% (底稿留存率过低，疑似脱离底稿/从零另写，应在底稿基础上适度润色而非重写)",
+      "木格措_planning_consultation: review_gate failed: writingIntentConsistency: writingIntentConsistency: intent=planning_consultation expects >= 3 structural buckets, hit 2 (missing: transport, ticket)",
+      "稻城亚丁_decision_experience: review_gate failed: travelogueDensity: opening lacks a real hook for styleFamily '旅途随笔风'; adopt one of ['scene_immersion', 'personal_motivation', 'dialogue_quote'] (现为套路化/千篇一律开头)",
+      "蜀南竹海_planning_consultation: review_gate failed: provenanceRewrite: qwq_route_review: leaked base-draft identifier (base draft id); travelogueDensity: opening lacks a real hook for styleFamily '旅途随笔风'; adopt one of ['scene_immersion', 'personal_motivation', 'dialogue_quote'] (现为套路化/千篇一律开头)",
+      "黄龙_route_transport: review_gate failed: baseDraftFidelity: base draft fidelity 28.4% < 55% (底稿留存率过低，疑似脱离底稿/从零另写，应在底稿基础上适度润色而非重写)"
+    ]
   },
   "executionReadiness": {
     "queueBackend": "",
@@ -453,15 +487,15 @@
     "throughputProjection": {
       "available": false,
       "measurementMode": "projected_from_trial_per_worker_rate",
-      "perWorkerObjectsPerHour": 0.0,
-      "realizedWorkerCount": 0,
+      "perWorkerObjectsPerHour": 32.6548,
+      "realizedWorkerCount": 1,
       "committedConcurrency": 0,
       "queueBackend": "",
       "projectedObjectsPerHour": 0.0,
       "projectedDailyCapacity": 0.0,
       "requiredObjectsPerHour": 4.1667,
-      "finishedAuthorJobs": 0,
-      "authorActiveSeconds": 0.0,
+      "finishedAuthorJobs": 67,
+      "authorActiveSeconds": 7386.348,
       "assumptions": [
         "linear scaling of measured per-worker author throughput across committed reliabletask workers",
         "source supply and review keep pace with committed concurrency"
@@ -470,60 +504,98 @@
     "firstPassRate": null
   },
   "envReady": {
-    "ready": false,
-    "reportPath": "",
-    "cursorStartup": {},
+    "ready": true,
+    "reportPath": "/Users/zhaoyuxi/qwq_scale_verify/runtime/batches/四川景点freshscale10-26aad552__fresh_cs100verify_20260626/_shared/env_ready_report.json",
+    "cursorStartup": {
+      "checked": false,
+      "ready": true,
+      "started": false,
+      "runtime": "local",
+      "model": "composer-2",
+      "issues": [],
+      "skipReason": "disabled"
+    },
     "issues": []
   },
   "downloadDiagnostics": {
-    "entitiesWithFetchReports": 0,
-    "plannedImages": 0,
-    "downloadedImages": 0,
+    "entitiesWithFetchReports": 17,
+    "plannedImages": 184,
+    "downloadedImages": 34,
     "blockedImages": 0,
     "rejectedByCategory": {
-      "fetch_or_non_image": 0,
+      "fetch_or_non_image": 13,
       "pixel_too_small": 0,
       "safety_or_watermark": 0,
       "rights": 0,
       "duplicate": 0,
       "other": 0
     },
-    "sourcePlanCategories": {},
-    "topEntityIssues": []
+    "sourcePlanCategories": {
+      "authoritative_reference": 4,
+      "encyclopedia": 17,
+      "official": 8,
+      "open_license": 17,
+      "travelogue": 17,
+      "review": 14
+    },
+    "topEntityIssues": [
+      {
+        "entity": "四姑娘山",
+        "rejected": 7,
+        "categories": {
+          "fetch_or_non_image": 7
+        }
+      },
+      {
+        "entity": "峨眉山",
+        "rejected": 6,
+        "categories": {
+          "fetch_or_non_image": 6
+        }
+      }
+    ]
   },
   "abandonmentDiagnostics": {
-    "totalIssueTexts": 68,
+    "totalIssueTexts": 27,
     "categories": {
       "imageOpenLicenseShortage": 0,
-      "imageRightsOrLicense": 0,
+      "imageRightsOrLicense": 2,
       "imageFetchOrQuality": 0,
-      "entityFocusGap": 0,
-      "articleSourceShortage": 34,
-      "homepageSourceShortage": 34,
+      "entityFocusGap": 15,
+      "articleSourceShortage": 0,
+      "homepageSourceShortage": 0,
       "workflowInterrupted": 0,
-      "other": 0
+      "other": 10
     },
     "dominantReasons": [
       {
-        "category": "articleSourceShortage",
-        "count": 34,
+        "category": "entityFocusGap",
+        "count": 15,
         "samples": [
-          "article sources=0 need>=4",
-          "article research needs >= 4 text-qualified base sources",
-          "article sources=0 need>=4",
-          "article research needs >= 4 text-qualified base sources",
-          "article sources=0 need>=4"
+          "source_unavailable: validator-eligible article base sources 3 < 4; raw=17; qualified=4; rejects={'entity_focus_off_topic': 11, 'entity_focus_below_validator_floor': 1, 'text_too_short': 1, 'source_asset_reused': 1}; missing writingIntent=seasonal_timing",
+          "source_unavailable: validator-eligible article base sources 0 < 4; raw=16; qualified=0; rejects={'entity_focus_off_topic': 15, 'entity_focus_below_validator_floor': 1}; missing writingIntent=planning_consultation",
+          "source_unavailable: validator-eligible article base sources 0 < 4; raw=16; qualified=0; rejects={'entity_focus_off_topic': 15, 'entity_focus_below_validator_floor': 1}; missing writingIntent=decision_experience",
+          "source_unavailable: validator-eligible article base sources 0 < 4; raw=16; qualified=0; rejects={'entity_focus_off_topic': 15, 'entity_focus_below_validator_floor': 1}; missing writingIntent=route_transport",
+          "source_unavailable: validator-eligible article base sources 0 < 4; raw=16; qualified=0; rejects={'entity_focus_off_topic': 15, 'entity_focus_below_validator_floor': 1}; missing writingIntent=seasonal_timing"
         ]
       },
       {
-        "category": "homepageSourceShortage",
-        "count": 34,
+        "category": "other",
+        "count": 10,
         "samples": [
-          "homepage sources=0 need>=1",
-          "homepage research needs encyclopedia or official evidence",
-          "homepage sources=0 need>=1",
-          "homepage research needs encyclopedia or official evidence",
-          "homepage sources=0 need>=1"
+          "homepage input unavailable after build_prepare repair budget",
+          "homepage input unavailable after build_prepare repair budget",
+          "homepage input unavailable after build_prepare repair budget",
+          "release missing planned post ref(s): 剑门关_seasonal_timing, 峨眉山_decision_experience, 木格措_planning_consultation, 稻城亚丁_decision_experience, 蜀南竹海_planning_consultation, 黄龙_route_transport",
+          "剑门关_seasonal_timing: review_gate failed: baseDraftFidelity: base draft fidelity 54.0% < 55% (底稿留存率过低，疑似脱离底稿/从零另写，应在底稿基础上适度润色而非重写); creativeGovernance: personaBoundary: 虚拟/平台编辑作者不得伪装真实亲历，命中 去过.+之后"
+        ]
+      },
+      {
+        "category": "imageRightsOrLicense",
+        "count": 2,
+        "samples": [
+          "posts/article/攻略/木格措·值不值得去/1: 木格措_detail_6_84cf690d missing image authorization proof or license snapshot",
+          "posts/article/攻略/木格措·值不值得去/1: 木格措_closing_6_a1e41c6d missing image authorization proof or license snapshot"
         ]
       }
     ]
@@ -535,29 +607,26 @@
     "syntheticAssetProvider": "",
     "requiresPublishableImages": true,
     "releaseAllowed": true,
-    "expectedImageWorks": 17,
+    "expectedImageWorks": 14,
     "openLicenseShortageCount": 0,
     "structuralOpenLicenseShortage": false,
     "structuralShortageThreshold": 5
   },
   "blockers": [
-    "env ready evidence missing or failed",
-    "Cursor SDK startup probe missing or failed;百级不得进入 author-runner",
-    "workflow status must be succeeded for scale; got missing",
-    "source-ready object capacity 0 < required 120",
-    "materialized publishable post count is zero",
+    "workflow status must be succeeded for scale; got manual_required",
+    "quality target satisfaction 63.00% < 90% (63/100)",
+    "source-ready object capacity 94 < required 120",
     "TokenLedger evidence missing; cannot project unit token/cost or cache hit rate",
     "isolated release evidence missing; release verify cannot be proven",
-    "staging/gamma import evidence missing",
     "measured throughput evidence missing; cannot project daily capacity",
+    "creator load exceeds publishCadence.maxDailyPosts=1 for scale: qwq_creator_landscape_photographer_001, qwq_creator_travel_blogger_chuanxi_001",
     "firstPassRate evidence missing"
   ],
   "warnings": [
-    "partial delivery accepted failedLaneCount=34; failed lanes must stay excluded from release/import",
-    "homepage lane source sufficiency 0.00% < 98%; treat as delivery success-rate evidence, not a release blocker",
-    "article lane source sufficiency 0.00% < 98%; treat as delivery success-rate evidence, not a release blocker",
-    "partial article delivery accepted: actual=0 abandoned=0 expected=68",
-    "partial image delivery accepted: actual=0 abandoned=0 expected=17",
+    "partial delivery accepted failedLaneCount=8; failed lanes must stay excluded from release/import",
+    "abandoned entities excluded from published entity/tag refs; abandoned=3 replacement=0 activeTargets=14 closed=False",
+    "trial partial delivery accepted abandonedContent=15 ratio=17.86%; abandoned refs must remain excluded from release/import",
+    "partial article delivery accepted: actual=35 abandoned=15 expected=56",
     "ship evidence missing; release/import closure should be captured by ship_report.json"
   ]
 }

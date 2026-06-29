@@ -4,13 +4,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
-import 'package:quwoquan_app/components/comment_system/comment_sort_menu.dart';
-import 'package:quwoquan_app/components/comment_system/comment_thread_view.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_sort_menu.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/providers/comment_provider.dart';
+import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 
 void main() {
   group('resolveCommentSortMenuPlacement 自适应翻转', () {
@@ -194,10 +194,7 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: const CupertinoPageScaffold(
             child: SingleChildScrollView(
-              child: CommentThreadView(
-                postId: postId,
-                shrinkWrap: true,
-              ),
+              child: CommentThreadView(postId: postId, shrinkWrap: true),
             ),
           ),
         ),

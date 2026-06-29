@@ -18,7 +18,7 @@ types:
       - { name: limit, type: int, default: 20, min: 1, max: 100 }
 
 enums:
-  ContentType: [image, video, micro, article, review]
+  ContentType: [image, video, micro, article]
   ArticleTemplatePreset: [gentle, ritual, diffuse, journal, tech]
   ArticleFontPreset: [clean, classic, handwritten, rounded, mono]
   ContentIdentity: [moment, work]

@@ -42,11 +42,62 @@ _NGRAM = 3
 # 可作"以底稿为骨架轻改"的权利模式（产品裁定 full light-edit，licensed 与 factual 同等对待）。
 # 仅 blocked 不可作底稿；rights 准入校验另在 download/content_plan 层执行，与此复用策略解耦。
 ADAPTABLE_SOURCE_USE_MODES = ("licensed_adaptation", "factual_reference_only")
+ARTICLE_MIN_BASE_DRAFT_CHARS = 600
+RICH_MIXED_MIN_TEXT_CHARS = 180
+RICH_MIXED_MIN_CAPTION_CHARS = 80
+RICH_MIXED_MIN_FIGURES = 3
 
 
 def base_draft_is_adaptable(source_use_mode: str | None) -> bool:
     """生产/review 复用层：该来源是否可作为以底稿为骨架轻改的表达底稿。"""
     return str(source_use_mode or "").strip() in ADAPTABLE_SOURCE_USE_MODES
+
+
+def base_draft_readiness(
+    text: str,
+    *,
+    publish_media_mode: str = "",
+) -> dict[str, Any]:
+    """Source-form adaptive base readiness for article drafts.
+
+    Pure text/reference-only sources still need 600 effective chars.  A
+    same-source rich mixed draft may pass with less prose only when it preserves
+    enough inline figures and captions to be a real图文底稿 rather than an image
+    placeholder.
+    """
+    raw = str(text or "")
+    compact = len(re.sub(r"\s+", "", raw))
+    figure_count = raw.count(":::figure")
+    image_alt_chars = sum(len(re.sub(r"\s+", "", match)) for match in re.findall(r"!\[([^\]]*)\]\(", raw))
+    figure_blocks = re.findall(r"(?s):::figure(.*?):::", raw)
+    caption_text = "\n".join(
+        line
+        for block in figure_blocks
+        for line in block.splitlines()
+        if line.strip() and not line.strip().startswith("![") and "asset://" not in line
+    )
+    caption_chars = len(re.sub(r"\s+", "", caption_text)) + image_alt_chars
+    prose_without_figures = re.sub(r"(?s):::figure.*?:::", "", raw)
+    prose_chars = len(re.sub(r"\s+", "", prose_without_figures))
+    text_ready = compact >= ARTICLE_MIN_BASE_DRAFT_CHARS
+    rich_ready = (
+        str(publish_media_mode or "").strip() != "text_only"
+        and figure_count >= RICH_MIXED_MIN_FIGURES
+        and prose_chars >= RICH_MIXED_MIN_TEXT_CHARS
+        and caption_chars >= RICH_MIXED_MIN_CAPTION_CHARS
+    )
+    return {
+        "ready": bool(text_ready or rich_ready),
+        "sourceForm": "rich_mixed" if rich_ready and not text_ready else "text",
+        "effectiveChars": compact,
+        "proseChars": prose_chars,
+        "inlineFigureCount": figure_count,
+        "captionChars": caption_chars,
+        "minTextChars": ARTICLE_MIN_BASE_DRAFT_CHARS,
+        "richMixedMinTextChars": RICH_MIXED_MIN_TEXT_CHARS,
+        "richMixedMinCaptionChars": RICH_MIXED_MIN_CAPTION_CHARS,
+        "richMixedMinFigures": RICH_MIXED_MIN_FIGURES,
+    }
 # 样板/噪声行标记唯一真相源在 content_evidence.SOURCE_BOILERPLATE_MARKERS，禁止在此另起一份。
 _NOISE_LINE_MARKERS = SOURCE_BOILERPLATE_MARKERS
 _RELEVANT_BASE_MIN_CHARS = 320
@@ -242,10 +293,12 @@ def load_base_draft_text(task_id: str, batch_id: str, base_source_ref: str | Non
 def sibling_source_texts(
     task_id: str, batch_id: str, base_source_ref: str | None
 ) -> dict[str, str]:
-    """同一内容对象 `1.download/sources/` 下、除底稿外的其它 source unit 原文。
+    """同一内容对象旧本地 `1.download/sources/` 下、除底稿外的其它 source unit 原文。
 
     单底稿零参考反拼接门用：{sourceRef(relative): text}，供 `cross_source_overlap_issues`
     扫描正文是否从「非底稿来源单元」长串照搬（如把同实体其它天行程/其它来源段落拼进来）。
+    新 canonical `batch/sources/{sourceUnitId}` 是批次级物理池，不代表同内容对象 sibling，
+    因此不得在这里扫描整个池。
     """
     if not base_source_ref:
         return {}
@@ -253,6 +306,8 @@ def sibling_source_texts(
     base_unit_dir = candidate if candidate.is_dir() else candidate.parent
     sources_dir = base_unit_dir.parent
     if sources_dir.name != "sources" or not sources_dir.is_dir():
+        return {}
+    if sources_dir.resolve() == (batch_root(task_id, batch_id) / "sources").resolve():
         return {}
     out: dict[str, str] = {}
     for unit_dir in sorted(p for p in sources_dir.iterdir() if p.is_dir()):
@@ -347,82 +402,96 @@ def extract_base_draft_body(text: str) -> str:
     return _extract_base_draft_body(text)
 
 
-# ─── writingIntent 主线对齐底稿（prompt 与 review 门共享单一真相源）──────────
-# 长多主题游记（跨城支线/广告/无关主题）若整篇灌进 baseDraftText，会逼 agent
-# 要么照搬无关段、要么大改导致低贴合度，且 review 门以整篇作分母，聚焦文章永远
-# 摸不到下限。这里按 writingIntent 桶（WRITING_INTENTS 为唯一来源）+ 实体名挑出
-# 主线对齐段，prompt 与门必须消费同一份对齐底稿，避免双轨/第二坐标链（R24/R-CS01）。
-_INTENT_ALIGNED_TARGET_CHARS = 4000
-# 仅当聚焦底稿自身有效字 >= 该下限才收窄；否则原样返回整篇。
-# 取 640（发布门 MIN_ARTICLE_BASE_DRAFT_CHARS=600 之上留小余量），避免收窄后跌破发布门。
-_INTENT_ALIGNED_MIN_CHARS = 640
+# ─── 标题取自底稿（source unit）─────────────────────────────────────────
+# 底稿中心模型：发布标题来自底稿（来源单元 meta.title 或正文首个标题），
+# 而非 `{实体}·{角度}` 模板。必须剥平台后缀/作者署名痕迹（避免泄露原平台/作者，
+# 与 provenanceRewrite 门一致），并做最小/最大长度约束；清洗后无可用标题时返回 ""，
+# 由上游对 article 源诚实弃稿（标题取不出来的文章源不成稿）。
+SOURCE_TITLE_MIN_CHARS = 4
+SOURCE_TITLE_MAX_CHARS = 40
+
+# 平台/站点尾缀（出现在标题尾部、跟随分隔符），剥离以去平台痕迹；不含"攻略/游记"等内容词。
+_TITLE_PLATFORM_SUFFIX_RE = re.compile(
+    r"[\s_\|｜·–—\-]+("
+    r"携程(攻略社区|旅行|旅游)?|马蜂窝|去哪儿(网|旅行)?|途牛(旅游网)?|同程(旅行|旅游)?|"
+    r"小红书|知乎(专栏)?|百度(百科|经验|旅游)?|美篇|穷游(网)?|驴妈妈(旅游网)?|飞猪|"
+    r"大众点评|新浪(旅游|博客)?|搜狐(旅游|号)?|腾讯(旅游|网|新闻)?|网易(旅游|号)?|"
+    r"旅游网|旅行网|景区官网|官方网站|官网|维基百科|wikipedia|wikivoyage|wikitravel"
+    r")\s*$",
+    re.IGNORECASE,
+)
+_TITLE_NOISE_RE = re.compile(r"[\u3010\u3008\u300a\[\(（【].*?[\u3011\u3009\u300b\]\)）】]\s*$")
+# 形如 `03.gws_ctrip` / `source_1` 的来源 id，不是真实标题。
+_SOURCE_ID_LIKE_RE = re.compile(r"^[0-9]+[\._-]|_(base|src|source)_?\d*$|^[a-z0-9]+[._][a-z0-9_]+$")
 
 
-def _intent_is_relevant(paragraph: str, bucket_terms: Sequence[Sequence[str]], entity_name: str) -> bool:
-    """段落是否与本篇 writingIntent 主线或本实体直接相关。"""
-    if entity_name and entity_name in paragraph:
-        return True
-    return any(any(term in paragraph for term in terms) for terms in bucket_terms)
-
-
-def intent_aligned_base_text(
-    base_text: str,
-    *,
-    writing_intent: str | None,
-    entity_name: str = "",
-    target_chars: int = _INTENT_ALIGNED_TARGET_CHARS,
-    min_chars: int = _INTENT_ALIGNED_MIN_CHARS,
-) -> str:
-    """按 writingIntent 桶关键词 + 实体名，从清洗底稿里挑主线对齐段落。
-
-    - 未知/缺失 intent 或段落过少时，原样返回整篇正文（不冒险收窄）。
-    - 只保留命中 intent 桶或含本实体名的段落，按原文顺序拼回保持叙事连贯。
-    - 绝不用无关段补长：聚焦底稿 < min_chars（源对该 intent 太薄）时原样返回整篇，
-      既不污染聚焦度，也不新增 thin-source 误丢（薄源由源采集充分率门 T3 处置）。
-    - prompt 侧 baseDraftText 与 review 门 baseDraftFidelity 分母消费同一份对齐底稿，
-      避免整篇多主题游记作分母误杀聚焦文章（R-CS01 单一真相源）。
-    """
-    from _common.quality_gates import WRITING_INTENTS
-
-    body = extract_base_draft_body(base_text)
-    if not body:
+def _clean_source_title(raw: str) -> str:
+    title = re.sub(r"\s+", " ", str(raw or "").strip())
+    if not title:
         return ""
-    spec = WRITING_INTENTS.get(str(writing_intent or "").strip())
-    paragraphs = [p.strip() for p in re.split(r"\n\s*\n", body) if p.strip()]
-    if not spec or len(paragraphs) <= 4:
-        return body[:target_chars]
-    bucket_terms = [list(terms) for terms in (spec.get("buckets") or {}).values()]
-    picked: list[str] = []
-    total = 0
-    for paragraph in paragraphs:
-        if not _intent_is_relevant(paragraph, bucket_terms, entity_name):
-            continue
-        chars = len(re.sub(r"\s+", "", paragraph))
-        if picked and total + chars > target_chars:
+    # 反复剥离尾部平台/站点后缀（可能链式：`… - 携程攻略社区`）。
+    for _ in range(4):
+        stripped = _TITLE_PLATFORM_SUFFIX_RE.sub("", title).strip(" _|｜·–—-")
+        if stripped == title:
             break
-        picked.append(paragraph)
-        total += chars
-    excerpt = "\n\n".join(picked).strip()
-    if excerpt and len(re.sub(r"\s+", "", excerpt)) >= min_chars:
-        return excerpt[:target_chars]
-    return body[:target_chars]
+        title = stripped
+    # 去掉尾部括注（如「（图）」「【攻略】」）。
+    title = _TITLE_NOISE_RE.sub("", title).strip(" _|｜·–—-")
+    if len(re.sub(r"\s+", "", title)) > SOURCE_TITLE_MAX_CHARS:
+        title = title[:SOURCE_TITLE_MAX_CHARS].rstrip(" _|｜·–—-，,、")
+    return title
 
 
-def load_intent_aligned_base_draft_text(
-    task_id: str,
-    batch_id: str,
-    base_source_ref: str | None,
-    *,
-    writing_intent: str | None = None,
-    entity_name: str = "",
-) -> str:
-    """读取底稿正文并按 writingIntent 收窄到主线对齐段（prompt 与门共用）。"""
-    text = load_base_draft_text(task_id, batch_id, base_source_ref)
-    if not text:
+def _looks_like_source_id(value: str, *, source_id: str = "") -> bool:
+    compact = str(value or "").strip()
+    if not compact:
+        return True
+    if source_id and compact == source_id:
+        return True
+    return bool(_SOURCE_ID_LIKE_RE.search(compact))
+
+
+def _first_heading_title(body: str) -> str:
+    for line in (body or "").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        heading = re.match(r"^#{1,4}\s+(.+?)\s*#*$", stripped)
+        if heading:
+            return heading.group(1).strip()
+    return ""
+
+
+def extract_source_title(task_id: str, batch_id: str, base_source_ref: str | None) -> str:
+    """从单一底稿（来源单元）派生发布标题：meta.title → 正文首标题，剥平台痕迹 + 长度约束。
+
+    返回清洗后的可用标题；取不出（空/过短/仅为来源 id）时返回 ""，由上游对 article 源弃稿。
+    """
+    if not base_source_ref:
         return ""
-    return intent_aligned_base_text(
-        text, writing_intent=writing_intent, entity_name=entity_name
-    )
+    meta = base_source_unit_meta(task_id, batch_id, base_source_ref)
+    source_id = str(meta.get("sourceId") or "").strip()
+    candidate = _clean_source_title(str(meta.get("title") or ""))
+    if not _looks_like_source_id(candidate, source_id=source_id) and len(
+        re.sub(r"\s+", "", candidate)
+    ) >= SOURCE_TITLE_MIN_CHARS:
+        return candidate
+    # 回退：底稿正文首个 markdown 标题。
+    body = load_base_draft_text(task_id, batch_id, base_source_ref)
+    heading = _clean_source_title(_first_heading_title(body))
+    if not _looks_like_source_id(heading, source_id=source_id) and len(
+        re.sub(r"\s+", "", heading)
+    ) >= SOURCE_TITLE_MIN_CHARS:
+        return heading
+    return ""
+
+
+# ─── 底稿中心 1:1：fidelity 对整篇单一底稿度量 ─────────────────────────────
+# 旧模型按 writingIntent 桶 + 实体名收窄底稿作分母（intent_aligned_base_text），
+# 在"实体×角度"配额模型下用于避免整篇多主题游记误杀聚焦文章。底稿中心 1:1 后，
+# 成品本就只来自单一底稿、实体退化为多标签，分母必须是整篇底稿（load_base_draft_text）：
+# 整篇度量既不会因离题段落把 fidelity 拉低误杀（消除 28.4% 类误判），高相似仍触顶防照搬。
+# 收窄逻辑（intent_aligned_base_text / load_intent_aligned_base_draft_text）已整体删除。
 
 
 _FIGURE_RE = re.compile(r"(?ms)^:::figure.*?:::")
@@ -726,10 +795,9 @@ __all__ = [
     "base_draft_candidates",
     "assign_base_draft",
     "extract_base_draft_body",
-    "intent_aligned_base_text",
+    "extract_source_title",
     "load_base_draft_text",
     "sibling_source_texts",
-    "load_intent_aligned_base_draft_text",
     "base_source_use_mode",
     "base_draft_similarity",
     "base_draft_fidelity_issues",

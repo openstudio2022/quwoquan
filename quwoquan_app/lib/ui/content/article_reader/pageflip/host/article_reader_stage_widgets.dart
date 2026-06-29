@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/content/article_reader/templates/article_reader_template_theme.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 
 enum ArticlePageCurlCorner { topLeft, topRight, bottomLeft, bottomRight }
 

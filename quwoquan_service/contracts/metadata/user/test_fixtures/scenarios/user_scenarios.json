@@ -12,7 +12,6 @@
       "profiles": [
         {
           "userId": "fixture_user_current",
-          "verified": true,
           "displayName": "新同学_260622_6698692",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
@@ -169,18 +168,10 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photo",
-          "verified": true,
           "displayName": "契约摄影师",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
           "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
@@ -327,14 +318,7 @@
               "sizeBytes": 1857474,
               "sourceHash": "sha256:bf14a1065a7e7777b5f691810e888d68d600c0b736f7535850e6d641f547f29c"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel",
@@ -485,106 +469,7 @@
               "sizeBytes": 2522887,
               "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
-        },
-        {
-          "userId": "fixture_user_travel_curator",
-          "verified": true,
-          "displayName": "林墨",
-          "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
-          "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
-          "bio": "旅行摄影策展人 · 杭州/成都双城 · 索尼 A7M4 + 胶片风格 · 主理旅行摄影圈与徒步摄影圈。",
-          "stats": {
-            "followingCount": 182,
-            "followerCount": 5400,
-            "postCount": 48,
-            "circleCount": 6,
-            "likeCount": 12800
-          },
-          "primaryRole": "leadAuthor",
-          "primaryTheme": "travel",
-          "secondaryThemes": [
-            "photography",
-            "film_photo",
-            "hiking"
-          ],
-          "themeTags": [
-            "travel",
-            "photography",
-            "film_photo",
-            "hiking",
-            "landscape"
-          ],
-          "postThemeRefs": [
-            "travel",
-            "photography"
-          ],
-          "circleThemeRefs": [
-            "travel",
-            "photography"
-          ],
-          "groupPersonaMix": [
-            {
-              "role": "leadAuthor",
-              "count": 4,
-              "userIds": [
-                "fixture_user_travel_curator",
-                "fixture_user_lin",
-                "fixture_user_su",
-                "fixture_user_zhou"
-              ]
-            },
-            {
-              "role": "friendContact",
-              "count": 2,
-              "userIds": [
-                "fixture_user_friend",
-                "fixture_user_commenter"
-              ]
-            }
-          ],
-          "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
-          "backgroundObjectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
-          "subAccountRefs": [],
-          "tags": [
-            "author",
-            "travel",
-            "curator"
-          ],
-          "media": {
-            "avatar": {
-              "objectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
-              "version": 1,
-              "mimeType": "image/png",
-              "width": 512,
-              "height": 512,
-              "sizeBytes": 315882,
-              "sourceHash": "sha256:220c4d75ea4c8fcc5ec6584afa0442f2f3692d98b564024e789bbe23717afb27"
-            },
-            "background": {
-              "objectKey": "media/background/s/archived-avatar/user/fixture_user_travel/v1/background.png",
-              "version": 1,
-              "mimeType": "image/png",
-              "width": 1600,
-              "height": 900,
-              "sizeBytes": 2522887,
-              "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
-            }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "film_photo"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_video",
@@ -739,16 +624,9 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2686629,
-              "sourceHash": "sha256:ab5cbfa588ba3ba58864dfd6568dc0e31c7e5a7b0c4bf65a36b001d9f9a5d024"
+              "sourceHash": "sha256:b1c3043df4163694cb4b0428b838d2f418f2a7fe33a9056643e078db29903ed0"
             }
-          },
-          "identityTags": [
-            "cityWalk",
-            "photography",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_article",
@@ -847,14 +725,7 @@
               "sizeBytes": 1794125,
               "sourceHash": "sha256:68d9a9303e0a5b685f978f1c13681d23d159303304e1e09750fe7c4f55da35d5"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_friend",
@@ -1006,14 +877,7 @@
               "sizeBytes": 1117608,
               "sourceHash": "sha256:37dc09790fcc630ecfe492e0332a73575e571006a14b5836f03f5c82951a6bea"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_weekend_1",
@@ -1172,14 +1036,7 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_weekend_2",
@@ -1342,14 +1199,7 @@
               "sizeBytes": 2062449,
               "sourceHash": "sha256:bacfe716b92a789d7c398acd22465ba316a038490b4a242e3acd024c8f8db438"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_owner",
@@ -1495,14 +1345,7 @@
               "sizeBytes": 1119236,
               "sourceHash": "sha256:42766ca9d90c1d9253d8194f40de15c5fc4bdd7b378bce1f9ea4378304544e8c"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel_owner",
@@ -1649,14 +1492,7 @@
               "sizeBytes": 2136545,
               "sourceHash": "sha256:584102cd74b9d094b22edfed04691aab7813486fe76d9a7a9de20ca58a0bbca3"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_commenter",
@@ -1766,14 +1602,7 @@
               "sizeBytes": 1212244,
               "sourceHash": "sha256:f19e6de501ad9d1f01af8184e3490b19c6a44d47c17d51ad2edd1e6960e428b8"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photography_01",
@@ -1921,14 +1750,7 @@
               "sizeBytes": 1857474,
               "sourceHash": "sha256:bf14a1065a7e7777b5f691810e888d68d600c0b736f7535850e6d641f547f29c"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photography_02",
@@ -2076,14 +1898,7 @@
               "sizeBytes": 292726,
               "sourceHash": "sha256:04c2762ae6fbdad22dbe9ae836b2cf365659d1319b07c7cccee4f27dfb47a817"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photography_03",
@@ -2240,14 +2055,7 @@
               "sizeBytes": 834719,
               "sourceHash": "sha256:a41c26b4214baa2807672449ce88e16ad1b45825182af6a959aee2bf92bce906"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photography_04",
@@ -2411,14 +2219,7 @@
               "sizeBytes": 292726,
               "sourceHash": "sha256:04c2762ae6fbdad22dbe9ae836b2cf365659d1319b07c7cccee4f27dfb47a817"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photography_05",
@@ -2569,14 +2370,7 @@
               "sizeBytes": 1857474,
               "sourceHash": "sha256:bf14a1065a7e7777b5f691810e888d68d600c0b736f7535850e6d641f547f29c"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photography_06",
@@ -2727,14 +2521,7 @@
               "sizeBytes": 292726,
               "sourceHash": "sha256:04c2762ae6fbdad22dbe9ae836b2cf365659d1319b07c7cccee4f27dfb47a817"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photography_07",
@@ -2878,14 +2665,7 @@
               "sizeBytes": 834719,
               "sourceHash": "sha256:a41c26b4214baa2807672449ce88e16ad1b45825182af6a959aee2bf92bce906"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photography_08",
@@ -3031,14 +2811,7 @@
               "sizeBytes": 292726,
               "sourceHash": "sha256:04c2762ae6fbdad22dbe9ae836b2cf365659d1319b07c7cccee4f27dfb47a817"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel_01",
@@ -3186,14 +2959,7 @@
               "sizeBytes": 2522887,
               "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel_02",
@@ -3341,14 +3107,7 @@
               "sizeBytes": 438255,
               "sourceHash": "sha256:175293c79167aeda0a919446e6e8e18bf112cc44f53cdff6bde3b1bf58f56fe5"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel_03",
@@ -3505,14 +3264,7 @@
               "sizeBytes": 629043,
               "sourceHash": "sha256:afc53544bb3c4c4ab07f147c9aff01056e01a65ed94c4d8a2b03e003c1e0532f"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel_04",
@@ -3676,14 +3428,7 @@
               "sizeBytes": 438255,
               "sourceHash": "sha256:175293c79167aeda0a919446e6e8e18bf112cc44f53cdff6bde3b1bf58f56fe5"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel_05",
@@ -3834,14 +3579,7 @@
               "sizeBytes": 2522887,
               "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel_06",
@@ -3992,14 +3730,7 @@
               "sizeBytes": 438255,
               "sourceHash": "sha256:175293c79167aeda0a919446e6e8e18bf112cc44f53cdff6bde3b1bf58f56fe5"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel_07",
@@ -4143,14 +3874,7 @@
               "sizeBytes": 629043,
               "sourceHash": "sha256:afc53544bb3c4c4ab07f147c9aff01056e01a65ed94c4d8a2b03e003c1e0532f"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel_08",
@@ -4296,14 +4020,7 @@
               "sizeBytes": 438255,
               "sourceHash": "sha256:175293c79167aeda0a919446e6e8e18bf112cc44f53cdff6bde3b1bf58f56fe5"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_citywalk_01",
@@ -4457,16 +4174,9 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2686629,
-              "sourceHash": "sha256:1d315b3daadb2fc6362bdd17175fd67925981c4cd72936feaa4d6ba54463f522"
+              "sourceHash": "sha256:f2a3f9838f85a0adfb0539a28e98c676ff3be2502a1570c1358a31867cb597ce"
             }
-          },
-          "identityTags": [
-            "cityWalk",
-            "photography",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_citywalk_02",
@@ -4624,14 +4334,7 @@
               "sizeBytes": 325598,
               "sourceHash": "sha256:233d9c96b1f9a91a5293dcfe2ecd871c21eb6ef0a4e699a47a68f07e3109173e"
             }
-          },
-          "identityTags": [
-            "cityWalk",
-            "photography",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_citywalk_03",
@@ -4789,14 +4492,7 @@
               "sizeBytes": 669649,
               "sourceHash": "sha256:0addbbced3afd5e0e1a7570e2b8583709216ad62baf8df9542b0c8d47f94df7d"
             }
-          },
-          "identityTags": [
-            "cityWalk",
-            "photography",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_citywalk_04",
@@ -4955,14 +4651,7 @@
               "sizeBytes": 325598,
               "sourceHash": "sha256:233d9c96b1f9a91a5293dcfe2ecd871c21eb6ef0a4e699a47a68f07e3109173e"
             }
-          },
-          "identityTags": [
-            "cityWalk",
-            "photography",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_citywalk_05",
@@ -5124,16 +4813,9 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2686629,
-              "sourceHash": "sha256:a846c85da30be481b87ff77fb59e8be7c0e871984f3750225e4a4c15d6f1a93e"
+              "sourceHash": "sha256:3c808dd62724f3b0a19835bfeb5fcd3aa711f0f7a67179a351114750c7e18d03"
             }
-          },
-          "identityTags": [
-            "cityWalk",
-            "photography",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_citywalk_06",
@@ -5285,14 +4967,7 @@
               "sizeBytes": 325598,
               "sourceHash": "sha256:233d9c96b1f9a91a5293dcfe2ecd871c21eb6ef0a4e699a47a68f07e3109173e"
             }
-          },
-          "identityTags": [
-            "cityWalk",
-            "photography",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_citywalk_07",
@@ -5443,14 +5118,7 @@
               "sizeBytes": 669649,
               "sourceHash": "sha256:0addbbced3afd5e0e1a7570e2b8583709216ad62baf8df9542b0c8d47f94df7d"
             }
-          },
-          "identityTags": [
-            "cityWalk",
-            "photography",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_citywalk_08",
@@ -5597,14 +5265,7 @@
               "sizeBytes": 325598,
               "sourceHash": "sha256:233d9c96b1f9a91a5293dcfe2ecd871c21eb6ef0a4e699a47a68f07e3109173e"
             }
-          },
-          "identityTags": [
-            "cityWalk",
-            "photography",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_food_01",
@@ -5760,14 +5421,7 @@
               "sizeBytes": 2062449,
               "sourceHash": "sha256:bacfe716b92a789d7c398acd22465ba316a038490b4a242e3acd024c8f8db438"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_food_02",
@@ -5925,14 +5579,7 @@
               "sizeBytes": 336314,
               "sourceHash": "sha256:84b80df33db94a01e948139f058bf3e51da46336eaa905eaeb1db7d95399d589"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_food_03",
@@ -6090,14 +5737,7 @@
               "sizeBytes": 410734,
               "sourceHash": "sha256:2f16b92cf7b2bf6c4c2c26cbf5862ec4a8593b8973410485b7de81873cb23bde"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_food_04",
@@ -6256,14 +5896,7 @@
               "sizeBytes": 336314,
               "sourceHash": "sha256:84b80df33db94a01e948139f058bf3e51da46336eaa905eaeb1db7d95399d589"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_food_05",
@@ -6427,14 +6060,7 @@
               "sizeBytes": 2062449,
               "sourceHash": "sha256:bacfe716b92a789d7c398acd22465ba316a038490b4a242e3acd024c8f8db438"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_food_06",
@@ -6586,14 +6212,7 @@
               "sizeBytes": 336314,
               "sourceHash": "sha256:84b80df33db94a01e948139f058bf3e51da46336eaa905eaeb1db7d95399d589"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_food_07",
@@ -6744,14 +6363,7 @@
               "sizeBytes": 410734,
               "sourceHash": "sha256:2f16b92cf7b2bf6c4c2c26cbf5862ec4a8593b8973410485b7de81873cb23bde"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_food_08",
@@ -6898,14 +6510,7 @@
               "sizeBytes": 336314,
               "sourceHash": "sha256:84b80df33db94a01e948139f058bf3e51da46336eaa905eaeb1db7d95399d589"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_coffee_01",
@@ -7055,14 +6660,7 @@
               "sizeBytes": 1830290,
               "sourceHash": "sha256:2020999e128f5ef8a7cd4d431b609acd51c4336338262c85dbcd4d474bdec199"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_coffee_02",
@@ -7214,14 +6812,7 @@
               "sizeBytes": 208687,
               "sourceHash": "sha256:f4f1296c8216e43eba783a35cac87a840859ac04100db6873a49a03f2667087d"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_coffee_03",
@@ -7373,14 +6964,7 @@
               "sizeBytes": 336314,
               "sourceHash": "sha256:84b80df33db94a01e948139f058bf3e51da46336eaa905eaeb1db7d95399d589"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_coffee_04",
@@ -7533,14 +7117,7 @@
               "sizeBytes": 208687,
               "sourceHash": "sha256:f4f1296c8216e43eba783a35cac87a840859ac04100db6873a49a03f2667087d"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_coffee_05",
@@ -7698,14 +7275,7 @@
               "sizeBytes": 1830290,
               "sourceHash": "sha256:2020999e128f5ef8a7cd4d431b609acd51c4336338262c85dbcd4d474bdec199"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_coffee_06",
@@ -7857,14 +7427,7 @@
               "sizeBytes": 208687,
               "sourceHash": "sha256:f4f1296c8216e43eba783a35cac87a840859ac04100db6873a49a03f2667087d"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_coffee_07",
@@ -8016,14 +7579,7 @@
               "sizeBytes": 336314,
               "sourceHash": "sha256:84b80df33db94a01e948139f058bf3e51da46336eaa905eaeb1db7d95399d589"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_coffee_08",
@@ -8169,14 +7725,7 @@
               "sizeBytes": 208687,
               "sourceHash": "sha256:f4f1296c8216e43eba783a35cac87a840859ac04100db6873a49a03f2667087d"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_lifestyle_01",
@@ -8324,14 +7873,7 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_lifestyle_02",
@@ -8481,14 +8023,7 @@
               "sizeBytes": 208687,
               "sourceHash": "sha256:f4f1296c8216e43eba783a35cac87a840859ac04100db6873a49a03f2667087d"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_lifestyle_03",
@@ -8645,14 +8180,7 @@
               "sizeBytes": 670853,
               "sourceHash": "sha256:f6f3c1bda548126ad24caee9997158188b306fb3ccd510a465c7aa83d4c11e2c"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_lifestyle_04",
@@ -8818,14 +8346,7 @@
               "sizeBytes": 208687,
               "sourceHash": "sha256:f4f1296c8216e43eba783a35cac87a840859ac04100db6873a49a03f2667087d"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_lifestyle_05",
@@ -8976,14 +8497,7 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_lifestyle_06",
@@ -9136,14 +8650,7 @@
               "sizeBytes": 208687,
               "sourceHash": "sha256:f4f1296c8216e43eba783a35cac87a840859ac04100db6873a49a03f2667087d"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_lifestyle_07",
@@ -9287,14 +8794,7 @@
               "sizeBytes": 670853,
               "sourceHash": "sha256:f6f3c1bda548126ad24caee9997158188b306fb3ccd510a465c7aa83d4c11e2c"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_lifestyle_08",
@@ -9442,14 +8942,7 @@
               "sizeBytes": 208687,
               "sourceHash": "sha256:f4f1296c8216e43eba783a35cac87a840859ac04100db6873a49a03f2667087d"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_fitness_01",
@@ -9600,14 +9093,7 @@
               "sizeBytes": 2368853,
               "sourceHash": "sha256:092889b735cfb0ec794f8a68dce1ad0cddf7f79ec4415c082363bb782891c739"
             }
-          },
-          "identityTags": [
-            "fitness",
-            "outdoor",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_fitness_02",
@@ -9764,14 +9250,7 @@
               "sizeBytes": 547431,
               "sourceHash": "sha256:d6ebd795e5abe6ced59f0d2c5094fb7bc2a55d0ecbbbf7ecdc5dc50229d8fadd"
             }
-          },
-          "identityTags": [
-            "fitness",
-            "outdoor",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_fitness_03",
@@ -9929,14 +9408,7 @@
               "sizeBytes": 557735,
               "sourceHash": "sha256:bb7a9247749b6e101be59248ebf5076e6ae5f93fff6d6d62c5fccc580b217e53"
             }
-          },
-          "identityTags": [
-            "fitness",
-            "outdoor",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_fitness_04",
@@ -10097,14 +9569,7 @@
               "sizeBytes": 547431,
               "sourceHash": "sha256:d6ebd795e5abe6ced59f0d2c5094fb7bc2a55d0ecbbbf7ecdc5dc50229d8fadd"
             }
-          },
-          "identityTags": [
-            "fitness",
-            "outdoor",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_fitness_05",
@@ -10265,14 +9730,7 @@
               "sizeBytes": 2368853,
               "sourceHash": "sha256:092889b735cfb0ec794f8a68dce1ad0cddf7f79ec4415c082363bb782891c739"
             }
-          },
-          "identityTags": [
-            "fitness",
-            "outdoor",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_fitness_06",
@@ -10429,14 +9887,7 @@
               "sizeBytes": 547431,
               "sourceHash": "sha256:d6ebd795e5abe6ced59f0d2c5094fb7bc2a55d0ecbbbf7ecdc5dc50229d8fadd"
             }
-          },
-          "identityTags": [
-            "fitness",
-            "outdoor",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_fitness_07",
@@ -10588,14 +10039,7 @@
               "sizeBytes": 557735,
               "sourceHash": "sha256:bb7a9247749b6e101be59248ebf5076e6ae5f93fff6d6d62c5fccc580b217e53"
             }
-          },
-          "identityTags": [
-            "fitness",
-            "outdoor",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_fitness_08",
@@ -10748,14 +10192,7 @@
               "sizeBytes": 547431,
               "sourceHash": "sha256:d6ebd795e5abe6ced59f0d2c5094fb7bc2a55d0ecbbbf7ecdc5dc50229d8fadd"
             }
-          },
-          "identityTags": [
-            "fitness",
-            "outdoor",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_pet_01",
@@ -10905,14 +10342,7 @@
               "sizeBytes": 1895563,
               "sourceHash": "sha256:6bbaf799bdea326d4f5ab75f7ce33b2ef228acfc90417fa13dd53a3c26651d61"
             }
-          },
-          "identityTags": [
-            "pet",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_pet_02",
@@ -11070,14 +10500,7 @@
               "sizeBytes": 231640,
               "sourceHash": "sha256:88bcab5b3dd6ea327cb6b38b593a83dc3e12deeb84a3c330fdc60132e5d2da76"
             }
-          },
-          "identityTags": [
-            "pet",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_pet_03",
@@ -11234,14 +10657,7 @@
               "sizeBytes": 377385,
               "sourceHash": "sha256:8d27477ded8ac7e94ce98261b28c3924a338e0d9c059eb08165c65dde6218b7d"
             }
-          },
-          "identityTags": [
-            "pet",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_pet_04",
@@ -11403,14 +10819,7 @@
               "sizeBytes": 231640,
               "sourceHash": "sha256:88bcab5b3dd6ea327cb6b38b593a83dc3e12deeb84a3c330fdc60132e5d2da76"
             }
-          },
-          "identityTags": [
-            "pet",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_pet_05",
@@ -11570,14 +10979,7 @@
               "sizeBytes": 1895563,
               "sourceHash": "sha256:6bbaf799bdea326d4f5ab75f7ce33b2ef228acfc90417fa13dd53a3c26651d61"
             }
-          },
-          "identityTags": [
-            "pet",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_pet_06",
@@ -11735,14 +11137,7 @@
               "sizeBytes": 231640,
               "sourceHash": "sha256:88bcab5b3dd6ea327cb6b38b593a83dc3e12deeb84a3c330fdc60132e5d2da76"
             }
-          },
-          "identityTags": [
-            "pet",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_pet_07",
@@ -11893,14 +11288,7 @@
               "sizeBytes": 377385,
               "sourceHash": "sha256:8d27477ded8ac7e94ce98261b28c3924a338e0d9c059eb08165c65dde6218b7d"
             }
-          },
-          "identityTags": [
-            "pet",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_pet_08",
@@ -12054,14 +11442,7 @@
               "sizeBytes": 231640,
               "sourceHash": "sha256:88bcab5b3dd6ea327cb6b38b593a83dc3e12deeb84a3c330fdc60132e5d2da76"
             }
-          },
-          "identityTags": [
-            "pet",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_parenting_01",
@@ -12211,14 +11592,7 @@
               "sizeBytes": 1528683,
               "sourceHash": "sha256:e4d915d6a3dec29be613b32cb3d4fc29050753a6c584d70c7bd2feb2c9553379"
             }
-          },
-          "identityTags": [
-            "parenting",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_parenting_02",
@@ -12375,14 +11749,7 @@
               "sizeBytes": 689602,
               "sourceHash": "sha256:3920561bf062f997af98b1f3b2a150e54435fc23741226b78a935c6d8fdc0cdc"
             }
-          },
-          "identityTags": [
-            "parenting",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_parenting_03",
@@ -12539,14 +11906,7 @@
               "sizeBytes": 267548,
               "sourceHash": "sha256:1652949757809effa512c7a1b4f3a0e0ff0faceb657f779cadda840c0a4a614c"
             }
-          },
-          "identityTags": [
-            "parenting",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_parenting_04",
@@ -12707,14 +12067,7 @@
               "sizeBytes": 689602,
               "sourceHash": "sha256:3920561bf062f997af98b1f3b2a150e54435fc23741226b78a935c6d8fdc0cdc"
             }
-          },
-          "identityTags": [
-            "parenting",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_parenting_05",
@@ -12874,14 +12227,7 @@
               "sizeBytes": 1528683,
               "sourceHash": "sha256:e4d915d6a3dec29be613b32cb3d4fc29050753a6c584d70c7bd2feb2c9553379"
             }
-          },
-          "identityTags": [
-            "parenting",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_parenting_06",
@@ -13038,14 +12384,7 @@
               "sizeBytes": 689602,
               "sourceHash": "sha256:3920561bf062f997af98b1f3b2a150e54435fc23741226b78a935c6d8fdc0cdc"
             }
-          },
-          "identityTags": [
-            "parenting",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_parenting_07",
@@ -13196,14 +12535,7 @@
               "sizeBytes": 267548,
               "sourceHash": "sha256:1652949757809effa512c7a1b4f3a0e0ff0faceb657f779cadda840c0a4a614c"
             }
-          },
-          "identityTags": [
-            "parenting",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_parenting_08",
@@ -13356,14 +12688,7 @@
               "sizeBytes": 689602,
               "sourceHash": "sha256:3920561bf062f997af98b1f3b2a150e54435fc23741226b78a935c6d8fdc0cdc"
             }
-          },
-          "identityTags": [
-            "parenting",
-            "lifestyle",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_outdoor_01",
@@ -13514,14 +12839,7 @@
               "sizeBytes": 2339108,
               "sourceHash": "sha256:8cddb1acab949e1a1ef0d77c48212e7b165c29a005eb90c7275ed9e2a400b70c"
             }
-          },
-          "identityTags": [
-            "outdoor",
-            "travel",
-            "fitness"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_outdoor_02",
@@ -13678,14 +12996,7 @@
               "sizeBytes": 629043,
               "sourceHash": "sha256:afc53544bb3c4c4ab07f147c9aff01056e01a65ed94c4d8a2b03e003c1e0532f"
             }
-          },
-          "identityTags": [
-            "outdoor",
-            "travel",
-            "fitness"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_outdoor_03",
@@ -13843,14 +13154,7 @@
               "sizeBytes": 547431,
               "sourceHash": "sha256:d6ebd795e5abe6ced59f0d2c5094fb7bc2a55d0ecbbbf7ecdc5dc50229d8fadd"
             }
-          },
-          "identityTags": [
-            "outdoor",
-            "travel",
-            "fitness"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_outdoor_04",
@@ -14011,14 +13315,7 @@
               "sizeBytes": 629043,
               "sourceHash": "sha256:afc53544bb3c4c4ab07f147c9aff01056e01a65ed94c4d8a2b03e003c1e0532f"
             }
-          },
-          "identityTags": [
-            "outdoor",
-            "travel",
-            "fitness"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_outdoor_05",
@@ -14179,14 +13476,7 @@
               "sizeBytes": 2339108,
               "sourceHash": "sha256:8cddb1acab949e1a1ef0d77c48212e7b165c29a005eb90c7275ed9e2a400b70c"
             }
-          },
-          "identityTags": [
-            "outdoor",
-            "travel",
-            "fitness"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_outdoor_06",
@@ -14343,14 +13633,7 @@
               "sizeBytes": 629043,
               "sourceHash": "sha256:afc53544bb3c4c4ab07f147c9aff01056e01a65ed94c4d8a2b03e003c1e0532f"
             }
-          },
-          "identityTags": [
-            "outdoor",
-            "travel",
-            "fitness"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_outdoor_07",
@@ -14502,14 +13785,7 @@
               "sizeBytes": 547431,
               "sourceHash": "sha256:d6ebd795e5abe6ced59f0d2c5094fb7bc2a55d0ecbbbf7ecdc5dc50229d8fadd"
             }
-          },
-          "identityTags": [
-            "outdoor",
-            "travel",
-            "fitness"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_outdoor_08",
@@ -14662,14 +13938,7 @@
               "sizeBytes": 629043,
               "sourceHash": "sha256:afc53544bb3c4c4ab07f147c9aff01056e01a65ed94c4d8a2b03e003c1e0532f"
             }
-          },
-          "identityTags": [
-            "outdoor",
-            "travel",
-            "fitness"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_tech_01",
@@ -14823,16 +14092,9 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2148230,
-              "sourceHash": "sha256:368b1ddf81a2733ada0712b2c7169f183cad7ae7f067321bb877b9aa8a501319"
+              "sourceHash": "sha256:6db08fc699b9f3eba1b957acb74f98ea3a4accda0d2079f003b81657b077d743"
             }
-          },
-          "identityTags": [
-            "tech",
-            "designWriting",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_tech_02",
@@ -14995,14 +14257,7 @@
               "sizeBytes": 296222,
               "sourceHash": "sha256:c84059be4a691af67dc579297d5c77a5ee37a730d1f73fbc748a3e8f4927bc18"
             }
-          },
-          "identityTags": [
-            "tech",
-            "designWriting",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_tech_03",
@@ -15165,14 +14420,7 @@
               "sizeBytes": 460563,
               "sourceHash": "sha256:f46a94de1aa6dcd4bbbb9ed7f946481c2759dbd1acf51d218c6285ba052cfacc"
             }
-          },
-          "identityTags": [
-            "tech",
-            "designWriting",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_tech_04",
@@ -15339,14 +14587,7 @@
               "sizeBytes": 296222,
               "sourceHash": "sha256:c84059be4a691af67dc579297d5c77a5ee37a730d1f73fbc748a3e8f4927bc18"
             }
-          },
-          "identityTags": [
-            "tech",
-            "designWriting",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_tech_05",
@@ -15510,16 +14751,9 @@
               "width": 1600,
               "height": 900,
               "sizeBytes": 2148230,
-              "sourceHash": "sha256:b738f6fd1c6a162f173e508257f7b3f3d55ec9c73aa1160f895627899915ca95"
+              "sourceHash": "sha256:342ce3cc7be27558096d0bc2035583ac22581f861d8b93eb5fb7779b876df10c"
             }
-          },
-          "identityTags": [
-            "tech",
-            "designWriting",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_tech_06",
@@ -15682,14 +14916,7 @@
               "sizeBytes": 296222,
               "sourceHash": "sha256:c84059be4a691af67dc579297d5c77a5ee37a730d1f73fbc748a3e8f4927bc18"
             }
-          },
-          "identityTags": [
-            "tech",
-            "designWriting",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_tech_07",
@@ -15840,14 +15067,7 @@
               "sizeBytes": 460563,
               "sourceHash": "sha256:f46a94de1aa6dcd4bbbb9ed7f946481c2759dbd1acf51d218c6285ba052cfacc"
             }
-          },
-          "identityTags": [
-            "tech",
-            "designWriting",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_tech_08",
@@ -16000,14 +15220,7 @@
               "sizeBytes": 296222,
               "sourceHash": "sha256:c84059be4a691af67dc579297d5c77a5ee37a730d1f73fbc748a3e8f4927bc18"
             }
-          },
-          "identityTags": [
-            "tech",
-            "designWriting",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_designwriting_01",
@@ -16140,14 +15353,7 @@
               "sizeBytes": 1794125,
               "sourceHash": "sha256:68d9a9303e0a5b685f978f1c13681d23d159303304e1e09750fe7c4f55da35d5"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_designwriting_02",
@@ -16280,14 +15486,7 @@
               "sizeBytes": 258530,
               "sourceHash": "sha256:707b1da8b937e029f5a02bc8a7d4c0b1079e34a9e1a1028f241af6591c06c56d"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_designwriting_03",
@@ -16420,14 +15619,7 @@
               "sizeBytes": 364986,
               "sourceHash": "sha256:5b72b03119366d628c805a7e81c42236ab8e887fa6863cf48e83e0a858e99ef7"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_designwriting_04",
@@ -16561,14 +15753,7 @@
               "sizeBytes": 258530,
               "sourceHash": "sha256:707b1da8b937e029f5a02bc8a7d4c0b1079e34a9e1a1028f241af6591c06c56d"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_designwriting_05",
@@ -16695,14 +15880,7 @@
               "sizeBytes": 1794125,
               "sourceHash": "sha256:68d9a9303e0a5b685f978f1c13681d23d159303304e1e09750fe7c4f55da35d5"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_designwriting_06",
@@ -16829,14 +16007,7 @@
               "sizeBytes": 258530,
               "sourceHash": "sha256:707b1da8b937e029f5a02bc8a7d4c0b1079e34a9e1a1028f241af6591c06c56d"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_designwriting_07",
@@ -16956,14 +16127,7 @@
               "sizeBytes": 364986,
               "sourceHash": "sha256:5b72b03119366d628c805a7e81c42236ab8e887fa6863cf48e83e0a858e99ef7"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_designwriting_08",
@@ -17085,14 +16249,7 @@
               "sizeBytes": 258530,
               "sourceHash": "sha256:707b1da8b937e029f5a02bc8a7d4c0b1079e34a9e1a1028f241af6591c06c56d"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         }
       ]
     },

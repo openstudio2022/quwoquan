@@ -92,17 +92,17 @@ class UITextConstants {
       '以多列瀑布墙展示图片、视频与文章封面，点击任意内容进入沉浸浏览。';
   static const String webPcFeaturedFeedTitle = '精品内容';
   static const String webPcCreateRailTitle = '创作';
-  static const String webPcCreateRailBody = '从相册、相机或文字开始，Web 端保持与移动端一致的创作入口。';
+  static const String webPcCreateRailBody = '从照片、视频或文字开始，Web 端保持与移动端一致的创作入口。';
   static const String webPcCreateWorkspaceTitle = '添加';
   static const String webPcCreateWorkspaceSubtitle = '选择一种方式开始创作。';
   static const String webPcCreateContentGroupTitle = '创作方式';
   static const String webPcCreateSocialGroupTitle = '社交关系';
-  static const String webPcCreateCameraTitle = '相机';
-  static const String webPcCreateCameraSubtitle = '拍照或录像，完成后进入对应编辑页。';
+  static const String webPcCreateCameraTitle = '发布视频';
+  static const String webPcCreateCameraSubtitle = '从相册选视频或拍视频';
   static const String webPcCreateVideoTitle = webPcCreateCameraTitle;
   static const String webPcCreateVideoSubtitle = webPcCreateCameraSubtitle;
-  static const String webPcCreateGalleryTitle = '从相册选择';
-  static const String webPcCreateGallerySubtitle = '挑选图片或视频，按实际类型进入编辑。';
+  static const String webPcCreateGalleryTitle = '发布照片';
+  static const String webPcCreateGallerySubtitle = '从相册选照片或拍照';
   static const String webPcCreateTextTitle = '写文字';
   static const String webPcCreateTextSubtitle = '记录想法，也可以继续打磨成长文。';
   static const String webPcCreateDraftsTitle = '继续草稿';
@@ -666,10 +666,31 @@ class UITextConstants {
   static const String objectIntersectionCtaAskAssistant = '问问小趣';
   static const String objectIntersectionCtaView = '查看这个连接';
   static const String circleImpactTitle = '这个圈子帮助了很多人';
+
+  /// 对象/圈子主页「我的交集」模块统一标题（与我的主页同语义 token）。
+  /// 取代实体/圈子页旧标题「为什么推荐这里 / 为什么推荐这个圈子」。
+  static const String objectMyIntersectionsTitle = '我的交集';
+
+  /// 对象/圈子主页「影响力」模块统一标题（取代圈子价值卡「这个圈子帮助了很多人」标题）。
+  static const String objectImpactTitle = '影响力';
+
+  /// 实体主页「我的交集」空态：你与这里尚无真实连接。
+  static const String objectIntersectionEmptyEntity = '你和这里还没有产生交集';
+
+  /// 圈子主页「我的交集」空态：你与这个圈子尚无真实连接。
+  static const String objectIntersectionEmptyCircle = '你和这个圈子还没有产生交集';
+
+  /// 实体主页核心动作次按钮：围绕这里沉淀记录。
+  static const String entityActionPublishRecord = '发记录';
+
+  /// 圈子主页核心动作次按钮：进入讨论（切换到讨论 tab）。
+  static const String circleActionEnterDiscussion = '进入讨论';
+
   static const String objectConnectionWithYou = '与你的连接';
   static const String impactEnumerableHintMine = '可查看与你内容相关的连接来源';
   static const String impactEnumerableHintOther = '可查看与TA内容相关的连接来源';
   static const String impactEnumerableHintCircle = '可查看这个影响的连接来源';
+  static const String impactEnumerableHintEntity = '可查看这个影响的连接来源';
   static const String objectIntersectionsTitle = '全部连接';
   static const String objectIntersectionsEmpty = '暂时还没有可展示的连接';
   static const String objectIntersectionsUnavailableTitle = '连接暂不可用';
@@ -1697,9 +1718,10 @@ class UITextConstants {
   static const String postArticle = '写笔记';
   static const String publish = '发表';
   static const String publishAction = '发布';
-  static const String createActionPostPhotoShort = '从相册选择';
-  static const String createActionPostVideoShort = '相机';
-  static const String createActionCameraSubtitle = '拍照或录像';
+  static const String createActionPostPhotoShort = '发布照片';
+  static const String createActionPhotoSubtitle = '从相册选照片或拍照';
+  static const String createActionPostVideoShort = '发布视频';
+  static const String createActionCameraSubtitle = '从相册选视频或拍视频';
   static const String createActionWriteLong = '写文字';
   static const String createActionResumeDraft = '从草稿开始';
   static const String localDraftsTitle = '本地草稿';
@@ -2098,8 +2120,11 @@ class UITextConstants {
   static const String mediaPickerMixedImageLocked = '已选择图片，清空后可选视频';
   static const String mediaPickerMixedVideoLocked = '已选择视频，清空后可选图片';
   static const String mediaPickerVideoTitle = '全部视频';
-  static const String mediaPickerVideoCameraEntry = '现在开拍';
+  static const String mediaPickerVideoCameraEntry = '拍视频';
   static const String mediaPickerOneTapMovie = '一键成片';
+  static const String mediaPickerOneTapMovieComposing = '生成中...';
+  static const String mediaPickerOneTapMovieUnavailable = '当前设备暂不支持一键成片';
+  static const String mediaPickerOneTapMovieFailed = '成片失败，请重试';
   static const String mediaPickerOneTapMovieQueued = '已加入一键成片，请在发视频页继续';
   static const String mediaPickerNextStep = '下一步';
   static const String mediaPickerPhotoTitle = '图片选择';

@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/render_frame.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 /// StPageFlip native soft render: page state `position` is converted with the
 /// active direction. In portrait BACK, this maps the left-side previous page

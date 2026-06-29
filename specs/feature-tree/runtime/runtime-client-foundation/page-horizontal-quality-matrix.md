@@ -93,8 +93,8 @@
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/content/pages/unified_media_viewer_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | **P2 ✓**：薄壳→`WorksImmersiveViewer`+`readPresentation`；**P6** 仍 exempt（S6-2）；2026-05-19 进入沉浸媒体时使用 appChrome 压缩 safeTop，对齐首页精品顶栏 |
-| `lib/ui/content/pages/work_browser_entry_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | `workBrowser` 统一深链入口；P2 `WorkBrowserItemDto`/`PostReadPresentation` + `ContentRepository` 定位队列；P3 走 `contentRepositoryProvider` Mock/Remote；P6 成功态跟随 `WorksImmersiveViewer` 深色沉浸与文章 Dark Paper，首屏错误态按 `sourceTheme` 回到来源 light/dark |
+| `lib/ui/discovery/pages/unified_media_viewer_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | — | ✓ | ✓ | **P2 ✓**：薄壳→`WorksImmersiveViewer`+`readPresentation`；**P6** 仍 exempt（S6-2）；2026-05-19 进入沉浸媒体时使用 appChrome 压缩 safeTop，对齐首页精品顶栏 |
+| `lib/ui/discovery/pages/work_browser_entry_page.dart` | local_contract | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | `workBrowser` 统一深链入口；P2 `WorkBrowserItemDto`/`PostReadPresentation` + `ContentRepository` 定位队列；P3 走 `contentRepositoryProvider` Mock/Remote；P6 成功态跟随 `WorksImmersiveViewer` 深色沉浸与文章 Dark Paper，首屏错误态按 `sourceTheme` 回到来源 light/dark |
 
 ---
 

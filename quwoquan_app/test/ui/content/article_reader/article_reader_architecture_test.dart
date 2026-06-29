@@ -6,11 +6,11 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/single_pag
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/backward_article_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/forward_article_flip_pipeline.dart';
-import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
-import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
-import 'package:quwoquan_app/ui/content/pageflip/spread_model.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/book_layout.dart';
+import 'package:quwoquan_app/components/pageflip/controller.dart';
+import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
+import 'package:quwoquan_app/components/pageflip/spread_model.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 void main() {
   test('article reader pipelines isolate forward and backward outputs', () {
@@ -57,7 +57,6 @@ void main() {
     expect(libDir.existsSync(), isTrue);
 
     const allowedDirectDeckEntrypoints = <String>{
-      'lib/components/pageflip/src/debug/pageflip_diagnostics.dart',
       'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
       'lib/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart',
     };

@@ -39,12 +39,17 @@ class DiscoveryFeedText {
   static const String intersectionFilterCircles = '圈子';
   static const String intersectionFilterPlaces = '地点';
   static const String intersectionFilterInterests = '兴趣';
+  static const String impactFilterRecords = '记录';
+  static const String impactFilterDiscussions = '讨论';
+  static const String impactFilterHomepage = '主页';
   static const String intersectionTimeBucketToday = '今天';
   static const String intersectionTimeBucketYesterday = '昨天';
   static const String intersectionTimeBucketLast7Days = '近 7 天';
   static const String intersectionTimeBucketThisMonth = '本月';
   static const String intersectionTimeBucketLastMonth = '上月';
   static const String intersectionTimeBucketEmpty = '暂无交集';
+  static const String intersectionTimelineRecentLimitNote = '仅展示最近 90 天的交集变化';
+  static String intersectionTimelineBucketCount(int count) => '$count条';
   static const String myIntersectionsSubtitle = '最近谁和你有了新的共同点';
   static const String intersectionExpandMore = '展开';
   static const String intersectionCollapse = '收起';

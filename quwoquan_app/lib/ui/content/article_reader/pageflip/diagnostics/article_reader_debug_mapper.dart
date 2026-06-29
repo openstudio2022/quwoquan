@@ -4,8 +4,8 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/arti
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
-import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/book_layout.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 /// Diagnostic mapper follows the same StPageFlip native BACK soft render as
 /// the host: BACK uses `(anchor.x - p.x, p.y - anchor.y)` and BACK projection,

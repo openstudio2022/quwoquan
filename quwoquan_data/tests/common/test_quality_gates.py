@@ -18,9 +18,19 @@ from _common import quality_gates as qg  # noqa: E402
 
 
 def test_writing_intent_contract():
+    # 底稿中心 1:1：writingIntent 是底稿派生的可选标签——合法值与"缺失"都不报错，仅非法取值报错。
     assert qg.writing_intent_issues("planning_consultation") == []
-    assert qg.writing_intent_issues("") and "missing" in qg.writing_intent_issues("")[0]
+    assert qg.writing_intent_issues("") == []
+    assert qg.writing_intent_issues(None) == []
     assert qg.writing_intent_issues("foo") and "invalid" in qg.writing_intent_issues("foo")[0]
+
+
+def test_derive_writing_intent_from_text():
+    # 底稿正文派生 writingIntent：命中结构桶最多者；任何输入都返回合法顶层标签且不抛错。
+    valid = {"planning_consultation", "decision_experience", "post_trip_journal"}
+    assert qg.derive_writing_intent("", default="post_trip_journal") == "post_trip_journal"
+    assert qg.derive_writing_intent("九寨沟交通怎么去 门票预约 行前安排攻略") in valid
+    assert qg.derive_writing_intent("随便一段没有明显信号的文字") in valid
 
 
 def test_image_reference_closure_blocks_cover_only():

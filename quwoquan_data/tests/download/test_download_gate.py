@@ -22,14 +22,26 @@ os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
 
 from _common.paths import batch_entity_object_dir, batch_root, ensure_task_layout  # noqa: E402
 from _common.io import write_json  # noqa: E402
-from _common.source_unit import write_source_unit  # noqa: E402
+from _common.source_unit import iter_source_units, write_source_unit  # noqa: E402
 from download.gate import gate_download  # noqa: E402
 
 TASK = "旅行/地域/四川省/景区/景区全覆盖"
 
 
 def _attach_image(unit_dir: Path, name: str) -> None:
-    assets = unit_dir / "assets"
+    target_unit = unit_dir
+    if unit_dir.parent.name == "sources" and unit_dir.parent.parent.name == "1.download":
+        object_dir = unit_dir.parent.parent.parent
+        ordinal_text, _, source_id = unit_dir.name.partition(".")
+        for candidate in iter_source_units(object_dir):
+            try:
+                meta = __import__("json").loads((candidate / "meta.json").read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                continue
+            if str(meta.get("sourceId") or "") == source_id and int(meta.get("ordinal") or 0) == int(ordinal_text or 0):
+                target_unit = candidate
+                break
+    assets = target_unit / "assets"
     assets.mkdir(parents=True, exist_ok=True)
     image = assets / f"{name}.jpg"
     image.write_bytes(b"fake-image")
@@ -391,7 +403,7 @@ def test_gate_download_blocks_target_entity_without_sources_dir():
 
     issues = gate_download(TASK, batch, target_entities={"缺下载景区"})
 
-    assert any("缺下载景区/1.download/sources: sources directory missing" in issue for issue in issues), issues
+    assert any("缺下载景区/1.download/source_refs.json: sources directory missing" in issue for issue in issues), issues
 
 
 def test_gate_download_includes_failed_stage_gate_sidecars():

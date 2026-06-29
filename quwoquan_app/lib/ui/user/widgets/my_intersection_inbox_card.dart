@@ -10,7 +10,7 @@ import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_intersection_insight_primitives.dart';
+import 'package:quwoquan_app/components/object_page/object_insight_primitives.dart';
 
 /// 我的主页「我的交集」预览卡（高保版）。
 ///

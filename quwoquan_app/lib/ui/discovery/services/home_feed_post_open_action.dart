@@ -9,7 +9,7 @@ import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
-import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
+import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_state.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_media_viewer_wiring.dart';
@@ -89,7 +89,6 @@ Future<void> openHomeFeedPost(
       posts: postViews,
       dtoPosts: viewerPosts,
       initialIndex: initialIndex,
-      category: 'following',
       source: 'home_feed',
       initialImageIndex: mediaIndex,
       rawPostsById: rawPostsById,

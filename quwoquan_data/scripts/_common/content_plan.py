@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
-from _common.base_draft import load_base_draft_text
+from _common.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness, load_base_draft_text
 from _common import ops_governance as og
 from _common.content_object import BRIEF_FILE, content_object_stage_dir, load_index
 from _common.creator_assignment import creator_assignment_issues, creator_assignment_required
@@ -26,7 +26,6 @@ from _common.paths import (
 from _common.quality_gates import WRITING_INTENTS, writing_intent_issues
 
 CONTENT_PLAN_SCHEMA = "quwoquan_data.content_plan_packet"
-ARTICLE_MIN_BASE_DRAFT_CHARS = 600
 ARTICLE_BASE_SOURCE_ROLES = {"base"}
 ARTICLE_BASE_SOURCE_CATEGORIES = {
     "travelogue",
@@ -223,38 +222,6 @@ def _article_source_category(meta: Mapping[str, Any]) -> str:
     ).strip()
 
 
-def _entity_focus_issues(*, ref: str, carrier: str, source_meta: Mapping[str, Any], item: Mapping[str, Any] | None = None) -> list[str]:
-    issues: list[str] = []
-    verdict = str(
-        (item or {}).get("entityFocusVerdict")
-        or source_meta.get("entityFocusVerdict")
-        or source_meta.get("focusVerdict")
-        or ""
-    ).strip().lower()
-    if verdict in {"weak", "supporting_only", "mismatch", "off_entity"}:
-        issues.append(
-            f"item[{ref}]: entity_focus_gate blocked {carrier} primary source "
-            f"(verdict={verdict}); weak/off-entity sourceUnit may only be supporting evidence"
-        )
-    raw_score = (
-        (item or {}).get("entityFocusScore")
-        if (item or {}).get("entityFocusScore") is not None
-        else source_meta.get("entityFocusScore")
-    )
-    try:
-        score = float(raw_score)
-    except (TypeError, ValueError):
-        score = None
-    # 聚焦度阈值的唯一真相源在 _common.entity_focus（与 download/选源/准出口径一致）。
-    from _common.entity_focus import ENTITY_FOCUS_STRONG_FLOOR
-    if score is not None and score < ENTITY_FOCUS_STRONG_FLOOR:
-        issues.append(
-            f"item[{ref}]: entity_focus_gate score {score:.2f} < {ENTITY_FOCUS_STRONG_FLOOR:.2f}; "
-            "primary source must be about the target entity, not a loose mention"
-        )
-    return issues
-
-
 def _source_asset_ref(
     task_id: str, batch_id: str, root: Path, source_ref: str, row: Mapping[str, Any]
 ) -> str:
@@ -318,9 +285,12 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             targets = dynamic_targets
         else:
             issues.append("siteSupplyDynamicContentPlan requires entityRefs in site_supply content_plan_packet")
-    if per_target_articles:
+    # 底稿中心 1:1（separated_research）：entityArticlesPerTarget / imageWorksPerTarget 降级为
+    # "载体车道开关"——枚举合格 source unit 逐一成稿，不再换算成每实体硬配额（既无地板也无天花板）。
+    # 仅遗留的非 separated_research 模式仍按"每实体硬配额"换算。
+    if per_target_articles and not separated_research:
         want_entity = per_target_articles * len(targets)
-    if per_target_galleries and image_quota_hard:
+    if per_target_galleries and image_quota_hard and not separated_research:
         want_gallery = per_target_galleries * len(targets)
     required_angles = [
         str(angle).strip()
@@ -562,13 +532,8 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                             source_meta = read_json(source_meta_path)
                         except (OSError, ValueError, TypeError):
                             source_meta = {}
-                        for focus_issue in _entity_focus_issues(
-                            ref=ref,
-                            carrier="image",
-                            source_meta=source_meta if isinstance(source_meta, Mapping) else {},
-                            item=item,
-                        ):
-                            issues.append(focus_issue)
+                        # 底稿中心 1:1：图片实体退化为多标签，不再用 entity_focus 弃稿；
+                        # 单源约束由 sourceCollectionId 一致性 + researchLane=image 把关。
                         if str(source_meta.get("researchLane") or "") != "image":
                             issues.append(
                                 f"item[{ref}]: image asset must come from researchLane=image: "
@@ -630,17 +595,9 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             issues.append(f"item[{ref}]: article baseSourceRef required for scaled task")
         if carrier != "image" and base_source_ref:
             source_meta = _source_meta(root, base_source_ref)
-            # 单实体聚焦门只约束 kind=entity 文章底稿；kind=route（网站角度环线）
-            # 本就用跨多个地点的多地点游记作底稿，由 routeCoverage/entityRefs>=3 把关，
-            # 不能用单实体聚焦门拦截，否则环线底稿会被误判 off_entity 而无法成稿。
-            if kind != "route":
-                for focus_issue in _entity_focus_issues(
-                    ref=ref,
-                    carrier="article",
-                    source_meta=source_meta,
-                    item=item,
-                ):
-                    issues.append(focus_issue)
+            # 底稿中心 1:1：文章实体退化为多标签，不再用单实体聚焦门弃稿——多目的地游记照样按
+            # 单一底稿成稿（entityRefs/entityTags 记录其覆盖的实体集合）。entity_focus 仅在
+            # "实体->主页（百科源）"路径把关，不在 article/image 内容项重复设门。
             actual_mode = str(source_meta.get("sourceUseMode") or "").strip()
             if actual_mode == "blocked":
                 issues.append(f"item[{ref}]: baseSourceRef points to blocked source")
@@ -680,22 +637,26 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                         f"item[{ref}]: article baseSourceRef category {category!r} "
                         "is not an approved article base category"
                     )
-            base_text_len = _compact_len(load_base_draft_text(task_id, batch_id, base_source_ref))
-            if strict_rights_mode and base_text_len < ARTICLE_MIN_BASE_DRAFT_CHARS:
+            readiness = base_draft_readiness(
+                load_base_draft_text(task_id, batch_id, base_source_ref),
+                publish_media_mode=str(item.get("publishMediaMode") or source_meta.get("publishMediaMode") or ""),
+            )
+            if strict_rights_mode and not readiness["ready"]:
                 issues.append(
                     f"item[{ref}]: baseSourceRef usable text too short "
-                    f"({base_text_len} < {ARTICLE_MIN_BASE_DRAFT_CHARS})"
+                    f"({readiness['effectiveChars']} < {ARTICLE_MIN_BASE_DRAFT_CHARS}; "
+                    f"figures={readiness['inlineFigureCount']} captions={readiness['captionChars']})"
                 )
             reuse_policy = str(item.get("baseSourceReusePolicy") or "").strip()
-            if strict_rights_mode and reuse_policy:
+            if reuse_policy:
+                # 底稿中心 1:1：一源只能一篇——彻底取消 baseSourceReusePolicy /
+                # multi_intent_source_bundle 逃生口，任何复用声明都不允许。
                 issues.append(
-                    f"item[{ref}]: baseSourceReusePolicy is not allowed for scaled separated_research; "
+                    f"item[{ref}]: baseSourceReusePolicy is not allowed; "
                     "article baseSourceRef must be one-source-one-work"
                 )
             previous = base_source_owners.get(base_source_ref)
-            if previous and previous != ref and (
-                strict_rights_mode or reuse_policy != "multi_intent_source_bundle"
-            ):
+            if previous and previous != ref:
                 issues.append(
                     f"item[{ref}]: baseSourceRef reused by {previous}; main evidence must be one-source-one-work"
                 )
@@ -789,43 +750,32 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
         )
         effective_target_articles = max(0, per_target_articles - len(target_abandoned_articles))
         effective_target_galleries = max(0, per_target_galleries - len(target_abandoned_galleries))
-        if per_target_articles and len(articles) != effective_target_articles:
-            issues.append(
-                f"{target}: entityArticlesPerTarget quota {per_target_articles} "
-                f"(minus abandoned {len(target_abandoned_articles)} => {effective_target_articles}) "
-                f"but packet has {len(articles)}"
-            )
-        if per_target_galleries and image_quota_hard and len(galleries) != effective_target_galleries:
-            issues.append(
-                f"{target}: imageWorksPerTarget quota {per_target_galleries} "
-                f"(minus abandoned {len(target_abandoned_galleries)} => {effective_target_galleries}) "
-                f"but packet has {len(galleries)}"
-            )
-        if per_target_articles == 2:
-            intents = sorted(str(item.get("writingIntent") or "") for item in articles)
-            abandoned_intents = _abandoned_intents_for_target(abandoned_refs, target)
-            expected = sorted(
-                intent
-                for intent in ("planning_consultation", "decision_experience")
-                if intent not in abandoned_intents
-            )
-            if intents != expected:
+        # 底稿中心 1:1（separated_research）：不再按每实体配额校验文章/图片篇数，也不再要求
+        # writingIntent 角度覆盖——每个合格 source unit 各成一篇，角度由底稿派生、可重复、可缺。
+        if not separated_research:
+            if per_target_articles and len(articles) != effective_target_articles:
                 issues.append(
-                    f"{target}: entity articles must split planning_consultation and "
-                    f"decision_experience (minus abandoned {sorted(abandoned_intents)} => {expected}), "
-                    f"got {intents}"
+                    f"{target}: entityArticlesPerTarget quota {per_target_articles} "
+                    f"(minus abandoned {len(target_abandoned_articles)} => {effective_target_articles}) "
+                    f"but packet has {len(articles)}"
                 )
-        if required_article_intents and per_target_articles == len(required_article_intents):
-            intents = sorted(str(item.get("writingIntent") or "") for item in articles)
-            abandoned_intents = _abandoned_intents_for_target(abandoned_refs, target)
-            expected = sorted(
-                intent for intent in required_article_intents if intent not in abandoned_intents
-            )
-            if intents != expected:
+            if per_target_galleries and image_quota_hard and len(galleries) != effective_target_galleries:
                 issues.append(
-                    f"{target}: entity articles must match acceptance.requiredAngles "
-                    f"{expected}, got {intents}"
+                    f"{target}: imageWorksPerTarget quota {per_target_galleries} "
+                    f"(minus abandoned {len(target_abandoned_galleries)} => {effective_target_galleries}) "
+                    f"but packet has {len(galleries)}"
                 )
+            if required_article_intents and per_target_articles == len(required_article_intents):
+                intents = sorted(str(item.get("writingIntent") or "") for item in articles)
+                abandoned_intents = _abandoned_intents_for_target(abandoned_refs, target)
+                expected = sorted(
+                    intent for intent in required_article_intents if intent not in abandoned_intents
+                )
+                if intents != expected:
+                    issues.append(
+                        f"{target}: entity articles must match acceptance.requiredAngles "
+                        f"{expected}, got {intents}"
+                    )
         if len(galleries) > 1:
             titles = [str(item.get("title") or "").strip() for item in galleries]
             non_empty_titles = [title for title in titles if title]

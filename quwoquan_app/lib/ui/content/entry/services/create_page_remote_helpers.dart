@@ -6,9 +6,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
-import 'package:quwoquan_app/ui/content/markdown/qwq_markdown.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
+import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown.dart';
 
 int paragraphCountForPayload(String text) {
   return text

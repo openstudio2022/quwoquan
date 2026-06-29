@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html as html_lib
+from html.parser import HTMLParser
 import hashlib
 import http.client
 import json
@@ -280,8 +281,89 @@ def _wikipedia_api_plaintext(url: str) -> str:
     return extract
 
 
+class _InlineFigureHTMLTextExtractor(HTMLParser):
+    _BLOCK_TAGS = {
+        "address",
+        "article",
+        "aside",
+        "blockquote",
+        "br",
+        "dd",
+        "div",
+        "dl",
+        "dt",
+        "figcaption",
+        "figure",
+        "footer",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "li",
+        "main",
+        "nav",
+        "ol",
+        "p",
+        "section",
+        "table",
+        "td",
+        "th",
+        "tr",
+        "ul",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._chunks: list[str] = []
+        self._skip_depth = 0
+        self._figure_index = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag = tag.lower()
+        if tag in {"script", "style", "noscript"}:
+            self._skip_depth += 1
+            return
+        if self._skip_depth:
+            return
+        if tag in self._BLOCK_TAGS:
+            self._chunks.append("\n")
+        if tag == "img":
+            attr = {key.lower(): value or "" for key, value in attrs}
+            src = (attr.get("src") or attr.get("data-src") or attr.get("data-original") or "").strip()
+            caption = (attr.get("alt") or attr.get("title") or src or "source image").strip()
+            caption = re.sub(r"\s+", " ", html_lib.unescape(caption))
+            self._figure_index += 1
+            asset_id = f"source-inline-{self._figure_index:03d}"
+            self._chunks.append(
+                f"\n:::figure\n![{caption}](asset://{asset_id})\n{caption}\n:::\n"
+            )
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.lower()
+        if tag in {"script", "style", "noscript"} and self._skip_depth:
+            self._skip_depth -= 1
+            return
+        if self._skip_depth:
+            return
+        if tag in self._BLOCK_TAGS:
+            self._chunks.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth:
+            return
+        text = html_lib.unescape(data)
+        if text.strip():
+            self._chunks.append(text)
+
+    def text(self) -> str:
+        return "".join(self._chunks)
+
+
 def _html_to_plain_text(html: str) -> str:
-    text = re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", html)
+    text = str(html or "")
     match = re.search(
         r'(?is)<div[^>]+class="[^"]*mw-parser-output[^"]*"[^>]*>(.*)</div>\s*</div>\s*</div>',
         text,
@@ -289,7 +371,12 @@ def _html_to_plain_text(html: str) -> str:
     if match:
         text = match.group(1)
     text = re.sub(r"(?is)<!--.*?-->", " ", text)
-    text = re.sub(r"(?is)<[^>]+>", "\n", text)
+    parser = _InlineFigureHTMLTextExtractor()
+    try:
+        parser.feed(text)
+        text = parser.text()
+    except Exception:  # noqa: BLE001
+        text = re.sub(r"(?is)<[^>]+>", "\n", text)
     text = html_lib.unescape(text)
     text = re.sub(r"&nbsp;|&amp;|&lt;|&gt;|&quot;|&#\d+;", " ", text)
     lines = [ln.strip() for ln in text.splitlines()]
@@ -689,7 +776,7 @@ def _source_fetchable_override(source: Mapping[str, Any] | None) -> bool:
 def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -> dict:
     """抓取原文但不落盘，返回 {url, statusCode, htmlBytes, text, sha256}。
 
-    供来源单元写入器把 page.html/source.md 落进 1.download/sources/{NN}.{sourceKind}/。
+    供来源单元写入器把 page.html/source.md 落进 `sources/{sourceUnitId}/`。
     网络异常抛出，由调用方走离线兜底。
     """
     runtime = resolve_travel_source_runtime(url)

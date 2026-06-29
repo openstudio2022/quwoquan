@@ -65,7 +65,7 @@ class PhotoPostDto extends PostBaseDto {
   factory PhotoPostDto.fromMap(Map<String, dynamic> m) {
     return PhotoPostDto(
       id: m['postId']?.toString() ?? m['_id']?.toString() ?? '',
-      type: m['contentType']?.toString() ?? m['category']?.toString() ?? 'photo',
+      type: m['contentType']?.toString() ?? m['category']?.toString() ?? 'image',
       identity: m['contentIdentity']?.toString() ?? m['identity']?.toString() ?? 'work',
       assistantUsePolicy: m['assistantUsePolicy']?.toString() ?? 'inherit',
       authorId: m['authorId']?.toString() ?? m['userId']?.toString() ?? m['author_id']?.toString() ?? '',

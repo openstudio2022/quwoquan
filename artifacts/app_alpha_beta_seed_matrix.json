@@ -15,7 +15,7 @@
   "alpha": {
     "dataSource": "mock",
     "test": "test/cloud/services/contract_seeded_mock_repository_test.dart",
-    "outputTail": "00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/services/contract_seeded_mock_repository_test.dart\n00:00 +0: alpha 环境契约要求端侧使用 mock repository\n00:00 +1: content mock repository 可由 contracts fixture 初始化\n00:00 +2: content contract fixture 的核心文章保留显式创作/更新/发布时间\n00:00 +3: content mock repository 默认优先读取 contract fixture\n00:00 +4: circle mock repository 可由 contracts fixture 初始化\n00:00 +5: circle mock repository 默认优先读取 contract fixture\n00:00 +6: chat mock repository 可由 contracts fixture 初始化\n00:00 +7: chat mock repository 默认优先读取 contract fixture\n00:00 +8: homepage mock repository 默认优先读取 contract fixture\n00:00 +9: app content mock repository 默认优先读取 contract fixture\n00:00 +10: user profile mock repository 默认优先读取 contract fixture\n00:00 +11: app alpha/beta/gamma seed manifests 引用的 fixture seedRefs 均存在\n00:00 +12: All tests passed!\n",
+    "outputTail": "erridden)\n! share_plus 13.1.0 from path vendor/plugins/share_plus (overridden)\n! shared_preferences_android 2.4.23 from path vendor/plugins/shared_preferences_android (overridden)\n  sqflite_darwin 2.4.3 (2.4.3+1 available)\n! test 1.31.1 (overridden) (1.31.2 available)\n! test_api 0.7.12 (overridden) (0.7.13 available)\n! test_core 0.6.18 (overridden) (0.6.19 available)\n! url_launcher_android 6.3.30 from path vendor/plugins/url_launcher_android (overridden)\n! vector_math 2.4.0 (overridden)\n  video_player_android 2.9.6 (2.9.7 available)\n  video_player_avfoundation 2.9.7 (2.10.0 available)\n  video_player_platform_interface 6.7.0 (6.8.0 available)\n! video_thumbnail 0.5.6 from path vendor/plugins/video_thumbnail (overridden)\n! wakelock_plus 1.6.1 from path vendor/plugins/wakelock_plus (overridden)\n! webview_flutter_android 4.12.0 from path vendor/plugins/webview_flutter_android (overridden)\n! win32 6.3.0 (overridden)\n  xml 6.6.1 (7.0.1 available)\nGot dependencies!\n16 packages have newer versions incompatible with dependency constraints.\nTry `flutter pub outdated` for more information.\n00:00 +0: loading /Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/test/cloud/services/contract_seeded_mock_repository_test.dart\n00:00 +0: alpha 环境契约要求端侧使用 mock repository\n00:00 +1: content mock repository 可由 contracts fixture 初始化\n00:00 +2: content contract fixture 的核心文章保留显式创作/更新/发布时间\n00:00 +3: content mock repository 默认优先读取 contract fixture\n00:00 +4: content mock repository 的真实评论入口复用高保回复磁度\n00:00 +5: circle mock repository 可由 contracts fixture 初始化\n00:00 +6: circle mock repository 默认优先读取 contract fixture\n00:00 +7: chat mock repository 可由 contracts fixture 初始化\n00:00 +8: chat mock repository 默认优先读取 contract fixture\n00:00 +9: homepage mock repository 默认优先读取 contract fixture\n00:00 +10: app content mock repository 默认优先读取 contract fixture\n00:00 +11: user profile mock repository 默认优先读取 contract fixture\n00:00 +12: app alpha/beta/gamma seed manifests 引用的 fixture seedRefs 均存在\n00:00 +13: All tests passed!\n",
     "deliveryChannels": {
       "assistant": [
         "app-fixture-json",
@@ -34,6 +34,10 @@
         "chat-service:test_store"
       ],
       "user": [
+        "app-fixture-json",
+        "user-service:test_store"
+      ],
+      "creator_pool": [
         "app-fixture-json",
         "user-service:test_store"
       ],

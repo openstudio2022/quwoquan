@@ -7,6 +7,7 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from _common.io import read_json
+from _common.paths import batch_root
 
 
 @dataclass(frozen=True)
@@ -612,8 +613,71 @@ def _source_dirs_for_entity(
     return []
 
 
-def load_source_records(task_id: str, batch_id: str, entity_names: Sequence[str], entity_refs: Sequence[str] | None = None) -> list[dict[str, Any]]:
+def _source_record_from_dir(
+    task_id: str,
+    batch_id: str,
+    source_dir: Path,
+    *,
+    entity_name: str,
+) -> dict[str, Any] | None:
+    if not source_dir.is_dir():
+        return None
+    source_md = source_dir / "source.md"
+    if not source_md.is_file():
+        return None
+    text = source_md.read_text(encoding="utf-8")
+    quality_path = source_dir / "source.quality.json"
+    if quality_path.exists():
+        payload = read_json(quality_path)
+        assessment = SourceAssessment(
+            source_id=str(payload.get("sourceId") or source_dir.name),
+            quality=str(payload.get("quality") or "Reject"),
+            score=int(payload.get("score") or 0),
+            reasons=tuple(str(item) for item in payload.get("reasons") or []),
+            excerpt=str(payload.get("excerpt") or ""),
+        )
+        url = str(payload.get("url") or _frontmatter_map(text).get("url") or "")
+    else:
+        assessment = score_source_markdown(source_dir.name, text, entity_name=entity_name)
+        url = _frontmatter_map(text).get("url") or ""
+    return {
+        "entityName": entity_name,
+        "sourceId": source_dir.name,
+        "sourceDir": str(source_dir),
+        "sourcePath": str(source_md),
+        "url": url,
+        "text": text,
+        "assessment": assessment,
+    }
+
+
+def load_source_records(
+    task_id: str,
+    batch_id: str,
+    entity_names: Sequence[str],
+    entity_refs: Sequence[str] | None = None,
+    *,
+    base_source_ref: str = "",
+) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
+    base_ref = str(base_source_ref or "").strip()
+    if base_ref:
+        source_path = Path(base_ref)
+        if not source_path.is_absolute():
+            source_path = batch_root(task_id, batch_id) / base_ref
+        entity_name = entity_names[0] if entity_names else ""
+        meta_path = source_path.parent / "meta.json"
+        if meta_path.is_file():
+            try:
+                meta = read_json(meta_path)
+            except (OSError, ValueError, TypeError):
+                meta = {}
+            relevance = meta.get("relevance") if isinstance(meta.get("relevance"), Mapping) else {}
+            target_refs = [str(ref) for ref in (relevance.get("targetRefs") or []) if str(ref)]
+            if target_refs:
+                entity_name = target_refs[0].rstrip("/").rsplit("/", 1)[-1]
+        row = _source_record_from_dir(task_id, batch_id, source_path.parent, entity_name=entity_name)
+        return [row] if row is not None else []
     ref_by_name: dict[str, str] = {}
     for raw_ref in entity_refs or []:
         ref = str(raw_ref or "").strip()
@@ -627,37 +691,9 @@ def load_source_records(task_id: str, batch_id: str, entity_names: Sequence[str]
             entity_name,
             entity_ref=ref_by_name.get(entity_name, ""),
         ):
-            if not source_dir.is_dir():
-                continue
-            source_md = source_dir / "source.md"
-            if not source_md.is_file():
-                continue
-            text = source_md.read_text(encoding="utf-8")
-            quality_path = source_dir / "source.quality.json"
-            if quality_path.exists():
-                payload = read_json(quality_path)
-                assessment = SourceAssessment(
-                    source_id=str(payload.get("sourceId") or source_dir.name),
-                    quality=str(payload.get("quality") or "Reject"),
-                    score=int(payload.get("score") or 0),
-                    reasons=tuple(str(item) for item in payload.get("reasons") or []),
-                    excerpt=str(payload.get("excerpt") or ""),
-                )
-                url = str(payload.get("url") or _frontmatter_map(text).get("url") or "")
-            else:
-                assessment = score_source_markdown(source_dir.name, text, entity_name=entity_name)
-                url = _frontmatter_map(text).get("url") or ""
-            records.append(
-                {
-                    "entityName": entity_name,
-                    "sourceId": source_dir.name,
-                    "sourceDir": str(source_dir),
-                    "sourcePath": str(source_md),
-                    "url": url,
-                    "text": text,
-                    "assessment": assessment,
-                }
-            )
+            row = _source_record_from_dir(task_id, batch_id, source_dir, entity_name=entity_name)
+            if row is not None:
+                records.append(row)
     return records
 
 

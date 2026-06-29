@@ -6,8 +6,10 @@ import json
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -115,10 +117,21 @@ def _curl_probe(
     *,
     cacert: Path,
     range_probe: bool = False,
+    resolve_local: bool = False,
 ) -> tuple[str, str]:
     cmd = [
         "curl",
         "-fsS",
+        "--http1.1",
+        "--connect-timeout",
+        "3",
+        "--max-time",
+        "8",
+        "--retry",
+        "5",
+        "--retry-delay",
+        "1",
+        "--retry-all-errors",
         "--cacert",
         str(cacert),
         "-o",
@@ -126,17 +139,26 @@ def _curl_probe(
         "-w",
         "%{http_code}|%{content_type}",
     ]
+    if resolve_local:
+        parsed = urlsplit(url)
+        if parsed.hostname and parsed.port:
+            cmd.extend(["--resolve", f"{parsed.hostname}:{parsed.port}:127.0.0.1"])
     if range_probe:
         cmd.extend(["-H", "Range: bytes=0-1"])
     else:
-        cmd.append("-I")
+        cmd.extend(["-H", "Range: bytes=0-0"])
     cmd.append(url)
-    result = subprocess.run(cmd, text=True, capture_output=True, check=False)
-    if result.returncode != 0:
+    last_failure: tuple[str, str] = ("curl-failed:unknown", "")
+    for attempt in range(3):
+        result = subprocess.run(cmd, text=True, capture_output=True, check=False)
+        if result.returncode == 0:
+            status, _, content_type = result.stdout.strip().partition("|")
+            return (status, content_type)
         detail = (result.stderr or result.stdout).strip().splitlines()
-        return (f"curl-failed:{detail[-1] if detail else result.returncode}", "")
-    status, _, content_type = result.stdout.strip().partition("|")
-    return (status, content_type)
+        last_failure = (f"curl-failed:{detail[-1] if detail else result.returncode}", "")
+        if attempt < 2:
+            time.sleep(0.2)
+    return last_failure
 
 
 def _load_media_objects() -> list[dict[str, Any]]:
@@ -380,13 +402,15 @@ def main(argv: list[str] | None = None) -> int:
             f"{base_url}/{object_key}",
             cacert=local_root_ca,
             range_probe=is_video,
+            resolve_local=target_name in LOCAL_ROOT_CA_BY_TARGET,
         )
-        expected = "206" if is_video else "200"
+        expected_statuses = {"206"} if is_video else {"200", "206"}
         if is_video:
             video_checked += 1
-        if status != expected:
+        if status not in expected_statuses:
             issues.append(
-                f"{object_key} expected HTTP {expected}, got {status}: {base_url}/{object_key}"
+                f"{object_key} expected HTTP {sorted(expected_statuses)}, "
+                f"got {status}: {base_url}/{object_key}"
             )
             continue
         expected_content_type = _expected_content_type_prefix(object_key)

@@ -28,7 +28,7 @@ if p.exists():
     (p.parent/'controller_lease.json').unlink(missing_ok=True)
 PY
 "$PY" -u "${REPO_ROOT}/quwoquan_data/scripts/cli.py" task run --mode single \
-  --task "$TASK" --batch "$BATCH" --managed --runtime local --resume --max-workers 1 --model composer-2
+  --task "$TASK" --batch "$BATCH" --managed --runtime local --resume --max-workers 1 --model composer-2.5
 "$PY" "${REPO_ROOT}/quwoquan_data/scripts/cli.py" task scaled-e2e author-runner \
   --plan "$PLAN" --strategy by-partition --runtime local --max-workers 2 --orchestrate
 "$PY" "${REPO_ROOT}/quwoquan_data/scripts/cli.py" task scaled-e2e finalize --plan "$PLAN"

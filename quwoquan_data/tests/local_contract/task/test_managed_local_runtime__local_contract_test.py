@@ -646,7 +646,7 @@ def test_managed_download_job_must_satisfy_lane_gate():
         assert "checkpoint lane gate still fails" in outcome["error"]
         assert outcome["gateIssues"]
 
-def test_managed_pipeline_does_not_consume_controller_yield(monkeypatch):
+def test_managed_pipeline_recovers_stale_controller_yield(monkeypatch):
     task_id = _make_task()
     batch_id = "managed_controller_yield"
     ctx = _ctx(task_id, batch_id)
@@ -658,14 +658,21 @@ def test_managed_pipeline_does_not_consume_controller_yield(monkeypatch):
     }
     run_mod.save_workflow_state(state)
 
-    monkeypatch.setattr(run_mod, "run_pipeline", lambda _ctx: 10)
-    monkeypatch.setattr(
-        run_mod,
-        "_run_managed_checkpoint",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must not start Agent")),
-    )
+    pipeline_codes = iter([10, 10, 0])
+    checkpoint_calls: list[str] = []
+    monkeypatch.setattr(run_mod, "run_pipeline", lambda _ctx: next(pipeline_codes))
 
-    assert run_mod.run_managed_pipeline(ctx) == 10
+    def _checkpoint(_ctx, stage):
+        checkpoint_calls.append(stage)
+        return True
+
+    monkeypatch.setattr(run_mod, "_run_managed_checkpoint", _checkpoint)
+
+    assert run_mod.run_managed_pipeline(ctx) == 0
+    assert checkpoint_calls == ["download_plan"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert "controllerYield" not in state
+    assert state["controllerYieldRecoveryActions"]
 
 def test_managed_pipeline_yields_after_ref_slice(monkeypatch):
     task_id = _make_task()
@@ -839,4 +846,3 @@ def test_managed_agent_subprocess_cleanup_clears_registered_pids(monkeypatch):
     assert calls == [("killpg", 12345, run_mod.signal.SIGTERM)]
     with run_mod._MANAGED_AGENT_SUBPROCESS_LOCK:
         assert run_mod._MANAGED_AGENT_SUBPROCESS_PIDS == set()
-

@@ -202,7 +202,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   MediaPickerEntryMode? _resolveInitialEntryMediaMode() {
     if (widget.initialAction == EditorStartAction.gallery) {
-      return MediaPickerEntryMode.mixed;
+      return MediaPickerEntryMode.image;
+    }
+    if (widget.initialAction == EditorStartAction.video) {
+      return MediaPickerEntryMode.video;
     }
     if (widget.initialAction == EditorStartAction.capture) {
       return (widget.initialTabKey ?? '').trim() == 'video'
@@ -222,7 +225,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
       case null:
         return null;
       case EditorStartAction.gallery:
-        return MediaPickerEntryMode.mixed;
+        return MediaPickerEntryMode.image;
+      case EditorStartAction.video:
+        return MediaPickerEntryMode.video;
       case EditorStartAction.capture:
         return MediaPickerEntryMode.image;
     }
@@ -332,7 +337,10 @@ class _CreatePageState extends ConsumerState<CreatePage>
     final initialMediaMode = _resolveInitialEntryMediaMode();
     switch (widget.initialAction) {
       case EditorStartAction.gallery:
-        await _pickMixedMediaFromGallery(closeWhenEmptyOnCancel: true);
+        await _pickImagesForCurrentEditor(closeWhenEmptyOnCancel: true);
+        return;
+      case EditorStartAction.video:
+        await _pickVideoForMedia(closeWhenEmptyOnCancel: true);
         return;
       case EditorStartAction.capture:
         await _openCameraForCurrentEditor(

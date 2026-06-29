@@ -8,7 +8,7 @@ from support.content_plan_source_reject_fixtures import *  # noqa: F401,F403
 
 def test_base_draft_candidates_exclude_reject_sources():
     obj = resolve_entity_object_dir(TASK, BATCH, "九寨沟", etype_hint="景区")
-    write_source_unit(
+    reject = write_source_unit(
         obj,
         ordinal=1,
         source_id="reject_probe",
@@ -20,7 +20,7 @@ def test_base_draft_candidates_exclude_reject_sources():
         title="探针页",
         target_ref="/entity/地点/景区/九寨沟",
     )
-    write_source_unit(
+    good = write_source_unit(
         obj,
         ordinal=2,
         source_id="good_story",
@@ -35,12 +35,12 @@ def test_base_draft_candidates_exclude_reject_sources():
     brief = {"entityRefs": ["地点/景区/九寨沟"]}
     candidates = base_draft_candidates(TASK, BATCH, brief)
     refs = [row["sourceRef"] for row in candidates]
-    assert any("good_story" in ref for ref in refs), refs
-    assert not any("reject_probe" in ref for ref in refs), refs
+    assert good["sourceRef"] in refs, refs
+    assert reject["sourceRef"] not in refs, refs
 
 def test_assign_base_draft_rejects_declared_reject_source():
     obj = resolve_entity_object_dir(TASK, BATCH, "黄龙", etype_hint="景区")
-    write_source_unit(
+    reject = write_source_unit(
         obj,
         ordinal=1,
         source_id="reject_probe",
@@ -52,7 +52,7 @@ def test_assign_base_draft_rejects_declared_reject_source():
         title="探针页",
         target_ref="/entity/地点/景区/黄龙",
     )
-    write_source_unit(
+    good = write_source_unit(
         obj,
         ordinal=2,
         source_id="good_story",
@@ -70,14 +70,14 @@ def test_assign_base_draft_rejects_declared_reject_source():
         "post://黄龙",
         {
             "entityRefs": ["地点/景区/黄龙"],
-            "baseSourceRef": "entities/地点/景区/黄龙/1.download/sources/01.reject_probe/source.md",
+            "baseSourceRef": reject["sourceRef"],
         },
     )
-    assert chosen and "good_story" in chosen, chosen
+    assert chosen == good["sourceRef"], chosen
 
 def test_assign_base_draft_reassigns_when_declared_source_taken_by_peer():
     obj = resolve_entity_object_dir(TASK, BATCH, "都江堰", etype_hint="景区")
-    write_source_unit(
+    wiki = write_source_unit(
         obj,
         ordinal=1,
         source_id="wiki_dujiangyan",
@@ -89,7 +89,7 @@ def test_assign_base_draft_reassigns_when_declared_source_taken_by_peer():
         title="都江堰概述",
         target_ref="/entity/地点/景区/都江堰",
     )
-    write_source_unit(
+    ctrip = write_source_unit(
         obj,
         ordinal=2,
         source_id="ctrip_dujiangyan",
@@ -105,21 +105,21 @@ def test_assign_base_draft_reassigns_when_declared_source_taken_by_peer():
         TASK,
         BATCH,
         "post://都江堰_画报",
-        {"entityRefs": ["地点/景区/都江堰"], "baseSourceRef": "wiki_dujiangyan"},
+        {"entityRefs": ["地点/景区/都江堰"], "baseSourceRef": wiki["sourceRef"]},
     )
     second = assign_base_draft(
         TASK,
         BATCH,
         "post://都江堰_攻略",
-        {"entityRefs": ["地点/景区/都江堰"], "baseSourceRef": "wiki_dujiangyan"},
+        {"entityRefs": ["地点/景区/都江堰"], "baseSourceRef": wiki["sourceRef"]},
     )
-    assert first and "wiki_dujiangyan" in first, first
-    assert second and "ctrip_dujiangyan" in second, second
+    assert first == wiki["sourceRef"], first
+    assert second == ctrip["sourceRef"], second
     assert first != second
 
 def test_load_base_draft_text_prefers_source_clean():
     obj = resolve_entity_object_dir(TASK, BATCH, "峨眉山", etype_hint="景区")
-    write_source_unit(
+    source = write_source_unit(
         obj,
         ordinal=1,
         source_id="wiki_emeishan",
@@ -135,13 +135,13 @@ def test_load_base_draft_text_prefers_source_clean():
     text = load_base_draft_text(
         TASK,
         BATCH,
-        "entities/地点/景区/峨眉山/1.download/sources/01.wiki_emeishan/source.md",
+        source["sourceRef"],
     )
     assert text == "clean source body only"
 
 def test_load_base_draft_text_extracts_signal_body_from_noisy_clean_source():
     obj = resolve_entity_object_dir(TASK, BATCH, "都江堰", etype_hint="景区")
-    write_source_unit(
+    source = write_source_unit(
         obj,
         ordinal=2,
         source_id="ctrip_noisy",
@@ -164,7 +164,7 @@ def test_load_base_draft_text_extracts_signal_body_from_noisy_clean_source():
     text = load_base_draft_text(
         TASK,
         BATCH,
-        "entities/地点/景区/都江堰/1.download/sources/02.ctrip_noisy/source.md",
+        source["sourceRef"],
     )
     assert "登录" not in text
     assert "附近景点" not in text
@@ -273,4 +273,3 @@ def test_base_draft_fidelity_still_blocks_keyword_only_rewrite():
     """
     article = "乐山大佛适合旅行，张公桥、上中顺、东方佛都都可以安排，整体体验不错。"
     assert base_draft_fidelity_issues(article, base)
-

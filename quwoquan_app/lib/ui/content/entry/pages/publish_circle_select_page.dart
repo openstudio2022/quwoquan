@@ -6,7 +6,7 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
-import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
+import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 
 /// 发布圈子选择页（design §3.7）；选项 [CreateCircleOption]（加载链经 CircleDto.fromMap）。
 ///

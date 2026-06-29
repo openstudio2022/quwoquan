@@ -39,9 +39,6 @@ var (
 	ErrPostNotFound                        = errors.New("CONTENT.USER.post_not_found")
 	ErrPublicRequiredForCircleDistribution = errors.New("CONTENT.USER.public_required_for_circle_distribution")
 	ErrRateLimited                         = errors.New("CONTENT.USER.rate_limited")
-	ErrReviewDuplicatePerPoi               = errors.New("CONTENT.USER.review_duplicate_per_poi")
-	ErrReviewPoiRequired                   = errors.New("CONTENT.USER.review_poi_required")
-	ErrReviewRatingRequired                = errors.New("CONTENT.USER.review_rating_required")
 	ErrStorageWriteFailed                  = errors.New("CONTENT.SYSTEM.storage_write_failed")
 	ErrUnauthorized                        = errors.New("CONTENT.USER.unauthorized")
 	ErrUpstreamTimeout                     = errors.New("CONTENT.MIDDLEWARE.upstream_timeout")
@@ -213,24 +210,6 @@ func AppErrorFromPublicRequiredForCircleDistribution(debugMessage string) *rterr
 func AppErrorFromRateLimited(debugMessage string) *rterr.AppError {
 	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "rate_limited")
 	return rterr.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithRecovery("retry", 60)
-}
-
-// AppErrorFromReviewDuplicatePerPoi returns *AppError for CONTENT.USER.review_duplicate_per_poi (user_message from errors.yaml).
-func AppErrorFromReviewDuplicatePerPoi(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "conflict")
-	return rterr.NewAppError(code, "你已点评过该地点，请先删除原口碑再发布", debugMessage).WithRecovery("surface", 0)
-}
-
-// AppErrorFromReviewPoiRequired returns *AppError for CONTENT.USER.review_poi_required (user_message from errors.yaml).
-func AppErrorFromReviewPoiRequired(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "口碑需绑定一个地点", debugMessage).WithRecovery("surface", 0)
-}
-
-// AppErrorFromReviewRatingRequired returns *AppError for CONTENT.USER.review_rating_required (user_message from errors.yaml).
-func AppErrorFromReviewRatingRequired(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "口碑评分必填，请打 1–5 星", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromStorageWriteFailed returns *AppError for CONTENT.SYSTEM.storage_write_failed (user_message from errors.yaml).

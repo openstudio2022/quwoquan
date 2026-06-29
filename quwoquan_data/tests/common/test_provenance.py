@@ -56,7 +56,7 @@ BATCH = "pilot"
 def _seed_post(produce_root: Path, ref: str, title: str) -> None:
     register_content_object(TASK, BATCH, ref, content_type="article", angle="攻略", title=title)
     obj = batch_entity_object_dir(TASK, BATCH, "地点", "景区", "九寨沟")
-    write_source_unit(
+    base_manifest = write_source_unit(
         obj,
         ordinal=1,
         source_id="base",
@@ -86,8 +86,8 @@ def _seed_post(produce_root: Path, ref: str, title: str) -> None:
         task_id=TASK,
         batch_id=BATCH,
     )
-    rel_a = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
-    rel_b = "entities/地点/景区/九寨沟/1.download/sources/02.supplement/source.md"
+    rel_a = str(base_manifest["sourceRef"])
+    source_abs = batch_root(TASK, BATCH) / rel_a
     write_writing_pack(
         TASK,
         BATCH,
@@ -101,8 +101,8 @@ def _seed_post(produce_root: Path, ref: str, title: str) -> None:
             "styleFamily": "route-guide",
             "mustIncludeFacts": [],
             "baseSourceRef": rel_a,
-            "sourcePaths": [rel_a, rel_b],
-            "sourceUrls": ["https://example.com/a", "https://example.com/b"],
+            "sourcePaths": [rel_a],
+            "sourceUrls": ["https://example.com/a"],
             "assets": [],
         },
     )
@@ -139,8 +139,8 @@ def _seed_post(produce_root: Path, ref: str, title: str) -> None:
             "entityRefs": [],
             "tagRefs": ["Topic/旅行", "Format/内容角度/攻略"],
             "assets": [],
-            "sourcePaths": [rel_a, rel_b],
-            "sourceUrls": ["https://example.com/a", "https://example.com/b"],
+            "sourcePaths": [rel_a],
+            "sourceUrls": ["https://example.com/a"],
             "citedSourceRefs": [rel_a],
             "storySpine": {"sourceQuality": [{"sourceId": "a", "score": 0.9}]},
             "relatedSearchPlan": {"queries": ["开放时间"]},
@@ -155,10 +155,7 @@ def _seed_post(produce_root: Path, ref: str, title: str) -> None:
         ref,
         f"# {title}\n\n正文：{ref} 的真实叙事展开，足够长以通过字数门校验。" * 12,
         model="cursor-agent",
-        cited_source_paths=[
-            str(obj / "1.download" / "sources" / "01.base" / "source.md"),
-            str(obj / "1.download" / "sources" / "02.supplement" / "source.md"),
-        ],
+        cited_source_paths=[str(source_abs)],
         covered_facts=[],
         session_trace="test-session",
         agent_run_id="run-provenance",
@@ -211,9 +208,10 @@ def test_materialize_writes_source_refs_snapshot_and_finalization_report():
     source_refs = read_json(post_dir / "1.download" / "source_refs.json")
     # 单底稿零参考 v2：sources 长度恒为 1，仅唯一底稿来源单元，无内联原文镜像。
     assert source_refs["schemaVersion"] == "quwoquan_data.source_refs/2"
-    assert source_refs["baseSourceRef"].endswith("01.base/source.md")
+    assert source_refs["baseSourceRef"].startswith("sources/")
+    assert source_refs["baseSourceRef"].endswith("/source.md")
     assert len(source_refs["sources"]) == 1
-    assert source_refs["sources"][0]["sourceUnitRef"].endswith("01.base")
+    assert source_refs["sources"][0]["sourceUnitRef"].startswith("sources/")
     assert source_refs["sources"][0]["role"] == "base"
     assert source_refs["sources"][0]["sourceFileSha256"]
     assert "sourceMarkdown" not in source_refs["sources"][0]
@@ -234,7 +232,7 @@ def test_source_refs_snapshot_is_single_base_without_inline_mirror():
     ensure_task_layout(TASK)
     ensure_batch_layout(TASK, "binary_source_asset", "produce")
     obj = batch_entity_object_dir(TASK, "binary_source_asset", "地点", "景区", "九寨沟")
-    write_source_unit(
+    source_manifest = write_source_unit(
         obj,
         ordinal=1,
         source_id="base",
@@ -249,7 +247,7 @@ def test_source_refs_snapshot_is_single_base_without_inline_mirror():
         task_id=TASK,
         batch_id="binary_source_asset",
     )
-    source_md = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+    source_md = str(source_manifest["sourceRef"])
 
     source_refs = build_source_refs_snapshot(
         TASK,
@@ -272,7 +270,8 @@ def test_materialize_relativizes_repo_runtime_cited_source_paths():
     post_dir = _materialize_one()
     manifest = read_json(post_dir / "manifest.json")
     provenance = read_json(post_dir / "5.review" / "provenance.json")
-    expected = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+    source_refs = read_json(post_dir / "1.download" / "source_refs.json")
+    expected = source_refs["baseSourceRef"]
     assert manifest["citedSourceRefs"][0] == expected
     assert provenance["citedSourcePaths"][0] == expected
 
@@ -283,6 +282,22 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
     ensure_task_layout(task)
     ensure_batch_layout(task, batch, "produce")
     register_content_object(task, batch, "repo_ref", content_type="article", angle="攻略", title="repo 路径攻略")
+    obj = batch_entity_object_dir(task, batch, "地点", "景区", "九寨沟")
+    source_manifest = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="base",
+        source_md="# source\n\nrepo relative source",
+        clean_md="# source\n\nrepo relative source",
+        platform="curated",
+        source_category="overview_baike",
+        url="https://example.com/a",
+        title="source a",
+        target_ref="/entity/地点/景区/九寨沟",
+        task_id=task,
+        batch_id=batch,
+    )
+    source_ref = str(source_manifest["sourceRef"])
     write_writing_pack(
         task,
         batch,
@@ -295,7 +310,7 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
             "writingIntent": "planning_consultation",
             "styleFamily": "route-guide",
             "mustIncludeFacts": [],
-            "baseSourceRef": "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md",
+            "baseSourceRef": source_ref,
             "sourcePaths": [],
             "sourceUrls": ["https://example.com/a"],
             "assets": [],
@@ -308,7 +323,7 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
     batch_dir_name = batch_root(task, batch).name
     repo_relative = (
         f"quwoquan_data/runtime/batches/{batch_dir_name}/"
-        "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+        f"{source_ref}"
     )
     write_stage_result(
         task,
@@ -334,16 +349,14 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
     )
     from _common.draft_io import write_agent_draft
 
-    source_abs = batch_root(task, batch) / "entities/地点/景区/九寨沟/1.download/sources/01.base"
-    source_abs.mkdir(parents=True, exist_ok=True)
-    (source_abs / "source.md").write_text("# source\n\nrepo relative source", encoding="utf-8")
+    source_abs = batch_root(task, batch) / source_ref
     write_agent_draft(
         task,
         batch,
         "repo_ref",
         "# repo 路径攻略\n\n正文足够长。" * 20,
         model="cursor-agent",
-        cited_source_paths=[str(source_abs / "source.md")],
+        cited_source_paths=[str(source_abs)],
         covered_facts=[],
         session_trace="test-session",
         agent_run_id="run-repo-relative",
@@ -353,7 +366,7 @@ def test_materialize_relativizes_repo_absolute_runtime_paths():
     assert len(materialized) == 1
     manifest = read_json(materialized[0] / "manifest.json")
     provenance = read_json(materialized[0] / "5.review" / "provenance.json")
-    expected = "entities/地点/景区/九寨沟/1.download/sources/01.base/source.md"
+    expected = source_ref
     assert manifest["citedSourceRefs"] == [expected]
     assert provenance["citedSourcePaths"] == [expected]
 

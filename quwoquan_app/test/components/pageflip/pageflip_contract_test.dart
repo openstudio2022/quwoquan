@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/components/pageflip/pageflip.dart';
+import '../../support/pageflip/pageflip.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_leaf_verso_uv_mesh.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/backward_sheet_partition.dart';
@@ -11,15 +11,15 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/modes/single_pag
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/backward_article_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/forward_article_flip_pipeline.dart';
-import 'package:quwoquan_app/ui/content/pageflip/backward_render_frame_builder.dart';
-import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
-import 'package:quwoquan_app/ui/content/pageflip/curl_mesh_builder.dart';
-import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
-import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
-import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
-import 'package:quwoquan_app/ui/content/pageflip/spread_model.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/backward_render_frame_builder.dart';
+import 'package:quwoquan_app/components/pageflip/book_layout.dart';
+import 'package:quwoquan_app/components/pageflip/controller.dart';
+import 'package:quwoquan_app/components/pageflip/curl_mesh_builder.dart';
+import 'package:quwoquan_app/components/pageflip/geometry.dart';
+import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
+import 'package:quwoquan_app/components/pageflip/render_frame.dart';
+import 'package:quwoquan_app/components/pageflip/spread_model.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 void main() {
   group('Pageflip', () {
@@ -34,10 +34,10 @@ void main() {
         'lib/ui/content/article_reader/pageflip/pipelines/backward_article_flip_pipeline.dart',
       );
       final controllerSource = _readAppSource(
-        'lib/ui/content/pageflip/controller.dart',
+        'lib/components/pageflip/controller.dart',
       );
       final backwardBuilderSource = _readAppSource(
-        'lib/ui/content/pageflip/backward_render_frame_builder.dart',
+        'lib/components/pageflip/backward_render_frame_builder.dart',
       );
       final diagnosticSignaturesSource = _readAppSource(
         'lib/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart',
@@ -51,7 +51,7 @@ void main() {
 
       expect(
         File(
-          'lib/ui/content/pageflip/backward_leaf_renderer.dart',
+          'lib/components/pageflip/backward_leaf_renderer.dart',
         ).existsSync(),
         isFalse,
         reason:
@@ -688,7 +688,7 @@ void main() {
           );
         }
         final diagnosticsSource = _readAppSource(
-          'lib/components/pageflip/src/debug/pageflip_diagnostics.dart',
+          'test/support/pageflip/src/debug/pageflip_diagnostics.dart',
         );
         expect(
           diagnosticsSource,
@@ -873,7 +873,7 @@ void main() {
         );
         expect(
           _readAppSource(
-            'lib/components/pageflip/src/debug/pageflip_diagnostics.dart',
+            'test/support/pageflip/src/debug/pageflip_diagnostics.dart',
           ),
           contains('debugPureBackwardGeometry: false'),
           reason:

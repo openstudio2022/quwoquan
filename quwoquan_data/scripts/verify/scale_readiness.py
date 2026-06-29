@@ -23,6 +23,7 @@ from _common.image_asset_strategy import (
 from _common.io import read_json, write_json
 from _common.paths import batch_root, release_root
 from _common.release_integrity import scan_runtime_batch_integrity
+from _common.source_unit import iter_source_units
 from verify.scale_readiness_capacity import (
     creator_load_report as _creator_load_report,
     resolve_agent_active as _resolve_agent_active,
@@ -199,11 +200,14 @@ def _source_admission_report(
     ready_capacity = 0
     source_ready_entities = 0
     for name in targets:
-        entity_dirs = sorted((root / "entities").glob(f"*/**/{name}/1.download/sources"))
+        entity_dirs = [
+            refs_path.parent.parent
+            for refs_path in sorted((root / "entities").glob(f"*/**/{name}/1.download/source_refs.json"))
+        ]
         counts = {"homepage": 0, "article": 0, "image": 0, "video": 0}
         focus_blocked = 0
-        for sources_dir in entity_dirs:
-            for source_dir in sorted(path for path in sources_dir.iterdir() if path.is_dir()):
+        for object_dir in entity_dirs:
+            for source_dir in iter_source_units(object_dir):
                 meta = _load_json_if_exists(source_dir / "meta.json")
                 focus = str(meta.get("entityFocusVerdict") or meta.get("focusVerdict") or "").lower()
                 if focus in {"weak", "supporting_only", "mismatch", "off_entity"}:

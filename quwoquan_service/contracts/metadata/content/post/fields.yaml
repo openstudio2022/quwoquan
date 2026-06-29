@@ -180,25 +180,6 @@ entities:
           [{mentionId,kind,surface,location,rangeStart,rangeEnd,status,candidateId,targetRef}]。
           status 支持 published/pending_review/rejected/offline；只有 published 且 targetRef 合法的项进入活动 entityRefs/tagRefs。
 
-      - name: rating
-        type: int
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        recommend_feature: true
-        description: 口碑整体评分 1–5；contentType==review 时必填（application 层条件校验），其余类型为空
-
-      - name: reviewAspects
-        type: "[]object"
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-        description: 口碑维度评分列表 [{aspectKey, score}]（如 环境/服务/性价比），可选；非 review 类型为空
-
       - name: mediaUrls
         type: "[]string"
         constraints: [NULLABLE]

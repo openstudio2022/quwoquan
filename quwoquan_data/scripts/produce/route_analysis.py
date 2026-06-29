@@ -22,7 +22,14 @@ def analyze_route_ref(task_id: str, batch_id: str, ref: str, brief: Mapping[str,
     title = require_title_hint(brief, ref=ref)
     entity_refs = [str(item) for item in brief.get("entityRefs") or [] if item]
     entity_names = entity_names_from_refs(entity_refs)
-    source_records = load_source_records(task_id, batch_id, entity_names, entity_refs=entity_refs)
+    base_source_ref = str(brief.get("baseSourceRef") or "").strip()
+    source_records = load_source_records(
+        task_id,
+        batch_id,
+        entity_names,
+        entity_refs=entity_refs,
+        base_source_ref=base_source_ref,
+    )
     evidence_bundle = build_route_evidence_bundle(
         ref,
         brief,

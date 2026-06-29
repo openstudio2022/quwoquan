@@ -3,6 +3,7 @@ runtime:
   appRuntimeEnv: gamma
   appDataSource: remote
   gatewayBaseUrl: https://gamma-api.quwoquan-env.test:19000
+  legalBaseUrl: https://gamma-api.quwoquan-env.test:19000/legal
   realtimeBaseUrl: wss://gamma-api.quwoquan-env.test:19000
   mediaAvatarCdnBaseUrl: https://gamma-avatar.quwoquan-env.test:19100
   mediaImageCdnBaseUrl: https://gamma-image.quwoquan-env.test:19100

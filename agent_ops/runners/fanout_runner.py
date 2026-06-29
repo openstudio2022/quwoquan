@@ -45,6 +45,7 @@ for _p in (_DATA_ROOT, _DATA_SCRIPTS):
 
 from _common import fanout_plan as fp  # noqa: E402
 from _common import fanout_strategies as fs  # noqa: E402
+from _common.cursor_credentials import is_cursor_auth_error, resolve_cursor_api_key  # noqa: E402
 from _common.article_package import compute_document_sha256, sha256_file, sha256_text  # noqa: E402
 from _common.draft_io import draft_article_path, draft_meta_path, prompt_path, read_draft_meta, writing_pack_path  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
@@ -326,7 +327,7 @@ def default_agent_runner(
     except Exception as exc:  # noqa: BLE001
         return RunOutcome(started=False, error=f"cursor_sdk unavailable: {exc}", retryable=False)
 
-    key = api_key or os.environ.get("CURSOR_API_KEY")
+    key = api_key or resolve_cursor_api_key()
     if not key:
         return RunOutcome(started=False, error="CURSOR_API_KEY missing", retryable=False)
     prompt = _build_prompt(packet)
@@ -374,9 +375,21 @@ def default_agent_runner(
             )
     if "startup_error" in holder:
         err = holder["startup_error"]
+        err_message = getattr(err, "message", str(err))
+        if is_cursor_auth_error(
+            err_message,
+            code=str(getattr(err, "code", "") or ""),
+            status=getattr(err, "status", None),
+        ):
+            # 凭据失效不计 retryable bridge 预算：上报凭据失效让上层 reload key 重发。
+            return RunOutcome(
+                started=False,
+                error=f"cursor credential invalid (auth): {err_message}",
+                retryable=False,
+            )
         return RunOutcome(
             started=False,
-            error=getattr(err, "message", str(err)),
+            error=err_message,
             retryable=bool(getattr(err, "is_retryable", False)),
         )
     if "error" in holder:
@@ -475,7 +488,7 @@ def default_orchestrator_runner(
 
     与 leaf runner 同构；真正的 checkpoint 完成由调用方读 workflow_state 校验（orchestrate_partition）。
     """
-    key = api_key or os.environ.get("CURSOR_API_KEY")
+    key = api_key or resolve_cursor_api_key()
     if not key:
         return RunOutcome(started=False, error="CURSOR_API_KEY missing", retryable=False)
     prompt = _build_orchestrator_prompt(packet)
@@ -503,7 +516,8 @@ def default_orchestrator_runner(
             agent_provider="cursor_sdk",
             max_workers=1,
         )
-        os.environ.setdefault("CURSOR_API_KEY", key)
+        # 让本地托管 runner 也能拿到本次显式 key（key 文件仍是更高优先的单一真相源）。
+        os.environ["CURSOR_API_KEY"] = key
         # 看门狗超时：编排 prompt 是开放式 Ralph 循环，本地 bridge 偶发 agent 调用挂起
         # （bridge/python 双 0% CPU、零文件写入、无返回）。_default_managed_agent_runner
         # 不对 Agent.prompt 设超时，单个挂起分区会永久阻塞串行队列。这里用独立线程跑托管
@@ -559,9 +573,20 @@ def default_orchestrator_runner(
         opts = _build_agent_options(api_key=key, model=model, runtime=runtime, cwd=cwd, repos=repos)
         result = Agent.prompt(prompt, opts)
     except CursorAgentError as err:
+        err_message = getattr(err, "message", str(err))
+        if is_cursor_auth_error(
+            err_message,
+            code=str(getattr(err, "code", "") or ""),
+            status=getattr(err, "status", None),
+        ):
+            return RunOutcome(
+                started=False,
+                error=f"cursor credential invalid (auth): {err_message}",
+                retryable=False,
+            )
         return RunOutcome(
             started=False,
-            error=getattr(err, "message", str(err)),
+            error=err_message,
             retryable=bool(getattr(err, "is_retryable", False)),
         )
     status = getattr(result, "status", "error")

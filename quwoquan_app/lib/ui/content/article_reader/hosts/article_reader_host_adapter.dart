@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/ui/content/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
+import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/components/pageflip/controller.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 
 @immutable

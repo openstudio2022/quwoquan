@@ -118,6 +118,8 @@ class AppColors {
   static const Color iosGroupedSurfaceDark = Color(0xFF1C1C1E);
   static const Color iosGroupedSurfaceElevatedLight = Color(0xFFFFFFFF);
   static const Color iosGroupedSurfaceElevatedDark = Color(0xFF2C2C2E);
+  static const Color iosIntersectionTimelineBackgroundLight = Color(0xFFF6F7F9);
+  static const Color iosIntersectionTimelineBackgroundDark = Color(0xFF000000);
 
   /// 作者主页等强调质感的 iOS 语义白表面。
   /// 浅色仅保留极轻微暖感，避免与纯白控件形成明显色块对比。
@@ -360,6 +362,16 @@ class AppColors {
       CupertinoDynamicColor.withBrightness(
         color: iosGroupedBackgroundLight,
         darkColor: iosGroupedBackgroundDark,
+      ),
+      context,
+    );
+  }
+
+  static Color iosIntersectionTimelineBackground(BuildContext context) {
+    return CupertinoDynamicColor.resolve(
+      CupertinoDynamicColor.withBrightness(
+        color: iosIntersectionTimelineBackgroundLight,
+        darkColor: iosIntersectionTimelineBackgroundDark,
       ),
       context,
     );

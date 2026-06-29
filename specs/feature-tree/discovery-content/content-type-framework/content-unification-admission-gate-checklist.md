@@ -1,4 +1,6 @@
-# 内容多形态统一 · 严格准入门清单（内容多形态统一 + 口碑 + 创作打标）
+# 内容多形态统一 · 严格准入门清单（内容多形态统一 + 创作打标）
+
+> **【2026-06-29 撤销说明｜以此为准】** 经用户冻结口径，当前内容类型只有 **图片(image)/视频(video)/文章(article)**（micro=微趣属类型轴、moment 属身份轴，均保留）。**口碑（review）内容类型已整体撤销**（见 [CR-20260629-076](../../../changelog/CR-20260629-076-content-type-triad-purge-review.yaml)，撤销 [CR-20260530-023](../../../changelog/CR-20260530-023-review-content-type.yaml) 的 review 部分）：`ContentType.review`、`rating/reviewAspects`、3 个 review 错误码、2 个 review 索引、`review_aspect` 投影与 feature-tree 节点 `review-content-type` 均已删除。**本清单中所有与口碑（review）相关的 B1 / B2 / C1 / C3 条目（含其 “CLEARED” 标记）一律作废，不再作为准入依据**；`creation-tagging-ia`（创作打标 IA）与 `publish/tags` tagRef 真相源不在撤销范围、仍生效。
 
 > 适用范围：本清单是「内容多形态统一」开工（`/dev`）前的严格准入门，挂 L2 [content-type-framework](spec.md)。
 > 硬规则：**首页交集驱动改版未决项必须先清零（Block A 全绿），且内容多形态统一自身规格/metadata 冻结（Block B/C 全绿）+ 严格准入门（§Gate）全勾选 + 门禁无 BLOCKING，方可进入内容多形态统一 `/dev`。不允许任何未决项带入下一阶段。**

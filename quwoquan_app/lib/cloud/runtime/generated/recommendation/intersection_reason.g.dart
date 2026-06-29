@@ -109,14 +109,14 @@ class IntersectionReason {
 
   factory IntersectionReason.fromMap(Map<String, dynamic> m) {
     return IntersectionReason(
-      kind: m['kind']?.toString() ?? m['sourceRef']?.toString() ?? '',
+      kind: m['kind']?.toString() ?? m['intersectionKind']?.toString() ?? m['sourceRef']?.toString() ?? '',
       vertical: m['vertical']?.toString() ?? 'general',
       dimension: m['dimension']?.toString() ?? '',
       tagRefs: _parseStringList(m['tagRefs']) ?? <String>[],
       relationKind: m['relationKind']?.toString() ?? '',
       objectKind: m['objectKind']?.toString() ?? '',
       relationObjectId: m['relationObjectId']?.toString() ?? '',
-      strength: (m['strength'] as num?)?.toDouble() ?? (m['strengthScore'] as num?)?.toDouble() ?? 0.0,
+      strength: (m['strength'] as num?)?.toDouble() ?? (m['strengthScore'] as num?)?.toDouble() ?? (m['strength_score'] as num?)?.toDouble() ?? 0.0,
       primaryText: m['primaryText']?.toString() ?? '',
       secondaryText: m['secondaryText']?.toString() ?? '',
       weightTier: m['weightTier']?.toString() ?? '',
@@ -135,7 +135,7 @@ class IntersectionReason {
       pointSummarySnapshotId: m['pointSummarySnapshotId']?.toString() ?? '',
       factPointCount: (m['factPointCount'] as num?)?.toInt() ?? 0,
       recommendedPointCount: (m['recommendedPointCount'] as num?)?.toInt() ?? 0,
-      totalPointCount: (m['totalPointCount'] as num?)?.toInt() ?? 0,
+      totalPointCount: (m['totalPointCount'] as num?)?.toInt() ?? (m['totalCount'] as num?)?.toInt() ?? (m['total_count'] as num?)?.toInt() ?? 0,
       dimensionPointSummary: _parseProjectionDtoList(m['dimensionPointSummary'], IntersectionDimensionTally.fromMap),
       pointClassLabel: m['pointClassLabel']?.toString() ?? '',
       connectionSummary: m['connectionSummary']?.toString() ?? '',
@@ -152,10 +152,10 @@ class IntersectionReason {
       edgeWeight: (m['edgeWeight'] as num?)?.toDouble() ?? 0.0,
       iconKey: m['iconKey']?.toString() ?? '',
       objectVisual: m['objectVisual'] == null ? null : IntersectionVisual.fromMap(_parseStringKeyMap(m['objectVisual'])!),
-      timeBucket: m['timeBucket']?.toString() ?? '',
-      dedupeKey: m['dedupeKey']?.toString() ?? '',
-      anchorUserWeight: (m['anchorUserWeight'] as num?)?.toDouble() ?? 0.0,
-      mutualCount: (m['mutualCount'] as num?)?.toInt() ?? 0,
+      timeBucket: m['timeBucket']?.toString() ?? m['time_bucket']?.toString() ?? '',
+      dedupeKey: m['dedupeKey']?.toString() ?? m['dedup_key']?.toString() ?? m['dedupe_key']?.toString() ?? '',
+      anchorUserWeight: (m['anchorUserWeight'] as num?)?.toDouble() ?? (m['anchorUserScore'] as num?)?.toDouble() ?? (m['anchor_user_score'] as num?)?.toDouble() ?? 0.0,
+      mutualCount: (m['mutualCount'] as num?)?.toInt() ?? (m['mutual_count'] as num?)?.toInt() ?? 0,
     );
   }
 

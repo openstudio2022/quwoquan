@@ -64,15 +64,12 @@ allow:
 - path: quwoquan_app/lib/ui/circle/pages/home_circles_hub_page.dart
   max_lines: 1258
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/ui/content/entry/models/create_editor_models.dart
+- path: quwoquan_app/lib/ui/content/models/create_editor_models.dart
   max_lines: 1255
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
 - path: quwoquan_app/lib/ui/content/article_reader/content/article_reader_page_surfaces.dart
   max_lines: 1230
   reason: oversized-budget (子 widget / part / extension 拆分，后续逐步降)
-- path: quwoquan_app/lib/components/pageflip/src/widget/pageflip_widget.dart
-  max_lines: 1158
-  reason: pageflip-locked (受 11/12 号几何规则严管，专项后置，禁止本轮拆分)
-- path: quwoquan_app/lib/ui/content/pageflip/curl_mesh_builder.dart
+- path: quwoquan_app/lib/components/pageflip/curl_mesh_builder.dart
   max_lines: 1128
   reason: pageflip-locked (受 11/12 号几何规则严管，专项后置，禁止本轮拆分)

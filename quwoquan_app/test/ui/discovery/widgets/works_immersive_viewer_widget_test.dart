@@ -32,7 +32,7 @@ import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagemen
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_reader_flip_host.dart';
-import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
+import 'package:quwoquan_app/ui/discovery/pages/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
@@ -944,11 +944,10 @@ void main() {
                 ],
                 dtoPosts: <PostBaseDto>[post],
                 initialIndex: 0,
-                category: 'photo',
                 rawPostsById: _viewerRawByPostId({
                   post.id: <String, dynamic>{
                     'postId': post.id,
-                    'type': 'photo',
+                    'type': 'image',
                     'contentType': 'image',
                     'authorId': post.authorId,
                     'authorNickname': post.displayName,
@@ -1017,7 +1016,6 @@ void main() {
                 ],
                 dtoPosts: <PostBaseDto>[post],
                 initialIndex: 0,
-                category: 'article',
                 rawPostsById: _viewerRawByPostId({
                   post.id: <String, dynamic>{
                     'postId': post.id,

@@ -1,0 +1,66 @@
+id: CR-20260629-078-coldstart-article-markdown-kernel-regeneration
+title: 冷启动创作者文章经生成器单一真相补齐 Markdown 内核重生成（R-MDARTICLE-001）
+slug: coldstart-article-markdown-kernel-regeneration
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel
+  - quwoquan_data/scripts/governance/creator_pool/content_bind.py
+  - quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json
+
+entries:
+  - timestamp: "2026-06-29T01:55:00+08:00"
+    summary: |
+      收口 R-MDARTICLE-001：冷启动创作者文章 fixture_creator_content_article_001（content_scenarios.json
+      seedSets.creator_authored_core.posts[0]，batch-100 E2E 创作者文章）此前仅含薄 body、缺
+      articleMarkdown 与 articleRenderProfile，致 make verify-markdown-article-no-article-document 红。
+      按 markdown-article-kernel「长文唯一持久化真相源为 Markdown」与单一真相原则，修法落在生成器
+      quwoquan_data/scripts/governance/creator_pool/content_bind.py（而非手改 JSON 制造漂移）：为 article
+      载体补 _stub_article_markdown（QWQ Rich Markdown v1，含 front matter 桌面）+ _stub_article_render_profile
+      （dict，contentVertical=travel），且不再产出 articleDocument；经 qwq-data materialize 重生
+      content_scenarios.json。新增生成器合约测试防回退。
+    reason: |
+      markdown-article-kernel/spec.md 冻结「长文唯一持久化真相源为 Markdown（articleMarkdown +
+      articleAssetManifest + articleRenderProfile），旧 articleDocument 预制数据全部重生成」。该冷启动文章
+      未走 Markdown 重生成，门禁红、端云长文契约存数据漂移（contentType=article 却无 Markdown 真相源），
+      冷启动文章无法经现有 reader（codec→QwqMarkdownAst→MarkdownPaginationEngine→ImmersiveMarkdownReader
+      →pageflip）正确渲染。按「未上线零兼容、零技术债容忍」与单一真相，修法必须落在生成器，不得手改 codegen/
+      materialize 产物制造第二真相。次序上排在 R-PAGEFLIP-001 之后（reader 渲染末端经 pageflip 层），
+      pageflip 层已于 CR-20260629-077 逐帧同构稳定，前置已满足。
+    change_type:
+      - data
+      - fix
+      - test
+    changed_documents:
+      - path: quwoquan_data/scripts/governance/creator_pool/content_bind.py
+        sections:
+          - "新增 _stub_article_markdown（QWQ Rich Markdown v1 + front matter）与 _stub_article_render_profile（dict）"
+          - "_content_document 为 article 载体注入 articleMarkdown + articleRenderProfile，移除 articleDocument 产出"
+      - path: quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.json
+        sections:
+          - "经 qwq-data materialize 重生：creator_authored_core.posts[0] article 文档 +13/-1（补 markdown 内核、去 articleDocument）；image/video seed 不变"
+      - path: quwoquan_data/tests/local_contract/creator_pool/test_creator_content_bind__local_contract_test.py
+        sections:
+          - "新增 test_article_projection_carries_markdown_kernel_not_article_document：断言生成器 article 投影携带 articleMarkdown+articleRenderProfile 且无 articleDocument"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: low
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py（OK）"
+        - "python3 quwoquan_app/scripts/content/verify_article_contract_purity.py（OK）"
+        - "quwoquan_data 生成器合约 test_creator_content_bind__local_contract_test.py（8 过，含新增 markdown 内核断言）"
+        - "cloud services/content-service/tests/post_markdown_contract_test.go（全过：GetPost 投影 markdown 内核、拒绝仅 articleDocument）"
+        - "端侧 test/cloud/content/contract/article_get_post_hydration_contract_test.dart + test/ui/content/article_render/markdown/** + test/ui/content/post/contract/post_view_projection_contract_test.dart（全过）"
+        - "content 契约套 test/cloud/content/contract + test/ui/content/post/contract + test/ui/content/models（124 过）"
+    notes:
+      - "单一真相修法：改生成器 + materialize 重生，未手改 JSON 产物，无第二真相漂移。"
+      - "渲染验证沿用 CR-20260629-077 已稳定的 pageflip 层（reader 末端经 article_read_only_book_deck.dart + lib/ui/content/models/article_presentation_models.dart）。"
+      - "test-app-alpha-seed 中 user profile 显示名正则失败为脏树预存在 user-profile 在途改动（user_profile_mock_data.dart 等），与本 CR 的 markdown 文章无关，未触碰这些用户改动。"
+      - "R-MDARTICLE-001 已收口（见 docs/outstanding_risks_backlog.md）。"

@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 
 enum CreateMediaType { image, video, gif }
 
-enum CreateMediaSource { album, camera }
+enum CreateMediaSource { album, camera, generated }
 
 enum MediaPickerCategory { all, video, photo, live, fullscreen }
 
@@ -84,8 +84,12 @@ class CreateMediaPickerResult {
   const CreateMediaPickerResult({
     required this.items,
     this.openOneTapMovie = false,
+    this.lockedSingleMedia = false,
+    this.oneTapMovieEffectId = '',
   });
 
   final List<CreateMediaItem> items;
   final bool openOneTapMovie;
+  final bool lockedSingleMedia;
+  final String oneTapMovieEffectId;
 }

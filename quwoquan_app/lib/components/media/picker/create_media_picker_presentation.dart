@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 
-enum CreateMediaPickerBottomAction { editImage, completeImage, nextStep }
+enum CreateMediaPickerBottomAction { oneTapMovie, nextStep }
 
 enum MediaPickerSelectionBlockReason {
   none,
@@ -51,9 +51,7 @@ String mediaPickerCompletionLabel({
   required MediaPickerEntryMode mode,
   required int selectionCount,
 }) {
-  final prefix = isPhotoCreationEntryMode(mode)
-      ? UITextConstants.mediaPickerComplete
-      : UITextConstants.mediaPickerNextStep;
+  const prefix = UITextConstants.mediaPickerNextStep;
   return '$prefix($selectionCount)';
 }
 
@@ -65,13 +63,13 @@ List<CreateMediaPickerBottomActionSpec> mediaPickerBottomActionsForEntryMode({
   if (isPhotoCreationEntryMode(mode)) {
     return <CreateMediaPickerBottomActionSpec>[
       CreateMediaPickerBottomActionSpec(
-        action: CreateMediaPickerBottomAction.editImage,
-        label: UITextConstants.mediaPickerEditImage,
+        action: CreateMediaPickerBottomAction.oneTapMovie,
+        label: UITextConstants.mediaPickerOneTapMovie,
         enabled: canContinue,
         isPrimary: false,
       ),
       CreateMediaPickerBottomActionSpec(
-        action: CreateMediaPickerBottomAction.completeImage,
+        action: CreateMediaPickerBottomAction.nextStep,
         label: mediaPickerCompletionLabel(
           mode: mode,
           selectionCount: selectionCount,

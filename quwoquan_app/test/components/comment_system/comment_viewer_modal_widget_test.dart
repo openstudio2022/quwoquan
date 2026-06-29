@@ -9,18 +9,18 @@ import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/models/comment_remote_config.dart';
-import 'package:quwoquan_app/components/comment_system/immersive_comment_split_sheet.dart';
-import 'package:quwoquan_app/components/comment_system/comment_input_overlay.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/immersive_comment_split_sheet.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_input_overlay.dart';
 import 'package:quwoquan_app/components/comment_system/comment_toolbar.dart';
-import 'package:quwoquan_app/components/comment_system/comment_thread_view.dart';
-import 'package:quwoquan_app/components/comment_system/comment_detail_surface.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer_modal.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_thread_view.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_detail_surface.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_viewer_modal.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/providers/comment_provider.dart';
+import 'package:quwoquan_app/ui/content/comments/providers/comment_provider.dart';
 
 void main() {
   late Directory tempDir;

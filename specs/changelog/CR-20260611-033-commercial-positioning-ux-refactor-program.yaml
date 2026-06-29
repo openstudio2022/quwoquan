@@ -147,7 +147,7 @@ dev_log:
       入口并复用 HomepagePicker 写入 ArticleInlineSpan entity mention；读侧 rich text 已支持 onEntityTap。
       小趣推荐标签/对象仍等待 WP8 creation-suggest metadata，本包不硬编码 assistant API。
     verify:
-      - cd quwoquan_app && flutter test test/ui/content/entry/article_editor_wysiwyg_widget_test.dart test/ui/content/entry/providers/create_editor_provider_test.dart test/ui/content/markdown/article_markdown_codec_test.dart test/ui/content/entry/publish_draft_projection_bridge_test.dart
+      - cd quwoquan_app && flutter test test/ui/content/entry/article_editor_wysiwyg_widget_test.dart test/ui/content/entry/providers/create_editor_provider_test.dart test/ui/content/article_render/markdown/article_markdown_codec_test.dart test/ui/content/entry/publish_draft_projection_bridge_test.dart
       - cd quwoquan_app && flutter analyze lib/ui/content/entry/services/article_entity_mention_picker.dart lib/ui/content/entry/pages/create_page.dart lib/ui/content/entry/widgets/article_editor.dart lib/ui/content/entry/widgets/article_editor_accessory_panels.dart test/ui/content/entry/article_editor_wysiwyg_widget_test.dart
       - make verify-markdown-article-no-article-document
       - make verify-article-contract-purity

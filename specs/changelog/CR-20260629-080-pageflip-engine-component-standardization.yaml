@@ -1,0 +1,104 @@
+id: CR-20260629-080-pageflip-engine-component-standardization
+title: 翻页通用引擎沉淀 components 并删除 ui/content/pageflip 旧根（R-PAGEFLIP-002）
+slug: pageflip-engine-component-standardization
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/runtime/runtime-client-foundation/article-editor-refactor
+  - specs/feature-tree/discovery-content
+  - quwoquan_app/lib/components/pageflip
+  - quwoquan_app/lib/ui/content/article_reader/pageflip
+  - quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py
+  - quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py
+
+entries:
+  - timestamp: "2026-06-29T11:20:00+08:00"
+    summary: |
+      收口 R-PAGEFLIP-002：将平台无关的生产翻页引擎自 `quwoquan_app/lib/ui/content/pageflip/**`
+      迁入 `quwoquan_app/lib/components/pageflip/**`，作为唯一生产 engine 根；旧 `ui/content/pageflip`
+      删除且不保留 facade。文章阅读器宿主 `quwoquan_app/lib/ui/content/article_reader/pageflip/**`
+      保留在 content UI 域，继续负责文章分页绑定、texture capture、host/layers/pipelines/debug 映射。
+      所有生产、test、tool import 一次性切到 `package:quwoquan_app/components/pageflip/...`；
+      旧 `test/ui/content/pageflip` 与 `test/local_contract/ui/content/pageflip` 同步迁入
+      `test/components/pageflip` 与 `test/local_contract/components/pageflip`。
+    reason: |
+      `ui/content/pageflip` 的职责是通用翻页 engine（geometry、render frame、curl mesh、release policy、
+      page surface snapshot），长期放在 content UI 域会迫使诊断 harness、测试工具与未来非 content
+      场景反向依赖 content。按 01-arch-constraints 与用户确认的“通用引擎进 components，文章 reader
+      adapter 留 UI”方案，应删除旧 UI engine 根；但前后翻几何对像素极敏感，本 CR 只做物理迁移与 import
+      重定向，不改 geometry、BACK 主线、release policy、gesture 状态机和 texture 语义。
+    change_type:
+      - architecture
+      - refactor
+      - test
+      - governance
+    changed_documents:
+      - path: quwoquan_app/lib/components/pageflip
+        sections:
+          - "自 quwoquan_app/lib/ui/content/pageflip 迁入，成为生产通用 engine 唯一根"
+          - "保持 geometry、render_frame、curl_mesh、release_policy、snapshot 语义不变"
+      - path: quwoquan_app/lib/ui/content/article_reader/pageflip
+        sections:
+          - "继续作为文章 reader adapter 消费 components/pageflip，不下沉到 components"
+      - path: quwoquan_app/test/components/pageflip
+        sections:
+          - "自 test/ui/content/pageflip 迁入，覆盖 engine contract/widget/pixel 用例"
+      - path: quwoquan_app/test/local_contract/components/pageflip
+        sections:
+          - "自 test/local_contract/ui/content/pageflip 迁入，保持 local_contract 对应证据"
+      - path: quwoquan_app/test/support/pageflip
+        sections:
+          - "诊断 harness 改依赖 components/pageflip，继续位于 test/support，不进入生产 lib"
+      - path: quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py
+        sections:
+          - "新增旧根 lib/ui/content/pageflip 禁回归检查"
+          - "固化 components/pageflip 禁 import package:quwoquan_app/ui/**"
+          - "禁止 lib 中非 article_reader host 消费 components/pageflip"
+      - path: quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py
+        sections:
+          - "BACK 主线扫描根更新为 components/pageflip + article_reader/pageflip + test/support/pageflip"
+      - path: .cursor/rules/11-pageflip-geometry-guardrails.mdc
+        sections:
+          - "触发路径更新为 lib/components/pageflip 与 article_reader/pageflip"
+      - path: .cursor/rules/12-pageflip-backward-mainline.mdc
+        sections:
+          - "触发路径更新为 lib/components/pageflip 与 article_reader/pageflip"
+      - path: .cursor/commands/pageflip-guard.md
+        sections:
+          - "pageflip guard 目标路径更新为 components/pageflip"
+      - path: quwoquan_app/AGENTS.md
+        sections:
+          - "pageflip 触发范围更新为 components/pageflip + article_reader/pageflip"
+      - path: specs/gates/test_directory_inventory.yaml
+        sections:
+          - "pageflip 测试 canonical 路径更新为 test/components/pageflip 与 local_contract/components/pageflip"
+      - path: specs/gates/test_legacy_source_allowlist.yaml
+        sections:
+          - "pageflip 测试路径同步为 components/pageflip"
+      - path: specs/gates/file_line_budget_allowlist.yaml
+        sections:
+          - "pageflip engine 行数预算路径同步为 lib/components/pageflip/curl_mesh_builder.dart"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: low
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "迁移前基线：python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "迁移前基线：make verify-app-pageflip-back-mainline（66 过 / 3 跳）"
+        - "迁移后：python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "迁移后：make verify-app-pageflip-back-mainline（66 过 / 3 跳，baseline 既有跳过）"
+        - "迁移后：flutter test --no-pub test/components/pageflip test/common/pageflip test/local_contract/components/pageflip test/ui/content/article_reader test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（300 过 / 6 跳）"
+        - "迁移后：flutter analyze --no-fatal-warnings --no-fatal-infos lib/components/pageflip lib/ui/content/article_reader/pageflip test/support/pageflip test/components/pageflip test/common/pageflip tool/pageflip_diagnostics_main.dart tool/pageflip_widget_diagnostics_main.dart（0 error，仅既有 warning/info）"
+        - "迁移后：python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
+        - "四环境 packaging 低层验证：python3 agent_ops/deploy/stackctl.py verify --env alpha|beta|gamma|prod --kind packaging --tier t1 --report-dir /tmp/qwq-pageflip-stackctl-<env>-t1（全部 PASS）"
+    notes:
+      - "本 CR 无外部 route、页面入口、用户可见文案或 reader 行为变更；仅物理目录迁移、import 重定向、测试/门禁路径同步。"
+      - "components/pageflip 为通用 engine，必须保持零 ui/** import；article_reader/pageflip 是文章阅读宿主 adapter，不沉淀到 components。"
+      - "旧 package:quwoquan_app/ui/content/pageflip/ 不保留兼容 facade；verify_content_ui_directory_boundaries.py 已加入退役路径扫描。"
+      - "四环境 all-tier verify 曾尝试执行；alpha/beta 被既有 seed media hash、缺失 mock avatar、beta root CA 与 Patrol CLI 前置阻断，gamma/prod all-tier 长跑中止，未作为本 CR 准出证据。"

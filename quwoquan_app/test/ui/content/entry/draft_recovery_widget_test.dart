@@ -13,7 +13,7 @@ import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/local_draft_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
@@ -161,6 +161,7 @@ Widget _buildApp(_TrackingContentRepository repository) {
           return CreatePage(
             initialAction: switch (type) {
               'gallery' => EditorStartAction.gallery,
+              'video' => EditorStartAction.video,
               'capture' => EditorStartAction.capture,
               'write' => EditorStartAction.write,
               _ => null,

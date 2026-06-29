@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/ui/content/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 
 void main() {
   test('ArticleDocumentData toMap/fromMap 往返含 canonical nodes 与 spans', () {

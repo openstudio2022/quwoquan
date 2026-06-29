@@ -266,7 +266,7 @@ def _write_auto_research_plans_impl(
         openverse = image_pools["openverse"]
         wiki_page_images = image_pools["wiki_page_images"]
         voyage_page_images = image_pools["voyage_page_images"]
-        authorized_image_pool = (
+        open_license_image_pool = (
             prior_image_pool
             + openverse
             + commons
@@ -275,7 +275,7 @@ def _write_auto_research_plans_impl(
             + wiki_page_images
             + voyage_page_images
         )
-        if needs_visual_pool and not authorized_image_pool:
+        if needs_visual_pool and not open_license_image_pool:
             rescue_pools = _discover_open_license_image_pools(
                 entity_id,
                 entity_aliases=entity_aliases,
@@ -303,7 +303,7 @@ def _write_auto_research_plans_impl(
                 openverse = rescue_pools["openverse"]
                 wiki_page_images = rescue_pools["wiki_page_images"]
                 voyage_page_images = rescue_pools["voyage_page_images"]
-                authorized_image_pool = prior_image_pool + rescue_pool
+                open_license_image_pool = prior_image_pool + rescue_pool
                 report.setdefault("rescueEvents", []).append(
                     {
                         "entityId": entity_id,
@@ -326,7 +326,7 @@ def _write_auto_research_plans_impl(
             if "article" in selected_lanes
             else []
         )
-        if needs_visual_pool and requires_publishable_images and not authorized_image_pool:
+        if needs_visual_pool and requires_publishable_images and not open_license_image_pool:
             issues.append(f"{entity_id}: no rights-compatible open-license images discovered")
             if "image" in selected_lanes:
                 _record_unavailable(
@@ -386,8 +386,8 @@ def _write_auto_research_plans_impl(
                             entity_id, "homepage", "Chinese Wikipedia", "encyclopedia"
                         ),
                         source_role="primary" if not homepage_sources else "supporting",
-                        images=_image_window(homepage_image_pool, 0, count=_BASE_DRAFT_IMAGE_CANDIDATES),
-                        image_evidence_mode="same_source" if wiki_page_images else "same_authorized_collection",
+                        images=_image_window(wiki_page_images, 0, count=_BASE_DRAFT_IMAGE_CANDIDATES),
+                        image_evidence_mode="same_source" if wiki_page_images else "",
                     )
                 )
                 if accepted:
@@ -410,8 +410,8 @@ def _write_auto_research_plans_impl(
                             support["category"] or "official",
                         ),
                         source_role="supporting",
-                        images=_image_window(homepage_image_pool, 1 + support_index, count=2),
-                        image_evidence_mode="same_authorized_collection" if homepage_image_pool else "",
+                        images=[],
+                        image_evidence_mode="",
                     )
                 )
                 if accepted:
@@ -428,8 +428,8 @@ def _write_auto_research_plans_impl(
                         entity_id, "homepage", "Baidu Baike item URL", "encyclopedia"
                     ),
                     source_role="supporting",
-                    images=_image_window(homepage_image_pool, 0, count=3),
-                    image_evidence_mode="same_authorized_collection" if homepage_image_pool else "",
+                    images=[],
+                    image_evidence_mode="",
                 )
             )
             if accepted:
@@ -446,7 +446,7 @@ def _write_auto_research_plans_impl(
                     entity_id=entity_id,
                     limit=3,
                 )
-                related_pool = related_images or authorized_image_pool
+                related_pool = related_images
                 accepted = _accept_homepage_source(
                     _source(
                         source_id=f"home_related_encyclopedia_support_{related_index}",
@@ -462,7 +462,7 @@ def _write_auto_research_plans_impl(
                         source_role="supporting",
                         images=_image_window(related_pool, 0, count=3),
                         image_evidence_mode=(
-                            "same_source" if related_images else "same_authorized_collection"
+                            "same_source" if related_images else ""
                         ) if related_pool else "",
                     )
                 )
@@ -481,8 +481,8 @@ def _write_auto_research_plans_impl(
                             entity_id, "homepage", "Sogou Baike query URL", "encyclopedia"
                         ),
                         source_role="supporting",
-                        images=_image_window(homepage_image_pool, 1, count=3),
-                        image_evidence_mode="same_authorized_collection" if homepage_image_pool else "",
+                        images=[],
+                        image_evidence_mode="",
                     )
                 )
                 if accepted:
@@ -525,7 +525,7 @@ def _write_auto_research_plans_impl(
             for source in _qunar_travelogue_sources(
                 entity_id,
                 entity_aliases=entity_aliases,
-                authorized_images=authorized_image_pool,
+                authorized_images=[],
                 limit=_article_base_candidate_limit(required_article_bases),
             ):
                 accepted = _accept_source(
@@ -550,6 +550,12 @@ def _write_auto_research_plans_impl(
                 related_url = _wiki_url("zh.wikipedia.org", related_title)
                 if not related_url:
                     continue
+                related_images = _mediawiki_page_images(
+                    "zh.wikipedia.org",
+                    related_title,
+                    entity_id=entity_id,
+                    limit=2,
+                )
                 accepted = _accept_source(
                     report,
                     _source(
@@ -564,10 +570,8 @@ def _write_auto_research_plans_impl(
                             f"context for {entity_id}; supporting only, not an article base"
                         ),
                         source_role="supporting",
-                        images=_image_window(wiki_page_images or authorized_image_pool, 1 + related_index, count=2),
-                        image_evidence_mode=(
-                            "same_authorized_collection" if (wiki_page_images or authorized_image_pool) else ""
-                        ),
+                        images=_image_window(related_images, 0, count=2),
+                        image_evidence_mode="same_source" if related_images else "",
                     ),
                     entity_id=entity_id,
                     lane="article",
@@ -576,7 +580,7 @@ def _write_auto_research_plans_impl(
                 if accepted:
                     article_sources.append(accepted)
             if voyage_url:
-                voyage_images = voyage_page_images or authorized_image_pool
+                voyage_images = voyage_page_images
                 accepted = _accept_source(
                     report,
                     _source(
@@ -592,7 +596,7 @@ def _write_auto_research_plans_impl(
                         source_role="base",
                         images=_image_window(voyage_images, 0, count=_BASE_DRAFT_IMAGE_CANDIDATES),
                         image_evidence_mode=(
-                            "same_source" if voyage_page_images else "same_authorized_collection"
+                            "same_source" if voyage_page_images else ""
                         ) if voyage_images else "",
                     ),
                     entity_id=entity_id,
@@ -624,8 +628,8 @@ def _write_auto_research_plans_impl(
                             entity_id, "article", "Wikipedia trusted external links", category
                         ),
                         source_role=source_role,
-                        images=_image_window(commons, 4 + index, count=3),
-                        image_evidence_mode="same_authorized_collection" if commons else "",
+                        images=[],
+                        image_evidence_mode="",
                     ),
                     entity_id=entity_id,
                     lane="article",
@@ -654,8 +658,8 @@ def _write_auto_research_plans_impl(
                             category,
                         ),
                         source_role=source_role,
-                        images=_image_window(authorized_image_pool, 2 + index, count=3),
-                        image_evidence_mode="same_authorized_collection" if authorized_image_pool else "",
+                        images=[],
+                        image_evidence_mode="",
                         fetchable_override=bool(known.get("fetchable")),
                     ),
                     entity_id=entity_id,
@@ -683,8 +687,8 @@ def _write_auto_research_plans_impl(
                             entity_id, "article", "Open license image search", "open_license"
                         ),
                         source_role="supporting",
-                        images=_image_window(authorized_image_pool, 5, count=3),
-                        image_evidence_mode="same_authorized_collection",
+                        images=[],
+                        image_evidence_mode="",
                     ),
                     entity_id=entity_id,
                     lane="article",
@@ -873,7 +877,7 @@ def _write_auto_research_plans_impl(
                         "entityId": entity_id,
                         "sourceCollectionId": "",
                         "platform": "",
-                        "imageCount": len(authorized_image_pool),
+                        "imageCount": len(open_license_image_pool),
                         "passed": True,
                         "issues": [],
                         "discoveryProvider": "reference_only_image_strategy",
@@ -942,7 +946,7 @@ def _write_auto_research_plans_impl(
                             "openverse": len(openverse),
                             "wikiPageImages": len(wiki_page_images),
                             "voyagePageImages": len(voyage_page_images),
-                            "authorizedImagePool": len(authorized_image_pool),
+                            "openLicenseImagePool": len(open_license_image_pool),
                             "acceptedCollections": len(collections),
                         },
                         "sourceUnavailable": _source_unavailable_for_entity(

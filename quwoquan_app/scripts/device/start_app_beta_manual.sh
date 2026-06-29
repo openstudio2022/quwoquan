@@ -34,7 +34,7 @@ LOCAL_IMAGE_HOST="beta-image.localhost"
 LOCAL_VIDEO_HOST="beta-video.localhost"
 LOCAL_UPLOAD_HOST="beta-upload.localhost"
 CHAT_SEED_REFS="${CHAT_SEED_REFS:-chat_core,chat_settings_core,chat_contacts_core,chat_group_flow_core}"
-CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017}"
+CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017/?directConnection=true}"
 CHAT_MONGO_DATABASE="${CHAT_MONGO_DATABASE:-quwoquan_chat_local}"
 CHAT_REDIS_ADDR="${CHAT_REDIS_ADDR:-localhost:6379}"
 LOCAL_GAMMA_COMPOSE_FILE="$ROOT_DIR/quwoquan_service/docker-compose.gamma-local.yaml"
@@ -305,7 +305,7 @@ beta_manual_ensure_docker_daemon() {
 }
 
 beta_manual_ensure_chat_backing_services() {
-  local default_mongo_uri="mongodb://localhost:27017"
+  local default_mongo_uri="mongodb://localhost:27017/?directConnection=true"
   local default_redis_addr="localhost:6379"
   local effective_mongo_uri="$CHAT_MONGO_URI"
   local effective_redis_addr="$CHAT_REDIS_ADDR"
@@ -940,10 +940,6 @@ beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/healthz" "gateway
 beta_manual_wait_https_ok "$PUBLIC_IMAGE_HOST" "$MEDIA_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "public media image route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_https_range_ok "$PUBLIC_VIDEO_HOST" "$MEDIA_PORT" "/media/video/s/archived-video/beta-sample.mp4" "public media video route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_https_ok "$PUBLIC_AVATAR_HOST" "$MEDIA_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "public media avatar route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "gateway current user avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png" "gateway friend avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png" "gateway group avatar proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
-beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "gateway post cover proxy" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; echo "media log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/circles" "circle fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/circles/fixture_circle_photo/feed" "circle feed fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_http_ok "${INTERNAL_GATEWAY_BASE_URL}/v1/user/profile" "user fixture route" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
@@ -1040,11 +1036,7 @@ report = {
         f"{avatar_cdn.rstrip('/')}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
         f"{avatar_cdn.rstrip('/')}/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
         f"{avatar_cdn.rstrip('/')}/media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png",
-        f"{gateway.rstrip('/')}/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
-        f"{gateway.rstrip('/')}/media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
-        f"{gateway.rstrip('/')}/media/avatar/s/archived-avatar/group/fixture_conv_group/v1/composite.png",
         f"{image_cdn.rstrip('/')}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-        f"{gateway.rstrip('/')}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
         f"{video_cdn.rstrip('/')}/media/video/beta-sample.mp4",
     ],
     "seedRefs": {

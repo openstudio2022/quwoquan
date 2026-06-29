@@ -54,7 +54,7 @@ def _non_comment_lines(text: str) -> str:
         lines.append(line)
     return "\n".join(lines)
 
-ARTICLE_DETAIL_VIEW = ROOT / "quwoquan_app/lib/ui/content/article_detail_view.dart"
+ARTICLE_DETAIL_VIEW = ROOT / "quwoquan_app/lib/ui/content/models/article_detail_view.dart"
 POST_FIELDS = (
     ROOT / "quwoquan_service/contracts/metadata/content/post/fields.yaml"
 )

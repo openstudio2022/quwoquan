@@ -22,7 +22,7 @@
 | P0 | 页面 | `lib/ui/discovery/pages/home_page.dart` | 关注/首页 Feed | Feed `PostBaseDto` → ReadPresentation(feed) |
 | P0 | 页面 | `lib/ui/discovery/pages/discovery_page.dart` | 发现（微趣/视频等） | 同上 + 沉浸入口 |
 | P0 | 组件 | `lib/components/content/media_post_card.dart` | 卡片复用 | 接收 ReadPresentation + SurfaceSpec |
-| P0 | 页面 | `lib/ui/content/pages/unified_media_viewer_page.dart` | 侵入式浏览 | ReadPresentation(immersive) + wire 补全 |
+| P0 | 页面 | `lib/ui/discovery/pages/unified_media_viewer_page.dart` | 侵入式浏览 | ReadPresentation(immersive) + wire 补全 |
 | P0 | 组件 | `lib/ui/discovery/widgets/works_immersive_viewer.dart` | 沉浸滑卡（**非 `*_page`，矩阵不单独占行**） | 与 `unified_media_viewer` 共用投影 |
 | P1 | 页面 | `lib/ui/circle/pages/home_circles_hub_page.dart` | 圈子 Tab 流 | 去掉/收敛 `CircleHubFeedPostEntry.raw`；DTO→Presentation |
 | P1 | 页面 + 挂靠 | `lib/ui/circle/pages/circle_detail_page.dart` → `section_creations.dart` | 圈子内作品 | `_tryParsePost(Map)` → 管道入口 |

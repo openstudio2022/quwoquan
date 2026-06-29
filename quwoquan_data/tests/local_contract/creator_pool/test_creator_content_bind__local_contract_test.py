@@ -16,6 +16,7 @@ from _common.creator_pool.media_assets import media_root
 from governance.creator_pool.content_bind import (
     CARRIERS,
     CONTENT_SEED_NAME,
+    _content_document,
     build_creator_content,
 )
 from governance.creator_pool.content_rollout import build_prod_rollout_dryrun
@@ -101,6 +102,31 @@ def test_prod_rollout_dryrun_is_go_with_pure_prod_invariant() -> None:
     assert report["boundAuthors"] and all(
         author.startswith("agent_author_travel_travel_batch_100_v1_") for author in report["boundAuthors"]
     )
+
+
+def test_article_projection_carries_markdown_kernel_not_article_document() -> None:
+    """The article content document must use the Markdown kernel (articleMarkdown +
+    articleRenderProfile, never articleDocument), so the markdown-article gate and the
+    end-to-end reader contract hold for the cold-start creator article."""
+    payload = _payload()
+    for index, post in enumerate(payload["posts"]):
+        doc = _content_document(post, index)
+        if post["carrier"] == "article":
+            assert "articleDocument" not in doc
+            markdown = doc["articleMarkdown"]
+            assert isinstance(markdown, str) and markdown.strip()
+            assert markdown.startswith("---"), "article markdown must carry front matter"
+            assert "template: journal" in markdown
+            profile = doc["articleRenderProfile"]
+            assert isinstance(profile, dict)
+            assert profile["template"] == "journal"
+            assert profile["contentVertical"] == "travel"
+            assert isinstance(profile["layoutPolicy"], dict)
+        else:
+            # image/video carriers must not leak the article-only kernel fields.
+            assert "articleMarkdown" not in doc
+            assert "articleRenderProfile" not in doc
+            assert "articleDocument" not in doc
 
 
 def test_persisted_seed_matches_producer_output() -> None:

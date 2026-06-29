@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreGraphics
 import CoreLocation
 import Flutter
 import UIKit
@@ -191,6 +192,12 @@ private final class VideoEditingPlugin {
         return
       }
       handleExportVideoEdit(arguments: arguments, result: result)
+    case "composeOneTapMovie":
+      guard let arguments = call.arguments as? [String: Any] else {
+        result(VideoEditingError.invalidArguments.flutterError)
+        return
+      }
+      handleComposeOneTapMovie(arguments: arguments, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -299,6 +306,29 @@ private final class VideoEditingPlugin {
     }
   }
 
+  private func handleComposeOneTapMovie(
+    arguments: [String: Any],
+    result: @escaping FlutterResult
+  ) {
+    queue.async {
+      do {
+        let request = try OneTapMovieRequest(arguments: arguments)
+        let payload = try self.composeOneTapMovie(request: request)
+        DispatchQueue.main.async {
+          result(payload)
+        }
+      } catch let error as VideoEditingError {
+        DispatchQueue.main.async {
+          result(error.flutterError)
+        }
+      } catch {
+        DispatchQueue.main.async {
+          result(VideoEditingError.unknown(error.localizedDescription).flutterError)
+        }
+      }
+    }
+  }
+
   private func extractFrames(
     request: FrameExtractionRequest
   ) throws -> [[String: Any]] {
@@ -360,6 +390,160 @@ private final class VideoEditingPlugin {
     return composition
   }
 
+  private func composeOneTapMovie(request: OneTapMovieRequest) throws -> [String: Any] {
+    let outputURL = try makeOutputURL(prefix: "one_tap_movie", fileExtension: "mp4")
+    let renderSize = CGSize(width: request.outputWidth, height: request.outputHeight)
+    let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
+    let settings: [String: Any] = [
+      AVVideoCodecKey: AVVideoCodecType.h264,
+      AVVideoWidthKey: request.outputWidth,
+      AVVideoHeightKey: request.outputHeight,
+    ]
+    let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
+    input.expectsMediaDataInRealTime = false
+    let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+      assetWriterInput: input,
+      sourcePixelBufferAttributes: [
+        kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+        kCVPixelBufferWidthKey as String: request.outputWidth,
+        kCVPixelBufferHeightKey as String: request.outputHeight,
+        kCVPixelBufferCGImageCompatibilityKey as String: true,
+        kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
+      ]
+    )
+    guard writer.canAdd(input) else {
+      throw VideoEditingError.exportUnavailable
+    }
+    writer.add(input)
+    guard writer.startWriting() else {
+      throw VideoEditingError.exportFailed(writer.error?.localizedDescription ?? "Unable to start writer.")
+    }
+    writer.startSession(atSourceTime: .zero)
+
+    let frameDuration = CMTime(value: 1, timescale: 30)
+    for (index, path) in request.imagePaths.enumerated() {
+      guard let image = UIImage(contentsOfFile: path) else {
+        throw VideoEditingError.imageReadFailed(path)
+      }
+      let start = CMTime(value: CMTimeValue(index * request.secondsPerImage), timescale: 1)
+      try appendImageFrame(
+        image,
+        renderSize: renderSize,
+        at: start,
+        input: input,
+        adaptor: adaptor
+      )
+      let next = CMTime(
+        value: CMTimeValue((index + 1) * request.secondsPerImage),
+        timescale: 1
+      )
+      let end = CMTimeSubtract(next, frameDuration)
+      if CMTimeCompare(end, start) > 0 {
+        try appendImageFrame(
+          image,
+          renderSize: renderSize,
+          at: end,
+          input: input,
+          adaptor: adaptor
+        )
+      }
+    }
+
+    input.markAsFinished()
+    let semaphore = DispatchSemaphore(value: 0)
+    writer.finishWriting {
+      semaphore.signal()
+    }
+    semaphore.wait()
+    guard writer.status == .completed else {
+      throw VideoEditingError.exportFailed(
+        writer.error?.localizedDescription ?? "One-tap movie export failed."
+      )
+    }
+    let coverPath = try writeUIImage(
+      UIImage(contentsOfFile: request.imagePaths[0]) ?? UIImage(),
+      prefix: "one_tap_movie_cover"
+    )
+    return [
+      "videoPath": outputURL.path,
+      "coverPath": coverPath,
+      "durationMs": request.imagePaths.count * request.secondsPerImage * 1000,
+    ]
+  }
+
+  private func appendImageFrame(
+    _ image: UIImage,
+    renderSize: CGSize,
+    at time: CMTime,
+    input: AVAssetWriterInput,
+    adaptor: AVAssetWriterInputPixelBufferAdaptor
+  ) throws {
+    while !input.isReadyForMoreMediaData {
+      Thread.sleep(forTimeInterval: 0.01)
+    }
+    guard let buffer = makePixelBuffer(from: image, renderSize: renderSize) else {
+      throw VideoEditingError.pixelBufferFailed
+    }
+    guard adaptor.append(buffer, withPresentationTime: time) else {
+      throw VideoEditingError.exportFailed("Unable to append one-tap movie frame.")
+    }
+  }
+
+  private func makePixelBuffer(from image: UIImage, renderSize: CGSize) -> CVPixelBuffer? {
+    var pixelBuffer: CVPixelBuffer?
+    let status = CVPixelBufferCreate(
+      kCFAllocatorDefault,
+      Int(renderSize.width),
+      Int(renderSize.height),
+      kCVPixelFormatType_32BGRA,
+      [
+        kCVPixelBufferCGImageCompatibilityKey: true,
+        kCVPixelBufferCGBitmapContextCompatibilityKey: true,
+      ] as CFDictionary,
+      &pixelBuffer
+    )
+    guard status == kCVReturnSuccess, let buffer = pixelBuffer else {
+      return nil
+    }
+    CVPixelBufferLockBaseAddress(buffer, [])
+    defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
+    guard
+      let context = CGContext(
+        data: CVPixelBufferGetBaseAddress(buffer),
+        width: Int(renderSize.width),
+        height: Int(renderSize.height),
+        bitsPerComponent: 8,
+        bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue |
+          CGBitmapInfo.byteOrder32Little.rawValue
+      )
+    else {
+      return nil
+    }
+    UIGraphicsPushContext(context)
+    UIColor.black.setFill()
+    UIRectFill(CGRect(origin: .zero, size: renderSize))
+    image.draw(in: aspectFitRect(imageSize: image.size, canvasSize: renderSize))
+    UIGraphicsPopContext()
+    return buffer
+  }
+
+  private func aspectFitRect(imageSize: CGSize, canvasSize: CGSize) -> CGRect {
+    guard imageSize.width > 0 && imageSize.height > 0 else {
+      return CGRect(origin: .zero, size: canvasSize)
+    }
+    let scale = min(canvasSize.width / imageSize.width, canvasSize.height / imageSize.height)
+    let width = imageSize.width * scale
+    let height = imageSize.height * scale
+    return CGRect(
+      x: (canvasSize.width - width) / 2,
+      y: (canvasSize.height - height) / 2,
+      width: width,
+      height: height
+    )
+  }
+
   private func generateCoverImage(sourcePath: String, timeMs: Int) throws -> String {
     let asset = AVURLAsset(url: URL(fileURLWithPath: sourcePath))
     let durationMs = max(Int(CMTimeGetSeconds(asset.duration) * 1000), 1000)
@@ -373,9 +557,12 @@ private final class VideoEditingPlugin {
   }
 
   private func writeImage(_ image: CGImage, prefix: String) throws -> String {
+    return try writeUIImage(UIImage(cgImage: image), prefix: prefix)
+  }
+
+  private func writeUIImage(_ image: UIImage, prefix: String) throws -> String {
     let url = try makeOutputURL(prefix: prefix, fileExtension: "jpg")
-    let uiImage = UIImage(cgImage: image)
-    guard let data = uiImage.jpegData(compressionQuality: 0.9) else {
+    guard let data = image.jpegData(compressionQuality: 0.9) else {
       throw VideoEditingError.imageWriteFailed
     }
     try data.write(to: url, options: .atomic)
@@ -452,12 +639,35 @@ private struct VideoEditRequest {
   }
 }
 
+private struct OneTapMovieRequest {
+  init(arguments: [String: Any]) throws {
+    let rawImagePaths = arguments["imagePaths"] as? [String] ?? []
+    let imagePaths = rawImagePaths
+      .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
+    guard !imagePaths.isEmpty else {
+      throw VideoEditingError.invalidArguments
+    }
+    self.imagePaths = imagePaths
+    self.secondsPerImage = max(arguments["secondsPerImage"] as? Int ?? 3, 1)
+    self.outputWidth = max(arguments["outputWidth"] as? Int ?? 1080, 320)
+    self.outputHeight = max(arguments["outputHeight"] as? Int ?? 1920, 320)
+  }
+
+  let imagePaths: [String]
+  let secondsPerImage: Int
+  let outputWidth: Int
+  let outputHeight: Int
+}
+
 private enum VideoEditingError: Error {
   case invalidArguments
   case videoTrackMissing
   case exportUnavailable
   case exportFailed(String)
+  case imageReadFailed(String)
   case imageWriteFailed
+  case pixelBufferFailed
   case unknown(String)
 
   var flutterError: FlutterError {
@@ -486,10 +696,22 @@ private enum VideoEditingError: Error {
         message: message,
         details: nil
       )
+    case let .imageReadFailed(path):
+      return FlutterError(
+        code: "video_edit_image_read_failed",
+        message: "Unable to read image: \(path)",
+        details: nil
+      )
     case .imageWriteFailed:
       return FlutterError(
         code: "video_edit_image_write_failed",
         message: "Unable to write thumbnail image.",
+        details: nil
+      )
+    case .pixelBufferFailed:
+      return FlutterError(
+        code: "video_edit_pixel_buffer_failed",
+        message: "Unable to render one-tap movie frame.",
         details: nil
       )
     case let .unknown(message):

@@ -11,12 +11,50 @@ class ChatMockData {
   /// 当前用户的 profile userId — 成员列表、用户主页使用
   static const currentUserProfileId = 'user_001';
 
-  /// Mock 用户头像池 — 保证所有页面（列表、详情、设置、主页）引用同一 URL
-  static String avatarFor(String userId) =>
-      'media/avatar/s/mock/user/$userId/v1/avatar.png';
+  static const _fallbackAvatar =
+      'media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png';
 
-  static String groupAvatarFor(String conversationId, {int version = 1}) =>
-      'media/avatar/s/archived-avatar/conversation/$conversationId/v$version/mock.png';
+  static const _avatarByMockUserId = <String, String>{
+    'user_001':
+        'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+    'current_user':
+        'media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png',
+    'user_002':
+        'media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png',
+    'user_003':
+        'media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png',
+    'user_004':
+        'media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png',
+    'user_005':
+        'media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png',
+    'user_006':
+        'media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png',
+    'user_007':
+        'media/avatar/s/archived-avatar/user/fixture_user_weekend_2/v1/avatar.png',
+    'user_008':
+        'media/avatar/s/archived-avatar/user/fixture_user_citywalk_01/v1/avatar.png',
+    'user_009':
+        'media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png',
+    'user_010':
+        'media/avatar/s/archived-avatar/user/fixture_user_outdoor_01/v1/avatar.png',
+    'fixture_assistant_primary':
+        'media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png',
+  };
+
+  /// Mock 用户头像池 — 保证所有页面引用已物化的 alpha media object。
+  static String avatarFor(String userId) =>
+      _avatarByMockUserId[userId] ?? _fallbackAvatar;
+
+  static String groupAvatarFor(String conversationId, {int version = 1}) => [
+    'media',
+    'avatar',
+    's',
+    'archived-avatar',
+    'conversation',
+    conversationId,
+    'v$version',
+    'mock.png',
+  ].join('/');
 
   static String groupAvatarSourceHashFor(String conversationId) {
     final source = _canonicalGroupAvatarMembers(membersFor(conversationId))
@@ -1114,8 +1152,16 @@ class ChatMockData {
   ];
 
   /// 联系人 Tab「圈子」占位（与记录 UI prototypeCircles 对齐）。
-  static String circleAvatarFor(String circleId) =>
-      'media/avatar/s/archived-avatar/circle/$circleId/v1/avatar.png';
+  static String circleAvatarFor(String circleId) {
+    const avatars = <String, String>{
+      'circle_1':
+          'media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png',
+      'circle_2':
+          'media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
+    };
+    return avatars[circleId] ??
+        'media/avatar/s/archived-avatar/circle/fixture_circle_life/v1/avatar.png';
+  }
 
   static List<Map<String, dynamic>> get contactTabCircles => [
     {

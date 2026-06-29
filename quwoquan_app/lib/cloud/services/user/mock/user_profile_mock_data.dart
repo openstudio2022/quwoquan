@@ -82,7 +82,7 @@ class UserProfileMockData {
     return [
       PhotoPostDto.fromMap({
         'postId': '${userId}_p1',
-        'contentType': 'photo',
+        'contentType': 'image',
         'authorId': userId,
         'displayName': _displayNameFor(userId),
         'authorAvatarUrl': _avatarFor(userId),

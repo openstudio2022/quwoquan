@@ -28,6 +28,7 @@ class AppListPageScaffold extends StatelessWidget {
     this.onBack,
     this.middle,
     this.trailing,
+    this.backgroundColor,
     this.resizeToAvoidBottomInset = true,
   });
 
@@ -38,6 +39,7 @@ class AppListPageScaffold extends StatelessWidget {
   final VoidCallback? onBack;
   final Widget? middle;
   final Widget? trailing;
+  final Color? backgroundColor;
   final bool resizeToAvoidBottomInset;
 
   @override
@@ -54,7 +56,7 @@ class AppListPageScaffold extends StatelessWidget {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SettingsSemanticConstants.pageChromeOverlayStyle(isDark),
       child: AppScaffold(
-        backgroundColor: background,
+        backgroundColor: backgroundColor ?? background,
         resizeToAvoidBottomInset: resizeToAvoidBottomInset,
         navigationBar: hasNavigation
             ? AppNavigationBar(

@@ -53,10 +53,10 @@ PY
 # fanout 分区由 author-runner orchestrate 推进 checkpoint，fresh prepare 已完成，勿重复 task run
 "$PY" "${REPO_ROOT}/quwoquan_data/scripts/cli.py" task scaled-e2e author-runner \
   --plan "$PLAN" --strategy by-partition --runtime local --max-workers 1 \
-  --model composer-2 --orchestrate
+  --model composer-2.5 --orchestrate
 
 "$PY" "${REPO_ROOT}/quwoquan_data/scripts/cli.py" task scaled-e2e finalize --plan "$PLAN" \
-  --runtime local --max-workers 1 --model composer-2
+  --runtime local --max-workers 1 --model composer-2.5
 
 "$PY" "${REPO_ROOT}/quwoquan_data/scripts/cli.py" task scaled-e2e verify --plan "$PLAN"
 

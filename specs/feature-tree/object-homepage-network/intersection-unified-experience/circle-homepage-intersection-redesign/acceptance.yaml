@@ -7,27 +7,30 @@ node:
   parent_domain_service: object-homepage-network
   parent_business_capability: intersection-unified-experience
 scope:
-  summary: 圈子主页沿用他人主页同壳同口径重做交集卡、价值卡、记录流与头部。
+  summary: 圈子主页与我的主页同壳同语义 token 重做为「身份 → 我的交集 → 影响力 → 记录/讨论/成员」双模块结构。
   in_scope:
-  - 交集卡标题「为什么推荐这个圈子」列表入口（主谓宾单句）。
-  - 价值卡「这个圈子帮助了很多人」AuthorImpactCard 同构、去好友化/去收藏。
+  - 我的交集卡标题由「为什么推荐这个圈子」改「我的交集」，渲染共享 ObjectIntersectionPreviewCard（objectBType=circle、objectSharedReasonsProvider）：单列预览句 + 蓝锚点 + 查看全部。
+  - 影响力卡标题由「这个圈子帮助了很多人」改「影响力」，AuthorImpactCard 同构、去好友化/去收藏，circleImpactProvider 单一真相源。
+  - 移除头部成员头像簇（你认识的人收敛进我的交集模块）；次按钮由私信改「进入讨论」（切讨论 tab）。
   - 一级 tab 内容改记录；记录流去胶囊改右侧过滤、双列瀑布、卡内交集句。
-  - 头部头像簇 + N 成员单计数；圈子独立头像字段契约预留 + alpha mock。
-  - 用户语言禁词清理（实体/Entity/Circle/交集/影响力/兴趣圈）。
+  - 头部 N 成员单计数；圈子独立头像字段契约预留 + alpha mock。
+  - 删除 section_interaction/circle_stats_row 死代码与中文字面量。
+  - 用户语言禁词清理（实体/Entity/Circle/为什么推荐/兴趣圈）。
   out_of_scope:
   - 云侧 Circle 服务/排序/图谱实现。
   - 圈子私信 1v1 链路改造。
 gwt_acceptance:
   GWT1:
-    title: 为什么推荐这个圈子列表入口 GWT
+    title: 我的交集卡列表入口 GWT
     given:
-    - alpha mock circle fixtures 含主谓宾 primaryText 与辅助说明。
+    - alpha mock circle fixtures 含主谓宾 primaryText 与蓝锚点 primarySpans。
     when:
-    - 渲染圈子主页交集卡。
+    - 渲染圈子主页「我的交集」卡。
     then:
-    - 交集卡标题为「为什么推荐这个圈子」，每行单结论句 + 至多一条辅助说明 + 查看更多。
+    - 我的交集卡走共享 ObjectIntersectionPreviewCard（objectBType=circle、objectSharedReasonsProvider），标题「我的交集」，单列预览句（蓝锚点）
+      + 弱入口「查看全部」。
     done_when:
-    - 与 ObjectIntersectionSection 同口径。
+    - 弃「为什么推荐这个圈子」标题，与我的主页同壳同语义 token。
     edge_cases:
     - 无交集事实时三态降级不占位。
     contract_refs:
@@ -64,17 +67,17 @@ gwt_acceptance:
       但 stackctl api_integration 仍因 gateway health SSL EOF 未进入 circle object intersections populated
       探针；由 `object-homepage-gamma-real-data-closure` 继续收口。'
   GWT2:
-    title: 圈子价值卡与去好友化 GWT
+    title: 圈子影响力卡与去好友化 GWT
     given:
     - alpha mock 提供圈子影响力数据。
     when:
-    - 渲染「这个圈子帮助了很多人」价值卡。
+    - 渲染圈子「影响力」卡。
     then:
-    - 卡片与 AuthorImpactCard 同构，文案为「建立了新连接」，无「认识了新朋友」/收藏文案。
+    - 影响力卡标题「影响力」，与 AuthorImpactCard 同构，文案为「建立了新连接」，无「认识了新朋友」/收藏文案。
     done_when:
-    - 文案口径与 intersection-definition §17 一致。
+    - 标题由「这个圈子帮助了很多人」改「影响力」，文案口径与 intersection-definition §17 一致。
     edge_cases:
-    - 无影响力事实时不展示价值项。
+    - 无影响力事实时不展示影响力卡。
     contract_refs:
     - content/post/projections/author_impact_item.yaml
     performance_points: []
@@ -143,15 +146,15 @@ gwt_acceptance:
     - '[migrated_from_recorded] PENDING api_integration：gamma circle 记录流真实卡片 intersectionReasons
       待 WP-D。'
   GWT4:
-    title: 头部头像簇单计数与独立头像 GWT
+    title: 头部独立头像与单计数去成员簇 GWT
     given:
-    - alpha mock circle fixtures 含成员头像簇与 iconUrl。
+    - alpha mock circle fixtures 含 iconUrl 与成员计数。
     when:
     - 渲染圈子主页头部。
     then:
-    - 头部展示头像簇 +「N 成员」单计数与圈子独立头像（缺省回退封面）；无禁用术语外露。
+    - 头部展示圈子独立头像（缺省回退封面）+「N 成员」单计数；移除头部成员头像簇（你认识的人收敛进我的交集模块）；无禁用术语外露。
     done_when:
-    - 头部不挂 4 列统计行。
+    - 头部不挂 4 列统计行、不挂成员头像簇。
     edge_cases:
     - iconUrl 缺省时回退 coverUrl。
     contract_refs:
@@ -185,6 +188,8 @@ gwt_acceptance:
     - '[recorded] PENDING api_integration 2026-06-25：circle iconUrl、成员计数与加入状态的真实链路
       需要在 gamma-local health 通过后由 api_integration/user_acceptance 验证；由 `object-homepage-gamma-real-data-closure`
       接管。'
+    - '[recorded] 2026-06-29：本节点由「为什么推荐这个圈子 + 这个圈子帮助了很多人」re-PRD 为「我的交集 + 影响力」双模块，标题改用共享语义 token；移除头部成员头像簇、次按钮改「进入讨论」、删除
+      section_interaction/circle_stats_row 死代码；上方早期 [migrated_from_recorded] 旧标题绿测记录为被取代的旧口径，待 local_contract 重写转绿后回填。'
 execution:
   local_gate:
   - bash agent_ops/scaffold/verify_feature_tree_refactor.sh

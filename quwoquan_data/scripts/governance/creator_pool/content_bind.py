@@ -163,12 +163,50 @@ def build_creator_content(
     }
 
 
+def _stub_article_markdown(*, title: str, summary: str, body: str) -> str:
+    """Deterministic-stub QWQ Markdown for the article carrier.
+
+    Long-form truth source is Markdown (`articleMarkdown`), never the retired
+    `articleDocument`. The narrative is a deterministic stub (bodyMode stub binding);
+    front matter mirrors the compliant content_scenarios article fixtures so the
+    markdown reader (codec → AST → pagination) renders a real long-form layout.
+    """
+    return (
+        "---\n"
+        f"title: {title}\n"
+        f"summary: {summary}\n"
+        "template: journal\n"
+        "fontPreset: clean\n"
+        "---\n\n"
+        f"# {title}\n\n"
+        f"{body}\n"
+    )
+
+
+def _stub_article_render_profile(*, vertical: str) -> dict[str, Any]:
+    """Deterministic-stub render profile (dict) aligned to compliant article fixtures."""
+    return {
+        "template": "journal",
+        "fontPreset": "clean",
+        "paperThemeMode": "system",
+        "paperTexture": "warmBlack",
+        "contentVertical": vertical or DEFAULT_VERTICAL,
+        "layoutPolicy": {
+            "wrapDowngrade": "compactWidthToFullWidth",
+            "galleryDowngrade": "singleColumn",
+        },
+    }
+
+
 def _content_document(post: dict[str, Any], index: int) -> dict[str, Any]:
     """Project a lean binding post into a content-service / app feed post document.
 
     The narrative body is a deterministic stub; the authorship binding is the real
     match_creator output. Field aliases mirror existing content_scenarios posts so
     both the Go content-service mapper and the Dart mock loader can consume it.
+    Article carrier carries the Markdown kernel (`articleMarkdown` +
+    `articleRenderProfile`, no `articleDocument`) per the markdown-article-kernel
+    contract.
     """
     carrier = post["carrier"]
     doc_id = f"{CONTENT_DOC_PREFIX}{post['postId']}"
@@ -178,7 +216,7 @@ def _content_document(post: dict[str, Any], index: int) -> dict[str, Any]:
         f"{post['region'] or DEFAULT_VERTICAL}主题 {carrier} 内容，由平台虚拟创作者"
         f"{post['displayName']}（{post['creatorArchetype']}）出品。"
     )
-    return {
+    document: dict[str, Any] = {
         "postId": doc_id,
         "id": doc_id,
         "contentType": post["contentType"],
@@ -206,6 +244,14 @@ def _content_document(post: dict[str, Any], index: int) -> dict[str, Any]:
         "shareCount": 1 + index,
         "createdAt": CONTENT_BASE_CREATED_AT,
     }
+    if carrier == "article":
+        document["articleMarkdown"] = _stub_article_markdown(
+            title=post["title"], summary=post["summary"], body=body
+        )
+        document["articleRenderProfile"] = _stub_article_render_profile(
+            vertical=post["vertical"]
+        )
+    return document
 
 
 def materialize_content_scenarios_seed_set(

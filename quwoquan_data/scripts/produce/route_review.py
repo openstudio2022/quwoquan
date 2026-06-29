@@ -127,23 +127,16 @@ def review_route_draft(
     from _common.base_draft import (
         base_draft_fidelity_issues,
         base_source_use_mode,
-        load_intent_aligned_base_draft_text,
+        load_base_draft_text,
     )
 
     if carrier in ("image", "gallery"):
         fidelity = []
     else:
-        # 门侧分母与 prompt 侧 baseDraftText 同源：同一份 writingIntent 主线对齐底稿，
-        # 否则整篇多主题游记作分母会误杀聚焦文章（R-CS01 单一真相源）。
-        from _common.writing_pack import primary_entity_name
-
-        base_text = load_intent_aligned_base_draft_text(
-            task_id,
-            batch_id,
-            brief.get("baseSourceRef"),
-            writing_intent=brief.get("writingIntent"),
-            entity_name=primary_entity_name(brief),
-        )
+        # 底稿中心 1:1：门侧分母 = 整篇单一底稿（与 prompt 侧 baseDraftText 同源）。
+        # 不再按 writingIntent 收窄分母——成品本就只来自这一篇底稿，整篇度量才能既防误杀
+        # （多主题游记不再因离题段落拉低 fidelity）又防逐字照搬（高相似仍触顶）。
+        base_text = load_base_draft_text(task_id, batch_id, brief.get("baseSourceRef"))
         source_use_mode = base_source_use_mode(task_id, batch_id, brief.get("baseSourceRef"))
         fidelity = base_draft_fidelity_issues(
             body,
@@ -502,7 +495,13 @@ def _check_carrier_consistency(compose_payload: Mapping[str, Any]) -> dict[str, 
     else:
         if len(re.findall(r"(?m)^##\s", article)) < 3:
             issues.append("article carrier lacks prose sections (looks like a gallery)")
-        if article.count(":::figure") and len(re.sub(r"\s+", "", article)) < 600:
+        if article.count(":::figure"):
+            from _common.base_draft import base_draft_readiness
+
+            readiness = base_draft_readiness(article)
+        else:
+            readiness = {"ready": len(re.sub(r"\s+", "", article)) >= 600}
+        if article.count(":::figure") and not readiness["ready"]:
             issues.append("article carrier is image-only; route to gallery instead")
     return {
         "passed": not issues,

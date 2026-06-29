@@ -10,7 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dt
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/core/services/location_permission_checker.dart';
-import 'package:quwoquan_app/ui/content/entry/models/publish_settings_models.dart';
+import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 
 // 兼容导出，供页面使用
 export 'package:quwoquan_app/core/services/location_permission_checker.dart'

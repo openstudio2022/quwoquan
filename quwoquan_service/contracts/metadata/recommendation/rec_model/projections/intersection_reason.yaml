@@ -7,7 +7,7 @@ description: |
   挂载点共用同一结构：feed item、对象推荐卡、对象页交集卡（你和这里的交集 / 你们的交集）、内容卡交集线索。
 
   闭集枚举（端按字符串解析）：
-    kind:      §23 一等字段，交集 kind 真相源（registry.kinds.kind，如 sharedFollowees / sameSchool / coVisitedEntity）；
+    kind:      §23 一等字段，交集 kind 真相源（registry.kinds.kind / intersectionKind，如 sharedFollowees / sameSchool / coVisitedEntity）；
                端查 IntersectionKindMetadata 表得 iconKey/objectKind/dimensions/actionHints/tone/vertical，禁止端再 intersectionKindOf 推导。
                兼容期 alias sourceRef（旧数据把 kind 放在 sourceRef）。
     vertical:  §23.4 垂类正交标注（general | travel_photography | campus，缺省 general）；与 kind 注册表 vertical 对齐。
@@ -61,7 +61,7 @@ client_projection:
       dart_type: String
       nullable: false
       source: kind
-      aliases: [kind, sourceRef]
+      aliases: [kind, intersectionKind, sourceRef]
       default: "''"
     - name: vertical
       dart_type: String
@@ -102,7 +102,7 @@ client_projection:
       dart_type: double
       nullable: false
       source: strength
-      aliases: [strength, strengthScore]
+      aliases: [strength, strengthScore, strength_score]
       default: "0.0"
     - name: primaryText
       dart_type: String
@@ -216,7 +216,7 @@ client_projection:
       dart_type: int
       nullable: false
       source: totalPointCount
-      aliases: [totalPointCount]
+      aliases: [totalPointCount, totalCount, total_count]
       default: "0"
     - name: dimensionPointSummary
       dart_type: List<IntersectionDimensionTally>
@@ -331,29 +331,29 @@ client_projection:
       map_from_string_key_class: IntersectionVisual
     # 我的交集高保重构（主页/详情页事实 item 排序与分组，只读字段）：
     #   timeBucket 为服务端归桶结果（today|yesterday|last7Days|thisMonth|lastMonth），
-    #   dedupeKey 为 user_id + object_id + object_type 的全局去重主键，
-    #   anchorUserWeight / mutualCount 用于同 strength/timeBucket 时稳定择优。
+    #   dedupeKey 为 viewerId + objectId + objectType + intersectionKind 的全局去重主键，
+    #   anchorUserWeight / totalPointCount / mutualCount 用于同 strength/timeBucket 时稳定择优。
     - name: timeBucket
       dart_type: String
       nullable: false
       source: timeBucket
-      aliases: [timeBucket]
+      aliases: [timeBucket, time_bucket]
       default: "''"
     - name: dedupeKey
       dart_type: String
       nullable: false
       source: dedupeKey
-      aliases: [dedupeKey]
+      aliases: [dedupeKey, dedup_key, dedupe_key]
       default: "''"
     - name: anchorUserWeight
       dart_type: double
       nullable: false
       source: anchorUserWeight
-      aliases: [anchorUserWeight]
+      aliases: [anchorUserWeight, anchorUserScore, anchor_user_score]
       default: "0.0"
     - name: mutualCount
       dart_type: int
       nullable: false
       source: mutualCount
-      aliases: [mutualCount]
+      aliases: [mutualCount, mutual_count]
       default: "0"

@@ -1,11 +1,12 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_action_sheet.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
 
@@ -24,7 +25,7 @@ void main() {
     description: 'sheet drag handle',
   );
 
-  testWidgets('创作入口收口为相册/相机/文字三项', (tester) async {
+  testWidgets('加号入口保留三项创作和三项社交动作', (tester) async {
     EditorStartAction? selected;
 
     await tester.pumpWidget(
@@ -58,6 +59,10 @@ void main() {
       find.text(UITextConstants.createActionPostPhotoShort),
       findsOneWidget,
     );
+    expect(
+      find.text(UITextConstants.createActionPhotoSubtitle),
+      findsOneWidget,
+    );
     expect(find.text(UITextConstants.createActionWriteLong), findsOneWidget);
     expect(
       find.text(UITextConstants.createActionPostVideoShort),
@@ -70,11 +75,15 @@ void main() {
     expect(find.text(UITextConstants.createActionResumeDraft), findsNothing);
     expect(
       find.text(UITextConstants.createActionCreateGroupShort),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       find.text(UITextConstants.createActionAddContactShort),
-      findsNothing,
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionCreateCircleShort),
+      findsOneWidget,
     );
     expect(find.text('发图片'), findsNothing);
     expect(find.text('发视频'), findsNothing);
@@ -84,7 +93,7 @@ void main() {
     expect(find.text('建圈子'), findsNothing);
     expect(find.text(UITextConstants.cancel), findsOneWidget);
     expect(find.byKey(TestKeys.createActionContinueFromDraft), findsNothing);
-    expect(find.byType(ConversationSheetListCard), findsOneWidget);
+    expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
     expect(find.byIcon(CupertinoIcons.chevron_forward), findsNothing);
     expect(
       find.descendant(
@@ -119,6 +128,34 @@ void main() {
             .dy,
       ),
     );
+    expect(
+      tester.getCenter(find.text(UITextConstants.createActionWriteLong)).dy,
+      lessThan(
+        tester
+            .getCenter(find.text(UITextConstants.createActionAddContactShort))
+            .dy,
+      ),
+    );
+    expect(
+      tester
+          .getCenter(find.text(UITextConstants.createActionAddContactShort))
+          .dy,
+      lessThan(
+        tester
+            .getCenter(find.text(UITextConstants.createActionCreateGroupShort))
+            .dy,
+      ),
+    );
+    expect(
+      tester
+          .getCenter(find.text(UITextConstants.createActionCreateGroupShort))
+          .dy,
+      lessThan(
+        tester
+            .getCenter(find.text(UITextConstants.createActionCreateCircleShort))
+            .dy,
+      ),
+    );
     expect(find.text('作品'), findsNothing);
     expect(find.text('文章'), findsNothing);
     expect(find.byKey(TestKeys.modalBottomSheetPanel), findsOneWidget);
@@ -132,7 +169,90 @@ void main() {
     await tester.tap(find.text(UITextConstants.createActionPostVideoShort));
     await tester.pump();
 
-    expect(selected, EditorStartAction.capture);
+    expect(selected, EditorStartAction.video);
+  });
+
+  testWidgets('Android 与 iOS 均渲染同一套列表式加号面板', (tester) async {
+    try {
+      for (final platform in <TargetPlatform>[
+        TargetPlatform.iOS,
+        TargetPlatform.android,
+      ]) {
+        debugDefaultTargetPlatformOverride = platform;
+
+        await tester.pumpWidget(
+          ProviderScope(
+            child: ScreenUtilInit(
+              designSize: const Size(390, 844),
+              builder: (context, child) => MaterialApp(
+                home: Scaffold(
+                  body: CreateEntrySheet(
+                    isOpen: true,
+                    onClose: () {},
+                    onSelect: (_) {},
+                    onContinueFromDraft: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+
+        expect(
+          find.text(UITextConstants.createActionPostPhotoShort),
+          findsOneWidget,
+        );
+        expect(
+          find.text(UITextConstants.createActionPhotoSubtitle),
+          findsOneWidget,
+        );
+        expect(
+          find.text(UITextConstants.createActionPostVideoShort),
+          findsOneWidget,
+        );
+        expect(
+          find.text(UITextConstants.createActionCameraSubtitle),
+          findsOneWidget,
+        );
+        expect(
+          find.text(UITextConstants.createActionWriteLong),
+          findsOneWidget,
+        );
+        expect(
+          find.text(UITextConstants.createActionAddContactShort),
+          findsOneWidget,
+        );
+        expect(
+          find.text(UITextConstants.createActionCreateGroupShort),
+          findsOneWidget,
+        );
+        expect(
+          find.text(UITextConstants.createActionCreateCircleShort),
+          findsOneWidget,
+        );
+        expect(find.text('发布'), findsNothing);
+        expect(find.text('互动'), findsNothing);
+        expect(find.text('发图片'), findsNothing);
+        expect(find.text('发视频'), findsNothing);
+        expect(find.text('写长文'), findsNothing);
+        expect(find.text('续草稿'), findsNothing);
+        expect(find.text('建圈子'), findsNothing);
+        expect(
+          find.descendant(
+            of: find.byKey(TestKeys.modalBottomSheetPanel),
+            matching: find.byType(Icon),
+          ),
+          findsNothing,
+        );
+        expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
+
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+      }
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 
   testWidgets('深色模式下创作入口顶部仅渲染一个标准拖拽手柄', (tester) async {
@@ -167,7 +287,7 @@ void main() {
     );
   });
 
-  testWidgets('趣信上下文优先级不改变移动端三项创作入口', (tester) async {
+  testWidgets('趣信上下文优先级不改变移动端创作优先入口顺序', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: ScreenUtilInit(
@@ -197,11 +317,11 @@ void main() {
     expect(galleryY, lessThan(cameraY));
     expect(
       find.text(UITextConstants.createActionCreateGroupShort),
-      findsNothing,
+      findsOneWidget,
     );
   });
 
-  testWidgets('移动端加号面板不渲染社交动作', (tester) async {
+  testWidgets('移动端加号面板渲染社交动作并触发回调', (tester) async {
     var createCircleTapped = false;
 
     await tester.pumpWidget(
@@ -228,17 +348,17 @@ void main() {
 
     expect(
       find.text(UITextConstants.createActionCreateCircleShort),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       find.text(UITextConstants.createActionAddContactShort),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       find.text(UITextConstants.createActionCreateGroupShort),
-      findsNothing,
+      findsOneWidget,
     );
-    expect(find.byType(ConversationSheetListCard), findsOneWidget);
+    expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
     expect(
       find.descendant(
         of: find.byKey(TestKeys.modalBottomSheetPanel),
@@ -247,7 +367,10 @@ void main() {
       findsNothing,
     );
 
-    expect(createCircleTapped, isFalse);
+    await tester.tap(find.text(UITextConstants.createActionCreateCircleShort));
+    await tester.pump();
+
+    expect(createCircleTapped, isTrue);
   });
 
   testWidgets('iPad 下发起弹窗保持内容驱动高度', (tester) async {

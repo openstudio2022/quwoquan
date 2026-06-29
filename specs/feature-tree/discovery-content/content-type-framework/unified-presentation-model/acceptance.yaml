@@ -17,7 +17,6 @@ scope:
     flag
   out_of_scope:
   - 发布/编辑写链路与持久化字段（仅读侧收敛）
-  - 口碑 review 类型接入（随 B1 选型，以 contentType 分支无痛接入）
   - pageflip 受控文件 article_read_only_book_deck.dart 的几何
 gwt_acceptance:
   GWT1:

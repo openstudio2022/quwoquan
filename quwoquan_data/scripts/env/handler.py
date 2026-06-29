@@ -8,7 +8,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from _common.python_runtime import environment_preflight, prepare_data_runtime, runtime_report
+from _common.python_runtime import (
+    cursor_startup_probe_suite,
+    environment_preflight,
+    prepare_data_runtime,
+    runtime_report,
+)
 
 
 def _print_report(report: dict, *, as_json: bool) -> None:
@@ -70,6 +75,23 @@ def _print_preflight(report: dict, *, as_json: bool) -> None:
         print(f"  - {item}", file=sys.stderr)
 
 
+def _print_cursor_probe(report: dict, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return
+    print(
+        "[env cursor-probe] "
+        f"attempts={report.get('attempts')} success={report.get('successCount')} "
+        f"authFailures={report.get('authFailures')} "
+        f"true5xxRate={report.get('true5xxRate')} "
+        f"bridgeDisconnectRate={report.get('bridgeDisconnectRate')} "
+        f"startupLatencyP95={report.get('startupLatencyP95')}"
+    )
+    print("[env cursor-probe] READY" if report.get("ready") else "[env cursor-probe] FAILED")
+    for item in report.get("issues") or []:
+        print(f"  - {item}", file=sys.stderr)
+
+
 def _cursor_startup_enabled(args: argparse.Namespace) -> bool:
     if bool(getattr(args, "no_cursor_startup", False)):
         return False
@@ -118,6 +140,26 @@ def handle_preflight(args: argparse.Namespace) -> None:
         cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 45.0)),
     )
     _print_preflight(report, as_json=bool(getattr(args, "json", False)))
+    if not report.get("ready"):
+        raise SystemExit(1)
+
+
+def handle_cursor_probe(args: argparse.Namespace) -> None:
+    report = cursor_startup_probe_suite(
+        model=str(getattr(args, "model", "composer-2.5") or "composer-2.5"),
+        runtime=str(getattr(args, "runtime", "local") or "local"),
+        attempts=int(getattr(args, "attempts", 20) or 20),
+        timeout_seconds=float(getattr(args, "startup_timeout_seconds", 45.0)),
+        cwd=Path(str(getattr(args, "cwd", "") or ".")).expanduser().resolve()
+        if getattr(args, "cwd", None)
+        else None,
+    )
+    report_out = getattr(args, "report_out", None)
+    if report_out:
+        out = Path(str(report_out)).expanduser()
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _print_cursor_probe(report, as_json=bool(getattr(args, "json", False)))
     if not report.get("ready"):
         raise SystemExit(1)
 
@@ -244,6 +286,16 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     ppf.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
     ppf.add_argument("--startup-timeout-seconds", type=float, default=45.0)
     ppf.set_defaults(handler=handle_preflight)
+
+    pcp = sub.add_parser("cursor-probe", help="重复执行真实 Cursor startup probe，并输出放量准入报告")
+    pcp.add_argument("--json", action="store_true")
+    pcp.add_argument("--model", default="composer-2.5", help="Cursor startup probe model")
+    pcp.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
+    pcp.add_argument("--attempts", type=int, default=20, help="探针次数；P0 正式门禁使用 20")
+    pcp.add_argument("--startup-timeout-seconds", type=float, default=45.0)
+    pcp.add_argument("--cwd", help="probe workspace cwd；默认 repo root")
+    pcp.add_argument("--report-out", dest="report_out", help="写出 JSON 报告路径")
+    pcp.set_defaults(handler=handle_cursor_probe)
 
     pr = sub.add_parser("ready", help="一键准备 data venv，并执行运行前环境验收")
     pr.add_argument("--python", help="目标 Python；默认 quwoquan_data/.venv/bin/python")

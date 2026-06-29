@@ -47,6 +47,7 @@ from concurrent.futures import ThreadPoolExecutor, wait
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
+from _common.cursor_credentials import is_cursor_auth_error, resolve_cursor_api_key
 from _common.entity_extract import require_domain_etype
 from _common.image_asset_strategy import (
     REFERENCE_ONLY_NO_IMAGE_RELEASE,
@@ -1891,23 +1892,22 @@ def _download_stage_gate_issues(
 
 
 def _download_source_units_mtime_ns(ctx: PipelineContext, entity_id: str, etype: str) -> int:
-    from _common.source_unit import resolve_entity_object_dir
+    from _common.source_unit import iter_source_units, resolve_entity_object_dir
 
-    sources_dir = (
-        resolve_entity_object_dir(
-            ctx.task_id,
-            ctx.batch_id,
-            entity_id,
-            etype_hint=etype,
-        )
-        / "1.download"
-        / "sources"
+    object_dir = resolve_entity_object_dir(
+        ctx.task_id,
+        ctx.batch_id,
+        entity_id,
+        etype_hint=etype,
     )
-    if not sources_dir.is_dir():
+    source_units = iter_source_units(object_dir)
+    if not source_units:
         return 0
     mtimes: list[int] = []
-    for path in sources_dir.rglob("*"):
-        if path.is_file():
+    for unit in source_units:
+        for path in unit.rglob("*"):
+            if not path.is_file():
+                continue
             try:
                 mtimes.append(path.stat().st_mtime_ns)
             except OSError:
@@ -4486,6 +4486,43 @@ def _write_retry_reports_for_refs(
         )
 
 
+def _abandon_persistent_produce_review_refs(
+    ctx: PipelineContext, result: StageResult
+) -> list[str]:
+    """produce_review 有界重试耗尽后，把仍未过门的对象级 ref 快速弃稿。
+
+    底稿中心快速失败：上游已保证单一底稿成稿，produce_review 反复失败的多为个别
+    难成稿对象，不应阻塞整批。仅在 workflowPolicy.allowPartialContent 为真时弃稿，
+    弃稿后批次以剩余合格内容收口（不追求 100%）。返回新增弃稿的 ref 列表。
+    """
+    from produce.materialize import prune_materialized_refs
+
+    refs, _issue_map = _produce_review_retry_refs(ctx, result.issues)
+    abandoned_refs = _abandoned_content_refs(load_workflow_state(ctx.task_id, ctx.batch_id))
+    failing = [ref for ref in refs if ref not in abandoned_refs]
+    if not failing:
+        return []
+    report = mark_abandoned_content_refs(
+        ctx.task_id,
+        ctx.batch_id,
+        failing,
+        stage="produce_review",
+        reason=(
+            "produce_review_persistent_failure_after_bounded_retries; "
+            "workflowPolicy.allowPartialContent"
+        ),
+    )
+    added = [str(ref) for ref in (report.get("added") or []) if str(ref).strip()]
+    if added:
+        prune_materialized_refs(ctx.task_id, ctx.batch_id, added)
+        print(
+            "[task run] produce_review 快速失败弃稿（有界重试耗尽，allowPartialContent）: "
+            + ", ".join(added[:12])
+            + (" ..." if len(added) > 12 else "")
+        )
+    return added
+
+
 def _prepare_produce_review_retry(ctx: PipelineContext, result: StageResult, target_stage: str) -> bool:
     from task import object_queue as oq
     from _common.draft_io import read_writing_pack
@@ -4499,22 +4536,9 @@ def _prepare_produce_review_retry(ctx: PipelineContext, result: StageResult, tar
         _write_retry_reports_for_refs(ctx, refs=refs, issue_map=issue_map, target_stage=target_stage)
         _purge_author_queue_for_stale_workflow(ctx, reason="produce_review->download_plan")
         return True
-    total_refs = max(1, len(_content_issue_matchers(ctx, exclude_refs=abandoned_refs)))
-    bulk_limit = max(5, int(total_refs * 0.2))
-    if len(refs) > bulk_limit:
-        if os.environ.get("QWQ_PRODUCE_REVIEW_ALLOW_BULK_REPAIR", "0") != "1":
-            print(
-                "[task run] produce_review bulk failure; "
-                f"{len(refs)}/{total_refs} refs exceed retry limit {bulk_limit}. "
-                "Keeping drafts intact and requiring gate/prompt diagnosis.",
-                file=sys.stderr,
-            )
-            return False
-        print(
-            "[task run] produce_review bulk repair override enabled; "
-            f"resetting {len(refs)}/{total_refs} failed refs",
-            file=sys.stderr,
-        )
+    # 底稿中心快速失败：不再用 20% bulk-repair 闸门（QWQ_PRODUCE_REVIEW_ALLOW_BULK_REPAIR）
+    # 阻塞整批等待人工诊断。失败 ref 一律按有界 ReAct 预算（MAX_REACT_REWINDS）重写；
+    # 预算耗尽后由 _react_rewind 在 allowPartialContent 下弃稿，批次以部分内容收口（不追求 100%）。
     _write_retry_reports_for_refs(ctx, refs=refs, issue_map=issue_map, target_stage=target_stage)
     _purge_author_queue_for_stale_workflow(ctx, refs=refs, reason="produce_review->produce_compose")
     reset = [ref for ref in refs if _invalidate_ref_for_retry(ctx, ref)]
@@ -5484,7 +5508,17 @@ def _clean_content_plan_outputs(ctx: PipelineContext) -> None:
 
 
 def _entity_name_from_source_dir(source_dir: Path) -> str:
-    """从来源单元路径推导目标实体名（entities/.../{name}/1.download/sources/...）。"""
+    """从来源单元 manifest 推导目标实体名。"""
+    meta_path = source_dir / "meta.json"
+    if meta_path.is_file():
+        try:
+            meta = read_json(meta_path)
+        except (OSError, ValueError, TypeError):
+            meta = {}
+        relevance = meta.get("relevance") if isinstance(meta.get("relevance"), Mapping) else {}
+        target_refs = [str(ref) for ref in (relevance.get("targetRefs") or []) if str(ref)]
+        if target_refs:
+            return target_refs[0].rstrip("/").rsplit("/", 1)[-1]
     parts = source_dir.parts
     for index, part in enumerate(parts):
         if part == "1.download" and index > 0:
@@ -5492,16 +5526,12 @@ def _entity_name_from_source_dir(source_dir: Path) -> str:
     return ""
 
 
-# 实体聚焦度的唯一真相源在 _common.entity_focus（download/选源/规划门/准出口径共用）。
+# 实体聚焦度的唯一真相源在 _common.entity_focus（download/选源/准出口径共用）。
+# 底稿中心 1:1 后，文章不再用 entity_focus 弃稿，仅保留分类诊断与多标签派生所需符号。
 from _common.entity_focus import (  # noqa: E402
-    entity_focus_aliases as _entity_focus_aliases,
-    entity_focus_score as _entity_focus_score,
     classify_entity_focus as _classify_entity_focus,
     coverage_targets_mentioned as _coverage_targets_mentioned,
-    verdict_is_primary_eligible as _verdict_is_primary_eligible,
-    ENTITY_FOCUS_STRONG_FLOOR as _ENTITY_FOCUS_STRONG_FLOOR,
     VERDICT_STRONG as _VERDICT_STRONG,
-    VERDICT_OFF_ENTITY as _VERDICT_OFF_ENTITY,
 )
 
 
@@ -5535,14 +5565,15 @@ def _content_capacity_gate_for_entity(
     deterministically fail content_plan never become active.
     """
 
-    from _common.base_draft import load_base_draft_text
+    from _common.base_draft import base_draft_readiness, extract_source_title, load_base_draft_text
     from _common.content_plan import ARTICLE_MIN_BASE_DRAFT_CHARS
     from _common.image_safety import assess_image_publish_prefilter
-    from _common.source_unit import resolve_entity_object_dir
+    from _common.source_unit import iter_source_units, resolve_entity_object_dir
 
     spec = active_spec or _active_spec(ctx)
     quotas = (spec.get("content") or {}).get("quotas") or {}
-    required_articles = max(0, int(quotas.get("entityArticlesPerTarget") or 0))
+    # 底稿中心 1:1：文章车道开关化——启用即只需 >=1 个"可提取标题"的合格 article source。
+    required_articles = 1 if int(quotas.get("entityArticlesPerTarget") or 0) > 0 else 0
     desired_images = max(0, int(quotas.get("imageWorksPerTarget") or 0))
     required_images = (
         desired_images
@@ -5553,8 +5584,8 @@ def _content_capacity_gate_for_entity(
     etype = _coverage_entity_type(spec)
     root = batch_root(ctx.task_id, ctx.batch_id)
     object_dir = resolve_entity_object_dir(ctx.task_id, ctx.batch_id, entity_id, etype_hint=etype)
-    sources_dir = object_dir / "1.download" / "sources"
-    if not sources_dir.is_dir():
+    source_units = iter_source_units(object_dir)
+    if not source_units:
         return False, [f"{entity_id}: sources directory missing"], {}
 
     def _asset_rows(source_dir: Path) -> list[dict[str, Any]]:
@@ -5621,7 +5652,7 @@ def _content_capacity_gate_for_entity(
         if str(target.get("name") or "").strip()
     )
 
-    for source_dir in sorted(path for path in sources_dir.iterdir() if path.is_dir()):
+    for source_dir in source_units:
         meta_path = source_dir / "meta.json"
         if not meta_path.is_file() or not (source_dir / "source.md").is_file():
             continue
@@ -5640,8 +5671,12 @@ def _content_capacity_gate_for_entity(
             article_raw_count += 1
             source_ref = _source_ref(source_dir)
             base_body = load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)
-            text_len = len(re.sub(r"\s+", "", base_body))
-            if text_len < ARTICLE_MIN_BASE_DRAFT_CHARS:
+            readiness = base_draft_readiness(
+                base_body,
+                publish_media_mode=str(meta.get("publishMediaMode") or ""),
+            )
+            text_len = int(readiness["effectiveChars"])
+            if not readiness["ready"]:
                 article_rejects["text_too_short"] += 1
                 continue
             entity_name = _entity_name_from_source_dir(source_dir)
@@ -5651,9 +5686,10 @@ def _content_capacity_gate_for_entity(
                 title=str(meta.get("title") or ""),
                 sibling_names=sibling_target_names,
             )
-            if not _verdict_is_primary_eligible(focus_verdict):
-                # 标题/正文未明确指代此实体（多地点环线/跑题）：不得作单实体文章底稿，弃稿。
-                article_rejects["entity_focus_off_topic"] += 1
+            # 底稿中心 1:1：文章不再因"未整体指代单一实体"弃稿（多目的地游记照样成稿，实体作多标签）；
+            # 唯一上游硬门是"底稿能否提取发布标题"——文章源无标题即诚实弃稿。
+            if not extract_source_title(ctx.task_id, ctx.batch_id, source_ref):
+                article_rejects["no_source_title"] += 1
                 continue
             if not rows:
                 article_image_soft_warnings["no_source_assets"] += 1
@@ -5790,9 +5826,10 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
     kept only as a repair fallback when deterministic source capacity is truly
     insufficient.
     """
-    from _common.base_draft import load_base_draft_text
+    from _common.base_draft import extract_source_title, load_base_draft_text
     from _common.content_object import write_brief_object
     from _common.image_safety import assess_image_publish_prefilter
+    from _common.quality_gates import derive_writing_intent
     from _common.content_plan import (
         ARTICLE_MIN_BASE_DRAFT_CHARS,
         CONTENT_PLAN_SCHEMA,
@@ -5803,44 +5840,15 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
     from _common.paths import batch_content_plan_packet_path, relative_batch_ref
     from _common.source_unit import resolve_entity_object_dir
 
-    intent_titles = {
-        "planning_consultation": "行前怎么安排",
-        "decision_experience": "值不值得去",
-        "route_transport": "怎么去与动线",
-        "seasonal_timing": "什么时候去最好",
-    }
-    required_angles = [
-        str(angle).strip()
-        for angle in ((active_spec.get("acceptance") or {}).get("requiredAngles") or [])
-        if str(angle).strip()
-    ]
-    article_intents = [
-        angle for angle in required_angles
-        if angle not in {"image", "imagePost", "gallery"}
-    ]
     quotas = (active_spec.get("content") or {}).get("quotas") or {}
+    # 底稿中心 1:1：配额降级为"载体车道开关"——>0 即启用该车道，按合格 source unit 逐一成稿，
+    # 不再有每实体角度配额/篇数上限；角度（writingIntent）改由底稿正文派生（derive_writing_intent）。
     per_target_articles = int(quotas.get("entityArticlesPerTarget") or 0)
     per_target_images = int(quotas.get("imageWorksPerTarget") or 0)
-    minimum_per_target_images = (
-        per_target_images
-        if image_count_is_hard_quota(active_spec)
-        else minimum_publishable_images_per_target(active_spec)
-    )
-    if per_target_articles <= 0 and per_target_images <= 0:
+    article_lane_enabled = per_target_articles > 0
+    image_lane_enabled = per_target_images > 0
+    if not article_lane_enabled and not image_lane_enabled:
         return ["content quotas are empty; auto content_plan skipped"]
-    if not article_intents:
-        article_intents = [
-            "planning_consultation",
-            "decision_experience",
-            "route_transport",
-            "seasonal_timing",
-        ][:per_target_articles]
-    article_intents = article_intents[:per_target_articles]
-    if per_target_articles and len(article_intents) != per_target_articles:
-        return [
-            f"required article intents {len(article_intents)} do not match "
-            f"entityArticlesPerTarget={per_target_articles}"
-        ]
     existing_packet = load_content_plan_packet(ctx.task_id, ctx.batch_id) or {}
     existing_source_site = (
         dict(existing_packet.get("sourceSite"))
@@ -5926,8 +5934,10 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
 
     for target in targets:
         object_dir = resolve_entity_object_dir(ctx.task_id, ctx.batch_id, target, etype_hint=etype)
-        sources_dir = object_dir / "1.download" / "sources"
-        if not sources_dir.is_dir():
+        from _common.source_unit import iter_source_units
+
+        source_units = iter_source_units(object_dir)
+        if not source_units:
             issues.append(f"{target}: sources directory missing")
             continue
         article_candidates: list[dict[str, Any]] = []
@@ -5959,7 +5969,7 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
             if len(examples) < 5:
                 examples.append(f"{source_id}{(': ' + detail) if detail else ''}")
 
-        for source_dir in sorted(path for path in sources_dir.iterdir() if path.is_dir()):
+        for source_dir in source_units:
             meta_path = source_dir / "meta.json"
             if not meta_path.is_file() or not (source_dir / "source.md").is_file():
                 continue
@@ -5978,9 +5988,20 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 article_raw_count += 1
                 source_ref = _source_ref(source_dir)
                 base_body = load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)
-                text_len = len(re.sub(r"\s+", "", base_body))
-                if text_len < ARTICLE_MIN_BASE_DRAFT_CHARS:
-                    _reject_article("text_too_short", source_id, f"{text_len}<{ARTICLE_MIN_BASE_DRAFT_CHARS}")
+                from _common.base_draft import base_draft_readiness
+
+                readiness = base_draft_readiness(
+                    base_body,
+                    publish_media_mode=str(meta.get("publishMediaMode") or ""),
+                )
+                text_len = int(readiness["effectiveChars"])
+                if not readiness["ready"]:
+                    _reject_article(
+                        "text_too_short",
+                        source_id,
+                        f"{text_len}<{ARTICLE_MIN_BASE_DRAFT_CHARS}; "
+                        f"figures={readiness['inlineFigureCount']} captions={readiness['captionChars']}",
+                    )
                     continue
                 focus_score, focus_verdict = _classify_entity_focus(
                     base_body,
@@ -5988,14 +6009,19 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                     title=str(meta.get("title") or ""),
                     sibling_names=targets,
                 )
-                if not _verdict_is_primary_eligible(focus_verdict):
-                    # 标题/正文未明确指代此实体（多地点环线/跑题）：不得作单实体文章底稿，弃稿。
-                    _reject_article(
-                        "entity_focus_off_topic",
-                        source_id,
-                        f"focus={focus_score:.2f}<{_ENTITY_FOCUS_STRONG_FLOOR:.2f} verdict={focus_verdict}",
-                    )
+                # 底稿中心 1:1：实体退化为多标签，文章不再因"未整体指代单一实体"弃稿
+                # （多目的地游记照样按单一底稿成稿，实体作为标签集合）；focus 仅留作诊断信号。
+                draft_title = extract_source_title(ctx.task_id, ctx.batch_id, source_ref)
+                if not draft_title:
+                    # 标题取自底稿：文章源无法提取可用发布标题 → 上游诚实弃稿（不成稿）。
+                    _reject_article("no_source_title", source_id, "底稿无法提取发布标题")
                     continue
+                entity_tags = sorted(
+                    {
+                        *_coverage_targets_mentioned(base_body, str(meta.get("title") or ""), targets),
+                        target,
+                    }
+                )
                 if not rows:
                     _soft_warn_article_image("no_source_assets", source_id)
                 article_candidates.append(
@@ -6004,6 +6030,9 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                         "sourceRef": source_ref,
                         "sourceId": source_id,
                         "title": str(meta.get("title") or source_id),
+                        "draftTitle": draft_title,
+                        "writingIntent": derive_writing_intent(base_body),
+                        "entityTags": entity_tags,
                         "sourceUseMode": str(meta.get("sourceUseMode") or "factual_reference_only"),
                         "sourceClass": str(meta.get("sourceClass") or meta.get("category") or ""),
                         "sourceQualityScore": float(
@@ -6141,7 +6170,7 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
             )
 
         picked_images: list[dict[str, Any]] = []
-        for candidate in image_candidates:
+        for candidate in (image_candidates if image_lane_enabled else []):
             refs, shas, collections = _image_claims(candidate)
             if _claims_conflict(
                 refs,
@@ -6173,17 +6202,9 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 claimed_shas=used_asset_shas,
                 claimed_collections=used_collection_ids,
             )
-            if len(picked_images) >= per_target_images:
-                break
-        if len(picked_images) < minimum_per_target_images:
-            for index in range(len(picked_images) + 1, minimum_per_target_images + 1):
-                ref = f"{target}_image" if per_target_images == 1 else f"{target}_image_{index}"
-                abandoned_content[ref] = (
-                    f"source_unavailable: usable image collections "
-                    f"{len(picked_images)} < {minimum_per_target_images}"
-                )
+            # 底稿中心 1:1：每个图片来源集合（source unit）各成一件图片作品，无 per-target 配额上限。
         picked_articles: list[dict[str, Any]] = []
-        for candidate in article_candidates:
+        for candidate in (article_candidates if article_lane_enabled else []):
             source_ref = str(candidate.get("sourceRef") or "").strip()
             if source_ref in used_article_source_refs:
                 _reject_article("source_ref_reused", str(candidate["sourceId"]))
@@ -6215,19 +6236,7 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                     claimed_shas=used_asset_shas,
                     claimed_collections=used_collection_ids,
                 )
-            if len(picked_articles) >= per_target_articles:
-                break
-        if len(picked_articles) < per_target_articles:
-            reject_summary = ", ".join(
-                f"{key}={value}" for key, value in sorted(article_rejects.items())
-            ) or "none"
-            for intent in article_intents[len(picked_articles):per_target_articles]:
-                abandoned_content[f"{target}_{intent}"] = (
-                    f"source_unavailable: usable article base sources "
-                    f"{len(picked_articles)} < {per_target_articles}; raw={article_raw_count}; "
-                    f"qualified={len(article_candidates)}; rejects={{ {reject_summary} }}; "
-                    f"missing writingIntent={intent}"
-                )
+            # 底稿中心 1:1：每个合格 article source unit 各成一篇，无 per-target 配额上限。
         def _normalized_quality_score(candidate: Mapping[str, Any]) -> float:
             try:
                 raw = float(candidate.get("sourceQualityScore") or 0)
@@ -6250,13 +6259,12 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
             sum(_article_length_score(candidate) for candidate in picked_articles) / len(picked_articles),
             4,
         ) if picked_articles else 0.0
-        image_count_score = round(
-            min(len(picked_images) / per_target_images, 1.0),
-            4,
-        ) if per_target_images else 1.0
+        image_count_score = 1.0 if (picked_images or not image_lane_enabled) else 0.0
+        # 底稿中心：目标"达标"= 启用的车道至少各产出一件作品；无 per-target 配额硬下限，
+        # 仅当某目标在启用车道下连一件合格 source unit 都没有时记为未达标（用于诊断/排序）。
         minimum_quality_passed = (
-            len(picked_articles) >= per_target_articles
-            and len(picked_images) >= minimum_per_target_images
+            (not article_lane_enabled or bool(picked_articles))
+            and (not image_lane_enabled or bool(picked_images))
         )
         composite_score = round(
             70.0
@@ -6272,7 +6280,8 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
             "rawImageAssets": image_raw_count,
             "qualifiedImageAssets": len(image_candidates),
             "pickedImageSources": len(picked_images),
-            "minimumImageSources": minimum_per_target_images,
+            "articleLaneEnabled": article_lane_enabled,
+            "imageLaneEnabled": image_lane_enabled,
             "desiredImageSources": per_target_images,
             "minimumQualityPassed": minimum_quality_passed,
             "articleQualityScore": article_quality_score,
@@ -6292,21 +6301,23 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 key: values for key, values in sorted(image_reject_examples.items())
             },
         }
-        for intent, candidate in zip(article_intents, picked_articles):
-            ref = f"{target}_{intent}"
-            # titleHint 是稳定路由坐标 + 发布标题占位（设计：{实体名}·{角度}）。
-            # 禁止把来源网页/游记的原标题逐字拼进来——那会泄露原作者标题并违背去平台痕迹原则；
-            # 标题角度由 Agent 在 creativePlan 中按底稿与读者承诺兑现。
-            title = f"{target}·{intent_titles.get(intent, intent)}"
+        for candidate in picked_articles:
+            intent = str(candidate.get("writingIntent") or "")
+            # 标题取自单一底稿（已剥平台痕迹），不再用 {实体}·{角度} 模板。
+            title = str(candidate.get("draftTitle") or "").strip()
+            source_id = str(candidate.get("sourceId") or "")
+            ref = f"{target}__{source_id}".replace("/", "_")
             entity_ref = f"/entity/{etype}/{target}"
+            entity_tags = list(candidate.get("entityTags") or [target])
             creator_assignment = _creator_assignment_for(carrier="article", target=target, intent=intent)
             brief = {
                 "titleHint": title,
                 "carrier": "article",
                 "entityRefs": [entity_ref],
+                "entityTags": entity_tags,
                 "mustIncludeFacts": [
-                    f"{target} 来源提及 {intent_titles.get(intent, intent)}",
-                    f"{target} 文字底稿来自来源单元 {candidate['sourceId']}；若使用配图，必须来自已授权资产（图文同源底稿，跨内容复用同一底稿图片属正常，无需全批独占）",
+                    f"{target} 文字底稿来自单一来源单元 {source_id}；标题取自底稿，正文按整篇底稿轻改、禁跨底稿拼接",
+                    "若使用配图，必须来自同一底稿的已授权源图（一源一作品）",
                 ],
                 "templateId": "travel.entity.guide",
                 "writingIntent": intent,
@@ -6325,8 +6336,9 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                     "researchLane": "article",
                     "title": title,
                     "entityRefs": [entity_ref],
+                    "entityTags": entity_tags,
                     "evidenceRefs": [candidate["sourceRef"]],
-                    "rationale": f"确定性选择 sourceRole=base、正文≥{ARTICLE_MIN_BASE_DRAFT_CHARS} 的 article text base source；源图作为加分项而非硬门",
+                    "rationale": f"底稿中心 1:1：单一 sourceRole=base 来源单元（正文≥{ARTICLE_MIN_BASE_DRAFT_CHARS}），标题取自底稿，实体作多标签",
                     "mustIncludeFacts": brief["mustIncludeFacts"],
                     "writingIntent": intent,
                     "baseSourceRef": candidate["sourceRef"],
@@ -6351,8 +6363,10 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
         ]
         image_caption_counts = Counter(key for key in image_caption_keys if key)
         image_caption_seen: dict[str, int] = defaultdict(int)
+        single_image = len(picked_images) == 1
         for index, candidate in enumerate(picked_images, start=1):
-            ref = f"{target}_image" if per_target_images == 1 else f"{target}_image_{index}"
+            # 底稿中心 1:1：单图作品保留 {target}_image，多图作品按序号去重，ref 始终唯一。
+            ref = f"{target}_image" if single_image else f"{target}_image_{index}"
             caption_title = str(candidate["caption"] or "").strip()[:60] or "图库作品"
             caption_key = re.sub(r"\s+", "", caption_title).strip()
             if caption_key and image_caption_counts.get(caption_key, 0) > 1:
@@ -6365,12 +6379,14 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 "titleHint": title,
                 "carrier": "image",
                 "entityRefs": [entity_ref],
+                "entityTags": [target],
                 "mustIncludeFacts": [
                     f"{target} 开放许可图片作品",
-                    "图片来自同一授权来源集合，禁止跨作者或跨页面混图",
+                    "图片来自同一授权来源集合（单一 source unit），禁止跨作者/页面/底稿混图",
                 ],
                 "templateId": "travel.entity.gallery",
                 "sourceCollectionId": candidate["collectionId"],
+                "baseSourceRef": candidate["sourceRef"],
                 "assetRefs": [candidate["assetRef"]],
                 "caption": candidate["caption"][:300],
                 **creator_assignment,
@@ -6385,9 +6401,11 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                     "title": title,
                     "caption": candidate["caption"][:300],
                     "entityRefs": [entity_ref],
+                    "entityTags": [target],
                     "evidenceRefs": [candidate["sourceRef"]],
-                    "rationale": "确定性选择 image research lane 下同一 sourceCollectionId 的授权图片集合",
+                    "rationale": "底稿中心 1:1：image research lane 下单一 sourceCollectionId 的授权图片集合（一源一作品）",
                     "sourceCollectionId": candidate["collectionId"],
+                    "baseSourceRef": candidate["sourceRef"],
                     "assetRefs": [candidate["assetRef"]],
                     **creator_assignment,
                 }
@@ -7068,6 +7086,25 @@ def _react_rewind(ctx: PipelineContext, state: dict, completed: set[str],
         used = 0
         rewinds.pop(key, None)
     if used >= MAX_REACT_REWINDS:
+        # 底稿中心快速失败：produce_review 有界重试耗尽后，若允许部分交付，则弃稿仍未过门的
+        # 对象并以 produce_review 重跑剩余合格内容收口，避免整批转人工空转。
+        if result.stage == "produce_review" and _workflow_allows_partial_content(ctx):
+            abandoned = _abandon_persistent_produce_review_refs(ctx, result)
+            if abandoned:
+                # 弃稿已落盘；重新加载，避免用陈旧的内存 state 覆盖 abandonedContentObjects。
+                latest = load_workflow_state(ctx.task_id, ctx.batch_id)
+                if latest:
+                    state.clear()
+                    state.update(latest)
+                new_completed = _rewind_to(completed, "produce_review")
+                state["reactRewinds"] = rewinds
+                state["completed"] = sorted(new_completed)
+                save_workflow_state(state)
+                print(
+                    f"[task run] ⟲ produce_review 弃稿 {len(abandoned)} 个对象后重跑剩余内容"
+                    f"（有界重试 {MAX_REACT_REWINDS} 次耗尽，allowPartialContent 部分交付）"
+                )
+                return new_completed, True
         print(f"[task run] ReAct 回退已达上限({MAX_REACT_REWINDS}) @ {result.stage}; 转人工", file=sys.stderr)
         return completed, False
     rewinds[key] = used + 1
@@ -7247,6 +7284,54 @@ def _recover_stale_auto_research(ctx: PipelineContext, state: dict[str, Any]) ->
     ]
     state["nextAction"] = "download_plan auto_research interrupted/stale; rerun workflow to revalidate source readiness"
     state["heartbeatAt"] = recovered_at
+    save_workflow_state(state)
+    return True
+
+
+def _recover_stale_controller_yield(ctx: PipelineContext, state: dict[str, Any]) -> bool:
+    """Clear stale controllerYield left by a dead managed-local controller."""
+    controller_yield = state.get("controllerYield")
+    if not isinstance(controller_yield, Mapping):
+        return False
+    stage = str(controller_yield.get("stage") or state.get("waitingCheckpoint") or "")
+    from _common import ops_governance as og
+
+    lease = og.read_controller_lease(ctx.task_id, ctx.batch_id)
+    lease_live = (
+        isinstance(lease, Mapping)
+        and str(lease.get("status") or "active") == "active"
+        and og.pid_alive(lease.get("pid"))
+    )
+    if lease_live or _managed_agent_process_alive(ctx):
+        return False
+    recovered_at = store.now_iso()
+    recovered = {
+        "stage": stage,
+        "reason": "stale controllerYield without live controller lease or workflow process",
+        "previous": dict(controller_yield),
+        "previousLease": dict(lease or {}) if isinstance(lease, Mapping) else None,
+        "recoveredAt": recovered_at,
+    }
+    history = state.setdefault("controllerYieldRecoveryActions", [])
+    if isinstance(history, list):
+        history.append(recovered)
+        state["controllerYieldRecoveryActions"] = history[-20:]
+    state.pop("controllerYield", None)
+    state.pop("activeAgentScheduler", None)
+    state["waitingCheckpoint"] = stage or state.get("waitingCheckpoint")
+    state["status"] = "running"
+    state["failedObjects"] = []
+    state["nextAction"] = (
+        f"recovered stale controller yield at {stage or '<unknown>'}; "
+        "managed loop will revalidate checkpoint"
+    )
+    state["heartbeatAt"] = recovered_at
+    try:
+        lease_path = og.controller_lease_path(ctx.task_id, ctx.batch_id, create=False)
+        if lease_path.is_file() and not lease_live:
+            lease_path.unlink()
+    except OSError:
+        pass
     save_workflow_state(state)
     return True
 
@@ -8578,13 +8663,16 @@ def _default_managed_agent_runner(ctx: PipelineContext, prompt: str) -> dict[str
         )
     except Exception as exc:  # noqa: BLE001
         return {"started": False, "status": "error", "error": f"cursor_sdk unavailable: {exc}"}
-    key = os.environ.get("CURSOR_API_KEY")
+    # 单一真相源：每次 agent 调用前 reload 最新 key（key 文件优先，env fallback），
+    # 让长跑进程能透明吃到运营/daemon 的 token 轮换，无需重启。
+    key = resolve_cursor_api_key()
     if not key:
         return {"started": False, "status": "error", "error": "CURSOR_API_KEY missing"}
     _patch_cursor_sdk_tool_callback_token()
     result = None
     last_error: dict[str, Any] | None = None
     workspace = Path.cwd()
+    auth_reload_used = False
     for attempt in range(3):
         client = None
         bridge_pids: list[int] = []
@@ -8620,6 +8708,30 @@ def _default_managed_agent_runner(ctx: PipelineContext, prompt: str) -> dict[str
             break
         except CursorAgentError as exc:
             message = getattr(exc, "message", str(exc))
+            # 凭据失效（轮换/过期/plan_required/401/403）单独分流：不计 retryable bridge 预算，
+            # 而是 reload key + 重建 bridge 重试一次；reload 后仍失败才上报"凭据失效"。
+            if is_cursor_auth_error(
+                message,
+                code=str(getattr(exc, "code", "") or ""),
+                status=getattr(exc, "status", None),
+            ):
+                reloaded = resolve_cursor_api_key()
+                if not auth_reload_used and reloaded and reloaded != key:
+                    auth_reload_used = True
+                    key = reloaded
+                    _terminate_workspace_cursor_bridges(workspace)
+                    time.sleep(max(_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS, 2.0))
+                    continue
+                return {
+                    "started": False,
+                    "status": "error",
+                    "error": f"cursor credential invalid (auth): {message}",
+                    "retryable": False,
+                    "authFailure": True,
+                    "errorCode": getattr(exc, "code", None),
+                    "requestId": getattr(exc, "request_id", None),
+                    "attempts": attempt + 1,
+                }
             retryable_bridge = _cursor_bridge_error_is_retryable(
                 message,
                 code=str(getattr(exc, "code", "") or ""),
@@ -9289,10 +9401,12 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
             + "\n为 activeCoverageTargets 完成证据驱动 content_plan；abandoned 对象不得再规划、注册或写 brief。"
             f"\nactiveCoverageTargets={json.dumps(active_targets, ensure_ascii=False)}"
             f"\n这是 workflow effective spec，不是只读 task.yaml；必须以这里为准: {json.dumps({'scope': prompt_spec.get('scope') or {}, 'content': content, 'acceptance': acceptance}, ensure_ascii=False)}"
-            f"\n精确配额: {json.dumps(quotas, ensure_ascii=False)}；requiredAngles={required_angles}。"
-            "\n每个 coverageTarget 必须满足 entityArticlesPerTarget 篇文章；"
-            "imageWorksPerTarget 是图片作品期望上限和评分饱和值，图片不足不应阻断合格实体，"
-            "但已选图片必须逐资产权利清晰合规（无需全批独占，跨内容复用同一底稿图片属正常）。不得沿用旧 2+2 示例。若现有 content_plan_packet 与规则冲突，直接重写。"
+            f"\n参考配额（仅作上限/饱和参考，不是硬性篇数）: {json.dumps(quotas, ensure_ascii=False)}。"
+            "\n底稿中心 1:1：枚举每个 coverageTarget 下所有合格 source unit，每个合格底稿各成一篇/一作品；"
+            "篇数由合格底稿数决定，不再要求满足固定 entityArticlesPerTarget/imageWorksPerTarget 篇数，"
+            "也不再要求 writingIntent 角度覆盖（writingIntent 是底稿派生的可选标签）。"
+            "图片不足不应阻断合格实体，已选图片必须逐资产权利清晰合规。不得沿用旧 2+2/角度配额示例。"
+            "若现有 content_plan_packet 与规则冲突，直接重写。"
             "\n类型按底稿形态路由："
             "实体主页主底稿来自 Wiki/百科/知识图谱/官网等实体介绍源，政府/文旅/媒体只作 supporting evidence；"
             "文章底稿来自 article_research，UGC、社区、媒体、官方和垂类专业文章同等按质量、事实密度、文字完整度和权利风险筛选；"
@@ -9982,6 +10096,8 @@ def run_managed_pipeline(ctx: PipelineContext) -> int:
         state = load_workflow_state(ctx.task_id, ctx.batch_id)
         stage = str(state.get("waitingCheckpoint") or "")
         if isinstance(state.get("controllerYield"), Mapping):
+            if _recover_stale_controller_yield(ctx, state):
+                continue
             print(f"[task run] controller yield at checkpoint '{stage}'; resume later")
             return 10
         retries = state.setdefault("retryCounts", {})

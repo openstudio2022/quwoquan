@@ -222,38 +222,34 @@ def test_replacement_screening_rejects_content_capacity_shortfall(monkeypatch):
     batch_id = "replacement_content_capacity_gate"
     ctx = _ctx(task_id, batch_id)
     object_dir = resolve_entity_object_dir(task_id, batch_id, "替补景区乙", etype_hint="地点/景区")
-    sources_dir = object_dir / STAGE_DOWNLOAD / "sources"
     for index in range(1, 3):
-        source_dir = sources_dir / f"{index:02d}.article_base_{index}"
-        assets_dir = source_dir / "assets"
-        assets_dir.mkdir(parents=True, exist_ok=True)
-        (source_dir / "source.md").write_text(_long_base_text(f"替补景区乙底稿{index}"), encoding="utf-8")
-        write_json(
-            source_dir / "meta.json",
-            {
-                "sourceId": f"article_base_{index}",
-                "researchLane": "article",
-                "sourceRole": "base",
-                "sourceUseMode": "factual_reference_only",
-                "category": "travelogue",
-                "title": f"替补底稿 {index}",
-                "sourceQualityScore": 0.9,
-            },
-        )
         image = _real_jpeg(700 + index)
-        (assets_dir / "article.jpg").write_bytes(image)
-        write_json(
-            assets_dir / "index.json",
-            {
-                "assets": [
-                    {
-                        "fileName": "article.jpg",
-                        "sha256": f"sha256:{hashlib.sha256(image).hexdigest()}",
-                        "sourceCollectionId": f"article-collection-{index}",
-                        "caption": "替补景区乙 文章源图",
-                    }
-                ]
-            },
+        write_structured_source_unit(
+            object_dir,
+            ordinal=index,
+            source_id=f"article_base_{index}",
+            source_md=_long_base_text(f"替补景区乙底稿{index}"),
+            clean_md=_long_base_text(f"替补景区乙底稿{index}"),
+            quality={"quality": "A-story", "score": 9, "fetchSucceeded": True},
+            source_category="travelogue",
+            source_use_mode="factual_reference_only",
+            source_role="base",
+            research_lane="article",
+            title=f"替补底稿 {index}",
+            target_ref="/entity/地点/景区/替补景区乙",
+            images=[
+                {
+                    "fileName": "article.jpg",
+                    "bytes": image,
+                    "ext": ".jpg",
+                    "sha256": f"sha256:{hashlib.sha256(image).hexdigest()}",
+                    "sourceCollectionId": f"article-collection-{index}",
+                    "caption": "替补景区乙 文章源图",
+                }
+            ],
+            task_id=task_id,
+            batch_id=batch_id,
+            build_variants=False,
         )
 
     monkeypatch.setattr("download.prepare.prepare_source_plan", lambda *_args, **_kwargs: None)
@@ -615,4 +611,3 @@ def test_agent_active_throughput_is_diagnostic_not_wall_clock_replacement():
     assert metrics["finishedAuthorJobs"] == 5
     assert metrics["infrastructureFailures"] == 1
     assert metrics["finishedAuthorJobsPerHour"] == 100.0
-

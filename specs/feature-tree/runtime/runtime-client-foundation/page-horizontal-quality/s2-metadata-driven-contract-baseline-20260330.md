@@ -122,7 +122,7 @@
 | `lib/ui/content/pages/article_detail_page.dart` | local_contract | ○ | partial | content | PostBaseDto |  |
 | `lib/ui/content/pages/photo_detail_page.dart` | local_contract | ○ | partial | content | PostBaseDto |  |
 | `lib/ui/content/pages/video_detail_page.dart` | local_contract | ○ | partial | content | PostBaseDto |  |
-| `lib/ui/content/pages/unified_media_viewer_page.dart` | local_contract | ○ | partial | content | PostBaseDto |  |
+| `lib/ui/discovery/pages/unified_media_viewer_page.dart` | local_contract | ○ | partial | discovery-content | PostBaseDto |  |
 
 ### content / entry（创作与发布子域）
 

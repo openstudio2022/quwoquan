@@ -84,7 +84,7 @@
 
 | path | domain | entry | dual_theme | exemption_reason | owner | evidence |
 |------|--------|-------|------------|------------------|-------|----------|
-| `lib/ui/content/pages/unified_media_viewer_page.dart` | content | GoRoute | exempt | 作品沉浸浏览强制暗场（S6-2） | TBD | `CupertinoPageScaffold(backgroundColor: AppColors.black)` + `WorksImmersiveViewer`；浅色模式仍为暗底，须在矩阵登记。 |
+| `lib/ui/discovery/pages/unified_media_viewer_page.dart` | discovery-content | GoRoute | exempt | 作品沉浸浏览强制暗场（S6-2） | TBD | `CupertinoPageScaffold(backgroundColor: AppColors.black)` + `WorksImmersiveViewer`；浅色模式仍为暗底，须在矩阵登记。 |
 
 ---
 

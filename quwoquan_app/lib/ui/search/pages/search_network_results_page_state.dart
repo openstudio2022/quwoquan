@@ -780,8 +780,7 @@ class _SearchNetworkResultsPageState
       _tabImage =>
         _contentResults
             .where(
-              (item) =>
-                  item.contentType == 'image' || item.contentType == 'photo',
+              (item) => item.contentType == 'image',
             )
             .toList(growable: false),
       _tabVideo =>

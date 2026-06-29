@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/article_reader_flip_pipeline.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 class ForwardArticleFlipPipeline extends ArticleFlipPipeline {
   const ForwardArticleFlipPipeline();

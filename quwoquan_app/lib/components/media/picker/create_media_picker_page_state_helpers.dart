@@ -55,9 +55,10 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossCount = _gridCrossAxisCount(constraints.maxWidth);
-        final includesCameraTile =
-            widget.entryMode != MediaPickerEntryMode.video;
-        final total = list.length + (includesCameraTile ? 1 : 0);
+        final fixedTileCount = widget.entryMode == MediaPickerEntryMode.video
+            ? 2
+            : 1;
+        final total = list.length + fixedTileCount;
         if (total == 0) {
           return _buildGridEmptyState(isDark);
         }
@@ -75,10 +76,14 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
                   crossAxisSpacing: AppSpacing.intraGroupXs,
                 ),
                 itemBuilder: (context, index) {
-                  if (includesCameraTile && index == 0) {
+                  if (index == 0) {
                     return _buildCameraTile(isDark);
                   }
-                  final entity = list[index - (includesCameraTile ? 1 : 0)];
+                  if (widget.entryMode == MediaPickerEntryMode.video &&
+                      index == 1) {
+                    return _buildOneTapMovieTile(isDark);
+                  }
+                  final entity = list[index - fixedTileCount];
                   return GestureDetector(
                     key: ValueKey<String>('media-picker-asset-${entity.id}'),
                     onTap: () => _toggleAsset(entity),
@@ -122,7 +127,7 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
                   );
                 },
               ),
-              if (list.isEmpty && includesCameraTile)
+              if (list.isEmpty)
                 Positioned.fill(
                   top: constraints.maxWidth / crossCount,
                   child: _buildGridEmptyState(isDark),
@@ -158,9 +163,13 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
               ),
               SizedBox(height: AppSpacing.interGroupSm),
               Text(
-                widget.entryMode == MediaPickerEntryMode.mixed
-                    ? UITextConstants.mediaPickerMixedAlbumEmpty
-                    : UITextConstants.mediaPickerAlbumEmpty,
+                switch (widget.entryMode) {
+                  MediaPickerEntryMode.video => UITextConstants.videoNoVideo,
+                  MediaPickerEntryMode.mixed =>
+                    UITextConstants.mediaPickerMixedAlbumEmpty,
+                  MediaPickerEntryMode.image =>
+                    UITextConstants.mediaPickerAlbumEmpty,
+                },
                 style: TextStyle(
                   color: primary,
                   fontSize: AppTypography.lg,
@@ -169,95 +178,15 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
               ),
               SizedBox(height: AppSpacing.intraGroupXs),
               Text(
-                widget.entryMode == MediaPickerEntryMode.mixed
-                    ? UITextConstants.mediaPickerMixedCameraEntry
-                    : UITextConstants.mediaPickerCameraEntry,
+                switch (widget.entryMode) {
+                  MediaPickerEntryMode.video =>
+                    UITextConstants.mediaPickerVideoCameraEntry,
+                  MediaPickerEntryMode.mixed =>
+                    UITextConstants.mediaPickerMixedCameraEntry,
+                  MediaPickerEntryMode.image =>
+                    UITextConstants.mediaPickerCameraEntry,
+                },
                 style: TextStyle(color: secondary, fontSize: AppTypography.sm),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVideoShootHero(bool isDark) {
-    final background = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundSecondary,
-    );
-    final foreground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final secondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        AppSpacing.containerMd,
-        AppSpacing.intraGroupSm,
-        AppSpacing.containerMd,
-        AppSpacing.interGroupSm,
-      ),
-      child: GestureDetector(
-        key: const ValueKey<String>('media-picker-video-camera-hero'),
-        onTap: _openCamera,
-        child: Container(
-          height: AppSpacing.buttonHeight * 3,
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-            border: Border.all(
-              color: AppColors.primaryColor.withValues(alpha: 0.28),
-            ),
-          ),
-          padding: EdgeInsets.all(AppSpacing.containerMd),
-          child: Row(
-            children: [
-              Container(
-                width: AppSpacing.buttonHeight + AppSpacing.buttonHeightSm,
-                height: AppSpacing.buttonHeight + AppSpacing.buttonHeightSm,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryColor.withValues(alpha: 0.18),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  CupertinoIcons.videocam_fill,
-                  color: AppColors.primaryColor,
-                  size: AppSpacing.iconLarge,
-                ),
-              ),
-              SizedBox(width: AppSpacing.containerMd),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      UITextConstants.mediaPickerVideoCameraEntry,
-                      style: TextStyle(
-                        color: foreground,
-                        fontSize: AppTypography.lg,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.intraGroupXs),
-                    Text(
-                      UITextConstants.cameraVideoMode,
-                      style: TextStyle(
-                        color: secondary,
-                        fontSize: AppTypography.sm,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                CupertinoIcons.chevron_forward,
-                color: secondary,
-                size: AppSpacing.iconSmall,
               ),
             ],
           ),

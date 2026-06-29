@@ -400,7 +400,8 @@ func (s *IntersectionService) Summary(ctx context.Context, userID string) (Inter
 	}, nil
 }
 
-// List 按维度/sourceRef/timeBucket/filter 分页列出事实交集，自上次查看的新增在前。
+// List 按维度/sourceRef/timeBucket/filter 分页列出事实交集。
+// 列表契约：先全局去重，再按 strength/timeBucket/anchor/count 稳定排序，最后分页。
 func (s *IntersectionService) List(ctx context.Context, userID string, query IntersectionListQuery) ([]IntersectionReasonView, string, bool, error) {
 	reasons, err := s.source.FactReasons(ctx, userID, "")
 	if err != nil {
@@ -410,6 +411,9 @@ func (s *IntersectionService) List(ctx context.Context, userID string, query Int
 	filtered := make([]IntersectionReasonView, 0, len(reasons))
 	for _, raw := range reasons {
 		r := hydratePointSummary(raw)
+		if strings.TrimSpace(r.TimeBucket) == "" {
+			r.TimeBucket = resolveIntersectionListTimeBucket(s.now(), r.FreshAt)
+		}
 		if !matchesIntersectionListQuery(r, query, wm) {
 			continue
 		}
@@ -419,14 +423,7 @@ func (s *IntersectionService) List(ctx context.Context, userID string, query Int
 		}
 		filtered = append(filtered, r)
 	}
-	sort.SliceStable(filtered, func(i, j int) bool {
-		iNew := freshUnix(filtered[i]) > wm[filtered[i].Dimension]
-		jNew := freshUnix(filtered[j]) > wm[filtered[j].Dimension]
-		if iNew != jNew {
-			return iNew
-		}
-		return freshUnix(filtered[i]) > freshUnix(filtered[j])
-	})
+	filtered = rankAndDedupeIntersectionList(userID, filtered)
 	limit := query.Limit
 	if limit <= 0 {
 		limit = 50
@@ -448,6 +445,140 @@ func (s *IntersectionService) List(ctx context.Context, userID string, query Int
 		nextCursor = strconv.Itoa(end)
 	}
 	return filtered[offset:end], nextCursor, hasMore, nil
+}
+
+func rankAndDedupeIntersectionList(userID string, items []IntersectionReasonView) []IntersectionReasonView {
+	chosen := make(map[string]IntersectionReasonView, len(items))
+	for _, item := range items {
+		key := intersectionListDedupeKey(userID, item)
+		if strings.TrimSpace(item.DedupeKey) == "" {
+			item.DedupeKey = key
+		}
+		existing, ok := chosen[key]
+		if !ok || compareIntersectionListRank(item, existing) < 0 {
+			chosen[key] = item
+		}
+	}
+	ranked := make([]IntersectionReasonView, 0, len(chosen))
+	for _, item := range chosen {
+		ranked = append(ranked, item)
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		return compareIntersectionListRank(ranked[i], ranked[j]) < 0
+	})
+	return ranked
+}
+
+func intersectionListDedupeKey(userID string, r IntersectionReasonView) string {
+	viewerID := strings.TrimSpace(userID)
+	objectID := strings.TrimSpace(r.ActionTargetID)
+	if objectID == "" {
+		objectID = strings.TrimSpace(r.RelationObjectID)
+	}
+	if objectID == "" {
+		objectID = strings.TrimSpace(r.IntersectionID)
+	}
+	objectType := strings.TrimSpace(r.ObjectKind)
+	intersectionKind := strings.TrimSpace(r.Kind)
+	if intersectionKind == "" {
+		intersectionKind = strings.TrimSpace(r.Source)
+	}
+	return strings.Join([]string{viewerID, objectID, objectType, intersectionKind}, ":")
+}
+
+func resolveIntersectionListTimeBucket(now time.Time, freshAt string) string {
+	fresh, err := time.Parse(time.RFC3339, strings.TrimSpace(freshAt))
+	if err != nil {
+		return "lastMonth"
+	}
+	today := dateOnlyUTC(now)
+	day := dateOnlyUTC(fresh)
+	if day.Equal(today) {
+		return "today"
+	}
+	if day.Equal(today.AddDate(0, 0, -1)) {
+		return "yesterday"
+	}
+	if !day.Before(today.AddDate(0, 0, -7)) {
+		return "last7Days"
+	}
+	if day.Year() == today.Year() && day.Month() == today.Month() {
+		return "thisMonth"
+	}
+	lastMonth := today.AddDate(0, -1, 0)
+	if day.Year() == lastMonth.Year() && day.Month() == lastMonth.Month() {
+		return "lastMonth"
+	}
+	return "outOfRange"
+}
+
+func dateOnlyUTC(t time.Time) time.Time {
+	utc := t.UTC()
+	return time.Date(utc.Year(), utc.Month(), utc.Day(), 0, 0, 0, 0, time.UTC)
+}
+
+func compareIntersectionListRank(a, b IntersectionReasonView) int {
+	if a.Strength != b.Strength {
+		if a.Strength > b.Strength {
+			return -1
+		}
+		return 1
+	}
+	if ap, bp := intersectionListTimeBucketPriority(a), intersectionListTimeBucketPriority(b); ap != bp {
+		if ap < bp {
+			return -1
+		}
+		return 1
+	}
+	if a.AnchorUserWeight != b.AnchorUserWeight {
+		if a.AnchorUserWeight > b.AnchorUserWeight {
+			return -1
+		}
+		return 1
+	}
+	if a.TotalPointCount != b.TotalPointCount {
+		if a.TotalPointCount > b.TotalPointCount {
+			return -1
+		}
+		return 1
+	}
+	if a.MutualCount != b.MutualCount {
+		if a.MutualCount > b.MutualCount {
+			return -1
+		}
+		return 1
+	}
+	return strings.Compare(stableIntersectionListKey(a), stableIntersectionListKey(b))
+}
+
+func intersectionListTimeBucketPriority(r IntersectionReasonView) int {
+	switch strings.TrimSpace(r.TimeBucket) {
+	case "today":
+		return 0
+	case "yesterday":
+		return 1
+	case "last7Days":
+		return 2
+	case "thisMonth":
+		return 3
+	case "lastMonth":
+		return 4
+	default:
+		return 5
+	}
+}
+
+func stableIntersectionListKey(r IntersectionReasonView) string {
+	if key := strings.TrimSpace(r.DedupeKey); key != "" {
+		return key
+	}
+	return strings.Join([]string{
+		strings.TrimSpace(r.ActionTargetID),
+		strings.TrimSpace(r.RelationObjectID),
+		strings.TrimSpace(r.ObjectKind),
+		strings.TrimSpace(r.Kind),
+		strings.TrimSpace(r.IntersectionID),
+	}, ":")
 }
 
 func matchesIntersectionListQuery(r IntersectionReasonView, query IntersectionListQuery, wm map[string]int64) bool {

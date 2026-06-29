@@ -19,12 +19,12 @@
 
 四套模型导致：同一帖在不同 surface 字段口径/兜底不一致；新增字段（如 A4 交集理由 `IntersectionReason`）需在四处分别接入；`discoveryPresentationWireForPost` 以 `Map<String, dynamic>?` 弱类型穿透（R04 GATE_BLOCK）；任何展示口径修复都要改四处，回归面不可控。
 
-内容多形态统一将引入口碑（review）等新内容形态并要求"统一对象卡 / 统一交集呈现"，若不先收敛读侧模型，新形态会再叠一套分叉。因此本场景作为其硬前置先行落地。
+内容多形态统一在 image/video/article/micro 之上还要求"统一对象卡 / 统一交集呈现"，若不先收敛读侧模型，新形态会再叠一套分叉。因此本场景作为其硬前置先行落地。
 
 ## 目标用户（间接）
 
 - 跨 surface 浏览同一内容、期望字段口径一致（标题、作者、统计、交集理由、媒体）的终端用户。
-- 后续在统一 model 上接入口碑与新交集呈现、不想再踩四套分叉的开发者。
+- 后续在统一 model 上接入新交集呈现、不想再踩四套分叉的开发者。
 
 ## 核心设计原则
 
@@ -107,7 +107,6 @@ micro/image/video/article 的差异由 `ContentSurfaceView` 内的强类型可�
 
 - 不改发布/编辑写链路与持久化结构。
 - 不新增 metadata 持久化字段。
-- 不在本轮接入口碑（review）类型（属内容多形态统一增量 B2，但必须能在统一 model 上以 `contentType` 分支无痛接入）。
 - 不动 pageflip 受控文件 `article_read_only_book_deck.dart`。
 
 ## 约束

@@ -78,6 +78,13 @@ api_routes:
     response_entity: ObjectPageBundle
 
   - method: GET
+    path: /v1/homepages/{homepageId}/impact
+    operation: GetEntityImpact
+    description: 实体（共享主页）影响摘要（连接型帮助结果，端侧实体主页「影响力」模块使用）
+    response_entity: EntityImpactSummary
+    auth: required
+
+  - method: GET
     path: /v1/homepages/{homepageId}/review-summary
     operation: GetHomepageReviewSummary
     description: 获取共享主页评分与口碑摘要

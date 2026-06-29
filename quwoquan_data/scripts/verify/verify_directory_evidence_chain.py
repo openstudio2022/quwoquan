@@ -81,7 +81,7 @@ _TASK_SHARED_ALLOW = {
 # 批次顶层允许集（§2/§12 A5）：对象目录 + 批次公共 + 受控 workspace 命令目录。
 # workspace 命令目录不得承载对象证据（由回退门 _regression_issues 保证）。
 _BATCH_TOP_ALLOW = {
-    "entities", "posts", "_shared", "batch_manifest.json",
+    "entities", "posts", "sources", "_shared", "batch_manifest.json",
     "task_workflow", "task_download", "task_build", "task_produce", "task_publish",
     "media",
 }
@@ -234,6 +234,44 @@ def _source_refs_issues(obj: Path, batch: Path) -> list[str]:
     elif unit_ref and not (batch / unit_ref).is_dir():
         issues.append(f"{rel}: sourceUnitRef 源单元缺失（不可回查）：{unit_ref}")
     return issues
+
+
+def _object_source_unit_records(obj: Path, batch: Path) -> list[tuple[str, str]]:
+    """Return (sourceId, sourceKind) pairs from canonical object source refs."""
+    snapshot_path = obj / "1.download" / "source_refs.json"
+    if not snapshot_path.is_file():
+        return []
+    try:
+        data = read_json(snapshot_path)
+    except Exception:  # noqa: BLE001
+        return []
+    rows = data.get("sources") or []
+    if not isinstance(rows, list):
+        return []
+    records: list[tuple[str, str]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        source_id = str(row.get("sourceId") or "").strip()
+        meta_ref = str(row.get("metaRef") or "").strip()
+        unit_ref = str(row.get("sourceUnitRef") or "").strip()
+        source_ref = str(row.get("sourceRef") or "").strip()
+        meta_path = batch / meta_ref if meta_ref else Path()
+        if not meta_path.is_file() and unit_ref:
+            meta_path = batch / unit_ref / "meta.json"
+        if not meta_path.is_file() and source_ref:
+            meta_path = batch / source_ref
+            meta_path = meta_path.parent / "meta.json"
+        category = ""
+        if meta_path.is_file():
+            try:
+                meta = read_json(meta_path)
+                category = str(meta.get("sourceKind") or meta.get("category") or "")
+                source_id = source_id or str(meta.get("sourceId") or "")
+            except Exception:  # noqa: BLE001
+                category = ""
+        records.append((source_id, category))
+    return records
 
 
 def _finalization_report_issues(obj: Path, batch: Path) -> list[str]:
@@ -612,6 +650,9 @@ def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
             for issue in mechanical_ending_title_issues(mpath.read_text(encoding="utf-8")):
                 issues.append(f"{rel}/{mdname}: {issue}")
     # 4. 无类别 weather_* 来源单元
+    for source_id, category in _object_source_unit_records(obj, batch):
+        for issue in source_unit_category_issues(source_id, category):
+            issues.append(f"{rel}: {issue}")
     sources_dir = obj / "1.download" / "sources"
     if sources_dir.is_dir():
         for unit in sorted(sources_dir.iterdir()):

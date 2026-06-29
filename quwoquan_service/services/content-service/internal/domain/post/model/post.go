@@ -132,8 +132,6 @@ type Post struct {
 	TagRefs                   []string       `json:"tagRefs" bson:"tagRefs"`
 	EntityRefs                []string       `json:"entityRefs" bson:"entityRefs"`
 	SemanticMentions          any            `json:"semanticMentions" bson:"semanticMentions"`
-	Rating                    int64          `json:"rating" bson:"rating"`
-	ReviewAspects             any            `json:"reviewAspects" bson:"reviewAspects"`
 	MediaUrls                 []string       `json:"mediaUrls" bson:"mediaUrls"`
 	MediaItems                any            `json:"mediaItems" bson:"mediaItems"`
 	CoverUrl                  string         `json:"coverUrl" bson:"coverUrl"`

@@ -6,7 +6,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_presentation.g.dart';
-import 'package:quwoquan_app/ui/content/models/content_time_label.dart';
+import 'package:quwoquan_app/components/content/content_time_label.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_read_surface_id.g.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -14,8 +14,8 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
-import 'package:quwoquan_app/components/comment_system/comment_viewer.dart';
-import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
+import 'package:quwoquan_app/ui/content/comments/widgets/comment_viewer.dart';
+import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.dart';
 
 /// 媒体帖子卡片基类
 /// 按照Figma原型设计，包含完整的交互功能和评论显示

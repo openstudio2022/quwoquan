@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 @immutable
 class ArticleReaderDynamicLayerSpec {

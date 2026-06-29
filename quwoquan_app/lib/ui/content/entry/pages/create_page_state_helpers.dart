@@ -162,7 +162,9 @@ extension _CreatePageStateHelpers on _CreatePageState {
     );
   }
 
-  Future<void> _pickImagesForCurrentEditor() async {
+  Future<void> _pickImagesForCurrentEditor({
+    bool closeWhenEmptyOnCancel = false,
+  }) async {
     if (!await requireLogin(ref, context, AuthGateReason.mediaUpload)) {
       return;
     }
@@ -194,7 +196,11 @@ extension _CreatePageStateHelpers on _CreatePageState {
       maxSelection: remainingSlots,
       initialPaths: const <String>[],
     );
-    if (!mounted || result == null) {
+    if (!mounted || result == null || result.items.isEmpty) {
+      if (closeWhenEmptyOnCancel &&
+          !ref.read(createEditorProvider).hasContent) {
+        _doClose();
+      }
       return;
     }
     final paths = result.items
@@ -237,7 +243,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
     );
   }
 
-  Future<void> _pickVideoForMedia() async {
+  Future<void> _pickVideoForMedia({bool closeWhenEmptyOnCancel = false}) async {
     if (!await requireLogin(ref, context, AuthGateReason.mediaUpload)) {
       return;
     }
@@ -255,6 +261,10 @@ extension _CreatePageStateHelpers on _CreatePageState {
           : <String>[state.videoPath],
     );
     if (!mounted || result == null || result.items.isEmpty) {
+      if (closeWhenEmptyOnCancel &&
+          !ref.read(createEditorProvider).hasContent) {
+        _doClose();
+      }
       return;
     }
     final item = result.items.first;
@@ -284,78 +294,6 @@ extension _CreatePageStateHelpers on _CreatePageState {
     await reportCreateEditorSurfaceEvent(ref, 'create_media_video_selected');
     if (mounted) {
       await _editCurrentVideo();
-    }
-  }
-
-  Future<void> _pickMixedMediaFromGallery({
-    bool closeWhenEmptyOnCancel = false,
-  }) async {
-    if (!await requireLogin(ref, context, AuthGateReason.mediaUpload)) {
-      return;
-    }
-    if (!mounted) return;
-    final result = await _openMediaPicker(
-      mode: MediaPickerEntryMode.mixed,
-      maxSelection: _CreatePageState._kMaxMediaImages,
-      initialPaths: const <String>[],
-    );
-    if (!mounted || result == null || result.items.isEmpty) {
-      if (closeWhenEmptyOnCancel &&
-          !ref.read(createEditorProvider).hasContent) {
-        _doClose();
-      }
-      return;
-    }
-    await _applyPickedMediaItems(result.items);
-  }
-
-  Future<void> _applyPickedMediaItems(List<CreateMediaItem> items) async {
-    if (items.isEmpty) {
-      return;
-    }
-    final state = ref.read(createEditorProvider);
-    switch (resolveCreateEntryMediaResolution(items)) {
-      case CreateEntryMediaResolution.empty:
-        return;
-      case CreateEntryMediaResolution.video:
-        final first = items.firstWhere((item) => item.isVideo);
-        if (state.imagePaths.isNotEmpty) {
-          AppToast.show(context, UITextConstants.createClearImagesBeforeVideo);
-          return;
-        }
-        await _applyVideoPathToMediaEditor(first.path, previousState: state);
-        if (mounted) {
-          await _editCurrentVideo();
-        }
-        return;
-      case CreateEntryMediaResolution.imageBatch:
-        if (state.hasVideo) {
-          AppToast.show(context, UITextConstants.createDeleteVideoBeforeImages);
-          return;
-        }
-        final paths = items
-            .where((item) => item.isImage)
-            .map((item) => item.path)
-            .take(_CreatePageState._kMaxMediaImages)
-            .toList(growable: false);
-        if (paths.isEmpty) {
-          return;
-        }
-        ref
-            .read(createEditorProvider.notifier)
-            .appendImages(
-              paths,
-              editorKind: CreateEditorKind.media,
-              maxImages: _CreatePageState._kMaxMediaImages,
-            );
-        await reportCreateEditorSurfaceEvent(
-          ref,
-          'create_media_images_selected',
-          createEditorSurfaceExtrasMediaBatch(
-            count: paths.length,
-            editorKind: CreateEditorKind.media,
-          ),
-        );
     }
   }
 

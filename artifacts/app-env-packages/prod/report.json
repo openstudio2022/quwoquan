@@ -4,6 +4,7 @@
   "runtimeEnv": "prod",
   "dataSource": "remote",
   "gatewayBaseUrl": "https://118.31.239.122:19000",
+  "legalBaseUrl": "https://quwoquan.com/legal",
   "realtimeBaseUrl": "wss://118.31.239.122:19000",
   "avatarCdnBaseUrl": "https://118.31.239.122:19100",
   "imageCdnBaseUrl": "https://118.31.239.122:19100",
@@ -22,6 +23,7 @@
   },
   "publicBases": {
     "gatewayBaseUrl": "https://118.31.239.122:19000",
+    "legalBaseUrl": "https://quwoquan.com/legal",
     "realtimeBaseUrl": "wss://118.31.239.122:19000",
     "mediaAvatarCdnBaseUrl": "https://118.31.239.122:19100",
     "mediaImageCdnBaseUrl": "https://118.31.239.122:19100",

@@ -93,6 +93,71 @@ def test_recover_agent_scheduler_clears_fresh_orphan_without_waiting_for_stale_t
     assert "activeAgentScheduler" not in recovered
     assert action["previous"]["recoveredBeforeStaleTimeout"] is True
 
+def test_recover_stale_controller_yield_clears_dead_controller(monkeypatch):
+    from _common import ops_governance as og
+
+    task_id = _make_task()
+    batch_id = "stale_controller_yield_recovery"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state.update(
+        {
+            "status": "repairing",
+            "waitingCheckpoint": "produce_author",
+            "controllerYield": {
+                "stage": "produce_author",
+                "reason": "managed ref slice partially completed",
+                "yieldedAt": "2000-01-01T00:00:00+00:00",
+            },
+            "activeAgentScheduler": {"stage": "produce_author", "runtime": "local"},
+            "failedObjects": ["old yield"],
+        }
+    )
+    run_mod.save_workflow_state(state)
+    og.controller_lease_path(task_id, batch_id, create=True).write_text(
+        '{"status":"active","pid":999999,"controllerRunId":"dead"}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(run_mod, "_managed_agent_process_alive", lambda _ctx: False)
+
+    assert run_mod._recover_stale_controller_yield(ctx, state) is True
+
+    recovered = run_mod.load_workflow_state(task_id, batch_id)
+    assert recovered["status"] == "running"
+    assert recovered["waitingCheckpoint"] == "produce_author"
+    assert recovered["failedObjects"] == []
+    assert "controllerYield" not in recovered
+    assert "activeAgentScheduler" not in recovered
+    assert recovered["controllerYieldRecoveryActions"][-1]["stage"] == "produce_author"
+    assert not og.controller_lease_path(task_id, batch_id, create=False).exists()
+
+def test_recover_controller_yield_keeps_live_controller(monkeypatch):
+    from _common import ops_governance as og
+
+    task_id = _make_task()
+    batch_id = "live_controller_yield_kept"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state.update(
+        {
+            "status": "repairing",
+            "waitingCheckpoint": "produce_author",
+            "controllerYield": {"stage": "produce_author", "reason": "bounded slice"},
+        }
+    )
+    run_mod.save_workflow_state(state)
+    og.controller_lease_path(task_id, batch_id, create=True).write_text(
+        '{"status":"active","pid":12345,"controllerRunId":"live"}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(run_mod, "_managed_agent_process_alive", lambda _ctx: False)
+    monkeypatch.setattr(og, "pid_alive", lambda pid: int(pid or 0) == 12345)
+
+    assert run_mod._recover_stale_controller_yield(ctx, state) is False
+
+    recovered = run_mod.load_workflow_state(task_id, batch_id)
+    assert recovered["controllerYield"]["reason"] == "bounded slice"
+
 def test_keyboard_interrupt_marks_workflow_manual_required(monkeypatch):
     task_id = _make_task()
     batch_id = "keyboard_interrupt_manual_required"
@@ -471,4 +536,3 @@ def test_download_plan_stale_source_rules_override_pending_repair(monkeypatch):
     assert result.status == "done"
     assert captured == {"entity_ids": [_EID], "force": True}
     assert "过期 source_plan" in result.message
-

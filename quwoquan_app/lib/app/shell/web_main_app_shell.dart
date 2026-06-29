@@ -11,7 +11,7 @@ import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
 import 'package:quwoquan_app/ui/plaza/pages/connection_hub_page.dart';
@@ -690,7 +690,7 @@ class _WebCreateWorkspace extends ConsumerWidget {
         icon: CupertinoIcons.camera,
         title: UITextConstants.webPcCreateCameraTitle,
         subtitle: UITextConstants.webPcCreateCameraSubtitle,
-        action: () => _openCreate(context, EditorStartAction.capture),
+        action: () => _openCreate(context, EditorStartAction.video),
       ),
       _CreateCardSpec(
         id: 'write',
@@ -698,6 +698,29 @@ class _WebCreateWorkspace extends ConsumerWidget {
         title: UITextConstants.webPcCreateTextTitle,
         subtitle: UITextConstants.webPcCreateTextSubtitle,
         action: () => _openCreate(context, EditorStartAction.write),
+      ),
+    ];
+    final socialActions = <_CreateCardSpec>[
+      _CreateCardSpec(
+        id: 'add-contact',
+        icon: CupertinoIcons.person_badge_plus,
+        title: UITextConstants.webPcCreateAddContactTitle,
+        subtitle: UITextConstants.webPcCreateAddContactSubtitle,
+        action: () => GlobalQuickActionSheet.openAddContact(context),
+      ),
+      _CreateCardSpec(
+        id: 'group-chat',
+        icon: CupertinoIcons.chat_bubble_2,
+        title: UITextConstants.webPcCreateGroupChatTitle,
+        subtitle: UITextConstants.webPcCreateGroupChatSubtitle,
+        action: () => GlobalQuickActionSheet.openStartGroupChat(context),
+      ),
+      _CreateCardSpec(
+        id: 'create-circle',
+        icon: CupertinoIcons.person_3,
+        title: UITextConstants.webPcCreateCircleTitle,
+        subtitle: UITextConstants.webPcCreateCircleSubtitle,
+        action: () => GlobalQuickActionSheet.openCreateCircle(context),
       ),
     ];
     return _WebDesktopFrame(
@@ -725,6 +748,13 @@ class _WebCreateWorkspace extends ConsumerWidget {
             groupKey: const ValueKey<String>('web-create-group-content'),
             title: UITextConstants.webPcCreateContentGroupTitle,
             cards: contentActions,
+            activeTabId: activeTabId,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          _WebCreateGroup(
+            groupKey: const ValueKey<String>('web-create-group-social'),
+            title: UITextConstants.webPcCreateSocialGroupTitle,
+            cards: socialActions,
             activeTabId: activeTabId,
           ),
         ],

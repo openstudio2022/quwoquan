@@ -81,6 +81,7 @@ class AuthApiPolicy {
     'GetCommentCountsDelta': 'public',
     'GetConversation': 'required',
     'GetCounters': 'public',
+    'GetEntityImpact': 'required',
     'GetEntryPersonalization': 'required',
     'GetEventDrilldown': 'public',
     'GetEventSummary': 'public',

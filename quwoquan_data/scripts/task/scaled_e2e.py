@@ -122,8 +122,101 @@ def _prepare_author_jobs_for_paused_targets(
         fd.sync_content_author_jobs(plan, unit, partition_path=list(unit.get("partitionPath") or []))
 
 
+def _handle_scaled_e2e_run(args: argparse.Namespace, *, invoke=None) -> None:
+    invoke = invoke or handle_scaled_e2e
+    cycles = max(1, int(getattr(args, "cycles", 3) or 3))
+    if not bool(getattr(args, "skip_prepare", False)):
+        invoke(
+            argparse.Namespace(
+                scaled_e2e_command="prepare",
+                task=args.task,
+                batch=args.batch,
+                plan=args.plan,
+                catalog=getattr(args, "catalog", None),
+                reset_state=bool(getattr(args, "reset_state", False)),
+                max_workers=getattr(args, "max_workers", 2),
+            )
+        )
+    invoke(
+        argparse.Namespace(
+            scaled_e2e_command="fanout-author",
+            plan=args.plan,
+            batch=args.batch,
+            strategy=getattr(args, "strategy", None),
+            concurrency=getattr(args, "concurrency", None),
+            batch_size=None,
+        )
+    )
+    last_exit = 1
+    for cycle in range(1, cycles + 1):
+        print(f"[task scaled-e2e run] cycle {cycle}/{cycles}: author-runner")
+        invoke(
+            argparse.Namespace(
+                scaled_e2e_command="author-runner",
+                plan=args.plan,
+                strategy=getattr(args, "strategy", None),
+                concurrency=getattr(args, "concurrency", None),
+                max_workers=getattr(args, "max_workers", None),
+                runtime=getattr(args, "runtime", None),
+                model=getattr(args, "model", None),
+                cwd=getattr(args, "cwd", None),
+                spend_limit=getattr(args, "spend_limit", None),
+                refs=None,
+                force_refs=None,
+                source_task=None,
+                source_batch=None,
+                skip_startup_probe=bool(getattr(args, "skip_startup_probe", False)),
+                orchestrate=True,
+                no_orchestrate=False,
+            )
+        )
+        invoke(argparse.Namespace(scaled_e2e_command="rollup", plan=args.plan))
+        print(f"[task scaled-e2e run] cycle {cycle}/{cycles}: finalize")
+        invoke(
+            argparse.Namespace(
+                scaled_e2e_command="finalize",
+                plan=args.plan,
+                strategy=getattr(args, "strategy", None),
+                concurrency=getattr(args, "concurrency", None),
+                max_workers=getattr(args, "max_workers", None),
+                runtime=getattr(args, "runtime", None),
+                model=getattr(args, "model", None),
+                cwd=getattr(args, "cwd", None),
+                spend_limit=getattr(args, "spend_limit", None),
+                reset_state=False,
+            )
+        )
+        invoke(argparse.Namespace(scaled_e2e_command="rollup", plan=args.plan))
+        print(f"[task scaled-e2e run] cycle {cycle}/{cycles}: verify")
+        try:
+            invoke(
+                argparse.Namespace(
+                    scaled_e2e_command="verify",
+                    task=None,
+                    batch=None,
+                    plan=args.plan,
+                )
+            )
+        except SystemExit as exc:
+            last_exit = int(getattr(exc, "code", 1) or 1)
+            if cycle < cycles:
+                print(
+                    f"[task scaled-e2e run] verify failed exit={last_exit}; "
+                    "continuing next author/finalize cycle",
+                    file=sys.stderr,
+                )
+                continue
+            raise
+        print("[task scaled-e2e run] WORKFLOW COMPLETE")
+        return
+    raise SystemExit(last_exit)
+
+
 def handle_scaled_e2e(args: argparse.Namespace) -> None:
     command = getattr(args, "scaled_e2e_command", "")
+    if command == "run":
+        _handle_scaled_e2e_run(args)
+        return
     if command == "prepare":
         from data.baseline import handle_baseline
         from explore.handler import handle_explore
@@ -410,5 +503,8 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
             raise SystemExit(1)
         print("[task scaled-e2e verify] PASSED")
         return
-    print("[task scaled-e2e] 需要子命令：prepare | fanout-author | rollup | verify", file=sys.stderr)
+    print(
+        "[task scaled-e2e] 需要子命令：prepare | fanout-author | author-runner | rollup | finalize | verify | run",
+        file=sys.stderr,
+    )
     raise SystemExit(2)

@@ -1,100 +1,34 @@
 part of 'homepage_detail_shell.dart';
 
 extension _HomepageBuilders on _HomepageDetailShellState {
-  /// 「为什么推荐这里」交集卡：与圈子/用户主页同构，切 [ObjectIntersectionSection]
-  /// 单一真相源（provider 驱动 loading/data/error 三态 + §7.3 高亮 + 归因上报）。
-  /// 不再页面内自造交集渲染；无可解析交集则组件自行收起（G2 不占位）。
+  /// 「我的交集」预览卡：与圈子/用户主页同构，消费 [ObjectIntersectionPreviewCard]。
   Widget _buildIntersectionCard(bool isDark) {
     final objectId = (_reference?.id ?? '').trim();
     if (objectId.isEmpty) {
       return const SizedBox.shrink();
     }
-    return Consumer(
-      builder: (context, ref, _) {
-        final query = ObjectIntersectionQuery(
-          objectAId: ref.watch(currentUserIdProvider),
-          objectAType: 'user',
-          objectBId: objectId,
-          objectBType: 'homepage',
-        );
-        return ObjectIntersectionSection(
-          query: query,
-          title: UITextConstants.entityWhyRecommendTitle,
-          isDark: isDark,
-          bottomPadding: AppSpacing.containerSm,
-          onReasonTap: widget.onIntersectionReasonTap,
-        );
-      },
+    return ObjectIntersectionPreviewCard(
+      objectId: objectId,
+      objectType: 'homepage',
+      title: UITextConstants.objectMyIntersectionsTitle,
+      emptyText: UITextConstants.objectIntersectionEmptyEntity,
+      referralSource: ReferralSource.entityPage,
+      cardKey: const ValueKey<String>('homepage-my-intersection-card'),
+      emptyKey: const ValueKey<String>('homepage-my-intersection-empty'),
     );
   }
 
-  /// 实体页「想去 · 正在去 · 结伴」行动模块：把内容消费就地接到同频结伴。
-  ///
-  /// 常驻入口（不依赖是否已有交集），点击进入结伴页（围绕该目的地实体沉淀同行者）。
-  /// 仅做展示 + 导航（push 路由常量），不跨 UI 模块 import plaza 内部组件/Provider，
-  /// 守 [01-arch-constraints] §2.4「禁止 import 其他 UI 模块内部」。
-  Widget _buildEntityCompanionModule(BuildContext context) {
-    if (widget.selectionMode) {
+  Widget _buildEntityImpactCard(bool isDark) {
+    final objectId = (_reference?.id ?? '').trim();
+    if (objectId.isEmpty) {
       return const SizedBox.shrink();
     }
-    final accent = AppColors.iosAccent(context);
-    return Padding(
-      padding: EdgeInsets.only(top: AppSpacing.containerSm),
-      child: CupertinoButton(
-        key: const ValueKey<String>('homepage-companion-entry-button'),
-        padding: EdgeInsets.zero,
-        onPressed: () => context.push(AppRoutePaths.plazaCompanion),
-        child: ProfileIosSectionCard(
-          child: Row(
-            children: <Widget>[
-              Container(
-                width: AppSpacing.avatarUserMd,
-                height: AppSpacing.avatarUserMd,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-                ),
-                alignment: Alignment.center,
-                child: Icon(
-                  CupertinoIcons.location_solid,
-                  size: AppSpacing.iconSmall,
-                  color: accent,
-                ),
-              ),
-              SizedBox(width: AppSpacing.containerSm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      PlazaTextConstants.entityCompanionSectionTitle,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
-                        color: AppColors.iosLabel(context),
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.intraGroupXs),
-                    Text(
-                      PlazaTextConstants.entityCompanionSectionSubtitle,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosFootnote,
-                        color: AppColors.iosSecondaryLabel(context),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(width: AppSpacing.intraGroupSm),
-              Icon(
-                CupertinoIcons.chevron_forward,
-                size: AppSpacing.iconXSmall,
-                color: AppColors.iosTertiaryLabel(context),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return ObjectImpactPreviewCard(
+      objectId: objectId,
+      target: ObjectImpactTarget.homepage,
+      referralSource: ReferralSource.entityPage,
+      enumerableHint: UITextConstants.impactEnumerableHintEntity,
+      cardKey: const ValueKey<String>('homepage-impact-card'),
     );
   }
 
@@ -278,15 +212,18 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       if (typeLabel.trim().isNotEmpty) typeLabel.trim(),
       if (locationLine.trim().isNotEmpty) locationLine.trim(),
     ].join(' · ');
-    final establishedYear = detail?.establishedYear;
     final followerCount = detail?.followerCount ?? 0;
+    final recordCount = _contentPreview.length;
+    final discussionCount = _questionPreview.length;
     final statsLine = <String>[
-      if (establishedYear != null && establishedYear > 0)
-        UITextConstants.entityEstablishedYearLabel(establishedYear),
       if (followerCount > 0)
         UITextConstants.entityFollowerCountLabel(
           formatCompactActionCount(followerCount),
         ),
+      if (recordCount > 0)
+        '${formatCompactActionCount(recordCount)} ${UITextConstants.objectTabRecord}',
+      if (discussionCount > 0)
+        '${formatCompactActionCount(discussionCount)} ${UITextConstants.objectTabDiscussion}',
     ].join(' · ');
     final referenceSubtitle = (reference?.subtitle ?? '').trim();
     final identityMetaLine = statsLine.isNotEmpty
@@ -344,120 +281,37 @@ extension _HomepageBuilders on _HomepageDetailShellState {
             SizedBox(height: AppSpacing.containerSm),
             if (!widget.selectionMode) ...<Widget>[
               SizedBox(height: AppSpacing.containerSm),
+              if (_entityIntroLine().trim().isNotEmpty) ...<Widget>[
+                ProfileSloganCard(
+                  isDark: isDark,
+                  bio: _entityIntroLine(),
+                  onTap: widget.onOpenIntroduction,
+                ),
+                SizedBox(height: AppSpacing.containerSm),
+              ],
               _HomepageActionBar(
                 isFollowing: widget.detail?.viewerFollowsHomepage ?? false,
                 onToggleFollow: widget.onToggleFollow,
-                onMessageOwner: widget.onMessageOwner,
+                onPublishRecord: _reference == null
+                    ? null
+                    : () => widget.onCreateContent(_reference!),
               ),
             ],
             SizedBox(height: AppSpacing.containerSm),
             _buildIntersectionCard(isDark),
-            _buildEntityCompanionModule(context),
-            _buildEntityIntroCard(context),
+            _buildEntityImpactCard(isDark),
           ],
         ),
       ),
     );
   }
 
-  /// 「关于这里」介绍卡：标题 + 2~4 行简介 + 右侧缩略图。
-  /// 去「认识XX」泛词，统一结论导向标题；缩略图来自封面，无封面则只排文字。
-  Widget _buildEntityIntroCard(BuildContext context) {
+  String _entityIntroLine() {
     final introductionSummary = (widget.introductionSummary ?? '').trim();
-    final fallbackIntro = <String>[
-      if ((_reference?.subtitle ?? '').trim().isNotEmpty)
-        _reference!.subtitle!.trim(),
-      if ((widget.detail?.categoryTags ?? const <String>[]).isNotEmpty)
-        widget.detail!.categoryTags.take(3).join(' · '),
-      if ((widget.detail?.city ?? '').trim().isNotEmpty)
-        widget.detail!.city!.trim(),
-    ].join(' · ');
-    final intro = introductionSummary.isNotEmpty
-        ? introductionSummary
-        : fallbackIntro;
-    final canOpenIntroduction = introductionSummary.isNotEmpty;
-    if (intro.isEmpty) {
-      return const SizedBox.shrink();
+    if (introductionSummary.isNotEmpty) {
+      return introductionSummary;
     }
-    final thumbnailUrl = (_reference?.coverUrl ?? '').trim();
-    final introText = Text(
-      intro,
-      maxLines: 4,
-      overflow: TextOverflow.ellipsis,
-      style: TextStyle(
-        fontSize: AppTypography.iosFootnote,
-        color: AppColors.iosSecondaryLabel(context),
-        height: AppSpacing.textLineHeightBody,
-      ),
-    );
-    return Padding(
-      padding: EdgeInsets.only(top: AppSpacing.containerSm),
-      child: CupertinoButton(
-        key: const ValueKey<String>('homepage-introduction-entry-button'),
-        padding: EdgeInsets.zero,
-        onPressed: canOpenIntroduction ? widget.onOpenIntroduction : null,
-        child: ProfileIosSectionCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      UITextConstants.entityAboutTitle,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosSubheadline,
-                        fontWeight: AppTypography.semiBold,
-                        color: AppColors.iosLabel(context),
-                      ),
-                    ),
-                  ),
-                  if (canOpenIntroduction) ...<Widget>[
-                    Text(
-                      UITextConstants.objectIntroMoreLabel,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosFootnote,
-                        color: AppColors.iosAccent(context),
-                      ),
-                    ),
-                    SizedBox(width: AppSpacing.two),
-                    Icon(
-                      CupertinoIcons.chevron_forward,
-                      size: AppSpacing.iconXSmall,
-                      color: AppColors.iosTertiaryLabel(context),
-                    ),
-                  ],
-                ],
-              ),
-              SizedBox(height: AppSpacing.intraGroupSm),
-              if (thumbnailUrl.isEmpty)
-                introText
-              else
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(child: introText),
-                    SizedBox(width: AppSpacing.containerSm),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-                      child: SizedBox(
-                        width: AppSpacing.avatarUserXl,
-                        height: AppSpacing.avatarUserXl,
-                        child: AppMediaImage(
-                          imageSource: thumbnailUrl,
-                          fit: BoxFit.cover,
-                          placeholder: const SizedBox.shrink(),
-                          errorWidget: const SizedBox.shrink(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
+    return (_reference?.subtitle ?? '').trim();
   }
 
   Widget _buildPrimaryTabBar(BuildContext context) {

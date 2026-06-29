@@ -15,6 +15,7 @@ from _common.batch_scan import iter_batch_object_dirs  # noqa: E402
 from _common.content_object import load_index as load_content_index  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import batch_root  # noqa: E402
+from _common.source_unit import iter_source_units  # noqa: E402
 from verify.verify_asset_id_zero_collision import scan_batch as scan_zero_collision  # noqa: E402
 from verify.verify_directory_evidence_chain import scan_batch as scan_directory  # noqa: E402
 
@@ -46,18 +47,12 @@ def _page_chars(path: Path) -> int:
 
 
 def _count_source_units(obj: Path) -> int:
-    src_root = obj / "1.download" / "sources"
-    if not src_root.is_dir():
-        return 0
-    return len([d for d in src_root.iterdir() if d.is_dir()])
+    return len(iter_source_units(obj))
 
 
 def _count_source_images(obj: Path) -> int:
     total = 0
-    src_root = obj / "1.download" / "sources"
-    if not src_root.is_dir():
-        return 0
-    for unit in src_root.iterdir():
+    for unit in iter_source_units(obj):
         idx = unit / "assets" / "index.json"
         if idx.is_file():
             data = read_json(idx)

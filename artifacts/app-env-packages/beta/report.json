@@ -4,6 +4,7 @@
   "runtimeEnv": "beta",
   "dataSource": "remote",
   "gatewayBaseUrl": "https://beta-api.quwoquan-env.test:18000",
+  "legalBaseUrl": "https://beta-api.quwoquan-env.test:18000/legal",
   "realtimeBaseUrl": "wss://beta-api.quwoquan-env.test:18000",
   "avatarCdnBaseUrl": "https://beta-avatar.quwoquan-env.test:18100",
   "imageCdnBaseUrl": "https://beta-image.quwoquan-env.test:18100",
@@ -22,6 +23,7 @@
   },
   "publicBases": {
     "gatewayBaseUrl": "https://beta-api.quwoquan-env.test:18000",
+    "legalBaseUrl": "https://beta-api.quwoquan-env.test:18000/legal",
     "realtimeBaseUrl": "wss://beta-api.quwoquan-env.test:18000",
     "mediaAvatarCdnBaseUrl": "https://beta-avatar.quwoquan-env.test:18100",
     "mediaImageCdnBaseUrl": "https://beta-image.quwoquan-env.test:18100",

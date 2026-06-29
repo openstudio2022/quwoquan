@@ -51,7 +51,7 @@
     }
   ],
   "env": "alpha",
-  "generatedAt": "2026-06-28T09:37:53.180656Z",
+  "generatedAt": "2026-06-29T07:14:52.916759Z",
   "legalBaseUrl": "https://alpha-api.quwoquan-env.test:17000/legal",
   "packageKind": "legal-static",
   "schemaVersion": "legal-static-public/v1"

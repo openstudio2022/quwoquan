@@ -581,6 +581,18 @@ def batch_entity_object_dir(
     return batch_root(task_id, batch_id) / "entities" / domain / etype / name
 
 
+def batch_sources_root(task_id: str, batch_id: str) -> Path:
+    """Canonical physical source-unit pool: `batch/sources/{sourceUnitId}/`."""
+    return batch_root(task_id, batch_id) / "sources"
+
+
+def batch_source_unit_dir(task_id: str, batch_id: str, source_unit_id: str) -> Path:
+    unit_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(source_unit_id or "").strip()).strip("_")
+    if not unit_id:
+        unit_id = "source_unit"
+    return batch_sources_root(task_id, batch_id) / unit_id
+
+
 def batch_entity_stage_dir(
     task_id: str, batch_id: str, domain: str, etype: str, name: str, stage: str
 ) -> Path:
@@ -620,10 +632,10 @@ def batch_post_stage_dir(
 
 
 def source_unit_dir(object_dir: Path, ordinal: int, source_id: str) -> Path:
-    """对象的来源单元：{object}/1.download/sources/{NN}.{sourceKind}/（NN 两位补零）。
+    """Legacy object-local source-unit path for older fixtures only.
 
-    来源是自包含单元（source.md + meta.json + assets/ + assets/index.json），
-    禁止把图片散落到对象级 images/。
+    Current production source units live under `batch/sources/{sourceUnitId}/`
+    and objects only keep `1.download/source_refs.json` soft refs.
     """
     return object_dir / STAGE_DOWNLOAD / "sources" / f"{ordinal:02d}.{source_id}"
 
@@ -720,4 +732,3 @@ def creator_pool_object_dir(vertical: str, batch_id: str, creator_ref: str) -> P
 
 def creator_pool_stage_dir(vertical: str, batch_id: str, creator_ref: str, stage: str) -> Path:
     return creator_pool_object_dir(vertical, batch_id, creator_ref) / stage
-

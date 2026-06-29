@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
+import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
 
 @immutable
 class ArticleReaderTextureWindow {

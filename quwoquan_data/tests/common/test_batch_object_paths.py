@@ -43,13 +43,13 @@ from _common.paths import (  # noqa: E402
     batch_post_object_dir,
     batch_post_stage_dir,
     batch_root,
+    batch_source_unit_dir,
     batch_shared_dir,
     batch_workflow_packet_path,
     batches_root,
     iter_task_batch_dirs,
     publish_data,
     relative_batch_ref,
-    source_unit_dir,
     task_discriminator,
     task_intent_label,
 )
@@ -95,11 +95,10 @@ def test_object_input_and_workflow_packet_paths_are_object_first():
 
 
 def test_source_unit_is_numbered_and_holds_assets_not_loose_images():
-    obj = batch_entity_object_dir(TASK, BATCH, "地点", "景区", "海螺沟")
-    unit = source_unit_dir(obj, 1, "overview_baike")
+    unit = batch_source_unit_dir(TASK, BATCH, "su_fixture")
     rel = unit.relative_to(batch_root(TASK, BATCH)).as_posix()
-    assert rel == "entities/地点/景区/海螺沟/1.download/sources/01.overview_baike", rel
-    # 来源单元自带 assets/，对象级别不应再出现 images/
+    assert rel == "sources/su_fixture", rel
+    # 来源单元自带 assets/，对象级别只保存 source_refs.json。
     assert (unit / "assets").parent == unit
 
 
@@ -109,10 +108,9 @@ def test_batch_common_info_is_hoisted_to_batch_root():
 
 
 def test_relative_batch_ref_is_posix_relative_no_absolute():
-    obj = batch_entity_object_dir(TASK, BATCH, "地点", "景区", "海螺沟")
-    src = source_unit_dir(obj, 1, "overview_baike") / "source.md"
+    src = batch_source_unit_dir(TASK, BATCH, "su_fixture") / "source.md"
     ref = relative_batch_ref(src, TASK, BATCH)
-    assert ref == "entities/地点/景区/海螺沟/1.download/sources/01.overview_baike/source.md", ref
+    assert ref == "sources/su_fixture/source.md", ref
     assert not ref.startswith("/"), ref
     assert "/Users/" not in ref, ref
     assert os.sep != "\\" or "\\" not in ref

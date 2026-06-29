@@ -61,9 +61,9 @@ Agent 根据 entityType + tagRefs 自动推导：
 
 ## 写作主线（writingIntent）与题材矩阵
 
-每篇文章必须选定且仅选定一条顶层主线（与单一门库 `_common/quality_gates.WRITING_INTENTS` 对齐，review/verify 校验结构匹配）：
+> 底稿中心 1:1 模型下，`writingIntent` 是**从底稿派生的可选内容角度标签**（与 `_common/quality_gates.WRITING_INTENTS` 对齐），用于选题提示与软评分，**不再单篇唯一、也不再作 review/verify 硬阻断门**。结构跟随底稿自身形态轻改；下表仅为常见角度的参考结构，不强制命中桶数。
 
-| writingIntent | 读者阶段 | 正文必含结构（命中≥3 桶） |
+| writingIntent | 读者阶段 | 常见结构（参考，非硬性命中） |
 | --- | --- | --- |
 | `planning_consultation` | 计划前咨询/攻略 | 顺序/动线、交通(怎么去)、票务(门票/预约/开放时间)、取舍(建议/注意/避开) |
 | `decision_experience` | 犹豫值不值得去 | 适合/不适合人群、体验价值、真实喜欢/遗憾、关键取舍 |

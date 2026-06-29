@@ -7,10 +7,10 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: content-type-framework
 scope:
-  summary: 创作入口与媒体编辑器 IA 收敛验收；本轮补充小红书式三动作入口、混合相册、可切相机与顶栏草稿保存状态。
+  summary: 创作入口与媒体编辑器 IA 收敛验收；本轮补充小红书式创作动作、社交动作保留、照片/视频入口、旧相机兼容与顶栏草稿保存状态。
   in_scope:
-  - 创作首层三动作菜单与媒体编辑器双编辑器心智。
-  - 混合相册、可切相机和图片/视频真实结果分流。
+  - 创作首层三动作菜单、社交动作保留与媒体编辑器双编辑器心智。
+  - 照片入口、视频入口、旧相机兼容和图片/视频真实结果分流。
   - 图片路径不暴露一键成片、拍视频或录像语义。
   - 编辑器顶栏草稿入口、保存状态、本地草稿页、自动保存、继续编辑与清稿时机统一。
   out_of_scope:
@@ -19,23 +19,29 @@ scope:
   - 新增 metadata 字段。
 gwt_acceptance:
   GWT1:
-    title: 三动作入口进入混合相册或可切相机后按真实结果分流
+    title: 加号入口保留创作与社交动作并按真实媒体结果分流
     given:
     - 用户从底栏或发现页全局 `+` 打开创作入口。
     - 设备相册和相机权限可用，且相册内同时存在图片和视频。
     when:
-    - 用户查看入口 sheet，并分别点击“从相册选择”“相机”“写文字”。
-    - 用户在混合相册或可切相机中选择/拍摄图片或视频。
+    - 用户查看入口 sheet，并分别点击“发布照片”“发布视频”“写文字”以及三条社交动作。
+    - 用户在照片或视频入口中选择/拍摄图片或视频。
     then:
-    - 移动端入口只显示 `从相册选择`、`相机`、`写文字` 与 `取消`，不显示发布/互动分组、社交入口或草稿行。
-    - "`/create?type=gallery` 打开混合相册选择器，底部只使用下一步语义；第一项选中后锁定本批次媒体类型，图片可多选，视频单选，图片和视频不能混选。"
-    - "`/create?type=capture` 打开默认拍照的可切相机，同页可切到录像；拍照返回图片编辑状态，录像返回视频编辑状态。"
+    - 移动端入口显示 `发布照片`、`发布视频`、`写文字`、`添加联系人`、`发起群聊`、`创建圈子` 与 `取消`。
+    - "`发布照片` 副文案固定为 `从相册选照片或拍照`。"
+    - "`发布视频` 副文案固定为 `从相册选视频或拍视频`。"
+    - 入口不显示发布/互动分组标题、图标、旧宫格、社交入口缩写或草稿行。
+    - "`/create?type=gallery` 打开图片选择器，允许从相册选照片或拍照，返回图片编辑状态。"
+    - "`/create?type=video` 打开视频选择器，允许从相册选视频或拍视频，返回视频编辑状态。"
+    - "`/create?type=capture` 仅作为旧相机/深链兼容入口，默认拍照且同页可切到录像；拍照返回图片编辑状态，录像返回视频编辑状态。"
     - "`/create?type=write` 直接进入文字为主编辑器。"
     - 相册/相机取消且编辑器无内容时关闭创作页回到来源页。
     - 图片 entry mode 下，相册选择器和拍摄页只表达图片发布，不展示“一键成片”“拍视频”“录像”等视频语义。
     - 图片 flow 的创作页顶栏标题为“图片创作”，并使用主导航标题语义，不在首屏淡化。
     - 图片选择器已选缩略条、图片编辑器缩略条与创作页图片网格共用统一拖拽重排行为：内容不足一屏时左对齐，拖拽悬停时目标区间兄弟项即时前移/后移空出目标位。
-    - 视频 entry mode 下，可使用视频选择和成片能力，但不复用图片路径的“编辑图片/完成(n)”按钮语义。
+    - 视频 entry mode 下，选择页复用图片选择页的深色三列宫格，第 1 格为 `拍视频`，第 2 格为 `一键成片`，其余格仅展示视频资源。
+    - "`一键成片` 只属于视频入口：用户至少选择 1 张图片并生成本地视频后，直接进入视频编辑状态，不回到视频选择器停留。"
+    - 视频 entry mode 下，不复用图片路径的“编辑图片/完成(n)”按钮语义。
     - 图片与视频互斥，切换类型前必须删空当前媒体，不存在图片和视频混合发布草稿。
     done_when:
     - "用户只需要在入口选择开始动作，系统能根据真实媒体结果进入图片或视频编辑状态，且发布 payload 的 `contentType` 与最终媒体类型一致。"
@@ -58,18 +64,20 @@ gwt_acceptance:
       - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
       recorded:
-      - file: quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
-      - file: quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
-      - file: quwoquan_app/test/ui/content/entry/create_entry_runtime_flag_test.dart
-      - file: quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/widgets/create_entry_sheet_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/create_entry_information_architecture_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/create_entry_runtime_flag__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/main_app_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
     status: completed
@@ -89,23 +97,29 @@ gwt_acceptance:
       - layer: local_contract
         suite: create_video_entry_mode
         cases:
-        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.gallery_opens_mixed_picker_and_capture_defaults_photo
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.photo_entry_opens_image_picker_and_video_entry_opens_video_picker
         envs: *id001
       - layer: local_contract
         suite: create_entry_media_resolution
         cases:
-        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.mixed_gallery_result_resolves_image_or_video_flow
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.photo_entry_image_result_enters_image_flow
         envs: *id001
       - layer: local_contract
         suite: creation_media_mode_split
         cases:
         - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.image_mode_hides_video_actions
         envs: *id001
+      - layer: local_contract
+        suite: video_media_picker_dark_flow
+        cases:
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.video_grid_camera_one_tap_movie_and_video_assets
+        - local_contract.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.one_tap_movie_returns_generated_video_result
+        envs: *id001
       supporting:
       - layer: user_acceptance
         suite: create_entry_sheet_widget
         cases:
-        - user_acceptance.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.entry_sheet_only_album_camera_write_cancel
+        - user_acceptance.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.entry_sheet_album_camera_write_and_social_actions
         envs:
         - gamma_local
       - layer: local_contract
@@ -133,7 +147,8 @@ gwt_acceptance:
     notes:
     - 2026-06-22 已记录图片/视频 picker 动作互斥与发布 payload contentType 互斥合同。
     - 2026-06-25 补充图片 flow 顶栏标题“图片创作”、缩略条左对齐与悬停即时让位验收口径，三处列表继续共用同一拖拽真相源。
-    - 2026-06-28 移动端 `+` 面板收口为三动作；gallery 改为 mixed picker，capture 改为 switchable camera，并以真实返回媒体类型进入图片/视频编辑状态。
+    - 2026-06-28 移动端 `+` 面板保留三条创作动作与三条社交动作；gallery 改为照片入口，新增 video 视频入口，capture 保留为旧相机/深链兼容入口，并以真实返回媒体类型进入图片/视频编辑状态。
+    - 2026-06-29 视频选择页改为与图片选择页一致的三列宫格，第 1 格 `拍视频`、第 2 格 `一键成片`；一键成片从图片选择生成本地视频后直接进入视频编辑状态。
   GWT2:
     title: 编辑器顶栏草稿入口与保存状态可靠反映本地草稿
     given:
@@ -171,13 +186,14 @@ gwt_acceptance:
       - file: quwoquan_app/test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/create_local_draft_page__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart
-      - file: quwoquan_app/test/ui/content/entry/draft_recovery_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/localDrafts/localDrafts_page__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/create_local_draft_page__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart
-      - file: quwoquan_app/test/ui/content/entry/draft_recovery_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
     status: completed
     test_evidence:
       primary:
@@ -203,6 +219,12 @@ gwt_acceptance:
         - user_acceptance.discovery_content.content_type_framework.creation_mode_and_surface_ia_unification.bottom_plus_write_saves_recovers_and_publish_clears_draft
         envs:
         - gamma_local
+      - layer: api_integration
+        suite: post_crud_contract
+        cases:
+        - api_integration.discovery_content.publish_comment_reaction.post_create_update.post_crud_contract
+        envs:
+        - gamma
     notes:
     - 2026-06-22 待以本地草稿页 + 新仓储 + 时机矩阵实现收口。
     - 2026-06-28 草稿入口从 sheet 移至编辑器顶栏；保存状态由同一 session controller 驱动，保存成功后 reload 校验再显示 `已保存`，本地草稿页进入/恢复时 reload。

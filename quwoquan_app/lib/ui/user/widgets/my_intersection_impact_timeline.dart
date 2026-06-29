@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -9,19 +10,19 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_evidence.dart';
-import 'package:quwoquan_app/ui/user/widgets/intersection_statement_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_timeline.dart';
 
-/// 「我的影响力」时间线：与交集 tab 同款 5 年时间桶脚手架（[IntersectionBucketTimeline]），
-/// 逐条复用共享 [IntersectionStatementRow]（四槽 + 行动 pill + 生命周期弱标 + 传播视图）。
+/// 「我的影响力」时间线：与交集 tab 同款最近时间桶脚手架（[IntersectionBucketTimeline]），
+/// 逐条复用详情页紧凑行，只展示云侧下发的 primaryText。
 /// 名字/对象片段进对应主页，数字片段/整行进影响明细 sheet（[AuthorImpactEvidence]）。
 ///
 /// 从 `my_intersection_inbox_page.dart` 抽出（R03 文件体量收敛）：影响力 tab 的时间线渲染、
 /// impact item 装配与 evidence 接线集中在此，页面只负责 tab 切换与状态注入。
 class ImpactTimeline extends ConsumerWidget {
-  const ImpactTimeline({super.key, required this.state});
+  const ImpactTimeline({super.key, required this.state, this.filter = 'all'});
 
   final AsyncValue<AuthorImpactSummary> state;
+  final String filter;
 
   IntersectionTargetNavigator _navigator(WidgetRef ref) =>
       IntersectionTargetNavigator(
@@ -64,7 +65,11 @@ class ImpactTimeline extends ConsumerWidget {
       },
       data: (summary) {
         final items = summary.items
-            .where((item) => item.primaryText.trim().isNotEmpty)
+            .where(
+              (item) =>
+                  item.primaryText.trim().isNotEmpty &&
+                  _matchesImpactFilter(item, filter),
+            )
             .toList(growable: false);
         if (items.isEmpty) {
           return Padding(
@@ -82,96 +87,122 @@ class ImpactTimeline extends ConsumerWidget {
           );
         }
         final navigator = _navigator(ref);
-        return IntersectionBucketTimeline(
-          rows: <IntersectionTimelineEntry>[
-            for (final item in items)
-              IntersectionTimelineEntry(
-                bucket: resolveIntersectionTimeBucket(
-                  item.timeBucket,
-                  item.freshAt,
-                ),
-                child: IntersectionTimelineCard(
-                  child: IntersectionStatementRow(
-                    item: _impactItem(
-                      context,
-                      ref,
-                      navigator,
-                      item,
-                      summary.authorId,
+        return Column(
+          children: <Widget>[
+            IntersectionBucketTimeline(
+              rows: <IntersectionTimelineEntry>[
+                for (final item in items)
+                  IntersectionTimelineEntry(
+                    bucket: resolveIntersectionTimeBucket(
+                      item.timeBucket,
+                      item.freshAt,
+                    ),
+                    child: IntersectionCompactTimelineRow(
+                      primaryText: item.primaryText.trim(),
+                      spans: item.primarySpans,
+                      iconKey: item.iconKey,
+                      sourceRef: item.source,
+                      dimension: item.intersectionDimension,
+                      onTap: () => _openImpactEvidence(
+                        context,
+                        ref,
+                        navigator,
+                        item,
+                        summary.authorId,
+                      ),
+                      onSpanTap: (span) => _onImpactSpanTap(
+                        context,
+                        ref,
+                        navigator,
+                        item,
+                        summary.authorId,
+                        span,
+                      ),
                     ),
                   ),
-                ),
-              ),
+              ],
+            ),
+            const IntersectionTimelineRecentLimitNote(),
           ],
         );
       },
     );
   }
 
-  IntersectionStatementItem _impactItem(
+  bool _matchesImpactFilter(AuthorImpactItem item, String filter) {
+    final dimension = item.intersectionDimension.toLowerCase();
+    final countObjectKind = item.countObjectKind.toLowerCase();
+    final source = item.source.toLowerCase();
+    final action = item.action.toLowerCase();
+    final helpType = item.helpType.toLowerCase();
+    switch (filter.trim()) {
+      case 'records':
+        return dimension == 'content' ||
+            countObjectKind == 'content' ||
+            countObjectKind == 'post' ||
+            source.contains('content') ||
+            source.contains('record');
+      case 'discussion':
+        return action.contains('comment') ||
+            action.contains('reply') ||
+            helpType.contains('discussion') ||
+            source.contains('discussion');
+      case 'homepage':
+        return countObjectKind == 'homepage' ||
+            countObjectKind == 'profile' ||
+            source.contains('homepage') ||
+            source.contains('profile');
+      default:
+        return true;
+    }
+  }
+
+  AuthorImpactEvidenceFetcher _evidenceFetcher(
+    WidgetRef ref,
+    AuthorImpactItem item,
+    String subAccountId,
+  ) {
+    return ({String cursor = ''}) => ref
+        .read(userProfileRepositoryProvider)
+        .listAuthorImpactEvidence(
+          subAccountId: subAccountId,
+          impactId: item.impactId,
+          evidenceSnapshotId: item.evidenceSnapshotId,
+          cursor: cursor,
+        );
+  }
+
+  void _openImpactEvidence(
     BuildContext context,
     WidgetRef ref,
     IntersectionTargetNavigator navigator,
     AuthorImpactItem item,
     String subAccountId,
   ) {
-    final AuthorImpactEvidenceFetcher evidenceFetcher =
-        ({String cursor = ''}) => ref
-            .read(userProfileRepositoryProvider)
-            .listAuthorImpactEvidence(
-              subAccountId: subAccountId,
-              impactId: item.impactId,
-              evidenceSnapshotId: item.evidenceSnapshotId,
-              cursor: cursor,
-            );
-    final hasAction = item.actionHints.any(
-      (hint) => hint.label.trim().isNotEmpty,
+    AuthorImpactEvidence.showEvidence(
+      context,
+      navigator: navigator,
+      item: item,
+      isMine: true,
+      fetchEvidence: _evidenceFetcher(ref, item, subAccountId),
     );
-    final hasPropagation =
-        item.propagationPath != null &&
-        item.propagationPath!.summaryText.trim().isNotEmpty;
-    return IntersectionStatementItem(
-      primaryText: item.primaryText.trim(),
-      subtitleText: '',
-      spans: item.primarySpans,
-      iconKey: item.iconKey,
-      sourceRef: item.source,
-      dimension: item.intersectionDimension,
-      actionHints: item.actionHints,
-      lifecycleState: item.lifecycleState,
-      strengthDelta: item.strengthDelta.round(),
-      propagationPath: item.propagationPath,
-      showAuxiliaryLine: hasAction || hasPropagation,
-      onSpanTap: (span) => AuthorImpactEvidence.onSpanTap(
-        context,
-        navigator: navigator,
-        item: item,
-        span: span,
-        isMine: true,
-        fetchEvidence: evidenceFetcher,
-      ),
-      onActionHintTap: (hint) => AuthorImpactEvidence.onActionHintTap(
-        context,
-        navigator: navigator,
-        item: item,
-        hint: hint,
-        isMine: true,
-        fetchEvidence: evidenceFetcher,
-      ),
-      onPropagationTap: () => AuthorImpactEvidence.showEvidence(
-        context,
-        navigator: navigator,
-        item: item,
-        isMine: true,
-        fetchEvidence: evidenceFetcher,
-      ),
-      onTap: () => AuthorImpactEvidence.showEvidence(
-        context,
-        navigator: navigator,
-        item: item,
-        isMine: true,
-        fetchEvidence: evidenceFetcher,
-      ),
+  }
+
+  void _onImpactSpanTap(
+    BuildContext context,
+    WidgetRef ref,
+    IntersectionTargetNavigator navigator,
+    AuthorImpactItem item,
+    String subAccountId,
+    IntersectionTextSpan span,
+  ) {
+    AuthorImpactEvidence.onSpanTap(
+      context,
+      navigator: navigator,
+      item: item,
+      span: span,
+      isMine: true,
+      fetchEvidence: _evidenceFetcher(ref, item, subAccountId),
     );
   }
 }

@@ -6,7 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/ui/content/media_viewer_interaction_bridge.dart';
+import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.dart';
 
 /// 游客（未登录）会话桩：isAuthenticated=false，但带稳定 installId。
 class _GuestAuthStore implements AuthSessionStore {

@@ -39,7 +39,7 @@ api_routes:
     operation: CreatePost
     description: 创建内容（可草稿或直发）
     request_entity: Post
-    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, rating, reviewAspects, mediaUrls, mediaItems, coverUrl, thumbnailUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
+    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, mediaUrls, mediaItems, coverUrl, thumbnailUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy, sourcePostId, sourceType, deviceInfo, publishLocation, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, personaContextVersion]
     security:
       auth_mode: required
       principal: owner
@@ -64,7 +64,7 @@ api_routes:
     path: /v1/content/posts/{postId}
     operation: UpdatePost
     description: 更新内容（仅 draft 可改；published 后不可变）
-    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, rating, reviewAspects, mediaUrls, mediaItems, coverUrl, thumbnailUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, contentIdentity, title, body, summary, semanticMentions, mediaUrls, mediaItems, coverUrl, thumbnailUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, videoUrl, coverStrategy, coverFrameTimeMs, illustrationAssetId, location, locationName, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
     security:
       auth_mode: required
       principal: owner
@@ -112,7 +112,7 @@ api_routes:
     path: /v1/content/posts/{postId}:promoteToWork
     operation: PromotePostToWork
     description: 点滴升级为作品（原地升级，保持 postId 与 deeplink 不变）
-    writable_fields: [contentType, title, summary, semanticMentions, rating, reviewAspects, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
+    writable_fields: [contentType, title, summary, semanticMentions, coverUrl, articleMarkdown, articleMarkdownVersion, articleAssetManifest, articleRenderProfile, primaryHomepageId, primaryHomepageType, primaryHomepageSnapshot, visibility, circleIds, groupId, nodeId, assistantUsePolicy]
     auth: required
 
   - method: GET

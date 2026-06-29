@@ -18,7 +18,8 @@ alwaysApply: false
 
 - 任何 stage / checkpoint 标记 `done` / `passed` / `WORKFLOW COMPLETE`，必须有对应真实产物落盘：文章 `article.md`、主页 `page.md`、图片 `assets/<image>`，且**非占位**（`is_placeholder` 为真、含 `TODO/待补充/XXX/PLACEHOLDER`、长度低于发布门、未替换模板变量者一律不算成稿）。
 - 产物必须由真实 agent 创作：provenance/draft_meta 的 `generator` 不得是 fallback/占位生成器；`generator==GENERATOR_AGENT` 才可视为已创作。
-- 实体相关文章必须**标题与正文整体指代该实体**（`entityRefs` + 标题/正文实体名匹配）；否则**诚实弃稿**，不得用主页哨兵（`_homepage_only`）或环线/无指代底稿凑成 article post 发布。
+- **底稿中心 1:1（源即单位）**：每个内容作品（article/image/video）只来自**单一 source unit**，禁止跨底稿拼接；标题**取自底稿**（文章源必须能从底稿提取标题，否则**上游诚实弃稿**），实体退化为**多标签**（`entityRefs` = 底稿提及的实体集合，可多）。文章**不再**因"未整体指代单一实体"而弃稿。
+- **实体主页例外**：`entity homepage`（`page.md`）必须来自**百科/官方介绍源**且整体指代该实体；非百科/跑题源不得凑实体主页。仍禁止用主页哨兵（`_homepage_only`）或跨底稿拼接凑 article post 发布。
 
 ## 3. 门禁必须能检测「无产物却通过」（GATE_BLOCK）
 
@@ -32,7 +33,7 @@ alwaysApply: false
 
 - `allowContentQuotaShortfall` / `allowPartialContent` / 弃稿 的语义必须在 `content_plan → produce → finalize → release_integrity` 全链同源：来源不足时**诚实少注册 / 弃稿**，不得在任一层硬失败或强凑配额。
 - 派生分区（fanout）必须继承源任务的 `workflowPolicy` 与 `acceptance`；丢失降级策略导致分区硬失败＝缺陷。
-- **载体差异必须一致豁免**：`image`/`video` 作品不认领底稿（图文可同源、豁免 one-source-one-draft），纯图片/视频 release 合法缺 `base_draft_ledger`，`media_check` 等检查不得用 article-centric 假设让 image-only 实体硬失败。
+- **载体一致 one-source-one-work（不再有 image 豁免）**：`article`/`image`/`video` 统一一源一作品——每个作品绑定**单一 source unit**（图片/视频作品的 `baseSourceRef` = 其素材所属来源单元，`sourceCollectionId` 仍为同一来源单元内的集合），**禁止跨 source unit 拼接素材或正文**。`base_draft_ledger` 对 image/video 同样登记一源一稿。图片治理（安全/授权/去重 `media_check`）仍按载体特性把关，但**素材来源单一性与文章一致**，不得用 article-centric 假设跳过 image 的单源约束。
 
 ## 5. 版本控制契约 / 系统内置资产跟代码走（GATE_BLOCK）
 

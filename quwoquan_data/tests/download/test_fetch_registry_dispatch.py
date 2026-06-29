@@ -38,6 +38,21 @@ def test_extract_page_text_dispatches_by_registry_extractor():
         fetch_mod._static_official_plaintext = orig_official
 
 
+def test_generic_html_extractor_preserves_inline_images_as_figures():
+    html = (
+        "<html><body><p>第一段正文。</p>"
+        "<figure><img src='https://img.example/a.jpg' alt='湖边栈道'><figcaption>湖边栈道</figcaption></figure>"
+        "<p>第二段正文。</p></body></html>"
+    ).encode("utf-8")
+
+    text = fetch_mod.extract_page_text(html, "https://example.com/a", extractor="generic_html")
+
+    assert "第一段正文" in text
+    assert ":::figure" in text
+    assert "![湖边栈道](asset://source-inline-001)" in text
+    assert text.index("第一段正文") < text.index(":::figure") < text.index("第二段正文")
+
+
 def test_fetch_source_payload_blocks_non_fetchable_registry_site():
     try:
         fetch_mod.fetch_source_payload("https://www.mafengwo.cn/i/123456.html")

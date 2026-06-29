@@ -23,16 +23,16 @@ import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/articl
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/backward_article_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/pipelines/forward_article_flip_pipeline.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/texture/article_reader_texture_capture_layer.dart';
-import 'package:quwoquan_app/ui/content/article_document_models.dart';
-import 'package:quwoquan_app/ui/content/article_presentation_models.dart';
-import 'package:quwoquan_app/ui/content/pageflip/book_layout.dart';
-import 'package:quwoquan_app/ui/content/pageflip/controller.dart';
-import 'package:quwoquan_app/ui/content/pageflip/geometry.dart';
-import 'package:quwoquan_app/ui/content/pageflip/page_surface_snapshot.dart';
-import 'package:quwoquan_app/ui/content/pageflip/pointer_bridge.dart';
-import 'package:quwoquan_app/ui/content/pageflip/render_frame.dart';
-import 'package:quwoquan_app/ui/content/pageflip/spread_model.dart';
-import 'package:quwoquan_app/ui/content/pageflip/types.dart';
+import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
+import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
+import 'package:quwoquan_app/components/pageflip/book_layout.dart';
+import 'package:quwoquan_app/components/pageflip/controller.dart';
+import 'package:quwoquan_app/components/pageflip/geometry.dart';
+import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
+import 'package:quwoquan_app/components/pageflip/pointer_bridge.dart';
+import 'package:quwoquan_app/components/pageflip/render_frame.dart';
+import 'package:quwoquan_app/components/pageflip/spread_model.dart';
+import 'package:quwoquan_app/components/pageflip/types.dart';
 
 enum ArticleReaderFallbackReason {
   forcedDegradedPager,

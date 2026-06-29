@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Pageflip Geometry Guardrails
 
-当任务触及 `quwoquan_app/lib/ui/content/pageflip/**`、`quwoquan_app/lib/ui/content/article_reader/pageflip/**`、`quwoquan_app/test/**/pageflip/**` 时，必须遵守本规则。
+当任务触及 `quwoquan_app/lib/components/pageflip/**`、`quwoquan_app/lib/ui/content/article_reader/pageflip/**`、`quwoquan_app/test/**/pageflip/**` 时，必须遵守本规则。
 
 ## 必须遵循
 

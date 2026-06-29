@@ -18,14 +18,14 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource, ReferralSourceExt;
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
-import 'package:quwoquan_app/ui/content/pages/unified_media_viewer_page.dart';
-import 'package:quwoquan_app/ui/content/pages/work_browser_entry_page.dart';
+import 'package:quwoquan_app/ui/discovery/pages/unified_media_viewer_page.dart';
+import 'package:quwoquan_app/ui/discovery/pages/work_browser_entry_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_detail_page.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_stats_page.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_draft_picker_flow.dart';
 import 'package:quwoquan_app/ui/content/entry/widgets/create_entry_sheet.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_editor_models.dart';
-import 'package:quwoquan_app/ui/content/entry/models/create_entry_arguments.dart';
+import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
+import 'package:quwoquan_app/ui/content/models/create_entry_arguments.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/local_draft_page.dart';
