@@ -133,11 +133,14 @@ def _write_auto_research_plans_impl(
         )
     except Exception:  # noqa: BLE001
         required_publishable_images = hard_image_works
+    from _common.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS
+
     report["scoringPolicy"] = {
         "imageCountPolicy": image_policy,
         "imageBonusSaturationCount": image_bonus_saturation_count,
         "minimumPublishableImagesPerTarget": hard_image_works,
-        "articleLengthPassChars": 600,
+        # RC6：长文字数门唯一真相源（图文混排走 base_draft_readiness 自适应，不在此体现固定门）。
+        "articleLengthPassChars": ARTICLE_MIN_BASE_DRAFT_CHARS,
     }
     for entity_id in entity_ids:
         obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)

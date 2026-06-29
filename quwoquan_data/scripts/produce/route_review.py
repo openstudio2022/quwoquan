@@ -495,12 +495,11 @@ def _check_carrier_consistency(compose_payload: Mapping[str, Any]) -> dict[str, 
     else:
         if len(re.findall(r"(?m)^##\s", article)) < 3:
             issues.append("article carrier lacks prose sections (looks like a gallery)")
-        if article.count(":::figure"):
-            from _common.base_draft import base_draft_readiness
+        # RC6：字数/就绪判定唯一真相源是 base_draft_readiness（形态自适应：长文≥600，
+        # 图文混排正文≥200 且有足量内联图/图注）。禁止在此另起裸 `>= 600` 第二真相源。
+        from _common.base_draft import base_draft_readiness
 
-            readiness = base_draft_readiness(article)
-        else:
-            readiness = {"ready": len(re.sub(r"\s+", "", article)) >= 600}
+        readiness = base_draft_readiness(article)
         if article.count(":::figure") and not readiness["ready"]:
             issues.append("article carrier is image-only; route to gallery instead")
     return {
