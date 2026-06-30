@@ -22,6 +22,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from _common.localization import latin_dominant
 from _common.section_outline import match_heading, slugify_section
 
 # 同时识别正文内联指令 {asset://id|...} 与 figure 块内 asset://id；取末段 id 作幂等键。
@@ -33,7 +34,6 @@ _MIN_WRAP_PARAGRAPH_CHARS = 80
 # 退化 caption 模式：纯数字-文件名（如 36661-Dujiangyan）或 upload 文件名 stem。
 _CAPTION_FILENAME_RE = re.compile(r"^\d{2,}[-_]")
 _CAPTION_CJK_RE = re.compile(r"[\u4e00-\u9fff]")
-_CAPTION_LATIN_RE = re.compile(r"[A-Za-z]")
 # 原文图片标记残留（wiki/file 语法、像素标注、图片扩展名）→ 非语义 caption。
 _CAPTION_RAW_MARKUP_RE = re.compile(
     r"(\[\[|\]\]|\bfile:|\bimage:|文件:|圖像:|图像:|\bthumb\b|\d+\s*px\b|\.(?:jpe?g|png|gif|svg|webp)\b)",
@@ -264,13 +264,11 @@ def _caption_is_degraded(caption: str, *, file_name: str = "") -> bool:
         return True
     if _CAPTION_RAW_MARKUP_RE.search(text):
         return True
-    cjk = len(_CAPTION_CJK_RE.findall(text))
-    latin = len(_CAPTION_LATIN_RE.findall(text))
     # 无中文语义（纯拉丁/英文/数字）→ 退化（含旧的「短且无 CJK」情形）。
-    if cjk == 0:
+    if not _CAPTION_CJK_RE.search(text):
         return True
-    # 英文/拉丁主导（拉丁字母数明显多于中文字符数）→ 退化。
-    if latin >= 6 and latin >= cjk * 2:
+    # 英文/拉丁主导（占比规则单一真相源在 _common.localization，全仓共用）。
+    if latin_dominant(text):
         return True
     return False
 

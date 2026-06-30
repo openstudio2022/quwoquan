@@ -18,6 +18,9 @@ python3 quwoquan_data/scripts/cli.py verify data-role-gate
 python3 quwoquan_data/scripts/verify/verify_no_flat_roots.py
 # 单一门库 quality_gates：writingIntent 契约 + 图文闭环 + 写作主线一致性 + 模板骨架相似度 + 语域 + source reject 阻断
 python3 quwoquan_data/tests/common/test_quality_gates.py
+# 简体中文发布门：发布标题/正文/caption 必须简体中文(非中文先译中、繁体折叠简体)；
+#                繁简折叠表与拉丁主导阈值单一真相源(_common.localization)，caption 门与主页门共用
+python3 quwoquan_data/tests/common/test_localization_simplified_chinese.py
 # 扫描门：禁止 scripts/tasks/runtime 复用测试专用正文骨架 agent_draft_kit（脚本拼文章正文反模式），
 #         并禁止重新引入「脚本拼实体主页正文」机械骨架函数（主页 page.md 须 Agent 创作）。
 python3 quwoquan_data/scripts/verify/verify_no_runtime_draft_kit.py

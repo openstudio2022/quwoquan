@@ -7,6 +7,7 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from _common.io import read_json
+from _common.localization import fold_to_simplified
 from _common.paths import batch_root
 
 
@@ -282,45 +283,9 @@ _ENTITY_SUFFIXES = (
     "旅游区",
     "景区",
 )
-_ZH_VARIANT_TRANSLATION = str.maketrans(
-    {
-        "雲": "云",
-        "臺": "台",
-        "颱": "台",
-        "風": "风",
-        "區": "区",
-        "國": "国",
-        "峽": "峡",
-        "體": "体",
-        "觀": "观",
-        "遊": "游",
-        "龍": "龙",
-        "車": "车",
-        "鐵": "铁",
-        "門": "门",
-        "頂": "顶",
-        "園": "园",
-        "級": "级",
-        "廣": "广",
-        "東": "东",
-        "華": "华",
-        "陰": "阴",
-        "縣": "县",
-        "處": "处",
-        "內": "内",
-        "條": "条",
-        "線": "线",
-        "運": "运",
-        "灣": "湾",
-        "鹽": "盐",
-        "鄉": "乡",
-        "鎮": "镇",
-    }
-)
-
-
 def _fold_zh_variants(value: str) -> str:
-    return str(value or "").translate(_ZH_VARIANT_TRANSLATION)
+    # 繁→简折叠表单一真相源在 _common.localization，全仓共用（R24）。
+    return fold_to_simplified(value)
 
 
 def entity_names_from_refs(entity_refs: Sequence[str] | None) -> list[str]:

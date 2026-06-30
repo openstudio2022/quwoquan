@@ -5,6 +5,9 @@ import re
 from pathlib import Path
 
 from _common import quality_gates as qg
+from _common.localization import simplified_chinese_publish_issues
+
+_H1_RE = re.compile(r"(?m)^#\s+(.+?)\s*$")
 
 
 # 真实历史标记：年份/朝代/世纪/建置沿革动词等（用于「历史沿革」章节语义校验）。
@@ -52,6 +55,15 @@ def entity_page_quality_issues(page_path: Path, *, label: str = "") -> list[str]
     )
     issues.extend(f"{prefix}{issue}" for issue in qg.timeline_monotonicity_issues(text))
     issues.extend(_history_section_issues(text, prefix))
+    # 简体中文发布门：H1 标题与正文必须是简体中文（非中文来源须先译中、繁体须折叠为简体）。
+    h1 = _H1_RE.search(text)
+    issues.extend(
+        simplified_chinese_publish_issues(
+            title=h1.group(1) if h1 else "",
+            body=text,
+            label=label,
+        )
+    )
     return issues
 
 
