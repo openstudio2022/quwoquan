@@ -24,6 +24,7 @@ os.environ.setdefault("QWQ_RUNTIME_ROOT", tempfile.mkdtemp(prefix="three_class_r
 from download.fetch import html_has_inline_video  # noqa: E402
 from build.homepage_text import _homepage_source_priority  # noqa: E402
 from download.research.source_quality import _homepage_can_seed_base_draft  # noqa: E402
+from download.source_inputs import content_type_for_lane, LANE_CONTENT_TYPE  # noqa: E402
 
 
 def test_article_video_detection_positive_and_negative():
@@ -99,6 +100,19 @@ def test_write_source_unit_persists_has_video_flag():
         title="纯图文攻略",
     )
     assert manifest_plain.get("hasVideo") is False
+
+
+def test_content_type_routing_by_lane():
+    # P3 三类解耦：lane → 内容类型路由真相源（homepage=entity/article=article/image=image）。
+    assert content_type_for_lane("homepage") == "entity"
+    assert content_type_for_lane("article") == "article"
+    assert content_type_for_lane("image") == "image"
+    # 未知/空/legacy 回落为 article（旧混合计划无独立 lane）。
+    assert content_type_for_lane("") == "article"
+    assert content_type_for_lane("legacy") == "article"
+    assert content_type_for_lane("unknown_lane") == "article"
+    # 三类不串味：每个 lane 路由唯一确定。
+    assert set(LANE_CONTENT_TYPE.values()) == {"entity", "article", "image"}
 
 
 def _run_all() -> None:

@@ -31,6 +31,24 @@ RESEARCH_PLAN_FILES = {
     "image": "image_source_plan.json",
 }
 
+# P3 三类解耦：research lane → 发布内容类型（单一真相源）。
+# 实体主页 homepage→entity、攻略文章 article→article、图库作品 image→image。
+# download 据此按内容类型路由各自来源、分类型下发调度，替代既往「全部当 article」的实体键控默认。
+LANE_CONTENT_TYPE = {
+    "homepage": "entity",
+    "article": "article",
+    "image": "image",
+}
+
+
+def content_type_for_lane(lane: str) -> str:
+    """research lane → 发布内容类型路由真相源。
+
+    三类物理解耦后，每条来源按其 lane 路由到对应内容类型：homepage=实体、article=文章、image=图片。
+    未知/空/legacy 混合计划回落为 article（旧 source_plan.json 是文章态文本计划，无独立 lane）。
+    """
+    return LANE_CONTENT_TYPE.get(str(lane or "").strip(), "article")
+
 
 def _source_plan_files(
     task_id: str,

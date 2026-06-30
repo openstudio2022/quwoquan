@@ -41,7 +41,20 @@
 - 已接入 `quwoquan_data/scripts/verify/verify_quwoquan_data.sh`。
 - 回归：`test_content_plan_source_gate / test_auto_content_plan / test_content_plan_distribution / test_source_quality_gate / test_auto_research_article_homepage` 全绿（47 passed）。
 
+### P3-3 download 去实体键控按内容类型路由 + 分类型下发调度
+
+现状盘点（已物理解耦的部分）：
+- 三类来源计划物理分离：`homepage_source_plan.json` / `article_source_plan.json` / `image_source_plan.json`（`source_inputs.RESEARCH_PLAN_FILES`）。
+- lane-scoped 抓取/选图：`download_fetch --lane {homepage,article,image}`、`_curated_sources_for_lanes`、`curated_images_for_entity(research_lane=...)`、lane-scoped source unit。
+
+本批补齐（去「全部当 article」实体键控默认）：
+- `quwoquan_data/scripts/download/source_inputs.py`
+  - 新增 `LANE_CONTENT_TYPE` + `content_type_for_lane()`：lane→内容类型路由【单一真相源】（homepage=entity/article=article/image=image，未知回落 article）。
+- `quwoquan_data/scripts/download/handler.py`
+  - `expectedContentType` 由 `content_type_for_lane(source.researchLane)` 路由（替代硬编码 `"article"`）。
+  - source_plan stage result 增 `dispatchByContentType`（按内容类型分桶计数），显式记录分类型下发调度，便于审计/续跑。
+- 测试：`test_three_class_decouple` 增 `content_type_for_lane` 路由契约（三类不串味 + legacy 回落）。
+
 ## 剩余（P3 后续）
 
-- download 调度层进一步「去实体键控」按内容类型物理路由（当前 hasVideo + lane 已实现弃稿/分流；本批先闭合判据与弃稿）。
-- 实体多源「择优」更细的跨百科打分（当前主源资格已收敛到百科类，择优排序后续随 P7 放量验证）。
+- 实体多源「择优」更细的跨百科打分（当前主源资格已收敛到百科类，择优排序随 P7 放量验证 / P3c）。
