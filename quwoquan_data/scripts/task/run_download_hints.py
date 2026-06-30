@@ -280,7 +280,8 @@ def _download_issue_repair_hints(
         category_lane = _download_source_category_issue_lane(text)
         if category_lane == "homepage":
             lane = "homepage"
-            action = "add_or_replace_homepage_encyclopedia_or_official_seed_source"
+            # P3 三类解耦：实体主页 base draft 主源只限百科（wiki/百度/搜狗），官网/官方不可 seed。
+            action = "add_or_replace_homepage_encyclopedia_seed_source"
         elif category_lane == "article":
             lane = "article"
             action = "add_or_replace_article_text_sources_with_fetchable_quality_evidence"

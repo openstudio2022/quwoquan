@@ -3079,7 +3079,7 @@ def _abandon_source_unavailable_entities(
         unrecoverable = (
             "manual_authorized_gallery_or_target_replacement" in combined
             or "manual_homepage_seed_source_or_target_replacement" in combined
-            or "homepage has no encyclopedia/official seed source" in combined
+            or "homepage has no encyclopedia" in combined
             or "no rights-compatible" in combined
             or "no single-author/single-file rights-cleared image collection" in combined
         )
@@ -3142,7 +3142,7 @@ def _auto_report_needs_target_replacement(report: Mapping[str, Any]) -> bool:
     replacement_markers = (
         "manual_authorized_gallery_or_target_replacement",
         "manual_homepage_seed_source_or_target_replacement",
-        "homepage has no encyclopedia/official seed source",
+        "homepage has no encyclopedia",
         "no rights-compatible",
         "no single-author/single-file rights-cleared image collection",
     )

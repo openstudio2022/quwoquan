@@ -353,6 +353,17 @@ def _write_auto_research_plans_impl(
                     rejected_source_urls=rejected_source_urls,
                 )
 
+            def _encyclopedia_role() -> str:
+                # P3 三类解耦：实体主页主源【只限百科】。首个被接受的百科作 primary，
+                # 其余百科与官网/补充源一律 supporting，使 plan 的 sourceRole 与消费侧择优一致（消除第二真相源）。
+                for existing in homepage_sources:
+                    if (
+                        str(existing.get("category") or "").casefold() == "encyclopedia"
+                        and str(existing.get("sourceRole") or "") == "primary"
+                    ):
+                        return "supporting"
+                return "primary"
+
             for prior_source in prior_homepage_sources:
                 if len(homepage_sources) >= _HOMEPAGE_CORE_SOURCE_LIMIT:
                     break
@@ -371,7 +382,8 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "homepage", official_reason_provider, "official"
                         ),
-                        source_role="primary",
+                        # P3: 官网降为 supporting（只补事实，不得作 base draft 主源）。
+                        source_role="supporting",
                     )
                 )
                 if accepted:
@@ -388,7 +400,7 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "homepage", "Chinese Wikipedia", "encyclopedia"
                         ),
-                        source_role="primary" if not homepage_sources else "supporting",
+                        source_role=_encyclopedia_role(),
                         images=_image_window(wiki_page_images, 0, count=_BASE_DRAFT_IMAGE_CANDIDATES),
                         image_evidence_mode="same_source" if wiki_page_images else "",
                     )
@@ -430,7 +442,8 @@ def _write_auto_research_plans_impl(
                     evidence_reason=_evidence_reason(
                         entity_id, "homepage", "Baidu Baike item URL", "encyclopedia"
                     ),
-                    source_role="supporting",
+                    # P3 多源择优：百度百科作百科候选，若 wiki 缺失则升为 primary。
+                    source_role=_encyclopedia_role(),
                     images=[],
                     image_evidence_mode="",
                 )
@@ -483,7 +496,8 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "homepage", "Sogou Baike query URL", "encyclopedia"
                         ),
-                        source_role="supporting",
+                        # P3 多源择优：搜狗百科作百科候选，若 wiki/百度均缺失则升为 primary。
+                        source_role=_encyclopedia_role(),
                         images=[],
                         image_evidence_mode="",
                     )
@@ -519,7 +533,7 @@ def _write_auto_research_plans_impl(
                     report,
                     entity_id=entity_id,
                     lane="homepage",
-                    reason="homepage has no encyclopedia/official seed source for baseDraft",
+                    reason="homepage has no encyclopedia (wiki/baidu/sogou) seed source for baseDraft",
                     next_action="manual_homepage_seed_source_or_target_replacement",
                 )
 
