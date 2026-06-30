@@ -4,25 +4,25 @@
   "runtime": "local",
   "attempts": 20,
   "timeoutSeconds": 180.0,
-  "successCount": 20,
+  "successCount": 18,
   "authFailures": 0,
   "true5xxCount": 0,
   "true5xxRate": 0.0,
   "startupTimeoutCount": 0,
   "startupTimeoutRate": 0.0,
   "coldStart5xxObservedCount": 0,
-  "bridgeDisconnectCount": 0,
-  "bridgeDisconnectRate": 0.0,
-  "startupLatencyP95": 22.7248,
+  "bridgeDisconnectCount": 2,
+  "bridgeDisconnectRate": 0.1,
+  "startupLatencyP95": 84.8248,
   "ready": true,
   "issues": [],
-  "startedAt": "2026-06-30T02:56:08Z",
-  "finishedAt": "2026-06-30T03:02:13Z",
+  "startedAt": "2026-06-30T03:48:19Z",
+  "finishedAt": "2026-06-30T04:00:11Z",
   "results": [
     {
       "attempt": 1,
       "ready": true,
-      "latencySeconds": 13.6449,
+      "latencySeconds": 48.7817,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -38,7 +38,7 @@
     {
       "attempt": 2,
       "ready": true,
-      "latencySeconds": 16.1742,
+      "latencySeconds": 32.3705,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -54,7 +54,7 @@
     {
       "attempt": 3,
       "ready": true,
-      "latencySeconds": 13.2165,
+      "latencySeconds": 14.6393,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -70,7 +70,7 @@
     {
       "attempt": 4,
       "ready": true,
-      "latencySeconds": 11.6581,
+      "latencySeconds": 12.7348,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -86,7 +86,7 @@
     {
       "attempt": 5,
       "ready": true,
-      "latencySeconds": 18.1709,
+      "latencySeconds": 13.7806,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -102,7 +102,7 @@
     {
       "attempt": 6,
       "ready": true,
-      "latencySeconds": 17.184,
+      "latencySeconds": 13.6947,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -118,7 +118,7 @@
     {
       "attempt": 7,
       "ready": true,
-      "latencySeconds": 13.1733,
+      "latencySeconds": 13.3199,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -134,7 +134,7 @@
     {
       "attempt": 8,
       "ready": true,
-      "latencySeconds": 11.1621,
+      "latencySeconds": 51.5861,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -145,12 +145,12 @@
       "true5xx": false,
       "bridgeDisconnect": false,
       "coldStart5xxObserved": false,
-      "attemptCount": 1
+      "attemptCount": 2
     },
     {
       "attempt": 9,
       "ready": true,
-      "latencySeconds": 22.7248,
+      "latencySeconds": 84.8248,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -161,28 +161,28 @@
       "true5xx": false,
       "bridgeDisconnect": false,
       "coldStart5xxObserved": false,
-      "attemptCount": 1
+      "attemptCount": 3
     },
     {
       "attempt": 10,
-      "ready": true,
-      "latencySeconds": 14.7424,
-      "status": "finished",
-      "errorClass": null,
+      "ready": false,
+      "latencySeconds": 86.9975,
+      "status": "error",
+      "errorClass": "NetworkError",
       "errorCode": null,
       "httpStatus": null,
-      "primaryClass": "ready",
+      "primaryClass": "bridgeDisconnect",
       "authFailure": false,
       "startupTimeout": false,
       "true5xx": false,
-      "bridgeDisconnect": false,
+      "bridgeDisconnect": true,
       "coldStart5xxObserved": false,
-      "attemptCount": 1
+      "attemptCount": 3
     },
     {
       "attempt": 11,
       "ready": true,
-      "latencySeconds": 15.1786,
+      "latencySeconds": 13.191,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -198,7 +198,7 @@
     {
       "attempt": 12,
       "ready": true,
-      "latencySeconds": 15.1756,
+      "latencySeconds": 12.7,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -214,7 +214,7 @@
     {
       "attempt": 13,
       "ready": true,
-      "latencySeconds": 13.1758,
+      "latencySeconds": 32.7255,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -230,7 +230,7 @@
     {
       "attempt": 14,
       "ready": true,
-      "latencySeconds": 79.1801,
+      "latencySeconds": 17.226,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -241,12 +241,12 @@
       "true5xx": false,
       "bridgeDisconnect": false,
       "coldStart5xxObserved": false,
-      "attemptCount": 3
+      "attemptCount": 1
     },
     {
       "attempt": 15,
       "ready": true,
-      "latencySeconds": 14.7355,
+      "latencySeconds": 12.2461,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -262,7 +262,7 @@
     {
       "attempt": 16,
       "ready": true,
-      "latencySeconds": 13.1953,
+      "latencySeconds": 13.2011,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -278,7 +278,7 @@
     {
       "attempt": 17,
       "ready": true,
-      "latencySeconds": 14.9063,
+      "latencySeconds": 84.7098,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -289,28 +289,28 @@
       "true5xx": false,
       "bridgeDisconnect": false,
       "coldStart5xxObserved": false,
-      "attemptCount": 1
+      "attemptCount": 3
     },
     {
       "attempt": 18,
-      "ready": true,
-      "latencySeconds": 18.1919,
-      "status": "finished",
-      "errorClass": null,
+      "ready": false,
+      "latencySeconds": 83.3833,
+      "status": "error",
+      "errorClass": "NetworkError",
       "errorCode": null,
       "httpStatus": null,
-      "primaryClass": "ready",
+      "primaryClass": "bridgeDisconnect",
       "authFailure": false,
       "startupTimeout": false,
       "true5xx": false,
-      "bridgeDisconnect": false,
+      "bridgeDisconnect": true,
       "coldStart5xxObserved": false,
-      "attemptCount": 1
+      "attemptCount": 3
     },
     {
       "attempt": 19,
       "ready": true,
-      "latencySeconds": 12.6655,
+      "latencySeconds": 54.6137,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
@@ -321,12 +321,12 @@
       "true5xx": false,
       "bridgeDisconnect": false,
       "coldStart5xxObserved": false,
-      "attemptCount": 1
+      "attemptCount": 2
     },
     {
       "attempt": 20,
       "ready": true,
-      "latencySeconds": 16.2024,
+      "latencySeconds": 15.1905,
       "status": "finished",
       "errorClass": null,
       "errorCode": null,
