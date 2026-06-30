@@ -113,13 +113,16 @@ def test_known_article_sources_skip_non_fetchable_registry_sites():
     assert any(source["platform"] == "景区官网" for source in sources)
     assert not any("you.ctrip.com" in url for url in urls)
 
-def test_homepage_seed_source_requires_encyclopedia_or_official_primary():
+def test_homepage_seed_source_requires_encyclopedia_primary_only():
+    # P3 三类解耦：实体主页 base draft 主源【只来自百科】(wiki/百度/搜狗百科 = encyclopedia)。
+    # 官网/官方/政务文旅/权威媒体一律降为 supporting，不得作 primaryEvidenceRef。
     assert _homepage_can_seed_base_draft({
         "platform": "维基百科",
         "category": "encyclopedia",
         "url": "https://zh.wikipedia.org/wiki/example",
     })
-    assert _homepage_can_seed_base_draft({
+    # 景区官网/official 不再能作主页 base draft 主源(P3 收紧为仅百科)。
+    assert not _homepage_can_seed_base_draft({
         "platform": "景区官网",
         "category": "official",
         "url": "https://example.com/about",
