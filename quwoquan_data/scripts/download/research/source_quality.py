@@ -501,6 +501,7 @@ def _homepage_core_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]
     """Homepage core evidence: encyclopedia/knowledge/official first, capped."""
     return sorted(sources, key=_homepage_plan_sort_key)[:_HOMEPAGE_CORE_SOURCE_LIMIT]
 
+# P3 三类解耦：可作实体主页 base draft 的主源【只限百科】。官网/官方降为 supporting。
 _HOMEPAGE_PRIMARY_SOURCE_MARKERS = (
     "维基百科",
     "wikipedia",
@@ -508,12 +509,20 @@ _HOMEPAGE_PRIMARY_SOURCE_MARKERS = (
     "搜狗百科",
     "字节百科",
     "百科",
+)
+
+_HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS = (
+    "政府",
+    "文旅",
+    "政务",
+    "gov.cn",
+    "权威媒体",
+    "媒体",
     "景区官网",
     "官网",
     "官方",
+    "official",
 )
-
-_HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS = ("政府", "文旅", "政务", "gov.cn", "权威媒体", "媒体")
 
 _HOMEPAGE_NON_HOMEPAGE_SOURCE_MARKERS = ("攻略", "游记", "评论", "点评", "小红书", "摄影")
 
@@ -533,7 +542,8 @@ def _homepage_can_seed_base_draft(source: Mapping[str, Any]) -> bool:
     if any(marker.casefold() in lowered for marker in _HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS):
         return False
     category = str(source.get("category") or "").casefold()
-    if category in {"encyclopedia", "official_site"}:
+    # 只有百科类目可作主页 base draft 主源；official_site 已在 support-only markers 归为补充源。
+    if category == "encyclopedia":
         return True
     return any(marker.casefold() in lowered for marker in _HOMEPAGE_PRIMARY_SOURCE_MARKERS)
 

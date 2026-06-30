@@ -474,6 +474,29 @@ def _html_to_plain_text(html: str, base_url: str = "") -> str:
     return text
 
 
+# P3 三类解耦：来源页内联视频检测（文章类含视频则放弃——不把视频内容强行图文化）。
+# 命中 <video>/<source type=video> 原生视频标签，或主流视频站点的 <iframe>/<embed> 嵌入。
+_VIDEO_TAG_RE = re.compile(r"(?is)<video[\s/>]|<source\b[^>]*\btype=['\"]?video/")
+_VIDEO_EMBED_HOST_RE = re.compile(
+    r"(?is)<(?:iframe|embed)\b[^>]*\bsrc=['\"][^'\"]*"
+    r"(?:youtube\.com|youtu\.be|youku\.com|bilibili\.com|player\.bilibili|"
+    r"iqiyi\.com|v\.qq\.com|video\.qq\.com|douyin\.com|ixigua\.com|"
+    r"miaopai\.com|vimeo\.com|/v\.swf|/video/|/player/)"
+)
+
+
+def html_has_inline_video(html: str) -> bool:
+    """来源页是否以视频为主要载体（含原生 <video> 或主流视频站嵌入）。
+
+    用于 P3「文章=图文混排或长文；含视频则放弃」判据：检测到内联视频即标记 hasVideo，
+    内容计划据此弃稿（不把视频内容强行图文化，避免成稿与原文严重不符）。
+    """
+    text = str(html or "")
+    if not text:
+        return False
+    return bool(_VIDEO_TAG_RE.search(text) or _VIDEO_EMBED_HOST_RE.search(text))
+
+
 def _html_to_plain_text_with_inline_images(
     html: str, base_url: str = ""
 ) -> tuple[str, list[dict[str, str]]]:

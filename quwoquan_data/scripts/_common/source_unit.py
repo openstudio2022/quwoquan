@@ -232,6 +232,7 @@ def write_source_unit(
     title: str = "",
     target_ref: str = "",
     relevance: str = "",
+    has_video: bool = False,
     images: Sequence[Mapping[str, Any]] | None = None,
     asset_funnel: Mapping[str, Any] | None = None,
     raw_format: str = "",
@@ -392,6 +393,8 @@ def write_source_unit(
         "sourceRole": source_role,
         "imageEvidenceMode": image_evidence_mode,
         "researchLane": research_lane,
+        # P3 三类解耦：来源页是否含内联视频（文章类含视频则放弃，不强行图文化视频内容）。
+        "hasVideo": bool(has_video),
         "license": license_value,
         "url": url,
         "snapshotHash": snapshot_hash,

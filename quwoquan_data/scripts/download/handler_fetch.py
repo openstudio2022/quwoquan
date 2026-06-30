@@ -336,6 +336,14 @@ def _fetch_download_entity(
                     flush=True,
                 )
                 quality = {**cached_quality, "retainedFromCache": True}
+        # P3：检测来源页是否含内联视频（文章类据此弃稿，不把视频强行图文化）。
+        from download.fetch import html_has_inline_video
+
+        page_has_video = False
+        if html_bytes:
+            page_has_video = html_has_inline_video(html_bytes.decode("utf-8", errors="replace"))
+        if not page_has_video and fetched_text:
+            page_has_video = html_has_inline_video(fetched_text)
         source_images, source_image_issues, source_image_funnel = _download_source_unit_images(
             source,
             task_id=task_id,
@@ -371,6 +379,7 @@ def _fetch_download_entity(
             title=source.get("title") or source["source_id"],
             target_ref=target_ref,
             relevance=f"覆盖 {entity_id} 的基础事实/交通/季节等",
+            has_video=page_has_video,
             images=source_images,
             asset_funnel=source_image_funnel,
             raw_format=raw_format,

@@ -5677,6 +5677,10 @@ def _content_capacity_gate_for_entity(
             if "support" in source_id.lower() or "support" in source_dir.name.lower():
                 continue
             article_raw_count += 1
+            if bool(meta.get("hasVideo")):
+                # P3 文章判据：含视频则放弃——不把视频内容强行图文化为攻略文章。
+                article_rejects["contains_video"] += 1
+                continue
             source_ref = _source_ref(source_dir)
             base_body = load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)
             readiness = base_draft_readiness(
@@ -5994,6 +5998,10 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 if "support" in source_id.lower() or "support" in source_dir.name.lower():
                     continue
                 article_raw_count += 1
+                if bool(meta.get("hasVideo")):
+                    # P3 文章判据：含视频则放弃——不把视频内容强行图文化为攻略文章。
+                    _reject_article("contains_video", source_id, "来源含内联视频，文章类放弃")
+                    continue
                 source_ref = _source_ref(source_dir)
                 base_body = load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)
                 from _common.base_draft import base_draft_readiness
