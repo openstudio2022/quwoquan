@@ -164,6 +164,8 @@ python3 quwoquan_data/tests/download/test_image_download_gates.py
 # + 内联候选构建与五道硬门后回连段落占位(同源不绕许可)
 python3 quwoquan_data/tests/download/test_fetch_registry_dispatch.py
 python3 quwoquan_data/tests/local_contract/download/test_inline_source_images__local_contract_test.py
+# P2 连续图组（figuregroup）回填契约：expand 回填/带回完整性/绑定后清理/计数/净化保结构
+python3 quwoquan_data/tests/local_contract/common/test_figure_group_backfill__local_contract_test.py
 # 标签可点击态：tag 本体保持语义定义，link target 由 publish index 派生
 python3 quwoquan_data/tests/publish/test_tag_link_targets.py
 # 行政区标签层级：V1 中国两级选择依赖 34 省级、广东完整地级市、北京区县 direct children

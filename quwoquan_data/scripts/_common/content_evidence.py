@@ -212,6 +212,14 @@ _CITATION_MARKER_RE = re.compile(
 _WIKI_HEADING_RE = re.compile(r"^\s*(={2,6})\s*(.+?)\s*=*\s*$")
 
 
+_STRUCTURAL_FIGURE_LINE_RE = re.compile(r"^\s*(?::::|!\[[^\]]*\]\(asset://)")
+
+
+def _is_structural_figure_line(line: str) -> bool:
+    """图文混排结构行：`:::figure` / `:::figuregroup` / 收尾 `:::` 围栏，或 `![..](asset://..)` 图片引用。"""
+    return bool(_STRUCTURAL_FIGURE_LINE_RE.match(str(line or "")))
+
+
 def source_line_is_boilerplate(line: str) -> bool:
     """判断一行是否为导航/页脚/广告/纯链接等样板噪声（净化与底稿提取共用）。"""
     compact = re.sub(r"\s+", "", line)
@@ -266,6 +274,11 @@ def clean_source_markdown(text: str, *, raw_format: str = "") -> str:
             continue
         if not line.strip():
             kept.append("")
+            continue
+        if _is_structural_figure_line(line):
+            # 图文混排结构行（:::figure/:::figuregroup 围栏、asset:// 图片引用）必须保结构原样保留，
+            # 不能被「无字母→样板噪声」误删（否则 source.clean.md 里的图文块围栏被打散，P2 图文混排丢失）。
+            kept.append(line.strip())
             continue
         if source_line_is_boilerplate(line):
             continue

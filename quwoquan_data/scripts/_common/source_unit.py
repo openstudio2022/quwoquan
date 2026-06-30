@@ -65,6 +65,8 @@ def bind_inline_source_placeholders(text: str, placeholder_to_asset: Mapping[str
     保留图文交错）。未成功下载的 source-inline 占位：删除其整个 :::figure 块，
     杜绝悬空占位（这是九寨沟"图片对不上/缺失"的直接表征）。
     """
+    from _common.figure_groups import prune_unbound_group_images
+
     bound = str(text or "")
     for placeholder, asset_id in placeholder_to_asset.items():
         placeholder = str(placeholder or "").strip()
@@ -72,6 +74,9 @@ def bind_inline_source_placeholders(text: str, placeholder_to_asset: Mapping[str
         if not placeholder or not asset_id:
             continue
         bound = bound.replace(f"asset://{placeholder}", f"asset://{asset_id}")
+    # figuregroup（连续图组）：剔除组内未绑定图行 + 重算 count + 删空组（P2）。
+    bound = prune_unbound_group_images(bound)
+    # 单图内联块：未绑定的悬空 :::figure 占位整块剥离（RC3）。
     bound = _INLINE_FIGURE_BLOCK_RE.sub("\n", bound)
     return re.sub(r"\n{3,}", "\n\n", bound)
 

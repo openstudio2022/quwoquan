@@ -52,6 +52,63 @@ def test_inline_extractor_prefers_lazy_data_attr_over_placeholder_src():
     assert not any("blank.gif" in s or "loading.gif" in s for s in srcs)
 
 
+def test_inline_extractor_merges_consecutive_images_into_figuregroup():
+    """P2 图文混排：相邻连续 <img> 合并为单个 :::figuregroup 占位（内部 N 张同序 assetId），
+    被真实文字隔断的单图仍是 :::figure 单图块；H1-H6 标题保结构为 markdown `#` 级标题。
+    （根因 R-CS10：连续 N 张拆 N 个独立占位 → AI 易丢图/打散图文交错。）
+    """
+    from _common.figure_groups import iter_figure_groups, figure_image_count
+
+    html = (
+        "<html><body>"
+        "<h2>第一站 五花海</h2>"
+        "<p>清晨抵达五花海，湖水斑斓。</p>"
+        "<img src='https://cdn/a1.jpg'/>"
+        "<img src='https://cdn/a2.jpg'/>"
+        "<img src='https://cdn/a3.jpg'/>"
+        "<p>随后前往五彩池。</p>"
+        "<img src='https://cdn/b1.jpg'/>"
+        "<h3>交通贴士</h3>"
+        "<p>建议自驾。</p>"
+        "</body></html>"
+    )
+    text, imgs = _html_to_plain_text_with_inline_images(html, "https://x/y")
+
+    # 标题保结构：H2 -> `## `、H3 -> `### `。
+    assert "## 第一站 五花海" in text
+    assert "### 交通贴士" in text
+
+    # 相邻连续 3 图 -> 单个 figuregroup count=3，组内 3 个同序 assetId。
+    groups = list(iter_figure_groups(text))
+    assert len(groups) == 1, text
+    gid, declared, group_imgs = groups[0]
+    assert gid and declared == 3
+    assert [aid for _cap, aid in group_imgs] == [
+        "source-inline-001",
+        "source-inline-002",
+        "source-inline-003",
+    ]
+
+    # 被正文隔断的第 4 张图不并入组，保持单图块。
+    assert ":::figure\n![source image](asset://source-inline-004)" in text
+    # 正文实际图片张数（组内逐张 + 单图）= 4。
+    assert figure_image_count(text) == 4
+
+    # 抽取器内联清单与占位一一对应、同序，覆盖全部 4 张图（供 CLI 同源下载回填）。
+    assert [i["placeholderId"] for i in imgs] == [
+        "source-inline-001",
+        "source-inline-002",
+        "source-inline-003",
+        "source-inline-004",
+    ]
+    assert [i["src"] for i in imgs] == [
+        "https://cdn/a1.jpg",
+        "https://cdn/a2.jpg",
+        "https://cdn/a3.jpg",
+        "https://cdn/b1.jpg",
+    ]
+
+
 def _jpeg(seed: int, size=(800, 600)) -> bytes:
     rng = np.random.default_rng(seed)
     arr = rng.integers(0, 256, size=(size[1], size[0], 3), dtype="uint8")

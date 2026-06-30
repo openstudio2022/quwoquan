@@ -315,14 +315,22 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
         "ul",
     }
 
+    _HEADING_TAGS = {"h1": "#", "h2": "##", "h3": "###", "h4": "####", "h5": "#####", "h6": "######"}
+
     def __init__(self, base_url: str = "") -> None:
         super().__init__(convert_charrefs=True)
         self._chunks: list[str] = []
         self._skip_depth = 0
         self._figure_index = 0
+        self._group_index = 0
         self._base_url = str(base_url or "")
         # 内联图清单：与 source.md 中 asset://source-inline-NNN 占位符一一对应（同序）。
         self._inline_images: list[dict[str, str]] = []
+        # 相邻连续图缓冲：仅被空白/块边界分隔的连续 <img> 合并为单个 figuregroup（P2）。
+        # 一旦出现真实文字（handle_data 非空白）即 flush，绝不跨正文段落误并。
+        self._pending_images: list[dict[str, str]] = []
+        # 标题保结构：进入 h1-h6 时压栈对应 markdown 前缀，handle_data 内据此产出 `#` 级标题。
+        self._heading_prefix: str | None = None
 
     # lazy-load 图片真实地址常见承载属性（按优先级）：站点把真实图放进 data-*，
     # src 仅留 1px/loading 占位。RC3 必须取真实地址，否则游记数十张图被占位吞掉（漏图）。
@@ -371,6 +379,25 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
                 return lazy
         return cls._usable_img_src(attr.get("src"))
 
+    def _flush_pending_images(self) -> None:
+        """把缓冲的相邻连续图落为 markdown：单图→`:::figure`，≥2 张→单个 `:::figuregroup` 占位。"""
+        pending = self._pending_images
+        if not pending:
+            return
+        self._pending_images = []
+        if len(pending) == 1:
+            img = pending[0]
+            self._chunks.append(
+                f"\n:::figure\n![{img['caption']}](asset://{img['placeholderId']})\n{img['caption']}\n:::\n"
+            )
+            return
+        self._group_index += 1
+        lines = [f'\n:::figuregroup id="grp-{self._group_index:03d}" count="{len(pending)}"']
+        for img in pending:
+            lines.append(f"![{img['caption']}](asset://{img['placeholderId']})")
+        lines.append(":::\n")
+        self._chunks.append("\n".join(lines))
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
         if tag in {"script", "style", "noscript"}:
@@ -378,8 +405,6 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
             return
         if self._skip_depth:
             return
-        if tag in self._BLOCK_TAGS:
-            self._chunks.append("\n")
         if tag == "img":
             attr = {key.lower(): value or "" for key, value in attrs}
             src = self._resolve_img_src(attr)
@@ -399,9 +424,19 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
                     "caption": caption,
                 }
             )
-            self._chunks.append(
-                f"\n:::figure\n![{caption}](asset://{asset_id})\n{caption}\n:::\n"
+            # 缓冲：连续图（仅空白/块边界分隔）合并；遇真实文字/标题/结束才 flush。
+            self._pending_images.append(
+                {"placeholderId": asset_id, "caption": caption}
             )
+            return
+        if tag in self._HEADING_TAGS:
+            # 标题保结构：先 flush 图缓冲，再起一行 markdown 标题前缀。
+            self._flush_pending_images()
+            self._heading_prefix = self._HEADING_TAGS[tag]
+            self._chunks.append(f"\n\n{self._heading_prefix} ")
+            return
+        if tag in self._BLOCK_TAGS:
+            self._chunks.append("\n")
 
     def inline_images(self) -> list[dict[str, str]]:
         return [dict(row) for row in self._inline_images]
@@ -413,6 +448,10 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
             return
         if self._skip_depth:
             return
+        if tag in self._HEADING_TAGS:
+            self._heading_prefix = None
+            self._chunks.append("\n")
+            return
         if tag in self._BLOCK_TAGS:
             self._chunks.append("\n")
 
@@ -421,9 +460,12 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
             return
         text = html_lib.unescape(data)
         if text.strip():
+            # 出现真实正文/标题文字 ⇒ 连续图段落到此为止，先 flush 图缓冲再写文字。
+            self._flush_pending_images()
             self._chunks.append(text)
 
     def text(self) -> str:
+        self._flush_pending_images()
         return "".join(self._chunks)
 
 

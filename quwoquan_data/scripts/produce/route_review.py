@@ -144,6 +144,22 @@ def review_route_draft(
             carrier=carrier,
             source_use_mode=source_use_mode,
         )
+    if carrier in ("image", "gallery"):
+        figure_group_issues: list[str] = []
+    else:
+        from _common.figure_groups import figure_group_integrity_issues
+
+        # 连续图组带回完整性（P2 / R-CS10）：底稿里出现的 figuregroup，创作 agent 成稿必须按原
+        # id/张数原样带回，禁止丢图/拆成多个单图/篡改组内 assetId（图文混排丢失直接回归防线）。
+        # 必须对【原始 body】判（含 figuregroup 占位），不能对剥图后的文本判；底稿与 fidelity 同源。
+        figure_group_issues = figure_group_integrity_issues(body, base_text)
+    route_checks["figureGroupIntegrity"] = {
+        "passed": not figure_group_issues,
+        "issues": figure_group_issues,
+        "suggestions": ["把底稿里的 :::figuregroup 连续图组占位按原 id 与组内 assetId 原样带回，勿丢图/拆图。"]
+        if figure_group_issues
+        else [],
+    }
     route_checks["baseDraftFidelity"] = {
         "passed": not fidelity,
         "issues": fidelity,
@@ -412,6 +428,10 @@ def _check_mixed_layout(article: str) -> dict[str, Any]:
     - 图片之间/前后不得有过大纯文字空档（> 1200 字无配图，提示拆图或转 gallery）。
     单图或无内嵌图的文章（仅封面）不受约束。
     """
+    from _common.figure_groups import expand_figure_groups
+
+    # P2：连续图组占位先展开为 N 个单图，再按穿插/空档判分（合并占位不绕过编排门）。
+    article = expand_figure_groups(article)
     blocks = list(re.finditer(r"(?ms)^:::figure\n(.*?)\n:::", article))
     issues: list[str] = []
     if len(blocks) < 2:
@@ -596,7 +616,7 @@ def _opening_paragraph(article: str) -> str:
         parts = text.split("\n---\n", 1)
         if len(parts) == 2:
             text = parts[1]
-    text = re.sub(r"(?ms)^:::figure\b.*?^:::\s*", "", text)
+    text = re.sub(r"(?ms)^:::figure(?:group)?\b.*?^:::\s*", "", text)
     paragraphs: list[str] = []
     for paragraph in text.split("\n\n"):
         stripped = paragraph.strip()

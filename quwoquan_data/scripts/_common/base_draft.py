@@ -97,11 +97,16 @@ def base_draft_readiness(
     enough inline figures and captions to be a real图文底稿 rather than an image
     placeholder.
     """
+    from _common.figure_groups import expand_figure_groups
+
     raw = str(text or "")
-    compact = len(re.sub(r"\s+", "", raw))
-    figure_count = raw.count(":::figure")
-    image_alt_chars = sum(len(re.sub(r"\s+", "", match)) for match in re.findall(r"!\[([^\]]*)\]\(", raw))
-    figure_blocks = re.findall(r"(?s):::figure(.*?):::", raw)
+    # figuregroup（连续图组）先展开为 N 个单图块再计量，使「连续 N 张合并占位」如实计 N 张图、
+    # N 段图注，不因合并占位被低估（P2 图主导底稿 readiness 判据）。
+    expanded = expand_figure_groups(raw)
+    compact = len(re.sub(r"\s+", "", expanded))
+    figure_count = expanded.count(":::figure")
+    image_alt_chars = sum(len(re.sub(r"\s+", "", match)) for match in re.findall(r"!\[([^\]]*)\]\(", expanded))
+    figure_blocks = re.findall(r"(?s):::figure(.*?):::", expanded)
     caption_text = "\n".join(
         line
         for block in figure_blocks
@@ -109,7 +114,7 @@ def base_draft_readiness(
         if line.strip() and not line.strip().startswith("![") and "asset://" not in line
     )
     caption_chars = len(re.sub(r"\s+", "", caption_text)) + image_alt_chars
-    prose_without_figures = re.sub(r"(?s):::figure.*?:::", "", raw)
+    prose_without_figures = re.sub(r"(?s):::figure.*?:::", "", expanded)
     prose_chars = len(re.sub(r"\s+", "", prose_without_figures))
     text_ready = compact >= ARTICLE_MIN_BASE_DRAFT_CHARS
     rich_ready = (

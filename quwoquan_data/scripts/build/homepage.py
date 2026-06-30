@@ -729,7 +729,7 @@ def _homepage_gate_body(page_text: str) -> str:
     `## 图集`，使得即便 Agent 自行内联了图片，也不会污染字符贴合度与模板指纹度量。
     """
     body = _strip_frontmatter(page_text)
-    body = re.sub(r"(?ms)^:::figure\b.*?^:::\s*", "", body)
+    body = re.sub(r"(?ms)^:::figure(?:group)?\b.*?^:::\s*", "", body)
     body = re.sub(r"(?m)^#{2,3}\s*图集\s*$", "", body)
     body = re.sub(r"\{asset://[^}]*\}", "", body)
     body = re.sub(r"^#{1,6}\s*", "", body, flags=re.MULTILINE)
@@ -813,6 +813,15 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
     draft_text = draft_page.read_text(encoding="utf-8")
     if is_placeholder(draft_text):
         return [f"{label}: 4.draft/page.md 仍是占位，等待创作 agent按底稿创作正文"]
+
+    from _common.figure_groups import expand_figure_groups, figure_group_integrity_issues
+
+    # 连续图组带回完整性（P2 / R-CS10）：先对【原始正文】判 figuregroup 是否按原 id/张数带回。
+    group_issues = figure_group_integrity_issues(draft_text, base_text)
+    if group_issues:
+        return [f"{label}: figuregroup integrity: {issue}" for issue in group_issues]
+    # 通过后回填：把连续图组占位展开为 N 个同源单图块，下游门禁/配图注入统一消费单图形态。
+    draft_text = expand_figure_groups(draft_text)
 
     gate_body = _homepage_gate_body(draft_text)
     gate_issues: list[str] = []
