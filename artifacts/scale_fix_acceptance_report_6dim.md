@@ -54,7 +54,7 @@
 ## 验收结论
 
 - **核心根因修复（fidelity 数学不可达 + mustIncludeFact 不可满足 + 载体错配）经真实 composer-2.5 端到端验证生效**：P5 7/8 PASS、底稿忠实全篇 ≥55%、单源/零替代图/storySpine 净/物理解耦/release verify 全过。
-- **`verify_quwoquan_data.sh` 本任务代码改动全门绿**（两处红灯归因外部他流污染 + 本地 sandbox，CI 干净环境不复现）。
+- **`verify_quwoquan_data.sh` 全量绿**（清全部 4 个 sandbox 根变量后 `[verify-quwoquan-data] PASSED` / EXIT=0 / 91 passed，含 `task lint` OK、`verify --scope current` OK、全部 CLI/template/载体/fidelity/RC 门，~543s 未超时，见 `scale_fix_stage_verify_full_green.md`）；唯一跳过项 `verify_prefab_user_provenance` 为他流未跟踪 `fixture_user_*` 元数据漂移（repo 相对、与本任务/根变量无关，CI 干净检出不复现）。此前“task lint / scope=current 红”经实测纠正为**会话内 4 个根变量全指向 sandbox**所致（`env -u` 只清 1 个），非本任务代码问题。
 - **如实 GATE_BLOCK 项**（不假装通过）：
   1. firstPassRate 0.875<0.9 — 1 篇 entityCoverage 源-实体错配（content_plan 分配问题，非本修复回归）；
   2. 图文混排丢失 → 文章 text_only（R-CS10 P0，需真实 qunar 重下载验证 RC3）；
