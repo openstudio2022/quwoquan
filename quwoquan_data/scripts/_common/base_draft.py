@@ -56,6 +56,35 @@ def base_draft_is_adaptable(source_use_mode: str | None) -> bool:
     return str(source_use_mode or "").strip() in ADAPTABLE_SOURCE_USE_MODES
 
 
+# 三类彻底解耦各自来源（download researchLane → 可作底稿的内容载体）：
+# - 文章/线路：只认 article 研究 lane（兼容历史 legacy / 空标签），不借百科或图集做底稿。
+# - 图片作品：只认 image lane（专业图库一源一作品）。
+# - 实体主页：只认 homepage / 百科 lane。
+# 兼容期把空标签 "" 视为历史 article/homepage 通用底稿（与 content_plan 的 researchLane 门一致）。
+_CARRIER_BASE_DRAFT_LANES: dict[str, set[str]] = {
+    "article": {"article", "legacy", ""},
+    "route": {"article", "legacy", ""},
+    "review": {"article", "legacy", ""},
+    "gallery": {"image"},
+    "image": {"image"},
+    "homepage": {"homepage", "encyclopedia", "legacy", ""},
+    "entity": {"homepage", "encyclopedia", "legacy", ""},
+}
+
+
+def base_draft_allowed_lanes(carrier: str | None) -> set[str] | None:
+    """按内容类型(carrier)返回底稿允许的 researchLane 集合；未知/未声明返回 None(不限制)。
+
+    把"按内容类型选取各自来源"从下游 content_plan 兜底前移到底稿认领源头：文章载体只
+    从 article 研究底稿认领、图片作品只从 image 图库来源认领、实体主页只从百科来源认领，
+    源头杜绝"一个实体的来源被跨类型误选为底稿"。
+    """
+    key = str(carrier or "").strip()
+    if key == "gallery":
+        key = "image"
+    return _CARRIER_BASE_DRAFT_LANES.get(key)
+
+
 def base_draft_readiness(
     text: str,
     *,
@@ -192,6 +221,18 @@ def _is_candidate_eligible(score: float, length: int) -> bool:
     return score >= 0.0 and length > 0
 
 
+def _unit_research_lane(unit_dir: Path) -> str:
+    """读取来源单元 meta.json 的 researchLane（缺失/异常返回空串=历史通用底稿）。"""
+    meta_path = unit_dir / "meta.json"
+    if not meta_path.is_file():
+        return ""
+    try:
+        meta = read_json(meta_path)
+    except (OSError, ValueError):
+        return ""
+    return str(meta.get("researchLane") or "") if isinstance(meta, dict) else ""
+
+
 def base_draft_candidates(
     task_id: str, batch_id: str, brief: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
@@ -215,7 +256,13 @@ def base_draft_candidates(
             if not _is_candidate_eligible(score, length):
                 continue
             rows.append(
-                {"sourceRef": source_ref, "score": score, "length": length, "unitDir": unit}
+                {
+                    "sourceRef": source_ref,
+                    "score": score,
+                    "length": length,
+                    "unitDir": unit,
+                    "researchLane": _unit_research_lane(unit),
+                }
             )
     rows.sort(key=lambda r: (r["score"], r["length"]), reverse=True)
     return rows
@@ -247,6 +294,16 @@ def assign_base_draft(
     assignments: dict[str, str] = dict(ledger.get("assignments") or {})
     taken = occupied_source_refs(ledger, exclude_post=post_ref)
     candidates = base_draft_candidates(task_id, batch_id, brief)
+
+    # 三类解耦：按 brief 载体把候选收窄到对应 researchLane（图片作品←image、文章/线路←
+    # article、实体主页←百科），源头杜绝跨类型误选底稿；未知载体不限制（兼容）。
+    allowed_lanes = base_draft_allowed_lanes(brief.get("carrier") or brief.get("contentType"))
+    if allowed_lanes is not None:
+        candidates = [
+            cand
+            for cand in candidates
+            if str(cand.get("researchLane") or "") in allowed_lanes
+        ]
 
     declared = str(brief.get("baseSourceRef") or "").strip()
     chosen = _normalize_to_source_ref(declared, candidates)
@@ -792,6 +849,7 @@ __all__ = [
     "cross_source_overlap_issues",
     "ADAPTABLE_SOURCE_USE_MODES",
     "base_draft_is_adaptable",
+    "base_draft_allowed_lanes",
     "load_base_draft_ledger",
     "save_base_draft_ledger",
     "occupied_source_refs",

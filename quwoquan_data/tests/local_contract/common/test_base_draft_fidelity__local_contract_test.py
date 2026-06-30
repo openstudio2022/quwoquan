@@ -38,6 +38,142 @@ def test_base_draft_candidates_exclude_reject_sources():
     assert good["sourceRef"] in refs, refs
     assert reject["sourceRef"] not in refs, refs
 
+def test_base_draft_allowed_lanes_decouples_by_carrier():
+    from _common.base_draft import base_draft_allowed_lanes
+
+    assert base_draft_allowed_lanes("article") == {"article", "legacy", ""}
+    assert base_draft_allowed_lanes("route") == {"article", "legacy", ""}
+    assert base_draft_allowed_lanes("gallery") == {"image"}
+    assert base_draft_allowed_lanes("image") == {"image"}
+    assert base_draft_allowed_lanes("homepage") == {"homepage", "encyclopedia", "legacy", ""}
+    # 未声明 / 未知载体不限制（兼容旧 brief、homepage 直连 base_draft_candidates 路径）。
+    assert base_draft_allowed_lanes(None) is None
+    assert base_draft_allowed_lanes("") is None
+    assert base_draft_allowed_lanes("unknown_carrier") is None
+
+
+def test_assign_base_draft_article_carrier_excludes_image_lane_source():
+    """三类解耦：文章载体底稿只从 article 研究 lane 认领，不误选 image 图库来源。"""
+    obj = resolve_entity_object_dir(TASK, BATCH, "螺髻山", etype_hint="景区")
+    image_unit = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="image_collection_lijiang",
+        source_md="# 螺髻山图集\n\n开放许可图库集合，仅供结构化图片资产。",
+        quality={"sourceId": "image_collection_lijiang", "quality": "B-fact", "score": 9},
+        platform="image_collection",
+        source_category="image_collection",
+        research_lane="image",
+        url="https://commons.example/collection",
+        title="螺髻山图集",
+        target_ref="/entity/地点/景区/螺髻山",
+    )
+    article_unit = write_source_unit(
+        obj,
+        ordinal=2,
+        source_id="qunar_article_base",
+        source_md="# 螺髻山游记\n\n含开放时间、索道与现场体验判断的图文混排游记正文。",
+        quality={"sourceId": "qunar_article_base", "quality": "A-story", "score": 7},
+        platform="qunar",
+        source_category="travelogue",
+        research_lane="article",
+        url="https://travel.qunar.com/youji/luojishan",
+        title="螺髻山游记",
+        target_ref="/entity/地点/景区/螺髻山",
+    )
+    chosen = assign_base_draft(
+        TASK,
+        BATCH,
+        "post://螺髻山_攻略",
+        {"entityRefs": ["地点/景区/螺髻山"], "carrier": "article"},
+    )
+    # image lane 质量分更高(9>7)，但文章载体必须落到 article lane 来源。
+    assert chosen == article_unit["sourceRef"], chosen
+    assert chosen != image_unit["sourceRef"]
+
+
+def test_assign_base_draft_gallery_carrier_excludes_article_lane_source():
+    """三类解耦：图片作品载体底稿只从 image lane 认领，不误选文章游记来源。"""
+    obj = resolve_entity_object_dir(TASK, BATCH, "邛海", etype_hint="景区")
+    article_unit = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="qunar_article_base",
+        source_md="# 邛海游记\n\n含现场体验与出行信息的长篇游记底稿正文。",
+        quality={"sourceId": "qunar_article_base", "quality": "A-story", "score": 9},
+        platform="qunar",
+        source_category="travelogue",
+        research_lane="article",
+        url="https://travel.qunar.com/youji/qionghai",
+        title="邛海游记",
+        target_ref="/entity/地点/景区/邛海",
+    )
+    image_unit = write_source_unit(
+        obj,
+        ordinal=2,
+        source_id="image_collection_qionghai",
+        source_md="# 邛海图集\n\n开放许可图库集合，供画报一源一作品。",
+        quality={"sourceId": "image_collection_qionghai", "quality": "B-fact", "score": 6},
+        platform="image_collection",
+        source_category="image_collection",
+        research_lane="image",
+        url="https://commons.example/qionghai",
+        title="邛海图集",
+        target_ref="/entity/地点/景区/邛海",
+    )
+    chosen = assign_base_draft(
+        TASK,
+        BATCH,
+        "post://邛海_画报",
+        {"entityRefs": ["地点/景区/邛海"], "carrier": "gallery"},
+    )
+    # article lane 质量分更高(9>6)，但图片作品载体必须落到 image lane 来源。
+    assert chosen == image_unit["sourceRef"], chosen
+    assert chosen != article_unit["sourceRef"]
+
+
+def test_assign_base_draft_declared_wrong_lane_ref_is_reassigned_to_correct_lane():
+    """声明的 baseSourceRef 指向错 lane 来源时，按载体改派到正确 lane，不原样透传。"""
+    obj = resolve_entity_object_dir(TASK, BATCH, "泸山", etype_hint="景区")
+    image_unit = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="image_collection_lushan",
+        source_md="# 泸山图集\n\n开放许可图库集合。",
+        quality={"sourceId": "image_collection_lushan", "quality": "B-fact", "score": 9},
+        platform="image_collection",
+        source_category="image_collection",
+        research_lane="image",
+        url="https://commons.example/lushan",
+        title="泸山图集",
+        target_ref="/entity/地点/景区/泸山",
+    )
+    article_unit = write_source_unit(
+        obj,
+        ordinal=2,
+        source_id="qunar_article_base",
+        source_md="# 泸山游记\n\n含现场体验判断的图文混排游记正文。",
+        quality={"sourceId": "qunar_article_base", "quality": "A-story", "score": 7},
+        platform="qunar",
+        source_category="travelogue",
+        research_lane="article",
+        url="https://travel.qunar.com/youji/lushan",
+        title="泸山游记",
+        target_ref="/entity/地点/景区/泸山",
+    )
+    chosen = assign_base_draft(
+        TASK,
+        BATCH,
+        "post://泸山_攻略",
+        {
+            "entityRefs": ["地点/景区/泸山"],
+            "carrier": "article",
+            "baseSourceRef": image_unit["sourceRef"],
+        },
+    )
+    assert chosen == article_unit["sourceRef"], chosen
+
+
 def test_assign_base_draft_rejects_declared_reject_source():
     obj = resolve_entity_object_dir(TASK, BATCH, "黄龙", etype_hint="景区")
     reject = write_source_unit(
