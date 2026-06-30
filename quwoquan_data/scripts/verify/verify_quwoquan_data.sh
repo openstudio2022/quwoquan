@@ -170,6 +170,8 @@ python3 quwoquan_data/tests/local_contract/common/test_figure_group_backfill__lo
 python3 quwoquan_data/tests/local_contract/common/test_three_class_decouple__local_contract_test.py
 # P4 图库合规：图虫/Pinterest 受限如实标注+替代路径+授权完整性硬门+非中文译简体门
 python3 quwoquan_data/tests/local_contract/common/test_image_provider_compliance__local_contract_test.py
+# P5 字数门自适应 + 软门统一口径：review/verify 同源消除第二真相源 + 非致命检查降软扣分
+python3 quwoquan_data/tests/local_contract/common/test_soft_gate_unification__local_contract_test.py
 # 标签可点击态：tag 本体保持语义定义，link target 由 publish index 派生
 python3 quwoquan_data/tests/publish/test_tag_link_targets.py
 # 行政区标签层级：V1 中国两级选择依赖 34 省级、广东完整地级市、北京区县 direct children
