@@ -150,6 +150,10 @@ python3 quwoquan_data/tests/common/test_source_unit_evidence_chain.py
 python3 quwoquan_data/tests/verify/test_directory_evidence_gate.py
 # 图片下载 6 门：相关性必填非模板、每实体≥2、最小像素、contentType+版权持久化、多变体(webp)、感知去重
 python3 quwoquan_data/tests/download/test_image_download_gates.py
+# RC3 图文混排：HTML 内联<img>就地同源捕获(抽取器分发/相对解析/data:跳过/payload清单)
+# + 内联候选构建与五道硬门后回连段落占位(同源不绕许可)
+python3 quwoquan_data/tests/download/test_fetch_registry_dispatch.py
+python3 quwoquan_data/tests/download/test_inline_source_images.py
 # 标签可点击态：tag 本体保持语义定义，link target 由 publish index 派生
 python3 quwoquan_data/tests/publish/test_tag_link_targets.py
 # 行政区标签层级：V1 中国两级选择依赖 34 省级、广东完整地级市、北京区县 direct children
