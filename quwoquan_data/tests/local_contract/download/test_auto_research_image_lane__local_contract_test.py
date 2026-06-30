@@ -6,6 +6,27 @@ from support.source_plan_guidance_fixtures import *  # noqa: F401,F403
 
 
 
+def _purge_cross_task_image_plans(entity_id: str) -> None:
+    """清理共享 runtime 下该实体的历史 image_source_plan.json（跨批次）。
+
+    本套件 fixture 在导入期设了进程级共享 QWQ_RUNTIME_ROOT（tempfile.mkdtemp），同
+    session 内多个测试文件共用同一 batches_root；跨任务复用门
+    `_verified_image_collections_from_prior_plans` 会按 entity_id glob 所有批次的
+    image_source_plan.json。为让"按本测试 seed 的已知 store 精确断言数量/救援重试"保持
+    hermetic（不被兄弟测试为同名实体写入的计划污染），在 seed/运行前清掉该实体旧计划。
+    生产里跨任务复用同实体 collections 是预期行为，这里仅做测试输入归零，不改任何业务逻辑。
+    """
+    from _common.paths import batches_root
+
+    for plan in batches_root().glob(
+        f"*/entities/地点/景区/{entity_id}/1.download/image_source_plan.json"
+    ):
+        try:
+            plan.unlink()
+        except OSError:
+            pass
+
+
 def test_auto_research_image_lane_prefers_non_homepage_alias_matched_image():
     import download.research_plan as research_mod
 
@@ -181,6 +202,7 @@ def test_auto_research_reuses_verified_image_collections_across_tasks_when_live_
     prior_batch = "cross_task_image_pool_prior"
     batch = "cross_task_image_pool_current"
     entity = "黄山风景区"
+    _purge_cross_task_image_plans(entity)
     prior_collections = []
     for index in range(2):
         collection_id = f"open_license_file:{entity}:cross_task_{index}"
@@ -289,6 +311,7 @@ def test_auto_research_rescues_image_lane_when_first_open_license_discovery_is_e
     store.save_spec(spec)
     batch = "image_rescue_current"
     entity = "故宫博物院"
+    _purge_cross_task_image_plans(entity)
     rescue_images = [
         {
             "url": f"https://upload.wikimedia.org/wikipedia/commons/rescue/gugong_{index}.jpg",
