@@ -162,7 +162,12 @@ def _build_route_assets(
     brief: Mapping[str, Any],
     evidence_bundle: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """选图：cover/node/closing 三类职责，节点图绑定各自实体，跨实体感知去重，跳过 unsafe。"""
+    """选图：cover/node/closing 三类职责。
+
+    文章 carrier：图 100% 同源——全部从 baseSourceRef 底稿来源自身 assets 汇聚的单一
+    base_pool 去重取图（去实体键控），node 数以 routeNodes 长度 bound、池耗尽即止，跳过 unsafe。
+    image/gallery carrier：一源一作品（单一 sourceCollectionId）。
+    """
     image_plan = list(brief.get("imagePlan") or [])
     manifest = load_batch_manifest(task_id, batch_id)
     global_batch_seq = int(brief.get("globalBatchSeq") or manifest.get("globalBatchSeq") or 0)
@@ -258,13 +263,14 @@ def _build_route_assets(
             raise RuntimeError(f"{ref}: image work must resolve exactly one sourceCollectionId")
         return assets
     base_source_ref = str(brief.get("baseSourceRef") or "").strip()
-    raw_per_entity = per_entity
-    # 文章配图必须 100% 同源（来自该文章底稿自身的 assets）。RC4：删除
-    # `not base_source_ref` 逃逸——baseSourceRef 缺失时绝不回退到借用同实体/兄弟
-    # 来源的图，否则会重现九寨沟"跨源替代图"。无 baseSourceRef ⇒ 不配图（text_only）。
-    per_entity = {
-        name: [
+    # RC1/RC4 去实体键控：文章配图 100% 同源——只用 baseSourceRef 指向的底稿来源自身
+    # assets，汇聚成单一 base_pool；不再按 routeNodes 实体位置(entity_names[0]/[-1])
+    # 键控选 cover/closing，避免 base 源不在首/末节点时漏图，也杜绝跨源替代图。
+    # baseSourceRef 缺失时绝不回退到借用同实体/兄弟来源 ⇒ 不配图（text_only）。
+    base_pool = sorted(
+        (
             candidate
+            for rows in per_entity.values()
             for candidate in rows
             if str(candidate.get("researchLane") or "") != "image"
             and base_source_ref
@@ -272,15 +278,15 @@ def _build_route_assets(
             and str(candidate.get("sourceAssetRef") or "").startswith(
                 base_source_ref.rsplit("/", 1)[0] + "/assets/"
             )
-        ]
-        for name, rows in raw_per_entity.items()
-    }
-    if base_source_ref and not any(per_entity.values()):
+        ),
+        key=lambda row: str(row.get("sourceAssetRef") or row.get("path") or ""),
+    )
+    if base_source_ref and not base_pool:
         raise RuntimeError(f"{ref}: article base draft source has no usable source images")
+    primary_entity = entity_names[0]
 
     cover_layout = layouts[0] if layouts else "fullWidth"
-    cover_pool = per_entity.get(entity_names[0]) or []
-    cover = _pick_safe_image(cover_pool, chosen)
+    cover = _pick_safe_image(base_pool, chosen)
     if cover is not None:
         chosen.append(cover[0]["path"])
         assets.append(
@@ -289,18 +295,20 @@ def _build_route_assets(
                 role="cover",
                 candidate=cover[0],
                 layout=cover_layout,
-                caption=_specific_asset_caption(cover[0], entity_names[0]),
-                entity_name=entity_names[0],
+                caption=_specific_asset_caption(cover[0], primary_entity),
+                entity_name=primary_entity,
                 global_batch_seq=global_batch_seq,
                 asset_registry=asset_registry,
                 verdict=cover[1],
             )
         )
 
+    # node 数仍以 routeNodes 长度 bound（保留线路推进感），但全部从同一 base_pool
+    # 去重取图（同源）；池耗尽即止，不再 per-entity 键控。
     for position, name in enumerate(entity_names):
-        node_image = _pick_safe_image(per_entity.get(name) or [], chosen)
+        node_image = _pick_safe_image(base_pool, chosen)
         if node_image is None:
-            continue
+            break
         chosen.append(node_image[0]["path"])
         assets.append(
             _make_asset(
@@ -316,8 +324,7 @@ def _build_route_assets(
             )
         )
 
-    closing_pool = per_entity.get(entity_names[-1]) or []
-    closing = _pick_safe_image(closing_pool, chosen)
+    closing = _pick_safe_image(base_pool, chosen)
     if closing is not None:
         chosen.append(closing[0]["path"])
         assets.append(
