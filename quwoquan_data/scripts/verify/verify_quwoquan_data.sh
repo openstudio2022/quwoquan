@@ -172,6 +172,8 @@ python3 quwoquan_data/tests/local_contract/common/test_three_class_decouple__loc
 python3 quwoquan_data/tests/local_contract/common/test_image_provider_compliance__local_contract_test.py
 # P5 字数门自适应 + 软门统一口径：review/verify 同源消除第二真相源 + 非致命检查降软扣分
 python3 quwoquan_data/tests/local_contract/common/test_soft_gate_unification__local_contract_test.py
+# P6 无人托管可靠性：错峰冷启释放器+per-worker warm bridge+冷启并发上限+吞吐/connection-refused 量化+cloud orchestrator 硬超时看门狗
+python3 quwoquan_data/tests/local_contract/task/test_unattended_reliability__local_contract_test.py
 # 标签可点击态：tag 本体保持语义定义，link target 由 publish index 派生
 python3 quwoquan_data/tests/publish/test_tag_link_targets.py
 # 行政区标签层级：V1 中国两级选择依赖 34 省级、广东完整地级市、北京区县 direct children
