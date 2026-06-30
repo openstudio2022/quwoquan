@@ -315,11 +315,29 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
         "ul",
     }
 
-    def __init__(self) -> None:
+    def __init__(self, base_url: str = "") -> None:
         super().__init__(convert_charrefs=True)
         self._chunks: list[str] = []
         self._skip_depth = 0
         self._figure_index = 0
+        self._base_url = str(base_url or "")
+        # 内联图清单：与 source.md 中 asset://source-inline-NNN 占位符一一对应（同序）。
+        self._inline_images: list[dict[str, str]] = []
+
+    @staticmethod
+    def _usable_img_src(src: str) -> str:
+        """只放行可就地下载的 src（http/https/协议相对//或相对路径）。
+
+        data: 内联、javascript:、about:、纯锚点 # 一律视为不可下载——这类 <img>
+        不再产生悬空的 asset://source-inline 占位（RC3：占位必须能锚定真实资产）。
+        """
+        s = str(src or "").strip()
+        if not s:
+            return ""
+        low = s.lower()
+        if low.startswith(("data:", "javascript:", "about:", "#")):
+            return ""
+        return s
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
@@ -332,14 +350,35 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
             self._chunks.append("\n")
         if tag == "img":
             attr = {key.lower(): value or "" for key, value in attrs}
-            src = (attr.get("src") or attr.get("data-src") or attr.get("data-original") or "").strip()
-            caption = (attr.get("alt") or attr.get("title") or src or "source image").strip()
-            caption = re.sub(r"\s+", " ", html_lib.unescape(caption))
+            src = self._usable_img_src(
+                attr.get("src")
+                or attr.get("data-src")
+                or attr.get("data-original")
+                or attr.get("data-lazy-src")
+                or ""
+            )
+            if not src:
+                # 无可下载 src ⇒ 不插入 figure（避免悬空占位、图文对不上）。
+                return
+            caption = (attr.get("alt") or attr.get("title") or "source image").strip()
+            caption = re.sub(r"\s+", " ", html_lib.unescape(caption)) or "source image"
             self._figure_index += 1
             asset_id = f"source-inline-{self._figure_index:03d}"
+            abs_src = urllib.parse.urljoin(self._base_url, src) if self._base_url else src
+            self._inline_images.append(
+                {
+                    "placeholderId": asset_id,
+                    "src": abs_src,
+                    "rawSrc": src,
+                    "caption": caption,
+                }
+            )
             self._chunks.append(
                 f"\n:::figure\n![{caption}](asset://{asset_id})\n{caption}\n:::\n"
             )
+
+    def inline_images(self) -> list[dict[str, str]]:
+        return [dict(row) for row in self._inline_images]
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
@@ -362,7 +401,19 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
         return "".join(self._chunks)
 
 
-def _html_to_plain_text(html: str) -> str:
+def _html_to_plain_text(html: str, base_url: str = "") -> str:
+    text, _ = _html_to_plain_text_with_inline_images(html, base_url)
+    return text
+
+
+def _html_to_plain_text_with_inline_images(
+    html: str, base_url: str = ""
+) -> tuple[str, list[dict[str, str]]]:
+    """抽取正文 + 同序内联 <img> 清单。
+
+    内联图占位 asset://source-inline-NNN 就地嵌入正文（保留图文交错），返回的清单
+    src 已按 base_url 解析为绝对 URL，供来源单元写入器就地同源下载并锚定 sourceAssetRef。
+    """
     text = str(html or "")
     match = re.search(
         r'(?is)<div[^>]+class="[^"]*mw-parser-output[^"]*"[^>]*>(.*)</div>\s*</div>\s*</div>',
@@ -371,12 +422,15 @@ def _html_to_plain_text(html: str) -> str:
     if match:
         text = match.group(1)
     text = re.sub(r"(?is)<!--.*?-->", " ", text)
-    parser = _InlineFigureHTMLTextExtractor()
+    parser = _InlineFigureHTMLTextExtractor(base_url=base_url)
+    inline_images: list[dict[str, str]] = []
     try:
         parser.feed(text)
         text = parser.text()
+        inline_images = parser.inline_images()
     except Exception:  # noqa: BLE001
         text = re.sub(r"(?is)<[^>]+>", "\n", text)
+        inline_images = []
     text = html_lib.unescape(text)
     text = re.sub(r"&nbsp;|&amp;|&lt;|&gt;|&quot;|&#\d+;", " ", text)
     lines = [ln.strip() for ln in text.splitlines()]
@@ -387,7 +441,7 @@ def _html_to_plain_text(html: str) -> str:
         if any(tok in ln for tok in ("wgBreakFrames", "RLCONF", "vector-feature", "DOCTYPE")):
             continue
         kept.append(ln)
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip(), inline_images
 
 
 def _html_meta_plain_text(html: str) -> str:
@@ -539,9 +593,16 @@ def _ems517_shell_plaintext(url: str, html: str) -> str:
 
 
 def _qunar_html_plaintext(html_bytes: bytes, url: str = "") -> str:
-    _ = url
     raw = html_bytes.decode("utf-8", errors="replace")
-    return _html_to_plain_text(raw)[:50000]
+    return _html_to_plain_text(raw, url)[:50000]
+
+
+def _qunar_html_with_inline_images(
+    html_bytes: bytes, url: str = ""
+) -> tuple[str, list[dict[str, str]]]:
+    raw = html_bytes.decode("utf-8", errors="replace")
+    text, imgs = _html_to_plain_text_with_inline_images(raw, url)
+    return text[:50000], imgs
 
 
 def _flatten_json_strings(value: object) -> list[str]:
@@ -649,6 +710,22 @@ def _extract_text_by_extractor(extractor: str, html_bytes: bytes, url: str = "")
 def extract_page_text(html_bytes: bytes, url: str = "", *, extractor: str = "generic_html") -> str:
     """从 HTML 响应抽取可读正文（按 registry extractor 分发）。"""
     return _extract_text_by_extractor(extractor, html_bytes, url)[:50000]
+
+
+def extract_page_text_with_inline_images(
+    html_bytes: bytes, url: str = "", *, extractor: str = "generic_html"
+) -> tuple[str, list[dict[str, str]]]:
+    """抽取正文 + 同源内联 <img> 清单（RC3：图文混排游记就地配图真相源）。
+
+    - qunar_html / generic_html：解析 html_bytes，返回 (正文, 内联图清单)；正文与
+      extract_page_text 一致，清单 src 已解析为绝对 URL，按出现顺序与正文里的
+      asset://source-inline-NNN 占位符一一对应。
+    - 其它 extractor（wikipedia_api 走 API assets、baike/official 非图文混排游记）：
+      返回 (正文, [])，不就地抓内联图，避免引入跨源/二次网络的第二图源。
+    """
+    if extractor in {"qunar_html", "generic_html"}:
+        return _qunar_html_with_inline_images(html_bytes, url)
+    return extract_page_text(html_bytes, url, extractor=extractor), []
 
 
 def sniff_image_ext(body: bytes, content_type: str = "") -> str | None:
