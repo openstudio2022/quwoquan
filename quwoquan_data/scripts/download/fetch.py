@@ -324,12 +324,29 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
         # 内联图清单：与 source.md 中 asset://source-inline-NNN 占位符一一对应（同序）。
         self._inline_images: list[dict[str, str]] = []
 
-    @staticmethod
-    def _usable_img_src(src: str) -> str:
+    # lazy-load 图片真实地址常见承载属性（按优先级）：站点把真实图放进 data-*，
+    # src 仅留 1px/loading 占位。RC3 必须取真实地址，否则游记数十张图被占位吞掉（漏图）。
+    _LAZY_SRC_ATTRS = (
+        "data-original",
+        "data-actualsrc",
+        "data-src",
+        "data-lazy-src",
+        "data-lazy",
+        "data-echo",
+    )
+    # 占位/装饰图特征：lazy 占位 gif、1px 透明、loading/spinner/spacer 等，不作为正文配图。
+    _PLACEHOLDER_SRC_RE = re.compile(
+        r"(?:^|/)(?:blank|spacer|placeholder|loading|grey|gray|transparent|pixel|1x1|s\.gif|t\.gif|default)"
+        r"[-_.a-z0-9]*\.(?:gif|png|svg)(?:[?#]|$)",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _usable_img_src(cls, src: str) -> str:
         """只放行可就地下载的 src（http/https/协议相对//或相对路径）。
 
-        data: 内联、javascript:、about:、纯锚点 # 一律视为不可下载——这类 <img>
-        不再产生悬空的 asset://source-inline 占位（RC3：占位必须能锚定真实资产）。
+        data: 内联、javascript:、about:、纯锚点 #、以及 1px/loading 等占位装饰图一律视为
+        不可下载——这类 <img> 不再产生悬空的 asset://source-inline 占位（RC3：占位必须能锚定真实资产）。
         """
         s = str(src or "").strip()
         if not s:
@@ -337,7 +354,22 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
         low = s.lower()
         if low.startswith(("data:", "javascript:", "about:", "#")):
             return ""
+        if cls._PLACEHOLDER_SRC_RE.search(s):
+            return ""
         return s
+
+    @classmethod
+    def _resolve_img_src(cls, attr: dict[str, str]) -> str:
+        """从 <img> 属性里解析真实可下载地址：优先 lazy data-*（真实图），再退回 src。
+
+        lazy-load 站点（如去哪儿游记移动页）把真实图放 data-original/data-src 等，src 留占位；
+        若先取 src 会吞掉真实图。这里先扫 lazy 属性取首个可用真实地址，无 lazy 再用 src。
+        """
+        for key in cls._LAZY_SRC_ATTRS:
+            lazy = cls._usable_img_src(attr.get(key))
+            if lazy:
+                return lazy
+        return cls._usable_img_src(attr.get("src"))
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
@@ -350,13 +382,7 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
             self._chunks.append("\n")
         if tag == "img":
             attr = {key.lower(): value or "" for key, value in attrs}
-            src = self._usable_img_src(
-                attr.get("src")
-                or attr.get("data-src")
-                or attr.get("data-original")
-                or attr.get("data-lazy-src")
-                or ""
-            )
+            src = self._resolve_img_src(attr)
             if not src:
                 # 无可下载 src ⇒ 不插入 figure（避免悬空占位、图文对不上）。
                 return

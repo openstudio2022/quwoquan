@@ -24,6 +24,32 @@ import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
 
 import download.handler_images as hi  # noqa: E402
+from download.fetch import _html_to_plain_text_with_inline_images  # noqa: E402
+
+
+def test_inline_extractor_prefers_lazy_data_attr_over_placeholder_src():
+    """RC3 漏图根因：lazy 站点把真实图放 data-original，src 留占位 gif。
+
+    抽取器必须取 data-* 真实地址，否则游记数十张图被占位吞掉（用户实测九寨沟游记缺图）。
+    """
+    html = (
+        "<html><body>"
+        "<p>九寨沟五花海</p>"
+        "<img src='https://qunarzz.com/assets/blank.gif' "
+        "data-original='https://tr-osdcp.qunarzz.com/photo/real-001.jpg'/>"
+        "<p>五彩池</p>"
+        "<img src='https://qunarzz.com/img/loading.gif' "
+        "data-src='https://tr-osdcp.qunarzz.com/photo/real-002.jpg'/>"
+        "<img src='https://cdn.example.com/photo/plain-003.jpg'/>"
+        "</body></html>"
+    )
+    _text, imgs = _html_to_plain_text_with_inline_images(html, "https://travel.qunar.com/youji/1")
+    srcs = [i["src"] for i in imgs]
+    assert "https://tr-osdcp.qunarzz.com/photo/real-001.jpg" in srcs
+    assert "https://tr-osdcp.qunarzz.com/photo/real-002.jpg" in srcs
+    assert "https://cdn.example.com/photo/plain-003.jpg" in srcs
+    # 占位 gif 绝不被当成正文配图
+    assert not any("blank.gif" in s or "loading.gif" in s for s in srcs)
 
 
 def _jpeg(seed: int, size=(800, 600)) -> bytes:
