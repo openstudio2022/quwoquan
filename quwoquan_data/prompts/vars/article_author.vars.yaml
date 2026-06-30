@@ -20,6 +20,7 @@ task:
     - creative_brief_block
     - persona_block
     - writing_intent_line
+    - narrative_block
     - base_source_line
     - banned_terms_line
     - opening_guidance_block

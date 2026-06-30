@@ -117,7 +117,7 @@ def review_route_draft(
     route_checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
-        "suggestions": ["按 prompt.md 由会话模型创作正文并写回对象 `4.draft/draft.article.md`（generator=agent）。"] if authenticity_issues else [],
+        "suggestions": ["按 prompt.md 由创作 agent创作正文并写回对象 `4.draft/draft.article.md`（generator=agent）。"] if authenticity_issues else [],
     }
     route_checks["factTraceability"] = {
         "passed": not traceability,

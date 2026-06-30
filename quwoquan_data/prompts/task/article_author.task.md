@@ -12,6 +12,8 @@
 
 {{writing_intent_line}}
 
+{{narrative_block}}
+
 {{base_source_line}}
 
 {{banned_terms_line}}

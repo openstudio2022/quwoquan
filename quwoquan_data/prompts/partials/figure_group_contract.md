@@ -1,16 +1,27 @@
 <figure_contract>
-内容区里的图以**占位符 fence** 形式出现（保留底稿原始图文交错位置），分两类，你都必须**原样带回**、禁止删改其 id：
+正文用 **figure fence** 承载图片，与底稿、发布渲染同一套语法。两类，你都必须保留其位置、禁止改 id / assetId：
 
-- 单图占位：`:::figure id="<figureId>":::`
-- 连续图组占位（底稿中相邻连续多图已合并为一个组）：`:::figuregroup id="<groupId>" count="<N>":::`
+- 单图 fence：
+  ```
+  :::figure id="<figureId>" layout="fullWidth|wrapLeft|wrapRight|gallery" caption="你的自然说明"
+  asset://<assetId>
+  :::
+  ```
+- 连续图组 fence（底稿中相邻连续多图已合并为一个组，内部含 N 个 `asset://`）：
+  ```
+  :::figuregroup id="<groupId>" count="<N>"
+  asset://<assetId-1>
+  asset://<assetId-2>
+  :::
+  ```
 
 规则（always）：
-- 把占位符 fence **保留在你认为最贴合上下文的段落之间**，顺序与底稿一致，文字围绕它自然展开。
-- 连续图组占位代表**同源相邻的 N 张图**；你只带回这**一个**组占位即可，
-  由 CLI 在占位内部回填这 N 张同源连续图。
+- 底稿正文里**已存在**的 figure / figuregroup fence，按原 id、原 assetId、原相对顺序保留，放在最贴合上下文的段落之间，文字围绕它自然展开。
+- 需要补封面 / 收尾 / 图集图时，只能引用 `<documents>` 「可用配图素材」里列出的 assetId，用上面的 fence 语法写入。
+- 连续图组 fence 代表**同源相邻的 N 张图**：整组保留，不要改 count、不要打散。
 
 规则（never）：
-- 禁止新增/虚构占位符或写出具体 assetId；只能使用内容区里已给出的占位符 fence。
-- 禁止把 `:::figuregroup ...:::` 拆成多个 `:::figure:::`，或把多个单图合并成一个组。
-- 禁止删掉占位符导致图文丢失（这正是上一轮「图文混排丢失」的根因）。
+- 禁止虚构 assetId 或引用素材清单之外的 id（会被 generatorProvenance 门拦截）。
+- 禁止把 `:::figuregroup ...:::` 拆成多个 `:::figure:::`，或把多张独立图硬塞进一个组。
+- 禁止删掉底稿已有的 figure / figuregroup fence 导致图文丢失（这正是上一轮「图文混排丢失」的根因）。
 </figure_contract>

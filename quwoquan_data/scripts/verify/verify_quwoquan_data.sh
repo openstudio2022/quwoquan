@@ -54,12 +54,15 @@ python3 quwoquan_data/tests/task/test_harness_hooks.py
 "$PYTEST_RUNNER" -m pytest -q \
   quwoquan_data/tests/local_contract/common/test_base_draft_fidelity__local_contract_test.py \
   quwoquan_data/tests/local_contract/common/test_content_plan_distribution__local_contract_test.py \
-  quwoquan_data/tests/local_contract/common/test_content_plan_source_gate__local_contract_test.py
+  quwoquan_data/tests/local_contract/common/test_content_plan_source_gate__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_prompt_render__local_contract_test.py
 # golden set 标定：好稿/坏稿语义门拦截率/误杀率达标
 python3 quwoquan_data/scripts/verify/measure_gate_goldenset.py
 # 契约门：会话 agent = 唯一模型执行者（禁外部 LLM SDK/端点 + 交付正文 agent-only 防线）
 python3 quwoquan_data/tests/common/test_agent_executor_contract.py
 python3 quwoquan_data/scripts/cli.py template lint
+# P1 提示词模板 lint：占位符闭合 / vars 必填 / 行数预算 / scripts 不得硬编码 prompt 正文（含 会话模型 措辞 ratchet）
+python3 quwoquan_data/scripts/verify/verify_prompt_templates.py
 python3 quwoquan_data/scripts/cli.py template creator-lint
 python3 quwoquan_data/scripts/cli.py template rec-contract
 python3 quwoquan_data/scripts/cli.py template audience-lint

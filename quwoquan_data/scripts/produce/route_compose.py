@@ -77,7 +77,7 @@ def build_route_writing_pack(
             cited_source_paths=quality_payload.get("sourcePaths") or [],
         )
     else:
-        # 仅当尚无 agent 草稿时写占位，避免覆盖会话模型已创作的正文。
+        # 仅当尚无 agent 草稿时写占位，避免覆盖创作 agent已创作的正文。
         existing = read_draft_meta(task_id, batch_id, ref)
         if not existing or str(existing.get("generator")) != GENERATOR_AGENT:
             write_placeholder_draft(task_id, batch_id, ref)

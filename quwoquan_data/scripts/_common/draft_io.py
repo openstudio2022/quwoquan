@@ -1,9 +1,9 @@
-"""Draft IO 规范：会话模型创作正文的落盘契约（对象优先，规格 §2.4/§15.1）。
+"""Draft IO 规范：创作 agent 创作正文的落盘契约（对象优先，规格 §2.4/§15.1）。
 
 produce 过程产物挂在内容对象目录下（经 `_common.content_object` 路由解析）：
   3.compose/writing_pack.json —— CLI prepare 产出的最小写作契约（证据/图/事实/约束）
-  4.draft/prompt.md           —— 给会话模型的人类可读写作指令
-  4.draft/draft.article.md    —— 文章/主页类会话模型创作的正文（prepare 阶段先写占位）
+  4.draft/prompt.md           —— 给创作 agent 的人类可读写作指令
+  4.draft/draft.article.md    —— 文章/主页类创作 agent 创作的正文（prepare 阶段先写占位）
   4.draft/draft_meta.json     —— 出处元数据（generator/model/citedSourcePaths/coveredFacts）
   4.draft/assets/             —— 草稿可引用资产包（只放必要物理文件）
 
@@ -133,7 +133,7 @@ def write_placeholder_draft(
     allow_agent_downgrade: bool = False,
     downgrade_reason: str = "",
 ) -> None:
-    """prepare 阶段写占位正文 + pending meta，待会话模型覆盖。
+    """prepare 阶段写占位正文 + pending meta，待创作 agent 覆盖。
 
     A completed agent draft is production evidence.  It may only be reset by an
     explicit upstream retry/rebuild path, never by an incidental prepare rerun.
@@ -152,7 +152,7 @@ def write_placeholder_draft(
         )
     article.parent.mkdir(parents=True, exist_ok=True)
     article.write_text(
-        f"{PLACEHOLDER_MARKER}\n# 待会话模型创作\n\n请阅读同目录 prompt.md 与 3.compose/writing_pack.json 后创作正文并覆盖 draft.article.md。\n",
+        f"{PLACEHOLDER_MARKER}\n# 待创作 agent 创作\n\n请阅读同目录 prompt.md 与 3.compose/writing_pack.json 后创作正文并覆盖 draft.article.md。\n",
         encoding="utf-8",
     )
     write_json(
@@ -298,7 +298,7 @@ def write_agent_draft(
     creative_plan: dict[str, Any] | None = None,
     self_critique: dict[str, Any] | None = None,
 ) -> None:
-    """会话模型创作正文写回（SOP 与测试 fixture 共用）。generator 固定为 agent。
+    """创作 agent 创作正文写回（SOP 与测试 fixture 共用）。generator 固定为 agent。
 
     extracted_entities: 正文中挖掘出的专有实体，形如 [{"name":"洛绒牛场","type":"自然景观","evidenceRef":"..."}]，
     供 produce review 生成实体 sidecar / 关联实体主页。

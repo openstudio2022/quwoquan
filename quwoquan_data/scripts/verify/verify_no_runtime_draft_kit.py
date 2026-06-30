@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 """扫描门：禁止正式链路复用测试专用的正文骨架（agent_draft_kit），
-并禁止普通脚本直接调用 ``write_agent_draft()`` 冒充会话模型写回正文，
+并禁止普通脚本直接调用 ``write_agent_draft()`` 冒充创作 agent写回正文，
 亦禁止重新引入「脚本拼实体主页正文」的机械骨架函数。
 
 背景（整改计划第一阶段）：四川 10e20c 批次的文章正文实际由 runtime 批次脚本
 `from helpers.agent_draft_kit import route_article/entity_article` 拼接派生，
-以 generator=agent 落盘，绕过"正文只由会话模型创作"的原则，导致机械模板稿过门；
+以 generator=agent 落盘，绕过"正文只由创作 agent创作"的原则，导致机械模板稿过门；
 实体主页 `page.md` 早期也由脚本按固定模板小标题切句凑字，产出千篇一律的模板主页。
 
 本门保证：除 `tests/` 外，任何 `scripts/ tasks/ runtime/` 下的 .py 都不得：
   - import agent_draft_kit（测试专用 fixture builder）；
   - 调用 route_article/entity_article/gallery_article 这类 kit 骨架函数；
   - 复刻 kit 的固定段落骨架指纹句；
-  - 调用 `write_agent_draft()`（除 `_common/draft_io.py` 自身定义外）；正文写回只能由会话模型/外部 runner 执行，
+  - 调用 `write_agent_draft()`（除 `_common/draft_io.py` 自身定义外）；正文写回只能由创作 agent/外部 runner 执行，
     编排/verify/普通 CLI 脚本不得伪造 generator=agent；
   - 定义「脚本拼实体主页正文」的机械骨架函数（如 `_compose_*page* / _render_*page_body /
     _build_*page_body / _pad_*page* / _homepage_body* / _homepage_paragraph* / _synthesize_*page* /
-    _stitch_*page*`）。实体主页正文同文章一样必须由会话模型在 4.draft/page.md 创作（generator=agent），
+    _stitch_*page*`）。实体主页正文同文章一样必须由创作 agent在 4.draft/page.md 创作（generator=agent），
     build_homepage 只下发 prompt.md + 占位 page.md，finalize 只注入封面与结构化 summary。
     注意：读取/解析 agent 写回正文的辅助（prompt 渲染、summary/section 映射、贴合度门）不在禁列。
 
 runtime/** 是本地产物（.gitignore），CI 上通常不存在 → 门会自动跳过不存在的根；
-但本地一旦残留"脚本拼正文/拼主页"路径即 FAIL，逼迫改回会话模型单篇创作。
+但本地一旦残留"脚本拼正文/拼主页"路径即 FAIL，逼迫改回创作 agent单篇创作。
 
 可直接运行：python3 quwoquan_data/scripts/verify/verify_no_runtime_draft_kit.py
 """
