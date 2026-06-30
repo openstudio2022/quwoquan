@@ -46,6 +46,24 @@ from download.prepare import prepare_source_plan
 
 from task import store
 
+# 抗导入顺序泄漏：本套件在导入期设了进程级临时 QWQ_RUNTIME_ROOT/QWQ_COMMITTED_TASKS_ROOT，
+# 但 `_common.paths` 的根是导入期冻结的模块常量；若同一 pytest 进程里其它测试文件先导入了
+# `_common.paths`（env 尚未指向临时目录），COMMITTED_TASKS_ROOT 会冻结成真实仓库 tasks/，
+# 导致本套件 `store.save_spec` 把夹具规格写进真实 `quwoquan_data/tasks/`（随后 task lint 失败、
+# 工作树被污染）。这里在导入后把已冻结的常量重钉到本套件临时根，强制隔离，不受导入顺序影响。
+import _common.paths as _paths_mod  # noqa: E402
+
+_RUNTIME_TMP = Path(_TMP)
+_COMMITTED_TMP = Path(_TMP) / "tasks"
+_paths_mod.RUNTIME_ROOT = _RUNTIME_TMP
+_paths_mod.TASKS_ROOT = _RUNTIME_TMP / "tasks"
+_paths_mod.COMMITTED_TASKS_ROOT = _COMMITTED_TMP
+_paths_mod.PUBLISH_ROOT = _RUNTIME_TMP / "publish"
+_paths_mod.RELEASE_ROOT = _RUNTIME_TMP / "release"
+# task.store 通过 `from _common.paths import COMMITTED_TASKS_ROOT` 绑定了自身副本（defaults_chain 用），
+# 同步重钉，确保读默认链也指向临时根。
+store.COMMITTED_TASKS_ROOT = _COMMITTED_TMP
+
 from download.research_plan import (  # noqa: E402
     _article_base_candidate_limit,
     _candidate_gate,
