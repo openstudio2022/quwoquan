@@ -548,6 +548,47 @@ retained: true
     assert any("intraDocRepetition" in issue for issue in review_payload["checks"]["provenanceRewrite"]["issues"]), review_payload
 
 
+def test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim():
+    """根因：多目的地路书底稿被框成单实体 guide 并被指示「删除无关城市段落」，
+
+    agent 为聚焦单一实体而丢弃其它站点章节 → baseDraftFidelity 崩到 18-49% < 55% 全挂。
+    1:1 源中心：底稿写到的所有目的地/行程段落都是正文内容，必须整篇保留，实体只是标签不是
+    裁剪边界；prompt 只允许删平台/广告/隐私噪声，不得以「与本篇实体无关」为由删其它城市段落。
+    """
+    from _common.writing_pack import render_prompt_md
+
+    pack = {
+        "ref": "都江堰__article_qunar_base_1",
+        "kind": "entity",
+        "carrier": "article",
+        "title": "彭水.成都.都江堰.乐山.赤水.遵义 渝蜀贵自驾穷游漫记",
+        "templateId": "travel.entity.guide",
+        "byline": "虚拟创作者",
+        "writingIntent": "planning_consultation",
+        "sourceUseMode": "factual_reference_only",
+        "baseSourceRef": "sources/su_demo/source.md",
+        "baseDraftText": "彭水乌江画廊碧波，成都青石板烟火，都江堰千年石堤，乐山大佛慈悲。" * 20,
+        "wordCount": {"min": 600, "max": 2000},
+    }
+    prompt = render_prompt_md(pack)
+    # 旧裁剪许可必须消失（这是 fidelity 崩塌根因）。
+    assert "无关城市段落" not in prompt, "prompt 仍保留「无关城市段落」裁剪许可，会诱导 agent 丢站点脱稿"
+    # 新的整篇保真指令必须在场。
+    assert "整篇保留" in prompt, prompt[:400]
+    assert ("多目的地" in prompt) or ("全部站点" in prompt), prompt[:400]
+    assert "实体只是标签" in prompt, prompt[:400]
+
+
+def test_article_section_intents_do_not_force_single_entity_focus():
+    """章节意图不得把多目的地底稿框成「关于某实体的那篇」诱导裁剪。"""
+    from produce.entity_workflow import _entity_section_intents
+
+    intents = _entity_section_intents({"subject": {"type": "地点/景区"}}, "都江堰")
+    joined = "\n".join(intents)
+    assert "关于 都江堰 的那篇" not in joined, joined
+    assert ("全部站点" in joined) or ("多目的地" in joined), joined
+
+
 if __name__ == "__main__":
     test_route_brief_includes_narrative_contract()
     test_gate_route_evidence_skips_narrative_requirements_for_image_carrier()
@@ -555,4 +596,6 @@ if __name__ == "__main__":
     test_route_workflow_generates_real_review_green()
     test_route_skip_does_not_prepare_writing_pack()
     test_route_review_blocks_intra_doc_repetition_padding()
+    test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim()
+    test_article_section_intents_do_not_force_single_entity_focus()
     print("route brief and evidence tests passed")
