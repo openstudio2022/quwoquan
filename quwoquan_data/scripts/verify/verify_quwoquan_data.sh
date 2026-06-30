@@ -168,6 +168,8 @@ python3 quwoquan_data/tests/local_contract/download/test_inline_source_images__l
 python3 quwoquan_data/tests/local_contract/common/test_figure_group_backfill__local_contract_test.py
 # P3 三类解耦：实体主页主源【只限百科】+ 文章【含内联视频则放弃】检测 + hasVideo 持久化
 python3 quwoquan_data/tests/local_contract/common/test_three_class_decouple__local_contract_test.py
+# P4 图库合规：图虫/Pinterest 受限如实标注+替代路径+授权完整性硬门+非中文译简体门
+python3 quwoquan_data/tests/local_contract/common/test_image_provider_compliance__local_contract_test.py
 # 标签可点击态：tag 本体保持语义定义，link target 由 publish index 派生
 python3 quwoquan_data/tests/publish/test_tag_link_targets.py
 # 行政区标签层级：V1 中国两级选择依赖 34 省级、广东完整地级市、北京区县 direct children

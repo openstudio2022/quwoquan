@@ -34,6 +34,9 @@ from download.research.auto_plan_facade import (
     _wikidata_item_for_entity_search,
     _wikidata_item_for_zhwiki,
 )
+from download.research.image_provider_compliance import (
+    professional_library_compliance_summary,
+)
 from download.research.auto_plan_report import (
     _source_availability_summary,
     _write_auto_report_artifacts,
@@ -329,6 +332,14 @@ def _write_auto_research_plans_impl(
             if "article" in selected_lanes
             else []
         )
+        if "image" in selected_lanes:
+            # P4：图库可发布性以 registry rightsPolicy 为唯一真相源。图虫/Pinterest 等受限
+            # 来源如实标注受限（bypassAttempted=false）+ 替代路径=开放许可图池，使"为什么专业
+            # 图库不直接进发布面、合规替代是什么"在 research report 中可审计；不抓取、不绕过。
+            report.setdefault(
+                "professionalImageLibraryCompliance",
+                professional_library_compliance_summary(),
+            )
         if needs_visual_pool and requires_publishable_images and not open_license_image_pool:
             issues.append(f"{entity_id}: no rights-compatible open-license images discovered")
             if "image" in selected_lanes:
