@@ -1,6 +1,6 @@
 """RC3 子步C2：同源内联 <img> 候选构建 + 走五道硬门后回连段落占位的契约测试。
 
-可直接运行：python3 quwoquan_data/tests/download/test_inline_source_images.py
+可直接运行：python3 quwoquan_data/tests/local_contract/download/test_inline_source_images__local_contract_test.py
 """
 from __future__ import annotations
 
