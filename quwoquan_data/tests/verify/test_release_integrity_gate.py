@@ -343,6 +343,27 @@ def test_homepage_base_draft_never_falls_back_to_guide_source():
     assert _entity_base_draft(TASK, BATCH, "地点", "景区", "毕棚沟") == {}
 
 
+def test_homepage_base_draft_picks_best_single_baike_no_cross_source():
+    """百科择优单源：多百科同存时取最高优先级单一源（维基>百度>搜狗），主页三件套同源不混源。"""
+    _reset()
+    sogou = _seed_source("毕棚沟", "01.sogou", kind="搜狗百科", source_use_mode="factual_reference_only")
+    baidu = _seed_source("毕棚沟", "02.baidu", kind="百度百科", source_use_mode="factual_reference_only")
+    wiki = _seed_source("毕棚沟", "03.wiki", kind="维基百科", source_use_mode="factual_reference_only")
+    chosen = _entity_base_draft(TASK, BATCH, "地点", "景区", "毕棚沟")
+    # 维基百科优先级最高（120>110>105）→ 取单一最佳源；三件套（text/outline/primaryEvidenceRef）同源。
+    assert chosen["sourceRef"] == wiki, chosen
+    assert chosen["primaryEvidenceRef"] == wiki
+    assert chosen["sourceRef"] not in (baidu, sogou)
+    assert chosen.get("text")
+
+    # 去掉维基后退而求其次取百度（仍是单一最佳源，绝不跨源拼接）。
+    _reset()
+    _seed_source("毕棚沟", "01.sogou", kind="搜狗百科", source_use_mode="factual_reference_only")
+    baidu_only = _seed_source("毕棚沟", "02.baidu", kind="百度百科", source_use_mode="factual_reference_only")
+    chosen_baidu = _entity_base_draft(TASK, BATCH, "地点", "景区", "毕棚沟")
+    assert chosen_baidu["sourceRef"] == baidu_only, chosen_baidu
+
+
 def test_release_quota_blocks_entity_homepage_outside_primary_post_refs():
     _reset()
     _seed_release_root()

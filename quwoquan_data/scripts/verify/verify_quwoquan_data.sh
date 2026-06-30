@@ -84,6 +84,8 @@ python3 quwoquan_data/tests/download/test_download_source_plan.py
 python3 quwoquan_data/tests/download/test_download_images.py
 # Phase 1：build 实体主页真实链路（prepare 下发契约 + validate 采纳门）
 python3 quwoquan_data/tests/build/test_build_homepage.py
+# 实体主页=百科择优单源（维基>百度>搜狗）+ 三件套同源 + 禁游记 + 发布完整性门
+"$PYTEST_RUNNER" -m pytest -q quwoquan_data/tests/verify/test_release_integrity_gate.py
 # Phase 1：实体主页图片闭环全量扫描/修复（page.md ↔ manifest.assets ↔ assets/）
 python3 quwoquan_data/tests/homepage_assets/test_homepage_assets.py
 python3 quwoquan_data/scripts/cli.py homepage-assets --dirty-only --fail-on-issues --include-runtime --include-publish
