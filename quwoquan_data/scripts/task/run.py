@@ -6323,10 +6323,16 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 "carrier": "article",
                 "entityRefs": [entity_ref],
                 "entityTags": entity_tags,
-                "mustIncludeFacts": [
-                    f"{target} 文字底稿来自单一来源单元 {source_id}；标题取自底稿，正文按整篇底稿轻改、禁跨底稿拼接",
-                    "若使用配图，必须来自同一底稿的已授权源图（一源一作品）",
-                ],
+                # mustIncludeFacts 是"正文必须包含且可追溯的目的地事实"，由 review 的
+                # evidenceQuality/factTraceability 门逐条校验是否出现在正文。单一底稿 article
+                # 没有独立抽取的事实清单——其"事实"就是底稿本身，由 baseDraftFidelity 门保真。
+                # 历史上这里硬塞了两条**写作策略/指令**（单源轻改、配图同源一源一作品），
+                # 它们是生产策略而非可叙述事实：agent 不可能把"我必须用同源图"写进游记正文并被
+                # factTraceability 追溯，导致所有文章必败（不可满足的 mustIncludeFact）。这两条
+                # 策略已由结构门（baseSourceRef 单源 + verify single-contract-source、
+                # route_assets 同源选图 + source_quality RC4 红线 + baseDraftFidelity 门）强制，
+                # 并在 prompt"底稿编辑硬合同"段向 agent 明确传达，无需再当作 mustIncludeFact。
+                "mustIncludeFacts": [],
                 "templateId": "travel.entity.guide",
                 "writingIntent": intent,
                 "baseSourceRef": candidate["sourceRef"],
