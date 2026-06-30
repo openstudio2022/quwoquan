@@ -589,6 +589,28 @@ def test_article_section_intents_do_not_force_single_entity_focus():
     assert ("全部站点" in joined) or ("多目的地" in joined), joined
 
 
+def test_base_aware_word_count_tracks_long_base_draft():
+    """根因：wordCount 固定上限(1600)远小于长底稿(~8900字)时，baseDraftFidelity>=55% 数学不可达
+    （成稿最多覆盖底稿 ~18% 三连）。light-edit 文章字数目标必须按清洗底稿长度派生。"""
+    from _common.base_draft import base_aware_word_count, clean_base_draft_length
+
+    long_base = "都江堰的清晨薄雾未散，我们沿着秦堰楼一路下行，江风裹着水汽扑面而来。\n" * 200
+    clean_len = clean_base_draft_length(long_base)
+    assert clean_len > 5000, clean_len
+    wc = base_aware_word_count(long_base, carrier="article", source_use_mode="factual_reference_only")
+    assert wc is not None
+    # 上限跟随底稿，不再被固定 1600 钉死。
+    assert wc["max"] > 1600 and wc["max"] >= clean_len, wc
+    assert wc["min"] >= 600, wc
+    # 数学可行：成稿达到 min 且逐句沿用底稿即可覆盖 >=55% 三连。
+    assert wc["min"] >= int(clean_len * 0.55), (wc, clean_len)
+    # image/gallery（短配文）与非改编源不设底稿字数门。
+    assert base_aware_word_count(long_base, carrier="image", source_use_mode="factual_reference_only") is None
+    assert base_aware_word_count(long_base, carrier="article", source_use_mode="blocked") is None
+    # 短底稿（< 文章下限）不强行抬高字数门。
+    assert base_aware_word_count("一句话。", carrier="article", source_use_mode="factual_reference_only") is None
+
+
 if __name__ == "__main__":
     test_route_brief_includes_narrative_contract()
     test_gate_route_evidence_skips_narrative_requirements_for_image_carrier()
@@ -598,4 +620,5 @@ if __name__ == "__main__":
     test_route_review_blocks_intra_doc_repetition_padding()
     test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim()
     test_article_section_intents_do_not_force_single_entity_focus()
+    test_base_aware_word_count_tracks_long_base_draft()
     print("route brief and evidence tests passed")

@@ -753,6 +753,44 @@ def base_draft_fidelity_issues(
     return []
 
 
+# 注入 prompt 的底稿正文上限：fidelity 门按整篇底稿判，prompt 必须给整篇（否则 agent 看不到
+# 的内容无法保留 → 必然低保真）。仅对极端超长底稿（书籍级）设安全上限，避免 prompt 失控。
+BASE_DRAFT_PROMPT_MAX_CHARS = 24000
+
+
+def clean_base_draft_length(base_text: str) -> int:
+    """底稿去平台噪声后的可读正文字数（去空白），用于派生 light-edit 字数目标。
+
+    与 `baseDraftFidelity` 清洗口径同源（`_base_comparison_lines`），保证字数目标与保真度
+    分母一致：成稿长度 ≈ 清洗底稿长度时，逐句轻改即可达 fidelity 下限。
+    """
+    return len(_compact_lines(_base_comparison_lines(str(base_text or ""))))
+
+
+def base_aware_word_count(
+    base_text: str,
+    *,
+    carrier: str = "article",
+    source_use_mode: str = "licensed_adaptation",
+) -> dict[str, int] | None:
+    """light-edit 文章字数目标必须跟随底稿长度，否则固定上限会与 `baseDraftFidelity>=55%` 互斥。
+
+    根因实测：底稿 ~8900 字、`wordCount` 上限 1600 时，成稿最多覆盖底稿 ~18% 三连，fidelity
+    必崩（成稿被逼压缩+重写）。light-edit 文章应整篇保留清洗底稿，故字数目标按清洗底稿长度派生。
+    `image/gallery`（短配文）与非改编源返回 None（沿用默认，不设底稿字数门）。
+    """
+    if str(carrier or "").lower() in ("image", "gallery"):
+        return None
+    if not base_draft_is_adaptable(source_use_mode):
+        return None
+    clean_len = clean_base_draft_length(base_text)
+    if clean_len < ARTICLE_MIN_BASE_DRAFT_CHARS:
+        return None
+    lo = max(ARTICLE_MIN_BASE_DRAFT_CHARS, int(clean_len * 0.62))
+    hi = max(lo + 600, int(clean_len * 1.12))
+    return {"min": lo, "max": hi}
+
+
 # ─── 反脱稿 / 反拼接度量（fidelity 的反向与跨源补强）──────────────────────
 # baseDraftFidelity 是“底稿留存了多少”的单向指标，测不到“正文里多少来自底稿之外/
 # 逐字搬自别的源”。以下两个函数补这块盲区：
