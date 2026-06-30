@@ -52,6 +52,30 @@ def slugify(value: str) -> str:
     return s or "asset"
 
 
+# RC3：source.md 内联图占位 :::figure 块（未绑定到真实资产的悬空占位需整块剥离）。
+_INLINE_FIGURE_BLOCK_RE = re.compile(
+    r"\n?:::figure\n!\[[^\]]*\]\(asset://source-inline-\d+\)\n[^\n]*\n:::\n?"
+)
+
+
+def bind_inline_source_placeholders(text: str, placeholder_to_asset: Mapping[str, str]) -> str:
+    """把 source.md 内联占位 asset://source-inline-NNN 绑定到真实 sourceAssetId。
+
+    成功就地同源下载的内联图：占位 → asset://{ordinal_kkk}（段落锚定位置不变，
+    保留图文交错）。未成功下载的 source-inline 占位：删除其整个 :::figure 块，
+    杜绝悬空占位（这是九寨沟"图片对不上/缺失"的直接表征）。
+    """
+    bound = str(text or "")
+    for placeholder, asset_id in placeholder_to_asset.items():
+        placeholder = str(placeholder or "").strip()
+        asset_id = str(asset_id or "").strip()
+        if not placeholder or not asset_id:
+            continue
+        bound = bound.replace(f"asset://{placeholder}", f"asset://{asset_id}")
+    bound = _INLINE_FIGURE_BLOCK_RE.sub("\n", bound)
+    return re.sub(r"\n{3,}", "\n\n", bound)
+
+
 _SOURCE_RAW_SNAPSHOT_NAMES = ("page.raw.json", "page.html")
 
 
@@ -244,6 +268,8 @@ def write_source_unit(
 
     asset_index: list[dict[str, Any]] = []
     assets_dir = unit / "assets"
+    # RC3：内联图占位 → 真实 sourceAssetId 的绑定表（仅就地同源下载成功的内联图入表）。
+    placeholder_to_asset: dict[str, str] = {}
     for k, img in enumerate(images or [], start=1):
         ext = str(img.get("ext") or _ext_from_name(img.get("fileName") or img.get("url") or "") or ".jpg")
         slug = slugify(img.get("slug") or img.get("role") or source_id)
@@ -309,8 +335,12 @@ def write_source_unit(
             "relevance": str(img.get("relevance") or relevance or ""),
             "variants": variants_meta,
             "variantGeneration": "inline" if build_variants else "deferred",
+            "inlinePlaceholderId": str(img.get("placeholderId") or ""),
         }
         asset_index.append(entry)
+        placeholder_id = str(img.get("placeholderId") or "").strip()
+        if placeholder_id:
+            placeholder_to_asset[placeholder_id] = entry["sourceAssetId"]
     if asset_index:
         (unit / "assets").mkdir(parents=True, exist_ok=True)
         index_payload: dict[str, Any] = {"assets": asset_index}
@@ -321,6 +351,17 @@ def write_source_unit(
     elif assets_dir.exists():
         # 本轮没有图片通过权利/抓取/像素/安全/相关性门时，旧 assets 不能继续作为可消费证据。
         shutil.rmtree(assets_dir)
+
+    # RC3：把 source.md / source.clean.md 的内联图占位绑定到真实 sourceAssetId；
+    # 未就地下载成功的 source-inline 占位整块剥离，避免悬空占位（图文对不上）。
+    if placeholder_to_asset or "asset://source-inline-" in source_md:
+        bound_md = bind_inline_source_placeholders(source_md, placeholder_to_asset)
+        if bound_md != source_md:
+            (unit / "source.md").write_text(bound_md, encoding="utf-8")
+        if clean_md and "asset://source-inline-" in clean_md:
+            bound_clean = bind_inline_source_placeholders(clean_md, placeholder_to_asset)
+            if bound_clean != clean_md and (unit / "source.clean.md").is_file():
+                (unit / "source.clean.md").write_text(bound_clean, encoding="utf-8")
 
     source_ref = ""
     if task_id and batch_id:
