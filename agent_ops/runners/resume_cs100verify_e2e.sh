@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Scale-100 verify (17 leaves × ~6 objects) with new Cursor token + composer-2.
 set -euo pipefail
-export QWQ_DATA_ROOT="${QWQ_DATA_ROOT:-$HOME/qwq_scale_verify}"
+export QWQ_DATA_ROOT="${QWQ_DATA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.qwq_sandbox}"
 export QWQ_RUNTIME_ROOT="${QWQ_RUNTIME_ROOT:-$QWQ_DATA_ROOT/runtime}"
 export QWQ_PUBLISH_ROOT="${QWQ_PUBLISH_ROOT:-$QWQ_DATA_ROOT/publish}"
 export QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS=1

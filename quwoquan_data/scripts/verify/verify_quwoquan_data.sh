@@ -192,6 +192,7 @@ python3 quwoquan_data/tests/local_contract/common/test_object_stages_and_wikitex
   quwoquan_data/tests/local_contract/env/test_cursor_probe__local_contract_test.py \
   quwoquan_data/tests/local_contract/task/test_cursor_credentials__local_contract_test.py \
   quwoquan_data/tests/local_contract/task/test_scaled_e2e_run__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_sandbox_root_isolation__local_contract_test.py \
   quwoquan_data/tests/local_contract/common/test_adaptive_word_gate__local_contract_test.py \
   quwoquan_data/tests/local_contract/common/test_entity_focus__local_contract_test.py \
   quwoquan_data/tests/local_contract/download/test_source_quality_gate__local_contract_test.py \
