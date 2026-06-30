@@ -318,7 +318,10 @@ def _write_auto_research_plans_impl(
                         "images": len(rescue_pool),
                     }
                 )
-        homepage_image_pool = wiki_page_images or commons or hint_commons or wikidata_commons or openverse
+        # 实体百科底稿(homepage)图位绝不混入 commons/openverse 等搜索池——那些只能用于
+        # P4 独立"图片作品"lane。同源隔离：homepage 图只来自页面自身 wikitext 真实图位
+        # (wiki/voyage)，宁可受限标注，也不混入页面外图。
+        homepage_image_pool = wiki_page_images or voyage_page_images
         homepage_image_urls = {
             str(image.get("url") or "")
             for image in homepage_image_pool

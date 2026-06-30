@@ -1232,7 +1232,12 @@ def fetch_wikipedia_wikitext(url: str) -> str:
     data = _mediawiki_json_loads(raw)
     parse_block = data.get("parse") if isinstance(data, Mapping) else {}
     if isinstance(parse_block, Mapping):
-        return str(parse_block.get("wikitext") or parse_block.get("*") or "").strip()
+        # format=json(formatversion=1) 下 wikitext 为 {"*": "..."}；必须取 "*"，
+        # 否则 str(dict) 会得到 dict repr 单行串，破坏 section/段落锚点解析。
+        raw_wikitext = parse_block.get("wikitext")
+        if isinstance(raw_wikitext, Mapping):
+            return str(raw_wikitext.get("*") or "").strip()
+        return str(raw_wikitext or parse_block.get("*") or "").strip()
     return ""
 
 
