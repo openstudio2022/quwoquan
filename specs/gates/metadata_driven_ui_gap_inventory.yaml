@@ -424,32 +424,22 @@ domains:
 
         target_edit_draft: N/A
 
-  - id: connection
-    metadata_hint: specs/product/intersection-action-deepening-and-social-ia.md + contracts/metadata/_shared/test_fixtures/connection_plaza_seed.yaml
-    repository: ConnectionRepository
+  - id: interest-match
+    metadata_hint: specs/product/intersection-action-deepening-and-social-ia.md §0 + contracts/metadata/_shared/app_routes.yaml#interestMatch
+    repository: N/A（纯导流 launcher，不持有云契约/Repository）
     repository_notes:
-      status: partial
+      status: not_applicable
       note: |
-        原型阶段 Mock 行内 canonical（不发 HTTP）；Remote 返回 structured unavailable（不整类委托 Mock，守 R16）。
-        后端 trip/meetup aggregate、附近 LBS、双向同意风控登记 backlog。
-    mock_remote_shared_types: true
+        2026-06-30「交集行动重建」：旧 plaza/connection 原型整体下线。
+        新版「找同趣 / 兴趣配对」为发现启动器（launcher），不自建 Mock 候选列表（守 R16），
+        按兴趣发现方式导流到既有真实面（/search、/search/network、/profile/intersections），
+        云契约由目标真实面持有。附近/结伴/局真实聚合 deferred。
+    mock_remote_shared_types: false
     ui_pages:
-      - path: quwoquan_app/lib/ui/plaza/pages/connection_hub_page.dart
-        status: partial
-        note: 同频连接中心四 tab；ConnectionHubSummary/PeerConnection/CompanionTrip/OfflineMeetup 强类型 ViewModel；P2/P3 待 service.yaml codegen
-        target_dto: ConnectionHubSummary
-      - path: quwoquan_app/lib/ui/plaza/pages/nearby_affinity_page.dart
-        status: partial
-        note: 附近同趣；模糊位置 + 权限态；GreetingRequest 破冰
-        target_dto: PeerConnection
-      - path: quwoquan_app/lib/ui/plaza/pages/companion_trip_page.dart
-        status: partial
-        note: 结伴行程；destinationEntityId 对齐 entity fixture
-        target_dto: CompanionTrip
-      - path: quwoquan_app/lib/ui/plaza/pages/offline_meetup_page.dart
-        status: partial
-        note: 线下局；joinMeetup → start_group_chat
-        target_dto: OfflineMeetup
+      - path: quwoquan_app/lib/ui/interest_match/pages/interest_match_page.dart
+        status: launcher
+        note: 找同趣 / 兴趣配对发现启动器；加号动作面板「兴趣配对」入口，route /interest-match；导流既有真实面 + 曝光埋点；不直接消费云契约（P2/P3 = —）
+        target_dto: N/A
 
   - id: search
     metadata_hint: quwoquan_service/contracts/metadata/_shared/search_contract.yaml + search_registry
@@ -588,6 +578,9 @@ domains:
       - path: quwoquan_app/lib/app/shell/bottom_navigation.dart
         status: exempt
         note: 底栏；无云行模型
+      - path: quwoquan_app/lib/app/shell/object_detail_global_bottom_nav.dart
+        status: exempt
+        note: 对象页（实体/圈子主页）详情态全局底栏适配器；复用 BottomNavigationWidget，纯导航无云行模型
       - path: quwoquan_app/lib/app/shell/web_app_install_banner.dart
         status: exempt
         note: Web 顶部 App 安装提示；下载 URL 走 dart-define 配置，无云行模型

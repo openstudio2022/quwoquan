@@ -3,7 +3,7 @@
 set -euo pipefail
 
 PLAN="${1:-}"
-DATA_ROOT="${QWQ_DATA_ROOT:-$HOME/qwq_scale_verify}"
+DATA_ROOT="${QWQ_DATA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.qwq_sandbox}"
 RUNTIME="$DATA_ROOT/runtime"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 

@@ -53,6 +53,95 @@ def test_generic_html_extractor_preserves_inline_images_as_figures():
     assert text.index("第一段正文") < text.index(":::figure") < text.index("第二段正文")
 
 
+def test_inline_images_capture_src_and_align_with_placeholders():
+    """RC3：内联 <img> 的 src 被捕获，清单与正文 asset://source-inline-NNN 同序对齐。"""
+    html = (
+        "<html><body><p>九寨沟第一段。</p>"
+        "<figure><img src='https://img.example/lake.jpg' alt='五花海'></figure>"
+        "<p>九寨沟第二段。</p>"
+        "<img data-src='https://img.example/falls.jpg' alt='珍珠滩瀑布'>"
+        "<p>九寨沟第三段。</p></body></html>"
+    ).encode("utf-8")
+
+    text, inline = fetch_mod.extract_page_text_with_inline_images(
+        html, "https://travel.qunar.com/youji/123", extractor="qunar_html"
+    )
+
+    # 正文与 extract_page_text 一致，占位按出现顺序排列。
+    assert text == fetch_mod.extract_page_text(
+        html, "https://travel.qunar.com/youji/123", extractor="qunar_html"
+    )
+    assert "![五花海](asset://source-inline-001)" in text
+    assert "![珍珠滩瀑布](asset://source-inline-002)" in text
+    assert text.index("source-inline-001") < text.index("source-inline-002")
+
+    assert [row["placeholderId"] for row in inline] == [
+        "source-inline-001",
+        "source-inline-002",
+    ]
+    assert [row["src"] for row in inline] == [
+        "https://img.example/lake.jpg",
+        "https://img.example/falls.jpg",
+    ]
+    assert [row["caption"] for row in inline] == ["五花海", "珍珠滩瀑布"]
+
+
+def test_inline_images_skip_data_uri_and_empty_src():
+    """data:/空 src 不产生悬空占位，也不进入内联清单；真实图仍按序捕获。"""
+    html = (
+        "<html><body>"
+        "<img src='data:image/gif;base64,R0lGODlh'>"
+        "<img src=''>"
+        "<p>正文一段。</p>"
+        "<img src='https://img.example/real.jpg' alt='真实配图'>"
+        "</body></html>"
+    ).encode("utf-8")
+
+    text, inline = fetch_mod.extract_page_text_with_inline_images(
+        html, "https://example.com/a", extractor="generic_html"
+    )
+
+    assert "data:image" not in text
+    assert text.count("asset://source-inline-") == 1
+    assert "![真实配图](asset://source-inline-001)" in text
+    assert [row["src"] for row in inline] == ["https://img.example/real.jpg"]
+
+
+def test_inline_images_resolve_relative_src_against_page_url():
+    """相对 src 按页面 URL 解析为绝对（同源就地下载需要绝对地址）。"""
+    html = (
+        "<html><body><p>正文。</p>"
+        "<img src='/photos/p1.jpg' alt='栈道'>"
+        "<img src='sub/p2.jpg' alt='栈道二'></body></html>"
+    ).encode("utf-8")
+
+    _text, inline = fetch_mod.extract_page_text_with_inline_images(
+        html, "https://travel.qunar.com/youji/7870084", extractor="qunar_html"
+    )
+
+    assert [row["src"] for row in inline] == [
+        "https://travel.qunar.com/photos/p1.jpg",
+        "https://travel.qunar.com/youji/sub/p2.jpg",
+    ]
+    assert [row["rawSrc"] for row in inline] == ["/photos/p1.jpg", "sub/p2.jpg"]
+
+
+def test_non_html_extractor_returns_no_inline_images():
+    """wikipedia_api 等非图文混排路径：内联清单为空（图走 API assets，不就地抓）。"""
+    orig_wiki = fetch_mod._wikipedia_api_plaintext
+    try:
+        fetch_mod._wikipedia_api_plaintext = lambda url: "维基正文"
+        text, inline = fetch_mod.extract_page_text_with_inline_images(
+            b"<html></html>",
+            "https://zh.wikipedia.org/wiki/九寨沟",
+            extractor="wikipedia_api",
+        )
+    finally:
+        fetch_mod._wikipedia_api_plaintext = orig_wiki
+    assert text == "维基正文"
+    assert inline == []
+
+
 def test_fetch_source_payload_blocks_non_fetchable_registry_site():
     try:
         fetch_mod.fetch_source_payload("https://www.mafengwo.cn/i/123456.html")
@@ -79,6 +168,43 @@ def test_fetch_source_payload_allows_source_level_fetchable_override():
     assert payload["statusCode"] == 200
     assert payload["runtime"]["sourceFetchableOverride"] is True
     assert "沈阳世博园" in payload["text"]
+
+
+def test_fetch_source_payload_returns_same_source_inline_images():
+    """RC3：图文混排游记 payload 携带同源内联图清单（绝对 URL，与正文占位同序）。"""
+    html = (
+        "<html><body><p>九寨沟游记开篇正文段。</p>"
+        "<figure><img src='/photo/lake.jpg' alt='五花海'></figure>"
+        "<p>沿栈道继续走的第二段正文。</p>"
+        "<img src='https://img.example/falls.jpg' alt='珍珠滩瀑布'>"
+        "</body></html>"
+    ).encode("utf-8")
+    orig_http = fetch_mod._http_get_bytes
+    try:
+        fetch_mod._http_get_bytes = lambda url, timeout=20, max_redirects=4, max_retries=4: (
+            200,
+            html,
+            "",
+        )
+        payload = fetch_mod.fetch_source_payload(
+            "https://travel.qunar.com/youji/7870084",
+            source={"extractor": "qunar_html", "fetchable": True},
+        )
+    finally:
+        fetch_mod._http_get_bytes = orig_http
+
+    inline = payload["inlineImages"]
+    assert [row["placeholderId"] for row in inline] == [
+        "source-inline-001",
+        "source-inline-002",
+    ]
+    # 相对 src 按页面 URL 解析为绝对，绝对 src 原样保留。
+    assert [row["src"] for row in inline] == [
+        "https://travel.qunar.com/photo/lake.jpg",
+        "https://img.example/falls.jpg",
+    ]
+    # 正文占位与清单同序对齐。
+    assert payload["text"].index("source-inline-001") < payload["text"].index("source-inline-002")
 
 
 def test_fetch_source_payload_uses_dpm_official_registry_source():

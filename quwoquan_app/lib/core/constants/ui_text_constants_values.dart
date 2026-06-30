@@ -5,7 +5,7 @@ class UITextConstants {
   static const String discovery = '发现';
   static const String homeTabFollowing = '关注';
   static const String homeTabRecommended = '推荐';
-  static const String homeTabFeatured = '精品';
+  static const String homeTabFeatured = '视频书';
   static const String homeTabCircles = '圈子';
   static const String homeTabTravel = '旅行';
   static const String homeTabPhotography = '摄影';
@@ -64,7 +64,7 @@ class UITextConstants {
   static const String webPcMessagesTabGroups = '群聊';
   static const String webPcProfileContextTitle = '我的主页';
   static const String webPcSearchHintHome = '搜索兴趣、圈子、作品、用户';
-  static const String webPcSearchHintFeatured = '搜索精品作品、视频、图文';
+  static const String webPcSearchHintFeatured = '搜索视频书作品、视频、图文';
   static const String webPcSearchHintCreate = '搜索素材、草稿、发布模板';
   static const String webPcSearchHintMessages = '搜索联系人、群聊、消息';
   static const String webPcSearchHintProfile = '搜索我的内容、浏览、互动';
@@ -72,7 +72,7 @@ class UITextConstants {
   static const String webPcWelcomePublish = '发布作品';
   static const String webPcWelcomeHeadline = '以兴趣为半径，画出我们的交集。';
   static const String webPcWelcomeSubtitle =
-      '在 Web 上浏览精品内容、发现兴趣相近的人，也可以下载 App 获得完整创作和消息体验。';
+      '在 Web 上浏览视频书内容、发现兴趣相近的人，也可以下载 App 获得完整创作和消息体验。';
   static const String webPcWelcomeContinue = '继续浏览 Web';
   static const String webPcWelcomeDownload = webInstallBannerDownloadApp;
   static const String webPcWelcomeScrollHint = '滚动鼠标也可以进入首页，工具栏会自动吸顶。';
@@ -87,10 +87,12 @@ class UITextConstants {
   static const String webPcHomeRailTitle = homeTodayIntersection;
   static const String webPcHomeRailBody = '关注同校、旅行、摄影与科技等兴趣讨论，新的交集会在这里持续浮现。';
   static const String webPcHomeFeedTitle = '首页推荐';
-  static const String webPcFeaturedRailTitle = '精选发现';
+  static const String webPcFeaturedRailTitle = '视频书发现';
   static const String webPcFeaturedRailBody =
       '以多列瀑布墙展示图片、视频与文章封面，点击任意内容进入沉浸浏览。';
-  static const String webPcFeaturedFeedTitle = '精品内容';
+  static const String webPcFeaturedFeedTitle = '视频书内容';
+  static const String worksVideoBookLoadingTitle = '正在加载更多视频书内容';
+  static const String worksVideoBookLoadingSubtitle = '继续停留即可自动预取新一批内容';
   static const String webPcCreateRailTitle = '创作';
   static const String webPcCreateRailBody = '从照片、视频或文字开始，Web 端保持与移动端一致的创作入口。';
   static const String webPcCreateWorkspaceTitle = '添加';
@@ -462,6 +464,7 @@ class UITextConstants {
   static const String loading = '加载中...';
   static const String retry = '重试';
   static const String cancel = '取消';
+  static const String close = '关闭';
   static const String openSettings = '去设置';
 
   /// 表单/弹层主提交（与「确认」区分，偏对话框「确定」）
@@ -635,12 +638,6 @@ class UITextConstants {
   /// 他人主页交集模块标题：从「为什么推荐TA」收敛为「我与TA的交集」。
   static const String profileWhyRecommendTitle = '我与TA的交集';
 
-  /// 圈子主页交集卡标题（结论导向，去「交集」泛词）。
-  static const String circleWhyRecommendTitle = '为什么推荐这个圈子';
-
-  /// 实体主页交集卡标题（结论导向，去「交集/实体」泛词）。
-  static const String entityWhyRecommendTitle = '为什么推荐这里';
-
   /// 实体主页介绍卡标题（去「实体/认识XX」泛词，统一「关于这里」）。
   static const String entityAboutTitle = '关于这里';
 
@@ -665,13 +662,11 @@ class UITextConstants {
   static const String objectIntersectionCtaAddContact = '加为联系人';
   static const String objectIntersectionCtaAskAssistant = '问问小趣';
   static const String objectIntersectionCtaView = '查看这个连接';
-  static const String circleImpactTitle = '这个圈子帮助了很多人';
 
   /// 对象/圈子主页「我的交集」模块统一标题（与我的主页同语义 token）。
-  /// 取代实体/圈子页旧标题「为什么推荐这里 / 为什么推荐这个圈子」。
   static const String objectMyIntersectionsTitle = '我的交集';
 
-  /// 对象/圈子主页「影响力」模块统一标题（取代圈子价值卡「这个圈子帮助了很多人」标题）。
+  /// 对象/圈子主页「影响力」模块统一标题。
   static const String objectImpactTitle = '影响力';
 
   /// 实体主页「我的交集」空态：你与这里尚无真实连接。
@@ -717,6 +712,8 @@ class UITextConstants {
   static const String homepageContentTypeArticle = '文章';
   static const String homepageContentTypeVideo = '视频';
   static const String homepageContentTypeImage = '图片';
+  static const String homepageContentTypeOpinion = '口碑';
+  static const String homepageContentTypeQuestion = '提问';
   static const String homepageContentTypeDefault = '内容';
   static const String homepageTypeDefault = '地点和事物';
   static const String circleInfoUnavailableTitle = '圈子信息暂不可用';
@@ -733,6 +730,8 @@ class UITextConstants {
   static const String objectTabRelatedCircles = '相关圈子';
   static const String objectTabMembers = '成员';
   static const String homepageSubCampusLife = '校园生活';
+  static const String homepageSubOpinion = '口碑';
+  static const String homepageSubQuestion = '提问';
   static const String objectIntroMoreLabel = '查看更多';
   static String objectIntroTitle(String objectName) => '认识$objectName';
   static const String editProfile = '编辑资料';
@@ -1743,6 +1742,8 @@ class UITextConstants {
   static const String createActionAddContactShort = homeObjectActionAddContact;
   static const String createActionCreateGroupShort = '发起群聊';
   static const String createActionCreateCircleShort = createCircle;
+  static const String createActionInterestMatchShort = '兴趣配对';
+  static const String createActionInterestMatchSubtitle = '发现同趣的人、圈子与地点';
   static const String createActionPublishGroupTitle = publishAction;
   static const String createActionSocialGroupTitle = profileTabInteraction;
   static const String createPageTitle = '创作';

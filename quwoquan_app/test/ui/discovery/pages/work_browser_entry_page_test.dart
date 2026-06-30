@@ -95,6 +95,41 @@ void main() {
     );
   });
 
+  testWidgets('直达入口：环境 smoke 使用可读视频 seed 时渲染视频 stage', (tester) async {
+    final repo = MockContentRepository();
+    const videoWorkId = 'v1';
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+        child: ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (context, _) => MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const WorkBrowserEntryPage(
+              workId: videoWorkId,
+              source: 'environmentSmoke',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(
+      find.byKey(const ValueKey('works-video-stage-$videoWorkId-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('work-browser-entry-error')),
+      findsNothing,
+    );
+  });
+
   testWidgets('直达入口：浅色来源的失效内容错误页不继承深色沉浸上下文', (tester) async {
     final repo = MockContentRepository();
 

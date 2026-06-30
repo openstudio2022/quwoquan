@@ -2,7 +2,7 @@
 # Resume cs100 fresh batch from produce_author → publish (managed local, composer-2.5).
 set -euo pipefail
 export CURSOR_API_KEY="${CURSOR_API_KEY:?set CURSOR_API_KEY}"
-export QWQ_DATA_ROOT="${QWQ_DATA_ROOT:-$HOME/qwq_scale_verify}"
+export QWQ_DATA_ROOT="${QWQ_DATA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.qwq_sandbox}"
 export QWQ_RUNTIME_ROOT="${QWQ_RUNTIME_ROOT:-$QWQ_DATA_ROOT/runtime}"
 export QWQ_PUBLISH_ROOT="${QWQ_PUBLISH_ROOT:-$QWQ_DATA_ROOT/publish}"
 export QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS=1

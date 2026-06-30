@@ -327,7 +327,8 @@ func TestIntersectionService_SpotlightFiltersIncompleteDisplay(t *testing.T) {
 			DisplayName: "林清越", AvatarURL: "https://static.quwoquan.test/a.png"},
 		// 非人对象无需头像，但要有结论句 → 进候选窗。
 		{IntersectionID: "place_ok", Dimension: "location", Strength: 0.6,
-			ActionTargetID: "e1", ObjectKind: "place", PrimaryText: "1位你关注的人来过这里"},
+			ActionTargetID: "e1", ObjectKind: "place", DisplayName: "横竖影像馆取景地",
+			PrimaryText: "1位你关注的人来过「横竖影像馆取景地」"},
 	}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
@@ -597,8 +598,9 @@ func TestIntersectionService_ListFiltersAndPaginates(t *testing.T) {
 		{
 			IntersectionID: "c", IntersectionClass: "fact", Dimension: "location",
 			Strength: 0.8, FreshAt: now.Add(-3 * time.Hour).Format(time.RFC3339), TimeBucket: "last7Days",
+			DisplayName: "横竖影像馆取景地",
 			IntersectionPoints: []IntersectionPointView{
-				{PointID: "c1", PointClass: "fact", Dimension: "location", SourceRef: "followeeVisited", Label: "来过这里", Count: 5, SampleText: "顾南", Visibility: "public"},
+				{PointID: "c1", PointClass: "fact", Dimension: "location", SourceRef: "followeeVisited", Label: "到访过", Count: 5, SampleText: "顾南", Visibility: "public"},
 			},
 		},
 	}}

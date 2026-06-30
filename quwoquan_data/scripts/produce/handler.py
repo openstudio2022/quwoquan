@@ -1,6 +1,6 @@
-"""data produce — 两阶段内容生产（compose-brief → 会话模型/结构化图片 → review）。
+"""data produce — 两阶段内容生产（compose-brief → 创作 agent/结构化图片 → review）。
 
-正文由会话模型（Agent）创作，CLI 不再拼接任何句子：
+正文由创作 agent（Agent）创作，CLI 不再拼接任何句子：
   --stage compose-brief : 准备写作契约 writing_pack.json + prompt.md + 草稿包（posts/.../4.draft/）。
   文章/主页类由人/Agent 据 prompt.md 创作正文写回 4.draft/draft.article.md（generator=agent）；
   图片作品只使用结构化 sourceCollection/assets/caption，不生成正文草稿。
@@ -183,11 +183,11 @@ def _stage_compose_brief(task_id: str, batch_id: str, refs, *, batch_size: int =
             f"(size={batch_size}); see {batch_dir(task_id, batch_id)}"
         )
         if prepared_article_like:
-            print("[produce] Next: 会话模型阅读 _batch/{seq}.batch_prompt.md；文章/主页类写回各 4.draft/draft.article.md，图片作品不生成正文草稿。")
+            print("[produce] Next: 创作 agent阅读 _batch/{seq}.batch_prompt.md；文章/主页类写回各 4.draft/draft.article.md，图片作品不生成正文草稿。")
         else:
             print("[produce] Next: 图片作品已由结构化 sourceCollection/assets/caption 准备；不生成 4.draft/draft.article.md。")
     elif prepared_article_like:
-        print("[produce] Next: 会话模型阅读 4.draft/prompt.md 与 3.compose/writing_pack.json 创作正文，写回 4.draft/draft.article.md (generator=agent)。")
+        print("[produce] Next: 创作 agent阅读 4.draft/prompt.md 与 3.compose/writing_pack.json 创作正文，写回 4.draft/draft.article.md (generator=agent)。")
     else:
         print("[produce] Next: 图片作品已由结构化 sourceCollection/assets/caption 准备；不生成 4.draft/draft.article.md。")
     print("[produce] 然后运行: qwq-data data produce --task <T> --batch <B> --type article --stage review --materialize")

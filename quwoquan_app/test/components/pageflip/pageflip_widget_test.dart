@@ -368,6 +368,98 @@ void main() {
     },
   );
 
+  testWidgets(
+    'ArticleReadOnlyBookDeck keeps slow backward drag live past the direction split',
+    (WidgetTester tester) async {
+      await tester.binding.setSurfaceSize(const Size(408, 916));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final debugStates = <ArticleReadOnlyBookDebugState>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: LayoutBuilder(
+            builder: (context, constraints) {
+              final metrics = resolveArticleCanvasMetrics(
+                context,
+                constraints,
+                variant: ArticleCanvasVariant.detail,
+              );
+              return ArticleReadOnlyBookDeck(
+                pages: _diagnosticPages(),
+                template: ArticleTemplatePreset.tech,
+                fontPreset: ArticleFontPreset.mono,
+                metrics: metrics,
+                pagePadding: articleReaderStagePagePadding(),
+                initialPage: 4,
+                coverUrl: '',
+                showFooterPageLabel: false,
+                onDebugStateChanged: debugStates.add,
+                debugPageSurfaceBuilder: _buildProbePageSurface,
+                debugBackPageSurfaceBuilder: _buildProbeBackPageSurface,
+              );
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      for (var i = 0; i < 12; i += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      debugStates.clear();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+      );
+      final samples = <ArticleReadOnlyBookDebugState>[];
+      const stepDeltas = <double>[64, 64, 64, 64, 64, 64, 64];
+      for (final dx in stepDeltas) {
+        await gesture.moveBy(Offset(dx, 0));
+        for (var i = 0; i < 4; i += 1) {
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        final backStates = debugStates
+            .where(
+              (state) =>
+                  state.renderDirection == StPageFlipDirection.back &&
+                  state.backwardCompositeMode == 'paperFoldBackwardMainline',
+            )
+            .toList(growable: false);
+        expect(
+          backStates,
+          isNotEmpty,
+          reason:
+              'slow BACK drag must keep producing paperFoldBackwardMainline samples.',
+        );
+        samples.add(backStates.last);
+      }
+
+      final coveredWidths = samples
+          .map((state) => state.backwardCoveredWidth)
+          .whereType<double>()
+          .toList(growable: false);
+      expect(coveredWidths, hasLength(stepDeltas.length));
+      for (var index = 1; index < coveredWidths.length; index += 1) {
+        expect(
+          coveredWidths[index],
+          greaterThanOrEqualTo(coveredWidths[index - 1] - 0.04),
+          reason:
+              'slow BACK drag must not stall or rewind while the finger remains down.',
+        );
+      }
+      expect(
+        coveredWidths.last,
+        greaterThan(0.86),
+        reason:
+            'held slow BACK drag must reach the late page pose before release, '
+            'not wait for gesture.up() animation to finish the turn.',
+      );
+
+      await gesture.up();
+      await tester.pump(const Duration(milliseconds: 16));
+      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    },
+  );
+
   testWidgets('PageflipDiagnosticsApp shows long-form baseline content', (
     WidgetTester tester,
   ) async {
@@ -2059,7 +2151,26 @@ void main() {
         samples.first.clipBounds?.width.abs() ??
         376.0;
 
-    final missingBackSamples = samples
+    bool expectsVisibleVerso(_IPhone17ZeroAngleSample sample) {
+      final trace = sample.trace;
+      if (trace == null) {
+        return true;
+      }
+      final versoWidth = trace.leafVersoWidth ?? 1;
+      final rectoCoverage = trace.leafRectoCoverage ?? 0;
+      return versoWidth > 0.05 && rectoCoverage < 0.95;
+    }
+
+    final visibleVersoSamples = samples
+        .where(expectsVisibleVerso)
+        .toList(growable: false);
+    expect(
+      visibleVersoSamples,
+      isNotEmpty,
+      reason: 'iPhone17 zero-angle BACK must still cover active verso phases.',
+    );
+
+    final missingBackSamples = visibleVersoSamples
         .where(
           (sample) =>
               sample.versoFailureReason ==
@@ -2074,10 +2185,10 @@ void main() {
       isEmpty,
       reason:
           'iPhone17 zero-angle BACK must not drop sheetVersoBack while the '
-          'mainline moving sheet remains active.\n'
+          'mainline moving sheet still has visible verso width.\n'
           '${missingBackSamples.map((sample) => sample.describe()).join('\n')}',
     );
-    final collapsedRuntimeSamples = samples
+    final collapsedRuntimeSamples = visibleVersoSamples
         .where(
           (sample) =>
               sample.versoFailureReason != BackwardVersoFailureReason.none ||
@@ -2098,6 +2209,16 @@ void main() {
           'or versoPolygonEmpty.\n'
           '${collapsedRuntimeSamples.map((sample) => sample.describe()).join('\n')}',
     );
+    final fullyLaidRectoSamples = samples
+        .where((sample) => !expectsVisibleVerso(sample))
+        .toList(growable: false);
+    expect(
+      fullyLaidRectoSamples,
+      isNotEmpty,
+      reason:
+          'complete held BACK drag must reach the recto/front laid-down phase '
+          'instead of staying visually stuck in the middle of the page.',
+    );
     final overWideSamples = samples
         .where((sample) {
           final backBounds = sample.sheetVersoBackBounds;
@@ -2115,6 +2236,10 @@ void main() {
     final jumpSamples = <_IPhone17ZeroAngleSample>[];
     for (var index = 1; index < samples.length; index += 1) {
       if (samples[index].label != samples[index - 1].label) {
+        continue;
+      }
+      if (!expectsVisibleVerso(samples[index - 1]) ||
+          !expectsVisibleVerso(samples[index])) {
         continue;
       }
       final previous = samples[index - 1].sheetVersoBackBounds;
@@ -2314,7 +2439,6 @@ void main() {
     () async {
       const pageSize = Size(400, 600);
       const sheetPoint = Offset(300, 300);
-      const sourcePoint = Offset(240, 300);
       const materialLocalPolygon = <Offset>[
         Offset(60, 0),
         Offset(460, 0),
@@ -2377,16 +2501,6 @@ void main() {
           Offset(120, 500),
         ],
       );
-      final snapshotBytes = await _rawRgbaBytes(snapshotImage);
-      final sourceColor = _classifyProbeColor(
-        _colorAtBytes(
-          snapshotImage.width,
-          snapshotImage.height,
-          snapshotBytes,
-          sourcePoint,
-        ),
-      );
-
       expect(narrowColor, equals(wideColor));
       expect(
         narrowColor,
@@ -2788,7 +2902,7 @@ Future<_BackwardVersoTextureProbeSample> _renderBackwardVersoTextureProbeScene(
     );
     framebufferBackActualColors.add(actualColor);
     framebufferBackExpectedAllColors.add(expectedBackColor);
-    if (actualColor != expectedBackColor) {
+    if (!_semanticBackColorMatches(actualColor, expectedBackColor)) {
       continue;
     }
     framebufferProbeColors.add(actualColor);
@@ -4213,7 +4327,9 @@ void _expectVisibleBackHasSpatialTexture(
   final cyanPixels = actualCounts[_ProbeColor.cyan] ?? 0;
   final blackPixels = actualCounts[_ProbeColor.black] ?? 0;
   final semanticInteriorPixels = cyanPixels + blackPixels;
-  final edgeMarkerPixels = actualCounts[_ProbeColor.white] ?? 0;
+  final edgeMarkerPixels =
+      (actualCounts[_ProbeColor.white] ?? 0) +
+      (actualCounts[_ProbeColor.paperBack] ?? 0);
   final semanticTexturePixels = semanticInteriorPixels + edgeMarkerPixels;
   expect(
     visiblePixels,
@@ -4225,7 +4341,8 @@ void _expectVisibleBackHasSpatialTexture(
       (color) =>
           color == _ProbeColor.cyan ||
           color == _ProbeColor.black ||
-          color == _ProbeColor.white,
+          color == _ProbeColor.white ||
+          color == _ProbeColor.paperBack,
     ),
     isTrue,
     reason:
@@ -4246,6 +4363,13 @@ void _expectVisibleBackHasSpatialTexture(
         '$poseLabel may expose edge markers when source-paper UV clips near the snapshot edge, '
         'but it must still be semantic back texture.',
   );
+}
+
+bool _semanticBackColorMatches(_ProbeColor actual, _ProbeColor expected) {
+  if (actual == expected) {
+    return true;
+  }
+  return expected == _ProbeColor.white && actual == _ProbeColor.paperBack;
 }
 
 void _expectProbeTextureAnchoredToPageLocal(

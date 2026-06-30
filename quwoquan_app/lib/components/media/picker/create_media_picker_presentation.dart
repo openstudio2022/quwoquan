@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 
-enum CreateMediaPickerBottomAction { oneTapMovie, nextStep }
+enum CreateMediaPickerFlowIntent { publish, oneTapMovieSource }
+
+enum CreateMediaPickerBottomAction { editImage, completeImage, nextStep }
 
 enum MediaPickerSelectionBlockReason {
   none,
@@ -58,22 +60,21 @@ String mediaPickerCompletionLabel({
 List<CreateMediaPickerBottomActionSpec> mediaPickerBottomActionsForEntryMode({
   required MediaPickerEntryMode mode,
   required int selectionCount,
+  CreateMediaPickerFlowIntent flowIntent = CreateMediaPickerFlowIntent.publish,
 }) {
   final canContinue = selectionCount > 0;
-  if (isPhotoCreationEntryMode(mode)) {
+  if (isPhotoCreationEntryMode(mode) &&
+      flowIntent != CreateMediaPickerFlowIntent.oneTapMovieSource) {
     return <CreateMediaPickerBottomActionSpec>[
       CreateMediaPickerBottomActionSpec(
-        action: CreateMediaPickerBottomAction.oneTapMovie,
-        label: UITextConstants.mediaPickerOneTapMovie,
+        action: CreateMediaPickerBottomAction.editImage,
+        label: UITextConstants.mediaPickerEditImage,
         enabled: canContinue,
         isPrimary: false,
       ),
       CreateMediaPickerBottomActionSpec(
-        action: CreateMediaPickerBottomAction.nextStep,
-        label: mediaPickerCompletionLabel(
-          mode: mode,
-          selectionCount: selectionCount,
-        ),
+        action: CreateMediaPickerBottomAction.completeImage,
+        label: '${UITextConstants.mediaPickerComplete}($selectionCount)',
         enabled: canContinue,
         isPrimary: true,
       ),

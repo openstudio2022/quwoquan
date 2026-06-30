@@ -4,8 +4,8 @@
   "batchId": "creator_smoke_20260629",
   "mode": "trial",
   "dailyTarget": 3,
-  "passed": true,
-  "decision": "go",
+  "passed": false,
+  "decision": "no_go",
   "expectedObjects": {
     "homepage": 3,
     "article": 3,
@@ -15,7 +15,7 @@
   },
   "qualityTarget": {
     "targetGoal": 3,
-    "minPassRate": 0.5,
+    "minPassRate": 1.0,
     "qualityPassedObjectCount": 12,
     "targetSatisfactionRate": 4.0,
     "sourceReadyGoal": 4,
@@ -23,7 +23,7 @@
   },
   "funnel": {
     "targeted": 3,
-    "sourceReady": 9,
+    "sourceReady": 0,
     "homepagePassed": 3,
     "contentPlanned": 13,
     "authored": 8,
@@ -51,8 +51,8 @@
   "sourceAdmission": {
     "schemaVersion": "quwoquan_data.source_ready_admission/1",
     "targetEntityCount": 3,
-    "sourceReadyEntityCount": 3,
-    "sourceReadyObjectCapacity": 9,
+    "sourceReadyEntityCount": 0,
+    "sourceReadyObjectCapacity": 0,
     "requiredPerEntity": {
       "homepage": 1,
       "article": 1,
@@ -61,11 +61,11 @@
     "perEntity": [
       {
         "entity": "九寨沟",
-        "sourceReady": true,
+        "sourceReady": false,
         "counts": {
-          "homepage": 2,
-          "article": 3,
-          "image": 2,
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
           "video": 0
         },
         "needed": {
@@ -73,16 +73,16 @@
           "article": 1,
           "image": 1
         },
-        "readyCapacity": 3,
-        "focusBlockedSourceUnits": 3
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
       },
       {
         "entity": "峨眉山",
-        "sourceReady": true,
+        "sourceReady": false,
         "counts": {
-          "homepage": 1,
-          "article": 2,
-          "image": 2,
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
           "video": 0
         },
         "needed": {
@@ -90,16 +90,16 @@
           "article": 1,
           "image": 1
         },
-        "readyCapacity": 3,
-        "focusBlockedSourceUnits": 3
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
       },
       {
         "entity": "都江堰",
-        "sourceReady": true,
+        "sourceReady": false,
         "counts": {
-          "homepage": 1,
-          "article": 1,
-          "image": 2,
+          "homepage": 0,
+          "article": 0,
+          "image": 0,
           "video": 0
         },
         "needed": {
@@ -107,8 +107,8 @@
           "article": 1,
           "image": 1
         },
-        "readyCapacity": 3,
-        "focusBlockedSourceUnits": 3
+        "readyCapacity": 0,
+        "focusBlockedSourceUnits": 0
       }
     ]
   },
@@ -362,7 +362,9 @@
     "structuralOpenLicenseShortage": false,
     "structuralShortageThreshold": 5
   },
-  "blockers": [],
+  "blockers": [
+    "source-ready object capacity 0 < required 4"
+  ],
   "warnings": [
     "trial partial delivery accepted abandonedContent=4 ratio=44.44%; abandoned refs must remain excluded from release/import",
     "trial firstPassRate 55.56% < 70%; quality target already satisfied with honest partial delivery"

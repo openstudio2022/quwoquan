@@ -33,6 +33,11 @@ from download.research.auto_plan_facade import (
     _wikidata_entity_aliases,
     _wikidata_item_for_entity_search,
     _wikidata_item_for_zhwiki,
+    _wiki_related_titles_for_entity,
+    _wiki_title_for_entity,
+)
+from download.research.image_provider_compliance import (
+    professional_library_compliance_summary,
 )
 from download.research.auto_plan_report import (
     _source_availability_summary,
@@ -71,8 +76,6 @@ from download.research.source_quality import (
 from download.research.text_match import _entity_name_variants, _expanded_entity_aliases
 from download.research.wiki_discovery import (
     _BASE_DRAFT_IMAGE_CANDIDATES,
-    _wiki_related_titles_for_entity,
-    _wiki_title_for_entity,
     _wiki_url,
 )
 
@@ -133,11 +136,14 @@ def _write_auto_research_plans_impl(
         )
     except Exception:  # noqa: BLE001
         required_publishable_images = hard_image_works
+    from _common.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS
+
     report["scoringPolicy"] = {
         "imageCountPolicy": image_policy,
         "imageBonusSaturationCount": image_bonus_saturation_count,
         "minimumPublishableImagesPerTarget": hard_image_works,
-        "articleLengthPassChars": 600,
+        # RC6：长文字数门唯一真相源（图文混排走 base_draft_readiness 自适应，不在此体现固定门）。
+        "articleLengthPassChars": ARTICLE_MIN_BASE_DRAFT_CHARS,
     }
     for entity_id in entity_ids:
         obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
@@ -312,7 +318,10 @@ def _write_auto_research_plans_impl(
                         "images": len(rescue_pool),
                     }
                 )
-        homepage_image_pool = wiki_page_images or commons or hint_commons or wikidata_commons or openverse
+        # 实体百科底稿(homepage)图位绝不混入 commons/openverse 等搜索池——那些只能用于
+        # P4 独立"图片作品"lane。同源隔离：homepage 图只来自页面自身 wikitext 真实图位
+        # (wiki/voyage)，宁可受限标注，也不混入页面外图。
+        homepage_image_pool = wiki_page_images or voyage_page_images
         homepage_image_urls = {
             str(image.get("url") or "")
             for image in homepage_image_pool
@@ -326,6 +335,14 @@ def _write_auto_research_plans_impl(
             if "article" in selected_lanes
             else []
         )
+        if "image" in selected_lanes:
+            # P4：图库可发布性以 registry rightsPolicy 为唯一真相源。图虫/Pinterest 等受限
+            # 来源如实标注受限（bypassAttempted=false）+ 替代路径=开放许可图池，使"为什么专业
+            # 图库不直接进发布面、合规替代是什么"在 research report 中可审计；不抓取、不绕过。
+            report.setdefault(
+                "professionalImageLibraryCompliance",
+                professional_library_compliance_summary(),
+            )
         if needs_visual_pool and requires_publishable_images and not open_license_image_pool:
             issues.append(f"{entity_id}: no rights-compatible open-license images discovered")
             if "image" in selected_lanes:
@@ -350,6 +367,17 @@ def _write_auto_research_plans_impl(
                     rejected_source_urls=rejected_source_urls,
                 )
 
+            def _encyclopedia_role() -> str:
+                # P3 三类解耦：实体主页主源【只限百科】。首个被接受的百科作 primary，
+                # 其余百科与官网/补充源一律 supporting，使 plan 的 sourceRole 与消费侧择优一致（消除第二真相源）。
+                for existing in homepage_sources:
+                    if (
+                        str(existing.get("category") or "").casefold() == "encyclopedia"
+                        and str(existing.get("sourceRole") or "") == "primary"
+                    ):
+                        return "supporting"
+                return "primary"
+
             for prior_source in prior_homepage_sources:
                 if len(homepage_sources) >= _HOMEPAGE_CORE_SOURCE_LIMIT:
                     break
@@ -368,7 +396,8 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "homepage", official_reason_provider, "official"
                         ),
-                        source_role="primary",
+                        # P3: 官网降为 supporting（只补事实，不得作 base draft 主源）。
+                        source_role="supporting",
                     )
                 )
                 if accepted:
@@ -385,7 +414,7 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "homepage", "Chinese Wikipedia", "encyclopedia"
                         ),
-                        source_role="primary" if not homepage_sources else "supporting",
+                        source_role=_encyclopedia_role(),
                         images=_image_window(wiki_page_images, 0, count=_BASE_DRAFT_IMAGE_CANDIDATES),
                         image_evidence_mode="same_source" if wiki_page_images else "",
                     )
@@ -427,7 +456,8 @@ def _write_auto_research_plans_impl(
                     evidence_reason=_evidence_reason(
                         entity_id, "homepage", "Baidu Baike item URL", "encyclopedia"
                     ),
-                    source_role="supporting",
+                    # P3 多源择优：百度百科作百科候选，若 wiki 缺失则升为 primary。
+                    source_role=_encyclopedia_role(),
                     images=[],
                     image_evidence_mode="",
                 )
@@ -480,7 +510,8 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "homepage", "Sogou Baike query URL", "encyclopedia"
                         ),
-                        source_role="supporting",
+                        # P3 多源择优：搜狗百科作百科候选，若 wiki/百度均缺失则升为 primary。
+                        source_role=_encyclopedia_role(),
                         images=[],
                         image_evidence_mode="",
                     )
@@ -516,7 +547,7 @@ def _write_auto_research_plans_impl(
                     report,
                     entity_id=entity_id,
                     lane="homepage",
-                    reason="homepage has no encyclopedia/official seed source for baseDraft",
+                    reason="homepage has no encyclopedia (wiki/baidu/sogou) seed source for baseDraft",
                     next_action="manual_homepage_seed_source_or_target_replacement",
                 )
 
@@ -525,7 +556,6 @@ def _write_auto_research_plans_impl(
             for source in _qunar_travelogue_sources(
                 entity_id,
                 entity_aliases=entity_aliases,
-                authorized_images=[],
                 limit=_article_base_candidate_limit(required_article_bases),
             ):
                 accepted = _accept_source(

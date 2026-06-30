@@ -29,6 +29,9 @@ UiErrorSemantic runtimeErrorSemantic(
   bool allowRetry = true,
   bool allowOpenSettings = false,
   UiErrorPresentation? presentation,
+  UiErrorAppearanceMode appearanceMode = UiErrorAppearanceMode.inherit,
+  String? sourceRouteId,
+  String? sourceSurfaceId,
 }) {
   return UiErrorSemanticResolver.resolve(
     context,
@@ -40,6 +43,9 @@ UiErrorSemantic runtimeErrorSemantic(
     allowRetry: allowRetry,
     allowOpenSettings: allowOpenSettings,
     presentation: presentation,
+    appearanceMode: appearanceMode,
+    sourceRouteId: sourceRouteId,
+    sourceSurfaceId: sourceSurfaceId,
   );
 }
 

@@ -315,11 +315,88 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
         "ul",
     }
 
-    def __init__(self) -> None:
+    _HEADING_TAGS = {"h1": "#", "h2": "##", "h3": "###", "h4": "####", "h5": "#####", "h6": "######"}
+
+    def __init__(self, base_url: str = "") -> None:
         super().__init__(convert_charrefs=True)
         self._chunks: list[str] = []
         self._skip_depth = 0
         self._figure_index = 0
+        self._group_index = 0
+        self._base_url = str(base_url or "")
+        # 内联图清单：与 source.md 中 asset://source-inline-NNN 占位符一一对应（同序）。
+        self._inline_images: list[dict[str, str]] = []
+        # 相邻连续图缓冲：仅被空白/块边界分隔的连续 <img> 合并为单个 figuregroup（P2）。
+        # 一旦出现真实文字（handle_data 非空白）即 flush，绝不跨正文段落误并。
+        self._pending_images: list[dict[str, str]] = []
+        # 标题保结构：进入 h1-h6 时压栈对应 markdown 前缀，handle_data 内据此产出 `#` 级标题。
+        self._heading_prefix: str | None = None
+
+    # lazy-load 图片真实地址常见承载属性（按优先级）：站点把真实图放进 data-*，
+    # src 仅留 1px/loading 占位。RC3 必须取真实地址，否则游记数十张图被占位吞掉（漏图）。
+    _LAZY_SRC_ATTRS = (
+        "data-original",
+        "data-actualsrc",
+        "data-src",
+        "data-lazy-src",
+        "data-lazy",
+        "data-echo",
+    )
+    # 占位/装饰图特征：lazy 占位 gif、1px 透明、loading/spinner/spacer 等，不作为正文配图。
+    _PLACEHOLDER_SRC_RE = re.compile(
+        r"(?:^|/)(?:blank|spacer|placeholder|loading|grey|gray|transparent|pixel|1x1|s\.gif|t\.gif|default)"
+        r"[-_.a-z0-9]*\.(?:gif|png|svg)(?:[?#]|$)",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _usable_img_src(cls, src: str) -> str:
+        """只放行可就地下载的 src（http/https/协议相对//或相对路径）。
+
+        data: 内联、javascript:、about:、纯锚点 #、以及 1px/loading 等占位装饰图一律视为
+        不可下载——这类 <img> 不再产生悬空的 asset://source-inline 占位（RC3：占位必须能锚定真实资产）。
+        """
+        s = str(src or "").strip()
+        if not s:
+            return ""
+        low = s.lower()
+        if low.startswith(("data:", "javascript:", "about:", "#")):
+            return ""
+        if cls._PLACEHOLDER_SRC_RE.search(s):
+            return ""
+        return s
+
+    @classmethod
+    def _resolve_img_src(cls, attr: dict[str, str]) -> str:
+        """从 <img> 属性里解析真实可下载地址：优先 lazy data-*（真实图），再退回 src。
+
+        lazy-load 站点（如去哪儿游记移动页）把真实图放 data-original/data-src 等，src 留占位；
+        若先取 src 会吞掉真实图。这里先扫 lazy 属性取首个可用真实地址，无 lazy 再用 src。
+        """
+        for key in cls._LAZY_SRC_ATTRS:
+            lazy = cls._usable_img_src(attr.get(key))
+            if lazy:
+                return lazy
+        return cls._usable_img_src(attr.get("src"))
+
+    def _flush_pending_images(self) -> None:
+        """把缓冲的相邻连续图落为 markdown：单图→`:::figure`，≥2 张→单个 `:::figuregroup` 占位。"""
+        pending = self._pending_images
+        if not pending:
+            return
+        self._pending_images = []
+        if len(pending) == 1:
+            img = pending[0]
+            self._chunks.append(
+                f"\n:::figure\n![{img['caption']}](asset://{img['placeholderId']})\n{img['caption']}\n:::\n"
+            )
+            return
+        self._group_index += 1
+        lines = [f'\n:::figuregroup id="grp-{self._group_index:03d}" count="{len(pending)}"']
+        for img in pending:
+            lines.append(f"![{img['caption']}](asset://{img['placeholderId']})")
+        lines.append(":::\n")
+        self._chunks.append("\n".join(lines))
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
@@ -328,18 +405,41 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
             return
         if self._skip_depth:
             return
-        if tag in self._BLOCK_TAGS:
-            self._chunks.append("\n")
         if tag == "img":
             attr = {key.lower(): value or "" for key, value in attrs}
-            src = (attr.get("src") or attr.get("data-src") or attr.get("data-original") or "").strip()
-            caption = (attr.get("alt") or attr.get("title") or src or "source image").strip()
-            caption = re.sub(r"\s+", " ", html_lib.unescape(caption))
+            src = self._resolve_img_src(attr)
+            if not src:
+                # 无可下载 src ⇒ 不插入 figure（避免悬空占位、图文对不上）。
+                return
+            caption = (attr.get("alt") or attr.get("title") or "source image").strip()
+            caption = re.sub(r"\s+", " ", html_lib.unescape(caption)) or "source image"
             self._figure_index += 1
             asset_id = f"source-inline-{self._figure_index:03d}"
-            self._chunks.append(
-                f"\n:::figure\n![{caption}](asset://{asset_id})\n{caption}\n:::\n"
+            abs_src = urllib.parse.urljoin(self._base_url, src) if self._base_url else src
+            self._inline_images.append(
+                {
+                    "placeholderId": asset_id,
+                    "src": abs_src,
+                    "rawSrc": src,
+                    "caption": caption,
+                }
             )
+            # 缓冲：连续图（仅空白/块边界分隔）合并；遇真实文字/标题/结束才 flush。
+            self._pending_images.append(
+                {"placeholderId": asset_id, "caption": caption}
+            )
+            return
+        if tag in self._HEADING_TAGS:
+            # 标题保结构：先 flush 图缓冲，再起一行 markdown 标题前缀。
+            self._flush_pending_images()
+            self._heading_prefix = self._HEADING_TAGS[tag]
+            self._chunks.append(f"\n\n{self._heading_prefix} ")
+            return
+        if tag in self._BLOCK_TAGS:
+            self._chunks.append("\n")
+
+    def inline_images(self) -> list[dict[str, str]]:
+        return [dict(row) for row in self._inline_images]
 
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
@@ -347,6 +447,10 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
             self._skip_depth -= 1
             return
         if self._skip_depth:
+            return
+        if tag in self._HEADING_TAGS:
+            self._heading_prefix = None
+            self._chunks.append("\n")
             return
         if tag in self._BLOCK_TAGS:
             self._chunks.append("\n")
@@ -356,13 +460,51 @@ class _InlineFigureHTMLTextExtractor(HTMLParser):
             return
         text = html_lib.unescape(data)
         if text.strip():
+            # 出现真实正文/标题文字 ⇒ 连续图段落到此为止，先 flush 图缓冲再写文字。
+            self._flush_pending_images()
             self._chunks.append(text)
 
     def text(self) -> str:
+        self._flush_pending_images()
         return "".join(self._chunks)
 
 
-def _html_to_plain_text(html: str) -> str:
+def _html_to_plain_text(html: str, base_url: str = "") -> str:
+    text, _ = _html_to_plain_text_with_inline_images(html, base_url)
+    return text
+
+
+# P3 三类解耦：来源页内联视频检测（文章类含视频则放弃——不把视频内容强行图文化）。
+# 命中 <video>/<source type=video> 原生视频标签，或主流视频站点的 <iframe>/<embed> 嵌入。
+_VIDEO_TAG_RE = re.compile(r"(?is)<video[\s/>]|<source\b[^>]*\btype=['\"]?video/")
+_VIDEO_EMBED_HOST_RE = re.compile(
+    r"(?is)<(?:iframe|embed)\b[^>]*\bsrc=['\"][^'\"]*"
+    r"(?:youtube\.com|youtu\.be|youku\.com|bilibili\.com|player\.bilibili|"
+    r"iqiyi\.com|v\.qq\.com|video\.qq\.com|douyin\.com|ixigua\.com|"
+    r"miaopai\.com|vimeo\.com|/v\.swf|/video/|/player/)"
+)
+
+
+def html_has_inline_video(html: str) -> bool:
+    """来源页是否以视频为主要载体（含原生 <video> 或主流视频站嵌入）。
+
+    用于 P3「文章=图文混排或长文；含视频则放弃」判据：检测到内联视频即标记 hasVideo，
+    内容计划据此弃稿（不把视频内容强行图文化，避免成稿与原文严重不符）。
+    """
+    text = str(html or "")
+    if not text:
+        return False
+    return bool(_VIDEO_TAG_RE.search(text) or _VIDEO_EMBED_HOST_RE.search(text))
+
+
+def _html_to_plain_text_with_inline_images(
+    html: str, base_url: str = ""
+) -> tuple[str, list[dict[str, str]]]:
+    """抽取正文 + 同序内联 <img> 清单。
+
+    内联图占位 asset://source-inline-NNN 就地嵌入正文（保留图文交错），返回的清单
+    src 已按 base_url 解析为绝对 URL，供来源单元写入器就地同源下载并锚定 sourceAssetRef。
+    """
     text = str(html or "")
     match = re.search(
         r'(?is)<div[^>]+class="[^"]*mw-parser-output[^"]*"[^>]*>(.*)</div>\s*</div>\s*</div>',
@@ -371,12 +513,15 @@ def _html_to_plain_text(html: str) -> str:
     if match:
         text = match.group(1)
     text = re.sub(r"(?is)<!--.*?-->", " ", text)
-    parser = _InlineFigureHTMLTextExtractor()
+    parser = _InlineFigureHTMLTextExtractor(base_url=base_url)
+    inline_images: list[dict[str, str]] = []
     try:
         parser.feed(text)
         text = parser.text()
+        inline_images = parser.inline_images()
     except Exception:  # noqa: BLE001
         text = re.sub(r"(?is)<[^>]+>", "\n", text)
+        inline_images = []
     text = html_lib.unescape(text)
     text = re.sub(r"&nbsp;|&amp;|&lt;|&gt;|&quot;|&#\d+;", " ", text)
     lines = [ln.strip() for ln in text.splitlines()]
@@ -387,7 +532,7 @@ def _html_to_plain_text(html: str) -> str:
         if any(tok in ln for tok in ("wgBreakFrames", "RLCONF", "vector-feature", "DOCTYPE")):
             continue
         kept.append(ln)
-    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip(), inline_images
 
 
 def _html_meta_plain_text(html: str) -> str:
@@ -539,9 +684,16 @@ def _ems517_shell_plaintext(url: str, html: str) -> str:
 
 
 def _qunar_html_plaintext(html_bytes: bytes, url: str = "") -> str:
-    _ = url
     raw = html_bytes.decode("utf-8", errors="replace")
-    return _html_to_plain_text(raw)[:50000]
+    return _html_to_plain_text(raw, url)[:50000]
+
+
+def _qunar_html_with_inline_images(
+    html_bytes: bytes, url: str = ""
+) -> tuple[str, list[dict[str, str]]]:
+    raw = html_bytes.decode("utf-8", errors="replace")
+    text, imgs = _html_to_plain_text_with_inline_images(raw, url)
+    return text[:50000], imgs
 
 
 def _flatten_json_strings(value: object) -> list[str]:
@@ -649,6 +801,22 @@ def _extract_text_by_extractor(extractor: str, html_bytes: bytes, url: str = "")
 def extract_page_text(html_bytes: bytes, url: str = "", *, extractor: str = "generic_html") -> str:
     """从 HTML 响应抽取可读正文（按 registry extractor 分发）。"""
     return _extract_text_by_extractor(extractor, html_bytes, url)[:50000]
+
+
+def extract_page_text_with_inline_images(
+    html_bytes: bytes, url: str = "", *, extractor: str = "generic_html"
+) -> tuple[str, list[dict[str, str]]]:
+    """抽取正文 + 同源内联 <img> 清单（RC3：图文混排游记就地配图真相源）。
+
+    - qunar_html / generic_html：解析 html_bytes，返回 (正文, 内联图清单)；正文与
+      extract_page_text 一致，清单 src 已解析为绝对 URL，按出现顺序与正文里的
+      asset://source-inline-NNN 占位符一一对应。
+    - 其它 extractor（wikipedia_api 走 API assets、baike/official 非图文混排游记）：
+      返回 (正文, [])，不就地抓内联图，避免引入跨源/二次网络的第二图源。
+    """
+    if extractor in {"qunar_html", "generic_html"}:
+        return _qunar_html_with_inline_images(html_bytes, url)
+    return extract_page_text(html_bytes, url, extractor=extractor), []
 
 
 def sniff_image_ext(body: bytes, content_type: str = "") -> str | None:
@@ -803,17 +971,22 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
             "htmlBytes": body,
             "text": text[:50000],
             "assets": assets,
+            "inlineImages": [],
             "sha256": hashlib.sha256(body).hexdigest(),
             "runtime": {**runtime, "rawFormat": "mediawiki_api_json"},
         }
     status, body, _ = _http_get_bytes(url, timeout=20, max_redirects=4, max_retries=4)
     if status != 200 or not body:
         raise RuntimeError(f"fetch failed for {url} (status={status})")
+    # RC3：图文混排游记（qunar/generic）返回同源内联图清单（绝对 URL，与正文
+    # asset://source-inline-NNN 占位同序），供来源单元写入器就地下载并锚定。
+    text, inline_images = extract_page_text_with_inline_images(body, url, extractor=extractor)
     return {
         "url": url,
         "statusCode": status,
         "htmlBytes": body,
-        "text": extract_page_text(body, url, extractor=extractor),
+        "text": text,
+        "inlineImages": inline_images,
         "sha256": hashlib.sha256(body).hexdigest(),
         "runtime": runtime,
     }
@@ -1059,7 +1232,12 @@ def fetch_wikipedia_wikitext(url: str) -> str:
     data = _mediawiki_json_loads(raw)
     parse_block = data.get("parse") if isinstance(data, Mapping) else {}
     if isinstance(parse_block, Mapping):
-        return str(parse_block.get("wikitext") or parse_block.get("*") or "").strip()
+        # format=json(formatversion=1) 下 wikitext 为 {"*": "..."}；必须取 "*"，
+        # 否则 str(dict) 会得到 dict repr 单行串，破坏 section/段落锚点解析。
+        raw_wikitext = parse_block.get("wikitext")
+        if isinstance(raw_wikitext, Mapping):
+            return str(raw_wikitext.get("*") or "").strip()
+        return str(raw_wikitext or parse_block.get("*") or "").strip()
     return ""
 
 

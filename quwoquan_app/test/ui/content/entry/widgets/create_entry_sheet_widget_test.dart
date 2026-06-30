@@ -25,7 +25,7 @@ void main() {
     description: 'sheet drag handle',
   );
 
-  testWidgets('加号入口保留三项创作和三项社交动作', (tester) async {
+  testWidgets('加号入口保留三项创作和四项社交动作', (tester) async {
     EditorStartAction? selected;
 
     await tester.pumpWidget(
@@ -83,6 +83,14 @@ void main() {
     );
     expect(
       find.text(UITextConstants.createActionCreateCircleShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionInterestMatchShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionInterestMatchSubtitle),
       findsOneWidget,
     );
     expect(find.text('发图片'), findsNothing);
@@ -153,6 +161,18 @@ void main() {
       lessThan(
         tester
             .getCenter(find.text(UITextConstants.createActionCreateCircleShort))
+            .dy,
+      ),
+    );
+    expect(
+      tester
+          .getCenter(find.text(UITextConstants.createActionCreateCircleShort))
+          .dy,
+      lessThan(
+        tester
+            .getCenter(
+              find.text(UITextConstants.createActionInterestMatchShort),
+            )
             .dy,
       ),
     );
@@ -229,6 +249,10 @@ void main() {
         );
         expect(
           find.text(UITextConstants.createActionCreateCircleShort),
+          findsOneWidget,
+        );
+        expect(
+          find.text(UITextConstants.createActionInterestMatchShort),
           findsOneWidget,
         );
         expect(find.text('发布'), findsNothing);
@@ -323,6 +347,7 @@ void main() {
 
   testWidgets('移动端加号面板渲染社交动作并触发回调', (tester) async {
     var createCircleTapped = false;
+    var interestMatchTapped = false;
 
     await tester.pumpWidget(
       ProviderScope(
@@ -336,6 +361,7 @@ void main() {
                 onStartGroupChat: () {},
                 onAddContact: () {},
                 onCreateCircle: () => createCircleTapped = true,
+                onInterestMatch: () => interestMatchTapped = true,
                 onCancel: () {},
                 priority: CreateActionSheetPriority.socialPrimary,
               ),
@@ -358,6 +384,14 @@ void main() {
       find.text(UITextConstants.createActionCreateGroupShort),
       findsOneWidget,
     );
+    expect(
+      find.text(UITextConstants.createActionInterestMatchShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionInterestMatchSubtitle),
+      findsOneWidget,
+    );
     expect(find.byType(ConversationSheetListCard), findsNWidgets(2));
     expect(
       find.descendant(
@@ -371,6 +405,11 @@ void main() {
     await tester.pump();
 
     expect(createCircleTapped, isTrue);
+
+    await tester.tap(find.text(UITextConstants.createActionInterestMatchShort));
+    await tester.pump();
+
+    expect(interestMatchTapped, isTrue);
   });
 
   testWidgets('iPad 下发起弹窗保持内容驱动高度', (tester) async {

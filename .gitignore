@@ -57,6 +57,11 @@ logs/
 # Assistant reference implementations (synced from upstream, do not commit)
 ref/
 
+# In-project gitignored sandbox data root (unattended / scaled e2e scratch root).
+# Canonical SSOT: quwoquan_data/scripts/_common/paths.py::default_sandbox_root().
+# Replaces the legacy ~/qwq_scale_verify HOME drift; never commit sandbox output.
+.qwq_sandbox/
+
 # quwoquan_data runtime roots
 quwoquan_data/runtime/**
 !quwoquan_data/runtime/

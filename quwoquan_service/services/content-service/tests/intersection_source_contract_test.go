@@ -19,7 +19,7 @@ import (
 const (
 	ixViewer = "ixsrc_viewer"
 	ixObject = "ixsrc_object"
-	ixEntity = "ixsrc_entity_lake"
+	ixEntity = "地点/取景地/横竖影像馆取景地"
 )
 
 func seedIntersectionSourceFixtures(t *testing.T) {
@@ -194,7 +194,7 @@ func TestIntersectionSource_PersonReasonBackfillsDisplayProfile(t *testing.T) {
 }
 
 // TestIntersectionSource_EntityObjectProducesFolloweeVisited 断言实体对象页
-// 产出桥接型 followeeVisited（N位你关注的人来过这里）。
+// 产出桥接型 followeeVisited（N位你关注的人来过「具体对象名」）。
 func TestIntersectionSource_EntityObjectProducesFolloweeVisited(t *testing.T) {
 	seedIntersectionSourceFixtures(t)
 	svc := newRealIntersectionService(t)
@@ -214,7 +214,7 @@ func TestIntersectionSource_EntityObjectProducesFolloweeVisited(t *testing.T) {
 	if hit == nil {
 		t.Fatalf("missing followeeVisited reason for entity object")
 	}
-	if !strings.Contains(hit.PrimaryText, "1位你关注的人来过这里") {
+	if !strings.Contains(hit.PrimaryText, "1位你关注的人来过「横竖影像馆取景地」") {
 		t.Fatalf("followeeVisited primaryText off-dictionary: %q", hit.PrimaryText)
 	}
 	if len(hit.IntersectionPoints) == 0 {

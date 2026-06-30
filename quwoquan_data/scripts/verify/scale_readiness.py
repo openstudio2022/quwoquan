@@ -216,7 +216,13 @@ def _source_admission_report(
                 lane = _source_unit_lane(meta, source_dir)
                 source_ref = (source_dir / "source.md").relative_to(root).as_posix() if (source_dir / "source.md").is_file() else ""
                 if lane == "article":
-                    if source_ref and _compact_len(load_base_draft_text(task_id, batch_id, source_ref)) >= 600:
+                    # RC6：文章可发布性计数走形态自适应唯一真相源 base_draft_readiness
+                    # （长文≥600 或 图文混排正文≥200+足量内联图/图注），不再裸 `>= 600`。
+                    from _common.base_draft import base_draft_readiness
+
+                    if source_ref and base_draft_readiness(
+                        load_base_draft_text(task_id, batch_id, source_ref)
+                    )["ready"]:
                         counts["article"] += 1
                 elif lane == "image":
                     index = _load_json_if_exists(source_dir / "assets" / "index.json")

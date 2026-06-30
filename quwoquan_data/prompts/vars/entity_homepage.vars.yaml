@@ -1,0 +1,13 @@
+template: entity_homepage
+system:
+  required:
+    - min_page_chars
+  optional: []
+task:
+  required:
+    - name
+    - base_draft_block
+  optional:
+    - base_source_line
+    - section_outline_block
+    - available_images_block

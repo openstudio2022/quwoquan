@@ -55,72 +55,61 @@ class _SectionChatState extends ConsumerState<SectionChat> {
       widget.isDark,
       ColorType.foregroundSecondary,
     );
-    final bgSecondary = AppColorsFunctional.getColor(
-      widget.isDark,
-      ColorType.backgroundSecondary,
-    );
-
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: bgSecondary,
-        borderRadius: BorderRadius.circular(AppSpacing.radiusTwentyFour),
+    return CupertinoButton(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerMd,
+        vertical: AppSpacing.containerSm,
       ),
-      child: CupertinoButton(
-        padding: EdgeInsets.all(AppSpacing.md),
-        minimumSize: Size.zero,
-        onPressed: () =>
-            context.push(AppRoutePaths.chatDetail(id: widget.conversationId!)),
-        child: Row(
-          children: [
-            Container(
-              width: AppSpacing.largeButtonSize,
-              height: AppSpacing.largeButtonSize,
-              decoration: BoxDecoration(
-                color: AppColors.primaryColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(
-                  AppSpacing.radiusTwentyFour,
+      minimumSize: Size.zero,
+      onPressed: () =>
+          context.push(AppRoutePaths.chatDetail(id: widget.conversationId!)),
+      child: Row(
+        children: [
+          Container(
+            width: AppSpacing.largeButtonSize,
+            height: AppSpacing.largeButtonSize,
+            decoration: BoxDecoration(
+              color: AppColors.primaryColor.withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              CupertinoIcons.chat_bubble_2_fill,
+              color: AppColors.primaryColor,
+              size: AppSpacing.iconMedium,
+            ),
+          ),
+          SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '圈聊入口',
+                  style: TextStyle(
+                    fontSize: AppTypography.lg,
+                    fontWeight: AppTypography.semiBold,
+                    color: fgPrimary,
+                  ),
                 ),
-              ),
-              child: Icon(
-                CupertinoIcons.chat_bubble_2_fill,
-                color: AppColors.primaryColor,
-                size: AppSpacing.iconMedium,
-              ),
-            ),
-            SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '圈聊入口',
-                    style: TextStyle(
-                      fontSize: AppTypography.lg,
-                      fontWeight: AppTypography.semiBold,
-                      color: fgPrimary,
-                    ),
+                SizedBox(height: AppSpacing.xs),
+                Text(
+                  '最近消息与未读会话统一在趣信中查看',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.sm,
+                    color: fgSecondary,
                   ),
-                  SizedBox(height: AppSpacing.xs),
-                  Text(
-                    '最近消息与未读会话统一在趣信中查看',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: AppTypography.sm,
-                      color: fgSecondary,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Icon(
-              CupertinoIcons.chevron_forward,
-              color: fgSecondary,
-              size: AppSpacing.iconSmall,
-            ),
-          ],
-        ),
+          ),
+          Icon(
+            CupertinoIcons.chevron_forward,
+            color: fgSecondary,
+            size: AppSpacing.iconSmall,
+          ),
+        ],
       ),
     );
   }
@@ -130,9 +119,11 @@ class _SectionChatState extends ConsumerState<SectionChat> {
       widget.isDark,
       ColorType.foregroundSecondary,
     );
-    return Container(
-      margin: EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      padding: EdgeInsets.all(AppSpacing.lg),
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.containerMd,
+        vertical: AppSpacing.containerLg,
+      ),
       child: Center(
         child: Text(
           UITextConstants.circleNoChatEnabled,

@@ -1,30 +1,37 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/shell/object_detail_global_bottom_nav.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
+import 'package:quwoquan_app/components/object_page/object_action_bar.dart';
 import 'package:quwoquan_app/components/object_page/object_impact_preview_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_preview_card.dart';
+import 'package:quwoquan_app/components/object_page/object_chrome_actions.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
+import 'package:quwoquan_app/components/object_page/object_secondary_filter_bar.dart';
+import 'package:quwoquan_app/components/object_page/object_slogan_card.dart';
+import 'package:quwoquan_app/components/object_page/object_stats_row.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/constants/homepage_detail_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_tab.dart';
-import 'package:quwoquan_app/ui/user/widgets/profile_slogan_card.dart';
 
 part 'homepage_detail_shell_components.dart';
 part 'homepage_detail_shell_components2.dart';
@@ -51,7 +58,6 @@ class HomepageDetailShell extends StatefulWidget {
     required this.onCreateContent,
     required this.onOpenIntroduction,
     required this.onAttach,
-    this.onIntersectionReasonTap,
   });
 
   final bool selectionMode;
@@ -72,7 +78,6 @@ class HomepageDetailShell extends StatefulWidget {
   final ValueChanged<HomepageCanonicalReference> onCreateContent;
   final VoidCallback onOpenIntroduction;
   final ValueChanged<HomepageCanonicalReference> onAttach;
-  final ValueChanged<IntersectionReason>? onIntersectionReasonTap;
 
   @override
   State<HomepageDetailShell> createState() => _HomepageDetailShellState();
@@ -100,8 +105,8 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
 
   String _activeContentSubTabId = _defaultContentSubTabId;
 
-  /// 二级过滤可见集：无 homepageTypes 约束的全展示；有约束的仅匹配类型展示
-  /// （如「校园生活」仅 school）。真相源 = codegen [HomepageUIConfig.subTabs]。
+  /// 二级过滤可见集：无 homepageTypes 约束的全展示；有约束的仅匹配类型展示。
+  /// 真相源 = codegen [HomepageUIConfig.subTabs]。
   List<HomepageSubTabConfig> get _visibleContentSubTabs {
     final homepageType = (_reference?.homepageType ?? '').trim();
     return HomepageUIConfig.subTabs
@@ -113,15 +118,17 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         .toList(growable: false);
   }
 
-  /// 二级过滤 id → 记录媒体类型；all/campus_life 不按媒体类型收窄。
+  /// 二级过滤 id → 记录类型；all 不按媒体类型收窄。
   String? _contentTypeForSubTab(String subTabId) {
     switch (subTabId) {
       case 'image':
         return 'image';
       case 'video':
         return 'video';
-      case 'article':
-        return 'article';
+      case 'opinion':
+        return 'review';
+      case 'question':
+        return 'question';
       default:
         return null;
     }
@@ -278,21 +285,29 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: ProfileIosSectionHeader(
-                  title: UITextConstants.homepageContentSectionTitle,
-                  padding: EdgeInsets.only(
-                    left: AppSpacing.containerXs,
-                    bottom: AppSpacing.intraGroupSm,
-                  ),
-                ),
-              ),
-              if (subTabs.length > 1)
-                _buildContentFilterButton(context, subTabs, activeId),
-            ],
-          ),
+          // 高保口径：一级 Tab 正下方横向胶囊（全部/图片/视频/…），左对齐、
+          // 无重复「记录」二级标题；替换旧「漏斗 + 弹层」入口（漏斗改回胶囊）。
+          if (subTabs.length > 1) ...<Widget>[
+            ObjectSecondaryFilterBar(
+              barKey: const ValueKey<String>('homepage-content-filter-bar'),
+              optionKeyPrefix: 'homepage-content-filter-option-',
+              items: subTabs
+                  .map(
+                    (tab) => ObjectSecondaryFilterItem(
+                      id: tab.id,
+                      label: homepageTabLabelForKey(tab.labelKey),
+                    ),
+                  )
+                  .toList(growable: false),
+              activeId: activeId,
+              onSelect: (id) {
+                if (id != _activeContentSubTabId) {
+                  setState(() => _activeContentSubTabId = id);
+                }
+              },
+            ),
+            SizedBox(height: AppSpacing.containerSm),
+          ],
           if (filtered.isEmpty)
             ProfileIosSectionCard(
               child: _HomepageEmptyState(
@@ -319,101 +334,69 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
     );
   }
 
-  /// 记录流二级过滤入口：最右侧「当前过滤名 + 漏斗」，点击弹层选择。
-  /// 与用户/圈子主页同范式（去横滑胶囊）。
-  Widget _buildContentFilterButton(
-    BuildContext context,
-    List<HomepageSubTabConfig> subTabs,
-    String activeId,
-  ) {
-    final activeTab = subTabs.firstWhere(
-      (tab) => tab.id == activeId,
-      orElse: () => subTabs.first,
-    );
-    final isAll = _contentTypeForSubTab(activeId) == null;
-    final fg = AppColors.iosLabel(context);
-    final accent = AppColors.iosAccent(context);
-    return CupertinoButton(
-      key: const ValueKey<String>('homepage-content-filter-button'),
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      minimumSize: Size.zero,
-      onPressed: () => _openContentFilterSheet(context, subTabs, activeId),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Text(
-            homepageTabLabelForKey(activeTab.labelKey),
-            style: TextStyle(
-              fontSize: AppTypography.iosSubheadline,
-              fontWeight: AppTypography.medium,
-              color: isAll ? fg : accent,
-            ),
-          ),
-          SizedBox(width: AppSpacing.intraGroupXs),
-          Icon(
-            CupertinoIcons.line_horizontal_3_decrease,
-            size: AppSpacing.iconSmall,
-            color: isAll ? AppColors.iosSecondaryLabel(context) : accent,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _openContentFilterSheet(
-    BuildContext context,
-    List<HomepageSubTabConfig> subTabs,
-    String activeId,
-  ) async {
-    final selected = await showCupertinoModalPopup<String>(
-      context: context,
-      builder: (sheetContext) => CupertinoActionSheet(
-        title: Text(UITextConstants.profileWorksFilterTitle),
-        actions: <Widget>[
-          for (final tab in subTabs)
-            CupertinoActionSheetAction(
-              key: ValueKey<String>('homepage-content-filter-option-${tab.id}'),
-              onPressed: () => Navigator.of(sheetContext).pop(tab.id),
-              child: Text(homepageTabLabelForKey(tab.labelKey)),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(sheetContext).pop(),
-          child: Text(UITextConstants.cancel),
-        ),
-      ),
-    );
-    if (selected != null && selected != activeId) {
-      setState(() => _activeContentSubTabId = selected);
-    }
-  }
-
   /// 实体记录卡：封面 + 卡内唯一交集句（[IntersectionReasonChip]）+ 标题 + 类型角标。
   /// 与用户/圈子记录卡同范式；无交集来源不展示、不占位（G2）。
   Widget _buildEntityRecordCard(HomepageContentPreview item, bool isDark) {
     final contentType = (item.contentType ?? '').trim();
+    final authorName = (item.authorName ?? '').trim();
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
     return PostPreviewCard(
       isDark: isDark,
       title: item.title,
       supportingText: item.summary ?? '',
       coverUrl: item.coverUrl ?? '',
       showVideoBadge: contentType == 'video',
+      // 内容类型移到封面角标（与圈子记录卡 grid 同范式），footer 让位给「作者 + 赞」。
+      mediaOverlay: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.intraGroupXs,
+        ),
+        decoration: BoxDecoration(
+          color: AppColors.black.withValues(alpha: 0.32),
+          borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
+        ),
+        child: Text(
+          _contentTypeLabel(contentType),
+          style: TextStyle(
+            color: AppColors.white,
+            fontSize: AppTypography.xs,
+            fontWeight: AppTypography.semiBold,
+          ),
+        ),
+      ),
       header: IntersectionReasonChip.fromReasons(
         item.intersectionReasons,
         isDark: isDark,
         // N5：实体主页记录卡 → 交集句对象片段点击精确归因为实体主页（非推荐流）。
         referralSource: ReferralSource.entityPage,
       ),
-      footer: Align(
-        alignment: Alignment.centerLeft,
-        child: _HomepageSummaryChipWidget(
-          label: _contentTypeLabel(contentType),
-          accent: false,
-        ),
+      // 高保口径：footer 与圈子记录卡统一为「作者名 + 心形赞数」（PostCardMetric）。
+      footer: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              authorName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosCaption1,
+                color: fgSecondary,
+              ),
+            ),
+          ),
+          SizedBox(width: AppSpacing.intraGroupXs),
+          PostCardMetric(
+            icon: CupertinoIcons.heart_fill,
+            label: '${item.likeCount}',
+            color: fgSecondary,
+            iconColor: AppColors.error.withValues(alpha: 0.9),
+            textStyle: TextStyle(
+              fontSize: AppTypography.iosCaption1,
+              color: fgSecondary,
+            ),
+          ),
+        ],
       ),
       onTap: () {},
     );
@@ -484,7 +467,12 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
                   onPressed: circleId.isEmpty
                       ? null
                       : () => context.push(
-                          AppRoutePaths.circleDetail(id: circleId),
+                          AppRoutePaths.circleDetail(
+                            id: circleId,
+                            sourceTheme: uiErrorAppearanceRouteValueFor(
+                              context,
+                            ),
+                          ),
                         ),
                   child: ProfileIosSectionCard(
                     child: _HomepageRelatedCircleCard(group: group),
@@ -519,6 +507,9 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         pinMode: ObjectPagePinMode.minimal,
         enablePinnedTabOverlay: false,
         contentHorizontalPadding: AppSpacing.containerMd,
+        surfaceBridgeOverride: 0,
+        tabSurfaceHorizontalPadding: AppSpacing.containerMd,
+        tabSurfaceTopRadius: _cardRadius,
         tabSurfaceBottomPadding: AppSpacing.containerLg,
         scrollViewKey: TestKeys.homepageDetailPage,
         backgroundBuilder: (c, pull) => _buildBackgroundLayer(c),
@@ -526,12 +517,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         toolbarBuilder: (c, identity, bg) => _buildToolbar(c, identity),
         tabBarBuilder: (c, pinned, opacity) => _buildPrimaryTabBar(c),
         tabBodyBuilder: (c) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            AppSpacing.containerMd,
-            AppSpacing.containerSm,
-            AppSpacing.containerMd,
-            0,
-          ),
+          padding: EdgeInsets.only(top: AppSpacing.containerSm),
           child: _buildActiveTabContent(c),
         ),
         bottomBar: widget.selectionMode
@@ -544,7 +530,8 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
                   }
                 },
               )
-            : null,
+            // 高保口径：浏览态详情页底部保留全局导航栏（首页/视频书/+/联系/我）。
+            : const ObjectDetailGlobalBottomNav(),
       ),
     );
   }

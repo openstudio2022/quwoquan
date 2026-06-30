@@ -29,8 +29,6 @@ ENTITY_FOCUS_WEAK_FLOOR: float = 0.08
 # >= 该值即视为多地点环线（当前实体 + >=2 个兄弟目标 = >=3 个地点），
 # 即使对当前实体聚焦度高，也不得作单实体底稿，应走网站角度 kind=route。
 ROUTE_SIBLING_FLOOR: int = 2
-# 网站角度环线选源：单源覆盖的覆盖目标数 >= 该值才作 route 底稿（多地点）。
-ROUTE_MIN_LOCATIONS: int = 3
 
 # verdict 取值（与 content_plan/scale_readiness 既有消费口径对齐）。
 VERDICT_STRONG = "strong"
@@ -184,8 +182,8 @@ def coverage_targets_mentioned(
 ) -> list[str]:
     """统计该来源（标题+正文）明确提及了给定覆盖目标集中的哪些实体。
 
-    用于网站角度环线选源：提及 >=ROUTE_MIN_LOCATIONS 个覆盖目标的多地点游记可作 route 底稿。
-    使用保守的 entity_match_aliases，避免通名二字误命中拉高覆盖数。
+    1:1 底稿中心模型下用于多标签覆盖：一篇底稿明确提及的覆盖目标都登记为 entityTags，
+    底稿仍只认领单一 base。使用保守的 entity_match_aliases，避免通名二字误命中拉高覆盖数。
     """
     names = list(target_names.keys()) if isinstance(target_names, Mapping) else list(target_names)
     text = f"{title or ''}\n{body or ''}"
@@ -199,18 +197,3 @@ def coverage_targets_mentioned(
             hit.append(canonical)
             seen.add(canonical)
     return hit
-
-
-def is_multi_location_route(
-    body: str,
-    title: str,
-    target_names: Mapping[str, Any] | list[str] | tuple[str, ...],
-    *,
-    min_locations: int = ROUTE_MIN_LOCATIONS,
-) -> tuple[bool, list[str]]:
-    """网站角度环线选源判定：返回 (是否多地点环线, 命中的覆盖目标列表)。
-
-    单一来源覆盖 >= min_locations 个覆盖目标时，适合作 kind=route 多地点底稿。
-    """
-    mentioned = coverage_targets_mentioned(body, title, target_names)
-    return (len(mentioned) >= int(min_locations)), mentioned

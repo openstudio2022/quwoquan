@@ -685,6 +685,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
   Size? _lastInteractiveStageSize;
   Offset? _boundaryDragStartLocalPosition;
   StPageFlipDirection? _boundaryDragDirection;
+  StPageFlipDirection? _activeDragDirection;
   double _boundaryRubberBandRawOffset = 0;
   double _boundaryRubberBandOffset = 0;
   bool _shouldAnimateBoundaryRubberBandReset = false;
@@ -1472,45 +1473,11 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     );
     final angle = frame.angle;
     final visualGeometryDirection = frame.visualGeometryDirection;
-    final sheetMaterialLocalPolygon = pageRectPolygon(pageSize);
     final projected = frame.backwardProjectedFrame;
-    final projectedFoldLine = projected?.foldLine;
-    final projectedFreeEdgeLine = projected?.projectedRightEdgeLine;
+    final sheetMaterialLocalPolygon = pageRectPolygon(pageSize);
     final currentResidualPagePolygon = frame.bottomClipArea.length >= 3
         ? List<Offset>.unmodifiable(frame.bottomClipArea)
         : const <Offset>[];
-    final sheetLocalFoldLine = projectedFoldLine == null
-        ? null
-        : (
-            _localPointFromAreaPoint(
-              point: projectedFoldLine.$1,
-              anchor: softGeometry.surfaceOrigin,
-              angle: angle,
-              direction: visualGeometryDirection,
-            ),
-            _localPointFromAreaPoint(
-              point: projectedFoldLine.$2,
-              anchor: softGeometry.surfaceOrigin,
-              angle: angle,
-              direction: visualGeometryDirection,
-            ),
-          );
-    final sheetLocalFreeEdgeLine = projectedFreeEdgeLine == null
-        ? null
-        : (
-            _localPointFromAreaPoint(
-              point: projectedFreeEdgeLine.$1,
-              anchor: softGeometry.surfaceOrigin,
-              angle: angle,
-              direction: visualGeometryDirection,
-            ),
-            _localPointFromAreaPoint(
-              point: projectedFreeEdgeLine.$2,
-              anchor: softGeometry.surfaceOrigin,
-              angle: angle,
-              direction: visualGeometryDirection,
-            ),
-          );
     final pageLocalPolygon = pageRectPolygon(pageSize);
     final pageRect = _backwardPageRect(scene);
     final pageViewportPolygon = <Offset>[
@@ -2070,9 +2037,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     final backwardBackLocalPolygon =
         backwardDiagnosticGeometry?.previousBackLocalPolygon ??
         backwardLocalClipPolygon;
-    final backwardBackAreaPolygon =
-        backwardDiagnosticGeometry?.previousBackAreaPolygon ??
-        backwardBackLocalPolygon;
     final backwardFrontLocalPolygon =
         backwardDiagnosticGeometry?.previousFrontLocalPolygon ??
         const <Offset>[];
@@ -3088,6 +3052,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     }
     final direction = controller.directionForGlobalPoint(startPosition);
     if (!controller.canFlipDirection(direction)) {
+      _activeDragDirection = null;
       _handleBoundaryPanStart(startPosition, direction: direction);
       _pendingOverflowDirection = direction;
       return;
@@ -3099,8 +3064,10 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       _dragStartGlobalPosition = null;
       _latestDragGlobalPosition = null;
       _dragStartedAt = null;
+      _activeDragDirection = null;
       return;
     }
+    _activeDragDirection = direction;
     _resetBoundaryRubberBand(animate: false);
     _startPageTransition('page_curl');
     _startPageFlipTextureSession(direction);
@@ -3132,7 +3099,12 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       }
       return;
     }
-    final direction = controller.directionForGlobalPoint(localPosition);
+    final direction =
+        _activeDragDirection ??
+        controller.scene.direction ??
+        controller.directionForGlobalPoint(
+          _dragStartGlobalPosition ?? localPosition,
+        );
     if (!controller.canFlipDirection(direction)) {
       return;
     }
@@ -3151,6 +3123,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     _dragStartGlobalPosition = null;
     _latestDragGlobalPosition = null;
     _dragStartedAt = null;
+    _activeDragDirection = null;
     _textureWarmupBlockedGesture = false;
     _resetBoundaryTracking(animate: true);
     final controller = _pageFlipController;
@@ -3168,10 +3141,12 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     final dragStart = _dragStartGlobalPosition;
     final dragLatest = _latestDragGlobalPosition;
     final dragStartedAt = _dragStartedAt;
+    final dragDirection = _activeDragDirection;
     _pointerDownLocalPosition = null;
     _dragStartGlobalPosition = null;
     _latestDragGlobalPosition = null;
     _dragStartedAt = null;
+    _activeDragDirection = null;
     final textureWarmupBlockedGesture = _textureWarmupBlockedGesture;
     _textureWarmupBlockedGesture = false;
     final stageSize = _lastInteractiveStageSize;
@@ -3188,7 +3163,8 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return;
     }
     if (dragStart != null) {
-      final direction = controller.directionForGlobalPoint(dragStart);
+      final direction =
+          dragDirection ?? controller.directionForGlobalPoint(dragStart);
       if (!controller.canFlipDirection(direction)) {
         _resetBoundaryTracking(animate: true);
         controller.cancelInteraction();
@@ -3209,6 +3185,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (!plan.isTurned) {
       final direction =
           controller.scene.direction ??
+          dragDirection ??
           (dragStart != null
               ? controller.directionForGlobalPoint(dragStart)
               : StPageFlipDirection.forward);
@@ -3708,7 +3685,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     int pageIndex,
     Size pageSize, {
     required bool mirrorContent,
-    double contentOpacity = 0.72,
+    double contentOpacity = 0.46,
   }) {
     final debugSurface = widget.debugBackPageSurfaceBuilder?.call(
       context,
@@ -3735,12 +3712,12 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
           end: Alignment.bottomCenter,
           colors: <Color>[
             Color.alphaBlend(
-              AppColors.white.withValues(alpha: 0.22),
+              palette.shadowColor.withValues(alpha: 0.08),
               palette.paperColor,
             ),
             palette.paperColor,
             Color.alphaBlend(
-              palette.paperBorderColor.withValues(alpha: 0.12),
+              palette.paperBorderColor.withValues(alpha: 0.18),
               palette.paperColor,
             ),
           ],
@@ -3769,9 +3746,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                   colors: <Color>[
-                    palette.paperBorderColor.withValues(alpha: 0.08),
+                    palette.shadowColor.withValues(alpha: 0.10),
                     AppColors.transparent,
-                    palette.shadowColor.withValues(alpha: 0.04),
+                    palette.shadowColor.withValues(alpha: 0.08),
                   ],
                   stops: const <double>[0.0, 0.58, 1.0],
                 ),
@@ -3785,9 +3762,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: <Color>[
-                    AppColors.white.withValues(alpha: 0.14),
+                    AppColors.white.withValues(alpha: 0.04),
                     AppColors.transparent,
-                    palette.shadowColor.withValues(alpha: 0.06),
+                    palette.shadowColor.withValues(alpha: 0.12),
                   ],
                   stops: const <double>[0.0, 0.42, 1.0],
                 ),
@@ -3814,17 +3791,17 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
         ? Alignment.centerLeft
         : Alignment.centerRight;
     final shadowColor = palette.shadowColor.withValues(
-      alpha: (showBackside ? 0.035 : 0.12) + (lift * 0.055),
+      alpha: (showBackside ? 0.10 : 0.12) + (lift * 0.065),
     );
-    final tunnelAlpha = (showBackside ? 0.028 : 0.08) + (lift * 0.04);
+    final tunnelAlpha = (showBackside ? 0.07 : 0.08) + (lift * 0.05);
     final tunnelColor = AppColors.black.withValues(
       alpha: tunnelAlpha.clamp(0.0, 1.0).toDouble(),
     );
     final highlightColor = AppColors.white.withValues(
-      alpha: (showBackside ? 0.12 : 0.14) + (lift * 0.08),
+      alpha: (showBackside ? 0.04 : 0.14) + (lift * 0.035),
     );
     final edgeTintColor = showBackside
-        ? AppColors.white.withValues(alpha: 0.05 + lift * 0.03)
+        ? palette.shadowColor.withValues(alpha: 0.04 + lift * 0.04)
         : palette.paperBorderColor.withValues(alpha: 0.08 + lift * 0.06);
     return IgnorePointer(
       child: Stack(
@@ -3836,7 +3813,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: <Color>[
-                  AppColors.white.withValues(alpha: showBackside ? 0.13 : 0.16),
+                  AppColors.white.withValues(alpha: showBackside ? 0.04 : 0.16),
                   AppColors.transparent,
                   tunnelColor,
                 ],

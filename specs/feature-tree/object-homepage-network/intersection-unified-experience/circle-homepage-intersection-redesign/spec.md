@@ -15,8 +15,8 @@
 
 ## 范围
 
-- 我的交集卡：标题由「为什么推荐这个圈子」改为「我的交集」，与我的主页同壳，渲染共享 `ObjectIntersectionPreviewCard`（objectBType=circle、`objectSharedReasonsProvider` 单一真相源）：单列预览句（蓝色可点击锚点）+ 弱入口「查看全部」；可见结论只读 `IntersectionReason.primaryText/primarySpans`，禁止用 `EvidenceGroup` 或 `intersectionPoints` 本地拼主句。
-- 影响力卡：标题由「这个圈子帮助了很多人」改为「影响力」，`AuthorImpactCard` 同构（`IntersectionStatementCard` + `circleImpactProvider`），去好友化/去收藏；句内数字可下钻来源明细；无可枚举影响事实不展示。
+- 我的交集卡：标题统一为「我的交集」，与我的主页同壳，渲染共享 `ObjectIntersectionPreviewCard`（objectBType=circle、`objectSharedReasonsProvider` 单一真相源）：单列预览句（蓝色可点击锚点）+ 弱入口「查看全部」；可见结论只读 `IntersectionReason.primaryText/primarySpans`，禁止用 `EvidenceGroup` 或 `intersectionPoints` 本地拼主句。
+- 影响力卡：标题统一为「影响力」，`AuthorImpactCard` 同构（`IntersectionStatementCard` + `circleImpactProvider`），去好友化/去收藏；句内数字可下钻来源明细；无可枚举影响事实不展示。
 - 头部：移除成员头像簇（你认识的人收敛进我的交集模块）；保留圈子独立头像（缺省回退封面）+「N 成员」单计数 + 认证标识。
 - 核心动作：主按钮「加入圈子」，次按钮由「私信」改为「进入讨论」（切换到讨论 tab）。
 - 一级 tab：`记录/讨论/成员`（metadata-first label_key）。

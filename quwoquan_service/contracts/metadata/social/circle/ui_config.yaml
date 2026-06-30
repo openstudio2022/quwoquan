@@ -24,7 +24,7 @@ circle_tabs:
   - id: members
     label_key: circle_tab_members
     body_slot: members
-    section_types: [interaction]
+    section_types: [members]
     order: 2
 
 circle_sections:
@@ -34,9 +34,9 @@ circle_sections:
     tab_id: content
     order: 0
 
-  - section_type: interaction
-    label_key: circle_section_interaction
-    icon: heart
+  - section_type: members
+    label_key: circle_section_members
+    icon: person_3
     tab_id: members
     order: 1
 

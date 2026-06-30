@@ -1,7 +1,7 @@
 # 交集统一规格 · 并行会话 Dispatch Index
 
-> 真相源：`specs/product/intersection-definition-and-application.md` §17–§18  
-> 状态：2026-06 规格收口完成；实现会话按本索引并行推进  
+> 真相源：`specs/product/intersection-definition-and-application.md` §17–§18
+> 状态：2026-06 规格收口完成；实现会话按本索引并行推进
 > 计划追踪：`docs/intersection-unification-plan.md`
 
 ---
@@ -13,8 +13,8 @@
 | S1 | 首页推荐 | `home-recommend-intersection-redesign` | `lib/ui/discovery/**` | feed/spotlight 单句 primaryText | Session-A |
 | S2a | 他人主页 | `user-profile-intersection-redesign` | `lib/ui/user/widgets/profile_*` | 为什么推荐TA 列表入口 | Session-B1 |
 | S2b | 我的主页 | `user-profile-intersection-redesign` | `lib/ui/user/widgets/my_*` | 我的连接/影响力 | Session-B2 |
-| S3 | 实体主页 | `entity-homepage-intersection-redesign` | `lib/ui/entity/**` | ObjectIntersectionSection | Session-C |
-| S4 | 圈子主页 | `circle-homepage-intersection-redesign` | `lib/ui/circle/**` | 为什么推荐这个圈子 | Session-D |
+| S3 | 实体主页 | `entity-homepage-intersection-redesign` | `lib/ui/entity/**` | 我的交集 + 影响力 | Session-C |
+| S4 | 圈子主页 | `circle-homepage-intersection-redesign` | `lib/ui/circle/**` | 我的交集 + 影响力 | Session-D |
 | S5 | 全局搜索 | `search-intersection-consumption` | `lib/ui/search/**` | 交集 Tab + connectionState | Session-E |
 | 横切 | 交集句统一 | `intersection-sentence-unification` | `lib/components/**/intersection_*` | G2 门禁 + Chip 单句 | Session-X（先行） |
 
@@ -118,8 +118,8 @@
 |---|---|---|---|---|---|---|---|
 | A 我的主页 | 我的连接 + 我的影响力 | ✓ iconKey/dimension | ✓ 人名前 | ✓ 对象 | ✓ 分桶弱标(新/增强/重新活跃) | ✓ author_impact 路径节点 + 再传播 | `lib/ui/user/widgets/my_intersection_inbox_card.dart` / `author_impact_card.dart` |
 | B 用户主页(他人) | 为什么推荐TA + TA的影响力 | ✓ | ✓ | ✓ | ✓ 证据组叠 | ○ TA 影响力 | `lib/components/object_page/intersection_entity.dart` / `object_page/**` |
-| C 实体主页 | 为什么推荐这里 + 记录流单句 | ✓ | ○ | ✓ 封面缩略 | ○ | — | 复用 B 的 `IntersectionEntity` / ObjectIntersectionSection |
-| D 圈子主页 | 为什么推荐这个圈子 + 圈子帮助了很多人 | ✓ | ✓ | ✓ | ○ | ✓ circle_impact 接统一三件套(解决 G4) | `lib/ui/circle/widgets/circle_shell_builders.dart` |
+| C 实体主页 | 我的交集 + 影响力 + 记录流单句 | ✓ | ○ | ✓ 封面缩略 | ○ | ✓ entity_impact | 复用 B 的 `IntersectionEntity` / ObjectIntersectionSection |
+| D 圈子主页 | 我的交集 + 影响力 | ✓ | ✓ | ✓ | ○ | ✓ circle_impact 接统一三件套(解决 G4) | `lib/ui/circle/widgets/circle_shell_builders.dart` |
 | E 首页 post | post 卡内单句 chip | ○ | ○ | — | 仅「新」红点 | — | post chip / `home_multi_form_feed`（紧凑面，不复活 spotlight） |
 
 图例：✓ 本轮原型已接线；○ 数据具备时按同一组件渲染；— 该面不适用。

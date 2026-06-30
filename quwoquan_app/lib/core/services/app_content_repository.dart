@@ -19,39 +19,54 @@ enum AppDataSourceMode { mock, remote }
 class AppDataSourceModeNotifier extends Notifier<AppDataSourceMode> {
   @override
   AppDataSourceMode build() {
-    // 环境优先于手动开关：alpha 必须本地可用，beta/gamma/prod 必须走远端契约。
-    // APP_DATA_SOURCE 只作为未知环境/本地实验兜底，避免 flutter run 默认 alpha 误连网关。
-    if (CloudRuntimeConfig.appRuntimeEnv == 'alpha') {
-      return AppDataSourceMode.mock;
-    }
-    if (CloudRuntimeConfig.appRuntimeEnv == 'beta' ||
-        CloudRuntimeConfig.appRuntimeEnv == 'gamma' ||
-        CloudRuntimeConfig.appRuntimeEnv == 'prod') {
-      return AppDataSourceMode.remote;
-    }
-    const v = String.fromEnvironment('APP_DATA_SOURCE', defaultValue: '');
-    if (v == 'remote') {
-      return AppDataSourceMode.remote;
-    }
-    if (v == 'mock') {
-      return AppDataSourceMode.mock;
-    }
-    return kReleaseMode ? AppDataSourceMode.remote : AppDataSourceMode.mock;
+    return resolveAppDataSourceModeForEnvironment(
+      runtimeEnv: CloudRuntimeConfig.appRuntimeEnv,
+      explicitDataSource: const String.fromEnvironment(
+        'APP_DATA_SOURCE',
+        defaultValue: '',
+      ),
+      releaseMode: kReleaseMode,
+      runPatrolT4: const bool.fromEnvironment('RUN_T4_PATROL'),
+    );
   }
 
   void setMode(AppDataSourceMode mode) {
-    if (CloudRuntimeConfig.appRuntimeEnv == 'alpha') {
-      state = AppDataSourceMode.mock;
-      return;
-    }
-    if (CloudRuntimeConfig.appRuntimeEnv == 'beta' ||
-        CloudRuntimeConfig.appRuntimeEnv == 'gamma' ||
-        CloudRuntimeConfig.appRuntimeEnv == 'prod') {
-      state = AppDataSourceMode.remote;
-      return;
-    }
-    state = mode;
+    state = resolveAppDataSourceModeForEnvironment(
+      runtimeEnv: CloudRuntimeConfig.appRuntimeEnv,
+      explicitDataSource: mode == AppDataSourceMode.remote ? 'remote' : 'mock',
+      releaseMode: kReleaseMode,
+      runPatrolT4: const bool.fromEnvironment('RUN_T4_PATROL'),
+    );
   }
+}
+
+@visibleForTesting
+AppDataSourceMode resolveAppDataSourceModeForEnvironment({
+  required String runtimeEnv,
+  required String explicitDataSource,
+  required bool releaseMode,
+  required bool runPatrolT4,
+}) {
+  final env = runtimeEnv.trim();
+  final dataSource = explicitDataSource.trim();
+  final isKnownRemoteEnv = env == 'beta' || env == 'gamma' || env == 'prod';
+
+  if (env == 'alpha') {
+    return AppDataSourceMode.mock;
+  }
+  if (dataSource == 'mock' && !releaseMode && runPatrolT4) {
+    return AppDataSourceMode.mock;
+  }
+  if (isKnownRemoteEnv) {
+    return AppDataSourceMode.remote;
+  }
+  if (dataSource == 'remote') {
+    return AppDataSourceMode.remote;
+  }
+  if (dataSource == 'mock') {
+    return AppDataSourceMode.mock;
+  }
+  return releaseMode ? AppDataSourceMode.remote : AppDataSourceMode.mock;
 }
 
 final appDataSourceModeProvider =

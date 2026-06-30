@@ -15,6 +15,19 @@
 
 ---
 
+## 0. 口径更新（2026-06-30 · 交集行动重建）
+
+本节为最新冻结口径，与下文历史规划冲突时以本节为准。
+
+- **前台主词收敛**：废弃 `同频 / 广场` 前台主词；底栏 `+` 动作面板入口名 `兴趣配对`，页面主词 `找同趣`，能力短标签 `同趣`（见 `00_GLOBAL_TERMINOLOGY.md` §3 / §12）。
+- **旧原型下线**：旧 `plaza / connection` 端侧原型（`lib/ui/plaza/**`、`lib/cloud/services/connection/**`、`plaza_text_constants.dart`、`connectionRepositoryProvider`、`/plaza/*` 路由、`connection_plaza_seed.yaml`）整体删除，不保留 v1/v2 双轨。
+- **新版「找同趣」入口**：底栏 `+` 动作面板「兴趣配对」进入 `lib/ui/interest_match/pages/interest_match_page.dart`，定位为**发现启动器（launcher）**，不自建第二套 Mock 候选列表；按兴趣锚点把用户导流到既有真实面（全局搜索 `/search`、网络结果 `/search/network`、我的交集 `/profile/intersections`），把交集行动闭环建立在既有真相源上。
+- **`IntersectionInstance` 统一对象**：交集实例（subject/target/evidence/affinity/moment/actionHints/safetyGate/feedback）作为所有触点共享的产品与契约心智；事实交集与亲和力必须分层展示，行动必须与交集证据绑定。
+- **后端能力延后（GATE_BLOCK）**：`附近同趣 / 结伴同行 / 线下局` 的真实聚合（trip/meetup aggregate、附近 LBS、双向同意风控）仍 `deferred`，落地前不得用端侧行内 Mock 包装成正式能力；`找同趣` launcher 只承接「发现 + 导流到既有真实面」，不渲染伪造的人/圈/地结果列表。
+- **行动落点复用**：打招呼走 `GreetingRequest` 请求箱，建群/同行/局走既有建群页，不新增第二套请求状态机。
+
+---
+
 ## 1. 文档定位
 
 `intersection-definition-and-application.md` 回答「什么是交集、用户看到哪些交集表达」；**本文回答「看到交集之后能做什么、做到多深、如何安全沉淀成关系」**。
@@ -25,7 +38,7 @@
 - 内容、实体、位置三条入口如何统一汇聚到「同趣 → 同行 → 线下 → 实时」的行动闭环。
 - 关系如何在「只保留关注一个用户动作」的硬约束下，仍提供情感与组织粒度。
 - 用户私有「联系人标签」如何定义、管理、应用。
-- 信息架构（底栏、同频连接中心、对象页行动区）如何承接这些行动。
+- 信息架构（`+` 动作面板「兴趣配对」、找同趣页 / 兴趣配对、对象页行动区）如何承接这些行动。
 - 隐私与风控的默认姿态。
 
 本文不替代：metadata 字段/route/surface/operation 真相源、各 `L1/L2/L3` 设计文档、关系门禁 `contact-and-session-governance` 的契约。
@@ -199,19 +212,19 @@ graph LR
 ```mermaid
 graph TD
   Discover[发现 内容流<br/>内容卡挂实体+圈子+同行徽章] -->|实体徽章| Entity[实体共享主页]
-  Square[同频/广场 新一级<br/>附近同趣·结伴同行·线下局] --> Nearby[附近同趣页]
-  Square --> Companion[结伴/行程页]
+  Square[同趣 找同趣 兴趣配对<br/>launcher 导流到真实面] --> Nearby[附近同趣页 deferred]
+  Square --> Companion[结伴/行程页 deferred]
   Square --> Meetup[线下局页]
   Entity -->|想去/正在去/结伴模块| Companion
   Entity -->|相关圈子/群| Circle[圈子主页]
-  Inbox[同频连接中心<br/>由交集收件箱升级] --> Nearby & Companion & Meetup
+  Inbox[交集收件箱 我的交集<br/>今日同趣机会真实承接] --> Nearby & Companion & Meetup
   Nearby & Companion & Meetup -->|行动阶梯| Greet[打招呼/破冰升级]
   Greet --> Chat[请求箱→正式会话→互关→1v1语音视频/见面]
   Chat --> Relation[关系沉淀: 已加入圈/同行群/关注/趣友/标签]
 ```
 
-- **底栏新增一级「同频/广场」**：承接 L4-L6 重行动入口，替换同质化的「精品」二级化。
-- **交集收件箱升级为「同频连接中心」**（`IntersectionInboxSummary` + `my_intersection_inbox_page`）：按 tab 分「同趣 / 同行 / 附近 / 局」。
+- **`+` 动作面板「兴趣配对（找同趣）」**：承接 L4-L6 重行动入口（口径见 §0）；当前以 `interest_match_page` launcher 落地，按锚点导流到既有真实面，重行动后端聚合 deferred。
+- **交集收件箱**（`IntersectionInboxSummary` + `my_intersection_inbox_page`）：作为「今日同趣机会」的真实数据承接，由「找同趣」launcher 导流进入；不再以四 tab 连接中心原型形态承载。
 - **对象页交集区**（`object_intersection_section.dart`）从「error/empty 收起的增强位」升级为**常驻行动区**，渲染新 `actionHints`，空态给「发现第一个共同点」引导。
 
 ---
@@ -278,7 +291,7 @@ graph TD
 2. 本蓝图冻结（本文）。
 3. registry Journey 草案（已完成）。
 4. circle 域 `trip/meetup` 与 user 域联系人标签 metadata 扩展 → codegen → verify。
-5. 端侧 IA 壳（底栏 / 同频连接中心 / 对象页行动区）。
+5. 端侧 IA 壳（底栏 `+` 动作面板 / 兴趣配对 launcher / 对象页行动区）。
 6. 端侧新页面（附近同趣 / 结伴 / 线下局）+ Repository 三层 + Provider + Mock fixture。
 7. 关系派生称谓 + 联系人标签端云。
 8. 风控/合规旅程。

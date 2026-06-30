@@ -86,8 +86,11 @@ sourceTierSignals:
 lanePolicies:
   homepage:
     maxCoreSources: 5
-    primarySourceClasses: [encyclopedia, knowledge_graph, official_site]
-    supportingOnlySourceClasses: [government_tourism, authoritative_media]
+    # P3 三类解耦：实体主页底稿主源【只来自百科】（wiki/百度/搜狗百科 = encyclopedia）。
+    # 知识图谱（Wikidata）、官网、政务文旅、权威媒体一律降为 supporting，只能补事实/交叉验证，
+    # 不得作为主页 primaryEvidenceRef（base draft 单源择优只在百科之间进行）。
+    primarySourceClasses: [encyclopedia]
+    supportingOnlySourceClasses: [knowledge_graph, official_site, government_tourism, authoritative_media]
     rankingSignals:
       - authority
       - entity_match
@@ -95,8 +98,8 @@ lanePolicies:
       - image_text_completeness
       - freshness
     promptFacts:
-      - 实体主页主源只从百科、知识图谱或实体/品牌/景区官网中选择。
-      - 政务、文旅、媒体和 UGC 只能补事实或交叉验证，不得作为主页 primaryEvidenceRef。
+      - 实体主页主源【只】从百科（维基百科 / 百度百科 / 搜狗百科）中选择，多个百科源之间按质量择优取最优单源。
+      - 知识图谱、实体/景区官网、政务、文旅、媒体和 UGC 只能补事实或交叉验证，不得作为主页 primaryEvidenceRef。
       - 核心主页来源最多 5 个，优先图文并茂、事实字段丰富、可抓取和可追溯的页面。
   article:
     sourceSelectionMode: quality_driven

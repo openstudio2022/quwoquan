@@ -16,7 +16,10 @@
           "title": "契约摄影师主页",
           "ownerId": "fixture_user_photo",
           "summary": "作者主页契约数据",
-          "relatedPostIds": ["fixture_photo_001", "fixture_article_001"]
+          "relatedPostIds": [
+            "fixture_photo_001",
+            "fixture_article_001"
+          ]
         },
         {
           "homepageId": "fixture_homepage_circle",
@@ -24,14 +27,19 @@
           "title": "契约摄影社主页",
           "ownerId": "fixture_circle_photo",
           "summary": "圈子主页契约数据",
-          "relatedCircleIds": ["fixture_circle_photo"]
+          "relatedCircleIds": [
+            "fixture_circle_photo"
+          ]
         },
         {
           "homepageId": "fixture_homepage_poi",
           "type": "poi",
           "title": "杭州西湖契约主页",
           "summary": "地点主页契约数据",
-          "geo": { "lat": 30.2431, "lng": 120.1505 }
+          "geo": {
+            "lat": 30.2431,
+            "lng": 120.1505
+          }
         },
         {
           "homepageId": "homepage_sight_west_lake",
@@ -42,7 +50,11 @@
           "summary": "杭州西湖核心游览区，由湖面、堤岸、园林、人文节点和城市公共生活共同构成，适合散步、骑行、摄影与长期内容沉淀。",
           "city": "杭州",
           "status": "published",
-          "categoryTags": ["景点", "城市地标", "赏景"],
+          "categoryTags": [
+            "景点",
+            "城市地标",
+            "赏景"
+          ],
           "verified": true,
           "establishedYear": 1982,
           "followerCount": 1286,
@@ -53,9 +65,11 @@
               "summary": "一条适合黄昏慢走的完整打卡笔记。",
               "contentType": "article",
               "coverUrl": "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+              "authorName": "湖畔慢行者",
+              "likeCount": 328,
               "intersectionReasons": [
                 {
-                  "primaryText": "你关注的9人来过这里",
+                  "primaryText": "你关注的9人来过「西湖景区」",
                   "displayText": "关注的人来过",
                   "dimension": "location"
                 }
@@ -66,7 +80,9 @@
               "title": "断桥边的夜色作品",
               "summary": "断桥残雪机位与曝光参数实拍。",
               "contentType": "image",
-              "coverUrl": "https://images.unsplash.com/photo-1538970272646-f61fabb3a8a2"
+              "coverUrl": "https://images.unsplash.com/photo-1538970272646-f61fabb3a8a2",
+              "authorName": "夜色摄影手",
+              "likeCount": 156
             },
             {
               "postId": "west_lake_record_3",
@@ -74,6 +90,8 @@
               "summary": "清晨苏堤骑行的一镜到底。",
               "contentType": "video",
               "coverUrl": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b",
+              "authorName": "苏堤骑行客",
+              "likeCount": 204,
               "intersectionReasons": [
                 {
                   "primaryText": "你常看的摄影作者都拍过这里",
@@ -176,13 +194,19 @@
           "summary": "以百科资料、关联内容、校友圈和问小趣入口承接校园冷启动",
           "city": "北京",
           "status": "published",
-          "categoryTags": ["校园", "大学", "北京"],
+          "categoryTags": [
+            "校园",
+            "大学",
+            "北京"
+          ],
           "contentPreview": [
             {
               "postId": "fixture_pku_post_001",
               "title": "未名湖春日路线",
               "summary": "AI 冷启动补齐的校园参观与摄影路线。",
-              "contentType": "article"
+              "contentType": "article",
+              "authorName": "燕园向导",
+              "likeCount": 73
             }
           ],
           "relatedGroups": [
@@ -204,7 +228,11 @@
           "summary": "承接校园介绍、内容、圈子和活跃贡献者的组织型主页",
           "city": "北京",
           "status": "published",
-          "categoryTags": ["校园", "大学", "北京"],
+          "categoryTags": [
+            "校园",
+            "大学",
+            "北京"
+          ],
           "relatedGroups": [
             {
               "circleId": "fixture_circle_tsinghua_photo",
@@ -224,7 +252,11 @@
           "summary": "面向校园生活、校友圈、问答与内容聚合的组织型主页",
           "city": "上海",
           "status": "published",
-          "categoryTags": ["校园", "大学", "上海"]
+          "categoryTags": [
+            "校园",
+            "大学",
+            "上海"
+          ]
         },
         {
           "homepageId": "fixture_homepage_university_zju",
@@ -235,7 +267,11 @@
           "summary": "聚合校园资料、创作内容、同城圈子和校友关系",
           "city": "杭州",
           "status": "published",
-          "categoryTags": ["校园", "大学", "杭州"]
+          "categoryTags": [
+            "校园",
+            "大学",
+            "杭州"
+          ]
         },
         {
           "homepageId": "fixture_homepage_university_nju",
@@ -246,7 +282,11 @@
           "summary": "作为校园冷启动样本沉淀可信资料与同趣关系",
           "city": "南京",
           "status": "published",
-          "categoryTags": ["校园", "大学", "南京"]
+          "categoryTags": [
+            "校园",
+            "大学",
+            "南京"
+          ]
         },
         {
           "homepageId": "fixture_homepage_travel_photo_west_lake",
@@ -257,7 +297,11 @@
           "summary": "聚合机位说明、最佳时段、作品与摄影同好圈",
           "city": "杭州",
           "status": "published",
-          "categoryTags": ["旅行摄影", "机位", "杭州"],
+          "categoryTags": [
+            "旅行摄影",
+            "机位",
+            "杭州"
+          ],
           "relatedGroups": [
             {
               "circleId": "fixture_circle_west_lake_photo",
@@ -277,7 +321,11 @@
           "summary": "聚合夜宵推荐、本地吃法、真实口碑与杭州老城夜色内容。",
           "city": "杭州",
           "status": "published",
-          "categoryTags": ["餐厅", "夜宵", "本地推荐"],
+          "categoryTags": [
+            "餐厅",
+            "夜宵",
+            "本地推荐"
+          ],
           "relatedGroups": [
             {
               "circleId": "night_market_circle_1",
@@ -297,7 +345,11 @@
           "summary": "承接登山路线、寺院游览、云海日出与川西南旅行内容沉淀。",
           "city": "乐山",
           "status": "published",
-          "categoryTags": ["景点", "山地旅行", "乐山"]
+          "categoryTags": [
+            "景点",
+            "山地旅行",
+            "乐山"
+          ]
         },
         {
           "homepageId": "homepage_sight_leshan_giant_buddha",
@@ -308,7 +360,11 @@
           "summary": "聚合大佛观景位、江岸路线、城市停留与乐山旅行内容。",
           "city": "乐山",
           "status": "published",
-          "categoryTags": ["景点", "石刻", "乐山"]
+          "categoryTags": [
+            "景点",
+            "石刻",
+            "乐山"
+          ]
         },
         {
           "homepageId": "fixture_homepage_travel_photo_dali",
@@ -319,7 +375,11 @@
           "summary": "沉淀环海路线、机位建议、作品和结伴交流",
           "city": "大理",
           "status": "published",
-          "categoryTags": ["旅行摄影", "目的地", "云南"]
+          "categoryTags": [
+            "旅行摄影",
+            "目的地",
+            "云南"
+          ]
         },
         {
           "homepageId": "fixture_homepage_travel_photo_tokyo",
@@ -330,7 +390,11 @@
           "summary": "覆盖街拍路线、作品精选、问答和旅行摄影圈",
           "city": "东京",
           "status": "published",
-          "categoryTags": ["旅行摄影", "城市街拍", "海外"]
+          "categoryTags": [
+            "旅行摄影",
+            "城市街拍",
+            "海外"
+          ]
         },
         {
           "homepageId": "fixture_homepage_travel_route_erhai",
@@ -526,6 +590,114 @@
             "市集",
             "历史"
           ]
+        },
+        {
+          "homepageId": "fixture_homepage_school_neworiental",
+          "type": "school",
+          "canonicalEntityId": "entity:school:neworiental",
+          "title": "新东方",
+          "subtitle": "教育培训 · 语言学习 · 校友网络",
+          "summary": "围绕语言学习、考试培训和职业成长沉淀内容、讨论与校友连接。",
+          "city": "北京",
+          "status": "published",
+          "categoryTags": [
+            "教育培训",
+            "语言学习",
+            "校友"
+          ],
+          "verified": true,
+          "followerCount": 8600,
+          "contentPreview": [
+            {
+              "postId": "neworiental_record_1",
+              "title": "从新东方课堂到职业转型的记录",
+              "summary": "校友分享学习经历、职业转向和长期成长路线。",
+              "contentType": "article",
+              "coverUrl": "media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png",
+              "authorName": "陈默",
+              "likeCount": 248,
+              "intersectionReasons": [
+                {
+                  "primaryText": "你和3位校友都来自新东方",
+                  "displayText": "同一教育经历",
+                  "dimension": "identity"
+                }
+              ]
+            }
+          ],
+          "questionPreview": [
+            {
+              "postId": "neworiental_question_1",
+              "title": "新东方校友现在都在讨论哪些学习路线？",
+              "summary": "围绕学习、转型和城市校友连接展开讨论。"
+            }
+          ],
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_neworiental_alumni",
+              "name": "新东方校友圈",
+              "memberCount": 3120,
+              "linkedHomepageId": "fixture_homepage_school_neworiental",
+              "linkedHomepageTitle": "新东方"
+            }
+          ],
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-06-30T00:00:00Z",
+          "publishedAt": "2026-06-30T00:00:00Z"
+        },
+        {
+          "homepageId": "fixture_homepage_photo_spot_hengshu_studio",
+          "type": "photo_spot",
+          "canonicalEntityId": "entity:photo_spot:hengshu_studio",
+          "title": "横竖影像馆取景地",
+          "subtitle": "摄影取景地 · 城市影像 · 胶片旅拍",
+          "summary": "横竖影像馆作品中反复出现的城市墙面、光影和胶片取景地。",
+          "city": "上海",
+          "status": "published",
+          "categoryTags": [
+            "摄影取景地",
+            "城市影像",
+            "胶片"
+          ],
+          "verified": true,
+          "followerCount": 980,
+          "contentPreview": [
+            {
+              "postId": "hengshu_spot_record_1",
+              "title": "单张竖图里的墙面光影取景地",
+              "summary": "记录同一组取景地的构图、安全宽高比和圆角展示。",
+              "contentType": "image",
+              "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
+              "authorName": "横竖影像馆",
+              "likeCount": 980,
+              "intersectionReasons": [
+                {
+                  "primaryText": "你与山川手账等 7 位都关注「横竖影像馆取景地」",
+                  "displayText": "共同关注取景地",
+                  "dimension": "location"
+                }
+              ]
+            }
+          ],
+          "questionPreview": [
+            {
+              "postId": "hengshu_spot_question_1",
+              "title": "这组取景地适合什么时段拍？",
+              "summary": "围绕机位、光线和拍摄安全沉淀讨论。"
+            }
+          ],
+          "relatedGroups": [
+            {
+              "circleId": "fixture_circle_photo",
+              "name": "契约摄影社",
+              "memberCount": 128,
+              "linkedHomepageId": "fixture_homepage_photo_spot_hengshu_studio",
+              "linkedHomepageTitle": "横竖影像馆取景地"
+            }
+          ],
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-06-30T00:00:00Z",
+          "publishedAt": "2026-06-30T00:00:00Z"
         }
       ]
     },
@@ -560,7 +732,11 @@
       "title": "实体主页详情与选择器契约种子",
       "type": "entity_homepage",
       "domainId": "entity",
-      "seedRefs": ["entity_homepage_core", "entity_claim_core", "entity_picker_core"],
+      "seedRefs": [
+        "entity_homepage_core",
+        "entity_claim_core",
+        "entity_picker_core"
+      ],
       "uiExpectations": {
         "homepageIds": [
           "fixture_homepage_author",
@@ -569,7 +745,11 @@
           "fixture_homepage_university_pku",
           "fixture_homepage_travel_photo_west_lake"
         ],
-        "textFragments": ["契约摄影师主页", "北京大学", "西湖旅行摄影机位"]
+        "textFragments": [
+          "契约摄影师主页",
+          "北京大学",
+          "西湖旅行摄影机位"
+        ]
       },
       "remoteExpectations": {
         "homepageIds": [
@@ -579,12 +759,25 @@
           "fixture_homepage_university_pku",
           "fixture_homepage_travel_photo_west_lake"
         ],
-        "claimIds": ["fixture_claim_author"]
+        "claimIds": [
+          "fixture_claim_author"
+        ]
       },
       "environments": {
-        "alpha": { "enabled": true, "repository": "mock" },
-        "beta": { "enabled": true, "repository": "remote", "requiresSeedReset": true },
-        "gamma": { "enabled": true, "repository": "remote", "requiresSeedReset": true }
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
       }
     }
   ]

@@ -510,6 +510,14 @@ def _resolve_materialized_article(
         )
     article_md = str(draft_article or "")
     actions: list[str] = []
+    # P2 连续图组回填：创作 agent 原样带回的 :::figuregroup 占位，在发布物化处展开为 N 个同源
+    # 单图块（下游 article.md / 资产解析 / text_only 剥离统一消费单图形态，连续图不丢、顺序不乱）。
+    from _common.figure_groups import expand_figure_groups
+
+    expanded_article = expand_figure_groups(article_md)
+    if expanded_article != article_md:
+        actions.append("figure_groups_expanded")
+        article_md = expanded_article
     if isinstance(entity_refs, list):
         annotated = _annotate_manifest_entities(article_md, entity_refs)
         if annotated != article_md:
@@ -526,7 +534,7 @@ def _resolve_materialized_article(
 def _strip_text_only_asset_markup(article_md: str) -> str:
     """Remove draft image markup when release downgraded an article to text-only."""
     text = str(article_md or "")
-    text = re.sub(r"(?ms)^:::figure\b.*?^:::\s*", "", text)
+    text = re.sub(r"(?ms)^:::figure(?:group)?\b.*?^:::\s*", "", text)
     text = re.sub(r"(?m)^coverImage:\s*asset://[^\n]+\n?", "", text)
     text = re.sub(r"(?m)^!\[[^\]]*\]\(asset://[^)]+\)\s*$\n?", "", text)
     text = re.sub(r"(?m)^asset://[^\s]+\s*$\n?", "", text)

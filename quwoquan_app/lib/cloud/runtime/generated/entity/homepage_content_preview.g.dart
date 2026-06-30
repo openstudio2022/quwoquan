@@ -9,6 +9,8 @@ class HomepageContentPreview {
   final String? summary;
   final String? contentType;
   final String? coverUrl;
+  final String? authorName;
+  final int likeCount;
   final List<IntersectionReason>? intersectionReasons;
 
   HomepageContentPreview({
@@ -17,6 +19,8 @@ class HomepageContentPreview {
     this.summary,
     this.contentType,
     this.coverUrl,
+    this.authorName,
+    this.likeCount = 0,
     this.intersectionReasons,
   });
 
@@ -27,6 +31,8 @@ class HomepageContentPreview {
       summary: m['summary']?.toString() ?? null,
       contentType: m['contentType']?.toString() ?? null,
       coverUrl: m['coverUrl']?.toString() ?? null,
+      authorName: m['authorName']?.toString() ?? null,
+      likeCount: (m['likeCount'] as num?)?.toInt() ?? 0,
       intersectionReasons: m['intersectionReasons'] == null ? null : _parseProjectionDtoList(m['intersectionReasons'], IntersectionReason.fromMap),
     );
   }
@@ -38,6 +44,8 @@ class HomepageContentPreview {
       'summary': summary,
       'contentType': contentType,
       'coverUrl': coverUrl,
+      'authorName': authorName,
+      'likeCount': likeCount,
       'intersectionReasons': intersectionReasons,
     };
   }
@@ -48,6 +56,8 @@ class HomepageContentPreview {
     String? summary,
     String? contentType,
     String? coverUrl,
+    String? authorName,
+    int? likeCount,
     List<IntersectionReason>? intersectionReasons,
   }) {
     return HomepageContentPreview(
@@ -56,6 +66,8 @@ class HomepageContentPreview {
       summary: summary ?? this.summary,
       contentType: contentType ?? this.contentType,
       coverUrl: coverUrl ?? this.coverUrl,
+      authorName: authorName ?? this.authorName,
+      likeCount: likeCount ?? this.likeCount,
       intersectionReasons: intersectionReasons ?? this.intersectionReasons,
     );
   }

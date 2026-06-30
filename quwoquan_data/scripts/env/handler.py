@@ -84,6 +84,8 @@ def _print_cursor_probe(report: dict, *, as_json: bool) -> None:
         f"attempts={report.get('attempts')} success={report.get('successCount')} "
         f"authFailures={report.get('authFailures')} "
         f"true5xxRate={report.get('true5xxRate')} "
+        f"startupTimeoutRate={report.get('startupTimeoutRate')} "
+        f"coldStart5xxObserved={report.get('coldStart5xxObservedCount')} "
         f"bridgeDisconnectRate={report.get('bridgeDisconnectRate')} "
         f"startupLatencyP95={report.get('startupLatencyP95')}"
     )
@@ -137,7 +139,7 @@ def handle_preflight(args: argparse.Namespace) -> None:
         check_cursor_startup=_cursor_startup_enabled(args),
         cursor_startup_model=str(getattr(args, "model", "composer-2") or "composer-2"),
         cursor_startup_runtime=str(getattr(args, "runtime", "local") or "local"),
-        cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 45.0)),
+        cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 120.0)),
     )
     _print_preflight(report, as_json=bool(getattr(args, "json", False)))
     if not report.get("ready"):
@@ -149,7 +151,7 @@ def handle_cursor_probe(args: argparse.Namespace) -> None:
         model=str(getattr(args, "model", "composer-2.5") or "composer-2.5"),
         runtime=str(getattr(args, "runtime", "local") or "local"),
         attempts=int(getattr(args, "attempts", 20) or 20),
-        timeout_seconds=float(getattr(args, "startup_timeout_seconds", 45.0)),
+        timeout_seconds=float(getattr(args, "startup_timeout_seconds", 180.0)),
         cwd=Path(str(getattr(args, "cwd", "") or ".")).expanduser().resolve()
         if getattr(args, "cwd", None)
         else None,
@@ -192,7 +194,7 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
         cmd.append("--cursor-startup")
         cmd.extend(["--model", str(getattr(args, "model", "composer-2") or "composer-2")])
         cmd.extend(["--runtime", str(getattr(args, "runtime", "local") or "local")])
-        cmd.extend(["--startup-timeout-seconds", str(float(getattr(args, "startup_timeout_seconds", 45.0)))])
+        cmd.extend(["--startup-timeout-seconds", str(float(getattr(args, "startup_timeout_seconds", 120.0)))])
     if bool(getattr(args, "no_cursor_key", False)):
         cmd.append("--no-cursor-key")
     if bool(getattr(args, "no_network", False)):
@@ -237,7 +239,7 @@ def handle_ready(args: argparse.Namespace) -> None:
             check_cursor_startup=_cursor_startup_enabled(args),
             cursor_startup_model=str(getattr(args, "model", "composer-2") or "composer-2"),
             cursor_startup_runtime=str(getattr(args, "runtime", "local") or "local"),
-            cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 45.0)),
+            cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 120.0)),
         )
     )
     report = {
@@ -284,7 +286,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     ppf.add_argument("--cursor-startup", action="store_true", help="执行真实 Cursor SDK Agent.prompt 启动探针")
     ppf.add_argument("--model", default="composer-2", help="Cursor startup probe model")
     ppf.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
-    ppf.add_argument("--startup-timeout-seconds", type=float, default=45.0)
+    ppf.add_argument("--startup-timeout-seconds", type=float, default=120.0)
     ppf.set_defaults(handler=handle_preflight)
 
     pcp = sub.add_parser("cursor-probe", help="重复执行真实 Cursor startup probe，并输出放量准入报告")
@@ -292,7 +294,12 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pcp.add_argument("--model", default="composer-2.5", help="Cursor startup probe model")
     pcp.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
     pcp.add_argument("--attempts", type=int, default=20, help="探针次数；P0 正式门禁使用 20")
-    pcp.add_argument("--startup-timeout-seconds", type=float, default=45.0)
+    pcp.add_argument(
+        "--startup-timeout-seconds",
+        type=float,
+        default=180.0,
+        help="单次冷启动探针超时；冷启动 + warm bridge 复用需要足够预算，默认 180s",
+    )
     pcp.add_argument("--cwd", help="probe workspace cwd；默认 repo root")
     pcp.add_argument("--report-out", dest="report_out", help="写出 JSON 报告路径")
     pcp.set_defaults(handler=handle_cursor_probe)
@@ -308,6 +315,6 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pr.add_argument("--no-cursor-startup", action="store_true", help="跳过真实 Cursor SDK Agent.prompt 启动探针（仅限单测/离线）")
     pr.add_argument("--model", default="composer-2", help="Cursor startup probe model")
     pr.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
-    pr.add_argument("--startup-timeout-seconds", type=float, default=45.0)
+    pr.add_argument("--startup-timeout-seconds", type=float, default=120.0)
     pr.set_defaults(cursor_startup=True)
     pr.set_defaults(handler=handle_ready)

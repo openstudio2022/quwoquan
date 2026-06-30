@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "quwoquan.task.progress",
+  "taskId": "旅行/地域/测试省/景区/环境证据优先",
+  "updatedAt": "2026-06-30T13:27:48.552384+00:00",
+  "coverage": {
+    "entities": {
+      "done": [],
+      "remaining": []
+    },
+    "categoriesDone": []
+  },
+  "anglesByEntity": {},
+  "openGaps": [],
+  "counts": {
+    "entities": 0,
+    "posts": 0
+  },
+  "lastRunId": null
+}

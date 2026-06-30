@@ -291,7 +291,32 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   }
 
   Future<void> _openOneTapMovie() async {
-    if (widget.entryMode != MediaPickerEntryMode.image) {
+    if (widget.entryMode == MediaPickerEntryMode.video) {
+      final result = await Navigator.of(context).push<CreateMediaPickerResult>(
+        MaterialPageRoute<CreateMediaPickerResult>(
+          settings: const RouteSettings(
+            name: PageAccessInternalRoutes.createMediaPicker,
+          ),
+          fullscreenDialog: true,
+          builder: (_) => CreateMediaPickerPage(
+            entryMode: MediaPickerEntryMode.image,
+            flowIntent: CreateMediaPickerFlowIntent.oneTapMovieSource,
+            maxSelection: _oneTapMovieMaxImages,
+            mediaPickerService: widget.mediaPickerService,
+            oneTapMovieComposer: widget.oneTapMovieComposer,
+            imageEditorBuilder: widget.imageEditorBuilder,
+            cameraBuilder: widget.cameraBuilder,
+          ),
+        ),
+      );
+      if (!mounted || result == null) {
+        return;
+      }
+      Navigator.of(context).pop(result);
+      return;
+    }
+    if (widget.entryMode != MediaPickerEntryMode.image ||
+        widget.flowIntent != CreateMediaPickerFlowIntent.oneTapMovieSource) {
       return;
     }
     final images = _selectedItems
@@ -325,13 +350,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
         .copyWith(durationMs: composed.durationMs);
     Navigator.of(context).pop(
       CreateMediaPickerResult(
-        items: <CreateMediaItem>[
-          videoItem,
-          ...images,
-        ],
+        items: <CreateMediaItem>[videoItem],
         openOneTapMovie: true,
         lockedSingleMedia: true,
-        oneTapMovieEffectId: composed.effectId,
       ),
     );
   }
@@ -622,10 +643,10 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     );
   }
 
-  Future<void> _openImageEditorForNextStep() async {
+  Future<void> _editLatestSelectedImage() async {
     final index = _selectedItems.lastIndexWhere((item) => item.isImage);
     if (index < 0) return;
-    await _editSelectedImageAt(index, continueWhenDone: true);
+    await _editSelectedImageAt(index);
   }
 
   Future<void> _editSelectedImageAt(
@@ -682,10 +703,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       _selectedById
         ..clear()
         ..addEntries(
-          edited.items.map((item) => MapEntry<String, CreateMediaItem>(
-                item.id,
-                item,
-              )),
+          edited.items.map(
+            (item) => MapEntry<String, CreateMediaItem>(item.id, item),
+          ),
         );
     });
     if (edited.continueToCreate) {
@@ -737,7 +757,9 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           imageIndex >= imageSelectedIndexes.length) {
         return _EditedPickerImages(
           items: _replaceSelectedImagePath(fallbackSelectedIndex, rawPath),
-          currentImageIndex: imageSelectedIndexes.indexOf(fallbackSelectedIndex),
+          currentImageIndex: imageSelectedIndexes.indexOf(
+            fallbackSelectedIndex,
+          ),
           continueToCreate: continueWhenDone,
         );
       }
@@ -754,14 +776,16 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           editedPaths: rawPaths,
         ),
         currentImageIndex: imageIndex,
-        continueToCreate:
-            continueWhenDone || action == 'continueToCreate',
+        continueToCreate: continueWhenDone || action == 'continueToCreate',
       );
     }
     return null;
   }
 
-  List<CreateMediaItem> _replaceSelectedImagePath(int selectedIndex, String path) {
+  List<CreateMediaItem> _replaceSelectedImagePath(
+    int selectedIndex,
+    String path,
+  ) {
     final next = List<CreateMediaItem>.from(_selectedItems);
     final item = next[selectedIndex];
     next[selectedIndex] = item.copyWith(path: path);
@@ -778,14 +802,21 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
         editedPaths != null && editedPaths.length == imageSelectedIndexes.length
         ? editedPaths
         : <String>[
-            for (final index in imageSelectedIndexes) _selectedItems[index].path,
+            for (final index in imageSelectedIndexes)
+              _selectedItems[index].path,
           ];
+    if (editedPaths == null ||
+        editedPaths.length != imageSelectedIndexes.length) {
+      sanitizedPaths[editedImageIndex] = editedPath;
+    }
     final originalImageItems = <CreateMediaItem>[
       for (final index in imageSelectedIndexes) _selectedItems[index],
     ];
     final remainingByPath = <String, List<CreateMediaItem>>{};
     for (final item in originalImageItems) {
-      remainingByPath.putIfAbsent(item.path, () => <CreateMediaItem>[]).add(item);
+      remainingByPath
+          .putIfAbsent(item.path, () => <CreateMediaItem>[])
+          .add(item);
     }
     final fallbackEdited = originalImageItems[editedImageIndex].copyWith(
       path: editedPath,
@@ -1105,6 +1136,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     final actions = mediaPickerBottomActionsForEntryMode(
       mode: widget.entryMode,
       selectionCount: selectionCount,
+      flowIntent: widget.flowIntent,
     );
     final background = AppColors.iosGroupedBackgroundDark;
     final border = AppColorsFunctional.getColor(
@@ -1150,7 +1182,15 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                 unawaited(_editLatestSelectedImage());
                 return;
               case CreateMediaPickerBottomAction.completeImage:
+                _finishSelection();
+                return;
               case CreateMediaPickerBottomAction.nextStep:
+                if (widget.entryMode == MediaPickerEntryMode.image &&
+                    widget.flowIntent ==
+                        CreateMediaPickerFlowIntent.oneTapMovieSource) {
+                  unawaited(_openOneTapMovie());
+                  return;
+                }
                 _finishSelection();
                 return;
             }

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,9 +11,12 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
+import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -159,12 +163,44 @@ class _JourneyIntersectionRepository implements IntersectionRepository {
         dimension: 'relationship',
         intersectionClass: 'fact',
         intersectionId: 'ix_journey_rel',
-        objectKind: 'person',
-        displayName: '林清越',
+        objectKind: 'circle',
+        displayName: '黄金投资圈',
         primaryText: '你和林清越等4位用户都关注「黄金投资圈」',
+        primarySpans: <IntersectionTextSpan>[
+          IntersectionTextSpan(text: '你和', role: 'plain'),
+          IntersectionTextSpan(
+            text: '林清越',
+            role: 'object',
+            target: IntersectionTarget(
+              objectId: 'u_lin',
+              objectKind: 'person',
+              routeId: 'userProfile',
+            ),
+          ),
+          IntersectionTextSpan(text: '等', role: 'plain'),
+          IntersectionTextSpan(
+            text: '4',
+            role: 'count',
+            target: IntersectionTarget(
+              objectId: 'relationship',
+              routeId: 'myIntersections',
+            ),
+          ),
+          IntersectionTextSpan(text: '位用户都关注「', role: 'plain'),
+          IntersectionTextSpan(
+            text: '黄金投资圈',
+            role: 'object',
+            target: IntersectionTarget(
+              objectId: 'fixture_circle_gold_invest',
+              objectKind: 'circle',
+              routeId: 'circleDetail',
+            ),
+          ),
+          IntersectionTextSpan(text: '」', role: 'plain'),
+        ],
         source: 'sharedEntityAttention',
         timeBucket: 'today',
-        actionTargetId: 'u_lin',
+        actionTargetId: 'fixture_circle_gold_invest',
         freshAt: DateTime.now().toUtc().toIso8601String(),
       ),
     ];
@@ -179,6 +215,31 @@ class _JourneyIntersectionRepository implements IntersectionRepository {
     required String objectType,
     int limit = 8,
   }) async => const <IntersectionReason>[];
+}
+
+bool _tapIntersectionSpanByText(WidgetTester tester, String text) {
+  final richTexts = tester.widgetList<RichText>(
+    find.descendant(
+      of: find.byType(InteractiveIntersectionText),
+      matching: find.byType(RichText),
+    ),
+  );
+  for (final richText in richTexts) {
+    var tapped = false;
+    richText.text.visitChildren((span) {
+      if (span is TextSpan && span.text == text) {
+        final recognizer = span.recognizer;
+        if (recognizer is TapGestureRecognizer && recognizer.onTap != null) {
+          recognizer.onTap!();
+          tapped = true;
+          return false;
+        }
+      }
+      return true;
+    });
+    if (tapped) return true;
+  }
+  return false;
 }
 
 Widget _scopedApp({
@@ -531,6 +592,14 @@ void main() {
                   builder: (_, state) =>
                       Text('USER:${state.pathParameters['username']}'),
                 ),
+                GoRoute(
+                  path: AppRoutePaths.circleDetailPathTemplate.replaceAll(
+                    '{id}',
+                    ':id',
+                  ),
+                  builder: (_, state) =>
+                      Text('CIRCLE:${state.pathParameters['id']}'),
+                ),
               ],
             ),
           ),
@@ -545,17 +614,17 @@ void main() {
       // 我的交集：点击事实行下钻详情页。
       await tester.tap(find.text('你和林清越等4位用户都关注「黄金投资圈」'));
       await tester.pumpAndSettle();
-      expect(
-        find.text(DiscoveryFeedText.intersectionTimeBucketToday),
-        findsOneWidget,
-      );
+      expect(find.text('今天 1条'), findsOneWidget);
       expect(find.text('你和林清越等4位用户都关注「黄金投资圈」'), findsOneWidget);
 
-      // 对象主页：点击详情页事实行进入其主页，并埋点归因。
-      await tester.tap(find.text('你和林清越等4位用户都关注「黄金投资圈」'));
+      // 对象主页：点击详情页事实句中的圈子名进入主题对象，并埋点归因。
+      expect(_tapIntersectionSpanByText(tester, '黄金投资圈'), isTrue);
       await tester.pumpAndSettle();
-      expect(find.text('USER:u_lin'), findsOneWidget);
-      expect(behaviorRepo.recorded.last.contentId, 'u_lin');
+      expect(find.text('CIRCLE:fixture_circle_gold_invest'), findsOneWidget);
+      expect(
+        behaviorRepo.recorded.last.contentId,
+        'fixture_circle_gold_invest',
+      );
     });
   });
 

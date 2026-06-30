@@ -369,6 +369,94 @@
           "ownerDisplayNameSnapshot": "契约科技作者",
           "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_tech_01/v1/avatar.png",
           "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_tech_01/v1/cover.jpg"
+        },
+        {
+          "id": "fixture_circle_gold_invest",
+          "name": "黄金投资圈",
+          "ownerId": "fixture_user_finance_owner",
+          "role": "member",
+          "joinStatus": "not_joined",
+          "isFollowed": false,
+          "coverUrl": "media/image/s/archived-image/circle/fixture_circle_tech/v1/cover.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_tech/v1/avatar.png",
+          "description": "围绕黄金、贵金属和长期资产配置展开事实讨论。",
+          "visibility": "public",
+          "joinPolicy": "open",
+          "circleType": "interestCircle",
+          "primaryTheme": "finance",
+          "secondaryThemes": [
+            "investment",
+            "gold"
+          ],
+          "themeTags": [
+            "finance",
+            "investment",
+            "gold"
+          ],
+          "categoryId": "finance",
+          "subCategory": "黄金",
+          "domainId": "finance",
+          "memberCount": 8426,
+          "postCount": 1200,
+          "weeklyActiveCount": 326,
+          "conversationId": "fixture_conv_circle_gold_invest",
+          "autoSyncChat": true,
+          "defaultPublicGroupId": "fixture_group_gold_invest_public",
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-06-30T00:00:00Z",
+          "ownerDisplayNameSnapshot": "黄金投资圈主",
+          "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_tech/v1/avatar.png",
+          "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_tech/v1/cover.png",
+          "tags": [
+            "黄金",
+            "贵金属",
+            "资产配置"
+          ],
+          "discussionCount": 326
+        },
+        {
+          "id": "fixture_circle_neworiental_alumni",
+          "name": "新东方校友圈",
+          "ownerId": "fixture_user_education_owner",
+          "role": "member",
+          "joinStatus": "not_joined",
+          "isFollowed": false,
+          "coverUrl": "media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png",
+          "avatarUrl": "media/avatar/s/archived-avatar/circle/fixture_circle_life/v1/avatar.png",
+          "description": "新东方校友围绕学习、成长和职业转型形成的兴趣圈。",
+          "visibility": "public",
+          "joinPolicy": "open",
+          "circleType": "interestCircle",
+          "primaryTheme": "education",
+          "secondaryThemes": [
+            "career",
+            "language"
+          ],
+          "themeTags": [
+            "education",
+            "career",
+            "language"
+          ],
+          "categoryId": "education",
+          "subCategory": "校友",
+          "domainId": "education",
+          "memberCount": 3120,
+          "postCount": 426,
+          "weeklyActiveCount": 88,
+          "conversationId": "fixture_conv_circle_neworiental_alumni",
+          "autoSyncChat": true,
+          "defaultPublicGroupId": "fixture_group_neworiental_alumni_public",
+          "createdAt": "2026-05-06T00:00:00Z",
+          "updatedAt": "2026-06-30T00:00:00Z",
+          "ownerDisplayNameSnapshot": "新东方校友圈主",
+          "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_life/v1/avatar.png",
+          "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png",
+          "tags": [
+            "教育",
+            "校友",
+            "成长"
+          ],
+          "discussionCount": 88
         }
       ],
       "groups": {
@@ -580,6 +668,48 @@
             "createdAt": "2026-05-12T16:00:00Z",
             "updatedAt": "2026-05-12T16:00:00Z",
             "ownerDisplayNameSnapshot": "契约科技作者"
+          }
+        ],
+        "fixture_circle_gold_invest": [
+          {
+            "_id": "fixture_group_gold_invest_public",
+            "circleId": "fixture_circle_gold_invest",
+            "groupType": "public_group",
+            "name": "黄金投资圈公开群",
+            "description": "黄金投资圈默认公开群。",
+            "visibility": "public",
+            "joinPolicy": "apply_only",
+            "ownerUserId": "fixture_user_finance_owner",
+            "memberCount": 8426,
+            "conversationId": "fixture_conv_fixture_circle_gold_invest",
+            "storageEnabled": true,
+            "noticeEnabled": true,
+            "isDefaultPublicGroup": true,
+            "status": "active",
+            "createdAt": "2026-05-06T00:00:00Z",
+            "updatedAt": "2026-06-30T00:00:00Z",
+            "ownerDisplayNameSnapshot": "黄金投资圈圈主"
+          }
+        ],
+        "fixture_circle_neworiental_alumni": [
+          {
+            "_id": "fixture_group_neworiental_alumni_public",
+            "circleId": "fixture_circle_neworiental_alumni",
+            "groupType": "public_group",
+            "name": "新东方校友圈公开群",
+            "description": "新东方校友圈默认公开群。",
+            "visibility": "public",
+            "joinPolicy": "apply_only",
+            "ownerUserId": "fixture_user_education_owner",
+            "memberCount": 3120,
+            "conversationId": "fixture_conv_fixture_circle_neworiental_alumni",
+            "storageEnabled": true,
+            "noticeEnabled": true,
+            "isDefaultPublicGroup": true,
+            "status": "active",
+            "createdAt": "2026-05-06T00:00:00Z",
+            "updatedAt": "2026-06-30T00:00:00Z",
+            "ownerDisplayNameSnapshot": "新东方校友圈圈主"
           }
         ]
       },
@@ -1323,6 +1453,58 @@
             "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_06/v1/avatar.jpg",
             "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_06/v1/avatar.jpg"
           }
+        ],
+        "fixture_circle_gold_invest": [
+          {
+            "_id": "fixture_member_fixture_circle_gold_invest_owner",
+            "circleId": "fixture_circle_gold_invest",
+            "userId": "fixture_user_finance_owner",
+            "role": "owner",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-06-30T00:00:00Z",
+            "contribution": 18,
+            "displayName": "黄金投资圈圈主",
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png"
+          },
+          {
+            "_id": "fixture_member_fixture_circle_gold_invest_member_01",
+            "circleId": "fixture_circle_gold_invest",
+            "userId": "fixture_user_lin",
+            "role": "member",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-06-29T12:00:00Z",
+            "contribution": 7,
+            "displayName": "林清越",
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png"
+          }
+        ],
+        "fixture_circle_neworiental_alumni": [
+          {
+            "_id": "fixture_member_fixture_circle_neworiental_alumni_owner",
+            "circleId": "fixture_circle_neworiental_alumni",
+            "userId": "fixture_user_education_owner",
+            "role": "owner",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-06-30T00:00:00Z",
+            "contribution": 18,
+            "displayName": "新东方校友圈圈主",
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png"
+          },
+          {
+            "_id": "fixture_member_fixture_circle_neworiental_alumni_member_01",
+            "circleId": "fixture_circle_neworiental_alumni",
+            "userId": "fixture_user_lin",
+            "role": "member",
+            "joinedAt": "2026-05-06T00:00:00Z",
+            "lastActiveAt": "2026-06-29T12:00:00Z",
+            "contribution": 7,
+            "displayName": "林清越",
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png"
+          }
         ]
       },
       "files": {
@@ -1343,6 +1525,41 @@
           }
         ]
       }
+    },
+    "circle_profile_core": {
+      "description": "圈子主页封面、统计、成员与作品。",
+      "circleIds": [
+        "fixture_circle_photo",
+        "fixture_circle_gold_invest",
+        "fixture_circle_neworiental_alumni"
+      ],
+      "stats": [
+        {
+          "circleId": "fixture_circle_photo",
+          "memberCount": 6,
+          "postCount": 18,
+          "weeklyActiveCount": 16
+        },
+        {
+          "circleId": "fixture_circle_gold_invest",
+          "memberCount": 8426,
+          "postCount": 1200,
+          "discussionCount": 326,
+          "weeklyActiveCount": 326
+        },
+        {
+          "circleId": "fixture_circle_neworiental_alumni",
+          "memberCount": 3120,
+          "postCount": 426,
+          "discussionCount": 88,
+          "weeklyActiveCount": 88
+        }
+      ],
+      "postIds": [
+        "fixture_photo_001",
+        "fixture_photo_002",
+        "fixture_post_photography_001"
+      ]
     },
     "circle_group_chat_link_core": {
       "description": "圈子默认公开群与聊天会话的对齐关系。",
@@ -1388,6 +1605,7 @@
       "domainId": "circle",
       "seedRefs": [
         "circle_core",
+        "circle_profile_core",
         "circle_group_chat_link_core"
       ],
       "uiExpectations": {

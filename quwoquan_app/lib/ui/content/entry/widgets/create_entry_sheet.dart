@@ -12,6 +12,7 @@ class CreateEntrySheet extends StatelessWidget {
     this.onCreateCircle,
     this.onAddContact,
     this.onStartGroupChat,
+    this.onInterestMatch,
     this.priority = CreateActionSheetPriority.createPrimary,
   });
 
@@ -22,6 +23,7 @@ class CreateEntrySheet extends StatelessWidget {
   final VoidCallback? onCreateCircle;
   final VoidCallback? onAddContact;
   final VoidCallback? onStartGroupChat;
+  final VoidCallback? onInterestMatch;
   final CreateActionSheetPriority priority;
 
   @override
@@ -36,6 +38,7 @@ class CreateEntrySheet extends StatelessWidget {
       onStartGroupChat: onStartGroupChat ?? onClose,
       onAddContact: onAddContact ?? onClose,
       onCreateCircle: onCreateCircle ?? onClose,
+      onInterestMatch: onInterestMatch ?? onClose,
       onCancel: onClose,
       priority: priority,
     );

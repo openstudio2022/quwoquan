@@ -1,0 +1,35 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/景区/真实小批
+title: 四川省景区真实小批
+intentLabel: 真实小批
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 景区
+parentTaskId: null
+status: draft
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 都江堰
+  - entityType: 地点/景区
+    name: 青城山
+provenance:
+  createdAt: '2026-06-30T14:35:44.824812+00:00'
+  createdBy: task new
+content:
+  angles:
+  - 攻略
+  - 美图
+  modalityContract: separated_research
+  research:
+    maxConcurrency: 2
+  quotas:
+    entityHomepagesPerTarget: 1
+    entityArticlesPerTarget: 1
+    imageWorksPerTarget: 1
+    routeArticles: 0

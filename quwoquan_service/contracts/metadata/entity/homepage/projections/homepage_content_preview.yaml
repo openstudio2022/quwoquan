@@ -49,6 +49,21 @@ client_projection:
       source: coverUrl
       aliases: [coverUrl]
 
+    - name: authorName
+      dart_type: String
+      nullable: true
+      source: authorName
+      aliases: [authorName]
+      description: "记录卡 footer 作者名（端只读展示；与圈子记录卡 footer 同范式）"
+
+    - name: likeCount
+      dart_type: int
+      nullable: false
+      source: likeCount
+      aliases: [likeCount]
+      default: "0"
+      description: "记录卡 footer 点赞数（端只读展示；与圈子记录卡 footer 同范式）"
+
     - name: intersectionReasons
       dart_type: List<IntersectionReason>
       nullable: true

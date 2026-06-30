@@ -8,6 +8,7 @@ import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.da
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_summary.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
@@ -16,8 +17,10 @@ import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
+import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 
 class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
   @override
@@ -73,7 +76,12 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> markForegroundAuthCheckNow() async {}
 }
 
-Widget _scopedApp({CircleRepository? mock, VoidCallback? onBack}) {
+Widget _scopedApp({
+  CircleRepository? mock,
+  VoidCallback? onBack,
+  String circleId = 'fixture_circle_photo',
+  UiErrorAppearanceMode sourceAppearanceMode = UiErrorAppearanceMode.inherit,
+}) {
   final repo = mock ?? MockCircleRepository();
   return ProviderScope(
     overrides: [
@@ -89,8 +97,9 @@ Widget _scopedApp({CircleRepository? mock, VoidCallback? onBack}) {
             path: '/',
             builder: (_, _) => Scaffold(
               body: CircleShell(
-                circleId: 'fixture_circle_photo',
+                circleId: circleId,
                 onBack: onBack,
+                sourceAppearanceMode: sourceAppearanceMode,
               ),
             ),
           ),
@@ -105,13 +114,22 @@ Future<void> _pumpShell(
   WidgetTester tester, {
   CircleRepository? mock,
   VoidCallback? onBack,
+  String circleId = 'fixture_circle_photo',
+  UiErrorAppearanceMode sourceAppearanceMode = UiErrorAppearanceMode.inherit,
 }) async {
   // 对象主页改版后圈子壳层内容更长，默认 800x600 视口会触发 NestedScrollView
   // 的 pinned tab/吸顶层覆盖，导致动作栏命中测试失败。这里放大视口让壳层完整内联展示。
   tester.view.physicalSize = const Size(1080, 3600);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(_scopedApp(mock: mock, onBack: onBack));
+  await tester.pumpWidget(
+    _scopedApp(
+      mock: mock,
+      onBack: onBack,
+      circleId: circleId,
+      sourceAppearanceMode: sourceAppearanceMode,
+    ),
+  );
   final container = ProviderScope.containerOf(
     tester.element(find.byType(CircleShell)),
   );
@@ -124,6 +142,26 @@ Future<void> _pumpShell(
 
 void main() {
   group('CircleShell - 渲染契约', () {
+    testWidgets('黄金投资圈预制 seed 可直接打开圈子高保壳层', (tester) async {
+      await _pumpShell(tester, circleId: 'fixture_circle_gold_invest');
+
+      expect(find.text('黄金投资圈'), findsWidgets);
+      expect(find.text('黄金 · 贵金属 · 资产配置'), findsWidgets);
+      expect(find.text('围绕黄金、贵金属和长期资产配置展开事实讨论。'), findsWidgets);
+      expect(find.text('8.4k'), findsOneWidget);
+      expect(find.text(UITextConstants.circleMembers), findsWidgets);
+      expect(find.text('1.2k'), findsOneWidget);
+      expect(find.text('326'), findsWidgets);
+      expect(find.byType(AppPageErrorState), findsNothing);
+      expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
+      expect(find.text('讨论'), findsWidgets);
+      expect(find.text('成员'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey<String>('circle-creations-filter-bar')),
+        findsOneWidget,
+      );
+    });
+
     testWidgets('使用资料页背景层与一级 tab 壳层', (tester) async {
       await _pumpShell(tester);
 
@@ -175,12 +213,31 @@ void main() {
       );
     });
 
+    testWidgets('讨论 Tab 不再混入资料存储与上传入口', (tester) async {
+      await _pumpShell(tester, circleId: 'fixture_circle_gold_invest');
+
+      final discussionTab = find.descendant(
+        of: find.byKey(
+          const ValueKey<String>('circle-shell-primary-tabs-inline'),
+        ),
+        matching: find.text(UITextConstants.objectTabDiscussion),
+      );
+      await tester.tap(discussionTab);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SectionStorage), findsNothing);
+      expect(find.text('资料'), findsNothing);
+      expect(find.text('上传文件'), findsNothing);
+    });
+
     testWidgets('圈子影响展示云侧 displayText，最多三条且不本地拼装', (tester) async {
       await _pumpShell(tester, mock: _ImpactCircleRepository());
 
       expect(find.text(UITextConstants.objectImpactTitle), findsOneWidget);
-      expect(find.text(UITextConstants.objectMyIntersectionsTitle), findsOneWidget);
-      expect(find.text(UITextConstants.circleWhyRecommendTitle), findsNothing);
+      expect(
+        find.text(UITextConstants.objectMyIntersectionsTitle),
+        findsOneWidget,
+      );
       expect(find.text('12人在这里建立了新连接'), findsOneWidget);
       expect(find.text('5个讨论正在这里发生'), findsOneWidget);
       expect(find.text('3人最近参与了这里'), findsOneWidget);
@@ -266,7 +323,9 @@ void main() {
 
       await _pumpShell(tester);
 
-      await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('object-chrome-more')),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -312,9 +371,30 @@ void main() {
     testWidgets('Repository 异常时 Widget 不崩溃', (tester) async {
       await _pumpShell(tester, mock: _ErrorCircleRepository());
 
-      expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text('圈子信息暂不可用'), findsAtLeastNWidgets(1));
+      expect(find.byType(AppPageErrorState), findsOneWidget);
       expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+    });
+
+    testWidgets('Repository 异常错误态跟随来源页面 appearance', (tester) async {
+      await _pumpShell(
+        tester,
+        mock: _ErrorCircleRepository(),
+        sourceAppearanceMode: UiErrorAppearanceMode.light,
+      );
+      var errorState = tester.widget<AppPageErrorState>(
+        find.byType(AppPageErrorState),
+      );
+      expect(errorState.semantic.appearanceMode, UiErrorAppearanceMode.light);
+
+      await _pumpShell(
+        tester,
+        mock: _ErrorCircleRepository(),
+        sourceAppearanceMode: UiErrorAppearanceMode.dark,
+      );
+      errorState = tester.widget<AppPageErrorState>(
+        find.byType(AppPageErrorState),
+      );
+      expect(errorState.semantic.appearanceMode, UiErrorAppearanceMode.dark);
     });
   });
 }

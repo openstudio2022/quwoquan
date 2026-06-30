@@ -438,7 +438,7 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		PointClass:  "fact",
 		Dimension:   "relationship",
 		Label:       "你关注的人来过",
-		DisplayText: strconv.Itoa(n) + "位你关注的人来过这里",
+		DisplayText: strconv.Itoa(n) + "位你关注的人到访过",
 		SourceRef:   "followeeVisited",
 		Visibility:  "public",
 		Count:       n,
@@ -448,7 +448,7 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		IntersectionID:     objectID + "_followee_visited",
 		IntersectionClass:  "fact",
 		Dimension:          "relationship",
-		DisplayName:        objectLabel(objectType),
+		DisplayName:        concreteObjectDisplayName(objectID, objectType),
 		Strength:           scoreFromCount(n, 4),
 		RelationKind:       "bridge",
 		RelationObjectID:   objectID,
@@ -692,6 +692,28 @@ func objectLabel(objectType string) string {
 	default:
 		return "同好"
 	}
+}
+
+func concreteObjectDisplayName(objectID, objectType string) string {
+	raw := strings.TrimSpace(objectID)
+	if raw == "" {
+		return ""
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == '/' || r == ':' || r == '|'
+	})
+	candidate := raw
+	if len(parts) > 0 {
+		candidate = strings.TrimSpace(parts[len(parts)-1])
+	}
+	switch candidate {
+	case "", objectLabel(objectType), "这里", "这个对象":
+		return ""
+	}
+	if strings.Contains(candidate, "_") {
+		return ""
+	}
+	return candidate
 }
 
 func relationActionType(objectType string) string {

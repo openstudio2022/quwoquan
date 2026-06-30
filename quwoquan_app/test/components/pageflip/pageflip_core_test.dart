@@ -6,6 +6,7 @@ import 'package:quwoquan_app/components/pageflip/book_layout.dart';
 import 'package:quwoquan_app/components/pageflip/controller.dart';
 import 'package:quwoquan_app/components/pageflip/curl_light_model.dart';
 import 'package:quwoquan_app/components/pageflip/curl_mesh_builder.dart';
+import 'package:quwoquan_app/components/pageflip/curl_renderer.dart';
 import 'package:quwoquan_app/components/pageflip/geometry.dart';
 import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/components/pageflip/render_frame.dart';
@@ -883,6 +884,33 @@ void main() {
     );
   });
 
+  test('Backward visual replay maps held drag linearly to the page edge', () {
+    const pageWidth = 398.0;
+    const pageHeight = 553.0;
+    const samples = <Offset>[
+      Offset(0, pageHeight - 24),
+      Offset(-pageWidth * 0.25, pageHeight - 24),
+      Offset(-pageWidth * 0.50, pageHeight - 24),
+      Offset(-pageWidth * 0.75, pageHeight - 24),
+      Offset(-pageWidth, pageHeight - 24),
+    ];
+
+    final visualXs = samples
+        .map(
+          (point) => resolveBackwardVisualReplayCanonicalPoint(
+            localPagePoint: point,
+            pageWidth: pageWidth,
+            pageHeight: pageHeight,
+          ).dx,
+        )
+        .toList(growable: false);
+
+    expect(visualXs, orderedEquals([...visualXs]..sort()));
+    expect(visualXs.first, closeTo(-pageWidth, 0.001));
+    expect(visualXs[2], closeTo(0, 0.001));
+    expect(visualXs.last, greaterThan(pageWidth * 0.98));
+  });
+
   test('FlipController 的轻微回翻不会在 stopMove 阶段直接判定为已翻页', () {
     final controller = StPageFlipController(
       spreadModel: StPageFlipSpreadModel(pageCount: 3),
@@ -1488,6 +1516,13 @@ void main() {
       midState.backfaceOcclusionStrength,
       lessThan(midState.tunnelShadowStrength),
     );
+  });
+
+  test('CurlRenderConfig 默认让背面纹理比正面暗淡', () {
+    const config = ArticlePageCurlRenderConfig();
+
+    expect(config.backfaceTextureLuminanceScale, lessThan(0.58));
+    expect(config.backfaceTextureLuminanceScale, greaterThan(0.38));
   });
 
   test('CurlLightModel 在回翻镜像路径下光影与前翻对称', () {

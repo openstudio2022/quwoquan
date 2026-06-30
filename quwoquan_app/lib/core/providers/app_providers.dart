@@ -29,7 +29,6 @@ import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_notifier.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/connection/connection_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
@@ -414,19 +413,6 @@ final createLocationServiceProvider = Provider<CreateLocationService>((ref) {
     );
   }
   return MockCreateLocationService();
-});
-
-/// 同频/广场社交连接 Repository（同趣/同行/附近/局）。
-///
-/// - mock（alpha/开发）→ [MockConnectionRepository]：本地 canonical 连接数据，不发 HTTP。
-/// - remote（beta/gamma/prod）→ [RemoteConnectionRepository]：后端契约未上线，
-///   方法返回结构化 unavailable 失败（不整类委托 Mock，守 R16）。
-final connectionRepositoryProvider = Provider<ConnectionRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  if (mode == AppDataSourceMode.remote) {
-    return const RemoteConnectionRepository();
-  }
-  return const MockConnectionRepository();
 });
 
 /// AppLog 上传服务 — 定期将本地 ndjson 日志批量上传到 OpsEvent 后端。

@@ -13,12 +13,14 @@ class CircleDetailPage extends ConsumerStatefulWidget {
   final String circleId;
   final VoidCallback onBack;
   final ReferralSource referralSource;
+  final UiErrorAppearanceMode sourceAppearanceMode;
 
   const CircleDetailPage({
     super.key,
     required this.circleId,
     required this.onBack,
     this.referralSource = ReferralSource.organicFeed,
+    this.sourceAppearanceMode = UiErrorAppearanceMode.inherit,
   });
 
   @override
@@ -31,16 +33,17 @@ class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        ref.read(visitRecorderServiceProvider).recordVisit(
+        ref
+            .read(visitRecorderServiceProvider)
+            .recordVisit(
               VisitTarget.entity(
                 kind: VisitEntityKind.circle,
                 id: widget.circleId,
               ),
             );
-        ref.read(contentEngagementTrackerProvider).trackEntityPageView(
-          widget.circleId,
-          from: widget.referralSource,
-        );
+        ref
+            .read(contentEngagementTrackerProvider)
+            .trackEntityPageView(widget.circleId, from: widget.referralSource);
       }
     });
   }
@@ -50,6 +53,7 @@ class _CircleDetailPageState extends ConsumerState<CircleDetailPage> {
     return CircleShell(
       circleId: widget.circleId,
       onBack: widget.onBack,
+      sourceAppearanceMode: widget.sourceAppearanceMode,
     );
   }
 }

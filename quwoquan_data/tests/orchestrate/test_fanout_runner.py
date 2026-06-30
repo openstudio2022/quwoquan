@@ -28,6 +28,8 @@ os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(Path(_TMP) / "tasks")
 # 单测可在用例内再覆盖以断言具体重试次数。
 os.environ.setdefault("QWQ_STARTUP_PROBE_BACKOFF_SECONDS", "0")
 os.environ.setdefault("QWQ_STARTUP_PROBE_MAX_ATTEMPTS", "3")
+# P6 错峰冷启在生产默认 8s；测试不等真实错峰，置 0 保持并行用例确定性快速（同 backoff 模式）。
+os.environ.setdefault("QWQ_FANOUT_WORKER_STAGGER_SECONDS", "0")
 
 from _common import fanout_plan as fp  # noqa: E402
 from _common import content_object  # noqa: E402

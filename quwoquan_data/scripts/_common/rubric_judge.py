@@ -1,6 +1,6 @@
 """LLM-as-judge 评审严格化（rubric judge rigor）。
 
-确定性硬门（quality_gates）只是 rule 层；rubric_review.json 是 judge 层（会话模型按
+确定性硬门（quality_gates）只是 rule 层；rubric_review.json 是 judge 层（创作 agent按
 固定 rubric 评分写回）。本模块把 2026 LLM-as-judge 业界纪律固化为可校验的门，
 确保软轨判官可信，不靠口头"看起来不错"：
 

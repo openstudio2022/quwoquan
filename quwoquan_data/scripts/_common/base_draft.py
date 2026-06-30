@@ -42,8 +42,11 @@ _NGRAM = 3
 # 可作"以底稿为骨架轻改"的权利模式（产品裁定 full light-edit，licensed 与 factual 同等对待）。
 # 仅 blocked 不可作底稿；rights 准入校验另在 download/content_plan 层执行，与此复用策略解耦。
 ADAPTABLE_SOURCE_USE_MODES = ("licensed_adaptation", "factual_reference_only")
+# 字数门唯一真相源（形态自适应）：长文 article 正文≥600；图文混排正文≥200 且
+# 有足量内联图与图注（一篇真·图文底稿，而非图片占位）。任何 verify/review/run.py
+# 预检都必须经 base_draft_readiness 消费这些阈值，禁止在别处另起一份固定 600。
 ARTICLE_MIN_BASE_DRAFT_CHARS = 600
-RICH_MIXED_MIN_TEXT_CHARS = 180
+RICH_MIXED_MIN_TEXT_CHARS = 200
 RICH_MIXED_MIN_CAPTION_CHARS = 80
 RICH_MIXED_MIN_FIGURES = 3
 
@@ -51,6 +54,35 @@ RICH_MIXED_MIN_FIGURES = 3
 def base_draft_is_adaptable(source_use_mode: str | None) -> bool:
     """生产/review 复用层：该来源是否可作为以底稿为骨架轻改的表达底稿。"""
     return str(source_use_mode or "").strip() in ADAPTABLE_SOURCE_USE_MODES
+
+
+# 三类彻底解耦各自来源（download researchLane → 可作底稿的内容载体）：
+# - 文章/线路：只认 article 研究 lane（兼容历史 legacy / 空标签），不借百科或图集做底稿。
+# - 图片作品：只认 image lane（专业图库一源一作品）。
+# - 实体主页：只认 homepage / 百科 lane。
+# 兼容期把空标签 "" 视为历史 article/homepage 通用底稿（与 content_plan 的 researchLane 门一致）。
+_CARRIER_BASE_DRAFT_LANES: dict[str, set[str]] = {
+    "article": {"article", "legacy", ""},
+    "route": {"article", "legacy", ""},
+    "review": {"article", "legacy", ""},
+    "gallery": {"image"},
+    "image": {"image"},
+    "homepage": {"homepage", "encyclopedia", "legacy", ""},
+    "entity": {"homepage", "encyclopedia", "legacy", ""},
+}
+
+
+def base_draft_allowed_lanes(carrier: str | None) -> set[str] | None:
+    """按内容类型(carrier)返回底稿允许的 researchLane 集合；未知/未声明返回 None(不限制)。
+
+    把"按内容类型选取各自来源"从下游 content_plan 兜底前移到底稿认领源头：文章载体只
+    从 article 研究底稿认领、图片作品只从 image 图库来源认领、实体主页只从百科来源认领，
+    源头杜绝"一个实体的来源被跨类型误选为底稿"。
+    """
+    key = str(carrier or "").strip()
+    if key == "gallery":
+        key = "image"
+    return _CARRIER_BASE_DRAFT_LANES.get(key)
 
 
 def base_draft_readiness(
@@ -65,11 +97,16 @@ def base_draft_readiness(
     enough inline figures and captions to be a real图文底稿 rather than an image
     placeholder.
     """
+    from _common.figure_groups import expand_figure_groups
+
     raw = str(text or "")
-    compact = len(re.sub(r"\s+", "", raw))
-    figure_count = raw.count(":::figure")
-    image_alt_chars = sum(len(re.sub(r"\s+", "", match)) for match in re.findall(r"!\[([^\]]*)\]\(", raw))
-    figure_blocks = re.findall(r"(?s):::figure(.*?):::", raw)
+    # figuregroup（连续图组）先展开为 N 个单图块再计量，使「连续 N 张合并占位」如实计 N 张图、
+    # N 段图注，不因合并占位被低估（P2 图主导底稿 readiness 判据）。
+    expanded = expand_figure_groups(raw)
+    compact = len(re.sub(r"\s+", "", expanded))
+    figure_count = expanded.count(":::figure")
+    image_alt_chars = sum(len(re.sub(r"\s+", "", match)) for match in re.findall(r"!\[([^\]]*)\]\(", expanded))
+    figure_blocks = re.findall(r"(?s):::figure(.*?):::", expanded)
     caption_text = "\n".join(
         line
         for block in figure_blocks
@@ -77,7 +114,7 @@ def base_draft_readiness(
         if line.strip() and not line.strip().startswith("![") and "asset://" not in line
     )
     caption_chars = len(re.sub(r"\s+", "", caption_text)) + image_alt_chars
-    prose_without_figures = re.sub(r"(?s):::figure.*?:::", "", raw)
+    prose_without_figures = re.sub(r"(?s):::figure.*?:::", "", expanded)
     prose_chars = len(re.sub(r"\s+", "", prose_without_figures))
     text_ready = compact >= ARTICLE_MIN_BASE_DRAFT_CHARS
     rich_ready = (
@@ -189,6 +226,18 @@ def _is_candidate_eligible(score: float, length: int) -> bool:
     return score >= 0.0 and length > 0
 
 
+def _unit_research_lane(unit_dir: Path) -> str:
+    """读取来源单元 meta.json 的 researchLane（缺失/异常返回空串=历史通用底稿）。"""
+    meta_path = unit_dir / "meta.json"
+    if not meta_path.is_file():
+        return ""
+    try:
+        meta = read_json(meta_path)
+    except (OSError, ValueError):
+        return ""
+    return str(meta.get("researchLane") or "") if isinstance(meta, dict) else ""
+
+
 def base_draft_candidates(
     task_id: str, batch_id: str, brief: Mapping[str, Any]
 ) -> list[dict[str, Any]]:
@@ -212,7 +261,13 @@ def base_draft_candidates(
             if not _is_candidate_eligible(score, length):
                 continue
             rows.append(
-                {"sourceRef": source_ref, "score": score, "length": length, "unitDir": unit}
+                {
+                    "sourceRef": source_ref,
+                    "score": score,
+                    "length": length,
+                    "unitDir": unit,
+                    "researchLane": _unit_research_lane(unit),
+                }
             )
     rows.sort(key=lambda r: (r["score"], r["length"]), reverse=True)
     return rows
@@ -244,6 +299,16 @@ def assign_base_draft(
     assignments: dict[str, str] = dict(ledger.get("assignments") or {})
     taken = occupied_source_refs(ledger, exclude_post=post_ref)
     candidates = base_draft_candidates(task_id, batch_id, brief)
+
+    # 三类解耦：按 brief 载体把候选收窄到对应 researchLane（图片作品←image、文章/线路←
+    # article、实体主页←百科），源头杜绝跨类型误选底稿；未知载体不限制（兼容）。
+    allowed_lanes = base_draft_allowed_lanes(brief.get("carrier") or brief.get("contentType"))
+    if allowed_lanes is not None:
+        candidates = [
+            cand
+            for cand in candidates
+            if str(cand.get("researchLane") or "") in allowed_lanes
+        ]
 
     declared = str(brief.get("baseSourceRef") or "").strip()
     chosen = _normalize_to_source_ref(declared, candidates)
@@ -693,6 +758,44 @@ def base_draft_fidelity_issues(
     return []
 
 
+# 注入 prompt 的底稿正文上限：fidelity 门按整篇底稿判，prompt 必须给整篇（否则 agent 看不到
+# 的内容无法保留 → 必然低保真）。仅对极端超长底稿（书籍级）设安全上限，避免 prompt 失控。
+BASE_DRAFT_PROMPT_MAX_CHARS = 24000
+
+
+def clean_base_draft_length(base_text: str) -> int:
+    """底稿去平台噪声后的可读正文字数（去空白），用于派生 light-edit 字数目标。
+
+    与 `baseDraftFidelity` 清洗口径同源（`_base_comparison_lines`），保证字数目标与保真度
+    分母一致：成稿长度 ≈ 清洗底稿长度时，逐句轻改即可达 fidelity 下限。
+    """
+    return len(_compact_lines(_base_comparison_lines(str(base_text or ""))))
+
+
+def base_aware_word_count(
+    base_text: str,
+    *,
+    carrier: str = "article",
+    source_use_mode: str = "licensed_adaptation",
+) -> dict[str, int] | None:
+    """light-edit 文章字数目标必须跟随底稿长度，否则固定上限会与 `baseDraftFidelity>=55%` 互斥。
+
+    根因实测：底稿 ~8900 字、`wordCount` 上限 1600 时，成稿最多覆盖底稿 ~18% 三连，fidelity
+    必崩（成稿被逼压缩+重写）。light-edit 文章应整篇保留清洗底稿，故字数目标按清洗底稿长度派生。
+    `image/gallery`（短配文）与非改编源返回 None（沿用默认，不设底稿字数门）。
+    """
+    if str(carrier or "").lower() in ("image", "gallery"):
+        return None
+    if not base_draft_is_adaptable(source_use_mode):
+        return None
+    clean_len = clean_base_draft_length(base_text)
+    if clean_len < ARTICLE_MIN_BASE_DRAFT_CHARS:
+        return None
+    lo = max(ARTICLE_MIN_BASE_DRAFT_CHARS, int(clean_len * 0.62))
+    hi = max(lo + 600, int(clean_len * 1.12))
+    return {"min": lo, "max": hi}
+
+
 # ─── 反脱稿 / 反拼接度量（fidelity 的反向与跨源补强）──────────────────────
 # baseDraftFidelity 是“底稿留存了多少”的单向指标，测不到“正文里多少来自底稿之外/
 # 逐字搬自别的源”。以下两个函数补这块盲区：
@@ -789,6 +892,7 @@ __all__ = [
     "cross_source_overlap_issues",
     "ADAPTABLE_SOURCE_USE_MODES",
     "base_draft_is_adaptable",
+    "base_draft_allowed_lanes",
     "load_base_draft_ledger",
     "save_base_draft_ledger",
     "occupied_source_refs",

@@ -13,6 +13,7 @@ from typing import Any
 from download.handler_plan import *  # noqa: F403
 from download.handler_images import *  # noqa: F403
 from download.handler_fetch import *  # noqa: F403
+from download.source_inputs import content_type_for_lane
 
 def handle_download(args: argparse.Namespace) -> None:
     """Orchestrate download: source_plan → fetch → source_screen.
@@ -57,7 +58,9 @@ def handle_download(args: argparse.Namespace) -> None:
                 "category": source.get("category") or "",
                 "sourceRole": source.get("sourceRole") or "",
                 "researchLane": source.get("researchLane") or "",
-                "expectedContentType": "article",
+                # P3 三类解耦：内容类型按 lane 路由（homepage=entity/article=article/image=image），
+                # 不再「全部当 article」实体键控；下游分类型下发调度据此区分来源处理。
+                "expectedContentType": content_type_for_lane(source.get("researchLane") or ""),
                 "priority": index + 1,
             }
             for index, source in enumerate(
@@ -70,6 +73,11 @@ def handle_download(args: argparse.Namespace) -> None:
                 )
             )
         ]
+        # P3 分类型下发调度：按内容类型对来源分桶，dispatch 记录显式区分三类，便于审计与续跑。
+        dispatch_by_content_type: dict[str, int] = {}
+        for planned in planned_sources:
+            ctype = str(planned.get("expectedContentType") or "article")
+            dispatch_by_content_type[ctype] = dispatch_by_content_type.get(ctype, 0) + 1
         write_stage_result(
             task_id,
             batch_id,
@@ -79,6 +87,7 @@ def handle_download(args: argparse.Namespace) -> None:
             {
                 "entityId": entity["entityId"],
                 "sources": planned_sources,
+                "dispatchByContentType": dispatch_by_content_type,
             },
         )
         # 源类别覆盖门（「全」硬约束）：≥2 源 + 覆盖 ≥N 类（含核心类），杜绝同质单一来源。

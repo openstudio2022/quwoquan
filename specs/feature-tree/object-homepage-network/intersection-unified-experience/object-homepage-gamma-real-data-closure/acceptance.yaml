@@ -182,7 +182,7 @@ gwt_acceptance:
     when:
       - "App Remote repository 请求 homepage object-page-bundle、introduction、related-groups，并刷新关注状态。"
     then:
-      - "实体主页 Header、CTA、为什么推荐这里、关于这里、记录、讨论、相关圈子均来自真实服务。"
+      - "实体主页 Header、CTA、我的交集、影响力、记录、讨论、相关圈子均来自真实服务。"
       - "公开页面不展示统一对象键、模板、来源、灰度 cohort、主页管理等内部字段。"
     done_when:
       - "homepage bundle、introduction、related-groups 均有 populated api_integration 结果。"
@@ -225,7 +225,7 @@ gwt_acceptance:
     when:
       - "App Remote repository 请求 circle list/detail/impact/feed/members，并执行 join/leave 状态刷新。"
     then:
-      - "圈子主页 Header、CTA、为什么推荐这个圈子、这个圈子帮助了很多人、记录、讨论、成员均来自真实服务。"
+      - "圈子主页 Header、CTA、我的交集、影响力、记录、讨论、成员均来自真实服务。"
       - "圈子头像独立于封面，封面只作为兜底；记录卡最多展示一条推荐理由。"
     done_when:
       - "circle list/detail/impact/feed/members 均有 populated api_integration 结果。"

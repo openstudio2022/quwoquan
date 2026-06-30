@@ -73,7 +73,6 @@ def test_parallel_auto_research_writes_availability_report():
         entity_id: str,
         *,
         entity_aliases: list[str] | tuple[str, ...] = (),
-        authorized_images: list[dict],
         limit: int = 4,
     ):
         if entity_id != "可用景区":
@@ -88,7 +87,8 @@ def test_parallel_auto_research_writes_availability_report():
                 match_confidence=0.95,
                 source_role="base",
                 images=[good_image],
-                image_evidence_mode="same_authorized_collection",
+                # RC4：UGC 游记文章配图必须同源；不再用 same_authorized_collection 跨源图集。
+                image_evidence_mode="same_source",
             )
             for index in range(1, 3)
         ]
@@ -191,7 +191,6 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
         entity_id: str,
         *,
         entity_aliases: list[str] | tuple[str, ...] = (),
-        authorized_images: list[dict],
         limit: int = 4,
     ):
         assert entity_id == entity
@@ -205,7 +204,8 @@ def test_auto_research_uses_related_encyclopedia_to_complete_museum_article_cate
                 match_confidence=0.95,
                 source_role="base",
                 images=[good_image],
-                image_evidence_mode="same_authorized_collection",
+                # RC4：UGC 游记文章配图必须同源；不再用 same_authorized_collection 跨源图集。
+                image_evidence_mode="same_source",
             )
             for index in range(1, 5)
         ]
@@ -395,7 +395,7 @@ def test_auto_research_reuses_prior_verified_article_base_sources_when_live_disc
         research_mod._mediawiki_page_images = lambda host, title, entity_id, limit=6: []
         research_mod._trusted_external_links = lambda title, limit=4: []
         research_mod._qunar_travelogue_sources = (
-            lambda entity_id, entity_aliases=(), authorized_images=(), limit=4: []
+            lambda entity_id, entity_aliases=(), limit=4: []
         )
         research_mod._task_content_quotas = lambda task_id: {
             "entityArticlesPerTarget": 4,

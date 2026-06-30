@@ -58,11 +58,6 @@ class BottomNavigationWidget extends ConsumerWidget {
         selectedIcon: FluentIcons.chat_multiple_24_regular,
       ),
       _BottomDestination(
-        label: AppConceptConstants.plaza,
-        icon: FluentIcons.people_community_24_regular,
-        selectedIcon: FluentIcons.people_community_24_filled,
-      ),
-      _BottomDestination(
         label: profileLabel,
         semanticLabel: profileLabel,
         iconBuilder: (color, selected, size) =>
@@ -86,7 +81,7 @@ class BottomNavigationWidget extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: List<Widget>.generate(destinations.length, (index) {
-                final selected = (currentIndex < 0 ? 0 : currentIndex) == index;
+                final selected = currentIndex == index;
                 final destination = destinations[index];
                 return Expanded(
                   child: CupertinoButton(
@@ -162,60 +157,65 @@ class _BottomNavItem extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: destination.semanticLabel ?? destination.label,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (destination.isPrimaryAction)
-            Container(
-              width: AppSpacing.primaryActionPillWidth,
-              height: AppSpacing.primaryActionPillHeight,
-              decoration: BoxDecoration(
-                color: AppColors.primaryColor,
-                borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryColor.withValues(alpha: 0.28),
-                    blurRadius: AppSpacing.sm,
-                    offset: const Offset(
-                      AppSpacing.zero,
-                      AppSpacing.bottomNavPrimaryActionShadowOffsetDy,
+      // wide(宽屏 Web) 断点下 icon(40)+gap+label 略超内容区高度；用 scaleDown
+      // 防极小溢出（手机 compact 内容低于底栏高度不触发缩放，零视觉回归）。
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (destination.isPrimaryAction)
+              Container(
+                width: AppSpacing.primaryActionPillWidth,
+                height: AppSpacing.primaryActionPillHeight,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryColor,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryColor.withValues(alpha: 0.28),
+                      blurRadius: AppSpacing.sm,
+                      offset: const Offset(
+                        AppSpacing.zero,
+                        AppSpacing.bottomNavPrimaryActionShadowOffsetDy,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              child: Icon(
-                destination.selectedIcon,
-                size: AppSpacing.bottomNavPrimaryActionIconSize,
-                color: AppColors.white,
-              ),
-            )
-          else ...[
-            if (destination.iconBuilder != null)
-              destination.iconBuilder!(
-                selected ? activeColor : inactiveColor,
-                selected,
-                iconSize,
+                  ],
+                ),
+                child: Icon(
+                  destination.selectedIcon,
+                  size: AppSpacing.bottomNavPrimaryActionIconSize,
+                  color: AppColors.white,
+                ),
               )
-            else
-              Icon(
-                selected ? destination.selectedIcon : destination.icon,
-                size: iconSize,
-                color: selected ? activeColor : inactiveColor,
+            else ...[
+              if (destination.iconBuilder != null)
+                destination.iconBuilder!(
+                  selected ? activeColor : inactiveColor,
+                  selected,
+                  iconSize,
+                )
+              else
+                Icon(
+                  selected ? destination.selectedIcon : destination.icon,
+                  size: iconSize,
+                  color: selected ? activeColor : inactiveColor,
+                ),
+              SizedBox(height: AppSpacing.bottomNavIconLabelGap),
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                style: labelStyle,
+                child: Text(
+                  destination.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            SizedBox(height: AppSpacing.bottomNavIconLabelGap),
-            AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 180),
-              curve: Curves.easeOutCubic,
-              style: labelStyle,
-              child: Text(
-                destination.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

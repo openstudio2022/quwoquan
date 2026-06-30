@@ -2,7 +2,7 @@
 
 覆盖博物馆/景区/餐厅/古镇等单实体内容（体验/攻略/探店/科普/叙事 等角度）。
 复用 route_workflow 的资产挑选、载体路由、图片门、来源痕迹清洗与 review 检查；
-仅在「章节意图」上改为单实体框架（初见/最打动/不足/去之前/适合谁），正文一律由会话模型创作。
+仅在「章节意图」上改为单实体框架（初见/最打动/不足/去之前/适合谁），正文一律由创作 agent创作。
 """
 from __future__ import annotations
 
@@ -124,7 +124,7 @@ def _entity_section_intents(brief: Mapping[str, Any], name: str) -> list[str]:
     """章节意图：跟随底稿自身结构，仅给最小建议（不再下发固定 6 段骨架）。"""
     kind = _kind_word(brief)
     return [
-        f"结构跟随底稿：保留底稿（关于 {name} 的那篇）自身的小标题与叙述顺序，只做轻量编辑。",
+        f"结构跟随底稿：保留底稿自身的小标题与叙述顺序（多目的地路书保留全部站点，不要裁成只讲 {name}），只做轻量编辑。",
         f"轻改重点：去语病/纠错别字/理顺语句/补全可回溯证据/去平台与版权痕迹；不要从零另写，也不要套用固定模板小标题（如「它到底适合谁」）。",
     ]
 
@@ -176,7 +176,7 @@ def build_entity_writing_pack(
             cited_source_paths=quality_payload.get("sourcePaths") or [],
         )
     else:
-        # 仅当尚无 agent 草稿时写占位，避免覆盖会话模型已创作的正文。
+        # 仅当尚无 agent 草稿时写占位，避免覆盖创作 agent已创作的正文。
         existing = read_draft_meta(task_id, batch_id, ref)
         if not existing or str(existing.get("generator")) != GENERATOR_AGENT:
             write_placeholder_draft(task_id, batch_id, ref)
@@ -474,7 +474,7 @@ def review_entity_draft(
     checks["generatorProvenance"] = {
         "passed": not authenticity_issues,
         "issues": authenticity_issues,
-        "suggestions": ["按 prompt.md 由会话模型创作正文并写回对象 `4.draft/draft.article.md`（generator=agent）。"] if authenticity_issues else [],
+        "suggestions": ["按 prompt.md 由创作 agent创作正文并写回对象 `4.draft/draft.article.md`（generator=agent）。"] if authenticity_issues else [],
     }
     checks["factTraceability"] = {
         "passed": not traceability,

@@ -13,12 +13,14 @@ from typing import Any, Mapping
 
 from _common.io import read_json
 from _common.paths import batch_root, release_root
-from _common.base_draft import base_draft_readiness
+from _common.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
 
 
 REPORT_SCHEMA = "quwoquan_data.release_integrity"
 BASE_DRAFT_LEDGER_SCHEMA = "quwoquan_data.base_draft_ledger"
-MIN_ARTICLE_BASE_DRAFT_CHARS = 600
+# RC6：长文字数门唯一真相源是 base_draft.ARTICLE_MIN_BASE_DRAFT_CHARS，此处仅做兼容别名，
+# 不再另立独立字面量第二真相源。
+MIN_ARTICLE_BASE_DRAFT_CHARS = ARTICLE_MIN_BASE_DRAFT_CHARS
 
 # 文章硬门分两类：
 # 1) COMMON——entity 文章与 route 文章两种 review builder 都会产出的检查，逐一必须 present+passed。

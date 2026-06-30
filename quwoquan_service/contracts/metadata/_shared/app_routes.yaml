@@ -15,14 +15,8 @@ routes:
     path: /
   - id: circles
     path: /circles
-  - id: plaza
-    path: /plaza
-  - id: plazaNearby
-    path: /plaza/nearby
-  - id: plazaCompanion
-    path: /plaza/companion
-  - id: plazaMeetup
-    path: /plaza/meetup
+  - id: interestMatch
+    path: /interest-match
   - id: chat
     path: /chat
   - id: startGroupChat
@@ -41,6 +35,7 @@ routes:
     query_params: [path, source, index, total]
   - id: circleDetail
     path: /circle/{id}
+    query_params: [sourceTheme]
   - id: circleStats
     path: /circle/{id}/stats
     query_params: [type]
@@ -69,6 +64,7 @@ routes:
     query_params: [query]
   - id: homepageDetail
     path: /homepages/{id}
+    query_params: [sourceTheme]
   - id: homepageIntroduction
     path: /homepages/{id}/introduction
     query_params: [source]

@@ -261,6 +261,8 @@ def _fetch_download_entity(
         status_code = 0
         fetched_text = ""
         raw_format = ""
+        # RC3：本次抓取的同源内联 <img> 清单（与 source_md 的 source-inline 占位同序）。
+        inline_images: list = []
         try:
             fetched = handler_bridge.call(
                 "fetch_source_payload",
@@ -271,6 +273,7 @@ def _fetch_download_entity(
             html_bytes = fetched["htmlBytes"]
             status_code = fetched["statusCode"]
             fetched_text = str(fetched.get("text") or "").strip()
+            inline_images = fetched.get("inlineImages") or []
             raw_format = str((fetched.get("runtime") or {}).get("rawFormat") or "")
             source_md = source_frontmatter(source, entity_id)
             if fetched_text:
@@ -312,6 +315,9 @@ def _fetch_download_entity(
                 cached_quality = None
             else:
                 source_md = (unit / "source.md").read_text(encoding="utf-8")
+                # 缓存命中：复用既有已绑定的来源 source.md/资产，不再用本次 fetch 的
+                # 内联清单二次注入（否则会重复下载并与已绑定占位错位）。
+                inline_images = []
                 clean_path = unit / "source.clean.md"
                 clean_md = clean_path.read_text(encoding="utf-8") if clean_path.is_file() else ""
                 page_path = find_source_unit_raw_snapshot(unit)
@@ -330,6 +336,14 @@ def _fetch_download_entity(
                     flush=True,
                 )
                 quality = {**cached_quality, "retainedFromCache": True}
+        # P3：检测来源页是否含内联视频（文章类据此弃稿，不把视频强行图文化）。
+        from download.fetch import html_has_inline_video
+
+        page_has_video = False
+        if html_bytes:
+            page_has_video = html_has_inline_video(html_bytes.decode("utf-8", errors="replace"))
+        if not page_has_video and fetched_text:
+            page_has_video = html_has_inline_video(fetched_text)
         source_images, source_image_issues, source_image_funnel = _download_source_unit_images(
             source,
             task_id=task_id,
@@ -338,6 +352,7 @@ def _fetch_download_entity(
             object_dir=object_dir,
             ordinal=ordinal,
             vertical=vertical,
+            extra_candidates=build_inline_image_candidates(inline_images, entity_id=entity_id),
         )
         if source_image_issues:
             image_quality_issues.extend(
@@ -364,6 +379,7 @@ def _fetch_download_entity(
             title=source.get("title") or source["source_id"],
             target_ref=target_ref,
             relevance=f"覆盖 {entity_id} 的基础事实/交通/季节等",
+            has_video=page_has_video,
             images=source_images,
             asset_funnel=source_image_funnel,
             raw_format=raw_format,

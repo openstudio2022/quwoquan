@@ -13,14 +13,13 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 /// 类名保留 `ProfileInsight*` 历史命名以零改动收敛；语义上为通用对象交集预览积木。
 
 String profileIntersectionSourceRef(IntersectionReason reason) {
-  final source = reason.source.trim();
-  if (source.isNotEmpty) {
-    return source;
+  for (final point in reason.intersectionPoints) {
+    final sourceRef = point.sourceRef.trim();
+    if (sourceRef.isNotEmpty) {
+      return sourceRef;
+    }
   }
-  if (reason.intersectionPoints.isEmpty) {
-    return '';
-  }
-  return reason.intersectionPoints.first.sourceRef.trim();
+  return reason.source.trim();
 }
 
 class ProfileInsightSectionCard extends StatelessWidget {

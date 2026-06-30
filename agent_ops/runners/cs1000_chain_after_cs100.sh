@@ -2,7 +2,7 @@
 # Wait for cs100 e2e chain, then start cs1000 prepare (avoid bridge contention).
 set -euo pipefail
 export CURSOR_API_KEY="${CURSOR_API_KEY:?set CURSOR_API_KEY}"
-export QWQ_DATA_ROOT="${QWQ_DATA_ROOT:-$HOME/qwq_scale_verify}"
+export QWQ_DATA_ROOT="${QWQ_DATA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/.qwq_sandbox}"
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 CS100_LOG="${QWQ_DATA_ROOT}/cs100_chain_after_prepare.log"
 CS1000_LOG="${QWQ_DATA_ROOT}/cs1000_prepare_loop.log"

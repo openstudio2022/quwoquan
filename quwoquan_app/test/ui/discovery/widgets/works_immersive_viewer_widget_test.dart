@@ -18,6 +18,7 @@ import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.da
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
+import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -554,7 +555,7 @@ Future<void> _flipArticleToLastPage(WidgetTester tester) async {
       return;
     }
     await tester.tap(next);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
   }
 }
 
@@ -641,6 +642,24 @@ void _consumeImageLoadExceptions(WidgetTester tester) {
   }
 }
 
+Future<void> _pumpImmersiveViewerFirstFrames(WidgetTester tester) async {
+  await tester.pump();
+  _consumeImageLoadExceptions(tester);
+  // 沉浸 viewer 首帧可能同时构建视频占位；测试环境视频初始化不完成时
+  // CupertinoActivityIndicator 会持续调度帧，因此不能用 pumpAndSettle。
+  await tester.pump(const Duration(milliseconds: 16));
+  await tester.pump(const Duration(milliseconds: 16));
+  _consumeImageLoadExceptions(tester);
+}
+
+Future<void> _pumpSettledFrames(WidgetTester tester) async {
+  _consumeImageLoadExceptions(tester);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 450));
+  await tester.pump(const Duration(milliseconds: 16));
+  _consumeImageLoadExceptions(tester);
+}
+
 Future<void> _tapRichTextSubstring(
   WidgetTester tester,
   Finder finder,
@@ -716,9 +735,8 @@ void main() {
   });
 
   test('沉浸媒体滑动顺滑性静态契约', () {
-    // 沉浸 viewer 重构后，横滑分页/吸附/预热/保活逻辑迁移到
-    // works_immersive_viewer_canvas.dart（viewer 主体只做装配）。静态契约读取
-    // viewer + canvas 合并源，保证这些顺滑性优化仍存在于真实绘制链路。
+    // 视频书重构后，图片横滑翻书迁移到 components/media 公共层；
+    // viewer/canvas 只保留 discovery adapter，视频保留原横滑预构建/保活逻辑。
     final viewerSource =
         File(
           'lib/ui/discovery/widgets/works_immersive_viewer.dart',
@@ -726,24 +744,40 @@ void main() {
         File(
           'lib/ui/discovery/widgets/works_immersive_viewer_canvas.dart',
         ).readAsStringSync();
+    final imageBookSource = File(
+      'lib/components/media/image/book/image_book_canvas.dart',
+    ).readAsStringSync();
+    final mediaPageflipSource = File(
+      'lib/components/media/shared/pageflip/media_page_flip_book.dart',
+    ).readAsStringSync();
     final videoPlayerSource = File(
       'lib/components/media/video/player/video_player_widget.dart',
     ).readAsStringSync();
 
+    expect(viewerSource, contains('return ImageBookCanvas('));
+    expect(imageBookSource, contains('class ImageBookCanvas'));
     expect(
-      viewerSource,
-      contains('double _pageWidthForConstraints(BoxConstraints constraints)'),
-      reason: '图片横滑分页距离必须来自实际 stage 宽度，而不是全屏宽度。',
+      imageBookSource,
+      contains('ImageBookPageSurfaceFactory'),
+      reason: '图片书必须先把成功/加载/失败三态统一成同尺寸 page surface。',
     );
+    expect(imageBookSource, contains('MediaPageFlipBook('));
+    expect(imageBookSource, contains('textureSnapshotBuilder:'));
+    expect(imageBookSource, contains('_buildImageTextureSnapshot('));
     expect(
-      viewerSource,
-      contains('Duration _settleDuration({'),
-      reason: '图片释放吸附应根据距离/速度动态收敛，避免固定时长拖沓。',
+      imageBookSource,
+      isNot(contains('buildLoadingTexture(')),
+      reason: '图片书 active curl 不得把 loading 模糊面提升为翻页材质。',
     );
+    expect(imageBookSource, contains('buildFailureTexture('));
+    expect(mediaPageflipSource, contains('class MediaPageFlipBook'));
+    expect(mediaPageflipSource, contains('computeStPageFlipLayout('));
+    expect(mediaPageflipSource, contains('_buildDynamicLayers('));
+    expect(mediaPageflipSource, contains('media-pageflip-flipping-layer'));
     expect(
-      viewerSource,
-      contains('precacheImage(CachedNetworkImageProvider(url), context)'),
-      reason: '图片横滑应预热相邻图，降低快速滑动时 placeholder 闪动。',
+      imageBookSource,
+      contains('cacheManagerForPreset'),
+      reason: '预加载、可见图和翻页纹理必须使用同一个 cover cache manager。',
     );
     expect(
       viewerSource,
@@ -763,7 +797,7 @@ void main() {
     expect(videoPlayerSource, contains('_syncPlaybackWithAutoPlay();'));
   });
 
-  testWidgets('精品沉浸流尾部显示加载哨兵并预取下一批内容', (tester) async {
+  testWidgets('视频书沉浸流尾部显示加载哨兵并预取下一批内容', (tester) async {
     final repo = _PagedFeaturedContentRepository();
     final analytics = _FakeAnalyticsService();
     final container = ProviderContainer(
@@ -797,9 +831,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     expect(
       container.read(discoveryFeedProvider('photo')).value?.items.length,
@@ -869,7 +901,7 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('精品顶部仅保留返回与更多入口（V1.0 取消形态分段与一级 tab）', (tester) async {
+  testWidgets('视频书顶部仅保留返回与更多入口（V1.0 取消形态分段与一级 tab）', (tester) async {
     final repo = _PagedFeaturedContentRepository();
     final container = ProviderContainer(
       overrides: [contentRepositoryProvider.overrideWithValue(repo)],
@@ -897,9 +929,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     // V1.0：顶部仅保留「返回 + 更多」，禁止形态分段 / 一级 tab。
     expect(
@@ -915,7 +945,7 @@ void main() {
       findsNothing,
     );
 
-    // 不再出现「关注 / 精品」一级 tab。
+    // 不再出现「关注 / 视频书」一级 tab。
     expect(find.text('关注'), findsNothing);
     expect(find.text('精品'), findsNothing);
 
@@ -975,10 +1005,10 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    await tester.pump();
+    await _pumpImmersiveViewerFirstFrames(tester);
     expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(milliseconds: 16));
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
     expect(find.byType(WorksImmersiveViewer), findsOneWidget);
@@ -1041,9 +1071,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     final barFinder = find.byType(ImmersiveEngagementBar);
     final railFinder = find.byKey(const ValueKey('immersive-engagement-rail'));
@@ -1111,9 +1139,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     expect(find.text('封面标题'), findsOneWidget);
     expect(find.textContaining('封面正文'), findsOneWidget);
@@ -1166,9 +1192,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     final viewer = find.byType(WorksImmersiveViewer);
     await tester.drag(viewer, const Offset(0, -360));
@@ -1184,7 +1208,59 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
-  testWidgets('精品页竖向图片按宽高比铺入状态栏', (tester) async {
+  testWidgets('视频书竖向作品流慢速拖过阈值后吸附到下一作品不弹回', (tester) async {
+    final first = _photoPost(
+      imageUrls: const ['media/image/s/fixture/photo-first.jpg'],
+    );
+    final second = _photoPost(
+      imageUrls: const ['media/image/s/fixture/photo-second.jpg'],
+    ).copyWith(id: 'photo-2', body: 'second body');
+    final changed = <int>[];
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [first, second],
+          externalPostViews: [
+            ContentSurfaceViewMapper.fromDto(first),
+            ContentSurfaceViewMapper.fromDto(second),
+          ],
+          onPostIndexChanged: changed.add,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await _pumpImmersiveViewerFirstFrames(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('works-status-content-canvas-photo-1')),
+      findsOneWidget,
+    );
+
+    final verticalPager = find.byWidgetPredicate(
+      (widget) => widget is PageView && widget.scrollDirection == Axis.vertical,
+    );
+    await tester.timedDrag(
+      verticalPager,
+      const Offset(0, -272),
+      const Duration(milliseconds: 480),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+    _consumeImageLoadExceptions(tester);
+
+    expect(changed, contains(1));
+    expect(
+      find.byKey(const ValueKey<String>('works-status-content-canvas-photo-2')),
+      findsOneWidget,
+      reason: '慢速上滑超过阈值后应稳定吸附到下一作品，不能弹回当前作品。',
+    );
+  });
+
+  testWidgets('视频书竖向图片按宽高比铺入状态栏', (tester) async {
     final post = _photoPost(width: 900, height: 1200);
     await tester.pumpWidget(
       _wrap(
@@ -1199,9 +1275,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
     final canvasRect = tester.getRect(
@@ -1210,7 +1284,7 @@ void main() {
     expect((canvasRect.top - viewerRect.top).abs(), lessThan(1));
   });
 
-  testWidgets('精品页宽横图保留状态栏安全区', (tester) async {
+  testWidgets('视频书宽横图保留状态栏安全区', (tester) async {
     final post = _photoPost(width: 1600, height: 900);
     await tester.pumpWidget(
       _wrap(
@@ -1225,9 +1299,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
     final canvasRect = tester.getRect(
@@ -1239,7 +1311,7 @@ void main() {
     );
   });
 
-  testWidgets('精品页视频可铺入状态栏', (tester) async {
+  testWidgets('视频书视频可铺入状态栏', (tester) async {
     final post = _videoPost(width: 1920, height: 1080);
     await tester.pumpWidget(
       _wrap(
@@ -1309,9 +1381,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
     final topRailRect = tester.getRect(
@@ -1418,9 +1488,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     final captionRect = tester.getRect(
       find.byKey(const ValueKey<String>('works-caption-rail')),
@@ -1459,7 +1527,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     final bookRect = tester.getRect(find.byType(ArticleReadOnlyBookDeck));
     final toolbarRect = tester.getRect(find.byType(ImmersiveEngagementBar));
@@ -1502,13 +1570,13 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     expect(find.text('临时改地点提醒'), findsOneWidget);
     expect(find.textContaining('今天风有点大'), findsOneWidget);
   });
 
-  testWidgets('交集以「N 个交集」入口呈现并点击弹出推荐解释详情', (tester) async {
+  testWidgets('交集以具象化句子呈现在底部并可点击弹出推荐解释详情', (tester) async {
     final post = _textMoment(
       intersectionReasons: <IntersectionReason>[
         IntersectionReason(
@@ -1543,29 +1611,31 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
-    // V1.0：交集作为推荐解释层入口（作者区「N 个交集 >」），不在 caption 内平铺。
+    // 视频书：交集作为三类媒体底部统一具象化句子，不回退到「N 个交集」摘要。
     expect(
       find.byKey(const ValueKey<String>('works-caption-intersection-reason')),
       findsNothing,
     );
-    final entry = find.byKey(const ValueKey('immersive-intersection-entry'));
-    expect(entry, findsOneWidget);
     expect(
-      find.text(DiscoveryFeedText.intersectionEntrySummary(1)),
+      find.byKey(const ValueKey('immersive-intersection-statement')),
       findsOneWidget,
     );
-    expect(find.text('你和 TA 都来自同一校园'), findsNothing);
+    expect(
+      find.text(DiscoveryFeedText.intersectionEntrySummary(1)),
+      findsNothing,
+    );
+    expect(find.text('你和 TA 都来自同一校园'), findsOneWidget);
 
-    // 点击入口弹出交集详情面板，展示完整 displayText。
-    await tester.tap(entry);
-    await tester.pumpAndSettle();
+    // 点击降级整句弹出交集详情面板，展示完整 displayText。
+    await tester.tap(find.text('你和 TA 都来自同一校园'));
+    await _pumpSettledFrames(tester);
     expect(
       find.byKey(const ValueKey<String>('works-intersection-detail-sheet')),
       findsOneWidget,
     );
-    expect(find.text('你和 TA 都来自同一校园'), findsOneWidget);
+    expect(find.text('你和 TA 都来自同一校园'), findsNWidgets(2));
     // V1.0：详情 sheet 为「为什么推荐给你」+ ✓ 证据列表。
     expect(
       find.text(DiscoveryFeedText.intersectionDetailTitle),
@@ -1610,8 +1680,7 @@ void main() {
         ),
       ),
     );
-    await tester.pump();
-    await tester.pumpAndSettle();
+    await _pumpImmersiveViewerFirstFrames(tester);
 
     final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
     final topRailRect = tester.getRect(
@@ -1660,10 +1729,10 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final panel = find.byKey(TestKeys.modalBottomSheetPanel);
     final screenHeight =
@@ -1691,10 +1760,10 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final contentFilter = find.text('内容过滤');
     final notInterested = find.text('不感兴趣');
@@ -1715,7 +1784,7 @@ void main() {
     );
 
     await tester.tap(contentFilter);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(
       find.byKey(const ValueKey<String>('more-action-content-filter-panel')),
@@ -1733,13 +1802,13 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey<String>('more-action-content-filter-image')),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     await tester.tap(
       find.byKey(const ValueKey<String>('more-action-content-filter-video')),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     await tester.tap(find.text('完成'));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(find.text('图片 / 视频'), findsOneWidget);
   });
@@ -1766,23 +1835,23 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     await tester.tap(find.byIcon(CupertinoIcons.ellipsis));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     await tester.tap(find.text('内容过滤'));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     await tester.tap(
       find.byKey(const ValueKey<String>('more-action-content-filter-image')),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     await tester.tap(
       find.byKey(const ValueKey<String>('more-action-content-filter-video')),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     await tester.tap(find.text('完成'));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     expect(find.text(article.title), findsNothing);
     expect(find.byType(VideoPlayerWidget), findsNothing);
     expect(find.text('图片 / 视频'), findsOneWidget);
@@ -1814,18 +1883,18 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     await tester.dragFrom(
       tester.getCenter(find.byType(WorksImmersiveViewer)),
       const Offset(-220, 0),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(switchedToCircles, isFalse);
   });
 
-  testWidgets('图片首图从内容区继续横滑时会出现回弹并恢复原位', (tester) async {
+  testWidgets('图片作品使用公共翻书组件，首图左滑翻到下一张且不触发退出', (tester) async {
     final post = _photoPost(
       imageUrls: const [
         'media/image/s/fixture/photo.jpg',
@@ -1852,39 +1921,62 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
-    final photoStage = find.byKey(const ValueKey<String>('works-photo-stage'));
-    final initialRect = tester.getRect(photoStage);
+    expect(
+      find.byKey(const ValueKey<String>('works-photo-stage')),
+      findsNothing,
+    );
+    final photoStage = find.byKey(
+      const ValueKey<String>('works-photo-book-stage'),
+    );
+    expect(photoStage, findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-gesture-layer')),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<MediaPageFlipBook>(find.byType(MediaPageFlipBook))
+          .pageCount,
+      2,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-static-page-0')),
+      findsOneWidget,
+    );
+    final initialRect = tester.getRect(
+      find.byKey(const ValueKey<String>('media-pageflip-gesture-layer')),
+    );
     final gesture = await tester.startGesture(initialRect.center);
-    await gesture.moveBy(const Offset(24, 0));
+    await gesture.moveBy(const Offset(-180, 0));
     await tester.pump();
-    await gesture.moveBy(const Offset(48, 0));
-    await tester.pump();
-    await gesture.moveBy(const Offset(48, 0));
-    await tester.pump();
+    await gesture.moveBy(const Offset(-180, 0));
+    for (var i = 0; i < 8; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+      _consumeImageLoadExceptions(tester);
+    }
 
-    final draggedTransform = tester
-        .widget<AnimatedContainer>(photoStage)
-        .transform;
-    expect(draggedTransform, isNotNull);
-    expect(draggedTransform!.storage[12], greaterThan(8));
     expect(dismissed, isFalse);
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+      reason: '图片视频书按住横滑时必须进入同源动态翻页层，而不是 release 后才换页。',
+    );
 
     await gesture.up();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 260));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 1100));
+    await _pumpSettledFrames(tester);
 
-    final settledTransform = tester
-        .widget<AnimatedContainer>(photoStage)
-        .transform;
-    expect(settledTransform, isNotNull);
-    expect(settledTransform!.storage[12], closeTo(0, 0.5));
     expect(dismissed, isFalse);
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-static-page-1')),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('图片末图从内容区继续横滑时会出现回弹并恢复原位', (tester) async {
+  testWidgets('图片作品末图继续左滑不触发退出', (tester) async {
     final post = _photoPost(
       imageUrls: const [
         'media/image/s/fixture/photo.jpg',
@@ -1911,36 +2003,31 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
-    final photoStage = find.byKey(const ValueKey<String>('works-photo-stage'));
-    final initialRect = tester.getRect(photoStage);
+    final photoStage = find.byKey(
+      const ValueKey<String>('works-photo-book-stage'),
+    );
+    expect(photoStage, findsOneWidget);
+    final initialRect = tester.getRect(
+      find.byKey(const ValueKey<String>('media-pageflip-gesture-layer')),
+    );
     final gesture = await tester.startGesture(initialRect.center);
-    await gesture.moveBy(const Offset(-24, 0));
-    await tester.pump();
-    await gesture.moveBy(const Offset(-48, 0));
-    await tester.pump();
-    await gesture.moveBy(const Offset(-48, 0));
+    await gesture.moveBy(const Offset(-240, 0));
     await tester.pump();
 
-    final draggedTransform = tester
-        .widget<AnimatedContainer>(photoStage)
-        .transform;
-    expect(draggedTransform, isNotNull);
-    expect(draggedTransform!.storage[12], lessThan(-8));
     expect(dismissed, isFalse);
 
     await gesture.up();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 260));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 1100));
+    await _pumpSettledFrames(tester);
 
-    final settledTransform = tester
-        .widget<AnimatedContainer>(photoStage)
-        .transform;
-    expect(settledTransform, isNotNull);
-    expect(settledTransform!.storage[12], closeTo(0, 0.5));
     expect(dismissed, isFalse);
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-static-page-1')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('文章翻页到边界后从内容区继续横滑不会切换主 tab', (tester) async {
@@ -1966,7 +2053,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     await _flipArticleToLastPage(tester);
     _expectArticleAdvancedPastFirstPage(tester);
@@ -1975,7 +2062,7 @@ void main() {
       tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
       const Offset(-260, -40),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(switchedToCircles, isFalse);
   });
@@ -2004,7 +2091,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final stage = find.byKey(const ValueKey<String>('article-boundary-stage'));
     final stageRect = tester.getRect(stage);
@@ -2026,7 +2113,7 @@ void main() {
     await gesture.up();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 260));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final settledTransform = tester.widget<AnimatedContainer>(stage).transform;
     expect(settledTransform, isNotNull);
@@ -2058,7 +2145,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     await _flipArticleToLastPage(tester);
 
@@ -2082,7 +2169,7 @@ void main() {
     await gesture.up();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 260));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final settledTransform = tester.widget<AnimatedContainer>(stage).transform;
     expect(settledTransform, isNotNull);
@@ -2148,7 +2235,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(
       find.byKey(const ValueKey<String>('works-article-page-progress')),
@@ -2174,7 +2261,7 @@ void main() {
 
     await tester.tap(nextChevron);
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     final advancedLabel = tester.widget<Text>(
       find.byKey(const ValueKey<String>('works-article-page-progress')),
     );
@@ -2182,7 +2269,7 @@ void main() {
 
     await tester.tap(prevChevron);
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     final restoredLabel = tester.widget<Text>(
       find.byKey(const ValueKey<String>('works-article-page-progress')),
     );
@@ -2221,7 +2308,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(
       find.text(UITextConstants.workArticlePageProgress(1, 1)),
@@ -2247,7 +2334,7 @@ void main() {
     await gesture.up();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 260));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final settledTransform = tester.widget<AnimatedContainer>(stage).transform;
     expect(settledTransform, isNotNull);
@@ -2282,7 +2369,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final imageRect = tester.getRect(find.byType(CachedNetworkImage).first);
     final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
@@ -2290,7 +2377,7 @@ void main() {
       Offset(imageRect.left + 6, viewerRect.center.dy),
       const Offset(220, 0),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(dismissed, isTrue);
   });
@@ -2372,14 +2459,14 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final viewerRect = tester.getRect(find.byType(WorksImmersiveViewer));
     await tester.dragFrom(
       Offset(viewerRect.right - 6, viewerRect.center.dy),
       const Offset(-220, 0),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(dismissed, isFalse);
 
@@ -2412,7 +2499,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     await _flipArticleToLastPage(tester);
     _expectArticleAdvancedPastFirstPage(tester);
@@ -2427,7 +2514,7 @@ void main() {
       Offset(deckRect.right - 6, deckRect.bottom - 80),
       const Offset(-220, -20),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(dismissed, isTrue);
   });
@@ -2496,7 +2583,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(
       find.byKey(const ValueKey<String>('works-top-back')),
@@ -2575,7 +2662,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(
       find.byWidgetPredicate(
@@ -2595,10 +2682,10 @@ void main() {
     );
 
     await tester.tap(find.byKey(const ValueKey<String>('works-top-more')));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     expect(find.text('阅读设置'), findsOneWidget);
     await tester.tap(find.text('阅读设置'));
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     expect(
       find.byKey(const ValueKey<String>('more-action-reading-settings-panel')),
       findsOneWidget,
@@ -2606,7 +2693,7 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey<String>('more-action-reading-theme-coolGray')),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(
       find.byWidgetPredicate(
@@ -2659,20 +2746,77 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final entityText = find.byKey(
       const ValueKey<String>('article-entity-rich-text'),
     );
     expect(entityText, findsWidgets);
     await _tapRichTextSubstring(tester, entityText.hitTestable().first, '灵隐寺');
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(
       find.byKey(const ValueKey<String>('homepage-detail-probe')),
       findsOneWidget,
     );
     expect(find.text('homepage:homepage_sight_west_lake'), findsOneWidget);
+  });
+
+  testWidgets('文章未知实体标签不会把原始 entity id 推进主页错误页', (tester) async {
+    final post = _articlePost();
+
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: _articleMarkdownRaw(
+              post,
+              '---\n'
+              'title: 未知实体\n'
+              'template: journal\n'
+              'fontPreset: clean\n'
+              '---\n\n'
+              '# 未知实体\n\n'
+              '@[未知地点](entity:photo_spot:unknown)\n',
+              extra: const <String, dynamic>{
+                'contentVertical': 'travel',
+                'entityMentions': <Map<String, dynamic>>[
+                  {
+                    'subjectType': 'entity',
+                    'subjectId': 'entity:photo_spot:unknown',
+                    'displayName': '未知地点',
+                    'rangeStart': 3,
+                    'rangeEnd': 7,
+                  },
+                ],
+              },
+            ),
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    final entityText = find.byKey(
+      const ValueKey<String>('article-entity-rich-text'),
+    );
+    expect(entityText, findsWidgets);
+    await _tapRichTextSubstring(tester, entityText.hitTestable().first, '未知地点');
+    await _pumpSettledFrames(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-probe')),
+      findsNothing,
+    );
+    expect(find.textContaining('homepage:entity'), findsNothing);
   });
 
   testWidgets('文章标签内联点击进入按 tagRef 搜索的 metadata 路由', (tester) async {
@@ -2704,7 +2848,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     final mentionText = find.byKey(
       const ValueKey<String>('article-entity-rich-text'),
@@ -2715,7 +2859,7 @@ void main() {
       mentionText.hitTestable().first,
       '城市漫步',
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(
       find.byKey(const ValueKey<String>('search-network-probe')),
@@ -2751,7 +2895,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(
       find.byKey(const ValueKey<String>('works-top-progress-label')),
@@ -2793,7 +2937,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(find.textContaining('创作于'), findsWidgets);
     expect(find.textContaining('更新于'), findsWidgets);
@@ -2819,7 +2963,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(find.byType(ArticleReaderFlipHost), findsOneWidget);
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
@@ -2830,7 +2974,7 @@ void main() {
       Offset(deckRect.right - 2, deckRect.bottom - 80),
       const Offset(-260, -40),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(find.textContaining('小节14'), findsWidgets);
   });
@@ -2862,7 +3006,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(find.byKey(TestKeys.articleBookStylePager), findsOneWidget);
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsNothing);
@@ -2909,7 +3053,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(find.byType(ArticleReadOnlyBookDeck), findsOneWidget);
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
@@ -2992,7 +3136,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(repo.getPostCallCount, equals(1));
     expect(find.text('水合后的标题'), findsWidgets);
@@ -3049,7 +3193,7 @@ void main() {
 
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(repo.getPostCallCount, equals(1));
     expect(
@@ -3058,7 +3202,7 @@ void main() {
     );
 
     await tester.pump();
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     expect(repo.getPostCallCount, equals(1));
 
     final hydrationEvent = analytics.events.firstWhere(
@@ -3087,7 +3231,7 @@ void main() {
     );
     await tester.pump();
     _consumeImageLoadExceptions(tester);
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(find.byType(ArticleReadOnlyBookDeck), findsOneWidget);
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);
@@ -3096,12 +3240,12 @@ void main() {
       tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
       const Offset(-260, -40),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
     await tester.dragFrom(
       tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
       const Offset(260, -40),
     );
-    await tester.pumpAndSettle();
+    await _pumpSettledFrames(tester);
 
     expect(find.byType(ArticleReadOnlyBookDeck), findsOneWidget);
     expect(find.byKey(TestKeys.articlePageCurlLayer), findsOneWidget);

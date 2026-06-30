@@ -1,0 +1,236 @@
+content:
+  angles:
+  - 体验
+  - 美图
+  - 攻略
+  audiences:
+  - 通用
+  carriers:
+  - article
+  - image
+  modalityContract: separated_research
+  quotas:
+    entityArticlesPerTarget: 4
+    imageWorksPerTarget: 2
+    entityHomepagesPerTarget: 1
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/测试省/景区/开放版权百级无预筛池
+title: 测试省景区开放版权百级无预筛池
+intentLabel: 开放版权百级无预筛池
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 测试省
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 测试省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 景区001
+  - entityType: 地点/景区
+    name: 景区002
+  - entityType: 地点/景区
+    name: 景区003
+  - entityType: 地点/景区
+    name: 景区004
+  - entityType: 地点/景区
+    name: 景区005
+  - entityType: 地点/景区
+    name: 景区006
+  - entityType: 地点/景区
+    name: 景区007
+  - entityType: 地点/景区
+    name: 景区008
+  - entityType: 地点/景区
+    name: 景区009
+  - entityType: 地点/景区
+    name: 景区010
+  - entityType: 地点/景区
+    name: 景区011
+  - entityType: 地点/景区
+    name: 景区012
+  - entityType: 地点/景区
+    name: 景区013
+  - entityType: 地点/景区
+    name: 景区014
+  - entityType: 地点/景区
+    name: 景区015
+  - entityType: 地点/景区
+    name: 景区016
+  - entityType: 地点/景区
+    name: 景区017
+  - entityType: 地点/景区
+    name: 景区018
+  - entityType: 地点/景区
+    name: 景区019
+  - entityType: 地点/景区
+    name: 景区020
+  - entityType: 地点/景区
+    name: 景区021
+  - entityType: 地点/景区
+    name: 景区022
+  - entityType: 地点/景区
+    name: 景区023
+  - entityType: 地点/景区
+    name: 景区024
+  - entityType: 地点/景区
+    name: 景区025
+  - entityType: 地点/景区
+    name: 景区026
+  - entityType: 地点/景区
+    name: 景区027
+  - entityType: 地点/景区
+    name: 景区028
+  - entityType: 地点/景区
+    name: 景区029
+  - entityType: 地点/景区
+    name: 景区030
+  - entityType: 地点/景区
+    name: 景区031
+  - entityType: 地点/景区
+    name: 景区032
+  - entityType: 地点/景区
+    name: 景区033
+  - entityType: 地点/景区
+    name: 景区034
+  - entityType: 地点/景区
+    name: 景区035
+  - entityType: 地点/景区
+    name: 景区036
+  - entityType: 地点/景区
+    name: 景区037
+  - entityType: 地点/景区
+    name: 景区038
+  - entityType: 地点/景区
+    name: 景区039
+  - entityType: 地点/景区
+    name: 景区040
+  - entityType: 地点/景区
+    name: 景区041
+  - entityType: 地点/景区
+    name: 景区042
+  - entityType: 地点/景区
+    name: 景区043
+  - entityType: 地点/景区
+    name: 景区044
+  - entityType: 地点/景区
+    name: 景区045
+  - entityType: 地点/景区
+    name: 景区046
+  - entityType: 地点/景区
+    name: 景区047
+  - entityType: 地点/景区
+    name: 景区048
+  - entityType: 地点/景区
+    name: 景区049
+  - entityType: 地点/景区
+    name: 景区050
+  - entityType: 地点/景区
+    name: 景区051
+  - entityType: 地点/景区
+    name: 景区052
+  - entityType: 地点/景区
+    name: 景区053
+  - entityType: 地点/景区
+    name: 景区054
+  - entityType: 地点/景区
+    name: 景区055
+  - entityType: 地点/景区
+    name: 景区056
+  - entityType: 地点/景区
+    name: 景区057
+  - entityType: 地点/景区
+    name: 景区058
+  - entityType: 地点/景区
+    name: 景区059
+  - entityType: 地点/景区
+    name: 景区060
+  - entityType: 地点/景区
+    name: 景区061
+  - entityType: 地点/景区
+    name: 景区062
+  - entityType: 地点/景区
+    name: 景区063
+  - entityType: 地点/景区
+    name: 景区064
+  - entityType: 地点/景区
+    name: 景区065
+  - entityType: 地点/景区
+    name: 景区066
+  - entityType: 地点/景区
+    name: 景区067
+  - entityType: 地点/景区
+    name: 景区068
+  - entityType: 地点/景区
+    name: 景区069
+  - entityType: 地点/景区
+    name: 景区070
+  - entityType: 地点/景区
+    name: 景区071
+  - entityType: 地点/景区
+    name: 景区072
+  - entityType: 地点/景区
+    name: 景区073
+  - entityType: 地点/景区
+    name: 景区074
+  - entityType: 地点/景区
+    name: 景区075
+  - entityType: 地点/景区
+    name: 景区076
+  - entityType: 地点/景区
+    name: 景区077
+  - entityType: 地点/景区
+    name: 景区078
+  - entityType: 地点/景区
+    name: 景区079
+  - entityType: 地点/景区
+    name: 景区080
+  - entityType: 地点/景区
+    name: 景区081
+  - entityType: 地点/景区
+    name: 景区082
+  - entityType: 地点/景区
+    name: 景区083
+  - entityType: 地点/景区
+    name: 景区084
+  - entityType: 地点/景区
+    name: 景区085
+  - entityType: 地点/景区
+    name: 景区086
+  - entityType: 地点/景区
+    name: 景区087
+  - entityType: 地点/景区
+    name: 景区088
+  - entityType: 地点/景区
+    name: 景区089
+  - entityType: 地点/景区
+    name: 景区090
+  - entityType: 地点/景区
+    name: 景区091
+  - entityType: 地点/景区
+    name: 景区092
+  - entityType: 地点/景区
+    name: 景区093
+  - entityType: 地点/景区
+    name: 景区094
+  - entityType: 地点/景区
+    name: 景区095
+  - entityType: 地点/景区
+    name: 景区096
+  - entityType: 地点/景区
+    name: 景区097
+  - entityType: 地点/景区
+    name: 景区098
+  - entityType: 地点/景区
+    name: 景区099
+  - entityType: 地点/景区
+    name: 景区100
+provenance:
+  createdAt: '2026-06-30T13:27:48.483705+00:00'
+  createdBy: test
+workflowPolicy:
+  allowPartialContent: false

@@ -13,7 +13,7 @@ import shutil
 import sys
 import tempfile
 from threading import Lock
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from _common.paths import ensure_batch_layout, batch_root
 from _common.io import read_json, write_json
@@ -518,6 +518,41 @@ def _preserve_rejected_source_memory(unit_dir: Path, meta: dict[str, object]) ->
         return True
     return False
 
+def build_inline_image_candidates(
+    inline_images: Sequence[Mapping[str, Any]] | None,
+    *,
+    entity_id: str,
+) -> list[dict[str, Any]]:
+    """RC3：把 fetch 抽出的同源内联 <img> 清单映射成来源单元图片候选规格。
+
+    每项携带 placeholderId（用于 write_source_unit 把 source.md 占位绑定到真实
+    sourceAssetId）、url、caption、relevance；许可/出处等字段不在此伪造，统一由
+    `_download_source_unit_images` 从来源 spec 继承，再走 权利→抓取→像素→安全→相关性
+    五道硬门（同源不绕许可：来源无可发布许可的内联图会被权利门如实丢弃）。
+    """
+    candidates: list[dict[str, Any]] = []
+    for row in inline_images or []:
+        if not isinstance(row, Mapping):
+            continue
+        src = str(row.get("src") or "").strip()
+        placeholder_id = str(row.get("placeholderId") or "").strip()
+        if not src or not placeholder_id:
+            continue
+        caption = str(row.get("caption") or "").strip()
+        candidates.append(
+            {
+                "url": src,
+                "placeholderId": placeholder_id,
+                "caption": caption,
+                # 同源内联图相关性以真实 alt/caption 表达；为空则交由相关性门判定，
+                # 不用实体名拼接伪造相关性。
+                "relevance": caption,
+            }
+        )
+    _ = entity_id  # 保留签名以便后续按实体调相关性默认（当前不伪造）。
+    return candidates
+
+
 def _download_source_unit_images(
     source: Mapping[str, Any],
     *,
@@ -527,6 +562,7 @@ def _download_source_unit_images(
     object_dir: Path,
     ordinal: int,
     vertical: str,
+    extra_candidates: Sequence[Mapping[str, Any]] = (),
 ) -> tuple[list[dict[str, Any]], list[str], dict[str, Any]]:
     """Download and gate images that belong to the same text source unit.
 
@@ -562,9 +598,12 @@ def _download_source_unit_images(
     if not isinstance(raw_images, list):
         msg = f"{source.get('source_id') or '?'} imageUrls must be a list"
         return images, [msg], _funnel(0, 0)
+    # RC3：同源内联 <img> 候选与计划 imageUrls 合并，走同一套五道硬门（不绕许可），
+    # 经 placeholderId 把通过门的内联图回连 source.md 段落占位。
+    all_candidates = list(raw_images) + list(extra_candidates or [])
     source_id = str(source.get("source_id") or "")
-    candidate_count = len(raw_images)
-    for idx_img, raw in enumerate(raw_images, start=1):
+    candidate_count = len(all_candidates)
+    for idx_img, raw in enumerate(all_candidates, start=1):
         if len(images) >= SOURCE_UNIT_MAX_IMAGES_PER_SOURCE:
             drops.append({"slug": f"{source_id}#{idx_img}", "reason": "capReached: 已达单源保留上限"})
             continue
@@ -677,6 +716,8 @@ def _download_source_unit_images(
                 "caption": str(spec.get("caption") or relevance),
                 "relevance": relevance,
                 "slug": f"{source_id}_{idx_img}",
+                # RC3：内联同源图回连 source.md 段落占位（非内联候选为空字符串）。
+                "placeholderId": str(spec.get("placeholderId") or ""),
             }
         )
     images, duplicates = dedupe_image_payloads(images)

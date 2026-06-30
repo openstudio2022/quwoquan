@@ -12,153 +12,132 @@ class ObjectContextTabSpec {
   final String label;
 }
 
-class ObjectContextTabs {
-  const ObjectContextTabs._();
-
-  static const List<ObjectContextTabSpec> user = <ObjectContextTabSpec>[
-    ObjectContextTabSpec(id: 'highlights', label: '看点'),
-    ObjectContextTabSpec(id: 'works', label: '作品'),
-    ObjectContextTabSpec(id: 'circles', label: '圈子'),
-    ObjectContextTabSpec(id: 'interaction', label: '互动'),
-  ];
-
-  static const List<ObjectContextTabSpec> circle = <ObjectContextTabSpec>[
-    ObjectContextTabSpec(id: 'home', label: '首页'),
-    ObjectContextTabSpec(id: 'content', label: '内容'),
-    ObjectContextTabSpec(id: 'groups', label: '群或组织'),
-    ObjectContextTabSpec(id: 'members', label: '成员'),
-  ];
-
-  static const List<ObjectContextTabSpec> entity = <ObjectContextTabSpec>[
-    ObjectContextTabSpec(id: 'home', label: '首页'),
-    ObjectContextTabSpec(
-      id: 'content',
-      label: UITextConstants.objectTabContent,
-    ),
-    ObjectContextTabSpec(
-      id: 'discussion',
-      label: UITextConstants.objectTabDiscussion,
-    ),
-    ObjectContextTabSpec(
-      id: 'interest_circles',
-      label: UITextConstants.objectTabRelatedCircles,
-    ),
-  ];
-}
-
+/// 唯一身份头底座（对象/圈子/用户主页共享）。
+///
+/// 单一真相源：用户主页 `ProfileHeader` 的版式下沉而来 —— 头像左侧 1/3 上探，
+/// 头像右侧只渲染「名字 + 类型/标签副标题」；认证勾、二维码、空标签提示等
+/// 用户专属元素经 [titleTrailing] / [trailing] / [subtitleOverride] 插槽注入。
+///
+/// 头像由调用方通过 [media] 传入（推荐 [ObjectIdentityAvatar]），尺寸需等于
+/// [avatarOuterExtent]，以保证与四类主页一致的上探/留白几何。
 class ObjectIdentityHeader extends StatelessWidget {
   const ObjectIdentityHeader({
     super.key,
-    required this.kind,
     required this.title,
+    required this.media,
+    this.titleTrailing,
     this.subtitle,
-    this.metaLine,
-    this.badges = const <String>[],
-    this.media,
+    this.subtitleOverride,
     this.trailing,
+    this.avatarOuterExtent = avatarOuterExtentDefault,
+    this.avatarOverlapRatio = avatarOverlapRatioDefault,
   });
 
-  final ObjectIdentityKind kind;
   final String title;
+
+  /// 头像/封面（含边框、阴影），尺寸应为 [avatarOuterExtent]。
+  final Widget media;
+
+  /// 名字右侧插槽（认证勾 / 官方标）。
+  final Widget? titleTrailing;
+
+  /// 类型/标签单行副标题（业务侧以 ` · ` 拼接）。
   final String? subtitle;
-  final String? metaLine;
-  final List<String> badges;
-  final Widget? media;
+
+  /// 副标题替换插槽（如用户主页空标签提示按钮）；非空时优先于 [subtitle]。
+  final Widget? subtitleOverride;
+
+  /// 名字行尾部插槽（二维码 / 更多）。
   final Widget? trailing;
 
-  static const double mediaExtent = AppSpacing.avatarUserXl;
-  static const double mediaBorder = AppSpacing.three;
-  static const double mediaOverlapRatio = 0.34;
+  final double avatarOuterExtent;
+  final double avatarOverlapRatio;
 
-  static double get mediaOuterExtent => mediaExtent + mediaBorder * 2;
-  static double get mediaIntrusion => mediaOuterExtent * mediaOverlapRatio;
+  static const double avatarInnerExtent = AppSpacing.xl * 2;
+  static const double avatarBorder = AppSpacing.three;
+  static const double avatarOuterExtentDefault =
+      avatarInnerExtent + avatarBorder * 2;
+  static const double avatarOverlapRatioDefault = 0.333;
+
+  double get _avatarOverlapPx => avatarOuterExtent * avatarOverlapRatio;
 
   @override
   Widget build(BuildContext context) {
-    final labelColor = AppColors.iosLabel(context);
-    final secondaryColor = AppColors.iosSecondaryLabel(context);
+    final fg = AppColors.iosLabel(context);
+    final fgSecondary = AppColors.iosSecondaryLabel(context);
+
+    final subtitleSection = <Widget>[];
+    if (subtitleOverride != null) {
+      subtitleSection
+        ..add(SizedBox(height: AppSpacing.intraGroupXs))
+        ..add(subtitleOverride!);
+    } else if ((subtitle ?? '').trim().isNotEmpty) {
+      subtitleSection
+        ..add(SizedBox(height: AppSpacing.intraGroupXs))
+        ..add(
+          Text(
+            subtitle!.trim(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: AppTypography.iosFootnote,
+              color: fgSecondary,
+              letterSpacing: -0.08,
+            ),
+          ),
+        );
+    }
+
     return Stack(
       clipBehavior: Clip.none,
       children: <Widget>[
         Padding(
-          padding: EdgeInsets.only(left: mediaOuterExtent + AppSpacing.sm),
-          child: Column(
+          padding: EdgeInsets.only(left: avatarOuterExtent + AppSpacing.sm),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(
-                    child: Text(
-                      title.trim().isEmpty
-                          ? UITextConstants.objectHomepageDefaultTitle
-                          : title.trim(),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: AppTypography.iosTitle2,
-                        fontWeight: AppTypography.bold,
-                        color: labelColor,
-                        height: AppSpacing.textLineHeightCompact,
-                      ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    SizedBox(height: AppSpacing.intraGroupXs),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: <Widget>[
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: AppTypography.iosTitle3,
+                              fontWeight: AppTypography.regular,
+                              color: fg.withValues(alpha: 0.94),
+                              letterSpacing: -0.24,
+                              height: AppSpacing.textLineHeightDense,
+                            ),
+                          ),
+                        ),
+                        if (titleTrailing != null) ...<Widget>[
+                          SizedBox(width: AppSpacing.intraGroupXs),
+                          titleTrailing!,
+                        ],
+                      ],
                     ),
-                  ),
-                  if (trailing != null) ...<Widget>[
-                    SizedBox(width: AppSpacing.containerSm),
-                    trailing!,
+                    ...subtitleSection,
                   ],
-                ],
+                ),
               ),
-              if ((subtitle ?? '').trim().isNotEmpty) ...<Widget>[
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  subtitle!.trim(),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    color: secondaryColor,
-                    height: AppSpacing.textLineHeightBody,
-                  ),
-                ),
-              ],
-              if ((metaLine ?? '').trim().isNotEmpty) ...<Widget>[
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  metaLine!.trim(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosFootnote,
-                    color: secondaryColor,
-                    height: AppSpacing.textLineHeightBody,
-                  ),
-                ),
-              ],
-              if (badges.isNotEmpty) ...<Widget>[
-                SizedBox(height: AppSpacing.intraGroupSm),
-                Wrap(
-                  spacing: AppSpacing.intraGroupXs,
-                  runSpacing: AppSpacing.intraGroupXs,
-                  children: badges
-                      .where((badge) => badge.trim().isNotEmpty)
-                      .take(3)
-                      .map(
-                        (badge) =>
-                            _ObjectBadge(label: badge.trim(), kind: kind),
-                      )
-                      .toList(growable: false),
-                ),
+              if (trailing != null) ...<Widget>[
+                SizedBox(width: AppSpacing.intraGroupXs),
+                trailing!,
               ],
             ],
           ),
         ),
-        Positioned(
-          top: -mediaIntrusion,
-          left: 0,
-          child: _ObjectIdentityMedia(kind: kind, child: media),
-        ),
+        Positioned(top: -_avatarOverlapPx, left: 0, child: media),
       ],
     );
   }
@@ -473,46 +452,56 @@ class ObjectPageSkeleton extends StatelessWidget {
   }
 }
 
-class _ObjectIdentityMedia extends StatelessWidget {
-  const _ObjectIdentityMedia({required this.kind, this.child});
+/// 身份头底座配套头像（实体=圆形，圈子=圆角方，用户=圆形）。
+///
+/// 尺寸固定为 [ObjectIdentityHeader.avatarOuterExtent]（含边框），上探/留白几何由
+/// [ObjectIdentityHeader] 统一负责；与用户主页头像同源的边框、阴影语义。
+class ObjectIdentityAvatar extends StatelessWidget {
+  const ObjectIdentityAvatar({
+    super.key,
+    required this.kind,
+    this.child,
+    this.borderColor,
+  });
 
   final ObjectIdentityKind kind;
+
+  /// 头像内容（图片）；缺省回退为类型占位图标。
   final Widget? child;
+
+  /// 边框色；缺省与卡面同源（`conversationSheetCardSurface`）。
+  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
-    final borderRadius = switch (kind) {
-      ObjectIdentityKind.user => BorderRadius.circular(
-        ObjectIdentityHeader.mediaOuterExtent,
-      ),
-      ObjectIdentityKind.circle => BorderRadius.circular(
-        ObjectIdentityHeader.mediaExtent *
-            AppSpacing.avatarCircleBorderRadiusRatio,
-      ),
-      ObjectIdentityKind.entity => BorderRadius.circular(
-        ObjectIdentityHeader.mediaOuterExtent,
-      ),
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    const inner = ObjectIdentityHeader.avatarInnerExtent;
+    const border = ObjectIdentityHeader.avatarBorder;
+    final resolvedBorder =
+        borderColor ??
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
+    final innerRadius = switch (kind) {
+      ObjectIdentityKind.user => inner,
+      ObjectIdentityKind.entity => inner,
+      ObjectIdentityKind.circle => inner * AppSpacing.avatarCircleBorderRadiusRatio,
     };
     return Container(
       decoration: BoxDecoration(
-        borderRadius: borderRadius,
-        border: Border.all(
-          color: AppColors.iosProfileSurface(context),
-          width: ObjectIdentityHeader.mediaBorder,
-        ),
+        borderRadius: BorderRadius.circular(innerRadius + border),
+        border: Border.all(color: resolvedBorder, width: border),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: AppColors.black.withValues(alpha: 0.12),
-            blurRadius: AppSpacing.twenty,
-            offset: const Offset(0, 10),
+            color: AppColors.black.withValues(alpha: isDark ? 0.18 : 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: borderRadius,
+        borderRadius: BorderRadius.circular(innerRadius),
         child: SizedBox(
-          width: ObjectIdentityHeader.mediaExtent,
-          height: ObjectIdentityHeader.mediaExtent,
+          width: inner,
+          height: inner,
           child: child ?? _ObjectIdentityFallback(kind: kind),
         ),
       ),
@@ -529,7 +518,7 @@ class _ObjectIdentityFallback extends StatelessWidget {
   Widget build(BuildContext context) {
     final icon = switch (kind) {
       ObjectIdentityKind.user => CupertinoIcons.person_fill,
-      ObjectIdentityKind.circle => CupertinoIcons.person_2_fill,
+      ObjectIdentityKind.circle => CupertinoIcons.person_3_fill,
       ObjectIdentityKind.entity => CupertinoIcons.photo_fill_on_rectangle_fill,
     };
     return DecoratedBox(
@@ -539,36 +528,6 @@ class _ObjectIdentityFallback extends StatelessWidget {
           icon,
           size: AppSpacing.iconLarge,
           color: AppColors.iosSecondaryLabel(context),
-        ),
-      ),
-    );
-  }
-}
-
-class _ObjectBadge extends StatelessWidget {
-  const _ObjectBadge({required this.label, required this.kind});
-
-  final String label;
-  final ObjectIdentityKind kind;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppColors.iosAccent(context);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerXs,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: AppTypography.iosCaption1,
-          fontWeight: AppTypography.medium,
-          color: accent,
         ),
       ),
     );

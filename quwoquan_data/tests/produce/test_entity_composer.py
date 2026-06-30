@@ -55,7 +55,30 @@ from produce.entity_workflow import (  # noqa: E402
 )
 from produce.materialize import materialize_posts  # noqa: E402
 from produce.handler import handle_produce  # noqa: E402
-from helpers.agent_draft_kit import entity_article  # noqa: E402
+def _faithful_entity_draft(title: str, byline: str) -> str:
+    """模拟会话模型"轻改底稿"：保留 _BASE_PARAS 骨架（高留存率），按 brief.structure
+    必需小节(进馆第一印象/最停留的展厅/参观动线/离开后的感受)组织，仅对第 6 段(不足)
+    做语气轻改，使 baseDraftFidelity 落在 [55%,99.5%]——既非脱稿，也非整篇逐字照搬。"""
+    p = _BASE_PARAS
+    parts = [
+        f"# {title}",
+        f"> {byline} · 资料整理后的编辑判断",
+        "## 进馆第一印象",
+        p[0],
+        p[1],
+        "## 最停留的展厅",
+        p[2],
+        "## 参观动线",
+        p[3],
+        p[4],
+        "## 离开后的感受",
+        _REWORDED_DRAWBACK,
+        p[6],
+        p[7],
+        p[8],
+        p[9],
+    ]
+    return "\n\n".join(parts) + "\n"
 
 
 def _compose_entity_agent_draft(task: str, batch: str, ref: str, brief: dict):
@@ -63,7 +86,7 @@ def _compose_entity_agent_draft(task: str, batch: str, ref: str, brief: dict):
     quality = analyze_route_ref(task, batch, ref, brief)
     pack = build_entity_writing_pack(task, batch, ref, brief, quality)
     byline = public_byline_label(str(brief.get("templateId")), brief.get("creator") or {})
-    article = entity_article(brief["titleHint"], byline, ENTITY, pack.get("mustIncludeFacts") or [])
+    article = _faithful_entity_draft(brief["titleHint"], byline)
     write_agent_draft(
         task,
         batch,
@@ -85,24 +108,42 @@ ENTITY = "三星堆博物馆"
 def _source_unit_for_ref(source_ref: str) -> Path:
     return (batch_root(TASK, BATCH) / source_ref).parent
 
-SOURCE_TEXT = """---
-url: https://example.com/sanxingdui
-platform: curated
-license: internal-curated
-allowedUse: internal_reference
-title: sample
-entity: 三星堆博物馆
-retained: true
----
+# 底稿（base draft）：富叙事长文，含动机/第一印象/停留展厅/参观时间/推荐动线/不足/
+# 离开感受，覆盖 mustIncludeFacts（参观时间、推荐动线、停留展厅）。1:1 模型下成品须轻改
+# 自此底稿（base_draft_similarity 留存率 ∈ [55%,99.5%]），故各段措辞即成品骨架。
+_BASE_PARAS = [
+    "出发前我其实有点犹豫，怕三星堆博物馆只是被名气架起来的网红打卡地，担心人挤人又看不出门道，真正走进去之后才发现展陈在清晨光线里安静得让人愿意慢下来，那份顾虑也就慢慢放下了。",
+    "进馆第一印象不是被名气震慑，而是一种被允许放慢的松弛，我没急着赶往下一处，而是先在入口附近站了一会儿，让自己从一路奔波的赶路状态里慢慢缓过来，再决定从哪里看起。",
+    "我在馆里停留最久的，是青铜大立人和黄金面具所在的那几间停留展厅，人少的时候最能看清那些纹路、铸造痕迹与修复的接缝，也最能体会到古蜀工匠那种不慌不忙的耐心。",
+    "关于参观时间，我会诚实地建议留出大半天甚至更从容一些，把最想细看的停留展厅排在开馆后人还不多的时段，主动错开午后的高峰，别让排队把好心情磨没了。",
+    "在参观动线上，我推荐先按馆方给出的推荐动线走完主力展厅，再回头补看自己感兴趣的次要展区，这样既不浪费体力，也不会在人潮里反复折返、走冤枉路。",
+    "当然也得说说不足，让我不太舒服的是午后排队和讲解扎堆，连续看展下来确实会有点累，注意力也容易被周围此起彼伏的人声分散，怕吵的人要有心理准备。",
+    "离开后再回想，这趟最值得的并不是把每一个展厅都打卡看完，而是把停留展厅和参观时间认真排进当天计划、避开午后高峰之后，那份能安静看展的从容与踏实。",
+    "如果你也想认真看展而不是匆匆打卡，我会建议你为真正打动自己的细节多留一些时间，按自己的节奏慢慢走，三星堆博物馆值得你专门来一趟。",
+    "我不会假装它处处完美，但只要避开高峰、跟着推荐动线安排好参观时间，它给我的那份安静和惊喜，远比出发前的犹豫要多得多。",
+    "临走在文创区我也没急着离开，慢慢翻看那些以面具和神树为灵感的小物，算是给这趟安静的看展之旅留一个温和的收尾。",
+]
 
-出发前我其实有点犹豫，怕三星堆博物馆只是网红打卡，真正走进去之后才发现展陈的清晨光线让人愿意慢下来。
+SOURCE_TEXT = (
+    "---\n"
+    "url: https://example.com/sanxingdui\n"
+    "platform: curated\n"
+    "license: internal-curated\n"
+    "allowedUse: internal_reference\n"
+    "title: sample\n"
+    "entity: 三星堆博物馆\n"
+    "retained: true\n"
+    "---\n\n"
+    + "\n\n".join(_BASE_PARAS)
+    + "\n"
+)
 
-参观时间建议留出大半天，开馆后先按推荐动线走青铜大立人和黄金面具所在的停留展厅，人少时最能看清细节。
-
-最打动我的是那种安静看展的节奏；让我不太舒服的是午后排队和讲解人多，连续看展也会有点累。
-
-实地走过后我会建议：把停留展厅和参观时间排进当天计划，避开午后高峰，比追求把所有展厅都看完更值得。
-"""
+# 第 6 段（不足）的轻改版本：成品对底稿做去语病/语气适配的"轻改"，使留存率落在
+# [55%,99.5%]（既非脱稿从零另写，也非整篇零加工逐字照搬）。其余段落保留底稿骨架。
+_REWORDED_DRAWBACK = (
+    "需要提醒的是体验上的小遗憾：临近中午，入口与讲解点常常排起长队、人声鼎沸，"
+    "一路看下来体力会被悄悄耗掉，专注力也难免被打散，对声音敏感的朋友最好提前做好准备。"
+)
 
 
 def _clean_image(path: Path, seed: int) -> None:
@@ -137,7 +178,13 @@ def _entity_brief() -> dict:
     }
 
 
-def _seed_sources() -> None:
+def _seed_sources() -> str:
+    """落盘单一底稿来源单元（curated_story，含 3 张同源图）。返回其 sourceRef。
+
+    1:1 底稿中心：生产经 handler._assign_base_draft 给 brief 赋 baseSourceRef；
+    这些直连 compose 的单测须显式把返回的 sourceRef 写回 brief['baseSourceRef']，
+    否则 RC4 同源硬门下文章无可用配图（imageGate 失败）。
+    """
     ensure_task_layout(TASK)
     ensure_batch_layout(TASK, BATCH, "download")
     ensure_batch_layout(TASK, BATCH, "produce")
@@ -162,7 +209,7 @@ def _seed_sources() -> None:
         image_path = image_root / f"{ENTITY}_{k}.jpg"
         _clean_image(image_path, seed=k + 1)
         image_paths.append(image_path)
-    write_source_unit(
+    base_manifest = write_source_unit(
         obj,
         ordinal=1,
         source_id="curated_story",
@@ -183,6 +230,7 @@ def _seed_sources() -> None:
         relevance=f"{ENTITY} 的参观与展陈体验",
         images=[{"sourcePath": str(path), "caption": f"{ENTITY} 图{k}", "relevance": f"{ENTITY} 图{k}"} for k, path in enumerate(image_paths)],
     )
+    return str(base_manifest["sourceRef"])
 
 
 def test_is_entity_brief_classification():
@@ -216,8 +264,9 @@ def test_normalize_entity_refs_full_path():
 
 
 def test_entity_placeholder_blocks_then_agent_draft_green():
-    _seed_sources()
+    base_ref = _seed_sources()
     brief = _entity_brief()
+    brief["baseSourceRef"] = base_ref
     # prepare：写作契约 + 占位草稿；占位阶段出处门必须拦截。
     quality = analyze_route_ref(TASK, BATCH, REF, brief)
     build_entity_writing_pack(TASK, BATCH, REF, brief, quality)
@@ -239,8 +288,9 @@ def test_entity_placeholder_blocks_then_agent_draft_green():
 
 
 def test_entity_review_approval_clears_stale_repair_report():
-    _seed_sources()
+    base_ref = _seed_sources()
     brief = _entity_brief()
+    brief["baseSourceRef"] = base_ref
     quality, _pack = _compose_entity_agent_draft(TASK, BATCH, REF, brief)
     repair_path = write_repair_report(
         task_id=TASK,
@@ -262,8 +312,9 @@ def test_entity_review_approval_clears_stale_repair_report():
 
 
 def test_entity_e2e_materialize_verify_green():
-    _seed_sources()
+    base_ref = _seed_sources()
     brief = _entity_brief()
+    brief["baseSourceRef"] = base_ref
     quality, _pack = _compose_entity_agent_draft(TASK, BATCH, REF, brief)
     review = review_entity_draft(TASK, BATCH, REF, brief, quality)
     assert review["decision"] == "approved", review["issues"]

@@ -22,8 +22,14 @@ extension CircleStatsWireProjection on CircleStatsWireDto {
     final s = raw;
     final fb = circleFallback;
     return CircleStatsViewData(
-      members: _readStatsInt(s, 'members', 'totalMembers', fb?.memberCount ?? 0),
+      members: _readStatsInt(
+        s,
+        'members',
+        'totalMembers',
+        fb?.memberCount ?? 0,
+      ),
       posts: _readStatsInt(s, 'posts', 'totalPosts', fb?.postCount ?? 0),
+      discussions: _readStatsInt(s, 'discussions', 'totalDiscussions', 0),
       weeklyActive: _readStatsInt(
         s,
         'weeklyActive',
@@ -40,6 +46,7 @@ class CircleStatsViewData {
   const CircleStatsViewData({
     required this.members,
     required this.posts,
+    required this.discussions,
     required this.weeklyActive,
     required this.likes,
   });
@@ -47,12 +54,14 @@ class CircleStatsViewData {
   static const empty = CircleStatsViewData(
     members: 0,
     posts: 0,
+    discussions: 0,
     weeklyActive: 0,
     likes: 0,
   );
 
   final int members;
   final int posts;
+  final int discussions;
   final int weeklyActive;
   final int likes;
 
@@ -67,9 +76,9 @@ class CircleStatsViewData {
     Map<String, dynamic> stats, {
     CircleDto? circleFallback,
   }) {
-    return CircleStatsWireDto.fromMap(stats).toViewData(
-      circleFallback: circleFallback,
-    );
+    return CircleStatsWireDto.fromMap(
+      stats,
+    ).toViewData(circleFallback: circleFallback);
   }
 
   /// 详情头 [CircleStatsRow]：帖子/成员/周活以 [CircleDto] 为准，点赞保留 wire。
@@ -78,6 +87,7 @@ class CircleStatsViewData {
     return CircleStatsViewData(
       members: circle.memberCount,
       posts: circle.postCount,
+      discussions: discussions,
       weeklyActive: circle.weeklyActiveCount,
       likes: likes,
     );

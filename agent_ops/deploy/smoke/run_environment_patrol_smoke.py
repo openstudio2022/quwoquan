@@ -27,6 +27,7 @@ from agent_ops.avatar.device_matrix_evidence import (
     write_discovered_devices_snapshot,
     write_json,
 )
+from agent_ops.deploy.lib.patrol_cli import resolve_patrol_cli
 
 
 APP_DIR = REPO_ROOT / "quwoquan_app"
@@ -206,7 +207,7 @@ def discover_devices(platform: str, device_ids: list[str]) -> list[dict[str, Any
     return selected
 
 
-def patrol_command(device: dict[str, Any], args: argparse.Namespace) -> list[str]:
+def patrol_command(device: dict[str, Any], args: argparse.Namespace, patrol_executable: str = "patrol") -> list[str]:
     runtime_env = args.runtime_env.strip() or _runtime_env_for_alias(args.env_name)
     api_contract_env = args.api_contract_env.strip() or runtime_env
     data_source = args.data_source.strip() or _data_source_for_runtime(runtime_env)
@@ -214,7 +215,7 @@ def patrol_command(device: dict[str, Any], args: argparse.Namespace) -> list[str
     product_ops_base_url = args.product_ops_base_url.strip()
     media_base_url = args.media_base_url.strip()
     command = [
-        "patrol",
+        patrol_executable,
         "test",
         "-t",
         args.target,
@@ -319,8 +320,17 @@ def main() -> int:
         "deviceInventoryPath": "",
         "evidenceRoot": "",
     }
+    patrol_resolution = resolve_patrol_cli()
+    patrol_executable = patrol_resolution.executable or "patrol"
+    report["patrolCli"] = patrol_resolution.as_report(required=not args.dry_run)
 
     if not args.dry_run:
+        if patrol_resolution.executable is None:
+            report["status"] = "gate_block"
+            report["failureReason"] = patrol_resolution.error
+            report["endedAt"] = utc_now()
+            write_report(report_path, report)
+            return 2
         missing = _missing_required_args(args)
         if missing:
             report["status"] = "gate_block"
@@ -373,7 +383,7 @@ def main() -> int:
         )
         if str(device.get("targetPlatform", "")).lower() == "ios":
             ensure_patrol_ios_products_bridge()
-        command = patrol_command(device, args)
+        command = patrol_command(device, args, patrol_executable)
         command_path = write_json(
             run_dir / "command.json",
             {

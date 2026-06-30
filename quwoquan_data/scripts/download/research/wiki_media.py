@@ -40,6 +40,19 @@ from download.research.wiki_core import (
     _wikidata_claims,
     _wiki_url,
 )
+from _common.wiki_wikitext import parse_wikitext_placements
+
+
+def _file_match_key(name: str) -> str:
+    """统一 File 名匹配键：去命名空间前缀、下划线↔空格归一、大小写无关。
+
+    placement.fileName 无前缀且空格转下划线；imageinfo 返回 title 带 `File:` 前缀且
+    用空格。归一后两侧可对齐，把 wikitext 真实图位顺序映射回 imageinfo 结果。
+    """
+    raw = str(name or "").strip()
+    if ":" in raw:
+        raw = raw.split(":", 1)[1]
+    return raw.replace("_", " ").strip().casefold()
 
 def _image_search_terms(
     entity_id: str,
@@ -378,10 +391,13 @@ def _qunar_travelogue_sources(
     entity_id: str,
     *,
     entity_aliases: list[str] | tuple[str, ...] = (),
-    authorized_images: list[dict[str, Any]],
     limit: int = 4,
 ) -> list[dict[str, Any]]:
-    """Discover fetchable Qunar travelogue pages for article text evidence."""
+    """Discover fetchable Qunar travelogue pages for article text evidence.
+
+    RC4：去哪儿 UGC 游记是 text-only 文章底稿，配图必须同源；不再接受外部「授权图集」
+    （已删除 authorized_images 死参），images 恒为空、imageEvidenceMode=""。
+    """
     sources: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
     # Composite scenic areas often have official operation names while UGC uses
@@ -477,77 +493,118 @@ def _mediawiki_page_images(
     entity_id: str,
     limit: int = 8,
 ) -> list[dict[str, Any]]:
-    """Return rights-compatible images transcluded by one exact MediaWiki page."""
+    """实体百科底稿图候选：唯一真相源 = 页面 wikitext `[[File:...]]` 真实图位。
+
+    用 `action=parse&prop=wikitext` 取正文 → `parse_wikitext_placements` 提取真实展示
+    File（保留 sourceOrder 与 caption）→ 仅对这些 File 取 imageinfo。跳过视频/音频等
+    非图片 transclude。不再用 `prop=images` 全量 transclude（信息框/gallery/导航模板里的
+    页面外图会混入），确保 plan 阶段 `wiki_page_images` 的 File 集合 == download 阶段
+    `meta.imagePlacements`（同一 `parse_wikitext_placements` 口径），消除「封面/插图不来自
+    底稿原文」的真相源分裂。
+    """
     if not title:
         return []
     page_url = _wiki_url(host, title)
-    page = _wiki_api(
+    parsed = _wiki_api(
         host,
         {
-            "action": "query",
-            "titles": title,
-            "prop": "images",
-            "imlimit": 40,
+            "action": "parse",
+            "page": title,
+            "prop": "wikitext",
+            "redirects": 1,
             "format": "json",
         },
     )
-    pages = (page.get("query") or {}).get("pages") or {}
-    filenames: list[str] = []
-    for row in pages.values():
-        if not isinstance(row, dict):
+    parse_block = parsed.get("parse") if isinstance(parsed, dict) else {}
+    wikitext = ""
+    if isinstance(parse_block, dict):
+        raw_wikitext = parse_block.get("wikitext")
+        if isinstance(raw_wikitext, dict):
+            wikitext = str(raw_wikitext.get("*") or "")
+        else:
+            wikitext = str(raw_wikitext or "")
+    if not wikitext.strip():
+        return []
+    _, placements = parse_wikitext_placements(wikitext)
+    if not placements:
+        return []
+    # 按 wikitext 真实展示顺序保留 File（dedupe + 跳过视频/音频/动图/矢量/文档），
+    # 仅放行可内联展示的位图（与下游 imageinfo url 扩展名门一致）。
+    ordered_titles: list[str] = []
+    caption_by_key: dict[str, str] = {}
+    seen_keys: set[str] = set()
+    for placement in sorted(placements, key=lambda row: int(row.get("sourceOrder") or 0)):
+        raw_name = str(placement.get("fileName") or "").strip()
+        if not raw_name:
             continue
-        for image in row.get("images") or []:
-            name = str(image.get("title") or "")
-            if name.startswith("File:") or name.startswith("文件:"):
-                filenames.append(name)
-            if len(filenames) >= limit * 3:
-                break
-    if not filenames:
+        if not re.search(r"\.(?:jpe?g|png|webp)$", raw_name, re.I):
+            continue  # 跳过 .webm/.ogv/.ogg/.gif/.svg/.pdf 等非位图展示文件
+        file_title = raw_name if raw_name.startswith(("File:", "文件:")) else f"File:{raw_name}"
+        key = _file_match_key(file_title)
+        if not key or key in seen_keys:
+            continue
+        seen_keys.add(key)
+        ordered_titles.append(file_title)
+        caption = str(placement.get("caption") or "").strip()
+        if caption and key not in caption_by_key:
+            caption_by_key[key] = caption
+    if not ordered_titles:
         return []
     data = _wiki_api(
         host,
         {
             "action": "query",
-            "titles": "|".join(filenames[:50]),
+            "titles": "|".join(ordered_titles[:50]),
             "prop": "imageinfo",
             "iiprop": "url|size|extmetadata",
             "format": "json",
         },
     )
     info_pages = (data.get("query") or {}).get("pages") or {}
-    images: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    info_by_key: dict[str, dict[str, Any]] = {}
     for row in info_pages.values():
+        if not isinstance(row, dict):
+            continue
+        info_by_key[_file_match_key(str(row.get("title") or ""))] = row
+    images: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for source_order, file_title in enumerate(ordered_titles):
+        row = info_by_key.get(_file_match_key(file_title))
         if not isinstance(row, dict):
             continue
         info = ((row.get("imageinfo") or [{}])[0] or {})
         url = str(info.get("url") or "")
-        if not url or url in seen:
+        if not url or url in seen_urls:
             continue
         if not re.search(r"\.(?:jpe?g|png|webp)(?:$|\?)", url, re.I):
             continue
         meta = info.get("extmetadata") or {}
         license_name = _strip_html(((meta.get("LicenseShortName") or {}).get("value") or ""))
         license_url = _strip_html(((meta.get("LicenseUrl") or {}).get("value") or ""))
-        if not license_name or not re.search(r"CC|Public domain|PD|自由|公有", license_name, re.I):
-            continue
-        if "igo" in license_name.lower() or not license_url:
+        # 许可可发布性以 _license_allows_app_publish 为唯一真相源：公有领域(PD/CC0)即便
+        # extmetadata 无 LicenseUrl 也合规可发布，不再用 `not license_url` 误丢真实底稿图。
+        if not _license_allows_app_publish(license_name, license_url):
             continue
         width = int(info.get("width") or 0)
         height = int(info.get("height") or 0)
         if width < 640 or height < 426 or max(width, height) < 800:
             continue
-        seen.add(url)
+        seen_urls.add(url)
         credit = _strip_html(
             ((meta.get("Artist") or {}).get("value") or "")
             or ((meta.get("Credit") or {}).get("value") or "")
             or "Wikimedia contributor"
         )
-        description = _strip_html(
+        source_url = str(info.get("descriptionurl") or info.get("descriptionshorturl") or url)
+        # caption 真相源优先取 wikitext 图位 caption；termsUrl 对无 LicenseUrl 的 PD 图
+        # 回退到 Commons 文件描述页（记录 PD/许可与作者，可审计），与 download 阶段
+        # `_wikipedia_api_image_assets` 一致，避免合规真实图被 termsUrl 必填门误丢。
+        placement_caption = caption_by_key.get(_file_match_key(file_title), "")
+        description = placement_caption or _strip_html(
             ((meta.get("ImageDescription") or {}).get("value") or "")
             or str(row.get("title") or "")
         )
-        source_url = str(info.get("descriptionurl") or info.get("descriptionshorturl") or url)
+        terms_url = license_url or source_url
         images.append(
             {
                 "url": url,
@@ -555,7 +612,7 @@ def _mediawiki_page_images(
                 "license": license_name,
                 "credit": credit,
                 "sourceUrl": source_url,
-                "termsUrl": license_url,
+                "termsUrl": terms_url,
                 "licenseSnapshot": f"{license_name} recorded on {host} file metadata",
                 "authorizationProof": source_url,
                 "usageScope": "app_publish",
@@ -565,6 +622,8 @@ def _mediawiki_page_images(
                 "relevance": description[:120] or page_url,
                 "creator": credit,
                 "collectionPageUrl": page_url,
+                "sourceOrder": source_order,
+                "fileTitle": file_title,
             }
         )
         if len(images) >= limit:

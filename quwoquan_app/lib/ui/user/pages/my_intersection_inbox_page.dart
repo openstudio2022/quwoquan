@@ -350,6 +350,7 @@ class _MyIntersectionInboxPageState
     if (span.role == 'count') {
       context.push(
         AppRoutePaths.myIntersections(
+          dimension: reason.dimension,
           filter: 'fact',
           sourceRef: _sourceRefFor(reason),
           intersectionId: reason.intersectionId,
@@ -399,10 +400,11 @@ class _MyIntersectionInboxPageState
 }
 
 String _sourceRefFor(IntersectionReason reason) {
-  final source = reason.source.trim();
-  if (source.isNotEmpty) return source;
-  if (reason.intersectionPoints.isEmpty) return '';
-  return reason.intersectionPoints.first.sourceRef.trim();
+  for (final point in reason.intersectionPoints) {
+    final sourceRef = point.sourceRef.trim();
+    if (sourceRef.isNotEmpty) return sourceRef;
+  }
+  return reason.source.trim();
 }
 
 enum _IntersectionDetailTab { intersections, impact }

@@ -135,6 +135,66 @@ def test_auto_content_plan_article_sources_reserve_unique_asset_refs():
     assert all(item["writingIntent"] in valid_intents for item in article_items)
     assert all(_EID in item["entityTags"] for item in article_items)
 
+def test_auto_content_plan_article_brief_has_no_policy_as_mustincludefact():
+    """契约：article brief 的 mustIncludeFacts 不得塞写作策略/指令当"可追溯事实"。
+
+    历史 bug：content_plan 给每篇文章硬塞两条策略串（单源轻改、配图同源一源一作品）到
+    mustIncludeFacts，review 的 evidenceQuality/factTraceability 门要求其逐条出现在正文且可
+    追溯——agent 不可能把"我必须用同源图"写进游记正文，导致所有文章必败（实测 P5 八篇全挂）。
+    这两条策略由 baseSourceRef 单源 + baseDraftFidelity + route_assets 同源 + RC4 红线结构门
+    强制，并在 prompt"底稿编辑硬合同"传达，不该当作 mustIncludeFact。
+    """
+    from _common.content_object import iter_content_refs, read_brief_object
+
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 1
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 0
+    spec.setdefault("acceptance", {})["requiredAngles"] = ["planning_consultation"]
+    store.save_spec(spec)
+    batch_id = "content_plan_article_no_policy_fact"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    repeated_body = "\n".join(
+        [
+            f"{_EID}行前需要核对开放时间、门票预约、交通接驳和天气情况，并把停车、接驳车、返程末班都写入计划。",
+            f"{_EID}核心游览点之间有步行距离，需要预留返程时间，亲子或老人同行时应降低坡道路段强度。",
+            f"{_EID}不同季节体验差异明显，雨天注意路面湿滑，晴天更适合把观景点和补给点拆成两段安排。",
+        ]
+        * 90
+    )
+    _write_content_plan_source(
+        object_dir,
+        task_id=task_id,
+        batch_id=batch_id,
+        ordinal=1,
+        source_id="article_policy_fact_base",
+        body=repeated_body,
+        title="无策略事实文章底稿",
+        asset_name="source.jpg",
+        asset_bytes=_real_jpeg(401),
+        collection_id="article:policy-fact",
+        caption=f"{_EID} 文章源图",
+        usage_scope="factual_reference_only",
+    )
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+    assert issues == [], issues
+
+    article_refs = list(iter_content_refs(task_id, batch_id))
+    assert article_refs, "expected at least one article content object"
+    _POLICY_MARKERS = ("一源一作品", "禁跨底稿拼接", "来自单一来源单元", "若使用配图")
+    for ref in article_refs:
+        brief = read_brief_object(task_id, batch_id, ref) or {}
+        if str(brief.get("carrier") or "") != "article":
+            continue
+        facts = [str(x) for x in (brief.get("mustIncludeFacts") or [])]
+        for fact in facts:
+            assert not any(marker in fact for marker in _POLICY_MARKERS), (
+                f"article brief {ref} 仍把写作策略当 mustIncludeFact: {fact!r}"
+            )
+
+
 def test_auto_content_plan_preserves_site_supply_source_site_provenance():
     task_id = _make_task()
     spec = store.load_spec(task_id)

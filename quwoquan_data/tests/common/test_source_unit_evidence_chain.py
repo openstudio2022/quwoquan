@@ -34,10 +34,11 @@ import cv2  # noqa: E402
 
 from _common.article_package import copy_asset_files  # noqa: E402
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
-from _common.io import write_json  # noqa: E402
+from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_entity_object_dir,
     batch_root,
+    batch_source_unit_dir,
     ensure_batch_layout,
     ensure_task_layout,
     task_shared_dir,
@@ -121,8 +122,16 @@ def test_object_image_candidates_carry_relative_refs():
 
 def test_route_assets_to_post_assets_traceable():
     _seed_source_units()
-    brief = {"imagePlan": [{"slot": "封面", "imageLayout": "fullWidth"}, {"slot": "节点", "gallery": "masonry"}]}
-    evidence_bundle = {"routeNodes": [{"entityName": n, "entityRef": f"地点/景区/{n}"} for n in ENTITIES]}
+    # RC4：文章 1:1 同源——证据链取自单一底稿来源（baseSourceRef）的 assets，不跨实体借图。
+    obj = batch_entity_object_dir(TASK, BATCH, "地点", "景区", "海螺沟")
+    cands = object_image_candidates(obj, TASK, BATCH)
+    assert cands, "seeded base source should expose image candidates"
+    brief = {
+        "carrier": "article",
+        "baseSourceRef": cands[0]["sourceRef"],
+        "imagePlan": [{"slot": "封面", "imageLayout": "fullWidth"}, {"slot": "节点", "gallery": "masonry"}],
+    }
+    evidence_bundle = {"routeNodes": [{"entityName": "海螺沟", "entityRef": "地点/景区/海螺沟"}]}
     assets = _build_route_assets(TASK, BATCH, "海螺沟环线", brief, evidence_bundle)
     assert assets, assets
     # 成品资产文件名 = assetId.ext，asset:// 可直查文件
@@ -142,6 +151,86 @@ def test_route_assets_to_post_assets_traceable():
         # sourceAssetRef 回查源图存在
         src = batch_root(TASK, BATCH) / a["sourceAssetRef"]
         assert src.is_file(), src
+
+
+def test_inline_image_placeholders_bind_to_source_asset_ids():
+    """RC3：内联图占位就地绑定真实 sourceAssetId；失败图占位整块剥离、图文交错保留。"""
+    ensure_task_layout(TASK)
+    ensure_batch_layout(TASK, BATCH, "download")
+    write_batch_manifest(TASK, BATCH, command="download")
+    obj = batch_entity_object_dir(TASK, BATCH, "地点", "景区", "九寨沟")
+    source_md = (
+        "---\nurl: https://travel.qunar.com/youji/7870084\n---\n\n"
+        "# 九寨沟游记\n\n出发前的第一段铺垫正文。\n\n"
+        ":::figure\n![五花海](asset://source-inline-001)\n五花海\n:::\n\n"
+        "沿栈道走的第二段正文。\n\n"
+        ":::figure\n![珍珠滩瀑布](asset://source-inline-002)\n珍珠滩瀑布\n:::\n\n"
+        "继续前行的第三段正文。\n\n"
+        ":::figure\n![未下载成功的图](asset://source-inline-003)\n未下载成功的图\n:::\n\n"
+        "回望全程的结尾段正文。\n"
+    )
+    manifest = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="article_qunar_base",
+        source_md=source_md,
+        clean_md=source_md,
+        quality={"sourceId": "article_qunar_base", "quality": "Good", "score": 4},
+        platform="qunar",
+        source_category="travelogue",
+        research_lane="article",
+        url="https://travel.qunar.com/youji/7870084",
+        title="九寨沟游记",
+        target_ref="/entity/地点/景区/九寨沟",
+        relevance="九寨沟图文混排游记底稿",
+        images=[
+            {
+                "bytes": _img(31),
+                "url": "https://travel.qunar.com/photo/lake.jpg",
+                "license": "qunar-ugc",
+                "credit": "qunar",
+                "caption": "五花海",
+                "placeholderId": "source-inline-001",
+            },
+            {
+                "bytes": _img(32),
+                "url": "https://travel.qunar.com/photo/falls.jpg",
+                "license": "qunar-ugc",
+                "credit": "qunar",
+                "caption": "珍珠滩瀑布",
+                "placeholderId": "source-inline-002",
+            },
+        ],
+        task_id=TASK,
+        batch_id=BATCH,
+        build_variants=False,
+    )
+    unit = batch_source_unit_dir(TASK, BATCH, str(manifest["sourceUnitId"]))
+    bound = (unit / "source.md").read_text(encoding="utf-8")
+
+    # 成功下载的内联图：占位绑定到真实 sourceAssetId（001_001 / 001_002）。
+    assert "asset://source-inline-001" not in bound
+    assert "asset://source-inline-002" not in bound
+    assert "asset://001_001" in bound
+    assert "asset://001_002" in bound
+    # 失败图占位整块剥离，不留悬空 source-inline-003。
+    assert "source-inline-003" not in bound
+    assert "未下载成功的图" not in bound
+    # 图文交错保留：正文段落与绑定后的 figure 仍按原序穿插。
+    assert (
+        bound.index("第一段铺垫正文")
+        < bound.index("asset://001_001")
+        < bound.index("第二段正文")
+        < bound.index("asset://001_002")
+        < bound.index("第三段正文")
+        < bound.index("结尾段正文")
+    )
+    # 资产索引记录 inlinePlaceholderId，可回查内联同源出处。
+    index_payload = read_json(unit / "assets" / "index.json")
+    placeholders = sorted(
+        str(a.get("inlinePlaceholderId") or "") for a in index_payload["assets"]
+    )
+    assert placeholders == ["source-inline-001", "source-inline-002"]
 
 
 def test_task_shared_allows_baseline_report():

@@ -114,7 +114,7 @@ sit_acceptance:
       已从 EvidenceGroup/intersectionPoints 主句拼装切到 IntersectionReason.primaryText/primarySpans
       单通道，覆盖无 primaryText 隐藏、affinity 推荐辅助、span/visual/actionHint 导航入口、展开与高亮。'
     - '[recorded] local_contract 2026-06-25：`flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart`
-      6/6 green；实体主页为什么推荐这里、关于这里、记录/讨论/相关圈子 Tab、相关圈子卡片化、内部字段不外露均有断言。'
+      6/6 green；实体主页我的交集、影响力、记录/讨论/相关圈子 Tab、相关圈子卡片化、内部字段不外露均有断言。'
     - '[recorded] local_contract 2026-06-25：`flutter test test/ui/circle/widgets/circle_header_widget_test.dart
       test/ui/circle/widgets/section_widgets_test.dart` 25/25 green；`flutter test test/ui/circle/widgets/circle_shell_widget_test.dart`
       10/10 green；圈子主页 Shell、Header、记录/讨论/成员 section 局部契约均通过。'

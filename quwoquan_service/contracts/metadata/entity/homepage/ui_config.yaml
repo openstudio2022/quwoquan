@@ -23,7 +23,7 @@ homepage_tabs:
     body_slot: interest_circles
     order: 2
 
-# 记录流二级过滤（右侧漏斗 + ActionSheet，非胶囊）。campus_life 仅 homepageType=school 出现。
+# 记录流二级过滤（高保胶囊）：全部 / 图片 / 视频 / 口碑 / 提问。
 homepage_sub_tabs:
   - id: all
     label_key: homepage_sub_all
@@ -38,11 +38,10 @@ homepage_sub_tabs:
     label_key: homepage_sub_video
     order: 2
 
-  - id: article
-    label_key: homepage_sub_article
+  - id: opinion
+    label_key: homepage_sub_opinion
     order: 3
 
-  - id: campus_life
-    label_key: homepage_sub_campus_life
+  - id: question
+    label_key: homepage_sub_question
     order: 4
-    homepage_types: [school]

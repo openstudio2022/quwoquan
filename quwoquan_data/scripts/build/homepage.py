@@ -3,10 +3,10 @@
 与现行「三层目录实体」模型一致（entities/{领域}/{类型}/{名称}/）：
 - prepare：读 effective task spec 的 scope.coverageTargets，为每个实体写
   3.compose/entity_page_input.json（含 SOP 模板路径、字数下限、底稿）+ 人读 4.draft/prompt.md
-  + 占位 4.draft/page.md，并写 assistant_tasks 清单，下发给会话模型。
+  + 占位 4.draft/page.md，并写 assistant_tasks 清单，下发给创作 agent。
 - Agent：读 prompt.md 与底稿，在底稿基础上做适度润色/事实校正/PII·平台痕迹清理/人设适配，
   把正文写回 4.draft/page.md（≥350字、保留底稿原句最小改、不脱离底稿从零另写、不机械模板凑字）。
-- finalize（materialize_entity_page）：不脚本拼正文，只对会话模型正文把关贴合度+模板指纹门，
+- finalize（materialize_entity_page）：不脚本拼正文，只对创作 agent正文把关贴合度+模板指纹门，
   再据正文与已授权真实图补齐封面资产并物化 page.md+_entity.json+manifest.json(generator=agent)，
   写真实 sha256 出处。
 - validate：逐 coverage 实体校验三件套/字数/必填字段，并复检 generator=agent+贴合度+模板指纹，
@@ -28,6 +28,7 @@ from _common.batch_asset_registry import allocate_post_asset_id, load_batch_asse
 from _common.batch_manifest import load_batch_manifest
 from _common.draft_io import PLACEHOLDER_MARKER, is_placeholder
 from _common.entity_page_quality import entity_page_quality_issues
+from _common.prompt_render import render
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.entity_object import sync_entity_object_to_task_mirror, write_entity_object_index
 from _common.post_evidence_chain import build_finalization_report
@@ -251,112 +252,80 @@ def _homepage_base_source_issues(task_id: str, batch_id: str, domain: str, etype
     return issues
 
 
+def _entity_base_source_line(base_ref: str, base_mode: str) -> str:
+    if base_ref:
+        return (
+            f"- **底稿来源**：`{base_ref}`（sourceUseMode=`{base_mode}`）作为本页表达骨架，"
+            "在其上做**适度润色 + 事实校正 + PII/平台痕迹清理 + 体裁适配**；"
+            "licensed_adaptation 与 factual_reference_only 同等以底稿为骨架轻改。"
+        )
+    return "- 当前无可用底稿（source 不足）；不要凭空编造，先回退到 source 修复。"
+
+
+def _entity_section_outline_block(base: dict[str, Any]) -> str:
+    outline_rows = base.get("sectionOutline") if isinstance(base.get("sectionOutline"), list) else []
+    if not outline_rows:
+        return ""
+    from _common.section_outline import render_outline_tree_from_dicts
+
+    tree = render_outline_tree_from_dicts(outline_rows)
+    if not tree:
+        return ""
+    return (
+        "## 底稿章节结构（必须保留为对应级别多级小标题）\n\n"
+        "底稿来源含以下有实质内容的章节，请在正文中**保留为对应的 `##`/`###` 多级小标题**，"
+        "可微调标题措辞，但不得静默丢弃、不得拍平为单层、不得并入其它段落：\n\n"
+        + tree
+    )
+
+
+def _entity_base_draft_block(base_text: str) -> str:
+    if not base_text:
+        return "## 底稿材料\n\n（无可用底稿材料；先回退 source 修复，不要凭空编造）"
+    return "## 底稿材料（在此基础上轻改）\n\n```\n" + base_text + "\n```"
+
+
+def _entity_available_images_block(payload: dict[str, Any]) -> str:
+    available = payload.get("availableImages") if isinstance(payload.get("availableImages"), list) else []
+    if not available:
+        return ""
+    lines = [
+        "## 同源配图清单（finalize 按章节/段落自动注入正文 figure 块）",
+        "",
+        "以下图片均来自与底稿**同一** source unit。finalize 会按章节/段落锚点把它们注入正文"
+        "（封面=第一张 fullWidth，其余 wrapLeft/wrapRight 环绕，无法定位的进文末『图集』）。"
+        "你专注写**带多级小标题的正文**即可；了解配图语义有助于组织章节，但不要为塞图硬拆章。",
+        "",
+    ]
+    for index, row in enumerate(available):
+        if not isinstance(row, dict):
+            continue
+        caption = str(row.get("caption") or row.get("relevance") or "").strip() or "配图"
+        layout = str(row.get("suggestedLayout") or "").strip()
+        role = "封面" if index == 0 else "配图"
+        suffix = f"（建议 {layout}）" if layout else ""
+        lines.append(f"- [{role}] {caption}{suffix}")
+    return "\n".join(lines)
+
+
 def _render_entity_page_prompt(payload: dict[str, Any]) -> str:
-    """人读写作指令：与文章 prompt.md 同构，但写回目标是 4.draft/page.md。"""
+    """人读写作指令：与文章 prompt 同构（指令区来自 entity_homepage 模板），写回目标是 4.draft/page.md。"""
     name = str(payload.get("name") or "")
     base = payload.get("baseDraft") if isinstance(payload.get("baseDraft"), dict) else {}
     base_ref = str(base.get("sourceRef") or base.get("primaryEvidenceRef") or "")
     base_mode = str(base.get("sourceUseMode") or "factual_reference_only")
     base_text = str(base.get("text") or "").strip()
-    lines: list[str] = []
-    lines.append(f"# 实体主页写作任务：{name}")
-    lines.append("")
-    lines.append("## 角色与目标")
-    lines.append("")
-    lines.append(
-        f"你是一位熟悉「{name}」的专业讲解员 / 资深导游。请用清晰、专业又有温度的叙事口吻，"
-        "向第一次了解它的读者系统讲解这处实体：它是什么、有哪些看点、地理与历史背景、"
-        "以及到访前该知道的稳定信息，让人读完就能对它形成完整、可信的认知。"
+    return render(
+        "entity_homepage",
+        system_vars={"min_page_chars": MIN_PAGE_CHARS},
+        task_vars={
+            "name": name,
+            "base_source_line": _entity_base_source_line(base_ref, base_mode),
+            "section_outline_block": _entity_section_outline_block(base),
+            "base_draft_block": _entity_base_draft_block(base_text),
+            "available_images_block": _entity_available_images_block(payload),
+        },
     )
-    lines.append("")
-    lines.append(
-        "- 只讲实体本身可核验的稳定事实（地理 / 历史 / 景观 / 交通 / 季节等），"
-        "用导游讲解的叙事方式娓娓道来；**不写个人游记、第一人称亲历或主观打卡体验**。"
-    )
-    lines.append("")
-    lines.append("## 底稿与改写硬合同")
-    lines.append("")
-    if base_ref:
-        lines.append(
-            f"- **底稿来源**：`{base_ref}`（sourceUseMode=`{base_mode}`）作为本页表达骨架。"
-            "在底稿基础上做**适度润色 + 事实校正 + PII/平台痕迹清理 + 人设/体裁适配**。"
-        )
-        lines.append(
-            "- licensed_adaptation 与 factual_reference_only **同等**以底稿为骨架轻改："
-            "保留底稿信息顺序与关键事实细节，多数语句在底稿原句上做最小改动"
-            "（去语病/错字、PII·平台痕迹清理、按讲解口吻微调用词）；"
-            "**不得脱离底稿从零另写**，也**不得整篇零加工照搬**。"
-        )
-    else:
-        lines.append("- 当前无可用底稿（source 不足）；不要凭空编造，先回退到 source 修复。")
-    lines.append(
-        "- 结构尊重底稿真实内容：SOP 模板章节只是规范化参考（用于命名/归类对齐），"
-        "仅『概况』必备，其余章节有真实内容才写、无内容直接省略、禁止硬凑，章节语义须正确。"
-    )
-    outline_rows = base.get("sectionOutline") if isinstance(base.get("sectionOutline"), list) else []
-    if outline_rows:
-        from _common.section_outline import render_outline_tree_from_dicts
-
-        tree = render_outline_tree_from_dicts(outline_rows)
-        if tree:
-            lines.append("")
-            lines.append("## 底稿章节结构（必须保留为对应级别多级小标题）")
-            lines.append("")
-            lines.append(
-                "底稿来源含以下有实质内容的章节，请在正文中**保留为对应的 `##`/`###` 多级小标题**，"
-                "可微调标题措辞，但不得静默丢弃、不得拍平为单层、不得并入其它段落："
-            )
-            lines.append("")
-            lines.append(tree)
-    lines.append(
-        "- **章节均衡硬要求**：任何单个章节去空白字数不得超过正文总量的一半（约 50%）。"
-        "底稿若某一主题（如『历史沿革』）篇幅极长，必须**按比例压缩为精炼概述**，"
-        "提炼关键节点与代表性事实，而不是整段照搬；压缩属于轻编辑的合法操作，"
-        "保真针对的是『不脱离底稿另写、不编造』，不是『不许删减』。"
-    )
-    lines.append(
-        "- **时间线归并硬要求**：当底稿把同一实体的多条并列时间线（如开发史/保护史/"
-        "行政沿革）分段罗列时，必须**按真实时间顺序归并为单一连贯叙事**，禁止首尾拼接造成"
-        "『2007 年后又跳回 1979 年』式的时间倒错；同一章节内年份应大致单调推进。"
-    )
-    lines.append("")
-    if base_text:
-        lines.append("## 底稿材料（在此基础上轻改）")
-        lines.append("")
-        lines.append("```")
-        lines.append(base_text)
-        lines.append("```")
-        lines.append("")
-    available = payload.get("availableImages") if isinstance(payload.get("availableImages"), list) else []
-    if available:
-        lines.append("## 同源配图清单（finalize 按章节/段落自动注入正文 figure 块）")
-        lines.append("")
-        lines.append(
-            "以下图片均来自与底稿**同一** source unit。finalize 会按章节/段落锚点把它们注入正文"
-            "（封面=第一张 fullWidth，其余 wrapLeft/wrapRight 环绕，无法定位的进文末『图集』）。"
-            "你专注写**带多级小标题的正文**即可；了解配图语义有助于组织章节，但不要为塞图硬拆章。"
-        )
-        lines.append("")
-        for index, row in enumerate(available):
-            if not isinstance(row, dict):
-                continue
-            caption = str(row.get("caption") or row.get("relevance") or "").strip() or "配图"
-            layout = str(row.get("suggestedLayout") or "").strip()
-            role = "封面" if index == 0 else "配图"
-            suffix = f"（建议 {layout}）" if layout else ""
-            lines.append(f"- [{role}] {caption}{suffix}")
-        lines.append("")
-    lines.append("## 产出方式")
-    lines.append("")
-    lines.append(f"- 把创作的正文写回同目录 `page.md`（覆盖占位 `{PLACEHOLDER_MARKER}`），正文去空白 ≥ {MIN_PAGE_CHARS} 字。")
-    lines.append(
-        "- 正文写**带多级小标题（`##`/`###`）的纯文字 Markdown**；配图、封面、`_entity.json`、"
-        "`manifest.json` 由 finalize 自动生成（按章节锚点把同源真实图注入正文 figure 块），"
-        "你**无需也不必**手写这些图片指令或元数据文件。"
-    )
-    lines.append("- 正文必须能在底稿/来源中回溯事实，禁止机械模板句、工程化口径与重复凑字。")
-    lines.append("- 完成后运行 `qwq-data data workflow run --resume` 进入 finalize/采纳门；失败按 validator 提示修改正文重跑。")
-    return "\n".join(lines) + "\n"
 
 
 def _entity_draft_dir(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> Path:
@@ -371,10 +340,10 @@ def _write_entity_page_prompt_and_placeholder(
     name: str,
     payload: dict[str, Any],
 ) -> None:
-    """下发人读 prompt.md + 占位 page.md：会话模型在 4.draft/page.md 创作正文。
+    """下发人读 prompt.md + 占位 page.md：创作 agent在 4.draft/page.md 创作正文。
 
     与文章一致：占位草稿用 PLACEHOLDER_MARKER 标记『尚未创作』，但绝不覆盖
-    会话模型已写回的真实正文（非占位则保留）。
+    创作 agent已写回的真实正文（非占位则保留）。
     """
     draft_dir = _entity_draft_dir(task_id, batch_id, domain, etype, name)
     draft_dir.mkdir(parents=True, exist_ok=True)
@@ -383,7 +352,7 @@ def _write_entity_page_prompt_and_placeholder(
     if draft_page.is_file() and not is_placeholder(draft_page.read_text(encoding="utf-8")):
         return
     draft_page.write_text(
-        f"{PLACEHOLDER_MARKER}\n\n# {name}\n\n（待会话模型按 prompt.md 与底稿创作实体主页正文，覆盖本占位）\n",
+        f"{PLACEHOLDER_MARKER}\n\n# {name}\n\n（待创作 agent按 prompt.md 与底稿创作实体主页正文，覆盖本占位）\n",
         encoding="utf-8",
     )
 
@@ -760,7 +729,7 @@ def _homepage_gate_body(page_text: str) -> str:
     `## 图集`，使得即便 Agent 自行内联了图片，也不会污染字符贴合度与模板指纹度量。
     """
     body = _strip_frontmatter(page_text)
-    body = re.sub(r"(?ms)^:::figure\b.*?^:::\s*", "", body)
+    body = re.sub(r"(?ms)^:::figure(?:group)?\b.*?^:::\s*", "", body)
     body = re.sub(r"(?m)^#{2,3}\s*图集\s*$", "", body)
     body = re.sub(r"\{asset://[^}]*\}", "", body)
     body = re.sub(r"^#{1,6}\s*", "", body, flags=re.MULTILINE)
@@ -818,13 +787,13 @@ def _homepage_tag_refs(domain: str, etype: str, name: str, payload: dict[str, An
 
 
 def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> list[str]:
-    """把会话模型写回的 `4.draft/page.md` 正文终态化为实体主页三件套。
+    """把创作 agent写回的 `4.draft/page.md` 正文终态化为实体主页三件套。
 
-    不再脚本拼正文/切句/凑字：正文必须由会话模型在底稿基础上轻改创作（generator=agent）。
+    不再脚本拼正文/切句/凑字：正文必须由创作 agent在底稿基础上轻改创作（generator=agent）。
     finalize 只做：① 贴合度门 + 模板指纹门把关 Agent 正文；② 从同源 unit 选封面/图库写入 manifest；
     ③ 据正文事实确定性映射 summary；④ 写 generator=agent 与真实 agentRunId provenance。
     正文 page.md 由 Agent 写纯文字 + 多级标题，finalize 按章节/段落锚点把同源真实图
-    确定性注入正文 figure 块（图文混排，闭环登记到 manifest）。会话模型未写回或仍是占位时
+    确定性注入正文 figure 块（图文混排，闭环登记到 manifest）。创作 agent未写回或仍是占位时
     返回等待项，checkpoint 阻塞等待，绝不退回脚本拼接。
     """
     label = f"{domain}/{etype}/{name}"
@@ -840,10 +809,19 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
 
     draft_page = _entity_draft_dir(task_id, batch_id, domain, etype, name) / "page.md"
     if not draft_page.is_file():
-        return [f"{label}: 等待会话模型写回 4.draft/page.md（generator=agent 正文）"]
+        return [f"{label}: 等待创作 agent写回 4.draft/page.md（generator=agent 正文）"]
     draft_text = draft_page.read_text(encoding="utf-8")
     if is_placeholder(draft_text):
-        return [f"{label}: 4.draft/page.md 仍是占位，等待会话模型按底稿创作正文"]
+        return [f"{label}: 4.draft/page.md 仍是占位，等待创作 agent按底稿创作正文"]
+
+    from _common.figure_groups import expand_figure_groups, figure_group_integrity_issues
+
+    # 连续图组带回完整性（P2 / R-CS10）：先对【原始正文】判 figuregroup 是否按原 id/张数带回。
+    group_issues = figure_group_integrity_issues(draft_text, base_text)
+    if group_issues:
+        return [f"{label}: figuregroup integrity: {issue}" for issue in group_issues]
+    # 通过后回填：把连续图组占位展开为 N 个同源单图块，下游门禁/配图注入统一消费单图形态。
+    draft_text = expand_figure_groups(draft_text)
 
     gate_body = _homepage_gate_body(draft_text)
     gate_issues: list[str] = []
@@ -1046,9 +1024,9 @@ def _entity_draft_path(task_id: str, batch_id: str, domain: str, etype: str, nam
 
 
 def _write_entity_draft(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> Path:
-    """返回会话模型创作的 4.draft/page.md；不得用 finalize 终稿覆盖 Agent 正文。
+    """返回创作 agent创作的 4.draft/page.md；不得用 finalize 终稿覆盖 Agent 正文。
 
-    主页正文已由会话模型在 4.draft/page.md 创作，finalize 只把它注入封面后写到 page.md。
+    主页正文已由创作 agent在 4.draft/page.md 创作，finalize 只把它注入封面后写到 page.md。
     这里只在草稿意外缺失时，用终稿做一次性补写兜底，否则保留 Agent 原始草稿用于
     finalization_report 的 draft↔final 归一化对照。
     """

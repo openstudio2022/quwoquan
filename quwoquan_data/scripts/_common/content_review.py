@@ -82,8 +82,21 @@ def check_narrative_quality(article: str, manifest: dict) -> list[str]:
         issues.append("blockquote leaks displayName")
     if re.search(r"^\s*> .*阿宁在路上", article, flags=re.M):
         issues.append("blockquote leaks system builtin persona")
-    if str(manifest.get("carrier") or "") != "gallery" and len(re.sub(r"\s+", "", article)) < 600:
-        issues.append("article too short")
+    # 字数门形态自适应（唯一真相源 base_draft_readiness）：image/gallery 图片作品不受
+    # 正文长度门约束；article 长文≥600，图文混排正文≥200且有足量内联图/图注。
+    if str(manifest.get("carrier") or "") not in ("image", "gallery"):
+        from _common.base_draft import base_draft_readiness
+
+        readiness = base_draft_readiness(
+            article,
+            publish_media_mode=str(manifest.get("publishMediaMode") or ""),
+        )
+        if not readiness["ready"]:
+            issues.append(
+                f"article fails adaptive word gate (form={readiness['sourceForm']} "
+                f"prose={readiness['proseChars']} figures={readiness['inlineFigureCount']} "
+                f"effective={readiness['effectiveChars']})"
+            )
     issues.extend(qg.intra_doc_repetition_issues(article))
     return issues
 

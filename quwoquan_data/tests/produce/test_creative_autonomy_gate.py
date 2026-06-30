@@ -56,10 +56,14 @@ def test_writing_pack_carries_creative_brief_and_prompt_contract():
 
     prompt = render_prompt_md(pack)
     assert "creativeBrief" in prompt
-    assert "Review Gate 硬检查" in prompt
-    assert "reviewGateChecklist" in prompt
-    assert "draft_meta.creativePlan" in prompt
-    assert "draft_meta.selfCritique" in prompt
+    # P1：指令区改为模板渲染，人设=创作 agent，删除"会话模型"措辞与 review gate 硬门复述
+    # （gate 细则收回 review）。但创作输出契约（creativePlan/selfCritique）仍须由 output_format 模板下发。
+    assert "会话模型" not in prompt
+    assert "创作 agent" in prompt
+    assert "Review Gate 硬检查" not in prompt
+    assert "reviewGateChecklist" not in prompt
+    assert "creativePlan" in prompt
+    assert "selfCritique" in prompt
 
 
 def test_prompt_limits_numeric_facts_to_source_allowlist():

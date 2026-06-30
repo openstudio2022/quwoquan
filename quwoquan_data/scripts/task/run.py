@@ -3079,7 +3079,7 @@ def _abandon_source_unavailable_entities(
         unrecoverable = (
             "manual_authorized_gallery_or_target_replacement" in combined
             or "manual_homepage_seed_source_or_target_replacement" in combined
-            or "homepage has no encyclopedia/official seed source" in combined
+            or "homepage has no encyclopedia" in combined
             or "no rights-compatible" in combined
             or "no single-author/single-file rights-cleared image collection" in combined
         )
@@ -3142,7 +3142,7 @@ def _auto_report_needs_target_replacement(report: Mapping[str, Any]) -> bool:
     replacement_markers = (
         "manual_authorized_gallery_or_target_replacement",
         "manual_homepage_seed_source_or_target_replacement",
-        "homepage has no encyclopedia/official seed source",
+        "homepage has no encyclopedia",
         "no rights-compatible",
         "no single-author/single-file rights-cleared image collection",
     )
@@ -4310,7 +4310,7 @@ def _abandon_release_base_draft_shortfalls(
         ctx.batch_id,
         short_refs,
         stage="content_plan",
-        reason="baseDraftText_effective_length_below_600_release_gate; legacy_content_plan_revalidation",
+        reason="baseDraftText_below_adaptive_word_gate_release; legacy_content_plan_revalidation",
     )
     added = [str(ref) for ref in (report.get("added") or []) if str(ref).strip()]
     if added:
@@ -4325,11 +4325,16 @@ def _abandon_release_base_draft_shortfalls(
 
 
 def _content_plan_base_draft_shortfall_refs(ctx: PipelineContext, active_refs: Iterable[str]) -> list[str]:
-    """Lightweight preflight for article source sufficiency before expensive gates."""
+    """Lightweight preflight for article source sufficiency before expensive gates.
+
+    字数门形态自适应（唯一真相源 base_draft_readiness）：长文需正文≥600；图文混排
+    底稿正文≥200 且有足量内联图/图注即可。禁止在此另起固定 600 raw 门误杀图多文少
+    的真·图文底稿。
+    """
 
     from _common import content_object
+    from _common.base_draft import base_draft_readiness
     from _common.draft_io import read_writing_pack
-    from _common.release_integrity import MIN_ARTICLE_BASE_DRAFT_CHARS
 
     short_refs: list[str] = []
     for ref in active_refs:
@@ -4338,8 +4343,11 @@ def _content_plan_base_draft_shortfall_refs(ctx: PipelineContext, active_refs: I
             continue
         pack = read_writing_pack(ctx.task_id, ctx.batch_id, ref) or {}
         base_text = str(pack.get("baseDraftText") or "")
-        effective_len = len(re.sub(r"\s+", "", base_text))
-        if effective_len < MIN_ARTICLE_BASE_DRAFT_CHARS:
+        readiness = base_draft_readiness(
+            base_text,
+            publish_media_mode=str(pack.get("publishMediaMode") or ""),
+        )
+        if not readiness["ready"]:
             short_refs.append(str(ref))
     return short_refs
 
@@ -4359,7 +4367,7 @@ def _abandon_content_plan_base_draft_shortfalls(
         ctx.batch_id,
         short_refs,
         stage="content_plan",
-        reason=f"baseDraftText_effective_length_below_600_release_gate; {reason_suffix}",
+        reason=f"baseDraftText_below_adaptive_word_gate_release; {reason_suffix}",
     )
     added = [str(ref) for ref in (report.get("added") or []) if str(ref).strip()]
     if added and prune_materialized:
@@ -5669,6 +5677,10 @@ def _content_capacity_gate_for_entity(
             if "support" in source_id.lower() or "support" in source_dir.name.lower():
                 continue
             article_raw_count += 1
+            if bool(meta.get("hasVideo")):
+                # P3 文章判据：含视频则放弃——不把视频内容强行图文化为攻略文章。
+                article_rejects["contains_video"] += 1
+                continue
             source_ref = _source_ref(source_dir)
             base_body = load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)
             readiness = base_draft_readiness(
@@ -5986,6 +5998,10 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 if "support" in source_id.lower() or "support" in source_dir.name.lower():
                     continue
                 article_raw_count += 1
+                if bool(meta.get("hasVideo")):
+                    # P3 文章判据：含视频则放弃——不把视频内容强行图文化为攻略文章。
+                    _reject_article("contains_video", source_id, "来源含内联视频，文章类放弃")
+                    continue
                 source_ref = _source_ref(source_dir)
                 base_body = load_base_draft_text(ctx.task_id, ctx.batch_id, source_ref)
                 from _common.base_draft import base_draft_readiness
@@ -6315,10 +6331,16 @@ def _auto_content_plan(ctx: PipelineContext, active_spec: Mapping[str, Any]) -> 
                 "carrier": "article",
                 "entityRefs": [entity_ref],
                 "entityTags": entity_tags,
-                "mustIncludeFacts": [
-                    f"{target} 文字底稿来自单一来源单元 {source_id}；标题取自底稿，正文按整篇底稿轻改、禁跨底稿拼接",
-                    "若使用配图，必须来自同一底稿的已授权源图（一源一作品）",
-                ],
+                # mustIncludeFacts 是"正文必须包含且可追溯的目的地事实"，由 review 的
+                # evidenceQuality/factTraceability 门逐条校验是否出现在正文。单一底稿 article
+                # 没有独立抽取的事实清单——其"事实"就是底稿本身，由 baseDraftFidelity 门保真。
+                # 历史上这里硬塞了两条**写作策略/指令**（单源轻改、配图同源一源一作品），
+                # 它们是生产策略而非可叙述事实：agent 不可能把"我必须用同源图"写进游记正文并被
+                # factTraceability 追溯，导致所有文章必败（不可满足的 mustIncludeFact）。这两条
+                # 策略已由结构门（baseSourceRef 单源 + verify single-contract-source、
+                # route_assets 同源选图 + source_quality RC4 红线 + baseDraftFidelity 门）强制，
+                # 并在 prompt"底稿编辑硬合同"段向 agent 明确传达，无需再当作 mustIncludeFact。
+                "mustIncludeFacts": [],
                 "templateId": "travel.entity.guide",
                 "writingIntent": intent,
                 "baseSourceRef": candidate["sourceRef"],
@@ -9484,7 +9506,7 @@ def _checkpoint_prompts(ctx: PipelineContext, stage: str) -> list[str]:
                     "单底稿零参考：全文只能来自这一份底稿，禁止用百科、官网、其它来源或其它文章补全、校正或搬迁段落；"
                     "Review Gate 会扫描与其它来源单元的长串逐字重合并驳回。"
                     "Review Gate 会检查 baseDraftFidelity 55%~99.5%，低于 55% 会被判定为脱离底稿。"
-                    "如果删除广告/保险/平台活动/无关城市段落，必须把与标题、writingIntent 和景区体验直接相关的底稿段落尽量贴回正文。"
+                    "删除仅限广告/保险/App 下载/积分/平台活动等非内容噪声；底稿写到的所有目的地/行程/景点段落都是正文内容，必须整篇保留（多目的地路书保留全部站点），禁止以「与本篇实体无关」为由删其它城市/景点段落（单一底稿 1:1 成稿，实体只是标签不是裁剪边界）。"
                     "draft_meta.selfCritique 必须包含 baseDraftFidelityStrategy，说明保留、删除和轻改的依据。"
                     "去除原平台名/原作者署名/水印（以虚拟创作者身份发布）并保留来源归因。"
                 )

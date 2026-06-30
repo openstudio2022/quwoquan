@@ -23,6 +23,8 @@ from download.research.wiki_discovery import (
     _wikidata_entity_aliases as _impl_wikidata_entity_aliases,
     _wikidata_item_for_entity_search as _impl_wikidata_item_for_entity_search,
     _wikidata_item_for_zhwiki as _impl_wikidata_item_for_zhwiki,
+    _wiki_related_titles_for_entity as _impl_wiki_related_titles_for_entity,
+    _wiki_title_for_entity as _impl_wiki_title_for_entity,
 )
 
 def _task_content_quotas(task_id: str) -> dict[str, int]:
@@ -47,6 +49,36 @@ def _known_entity_aliases(entity_id: str) -> list[str]:
 
 def _known_official_website(entity_id: str) -> str:
     return runtime_bridge.call("_known_official_website", _impl_known_official_website, entity_id)
+
+
+def _wiki_title_for_entity(
+    host: str,
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+) -> str:
+    return runtime_bridge.call(
+        "_wiki_title_for_entity",
+        _impl_wiki_title_for_entity,
+        host,
+        entity_id,
+        entity_aliases=entity_aliases,
+    )
+
+
+def _wiki_related_titles_for_entity(
+    host: str,
+    entity_id: str,
+    *,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+) -> list[str]:
+    return runtime_bridge.call(
+        "_wiki_related_titles_for_entity",
+        _impl_wiki_related_titles_for_entity,
+        host,
+        entity_id,
+        entity_aliases=entity_aliases,
+    )
 
 
 def _wikidata_item_for_zhwiki(title: str) -> str:
@@ -94,7 +126,6 @@ def _qunar_travelogue_sources(
     entity_id: str,
     *,
     entity_aliases: list[str] | tuple[str, ...] = (),
-    authorized_images: list[dict[str, Any]],
     limit: int = 4,
 ) -> list[dict[str, Any]]:
     return runtime_bridge.call(
@@ -102,7 +133,6 @@ def _qunar_travelogue_sources(
         _impl_qunar_travelogue_sources,
         entity_id,
         entity_aliases=entity_aliases,
-        authorized_images=authorized_images,
         limit=limit,
     )
 
@@ -155,5 +185,4 @@ def _discover_open_license_image_pools(
         openverse_limit=openverse_limit,
         page_limit=page_limit,
     )
-
 

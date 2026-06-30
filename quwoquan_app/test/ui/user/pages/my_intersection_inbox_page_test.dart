@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,6 +7,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
@@ -21,6 +23,18 @@ import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/user/pages/my_intersection_inbox_page.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_timeline.dart';
+
+TextSpan _spanByText(RichText richText, String text) {
+  TextSpan? result;
+  richText.text.visitChildren((span) {
+    if (span is TextSpan && span.text == text) {
+      result = span;
+      return false;
+    }
+    return true;
+  });
+  return result!;
+}
 
 void main() {
   testWidgets('我的交集列表：展示筛选、时间桶和事实行，并打开即 visit 清零', (tester) async {
@@ -132,13 +146,12 @@ void main() {
   });
 
   testWidgets('我的交集：紧凑 row 不展示 secondary、生命周期弱标和行动 pill', (tester) async {
+    final repo = _LifecycleIntersectionRepository();
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           authSessionControllerProvider.overrideWith(_AuthenticatedSession.new),
-          intersectionRepositoryProvider.overrideWithValue(
-            _LifecycleIntersectionRepository(),
-          ),
+          intersectionRepositoryProvider.overrideWithValue(repo),
         ],
         child: CupertinoApp.router(routerConfig: _router()),
       ),
@@ -155,6 +168,22 @@ void main() {
     expect(find.byType(Image), findsNothing);
     final rowSize = tester.getSize(find.byType(IntersectionCompactTimelineRow));
     expect(rowSize.height, inInclusiveRange(60, 64));
+
+    final rowRichTexts = tester.widgetList<RichText>(
+      find.descendant(
+        of: find.byType(IntersectionCompactTimelineRow).first,
+        matching: find.byType(RichText),
+      ),
+    );
+    final richText = rowRichTexts.firstWhere(
+      (widget) => widget.text.toPlainText().contains('王然'),
+    );
+    final countSpan = _spanByText(richText, '8');
+    (countSpan.recognizer! as TapGestureRecognizer).onTap!();
+    await tester.pumpAndSettle();
+    expect(repo.requestedDimension, 'content');
+    expect(repo.requestedSourceRef, 'coCommented');
+    expect(find.textContaining('王然'), findsOneWidget);
   });
 
   testWidgets('filter=impact 时直达影响力一级 tab', (tester) async {
@@ -227,6 +256,11 @@ GoRouter _router({Widget page = const MyIntersectionInboxPage()}) {
     initialLocation: '/',
     routes: [
       GoRoute(path: '/', builder: (_, _) => page),
+      GoRoute(
+        path: '/profile/intersections',
+        builder: (_, state) =>
+            MyIntersectionInboxPage.fromQuery(state.uri.queryParameters),
+      ),
       GoRoute(
         path: '/user/:username',
         builder: (_, state) => Text('USER:${state.pathParameters['username']}'),
@@ -395,7 +429,7 @@ class _FiveYearIntersectionRepository implements IntersectionRepository {
         objectKind: 'school',
         displayName: '新东方',
         primaryText: '你和3位校友都来自新东方',
-        actionTargetId: 'fixture_homepage_university_pku',
+        actionTargetId: 'fixture_homepage_school_neworiental',
         timeBucket: 'year:${year - 2}',
         freshAt: DateTime.now().toUtc().toIso8601String(),
       ),
@@ -425,6 +459,9 @@ class _FiveYearIntersectionRepository implements IntersectionRepository {
 }
 
 class _LifecycleIntersectionRepository implements IntersectionRepository {
+  String? requestedDimension;
+  String? requestedSourceRef;
+
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
     return IntersectionInboxSummary(totalCount: 1, totalReactivatedCount: 1);
@@ -439,12 +476,15 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
     String? cursor,
     int limit = 50,
   }) async {
+    requestedDimension = dimension;
+    requestedSourceRef = sourceRef;
     return <IntersectionReason>[
       IntersectionReason(
         dimension: 'content',
         intersectionClass: 'fact',
         intersectionId: 'ix_lifecycle',
         objectKind: 'circle',
+        source: 'content',
         displayName: '黄金投资圈',
         actionTargetId: 'fixture_circle_gold_invest',
         timeBucket: 'today',
@@ -481,6 +521,14 @@ class _LifecycleIntersectionRepository implements IntersectionRepository {
               objectKind: 'circle',
               routeId: 'circleDetail',
             ),
+          ),
+        ],
+        intersectionPoints: <IntersectionPoint>[
+          IntersectionPoint(
+            pointId: 'p_lifecycle',
+            sourceRef: 'coCommented',
+            count: 8,
+            dimension: 'content',
           ),
         ],
         actionHints: <IntersectionActionHint>[

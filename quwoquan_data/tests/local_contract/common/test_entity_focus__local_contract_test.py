@@ -106,22 +106,6 @@ def test_single_sibling_mention_is_still_single_entity():
     assert ef.verdict_is_primary_eligible(verdict) is True
 
 
-def test_is_multi_location_route_helper():
-    body = _multi_city_travelogue("宽窄巷子")
-    targets = ["成都", "重庆", "三峡", "宜昌", "宽窄巷子"]
-    is_route, mentioned = ef.is_multi_location_route(
-        body, "成都重庆三峡六日自驾游记", targets
-    )
-    assert is_route is True
-    assert len(mentioned) >= 3
-    # 单实体聚焦游记不是环线。
-    focused = _focused_travelogue("九寨沟")
-    is_route2, mentioned2 = ef.is_multi_location_route(
-        focused, "九寨沟两日深度游记", ["九寨沟", "黄龙", "稻城亚丁"]
-    )
-    assert is_route2 is False, mentioned2
-
-
 def test_coverage_targets_mentioned_detects_route_over_three_places():
     body = _multi_city_travelogue("宽窄巷子")
     targets = ["成都", "重庆", "三峡", "宜昌", "宽窄巷子", "九寨沟"]
@@ -144,7 +128,6 @@ if __name__ == "__main__":
     test_image_only_no_text_is_off_entity()
     test_route_featuring_entity_is_off_entity_via_siblings()
     test_single_sibling_mention_is_still_single_entity()
-    test_is_multi_location_route_helper()
     test_coverage_targets_mentioned_detects_route_over_three_places()
     test_strong_verdict_is_primary_eligible_and_empty_is_lenient()
     print("entity_focus contract tests passed")

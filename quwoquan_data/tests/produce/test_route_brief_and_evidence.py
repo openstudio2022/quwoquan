@@ -39,7 +39,11 @@ from _common.evidence_contract import quality_payload_contract_issues  # noqa: E
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
 from _common.io import write_json  # noqa: E402
 from _common.paths import batch_inputs_dir, ensure_batch_layout, ensure_task_layout  # noqa: E402
-from _common.content_evidence import extract_source_evidence, public_byline_label  # noqa: E402
+from _common.content_evidence import (  # noqa: E402
+    extract_source_evidence,
+    gate_route_evidence_bundle,
+    public_byline_label,
+)
 from _common.draft_io import read_writing_pack, write_agent_draft, prompt_path, read_draft_meta  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from plan.brief import resolve_compose_brief  # noqa: E402
@@ -107,6 +111,46 @@ def test_extract_source_evidence_folds_common_zh_variants_for_mainline():
 
     assert evidence["mainlineEvidence"]
     assert any("雲台山" in sentence for sentence in evidence["mainlineEvidence"])
+
+
+def test_gate_route_evidence_skips_narrative_requirements_for_image_carrier():
+    """载体错配根因：image/gallery 画报曾被线路叙事门（情感/storySpine/路线覆盖）误门控。
+
+    开放许可图集（Wikimedia/CC）只有事实性 caption、无 UGC 互动信号，必然缺 emotion evidence，
+    旧逻辑会把整批 produce_compose 判 `missing emotion evidence` 转人工。图片作品的把关由
+    许可(rights)/资产落盘/相关性/works_gate 负责，不应受线路证据门约束。
+    """
+    empty_bundle: dict = {
+        "coverage": {"coveredEntityCount": 0},
+        "routeNodes": [],
+        "emotionSignals": {"likes": [], "painPoints": []},
+        "storySpine": {},
+    }
+    for carrier in ("image", "gallery", "Image", "GALLERY"):
+        brief = {
+            "carrier": carrier,
+            "evidenceRequirements": {"emotion": {"required": True}},
+            "mustIncludeFacts": ["九寨沟五花海"],
+        }
+        assert gate_route_evidence_bundle(brief, empty_bundle) == [], carrier
+
+
+def test_gate_route_evidence_still_gates_narrative_carriers():
+    """回归护栏：article/route 等叙事载体在空证据下仍必须被拦截，禁止载体感知误伤叙事门。"""
+    empty_bundle: dict = {
+        "coverage": {"coveredEntityCount": 0},
+        "routeNodes": [],
+        "emotionSignals": {"likes": [], "painPoints": []},
+        "storySpine": {},
+    }
+    for carrier in ("article", "route", ""):
+        brief = {
+            "carrier": carrier,
+            "evidenceRequirements": {"emotion": {"required": True}},
+        }
+        issues = gate_route_evidence_bundle(brief, empty_bundle)
+        assert any("missing emotion evidence" in issue for issue in issues), (carrier, issues)
+        assert any("route progression spine" in issue for issue in issues), (carrier, issues)
 
 
 def test_route_workflow_generates_real_review_green():
@@ -504,9 +548,77 @@ retained: true
     assert any("intraDocRepetition" in issue for issue in review_payload["checks"]["provenanceRewrite"]["issues"]), review_payload
 
 
+def test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim():
+    """根因：多目的地路书底稿被框成单实体 guide 并被指示「删除无关城市段落」，
+
+    agent 为聚焦单一实体而丢弃其它站点章节 → baseDraftFidelity 崩到 18-49% < 55% 全挂。
+    1:1 源中心：底稿写到的所有目的地/行程段落都是正文内容，必须整篇保留，实体只是标签不是
+    裁剪边界；prompt 只允许删平台/广告/隐私噪声，不得以「与本篇实体无关」为由删其它城市段落。
+    """
+    from _common.writing_pack import render_prompt_md
+
+    pack = {
+        "ref": "都江堰__article_qunar_base_1",
+        "kind": "entity",
+        "carrier": "article",
+        "title": "彭水.成都.都江堰.乐山.赤水.遵义 渝蜀贵自驾穷游漫记",
+        "templateId": "travel.entity.guide",
+        "byline": "虚拟创作者",
+        "writingIntent": "planning_consultation",
+        "sourceUseMode": "factual_reference_only",
+        "baseSourceRef": "sources/su_demo/source.md",
+        "baseDraftText": "彭水乌江画廊碧波，成都青石板烟火，都江堰千年石堤，乐山大佛慈悲。" * 20,
+        "wordCount": {"min": 600, "max": 2000},
+    }
+    prompt = render_prompt_md(pack)
+    # 旧裁剪许可必须消失（这是 fidelity 崩塌根因）。
+    assert "无关城市段落" not in prompt, "prompt 仍保留「无关城市段落」裁剪许可，会诱导 agent 丢站点脱稿"
+    # 新的整篇保真指令必须在场。
+    assert "整篇保留" in prompt, prompt[:400]
+    assert ("多目的地" in prompt) or ("全部站点" in prompt), prompt[:400]
+    assert "实体只是标签" in prompt, prompt[:400]
+
+
+def test_article_section_intents_do_not_force_single_entity_focus():
+    """章节意图不得把多目的地底稿框成「关于某实体的那篇」诱导裁剪。"""
+    from produce.entity_workflow import _entity_section_intents
+
+    intents = _entity_section_intents({"subject": {"type": "地点/景区"}}, "都江堰")
+    joined = "\n".join(intents)
+    assert "关于 都江堰 的那篇" not in joined, joined
+    assert ("全部站点" in joined) or ("多目的地" in joined), joined
+
+
+def test_base_aware_word_count_tracks_long_base_draft():
+    """根因：wordCount 固定上限(1600)远小于长底稿(~8900字)时，baseDraftFidelity>=55% 数学不可达
+    （成稿最多覆盖底稿 ~18% 三连）。light-edit 文章字数目标必须按清洗底稿长度派生。"""
+    from _common.base_draft import base_aware_word_count, clean_base_draft_length
+
+    long_base = "都江堰的清晨薄雾未散，我们沿着秦堰楼一路下行，江风裹着水汽扑面而来。\n" * 200
+    clean_len = clean_base_draft_length(long_base)
+    assert clean_len > 5000, clean_len
+    wc = base_aware_word_count(long_base, carrier="article", source_use_mode="factual_reference_only")
+    assert wc is not None
+    # 上限跟随底稿，不再被固定 1600 钉死。
+    assert wc["max"] > 1600 and wc["max"] >= clean_len, wc
+    assert wc["min"] >= 600, wc
+    # 数学可行：成稿达到 min 且逐句沿用底稿即可覆盖 >=55% 三连。
+    assert wc["min"] >= int(clean_len * 0.55), (wc, clean_len)
+    # image/gallery（短配文）与非改编源不设底稿字数门。
+    assert base_aware_word_count(long_base, carrier="image", source_use_mode="factual_reference_only") is None
+    assert base_aware_word_count(long_base, carrier="article", source_use_mode="blocked") is None
+    # 短底稿（< 文章下限）不强行抬高字数门。
+    assert base_aware_word_count("一句话。", carrier="article", source_use_mode="factual_reference_only") is None
+
+
 if __name__ == "__main__":
     test_route_brief_includes_narrative_contract()
+    test_gate_route_evidence_skips_narrative_requirements_for_image_carrier()
+    test_gate_route_evidence_still_gates_narrative_carriers()
     test_route_workflow_generates_real_review_green()
     test_route_skip_does_not_prepare_writing_pack()
     test_route_review_blocks_intra_doc_repetition_padding()
+    test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim()
+    test_article_section_intents_do_not_force_single_entity_focus()
+    test_base_aware_word_count_tracks_long_base_draft()
     print("route brief and evidence tests passed")

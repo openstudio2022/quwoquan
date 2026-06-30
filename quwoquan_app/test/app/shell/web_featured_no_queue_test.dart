@@ -11,8 +11,8 @@ void main() {
     SharedPreferences.setMockInitialValues(const <String, Object>{});
   });
 
-  group('Web 精品页', () {
-    testWidgets('改为复用发现内容流的多列墙，无「精品队列」', (tester) async {
+  group('Web 视频书页', () {
+    testWidgets('改为复用发现内容流的多列墙，无旧精品队列', (tester) async {
       WebShellTestHarness.suppressExpectedErrors();
       WebShellTestHarness.useWideViewport(tester);
 
@@ -20,14 +20,14 @@ void main() {
       await WebShellTestHarness.enterToolbar(tester);
       await WebShellTestHarness.tapPrimary(tester, 'featured');
 
-      // 精品默认 filter=all → 发现频道 work，复用 HomeMultiFormFeed 多列墙。
+      // 视频书默认 filter=all → 发现频道 work，复用 HomeMultiFormFeed 多列墙。
       expect(
         find.byKey(const ValueKey<String>('web-content-feed-work')),
         findsOneWidget,
       );
       expect(find.byType(HomeMultiFormFeed), findsOneWidget);
 
-      // 旧的「精品队列」语义被移除，rail 文案不再含「队列」。
+      // 旧的精品队列语义被移除，rail 文案不再含「队列」。
       expect(find.textContaining('队列'), findsNothing);
 
       // 右侧说明栏已移除，不再展示占位 rail 文案。

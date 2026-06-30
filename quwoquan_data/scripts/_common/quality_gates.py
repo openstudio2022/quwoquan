@@ -96,6 +96,38 @@ INTRA_DOC_REPEAT_MIN_PARAGRAPH_COUNT = 5
 INTRA_DOC_REPEAT_MIN_SENTENCE_CHARS = 16
 INTRA_DOC_REPEAT_MIN_SENTENCE_COUNT = 3
 
+# ---------------------------------------------------------------------------
+# 非致命启发式质量门集合（软门）——单一真相源（P5）。
+#
+# 这些门是「文风/结构」启发式：命中只应「软扣分 + 出修订建议」，绝不 hard-block 发布，
+# 避免低误报启发式反复触发 rewind 拖慢首过率（首过率低→反复 rewind→耗时是放量根因之一）。
+#
+# - travelogueDensity      情感/叙事密度（情感词）
+# - writingIntentConsistency 写作主线一致性（结构桶）
+# - mechanicalHeading      机械化清单式小标题（小标题数/风格）
+# - proseStyle             机械化固定收尾小标题（结尾差异化）
+#
+# produce review（route_review/entity_workflow 经 aggregate_checks）与 publish-face
+# verify（verify_content_quality）必须共用本集合判定软/硬，禁止任一侧把软门当硬门
+# —— 这是消除 review/verify「第二真相源」的唯一口径。
+#
+# 注意：golden set（measure_gate_goldenset）独立度量这些启发式函数的「检出准确率」(firing)，
+# 与「命中后软/硬动作」是两件不同的事，不受本集合影响（软门仍会 firing，只是不 hard-block）。
+SOFT_QUALITY_GATES: frozenset[str] = frozenset(
+    {
+        "travelogueDensity",
+        "writingIntentConsistency",
+        "mechanicalHeading",
+        "proseStyle",
+    }
+)
+
+
+def is_soft_quality_gate(name: str) -> bool:
+    """该评审/校验门是否为非致命软门（命中只软扣分+建议，不 hard-block）。"""
+    return str(name or "").strip() in SOFT_QUALITY_GATES
+
+
 # 写作主线一致性：命中桶数下限由各 intent 的 requireBuckets 决定。
 
 
@@ -690,7 +722,7 @@ def semantic_duplicate_issues(
 
 # ---------------------------------------------------------------------------
 # 门 7：rubric 评审稳定性（双轨软质量的判官可信度）。
-# rubric 评分由会话模型（LLM-as-judge）产出；本函数只校验判官稳定性，
+# rubric 评分由创作 agent（LLM-as-judge）产出；本函数只校验判官稳定性，
 # 不替代评审本身。同输入多次评分方差过大 → 判官不可信，门失效。
 # ---------------------------------------------------------------------------
 RUBRIC_MAX_STDEV = 1.0  # rubric 评分按 0-10，标准差上限

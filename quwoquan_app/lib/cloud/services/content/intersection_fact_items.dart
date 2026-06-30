@@ -163,7 +163,7 @@ List<IntersectionReason> fallbackInboxReasons() {
       strength: 0.82,
       kind: 'sameSchool',
       actionType: 'view',
-      actionTargetId: 'fixture_homepage_university_pku',
+      actionTargetId: 'fixture_homepage_school_neworiental',
       source: 'sameSchool',
       freshAt: _isoMinusHours(10),
     ),
@@ -181,7 +181,7 @@ List<IntersectionReason> fallbackInboxReasons() {
       strength: 0.88,
       kind: 'coCommented',
       actionType: 'join',
-      actionTargetId: 'circle_gold_invest',
+      actionTargetId: 'fixture_circle_gold_invest',
       source: 'coCommented',
       lifecycleState: 'reactivated',
       freshAt: _isoMinusHours(30),
@@ -335,7 +335,8 @@ String _resolveReasonKind(IntersectionReason reason) {
     if (IntersectionKindMetadata.of(candidate) != null) return candidate;
   }
   for (final candidate in candidates) {
-    if (candidate.isNotEmpty && !intersectionDimensionKeys.contains(candidate)) {
+    if (candidate.isNotEmpty &&
+        !intersectionDimensionKeys.contains(candidate)) {
       return candidate;
     }
   }

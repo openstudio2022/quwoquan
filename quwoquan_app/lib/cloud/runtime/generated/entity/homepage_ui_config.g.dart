@@ -45,7 +45,7 @@ class HomepageUIConfig {
     HomepageSubTabConfig(id: "all", labelKey: "homepage_sub_all", isDefault: true, homepageTypes: const <String>[]),
     HomepageSubTabConfig(id: "image", labelKey: "homepage_sub_image", isDefault: false, homepageTypes: const <String>[]),
     HomepageSubTabConfig(id: "video", labelKey: "homepage_sub_video", isDefault: false, homepageTypes: const <String>[]),
-    HomepageSubTabConfig(id: "article", labelKey: "homepage_sub_article", isDefault: false, homepageTypes: const <String>[]),
-    HomepageSubTabConfig(id: "campus_life", labelKey: "homepage_sub_campus_life", isDefault: false, homepageTypes: <String>['school']),
+    HomepageSubTabConfig(id: "opinion", labelKey: "homepage_sub_opinion", isDefault: false, homepageTypes: const <String>[]),
+    HomepageSubTabConfig(id: "question", labelKey: "homepage_sub_question", isDefault: false, homepageTypes: const <String>[]),
   ];
 }

@@ -92,7 +92,12 @@ def _post_allowed(posts_root: Path, post_dir: Path, post_rels: set[str] | None) 
     return _post_rel(posts_root, post_dir) in post_rels
 
 
-def verify_posts(posts_root: Path, *, post_rels: set[str] | None = None) -> list[str]:
+def verify_posts(
+    posts_root: Path,
+    *,
+    post_rels: set[str] | None = None,
+    advisories: list[str] | None = None,
+) -> list[str]:
     issues: list[str] = []
     if not posts_root.exists():
         return issues
@@ -114,8 +119,24 @@ def verify_posts(posts_root: Path, *, post_rels: set[str] | None = None) -> list
 
         for word in forbidden_phrase_hits(article):
             issues.append(f"{article_path}: forbidden phrase found: {word}")
-        if len(re.sub(r"\s+", "", article)) < 600:
-            issues.append(f"{article_path}: article body shorter than 600 non-space chars")
+        # 字数门形态自适应（唯一真相源 base_draft_readiness）：图片作品(image/gallery)
+        # 不受正文长度门约束；article 长文需≥600，图文混排正文≥200且有足量内联图/图注。
+        carrier = str(manifest.get("carrier") or "")
+        if carrier not in ("image", "gallery"):
+            from _common.base_draft import base_draft_readiness
+
+            readiness = base_draft_readiness(
+                article,
+                publish_media_mode=str(manifest.get("publishMediaMode") or ""),
+            )
+            if not readiness["ready"]:
+                issues.append(
+                    f"{article_path}: article body fails adaptive word gate "
+                    f"(form={readiness['sourceForm']} prose={readiness['proseChars']} "
+                    f"figures={readiness['inlineFigureCount']} effective={readiness['effectiveChars']}; "
+                    f"need long-form>={readiness['minTextChars']} or mixed prose>="
+                    f"{readiness['richMixedMinTextChars']}+figures>={readiness['richMixedMinFigures']})"
+                )
         if re.search(r"(?m)^标签[:：]", article):
             issues.append(f"{article_path}: standalone tag section is not allowed")
 
@@ -136,8 +157,8 @@ def verify_posts(posts_root: Path, *, post_rels: set[str] | None = None) -> list
         issues.extend(annotation_publish_issues(article, entity_refs if isinstance(entity_refs, list) else []))
         # 「明」交集信号强制门：每个 post 必须有完备的 intersectionHints（对齐 IntersectionReason 闭集）。
         issues.extend(intersection_hint_issues(manifest.get("intersectionHints"), manifest))
-        # 发布面复跑单一门库语义门：不只信 review.json=approved。
-        issues.extend(_semantic_gate_issues(article_path, article, manifest))
+        # 发布面复跑单一门库语义门：不只信 review.json=approved。软门进 advisories（不 hard-block）。
+        issues.extend(_semantic_gate_issues(article_path, article, manifest, advisories=advisories))
 
     # 跨篇模板骨架门 + SimHash 语义去重双指标：换实体名同骨架在发布面也要拦。
     all_articles = [art for _, art in peer_articles]
@@ -161,9 +182,21 @@ def verify_posts(posts_root: Path, *, post_rels: set[str] | None = None) -> list
     return issues
 
 
-def _semantic_gate_issues(article_path: Path, article: str, manifest: dict) -> list[str]:
-    """复用单一 gate library，在发布面复跑图文闭环/主线一致性/语域门。"""
+def _semantic_gate_issues(
+    article_path: Path,
+    article: str,
+    manifest: dict,
+    *,
+    advisories: list[str] | None = None,
+) -> list[str]:
+    """复用单一 gate library，在发布面复跑图文闭环/主线一致性/语域门。
+
+    软门（``quality_gates.SOFT_QUALITY_GATES``：writingIntentConsistency / mechanicalHeading）
+    命中只进 ``advisories``（软扣分+建议），绝不 hard-block；与 produce review 的 SOFT_CHECKS
+    同口径（消除第二真相源）。硬门（图文闭环/语域/联系方式/段内重复）仍 hard-block。
+    """
     out: list[str] = []
+    advisory_sink = advisories if advisories is not None else []
     carrier = str(manifest.get("carrier") or "article")
     assets = manifest.get("assets") if isinstance(manifest.get("assets"), list) else []
     route_nodes = manifest.get("routeNodes") or manifest.get("routeNodeRefs") or []
@@ -172,8 +205,9 @@ def _semantic_gate_issues(article_path: Path, article: str, manifest: dict) -> l
         out.append(f"{article_path}: {msg}")
     writing_intent = manifest.get("writingIntent")
     if writing_intent:
+        # 软门：写作主线一致性（启发式），降软扣分不 hard-block。
         for msg in qg.writing_intent_consistency_issues(article, writing_intent):
-            out.append(f"{article_path}: {msg}")
+            advisory_sink.append(f"{article_path}: [soft:writingIntentConsistency] {msg}")
     banned = manifest.get("bannedRegisterTerms")
     if isinstance(banned, list) and banned:
         for msg in qg.register_lexicon_issues(article, [str(b) for b in banned]):
@@ -184,8 +218,9 @@ def _semantic_gate_issues(article_path: Path, article: str, manifest: dict) -> l
     for msg in qg.contact_info_issues(article, allowed_numbers=pc.allowed_numbers([str(n) for n in allowed_contacts])):
         out.append(f"{article_path}: {msg}")
     heading_extra = manifest.get("mechanicalHeadingTerms") if isinstance(manifest.get("mechanicalHeadingTerms"), list) else []
+    # 软门：机械化清单式小标题（启发式），降软扣分不 hard-block。
     for msg in qg.mechanical_heading_issues(article, extra_terms=[str(t) for t in heading_extra]):
-        out.append(f"{article_path}: {msg}")
+        advisory_sink.append(f"{article_path}: [soft:mechanicalHeading] {msg}")
     for msg in qg.intra_doc_repetition_issues(article):
         out.append(f"{article_path}: {msg}")
     return out
@@ -264,7 +299,13 @@ def main() -> None:
     if posts_root is None:
         print("[content-quality] No posts root specified; template-only gate skipped")
         return
-    issues = verify_posts(posts_root)
+    advisories: list[str] = []
+    issues = verify_posts(posts_root, advisories=advisories)
+    if advisories:
+        # 软门（情感密度/写作主线/机械小标题/机械结尾）只软提示，不计入 FAIL。
+        print(f"[content-quality] {len(advisories)} soft advisory(ies) (non-blocking):")
+        for advisory in advisories:
+            print(f"  ~ {advisory}")
     if issues:
         print(f"[content-quality] FAILED ({len(issues)} issue(s))", file=sys.stderr)
         for issue in issues:

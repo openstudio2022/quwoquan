@@ -77,7 +77,11 @@ def _article_without_assets_allowed(brief: Mapping[str, Any]) -> bool:
 DECISION_MARKERS = ("我会", "我更愿意", "建议把", "如果你", "可以跟团", "宁可", "就该", "值不值得", "优先看", "我不会")
 STANDALONE_TIPS_MARKERS = ("实用信息", "实用攻略信息", "来源平台", "信息卡", "小贴士：", "tips：", "贴士：")
 
-SOFT_CHECKS: set[str] = {"travelogueDensity", "writingIntentConsistency"}
+# 软门集合单一真相源 = quality_gates.SOFT_QUALITY_GATES（review 与 publish-face verify 共用，
+# 消除第二真相源）。新增/调整软门只改 quality_gates，禁止此处另起一套集合。
+from _common.quality_gates import SOFT_QUALITY_GATES as _SOFT_QUALITY_GATES
+
+SOFT_CHECKS: set[str] = set(_SOFT_QUALITY_GATES)
 IMAGE_EVIDENCE_GENERATOR = "image_evidence_pack"
 
 

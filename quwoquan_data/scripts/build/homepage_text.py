@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+# P3 三类解耦：实体主页 base draft 主源【只来自百科】。仅百科种类授予 primary 资格，
+# 官网/官方一律降为 supporting（priority 0，可补事实但不得作 primaryEvidenceRef）。
 _HOMEPAGE_PRIMARY_KIND_BONUS = (
     ("维基百科", 120),
     ("wikipedia", 120),
@@ -12,11 +14,8 @@ _HOMEPAGE_PRIMARY_KIND_BONUS = (
     ("搜狗百科", 105),
     ("字节百科", 100),
     ("百科", 95),
-    ("景区官网", 90),
-    ("官网", 85),
-    ("官方", 85),
 )
-_HOMEPAGE_SUPPORT_ONLY_MARKERS = ("政府", "文旅", "政务", "gov.cn")
+_HOMEPAGE_SUPPORT_ONLY_MARKERS = ("政府", "文旅", "政务", "gov.cn", "景区官网", "官网", "官方", "official")
 _HOMEPAGE_GUIDE_PENALTY = ("攻略", "游记", "评论", "点评", "小红书", "图虫", "摄影")
 _HOMEPAGE_ALLOWED_LANES = ("homepage", "legacy", "")
 _HOMEPAGE_FACT_NOISE_MARKERS = (
@@ -188,7 +187,8 @@ def _homepage_source_priority(meta: dict[str, Any]) -> int:
         if marker.casefold() in lowered:
             priority = max(priority, score)
     category = str(meta.get("category") or "").casefold()
-    if category in {"encyclopedia", "official_site"}:
+    # 只有百科类目授予 primary；official_site 不再给 primary（已在 support-only markers 归 0）。
+    if category == "encyclopedia":
         priority = max(priority, 85)
     return priority
 

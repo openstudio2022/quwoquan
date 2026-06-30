@@ -31,6 +31,7 @@ LITE_REFS: dict[str, list[str]] = {
     ],
     "social/circle/test_fixtures/scenarios/circle_scenarios.json": [
         "circle_core",
+        "circle_profile_core",
     ],
     "messages/chat/test_fixtures/scenarios/chat_scenarios.json": [
         "chat_core",
@@ -77,7 +78,9 @@ LITE_USER_IDS = {
     "fixture_user_weekend_2",
 }
 LITE_CIRCLE_IDS = {
+    "fixture_circle_gold_invest",
     "fixture_circle_life",
+    "fixture_circle_neworiental_alumni",
     "fixture_circle_photo",
     "fixture_circle_tech",
     "fixture_circle_travel",
@@ -191,6 +194,19 @@ def prune_seed_payload(relative_path: str, payload: dict[str, Any]) -> dict[str,
             for key, value in (seed.get("members") or {}).items()
             if key in LITE_CIRCLE_IDS
         }
+        profile_seed = seed_sets["circle_profile_core"]
+        profile_seed["circleIds"] = [
+            row for row in profile_seed.get("circleIds", [])
+            if str(row) in LITE_CIRCLE_IDS
+        ]
+        profile_seed["stats"] = [
+            row for row in profile_seed.get("stats", [])
+            if row_id(row, "circleId") in LITE_CIRCLE_IDS
+        ]
+        profile_seed["postIds"] = [
+            row for row in profile_seed.get("postIds", [])
+            if str(row) in LITE_CONTENT_POST_IDS
+        ]
 
     if relative_path == "messages/chat/test_fixtures/scenarios/chat_scenarios.json":
         core = seed_sets["chat_core"]

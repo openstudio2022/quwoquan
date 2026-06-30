@@ -121,38 +121,48 @@ void main() {
       expect(emptyIcon, isNot(contains('@mipmap')));
     });
 
-    test(
-      'Flutter welcome screen is the only branded welcome implementation',
-      () {
-        final runtime = _readAppFile('lib/app/app_startup_runtime.dart');
-        final bridge = _readAppFile('lib/core/platform/native_bridge.dart');
-        final welcome = _readAppFile(
-          'lib/ui/welcome/pages/welcome_screen.dart',
-        );
-        final shell = _readAppFile('lib/quwoquan_app_shell.dart');
+    test('Flutter welcome screen is the only branded welcome implementation', () {
+      final runtime = _readAppFile('lib/app/app_startup_runtime.dart');
+      final bridge = _readAppFile('lib/core/platform/native_bridge.dart');
+      final welcome = _readAppFile('lib/ui/welcome/pages/welcome_screen.dart');
+      final shell = _readAppFile('lib/quwoquan_app_shell.dart');
 
-        for (final source in [runtime, bridge, welcome, shell]) {
-          expect(source, isNot(contains('nativeStartupElapsed')));
-          expect(source, isNot(contains('nativeStartupElapsedMs')));
-          expect(source, isNot(contains('flutterWelcomeReady')));
-          expect(source, isNot(contains('flutterWelcomeCompleted')));
-          expect(source, isNot(contains('completeNativeWelcomeOverlay')));
-          expect(source, isNot(contains('quwoquan/startup/native')));
-        }
+      for (final source in [runtime, bridge, welcome, shell]) {
+        expect(source, isNot(contains('nativeStartupElapsed')));
+        expect(source, isNot(contains('nativeStartupElapsedMs')));
+        expect(source, isNot(contains('flutterWelcomeReady')));
+        expect(source, isNot(contains('flutterWelcomeCompleted')));
+        expect(source, isNot(contains('completeNativeWelcomeOverlay')));
+        expect(source, isNot(contains('quwoquan/startup/native')));
+      }
 
-        expect(bridge, isNot(contains('StartupNativeBridge')));
-        expect(welcome, isNot(contains('initialSequenceElapsed')));
-        expect(welcome, isNot(contains('sequenceEnabled')));
-        expect(welcome, isNot(contains('onFlutterWelcomeReady')));
-        expect(welcome, contains('_beginAnimatedSequence'));
-        expect(welcome, contains('waitUntilFirstFrameRasterized'));
-        expect(welcome, contains('_visibleFrameGuard'));
-        expect(shell, contains('_maxStartupWelcomeReplayCount = 2'));
-        expect(shell, contains('startupStillStartingInline'));
-        expect(shell, contains("_buildStartupFallbackApp"));
-        expect(shell, contains("'result': degraded ? 'degraded' : 'entered'"));
-      },
-    );
+      expect(bridge, isNot(contains('StartupNativeBridge')));
+      expect(welcome, isNot(contains('initialSequenceElapsed')));
+      expect(welcome, isNot(contains('sequenceEnabled')));
+      expect(welcome, isNot(contains('onFlutterWelcomeReady')));
+      expect(welcome, contains('_beginAnimatedSequence'));
+      expect(welcome, contains('waitUntilFirstFrameRasterized'));
+      expect(welcome, contains('_visibleFrameGuard'));
+      expect(shell, contains('_maxStartupWelcomeReplayCount = 2'));
+      expect(shell, contains('startupStillStartingInline'));
+      expect(shell, contains("_buildStartupFallbackApp"));
+      expect(shell, contains("'result': degraded ? 'degraded' : 'entered'"));
+
+      final deferredRegistry = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/StartupDeferredPluginRegistry.java',
+      );
+      expect(deferredRegistry, contains('ensureLocation'));
+      expect(deferredRegistry, contains('geolocator_android'));
+
+      final gradle = _readAppFile('android/app/build.gradle.kts');
+      expect(gradle, contains('patch_android_plugin_registrant.sh'));
+      expect(gradle, contains('JavaWithJavac'));
+
+      final patchScript = _readAppFile(
+        'scripts/patch_android_plugin_registrant.sh',
+      );
+      expect(patchScript, contains('com.baseflow.geolocator.GeolocatorPlugin'));
+    });
 
     test(
       'startup first-frame probe launches MainActivity and forbids native welcome',

@@ -157,7 +157,8 @@ def test_download_repair_lanes_route_encyclopedia_core_gap_to_homepage():
         entity_id="天下第一泉景区",
     )
     assert hints[0]["lane"] == "homepage"
-    assert hints[0]["action"] == "add_or_replace_homepage_encyclopedia_or_official_seed_source"
+    # P3 三类解耦：实体主页 base draft 主源只限百科，repair 提示不再含 official seed。
+    assert hints[0]["action"] == "add_or_replace_homepage_encyclopedia_seed_source"
 
 def test_download_issue_repair_hints_classify_image_gate_failure():
     hints = run_mod._download_issue_repair_hints(

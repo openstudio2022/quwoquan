@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quwoquan_app/cloud/runtime/startup_deferred_plugins.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
@@ -23,18 +23,10 @@ enum AppPermissionKind {
 }
 
 /// 权限所处阶段（对 UI 透明，屏蔽 iOS/Android 差异）。
-enum AppPermissionPhase {
-  granted,
-  requestable,
-  settingsRequired,
-  restricted,
-}
+enum AppPermissionPhase { granted, requestable, settingsRequired, restricted }
 
 /// 权限请求触达面：JIT 动作 vs 整页能力。
-enum AppPermissionSurface {
-  jit,
-  page,
-}
+enum AppPermissionSurface { jit, page }
 
 /// [AppPermissionCoordinator.ensure] 结果。
 enum AppPermissionEnsureOutcome {
@@ -68,7 +60,7 @@ class AppPermissionCopy {
   final String deniedMessage;
 }
 
-class _AppPermissionSessionState {
+class AppPermissionSessionState {
   bool suppressSettingsPrompt = false;
   bool settingsVisitPending = false;
   void Function(bool granted)? onSettingsReturn;
@@ -85,7 +77,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       AppPermissionCoordinator._();
 
   @visibleForTesting
-  _AppPermissionSessionState testSession(AppPermissionKind kind) =>
+  AppPermissionSessionState testSession(AppPermissionKind kind) =>
       _sessionFor(kind);
 
   @visibleForTesting
@@ -95,11 +87,10 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
   static AppPermissionCoordinator? debugInstance;
 
   @visibleForTesting
-  static AppPermissionCoordinator get testable =>
-      debugInstance ?? instance;
+  static AppPermissionCoordinator get testable => debugInstance ?? instance;
 
-  final Map<AppPermissionKind, _AppPermissionSessionState> _sessions =
-      <AppPermissionKind, _AppPermissionSessionState>{};
+  final Map<AppPermissionKind, AppPermissionSessionState> _sessions =
+      <AppPermissionKind, AppPermissionSessionState>{};
 
   bool _lifecycleAttached = false;
   BuildContext? _toastContext;
@@ -204,7 +195,8 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
         label: UITextConstants.permissionNotificationsLabel,
         primerTitle: UITextConstants.permissionNotificationsPrimerTitle,
         primerMessage: UITextConstants.permissionNotificationsPrimerMessage,
-        settingsPathMessage: UITextConstants.permissionNotificationsOpenSettings,
+        settingsPathMessage:
+            UITextConstants.permissionNotificationsOpenSettings,
         deniedMessage: UITextConstants.permissionNotificationsDenied,
       ),
     };
@@ -279,13 +271,20 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       session.suppressSettingsPrompt = false;
       return AppPermissionEnsureOutcome.granted;
     }
+    if (!context.mounted) {
+      return switch (currentPhase) {
+        AppPermissionPhase.restricted => AppPermissionEnsureOutcome.restricted,
+        AppPermissionPhase.settingsRequired =>
+          AppPermissionEnsureOutcome.settingsRequired,
+        AppPermissionPhase.requestable => AppPermissionEnsureOutcome.denied,
+        AppPermissionPhase.granted => AppPermissionEnsureOutcome.granted,
+      };
+    }
     if (currentPhase == AppPermissionPhase.restricted) {
-      if (showUiOnFailure && context.mounted) {
+      if (showUiOnFailure) {
         await _showSoftToast(
           context,
-          UITextConstants.permissionRestrictedMessage(
-            copyFor(kind).label,
-          ),
+          UITextConstants.permissionRestrictedMessage(copyFor(kind).label),
         );
       }
       return AppPermissionEnsureOutcome.restricted;
@@ -323,15 +322,16 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       session.suppressSettingsPrompt = false;
       return AppPermissionEnsureOutcome.granted;
     }
+    if (!context.mounted) {
+      return afterPhase == AppPermissionPhase.requestable
+          ? AppPermissionEnsureOutcome.denied
+          : AppPermissionEnsureOutcome.settingsRequired;
+    }
     if (afterPhase == AppPermissionPhase.requestable) {
-      if (showUiOnFailure && context.mounted) {
+      if (showUiOnFailure) {
         await _showSoftToast(context, copyFor(kind).deniedMessage);
       }
       return AppPermissionEnsureOutcome.denied;
-    }
-
-    if (!context.mounted) {
-      return AppPermissionEnsureOutcome.settingsRequired;
     }
 
     return _ensureSettingsRequired(
@@ -387,7 +387,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
   Future<AppPermissionEnsureOutcome> _ensureSettingsRequired(
     BuildContext context,
     AppPermissionKind kind, {
-    required _AppPermissionSessionState session,
+    required AppPermissionSessionState session,
     required bool showUiOnFailure,
     void Function(bool granted)? onSettingsReturn,
   }) async {
@@ -507,8 +507,8 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
     }
   }
 
-  _AppPermissionSessionState _sessionFor(AppPermissionKind kind) {
-    return _sessions.putIfAbsent(kind, _AppPermissionSessionState.new);
+  AppPermissionSessionState _sessionFor(AppPermissionKind kind) {
+    return _sessions.putIfAbsent(kind, AppPermissionSessionState.new);
   }
 
   Future<bool> _maybeShowPrimer(
@@ -564,10 +564,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       Permission.microphone,
       grantFallback: _microphoneRecordGranted,
     );
-    _registerPermissionHandlerKind(
-      AppPermissionKind.camera,
-      Permission.camera,
-    );
+    _registerPermissionHandlerKind(AppPermissionKind.camera, Permission.camera);
     _registerPermissionHandlerKind(
       AppPermissionKind.contacts,
       Permission.contacts,
@@ -642,6 +639,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
 
   void _registerLocationAdapter() {
     phaseReaders[AppPermissionKind.location] = () async {
+      await StartupDeferredPlugins.ensureLocationPlugins();
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         return AppPermissionPhase.settingsRequired;
@@ -657,11 +655,13 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       return AppPermissionPhase.requestable;
     };
     grantCheckers[AppPermissionKind.location] = () async {
+      await StartupDeferredPlugins.ensureLocationPlugins();
       final perm = await Geolocator.checkPermission();
       return perm == LocationPermission.always ||
           perm == LocationPermission.whileInUse;
     };
     requesters[AppPermissionKind.location] = () async {
+      await StartupDeferredPlugins.ensureLocationPlugins();
       if (!await Geolocator.isLocationServiceEnabled()) {
         return false;
       }
@@ -691,5 +691,4 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       await recorder.dispose();
     }
   }
-
 }

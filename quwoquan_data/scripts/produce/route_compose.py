@@ -77,7 +77,7 @@ def build_route_writing_pack(
             cited_source_paths=quality_payload.get("sourcePaths") or [],
         )
     else:
-        # 仅当尚无 agent 草稿时写占位，避免覆盖会话模型已创作的正文。
+        # 仅当尚无 agent 草稿时写占位，避免覆盖创作 agent已创作的正文。
         existing = read_draft_meta(task_id, batch_id, ref)
         if not existing or str(existing.get("generator")) != GENERATOR_AGENT:
             write_placeholder_draft(task_id, batch_id, ref)
@@ -262,7 +262,12 @@ def _attach_base_draft_text(task_id: str, batch_id: str, pack: dict[str, Any]) -
     底稿中心 1:1：内联整篇单一底稿正文，prompt 与 review 门（baseDraftFidelity）消费同一份
     整篇底稿；成品只来自这一篇底稿，不再按 writingIntent 收窄分母（避免误杀，也防逐字照搬）。
     """
-    from _common.base_draft import base_source_use_mode, load_base_draft_text
+    from _common.base_draft import (
+        BASE_DRAFT_PROMPT_MAX_CHARS,
+        base_aware_word_count,
+        base_source_use_mode,
+        load_base_draft_text,
+    )
 
     base_ref = str(pack.get("baseSourceRef") or "")
     if not base_ref:
@@ -270,6 +275,16 @@ def _attach_base_draft_text(task_id: str, batch_id: str, pack: dict[str, Any]) -
     pack["sourceUseMode"] = base_source_use_mode(task_id, batch_id, base_ref)
     text = load_base_draft_text(task_id, batch_id, base_ref).strip()
     if text:
-        pack["baseDraftText"] = text[:4000]
+        # 不再截断到 4000：fidelity 门按整篇底稿判，prompt 必须给整篇——agent 看不到的内容
+        # 无法保留，截断会强制低保真。仅对书籍级超长底稿设安全上限。
+        pack["baseDraftText"] = text[:BASE_DRAFT_PROMPT_MAX_CHARS]
+        # light-edit 文章字数目标跟随底稿长度，消除 wordCount 固定上限与 baseDraftFidelity 的互斥。
+        wc = base_aware_word_count(
+            text,
+            carrier=str(pack.get("carrier") or "article"),
+            source_use_mode=str(pack.get("sourceUseMode") or ""),
+        )
+        if wc:
+            pack["wordCount"] = wc
 
 __all__ = [name for name in globals() if not name.startswith("__")]

@@ -59,6 +59,82 @@ _RUN_MATRIX_LOCK = threading.Lock()
 ASSIGNMENT_MIN_POLL_SECONDS = 0.05
 ASSIGNMENT_MAX_BACKOFF_WAIT_SECONDS = 900.0
 
+# P6 错峰冷启 / 暖 bridge / 吞吐量化（无人托管可靠性）。
+# 放量时多 worker 同刻冷启 cursor bridge 会互抢回调端口 → 大面积 "Connection refused"
+# （实测 cs100 一轮 294 次、orchestrationFailed 而 0 收口）。这里在 runner 层做三件事：
+# 1) 把同刻冷启的并发 worker 收敛到 cold-start 安全上限（默认 3，对齐规划 concurrency=2-3）；
+# 2) 用"冷启释放器"把相邻 bridge 冷启错峰拉开（鱼贯而非齐发）；
+# 3) per-worker 预建 warm bridge：首个真实 author 调用前先以 startup probe 暖好本 worker 的 bridge。
+COLD_START_MAX_WORKERS = max(1, int(os.environ.get("QWQ_FANOUT_COLD_START_MAX_WORKERS", "3")))
+WORKER_STAGGER_SECONDS = max(0.0, float(os.environ.get("QWQ_FANOUT_WORKER_STAGGER_SECONDS", "8.0")))
+
+# 连接拒绝/冷启竞态标记（量化 throughput vs connection-refused 用，单一真相源）。
+_CONNECTION_REFUSED_MARKERS = (
+    "connection refused",
+    "connecterror",
+    "connection reset",
+    "bridge request failed",
+    "exited before discovery",
+    "failed before discovery",
+)
+
+
+def _is_connection_refused(error: str | None) -> bool:
+    """该错误是否属于 bridge 冷启连接拒绝/竞态（用于量化，不改变控制流）。"""
+    lowered = str(error or "").casefold()
+    return any(marker in lowered for marker in _CONNECTION_REFUSED_MARKERS)
+
+
+def _orchestrate_agent_timeout_seconds() -> float:
+    """orchestrator 单 agent 调用硬超时（local/cloud 看门狗共用单一真相源）。
+
+    生产默认 300s、地板 60s（防误设过低让看门狗误杀正常长跑）；地板可经
+    QWQ_ORCHESTRATE_AGENT_TIMEOUT_FLOOR_SECONDS 覆盖（仅供契约测试快速断言超时路径）。
+    """
+    floor = max(0.1, float(os.environ.get("QWQ_ORCHESTRATE_AGENT_TIMEOUT_FLOOR_SECONDS", "60")))
+    requested = float(os.environ.get("QWQ_ORCHESTRATE_AGENT_TIMEOUT_SECONDS", "300"))
+    return max(floor, requested)
+
+
+class _ColdStartReleaser:
+    """串行化并错峰相邻的 cursor bridge 冷启放行。
+
+    多 worker 线程池下若所有 worker 同刻 launch bridge 会抢回调端口导致 Connection refused
+    风暴。该释放器用锁串行化"冷启放行"，并保证相邻放行间至少间隔 min_interval 秒（错峰），
+    把冷启从"齐发"摊平成"鱼贯"。每个 worker 只在首个 bridge（warm-up / 首个 job）前调用一次。
+    sleep/clock 可注入，便于契约测试断言间隔而不真睡。
+    """
+
+    def __init__(
+        self,
+        min_interval_seconds: float,
+        *,
+        sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._min_interval = max(0.0, float(min_interval_seconds))
+        self._lock = threading.Lock()
+        self._last_release: float | None = None
+        self._sleep = sleep
+        self._clock = clock
+        self.releases = 0
+        self.total_wait_seconds = 0.0
+
+    def wait(self) -> float:
+        """阻塞到可以冷启本 worker 的 bridge，返回本次错峰等待秒数。"""
+        with self._lock:
+            waited = 0.0
+            if self._min_interval > 0 and self._last_release is not None:
+                now = self._clock()
+                target = self._last_release + self._min_interval
+                if now < target:
+                    waited = target - now
+                    self._sleep(waited)
+            self._last_release = self._clock()
+            self.releases += 1
+            self.total_wait_seconds += waited
+            return waited
+
 # 分区 orchestrator 必须推进到位的三个 checkpoint（plan Phase C 缺口）。
 ORCHESTRATOR_CHECKPOINTS = ("download_plan", "build_homepage", "content_plan")
 # orchestrator 推进到该 stage 即停：此时每个叶子的 writing_pack + prompt 已物化，
@@ -123,6 +199,10 @@ class WorkerStats:
     refs_failed: list[str] = field(default_factory=list)
     orchestrations: list[OrchestrationResult] = field(default_factory=list)
     run_records: list[dict[str, Any]] = field(default_factory=list)
+    # P6 错峰冷启 / per-worker warm bridge 观测。
+    prewarmed: bool = False
+    prewarm_error: str | None = None
+    cold_start_wait_seconds: float = 0.0
 
 
 def _build_prompt(packet: Mapping[str, Any]) -> str:
@@ -523,9 +603,7 @@ def default_orchestrator_runner(
         # 不对 Agent.prompt 设超时，单个挂起分区会永久阻塞串行队列。这里用独立线程跑托管
         # runner + 硬 deadline；超时则杀本 workspace bridge 让其解除阻塞，并按 retryable 返回，
         # 由 orchestrate_partition 的 per-partition 重试/object_queue backoff 接力，而非整轮卡死。
-        timeout_s = max(
-            60.0, float(os.environ.get("QWQ_ORCHESTRATE_AGENT_TIMEOUT_SECONDS", "300"))
-        )
+        timeout_s = _orchestrate_agent_timeout_seconds()
         holder: dict[str, Any] = {}
         done = threading.Event()
 
@@ -569,10 +647,36 @@ def default_orchestrator_runner(
         from cursor_sdk import Agent, CursorAgentError  # type: ignore
     except Exception as exc:  # noqa: BLE001
         return RunOutcome(started=False, error=f"cursor_sdk unavailable: {exc}", retryable=False)
-    try:
-        opts = _build_agent_options(api_key=key, model=model, runtime=runtime, cwd=cwd, repos=repos)
-        result = Agent.prompt(prompt, opts)
-    except CursorAgentError as err:
+    # 硬超时看门狗：云端 orchestrator 的开放式 Ralph 循环也会偶发 agent 调用挂起（云端 hiccup /
+    # SDK 尾部不返回）。裸 Agent.prompt 无超时会让单个挂起分区永久阻塞 worker。这里用独立线程 +
+    # 硬 deadline；超时按 retryable 返回，交给 orchestrate_partition 的 per-partition 重试接力。
+    timeout_s = _orchestrate_agent_timeout_seconds()
+    holder: dict[str, Any] = {}
+    done = threading.Event()
+
+    def _invoke_cloud() -> None:
+        try:
+            opts = _build_agent_options(api_key=key, model=model, runtime=runtime, cwd=cwd, repos=repos)
+            holder["result"] = Agent.prompt(prompt, opts)
+        except CursorAgentError as err:  # noqa: BLE001 - 启动/运行失败分流在主线程统一处理
+            holder["cursor_error"] = err
+        except Exception as exc:  # noqa: BLE001
+            holder["error"] = exc
+        finally:
+            done.set()
+
+    worker = threading.Thread(target=_invoke_cloud, name="orchestrate-cloud-agent", daemon=True)
+    worker.start()
+    if not done.wait(timeout=timeout_s):
+        return RunOutcome(
+            started=True,
+            status="error",
+            passed=False,
+            retryable=True,
+            error=f"orchestrate agent timed out after {int(timeout_s)}s (cloud agent stall)",
+        )
+    if "cursor_error" in holder:
+        err = holder["cursor_error"]
         err_message = getattr(err, "message", str(err))
         if is_cursor_auth_error(
             err_message,
@@ -589,6 +693,9 @@ def default_orchestrator_runner(
             error=err_message,
             retryable=bool(getattr(err, "is_retryable", False)),
         )
+    if "error" in holder:
+        return RunOutcome(started=True, status="error", passed=False, error=str(holder["error"]), retryable=True)
+    result = holder.get("result")
     status = getattr(result, "status", "error")
     return RunOutcome(
         started=True,
@@ -1056,6 +1163,23 @@ def _collect_final_stage_refs(
     return sorted(completed), sorted(failed)
 
 
+def _prewarm_worker_bridge(prewarm_runner: Callable[[], RunOutcome], stats: WorkerStats) -> None:
+    """per-worker 预建 warm bridge：首个真实 author 调用前先暖好本 worker 的 bridge。
+
+    失败不阻断（仍进 lease 循环，由 _process_job 的 startup 退避兜底），只记录到 stats，
+    便于量化 connection-refused / 冷启竞态。
+    """
+    try:
+        warm = prewarm_runner()
+    except Exception as exc:  # noqa: BLE001 - 暖机失败不得让整个 worker 崩溃
+        stats.prewarmed = False
+        stats.prewarm_error = f"{type(exc).__name__}: {exc}"
+        return
+    stats.prewarmed = bool(warm.started and warm.status == "finished")
+    if not stats.prewarmed:
+        stats.prewarm_error = warm.error or warm.status
+
+
 def run_assignment(
     assignment: Mapping[str, Any],
     *,
@@ -1069,6 +1193,8 @@ def run_assignment(
     plan: Mapping[str, Any] | None = None,
     refs_filter: list[str] | None = None,
     force_refs: list[str] | None = None,
+    cold_start_gate: Callable[[], float] | None = None,
+    prewarm_runner: Callable[[], RunOutcome] | None = None,
 ) -> WorkerStats:
     """一个 assignment = 一次 worker 拉起：循环 lease→agent→complete/fail 直到无活。
 
@@ -1077,9 +1203,17 @@ def run_assignment(
     当提供 orchestrator_runner 时（by-partition 主路径）：先用分区 orchestrator 把本 assignment 的
     每个 target 推进过 download_plan/build_homepage/content_plan 三个 checkpoint（真实检索+真主页+定篇目），
     校验到位后再 lease 叶子 author job；未到位的分区跳过叶子分发（避免在缺 compose 输入时空跑）。
+
+    cold_start_gate（P6 错峰冷启）：本 worker 首个 bridge 冷启前调用一次，返回错峰等待秒数；
+    prewarm_runner（P6 per-worker warm bridge）：错峰放行后预建一次 warm bridge，再进 lease 循环。
     """
     worker = worker or str(assignment.get("assignmentId") or "worker")
     stats = WorkerStats(worker=worker)
+    # P6：先错峰放行本 worker 的冷启，再 per-worker 预建 warm bridge（首个真实调用前 bridge 已就绪）。
+    if cold_start_gate is not None:
+        stats.cold_start_wait_seconds = cold_start_gate()
+    if prewarm_runner is not None:
+        _prewarm_worker_bridge(prewarm_runner, stats)
     assignment_refs = list(assignment.get("refs") or [])
     targets = list(assignment.get("targets") or [])
     partition_path = list(assignment.get("partitionPath") or [])
@@ -1213,6 +1347,9 @@ def run_fanout(
     force_refs: list[str] | None = None,
     source_task: str | None = None,
     source_batch: str | None = None,
+    prewarm: bool = False,
+    worker_stagger_seconds: float | None = None,
+    cold_start_max_workers: int | None = None,
 ) -> dict[str, Any]:
     """加载冻结计划 → 展开 assignment → 多 worker 执行。返回聚合统计。
 
@@ -1220,6 +1357,10 @@ def run_fanout(
     规避同 agent 并发 run 409）。默认顺序执行（确定性，便于测试）。
 
     orchestrator_runner 非空时：每个 assignment 先跑分区 orchestrator 推进三个 checkpoint，再分发叶子。
+
+    P6 无人托管可靠性：并行时把同刻冷启的 worker 收敛到 cold_start_max_workers（默认 3，
+    对齐规划 concurrency=2-3），用 _ColdStartReleaser 错峰相邻 bridge 冷启；prewarm=True 时
+    每 worker 进 lease 循环前预建一次 warm bridge。summary 量化 throughput 与 connectionRefused。
     """
     plan = fp.load_plan(plan_id)
     if plan is None:
@@ -1278,6 +1419,28 @@ def run_fanout(
     matrix["assignments"] = len(assignments)
     _save_run_matrix(plan_id, matrix)
 
+    # P6 错峰冷启：把同刻并发冷启的 worker 收敛到 cold-start 安全上限，再用释放器错峰相邻冷启。
+    requested_workers = int(max_workers or 0)
+    is_parallel = bool(requested_workers and requested_workers > 1 and len(assignments) > 1)
+    cold_start_cap = int(cold_start_max_workers if cold_start_max_workers is not None else COLD_START_MAX_WORKERS)
+    cold_start_cap = max(1, cold_start_cap)
+    effective_workers = min(requested_workers, cold_start_cap) if is_parallel else requested_workers
+    stagger_seconds = float(
+        worker_stagger_seconds if worker_stagger_seconds is not None else WORKER_STAGGER_SECONDS
+    )
+    # 错峰/暖机仅在真正并行时启用（顺序执行无冷启抢端口问题，且保持单 worker 确定性测试不变）。
+    cold_start_releaser = _ColdStartReleaser(stagger_seconds) if is_parallel else None
+    enable_prewarm = bool(prewarm and is_parallel)
+
+    def _make_prewarm_runner() -> Callable[[], RunOutcome] | None:
+        if not enable_prewarm:
+            return None
+
+        def _warm() -> RunOutcome:
+            return agent_runner(_startup_probe_packet(plan_id))
+
+        return _warm
+
     def _run(a: Mapping[str, Any]) -> WorkerStats:
         return run_assignment(
             a,
@@ -1288,13 +1451,17 @@ def run_fanout(
             plan=plan,
             refs_filter=refs,
             force_refs=force_refs,
+            cold_start_gate=(cold_start_releaser.wait if cold_start_releaser is not None else None),
+            prewarm_runner=_make_prewarm_runner(),
         )
 
-    if max_workers and max_workers > 1 and len(assignments) > 1:
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+    run_started_at = time.monotonic()
+    if is_parallel:
+        with ThreadPoolExecutor(max_workers=effective_workers) as pool:
             results = list(pool.map(_run, assignments))
     else:
         results = [_run(a) for a in assignments]
+    elapsed_seconds = max(0.0, time.monotonic() - run_started_at)
 
     orchestrations = [o for r in results for o in r.orchestrations]
     final_refs_completed, final_refs_failed = _collect_final_stage_refs(expansion["units"], stage=stage, refs=refs)
@@ -1304,19 +1471,53 @@ def run_fanout(
     total_startup_failures = sum(r.startup_failures for r in results)
     total_orchestrated = sum(r.orchestrated for r in results)
     total_orchestration_failed = sum(r.orchestration_failed for r in results)
+    total_leased = sum(r.leased for r in results)
+    # P6 量化 connection-refused：统计 worker 暖机失败 + 各 ref run 记录里属于冷启连接拒绝的次数。
+    connection_refused = sum(
+        1 for r in results for rec in r.run_records if _is_connection_refused(rec.get("error"))
+    )
+    connection_refused += sum(
+        1 for r in results if r.prewarm_error and _is_connection_refused(r.prewarm_error)
+    )
+    orchestration_connection_refused = sum(
+        1 for o in orchestrations if _is_connection_refused(o.error)
+    )
+    connection_refused += orchestration_connection_refused
+    prewarmed_workers = sum(1 for r in results if r.prewarmed)
+    minutes = elapsed_seconds / 60.0 if elapsed_seconds > 0 else 0.0
+    # P6 量化吞吐：完成/派工速率 + 错峰冷启实际收敛后的并发与等待，便于对比 throughput vs connection-refused。
+    throughput = {
+        "elapsedSeconds": round(elapsed_seconds, 3),
+        "completed": total_completed,
+        "leased": total_leased,
+        "completedPerMinute": round(total_completed / minutes, 3) if minutes > 0 else 0.0,
+        "leasedPerMinute": round(total_leased / minutes, 3) if minutes > 0 else 0.0,
+        "maxWorkersRequested": requested_workers,
+        "maxWorkersEffective": effective_workers,
+        "coldStartCap": cold_start_cap,
+        "staggerSeconds": round(stagger_seconds, 3),
+        "prewarm": enable_prewarm,
+        "prewarmedWorkers": prewarmed_workers,
+        "coldStartWaitSeconds": round(
+            cold_start_releaser.total_wait_seconds if cold_start_releaser is not None else 0.0, 3
+        ),
+        "connectionRefused": connection_refused,
+    }
     final_matrix = _load_run_matrix(plan_id)
     final_matrix["summary"] = {
         "assignments": len(assignments),
-        "leased": sum(r.leased for r in results),
+        "leased": total_leased,
         "completed": total_completed,
         "failed": total_failed,
         "attemptFailures": total_attempt_failures,
         "startupFailures": total_startup_failures,
         "orchestrated": total_orchestrated,
         "orchestrationFailed": total_orchestration_failed,
+        "connectionRefused": connection_refused,
         "startupFailureRate": round((total_startup_failures / max(1, total_completed + total_failed)), 4),
         "retryConvergence": round((total_completed / max(1, total_completed + total_failed)), 4),
         "spilloverRate": 0.0,
+        "throughput": throughput,
     }
     worker_records = [
         {
@@ -1330,6 +1531,9 @@ def run_fanout(
             "startupFailures": r.startup_failures,
             "orchestrated": r.orchestrated,
             "orchestrationFailed": r.orchestration_failed,
+            "prewarmed": r.prewarmed,
+            "prewarmError": r.prewarm_error,
+            "coldStartWaitSeconds": round(r.cold_start_wait_seconds, 3),
         }
         for r in results
     ]
@@ -1339,13 +1543,15 @@ def run_fanout(
         "planId": plan_id,
         "strategy": expansion["strategy"],
         "assignments": len(assignments),
-        "leased": sum(r.leased for r in results),
+        "leased": total_leased,
         "completed": total_completed,
         "failed": total_failed,
         "attemptFailures": total_attempt_failures,
         "startupFailures": total_startup_failures,
         "orchestrated": total_orchestrated,
         "orchestrationFailed": total_orchestration_failed,
+        "connectionRefused": connection_refused,
+        "throughput": throughput,
         "orchestrations": [
             {"taskId": o.task_id, "batchId": o.batch_id, "started": o.started,
              "reached": o.reached, "missing": o.missing, "error": o.error}
@@ -1441,6 +1647,18 @@ def main(argv: list[str] | None = None) -> int:
         "--orchestrator-until", dest="orchestrator_until", default=ORCHESTRATOR_UNTIL,
         help=f"orchestrator 推进到的 stage（默认 {ORCHESTRATOR_UNTIL}）",
     )
+    parser.add_argument(
+        "--worker-stagger-seconds", dest="worker_stagger_seconds", type=float, default=None,
+        help=f"错峰冷启：相邻 worker bridge 冷启最小间隔秒（默认 {WORKER_STAGGER_SECONDS}，0=不错峰）",
+    )
+    parser.add_argument(
+        "--cold-start-max-workers", dest="cold_start_max_workers", type=int, default=None,
+        help=f"冷启安全并发上限（默认 {COLD_START_MAX_WORKERS}，对齐 concurrency=2-3）",
+    )
+    parser.add_argument(
+        "--no-prewarm", dest="prewarm", action="store_false", default=True,
+        help="禁用 per-worker 预建 warm bridge（并行时默认开启）",
+    )
     args = parser.parse_args(argv)
 
     # by-partition 默认开启 orchestrator（与策略语义一致）；其它策略默认关闭，除非显式 --orchestrate。
@@ -1502,6 +1720,9 @@ def main(argv: list[str] | None = None) -> int:
         force_refs=[item.strip() for item in str(args.force_refs or "").split(",") if item.strip()] or None,
         source_task=args.source_task,
         source_batch=args.source_batch,
+        prewarm=bool(getattr(args, "prewarm", True)),
+        worker_stagger_seconds=getattr(args, "worker_stagger_seconds", None),
+        cold_start_max_workers=getattr(args, "cold_start_max_workers", None),
     )
     print(json.dumps(report, ensure_ascii=False, indent=2))
     # 退出码：运行失败或 orchestrator checkpoint 未到位=2，否则 0（startup 失败已退避入队，不视为致命）。

@@ -355,6 +355,10 @@ String _contentTypeLabel(String contentType) {
       return UITextConstants.homepageContentTypeVideo;
     case 'image':
       return UITextConstants.homepageContentTypeImage;
+    case 'review':
+      return UITextConstants.homepageContentTypeOpinion;
+    case 'question':
+      return UITextConstants.homepageContentTypeQuestion;
     default:
       return UITextConstants.homepageContentTypeDefault;
   }

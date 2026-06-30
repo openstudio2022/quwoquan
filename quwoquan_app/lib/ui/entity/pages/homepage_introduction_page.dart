@@ -12,6 +12,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_related_gro
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/ui/entity/providers/homepage_introduction_provider.dart';
 
@@ -74,7 +75,7 @@ class _HomepageIntroductionPageState
       homepageIntroductionProvider(widget.homepageId),
     );
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-    return CupertinoPageScaffold(
+    return AppScaffold(
       backgroundColor: SettingsSemanticConstants.pageBackground(isDark),
       navigationBar: CupertinoNavigationBar(
         middle: const Text('认识'),

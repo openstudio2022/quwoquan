@@ -12,8 +12,8 @@ scope:
   - workBrowser 统一深链入口
   - 顶部系统层只保留返回/更多
   - 更多菜单媒体筛选（全部作品/图片/视频/文章）
-  - 图片点状指示器、视频集胶囊、文章页尾页码
-  - 底部工具栏作者/关注/赞转评 + 交集摘要行
+  - 图片书物理翻页、视频集胶囊、文章页尾页码
+  - 底部工具栏作者/关注/赞转评 + 具象化交集句
   - 交集详情 sheet（点击后出现）
   - WorkBrowserItemDto 强类型契约数据流
   - 文章深色纸张主题系统、阅读设置与实体标签跳转
@@ -122,29 +122,39 @@ gwt_acceptance:
     - '[migrated_from_recorded_command] bash agent_ops/scaffold/verify_acceptance_standard.sh'
     - '[migrated_from_recorded_command] bash agent_ops/scaffold/verify_feature_tree_refactor.sh'
   GWT3:
-    title: 三类媒体内部导航状态信息
+    title: 三类媒体内部导航状态信息与图片书体验
     given:
     - 队列中存在 8 图作品、4 集视频作品、6 页文章作品。
     when:
     - 用户在各作品内部水平滑动。
     then:
-    - 图片作品在内容下方、标题上方显示点状指示器，最多 6 点且明确当前位置；单图无指示器。
+    - 图片作品使用 `components/media/image/book/ImageBookCanvas` 与 `components/media/shared/pageflip/MediaPageFlipBook` 形成物理翻书体验，不回退为 rubber-band PageView 主体验。
+    - 图片作品横滑按住时出现同源动态翻页层，正面、背面、底页三面材质齐备，翻页边界与折线可见，背面不得采样黑屏、空纹理或 loading 模糊材质。
+    - 图片书前翻绑定为 `recto=current.front / verso=next.back / bottom=next.front`，后翻绑定为 `recto=prev.front / verso=prev.back / bottom=current.front`；back 必须是独立暗淡背面纹理，不得复用 front。
+    - 横图、竖图、极端比例图统一 rasterize 成同一书页 logicalSize，图片自然尺寸只影响 cover 裁剪，不改变翻页几何。
+    - 图片加载中只作为静态等待态；active 翻页中如图片尚未解码或加载失败，必须输出同尺寸 failure front/back page surface，表达“图片未正确加载”的状态而非黑屏、跳页或 loading 模糊页。
+    - 图片作品在内容下方、标题上方显示点状页态，最多 6 点且明确当前位置；单图无指示器。
     - 视频作品显示自绘极简控制行（播放态/当前时间/进度/总时长）与 `视频集 · n/m ↔` 胶囊（时间轴下、标题上）；无点状指示器；单视频无胶囊；无平台默认控制层。
     - 文章作品使用深色纸张阅读，页码 `n / m` 位于正文后、作者栏前，chevron 可切页；顶部无页码。
     - 文章默认不使用白纸，翻页正面、背面、底页共用同一纸张 palette。
     done_when:
-    - widget 测试覆盖三类媒体导航状态信息位置与上限断言。
+    - local_contract 覆盖 `MediaPageFlipBook` 全屏左滑 0→1、右滑 1→0、前翻/后翻 held dynamic layer 三面 face binding、斜向拖拽 rotation 与同尺寸，且 `ImageBookCanvas` 会同步当前图片页码。
+    - local_contract 覆盖 `ImageBookPageSurfaceFactory` 横图、竖图、loading、failure 四类输入均输出同尺寸非空 front/back page surface，且 back 亮度低于 front；同时覆盖 `ImageBookCanvas` active texture builder 不返回 loading 材质。
+    - widget 测试覆盖 Work Browser 图片书组件接入、首图 held curl 与翻到下一张、末图继续左滑不退出、三类媒体导航状态信息位置与上限断言。
     - pageflip 测试覆盖文章深色纸张正反面材质同源。
     edge_cases:
     - 8 图作品只渲染 6 点，以首尾淡化表达更多。
+    - 图片滑到首末边界后，内容区横滑只触发图片书 overflow，不误触发主 tab/沉浸页退出。
     contract_refs:
     - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
     performance_points: []
     tests:
       planned:
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
-      recorded: []
-    status: pending_evidence
+      recorded:
+      - file: quwoquan_app/test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart
+    status: completed
     test_evidence:
       primary:
       - layer: local_contract
@@ -159,7 +169,13 @@ gwt_acceptance:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
+    - '[recorded_command] cd quwoquan_app && flutter analyze lib/components/media/shared/pageflip/media_page_flip_book.dart lib/components/media/image/book/image_book_canvas.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
+    - '[recorded_command] cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
+    - '[recorded_command] python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py'
+    - '[recorded_command] make verify-app-pageflip-back-mainline'
+    - '[recorded_command] python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py'
+    - '[recorded_command] cd quwoquan_app && flutter test test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart'
+    - '[recorded_command] cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
   GWT4:
     title: 媒体筛选进入更多菜单
     given:
@@ -198,16 +214,16 @@ gwt_acceptance:
     - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
     - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/content/post/contract/post_ui_config_contract_test.dart'
   GWT5:
-    title: 交集作为推荐解释层
+    title: 具象化交集句作为推荐解释层
     given:
-    - 当前作品契约下发交集摘要与详情列表。
+    - 当前作品契约下发 `IntersectionReason.primaryText/primarySpans`、target 与详情列表。
     when:
-    - 用户查看默认态并点击 `N 个交集 >`。
+    - 用户查看默认态并点击底部具象化交集句或其中可导航片段。
     then:
-    - 默认态只在作者区域显示 `N 个交集 >` 摘要；内容层无交集 chip/卡片/浮层。
-    - 点击后弹出「为什么推荐给你」详情 sheet，详情项文案来自云侧投影。
+    - 默认态只在底部工具栏最下方显示云侧具象化交集句；不显示 `N 个交集 >` 摘要作为主表达；内容层无交集 chip/卡片/浮层。
+    - 点击可导航片段进入对应主页/列表；整句 fallback 弹出「为什么推荐给你」详情 sheet，详情项文案来自云侧投影。
     done_when:
-    - widget 测试断言默认态摘要、点击后详情、内容层无交集元素。
+    - widget 测试断言默认态具象化交集句、点击后详情/导航降级、内容层无交集元素。
     edge_cases:
     - 无交集数据时摘要行隐藏。
     contract_refs:

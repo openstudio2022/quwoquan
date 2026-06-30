@@ -578,9 +578,17 @@ func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) 
 	case "sharedEntityAttention":
 		return fmt.Sprintf("你和%s共同关注了这里", representativeSubject(r, anchor, n))
 	case "followeeVisited":
-		return fmt.Sprintf("%s来过这里", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"))
+		objectName := concreteObjectNameForReason(r)
+		if objectName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s来过「%s」", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"), objectName)
 	case "followeeInObject":
-		return fmt.Sprintf("%s在这里", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"))
+		objectName := concreteObjectNameForReason(r)
+		if objectName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s在「%s」", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"), objectName)
 	case "followeeViewing":
 		return fmt.Sprintf("%s最近看过这些内容", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"))
 	case "followeeDiscussedThis":
@@ -592,6 +600,16 @@ func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) 
 		return fmt.Sprintf("你和%s都关注这些主题", representativeSubject(r, anchor, n))
 	default:
 		return ""
+	}
+}
+
+func concreteObjectNameForReason(r IntersectionReasonView) string {
+	name := strings.TrimSpace(r.DisplayName)
+	switch name {
+	case "", "同游", "同好", "同校", "这里", "这个对象":
+		return ""
+	default:
+		return name
 	}
 }
 

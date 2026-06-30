@@ -17,7 +17,7 @@
 
 ## 范围
 
-- 我的交集卡：标题由「为什么推荐这里」改为「我的交集」，与我的主页同壳，渲染 `ObjectIntersectionPreviewCard`（共享积木，objectBType=homepage、`objectSharedReasonsProvider` 单一真相源）：单列预览句（蓝色可点击锚点）+ 弱入口「查看全部」；可见结论只读 `IntersectionReason.primaryText/primarySpans`，禁止用 `EvidenceGroup` 或 `intersectionPoints` 本地拼主句；无真实交集时克制空态不占位。
+- 我的交集卡：标题统一为「我的交集」，与我的主页同壳，渲染 `ObjectIntersectionPreviewCard`（共享积木，objectBType=homepage、`objectSharedReasonsProvider` 单一真相源）：单列预览句（蓝色可点击锚点）+ 弱入口「查看全部」；可见结论只读 `IntersectionReason.primaryText/primarySpans`，禁止用 `EvidenceGroup` 或 `intersectionPoints` 本地拼主句；无真实交集时克制空态不占位。
 - 影响力卡（新增）：标题「影响力」，与「我的影响力」（`AuthorImpactCard`）/圈子影响卡同构，渲染 `IntersectionStatementCard` + `entityImpactProvider`；逐条只读云侧 `EntityImpactItem.primaryText/primarySpans`，句内数字可点击下钻「影响明细」sheet（来源摘要 + 样本视觉）；无可枚举影响事实时不展示，不用主观营销语。
 - 关于这里卡：标题「关于这里」；正文 2~4 行 + 缩略图；「查看更多介绍」进介绍详情页（下沉到双模块之下）。
 - 核心动作：主按钮「关注」，次按钮由「私信」改为「发记录」（围绕这里沉淀记录）；移除首屏常驻「想去·正在去·结伴」入口（不再首屏占位）。

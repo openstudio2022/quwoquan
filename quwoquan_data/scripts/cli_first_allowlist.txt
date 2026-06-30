@@ -41,3 +41,6 @@ governance/creator_pool/retire_legacy_prefab_users.py
 # 实体主页结构 + 配图语义验收门：经 verify_quwoquan_data.sh 调度（新批次 opt-in），
 # __main__ 仅便于单独排障。
 verify/verify_homepage_structure_and_assets.py
+# P1 提示词模板 lint 门（占位符闭合/vars 必填/行数预算/scripts 禁硬编码 prompt 正文 ratchet）：
+# 经 verify_quwoquan_data.sh 调度，__main__ 仅便于单独排障；属 gate 类（非内容生产业务入口）。
+verify/verify_prompt_templates.py

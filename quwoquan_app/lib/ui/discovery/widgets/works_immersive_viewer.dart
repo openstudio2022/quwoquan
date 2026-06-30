@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'dart:math' show exp, max;
+import 'dart:math' show max;
 import 'dart:ui' show FontFeature, ImageFilter;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/scheduler.dart';
@@ -17,9 +16,13 @@ import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/work_browser_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/work_browser_media_item_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:video_player/video_player.dart'
     show VideoPlayerController, VideoPlayerValue;
+import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
+import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/immersive_comment_split_sheet.dart';
@@ -82,6 +85,94 @@ import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy
 part 'works_immersive_viewer_controls.dart';
 part 'works_immersive_viewer_canvas.dart';
 part 'works_immersive_viewer_engagement_actions.dart';
+
+const double _worksImmersiveVerticalCommitFraction = 0.20;
+
+class _WorksImmersiveVerticalPagePhysics extends PageScrollPhysics {
+  const _WorksImmersiveVerticalPagePhysics({
+    required this.currentPage,
+    super.parent,
+  });
+
+  final int Function() currentPage;
+
+  @override
+  _WorksImmersiveVerticalPagePhysics applyTo(ScrollPhysics? ancestor) {
+    return _WorksImmersiveVerticalPagePhysics(
+      currentPage: currentPage,
+      parent: buildParent(ancestor),
+    );
+  }
+
+  @override
+  Simulation? createBallisticSimulation(
+    ScrollMetrics position,
+    double velocity,
+  ) {
+    if ((velocity <= 0.0 && position.pixels <= position.minScrollExtent) ||
+        (velocity >= 0.0 && position.pixels >= position.maxScrollExtent)) {
+      return super.createBallisticSimulation(position, velocity);
+    }
+    final tolerance = toleranceFor(position);
+    final target = _targetPixels(position, tolerance, velocity);
+    if ((target - position.pixels).abs() < tolerance.distance) {
+      return null;
+    }
+    return ScrollSpringSimulation(
+      spring,
+      position.pixels,
+      target,
+      velocity,
+      tolerance: tolerance,
+    );
+  }
+
+  double _targetPixels(
+    ScrollMetrics position,
+    Tolerance tolerance,
+    double velocity,
+  ) {
+    final anchorPage = currentPage().toDouble();
+    final currentScrollPage = _pageForPixels(position, position.pixels);
+    var targetPage = anchorPage;
+    final deltaFromAnchor = currentScrollPage - anchorPage;
+    if (deltaFromAnchor >= _worksImmersiveVerticalCommitFraction) {
+      targetPage = anchorPage + 1;
+    } else if (deltaFromAnchor <= -_worksImmersiveVerticalCommitFraction) {
+      targetPage = anchorPage - 1;
+    } else if (velocity < -tolerance.velocity) {
+      targetPage = anchorPage + 1;
+    } else if (velocity > tolerance.velocity) {
+      targetPage = anchorPage - 1;
+    }
+
+    final minPage = _pageForPixels(position, position.minScrollExtent);
+    final maxPage = _pageForPixels(position, position.maxScrollExtent);
+    final clampedPage = targetPage.clamp(minPage, maxPage).toDouble();
+    return _pixelsForPage(
+      position,
+      clampedPage,
+    ).clamp(position.minScrollExtent, position.maxScrollExtent).toDouble();
+  }
+
+  double _pageForPixels(ScrollMetrics position, double pixels) {
+    if (position is PageMetrics && position.page != null) {
+      final extent = _pageExtent(position);
+      return extent <= 0 ? 0 : pixels / extent;
+    }
+    final viewport = position.viewportDimension;
+    return viewport <= 0 ? 0 : pixels / viewport;
+  }
+
+  double _pixelsForPage(ScrollMetrics position, double page) {
+    return page * _pageExtent(position);
+  }
+
+  double _pageExtent(ScrollMetrics position) {
+    final fraction = position is PageMetrics ? position.viewportFraction : 1.0;
+    return max(1.0, position.viewportDimension * fraction);
+  }
+}
 
 class WorksImmersiveViewer extends ConsumerStatefulWidget {
   const WorksImmersiveViewer({
@@ -1285,9 +1376,14 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return;
     }
     if (targetType != 'homepage' && targetType != 'entity') return;
-    context.push(
-      AppRoutePaths.homepageDetail(id: _homepageIdForArticleEntity(targetId)),
+    final homepageId = _homepageIdForArticleEntity(
+      targetId,
+      allowDirectHomepageId: targetType == 'homepage',
     );
+    if (homepageId == null || homepageId.isEmpty) {
+      return;
+    }
+    context.push(AppRoutePaths.homepageDetail(id: homepageId));
   }
 
   String _tagRefForArticleMention(String targetId) {
@@ -1297,18 +1393,24 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         : normalized;
   }
 
-  String _homepageIdForArticleEntity(String targetId) {
+  String? _homepageIdForArticleEntity(
+    String targetId, {
+    required bool allowDirectHomepageId,
+  }) {
     final normalized = targetId.trim();
-    if (!normalized.startsWith('entity:')) {
-      return normalized;
-    }
     final seed = ContractFixtureRuntimeLoader.entitySeedSet();
     final homepages = seed?['homepages'];
     if (homepages is List) {
       for (final raw in homepages) {
         if (raw is! Map) continue;
         final item = raw.cast<String, dynamic>();
-        if (item['canonicalEntityId']?.toString() == normalized) {
+        final candidates = <String>{
+          item['canonicalEntityId']?.toString().trim() ?? '',
+          item['homepageId']?.toString().trim() ?? '',
+          item['id']?.toString().trim() ?? '',
+          item['title']?.toString().trim() ?? '',
+        }..removeWhere((item) => item.isEmpty);
+        if (candidates.contains(normalized)) {
           final homepageId = item['homepageId']?.toString() ?? '';
           if (homepageId.isNotEmpty) {
             return homepageId;
@@ -1316,7 +1418,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         }
       }
     }
-    return normalized;
+    if (allowDirectHomepageId && !normalized.startsWith('entity:')) {
+      return normalized;
+    }
+    return null;
   }
 
   bool _showsCaptionOverlay(PostBaseDto post) {
@@ -1396,11 +1501,15 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   // ── 交集（推荐解释层）────────────────────────────────────────
 
-  /// 作者区交集摘要：`N 个交集`；无交集证据返回空串（不渲染入口）。
-  String _intersectionSummaryFor(PostBaseDto post) {
-    final count = post.intersectionReasons?.length ?? 0;
-    if (count <= 0) return '';
-    return DiscoveryFeedText.intersectionEntrySummary(count);
+  IntersectionReason? _primaryIntersectionReasonFor(PostBaseDto post) {
+    final reasons = post.intersectionReasons ?? const <IntersectionReason>[];
+    for (final reason in reasons) {
+      if (reason.primarySpans.isNotEmpty ||
+          reason.primaryText.trim().isNotEmpty) {
+        return reason;
+      }
+    }
+    return null;
   }
 
   /// 点击交集入口弹出推荐解释层（V1.0：解释层弹出，禁止卡片/标签遮挡内容）。
@@ -1464,6 +1573,98 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       }
     }
     return refs.toList(growable: false);
+  }
+
+  void _openIntersectionSpan(
+    BuildContext context,
+    IntersectionReason reason,
+    IntersectionTextSpan span,
+  ) {
+    final navigator = IntersectionTargetNavigator(
+      onTrack: (target, attribution) {
+        ref
+            .read(contentBehaviorTrackerProvider)
+            .trackTagClick(
+              target.objectId,
+              referralSource: ReferralSource.organicFeed,
+              tags: attribution.tagRefs,
+              intersectionId: attribution.intersectionId,
+              intersectionDimension: attribution.dimension,
+              intersectionSourceRef: attribution.sourceRef,
+              intersectionTagRefs: attribution.tagRefs,
+              intersectionClass: attribution.intersectionClass,
+              intersectionEvidenceId: attribution.evidenceId,
+            );
+      },
+    );
+    navigator.open(
+      context,
+      span.target,
+      sourceRef: reason.source,
+      attribution: _intersectionNavAttribution(reason),
+    );
+  }
+
+  void _openIntersectionFallback(
+    BuildContext context,
+    PostBaseDto post,
+    IntersectionReason reason,
+  ) {
+    final navigator = IntersectionTargetNavigator(
+      onTrack: (target, attribution) {
+        ref
+            .read(contentBehaviorTrackerProvider)
+            .trackTagClick(
+              target.objectId,
+              referralSource: ReferralSource.organicFeed,
+              tags: attribution.tagRefs,
+              intersectionId: attribution.intersectionId,
+              intersectionDimension: attribution.dimension,
+              intersectionSourceRef: attribution.sourceRef,
+              intersectionTagRefs: attribution.tagRefs,
+              intersectionClass: attribution.intersectionClass,
+              intersectionEvidenceId: attribution.evidenceId,
+            );
+      },
+    );
+    for (final visual in reason.sampleVisuals) {
+      if (navigator.open(
+        context,
+        visual.target,
+        sourceRef: reason.source,
+        attribution: _intersectionNavAttribution(reason),
+      )) {
+        return;
+      }
+    }
+    final dimension = reason.dimension.trim();
+    if (dimension.isNotEmpty &&
+        navigator.open(
+          context,
+          IntersectionTarget(
+            objectId: dimension,
+            objectKind: 'tag',
+            routeId: 'myIntersections',
+          ),
+          sourceRef: reason.source,
+          attribution: _intersectionNavAttribution(reason),
+        )) {
+      return;
+    }
+    _showIntersectionDetail(context, post);
+  }
+
+  IntersectionNavAttribution _intersectionNavAttribution(
+    IntersectionReason reason,
+  ) {
+    return IntersectionNavAttribution(
+      intersectionId: reason.intersectionId,
+      dimension: reason.dimension,
+      intersectionClass: reason.intersectionClass,
+      sourceRef: reason.source,
+      tagRefs: reason.tagRefs,
+      evidenceId: reason.pointSummarySnapshotId,
+    );
   }
 
   /// 视频画布上报当前激活的播放控制器（stageKey = postId-episodeIndex）。
@@ -1991,7 +2192,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   child: PageView.builder(
                     controller: _pageController,
                     scrollDirection: Axis.vertical,
-                    physics: const PageScrollPhysics(),
+                    physics: _WorksImmersiveVerticalPagePhysics(
+                      currentPage: () => _currentPage,
+                    ),
                     itemCount: posts.isEmpty
                         ? 1
                         : (verticalFlowDisabled
@@ -2224,62 +2427,84 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: ImmersiveEngagementBar(
-                    layoutSpec: currentEngagementLayoutSpec,
-                    avatarUrl: currentPost.avatarUrl,
-                    displayName: currentPost.displayName,
-                    authorBadge: _workItemFor(currentPost).authorBadge ?? '',
-                    likeCount: effectivePostLikeCount(
-                      ref,
-                      currentPost.id,
-                      fallback: currentPost.likeCount,
-                    ),
-                    shareCount: effectivePostShareCount(
-                      ref,
-                      currentPost.id,
-                      fallback: currentPost.shareCount,
-                    ),
-                    commentCount: effectivePostCommentCount(
-                      ref,
-                      currentPost.id,
-                      fallback: currentPost.commentCount,
-                    ),
-                    isLiked: effectivePostLiked(ref, currentPost.id),
-                    isFollowing: effectiveProfileFollowing(
-                      ref,
-                      currentPost.subAccountId,
-                    ),
-                    intersectionSummary: _intersectionSummaryFor(currentPost),
-                    onIntersectionTap: () =>
-                        _showIntersectionDetail(context, currentPost),
-                    onUserTap: () {
-                      // §7.3 旅程无断点：携该作品的最强证据组 kind 跳作者主页高亮。
-                      ref
-                          .read(intersectionHighlightIntentProvider.notifier)
-                          .primeFromReasons(
-                            currentPost.subAccountId,
-                            currentPost.intersectionReasons,
-                          );
-                      widget.onUserTap(
-                        currentPost.subAccountId,
+                  child: Builder(
+                    builder: (context) {
+                      final intersectionReason = _primaryIntersectionReasonFor(
+                        currentPost,
+                      );
+                      return ImmersiveEngagementBar(
+                        layoutSpec: currentEngagementLayoutSpec,
                         avatarUrl: currentPost.avatarUrl,
                         displayName: currentPost.displayName,
-                        backgroundUrl: currentPost.authorBackgroundUrl,
+                        authorBadge:
+                            _workItemFor(currentPost).authorBadge ?? '',
+                        likeCount: effectivePostLikeCount(
+                          ref,
+                          currentPost.id,
+                          fallback: currentPost.likeCount,
+                        ),
+                        shareCount: effectivePostShareCount(
+                          ref,
+                          currentPost.id,
+                          fallback: currentPost.shareCount,
+                        ),
+                        commentCount: effectivePostCommentCount(
+                          ref,
+                          currentPost.id,
+                          fallback: currentPost.commentCount,
+                        ),
+                        isLiked: effectivePostLiked(ref, currentPost.id),
+                        isFollowing: effectiveProfileFollowing(
+                          ref,
+                          currentPost.subAccountId,
+                        ),
+                        intersectionReason: intersectionReason,
+                        onIntersectionSpanTap: intersectionReason == null
+                            ? null
+                            : (span) => _openIntersectionSpan(
+                                context,
+                                intersectionReason,
+                                span,
+                              ),
+                        onIntersectionFallbackTap: intersectionReason == null
+                            ? null
+                            : () => _openIntersectionFallback(
+                                context,
+                                currentPost,
+                                intersectionReason,
+                              ),
+                        onUserTap: () {
+                          // §7.3 旅程无断点：携该作品的最强证据组 kind 跳作者主页高亮。
+                          ref
+                              .read(
+                                intersectionHighlightIntentProvider.notifier,
+                              )
+                              .primeFromReasons(
+                                currentPost.subAccountId,
+                                currentPost.intersectionReasons,
+                              );
+                          widget.onUserTap(
+                            currentPost.subAccountId,
+                            avatarUrl: currentPost.avatarUrl,
+                            displayName: currentPost.displayName,
+                            backgroundUrl: currentPost.authorBackgroundUrl,
+                          );
+                        },
+                        onFollowTap: () => _onFollow(currentPost),
+                        onLikeTap: () => _onLike(currentPost),
+                        onCommentTap: () => _openCommentFor(currentPost.id),
+                        onShareTap: () => _sharePost(
+                          context,
+                          currentPost,
+                          enableIdentityTemplate: ref.read(
+                            contentFeatureFlagProvider(
+                              'enable_identity_share_template',
+                            ),
+                          ),
+                        ),
+                        onRevealSystemNav: widget.onRevealSystemNav,
                       );
                     },
-                    onFollowTap: () => _onFollow(currentPost),
-                    onLikeTap: () => _onLike(currentPost),
-                    onCommentTap: () => _openCommentFor(currentPost.id),
-                    onShareTap: () => _sharePost(
-                      context,
-                      currentPost,
-                      enableIdentityTemplate: ref.read(
-                        contentFeatureFlagProvider(
-                          'enable_identity_share_template',
-                        ),
-                      ),
-                    ),
-                    onRevealSystemNav: widget.onRevealSystemNav,
                   ),
                 ),
             ],
@@ -2337,7 +2562,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 const CupertinoActivityIndicator(radius: 16),
                 SizedBox(height: AppSpacing.containerSm),
                 Text(
-                  '正在加载更多精品内容',
+                  UITextConstants.worksVideoBookLoadingTitle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.white,
@@ -2347,7 +2572,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 ),
                 SizedBox(height: AppSpacing.intraGroupSm),
                 Text(
-                  '继续停留即可自动预取新一批内容',
+                  UITextConstants.worksVideoBookLoadingSubtitle,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.white.withValues(alpha: 0.72),
@@ -2367,8 +2592,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     required bool enableArticlePageCurl,
   }) {
     if (_isImageLikePost(post)) {
-      return _WorksPhotoCanvas(
-        post: post,
+      return ImageBookCanvas(
+        imageUrls: _imageUrlsForPost(post),
         initialIndex: _photoInnerIndex[post.id] ?? _defaultImageIndexFor(post),
         onImageChanged: (index) =>
             setState(() => _photoInnerIndex[post.id] = index),

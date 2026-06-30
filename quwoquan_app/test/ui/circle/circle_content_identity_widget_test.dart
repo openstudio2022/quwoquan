@@ -52,12 +52,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 二级过滤收敛为最右漏斗入口（默认「全部」）。
-    expect(find.text('全部'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey<String>('circle-creations-filter-button')),
-    );
-    await tester.pumpAndSettle();
+    // 二级过滤改回横向胶囊条：全部子页签直接平铺可见（默认「全部」选中）。
+    expect(find.text('全部'), findsAtLeastNWidgets(1));
     expect(find.text('图片'), findsAtLeastNWidgets(1));
     expect(find.text('视频'), findsAtLeastNWidgets(1));
     // 「长文」是与用户主页同源的 metadata 子页签 creation_sub_text 文案
@@ -86,10 +82,6 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('列表视图'));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey<String>('circle-creations-filter-button')),
-    );
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(

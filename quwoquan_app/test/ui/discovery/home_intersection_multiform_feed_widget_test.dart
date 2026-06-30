@@ -84,6 +84,52 @@ IntersectionReason _reason({String intersectionClass = 'fact'}) {
   );
 }
 
+IntersectionReason _photoSpotReason() {
+  return IntersectionReason(
+    dimension: 'photo_work',
+    intersectionId: 'ix_post_photo_spot',
+    intersectionClass: 'fact',
+    objectKind: 'photo_spot',
+    source: 'alpha_showcase',
+    actionTargetId: 'fixture_homepage_photo_spot_hengshu_studio',
+    pointSummarySnapshotId: 'snap_photo_spot',
+    primaryText: '你与山川手账等 7 位都关注「横竖影像馆取景地」',
+    primarySpans: <IntersectionTextSpan>[
+      IntersectionTextSpan(text: '你与', role: 'plain'),
+      IntersectionTextSpan(
+        text: '山川手账',
+        role: 'object',
+        target: IntersectionTarget(
+          objectId: 'fixture_user_shanchuan',
+          objectKind: 'person',
+          routeId: 'userProfile',
+        ),
+      ),
+      IntersectionTextSpan(text: '等 ', role: 'plain'),
+      IntersectionTextSpan(
+        text: '7',
+        role: 'count',
+        target: IntersectionTarget(
+          objectId: 'photo_work',
+          objectKind: 'tag',
+          routeId: 'myIntersections',
+        ),
+      ),
+      IntersectionTextSpan(text: ' 位都关注「', role: 'plain'),
+      IntersectionTextSpan(
+        text: '横竖影像馆取景地',
+        role: 'object',
+        target: IntersectionTarget(
+          objectId: 'fixture_homepage_photo_spot_hengshu_studio',
+          objectKind: 'photo_spot',
+          routeId: 'homepageDetail',
+        ),
+      ),
+      IntersectionTextSpan(text: '」', role: 'plain'),
+    ],
+  );
+}
+
 MicroPostDto _microPost({
   List<String> imageUrls = const <String>[
     'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
@@ -124,7 +170,9 @@ PhotoPostDto _photoPost({
   List<String> imageUrls = const <String>[
     'media/image/s/archived-image/post/fixture_photo_002/v1/cover.png',
   ],
+  IntersectionReason? reason,
 }) {
+  final effectiveReason = reason ?? _reason();
   return PhotoPostDto(
     id: 'photo_${width}_${height}_${imageUrls.length}',
     type: 'photo',
@@ -148,7 +196,7 @@ PhotoPostDto _photoPost({
     createdAt: DateTime(2026),
     updatedAt: null,
     publishedAt: null,
-    intersectionReasons: <IntersectionReason>[_reason()],
+    intersectionReasons: <IntersectionReason>[effectiveReason],
   );
 }
 
@@ -629,6 +677,34 @@ void main() {
     );
     expect(nameSpan.recognizer, isA<TapGestureRecognizer>());
     expect(countSpan.recognizer, isA<TapGestureRecognizer>());
+  });
+
+  testWidgets('首页实体对象并入交集句，不再单独渲染孤立实体标签', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      _buildFeed(
+        _photoPost(width: 1080, height: 1920, reason: _photoSpotReason()),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey<String>('home-connection-badges-row')),
+      findsNothing,
+    );
+    final richText = tester.widget<RichText>(
+      find.descendant(
+        of: find.byType(InteractiveIntersectionText),
+        matching: find.byType(RichText),
+      ),
+    );
+    expect(richText.text.toPlainText(), '你与山川手账等 7 位都关注「横竖影像馆取景地」');
+    expect(
+      _spanByText(richText, '横竖影像馆取景地').recognizer,
+      isA<TapGestureRecognizer>(),
+    );
   });
 
   testWidgets('个人记录图片按 1-9+ 图规则展示并在末格聚合剩余张数', (tester) async {

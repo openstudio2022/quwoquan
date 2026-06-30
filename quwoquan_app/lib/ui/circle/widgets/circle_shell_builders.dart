@@ -40,6 +40,7 @@ extension _CircleShellBuilders on _CircleShellState {
     required String? coverUrl,
   }) {
     final circle = state.circleData;
+    final statItems = _circleStatItems(state);
     final summarySurface = AppColors.iosProfileSurface(context);
     final summaryBorder = AppColors.iosSeparator(
       context,
@@ -48,7 +49,7 @@ extension _CircleShellBuilders on _CircleShellState {
         ? AppColors.black.withValues(alpha: 0.18)
         : AppColors.black.withValues(alpha: 0.05);
 
-    return Container(
+    final identityCard = Container(
       decoration: BoxDecoration(
         color: summarySurface,
         borderRadius: BorderRadius.circular(_CircleShellState._cardRadius),
@@ -75,16 +76,25 @@ extension _CircleShellBuilders on _CircleShellState {
               isDark: isDark,
               avatarUrl: circle?.iconUrl ?? coverUrl,
               name: circleName,
-              description: circle?.description,
-              tags: circle?.tags ?? const [],
-              badgeLabel: _badgeLabel(state),
-              metaLine: _metaLine(state),
-              onTagTap: (tag) {
-                ref
-                    .read(contentEngagementTrackerProvider)
-                    .trackTagClick(tag, fromContentId: widget.circleId);
-              },
+              identityTags: circle?.tags ?? const <String>[],
+              verified: _isVerified(state),
             ),
+            if ((circle?.description ?? '').trim().isNotEmpty) ...[
+              SizedBox(height: AppSpacing.containerSm),
+              ObjectSloganCard(
+                isDark: isDark,
+                bio: circle?.description,
+                cardKey: const ValueKey<String>('circle-slogan-card'),
+              ),
+            ],
+            if (statItems.isNotEmpty) ...[
+              SizedBox(height: AppSpacing.containerSm),
+              ObjectStatsRow(
+                isDark: isDark,
+                items: statItems,
+                rowKey: const ValueKey<String>('circle-stats-inline-row'),
+              ),
+            ],
             SizedBox(height: AppSpacing.md),
             CircleActionBar(
               isDark: isDark,
@@ -97,34 +107,40 @@ extension _CircleShellBuilders on _CircleShellState {
                   : () => _gatedJoinCircle(context, notifier),
               onEnterDiscussion: () => _changeTab('discussion'),
             ),
-            SizedBox(height: AppSpacing.sm),
-            _buildIntersectionCard(isDark),
-            _buildCircleImpactCard(isDark),
-            if (state.error != null && state.error!.trim().isNotEmpty) ...[
-              SizedBox(height: AppSpacing.sm),
-              AppSectionErrorCard(
-                semantic: UiErrorSemantic(
-                  category: UiErrorCategory.sectionLoad,
-                  scope: UiErrorScope.section,
-                  title: UITextConstants.circleInfoUnavailableTitle,
-                  message: state.error!,
-                  primaryAction: const UiErrorAction(
-                    type: UiErrorActionType.retry,
-                    label: UITextConstants.tryAgain,
-                  ),
-                ),
-                margin: EdgeInsets.zero,
-                onAction: (action) async {
-                  if (action.type == UiErrorActionType.retry ||
-                      action.type == UiErrorActionType.resubmit) {
-                    await notifier.loadCircle();
-                  }
-                },
-              ),
-            ],
           ],
         ),
       ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        identityCard,
+        if (circle != null) ...<Widget>[
+          SizedBox(height: AppSpacing.containerSm),
+          _buildIntersectionCard(isDark),
+          SizedBox(height: AppSpacing.containerSm),
+          _buildCircleImpactCard(isDark),
+        ],
+        if (circle != null && state.loadError != null) ...<Widget>[
+          SizedBox(height: AppSpacing.containerSm),
+          AppSectionErrorCard(
+            semantic: runtimeErrorSemantic(
+              context,
+              error: state.loadError!,
+              category: UiErrorCategory.sectionLoad,
+              scope: UiErrorScope.section,
+              appearanceMode: widget.sourceAppearanceMode,
+            ),
+            margin: EdgeInsets.zero,
+            onAction: (action) async {
+              if (action.type == UiErrorActionType.retry ||
+                  action.type == UiErrorActionType.resubmit) {
+                await notifier.loadCircle();
+              }
+            },
+          ),
+        ],
+      ],
     );
   }
 
@@ -138,6 +154,7 @@ extension _CircleShellBuilders on _CircleShellState {
       referralSource: ReferralSource.circlePost,
       cardKey: const ValueKey<String>('circle-my-intersection-card'),
       emptyKey: const ValueKey<String>('circle-my-intersection-empty'),
+      topPadding: false,
     );
   }
 
@@ -149,6 +166,7 @@ extension _CircleShellBuilders on _CircleShellState {
       referralSource: ReferralSource.circlePost,
       enumerableHint: UITextConstants.impactEnumerableHintCircle,
       cardKey: const ValueKey<String>('circle-impact-card'),
+      topDivider: false,
     );
   }
 
@@ -162,12 +180,12 @@ extension _CircleShellBuilders on _CircleShellState {
           top: 0,
           bottom: -_CircleShellState._surfaceBridge,
           child: coverUrl != null && coverUrl.isNotEmpty
-              ? AppCachedNetworkImage(
-                  imageUrl: coverUrl,
+              ? AppMediaImage(
+                  imageSource: coverUrl,
                   fit: BoxFit.cover,
-                  errorWidget: ColoredBox(color: bg),
+                  errorWidget: _buildCoverFallback(bg),
                 )
-              : ColoredBox(color: bg.withValues(alpha: 0.75)),
+              : _buildCoverFallback(bg),
         ),
         Positioned(
           left: 0,
@@ -190,6 +208,23 @@ extension _CircleShellBuilders on _CircleShellState {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCoverFallback(Color bg) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            bg.withValues(alpha: 0.78),
+            AppColors.iosAccent(context).withValues(alpha: 0.18),
+            bg.withValues(alpha: 0.92),
+          ],
+          stops: const [0.0, 0.48, 1.0],
+        ),
+      ),
     );
   }
 
@@ -336,20 +371,22 @@ extension _CircleShellBuilders on _CircleShellState {
                             ),
                           ),
                         ),
-                        SizedBox(
-                          width: slotWidth,
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: _CircleToolbarButton(
-                              icon: CupertinoIcons.ellipsis,
-                              onPressed: () => _showMoreOptions(
-                                context,
-                                circleName: circleName,
-                                state: state,
-                              ),
-                              backgroundColor: actionBackground,
-                              foregroundColor: compactForeground,
-                            ),
+                        // 高保顶栏右侧四图标：搜索 / AI / 分享 / 更多（⚙︎=圈子操作面板）。
+                        ObjectChromeActions(
+                          foregroundColor: compactForeground,
+                          backgroundColor: actionBackground,
+                          onSearch: () => GlobalSearchLauncher.open(
+                            context,
+                            initialScope: GlobalSearchScope.circles.searchScope,
+                          ),
+                          onAssistant: (ref) =>
+                              GlobalAssistantLauncher.open(context, ref),
+                          onShare: () =>
+                              AppToast.show(context, UITextConstants.share),
+                          onMore: () => _showMoreOptions(
+                            context,
+                            circleName: circleName,
+                            state: state,
                           ),
                         ),
                       ],
@@ -441,35 +478,11 @@ extension _CircleShellBuilders on _CircleShellState {
                 keySuffix: _activeTabId,
               )
             : Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  AppSpacing.containerSm,
-                  AppSpacing.containerMd,
-                  0,
-                ),
-                child: Column(
-                  children: [
-                    _SectionSurface(
-                      isDark: isDark,
-                      child: SectionChat(
-                        circleId: widget.circleId,
-                        conversationId:
-                            state.defaultPublicGroup?.conversationId,
-                        isDark: isDark,
-                      ),
-                    ),
-                    SizedBox(height: AppSpacing.md),
-                    _SectionSurface(
-                      isDark: isDark,
-                      child: SectionStorage(
-                        circleId: widget.circleId,
-                        isDark: isDark,
-                        storageUsedBytes: circle?.storageUsedBytes ?? 0,
-                        storageQuotaBytes:
-                            circle?.storageQuotaBytes ?? 1073741824,
-                      ),
-                    ),
-                  ],
+                padding: EdgeInsets.only(top: AppSpacing.containerSm),
+                child: SectionChat(
+                  circleId: widget.circleId,
+                  conversationId: state.defaultPublicGroup?.conversationId,
+                  isDark: isDark,
                 ),
               ),
       'members' =>
@@ -483,18 +496,10 @@ extension _CircleShellBuilders on _CircleShellState {
                 keySuffix: _activeTabId,
               )
             : Padding(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  AppSpacing.containerSm,
-                  AppSpacing.containerMd,
-                  0,
-                ),
-                child: _SectionSurface(
+                padding: EdgeInsets.only(top: AppSpacing.containerSm),
+                child: SectionMembers(
+                  circleId: widget.circleId,
                   isDark: isDark,
-                  child: SectionMembers(
-                    circleId: widget.circleId,
-                    isDark: isDark,
-                  ),
                 ),
               ),
       _ => const SizedBox.shrink(),
@@ -506,4 +511,3 @@ extension _CircleShellBuilders on _CircleShellState {
     );
   }
 }
-

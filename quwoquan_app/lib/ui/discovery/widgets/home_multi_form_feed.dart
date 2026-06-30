@@ -20,11 +20,10 @@ import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.d
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
-import 'package:quwoquan_app/core/constants/design_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/cloud/runtime/recommendation/intersection_action_keys.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
-import 'package:quwoquan_app/core/constants/plaza_text_constants.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';

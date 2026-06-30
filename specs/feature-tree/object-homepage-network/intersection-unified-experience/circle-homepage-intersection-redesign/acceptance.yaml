@@ -9,8 +9,8 @@ node:
 scope:
   summary: 圈子主页与我的主页同壳同语义 token 重做为「身份 → 我的交集 → 影响力 → 记录/讨论/成员」双模块结构。
   in_scope:
-  - 我的交集卡标题由「为什么推荐这个圈子」改「我的交集」，渲染共享 ObjectIntersectionPreviewCard（objectBType=circle、objectSharedReasonsProvider）：单列预览句 + 蓝锚点 + 查看全部。
-  - 影响力卡标题由「这个圈子帮助了很多人」改「影响力」，AuthorImpactCard 同构、去好友化/去收藏，circleImpactProvider 单一真相源。
+  - 我的交集卡标题统一为「我的交集」，渲染共享 ObjectIntersectionPreviewCard（objectBType=circle、objectSharedReasonsProvider）：单列预览句 + 蓝锚点 + 查看全部。
+  - 影响力卡标题统一为「影响力」，AuthorImpactCard 同构、去好友化/去收藏，circleImpactProvider 单一真相源。
   - 移除头部成员头像簇（你认识的人收敛进我的交集模块）；次按钮由私信改「进入讨论」（切讨论 tab）。
   - 一级 tab 内容改记录；记录流去胶囊改右侧过滤、双列瀑布、卡内交集句。
   - 头部 N 成员单计数；圈子独立头像字段契约预留 + alpha mock。
@@ -30,7 +30,7 @@ gwt_acceptance:
     - 我的交集卡走共享 ObjectIntersectionPreviewCard（objectBType=circle、objectSharedReasonsProvider），标题「我的交集」，单列预览句（蓝锚点）
       + 弱入口「查看全部」。
     done_when:
-    - 弃「为什么推荐这个圈子」标题，与我的主页同壳同语义 token。
+    - 弃旧推荐标题，与我的主页同壳同语义 token。
     edge_cases:
     - 无交集事实时三态降级不占位。
     contract_refs:
@@ -57,11 +57,11 @@ gwt_acceptance:
         envs: *id001
     notes:
     - '[recorded] local_contract 2026-06-25：`flutter test test/ui/circle/widgets/circle_shell_widget_test.dart`
-      10/10 green；覆盖「为什么推荐这个圈子」交集卡、云侧 displayText、事实行来源说明、空/错态收起。'
+      10/10 green；覆盖旧推荐交集卡、云侧 displayText、事实行来源说明、空/错态收起。'
     - '[recorded] local_contract 2026-06-25：`flutter test test/components/object_page/object_intersection_card_test.dart
       test/components/object_page/object_intersection_section_test.dart` 15/15 green；圈子主页 ObjectIntersectionSection
       下游已切 primaryText/primarySpans 单通道，覆盖无 primaryText 隐藏、affinity 推荐辅助、展开与高亮。'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（「为什么推荐这个圈子」交集卡：单结论句
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（旧推荐交集卡：单结论句
       + 辅助说明 + 查看更多，无交集三态降级，2026-06-16 green）'
     - '[recorded] PENDING api_integration 2026-06-25：gamma-local 静态拓扑已包含 circle-service，
       但 stackctl api_integration 仍因 gateway health SSL EOF 未进入 circle object intersections populated
@@ -75,7 +75,7 @@ gwt_acceptance:
     then:
     - 影响力卡标题「影响力」，与 AuthorImpactCard 同构，文案为「建立了新连接」，无「认识了新朋友」/收藏文案。
     done_when:
-    - 标题由「这个圈子帮助了很多人」改「影响力」，文案口径与 intersection-definition §17 一致。
+    - 标题统一为「影响力」，文案口径与 intersection-definition §17 一致。
     edge_cases:
     - 无影响力事实时不展示影响力卡。
     contract_refs:
@@ -188,7 +188,7 @@ gwt_acceptance:
     - '[recorded] PENDING api_integration 2026-06-25：circle iconUrl、成员计数与加入状态的真实链路
       需要在 gamma-local health 通过后由 api_integration/user_acceptance 验证；由 `object-homepage-gamma-real-data-closure`
       接管。'
-    - '[recorded] 2026-06-29：本节点由「为什么推荐这个圈子 + 这个圈子帮助了很多人」re-PRD 为「我的交集 + 影响力」双模块，标题改用共享语义 token；移除头部成员头像簇、次按钮改「进入讨论」、删除
+    - '[recorded] 2026-06-29：本节点由旧推荐标题与旧价值卡 re-PRD 为「我的交集 + 影响力」双模块，标题改用共享语义 token；移除头部成员头像簇、次按钮改「进入讨论」、删除
       section_interaction/circle_stats_row 死代码；上方早期 [migrated_from_recorded] 旧标题绿测记录为被取代的旧口径，待 local_contract 重写转绿后回填。'
 execution:
   local_gate:

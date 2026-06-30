@@ -39,6 +39,28 @@ RELEASE_ROOT = Path(os.environ.get("QWQ_RELEASE_ROOT", DATA_ROOT / "release"))
 SCHEMA_ROOT = Path(os.environ.get("QWQ_SCHEMA_ROOT", _REPO_DATA_ROOT / "schema"))
 SOP_ROOT = DATA_ROOT / "sop"
 
+# 项目内 gitignored sandbox 根（无人托管 / 放量 e2e 的默认 scratch 数据根）的单一真相源。
+# 历史上 runner 脚本把 QWQ_DATA_ROOT 默认到用户 HOME 的 ~/qwq_scale_verify，导致：
+#   1) 真实产物漂移到仓库外、不可清理、跨任务互相污染；
+#   2) 与 gate 的默认 release 根（quwoquan_data/release）位置不清晰。
+# 现统一默认到仓库内 `.qwq_sandbox/`（已 gitignore）。注意：这是“沙箱默认根”的位置定义，
+# 不改变 DATA_ROOT 的默认值——gate/测试仍用仓库 quwoquan_data 数据根，
+# 保证 `verify --scope current` 扫描的 release 根与沙箱 release 物理隔离、互不污染；
+# schema / contracts 仍跟代码走（_REPO_DATA_ROOT / REPO_ROOT），不随沙箱根漂移。
+DEFAULT_SANDBOX_ROOT = REPO_ROOT / ".qwq_sandbox"
+
+
+def default_sandbox_root() -> Path:
+    """Canonical in-project gitignored sandbox data root for unattended/scaled e2e.
+
+    Runner scripts and scaled-e2e default ``QWQ_DATA_ROOT`` to this path instead of
+    ``~/qwq_scale_verify``. Pointing ``QWQ_DATA_ROOT`` here keeps runtime/publish/release
+    under the gitignored sandbox while schema/contracts keep following the repo, and the
+    gate's default release root (``quwoquan_data/release``) stays isolated from sandbox
+    releases so ``verify --scope current`` is never polluted by experiment output.
+    """
+    return DEFAULT_SANDBOX_ROOT
+
 TASKS_ROOT = RUNTIME_ROOT / "tasks"
 # committed 任务规格根（受版本控制；与 runtime/tasks 同 taskId 对应）
 COMMITTED_TASKS_ROOT = Path(os.environ.get("QWQ_COMMITTED_TASKS_ROOT", DATA_ROOT / "tasks"))

@@ -7,6 +7,7 @@ import re
 from typing import Any, Iterable, Mapping, Sequence
 
 from _common.io import read_json
+from _common.localization import fold_to_simplified
 from _common.paths import batch_root
 
 
@@ -211,6 +212,14 @@ _CITATION_MARKER_RE = re.compile(
 _WIKI_HEADING_RE = re.compile(r"^\s*(={2,6})\s*(.+?)\s*=*\s*$")
 
 
+_STRUCTURAL_FIGURE_LINE_RE = re.compile(r"^\s*(?::::|!\[[^\]]*\]\(asset://)")
+
+
+def _is_structural_figure_line(line: str) -> bool:
+    """图文混排结构行：`:::figure` / `:::figuregroup` / 收尾 `:::` 围栏，或 `![..](asset://..)` 图片引用。"""
+    return bool(_STRUCTURAL_FIGURE_LINE_RE.match(str(line or "")))
+
+
 def source_line_is_boilerplate(line: str) -> bool:
     """判断一行是否为导航/页脚/广告/纯链接等样板噪声（净化与底稿提取共用）。"""
     compact = re.sub(r"\s+", "", line)
@@ -266,6 +275,11 @@ def clean_source_markdown(text: str, *, raw_format: str = "") -> str:
         if not line.strip():
             kept.append("")
             continue
+        if _is_structural_figure_line(line):
+            # 图文混排结构行（:::figure/:::figuregroup 围栏、asset:// 图片引用）必须保结构原样保留，
+            # 不能被「无字母→样板噪声」误删（否则 source.clean.md 里的图文块围栏被打散，P2 图文混排丢失）。
+            kept.append(line.strip())
+            continue
         if source_line_is_boilerplate(line):
             continue
         kept.append(line.strip())
@@ -282,45 +296,9 @@ _ENTITY_SUFFIXES = (
     "旅游区",
     "景区",
 )
-_ZH_VARIANT_TRANSLATION = str.maketrans(
-    {
-        "雲": "云",
-        "臺": "台",
-        "颱": "台",
-        "風": "风",
-        "區": "区",
-        "國": "国",
-        "峽": "峡",
-        "體": "体",
-        "觀": "观",
-        "遊": "游",
-        "龍": "龙",
-        "車": "车",
-        "鐵": "铁",
-        "門": "门",
-        "頂": "顶",
-        "園": "园",
-        "級": "级",
-        "廣": "广",
-        "東": "东",
-        "華": "华",
-        "陰": "阴",
-        "縣": "县",
-        "處": "处",
-        "內": "内",
-        "條": "条",
-        "線": "线",
-        "運": "运",
-        "灣": "湾",
-        "鹽": "盐",
-        "鄉": "乡",
-        "鎮": "镇",
-    }
-)
-
-
 def _fold_zh_variants(value: str) -> str:
-    return str(value or "").translate(_ZH_VARIANT_TRANSLATION)
+    # 繁→简折叠表单一真相源在 _common.localization，全仓共用（R24）。
+    return fold_to_simplified(value)
 
 
 def entity_names_from_refs(entity_refs: Sequence[str] | None) -> list[str]:
@@ -762,6 +740,18 @@ def build_route_evidence_bundle(
                 top_excerpt = assessment.excerpt
                 break
 
+        # route 单一多目的地底稿模型：每个目的地节点各自认领「单一最佳保留源」作节点底稿，
+        # 节点配图只来自该节点底稿（节点内不跨源、节点间不互借）。无保留源 ⇒ 该节点文字承载。
+        node_base_id = ""
+        node_base_url = ""
+        if retained_items:
+            best_row = max(
+                retained_items,
+                key=lambda r: int(getattr(r.get("assessment"), "score", 0) or 0),
+            )
+            node_base_id = str(best_row.get("sourceId") or "")
+            node_base_url = str(best_row.get("url") or "")
+
         route_nodes.append(
             {
                 "sequence": index,
@@ -769,6 +759,8 @@ def build_route_evidence_bundle(
                 "entityName": entity_name,
                 "sourceCount": len(entity_items),
                 "retainedSourceCount": len(retained_items),
+                "baseSourceId": node_base_id,
+                "baseSourceUrl": node_base_url,
                 "rejectOnly": bool(entity_items) and not retained_items,
                 "topExcerpt": top_excerpt,
                 "factEvidence": _unique_fact_entries(fact_entries, limit=6),
@@ -863,7 +855,16 @@ def _fact_supported(fact: str, evidence_bundle: Mapping[str, Any]) -> bool:
 
 
 def gate_route_evidence_bundle(brief: Mapping[str, Any], evidence_bundle: Mapping[str, Any]) -> list[str]:
-    """检查线路级证据是否足以进入 compose。"""
+    """检查线路级证据是否足以进入 compose。
+
+    载体感知：image/gallery 画报是"专业图库一源一作品"的视觉载体，不承载线路/体验叙事证据
+    （UGC 情感信号 likes/painPoints、storySpine 进程、路线节点覆盖、mustIncludeFacts 叙事）。
+    对其施加线路叙事门属载体错配——会把开放许可图集（Wikimedia/CC 事实性 caption、无 UGC 互动）
+    误判为 `missing emotion evidence` 而整批转人工。图片作品的把关由许可(rights)、资产落盘、
+    相关性、works_gate 负责，不在此线路证据门内。故 image/gallery 直接放行（不产线路叙事 issue）。
+    """
+    if str(brief.get("carrier") or "").lower() in ("image", "gallery"):
+        return []
     issues: list[str] = []
     coverage = evidence_bundle.get("coverage") or {}
     route_nodes = evidence_bundle.get("routeNodes") or []

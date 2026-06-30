@@ -15,6 +15,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       referralSource: ReferralSource.entityPage,
       cardKey: const ValueKey<String>('homepage-my-intersection-card'),
       emptyKey: const ValueKey<String>('homepage-my-intersection-empty'),
+      topPadding: false,
     );
   }
 
@@ -29,13 +30,16 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       referralSource: ReferralSource.entityPage,
       enumerableHint: UITextConstants.impactEnumerableHintEntity,
       cardKey: const ValueKey<String>('homepage-impact-card'),
+      topDivider: false,
     );
   }
 
-  Widget _buildIdentityMedia(BuildContext context, String? coverUrl) {
+  /// 身份头像内容（封面缩略 / Logo）；为空返回 null，由 [ObjectIdentityAvatar]
+  /// 回退到类型占位图标，避免空白方块。
+  Widget? _buildIdentityMedia(BuildContext context, String? coverUrl) {
     final source = (coverUrl ?? '').trim();
     if (source.isEmpty) {
-      return const SizedBox.shrink();
+      return null;
     }
     return AppMediaImage(
       imageSource: source,
@@ -50,87 +54,141 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       MediaQuery.viewPaddingOf(context).top,
       context,
     );
-    final toolbarFill = AppColors.iosSystemBackground(
-      context,
-    ).withValues(alpha: progress * 0.92);
+    final isPinned = progress > 0.12;
+    final toolbarFill = isPinned
+        ? AppColors.iosSystemBackground(context)
+        : AppColors.transparent;
     final toolbarBorder = AppColors.iosSeparator(
       context,
-    ).withValues(alpha: progress * 0.14);
-    final buttonForeground =
-        Color.lerp(
-          CupertinoColors.white,
-          AppColors.iosLabel(context),
-          progress,
-        ) ??
-        AppColors.iosLabel(context);
-    final buttonBackground =
-        Color.lerp(
-          AppColors.black.withValues(alpha: 0.18),
-          AppColors.iosFill(context).withValues(alpha: 0.94),
-          progress,
-        ) ??
-        AppColors.iosFill(context);
+    ).withValues(alpha: isPinned ? 0.14 : 0);
+    final buttonForeground = isPinned
+        ? AppColors.iosLabel(context)
+        : CupertinoColors.white;
+    const buttonBackground = AppColors.transparent;
 
     return Positioned(
       top: 0,
       left: 0,
       right: 0,
-      child: Container(
-        padding: EdgeInsets.fromLTRB(
-          AppSpacing.containerMd,
-          safeTop + AppSpacing.appChromeToolbarVerticalPadding(context),
-          AppSpacing.containerMd,
-          AppSpacing.appChromeToolbarVerticalPadding(context),
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle(
+          statusBarColor: AppColors.transparent,
+          statusBarIconBrightness: isPinned
+              ? (CupertinoTheme.of(context).brightness == Brightness.dark
+                    ? Brightness.light
+                    : Brightness.dark)
+              : Brightness.light,
+          statusBarBrightness: isPinned
+              ? (CupertinoTheme.of(context).brightness == Brightness.dark
+                    ? Brightness.dark
+                    : Brightness.light)
+              : Brightness.dark,
         ),
-        decoration: BoxDecoration(
-          color: toolbarFill,
-          border: Border(
-            bottom: BorderSide(
-              color: toolbarBorder,
-              width: AppSpacing.hairline,
+        child: Container(
+          padding: EdgeInsets.fromLTRB(
+            AppSpacing.containerMd,
+            safeTop + AppSpacing.appChromeToolbarVerticalPadding(context),
+            AppSpacing.containerMd,
+            AppSpacing.appChromeToolbarVerticalPadding(context),
+          ),
+          decoration: BoxDecoration(
+            color: toolbarFill,
+            border: Border(
+              bottom: BorderSide(
+                color: toolbarBorder,
+                width: AppSpacing.hairline,
+              ),
             ),
           ),
-        ),
-        child: Row(
-          children: <Widget>[
-            ProfileIosIconButton(
-              icon: widget.selectionMode
-                  ? CupertinoIcons.xmark
-                  : CupertinoIcons.chevron_back,
-              onPressed: widget.onBack,
-              backgroundColor: buttonBackground,
-              foregroundColor: buttonForeground,
-            ),
-            Expanded(
-              child: IgnorePointer(
-                child: Opacity(
-                  opacity: progress,
-                  child: Text(
-                    _reference?.title ?? '',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: AppTypography.iosNavTitle,
-                      fontWeight: AppTypography.semiBold,
-                      color: AppColors.iosLabel(context),
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: AppSpacing.appChromeActionButtonSize,
+                height: AppSpacing.appChromeActionButtonSize,
+                child: Center(
+                  child: widget.selectionMode || !isPinned
+                      ? ProfileIosIconButton(
+                          key: const ValueKey<String>(
+                            'homepage-detail-back-button',
+                          ),
+                          icon: widget.selectionMode
+                              ? CupertinoIcons.xmark
+                              : CupertinoIcons.chevron_back,
+                          onPressed: widget.onBack,
+                          backgroundColor: buttonBackground,
+                          foregroundColor: buttonForeground,
+                        )
+                      : _buildCompactToolbarAvatar(context),
+                ),
+              ),
+              Expanded(
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: progress,
+                    child: Text(
+                      _reference?.title ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: AppTypography.iosNavTitle,
+                        fontWeight: AppTypography.semiBold,
+                        color: AppColors.iosLabel(context),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            if (_hasMoreActions)
-              ProfileIosIconButton(
-                key: const ValueKey<String>('homepage-detail-more-button'),
-                icon: CupertinoIcons.slider_horizontal_3,
-                onPressed: () => _showMoreActions(context),
-                backgroundColor: buttonBackground,
-                foregroundColor: buttonForeground,
-              )
-            else
-              const SizedBox(width: AppSpacing.minInteractiveSize),
-          ],
+              if (widget.selectionMode)
+                const SizedBox(width: AppSpacing.minInteractiveSize)
+              else
+                // 高保顶栏右侧四图标：搜索 / AI / 分享 / 更多（⚙︎=对象操作面板）。
+                ObjectChromeActions(
+                  foregroundColor: buttonForeground,
+                  backgroundColor: buttonBackground,
+                  onSearch: () => GlobalSearchLauncher.open(
+                    context,
+                    initialScope: GlobalSearchScope.all.searchScope,
+                  ),
+                  onAssistant: (ref) =>
+                      GlobalAssistantLauncher.open(context, ref),
+                  onShare: () => AppToast.show(context, UITextConstants.share),
+                  onMore: _hasMoreActions
+                      ? () => _showMoreActions(context)
+                      : null,
+                ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildCompactToolbarAvatar(BuildContext context) {
+    final coverUrl = (_reference?.coverUrl ?? '').trim();
+    final fallback = DecoratedBox(
+      decoration: BoxDecoration(color: AppColors.iosSecondaryFill(context)),
+      child: Center(
+        child: Icon(
+          CupertinoIcons.photo_fill_on_rectangle_fill,
+          size: AppSpacing.iconSmall,
+          color: AppColors.iosSecondaryLabel(context),
+        ),
+      ),
+    );
+    return ClipOval(
+      key: const ValueKey<String>('homepage-detail-compact-avatar'),
+      child: SizedBox(
+        width: AppSpacing.avatarUserSm,
+        height: AppSpacing.avatarUserSm,
+        child: coverUrl.isEmpty
+            ? fallback
+            : AppMediaImage(
+                imageSource: coverUrl,
+                fit: BoxFit.cover,
+                placeholder: fallback,
+                errorWidget: fallback,
+              ),
       ),
     );
   }
@@ -215,25 +273,27 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     final followerCount = detail?.followerCount ?? 0;
     final recordCount = _contentPreview.length;
     final discussionCount = _questionPreview.length;
-    final statsLine = <String>[
+    // 轻统计行：主统计「关注」，弱展示「记录 / 讨论」（高保口径 #5：实体用关注，
+    // 不用粉丝）。下沉到共享 [ObjectStatsRow]，与用户主页同款值/标签 token。
+    final statItems = <ObjectStatItem>[
       if (followerCount > 0)
-        UITextConstants.entityFollowerCountLabel(
-          formatCompactActionCount(followerCount),
+        ObjectStatItem(
+          value: formatCompactActionCount(followerCount),
+          label: UITextConstants.follow,
         ),
       if (recordCount > 0)
-        '${formatCompactActionCount(recordCount)} ${UITextConstants.objectTabRecord}',
+        ObjectStatItem(
+          value: formatCompactActionCount(recordCount),
+          label: UITextConstants.objectTabRecord,
+        ),
       if (discussionCount > 0)
-        '${formatCompactActionCount(discussionCount)} ${UITextConstants.objectTabDiscussion}',
-    ].join(' · ');
-    final referenceSubtitle = (reference?.subtitle ?? '').trim();
-    final identityMetaLine = statsLine.isNotEmpty
-        ? statsLine
-        : referenceSubtitle;
-    final identityBadges = <String>[
-      if (detail?.verified == true) UITextConstants.entityVerifiedBadge,
+        ObjectStatItem(
+          value: formatCompactActionCount(discussionCount),
+          label: UITextConstants.objectTabDiscussion,
+        ),
     ];
 
-    return Container(
+    final identityCard = Container(
       decoration: BoxDecoration(
         color: summarySurface,
         borderRadius: BorderRadius.circular(
@@ -259,50 +319,61 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             ObjectIdentityHeader(
-              kind: ObjectIdentityKind.entity,
               title:
                   reference?.title ??
                   UITextConstants.objectHomepageDefaultTitle,
-              subtitle: identitySubtitle,
-              metaLine: identityMetaLine,
-              badges: identityBadges,
-              media: _buildIdentityMedia(context, reference?.coverUrl),
-              trailing: _hasMoreActions
-                  ? ProfileIosIconButton(
+              media: ObjectIdentityAvatar(
+                kind: ObjectIdentityKind.entity,
+                child: _buildIdentityMedia(context, reference?.coverUrl),
+              ),
+              titleTrailing: (detail?.verified ?? false)
+                  ? Icon(
                       key: const ValueKey<String>(
-                        'homepage-summary-settings-button',
+                        'homepage-summary-verified-badge',
                       ),
-                      icon: CupertinoIcons.slider_horizontal_3,
-                      onPressed: () => _showMoreActions(context),
-                      style: ProfileIosIconButtonStyle.tinted,
+                      CupertinoIcons.checkmark_seal_fill,
+                      size: AppSpacing.iconSmall,
+                      color: AppColors.iosAccent(context),
                     )
                   : null,
+              subtitle: identitySubtitle,
             ),
-            SizedBox(height: AppSpacing.containerSm),
             if (!widget.selectionMode) ...<Widget>[
-              SizedBox(height: AppSpacing.containerSm),
               if (_entityIntroLine().trim().isNotEmpty) ...<Widget>[
-                ProfileSloganCard(
+                SizedBox(height: AppSpacing.containerSm),
+                ObjectSloganCard(
                   isDark: isDark,
                   bio: _entityIntroLine(),
                   onTap: widget.onOpenIntroduction,
+                  cardKey: const ValueKey<String>('homepage-intro-slogan-card'),
                 ),
-                SizedBox(height: AppSpacing.containerSm),
               ],
-              _HomepageActionBar(
-                isFollowing: widget.detail?.viewerFollowsHomepage ?? false,
-                onToggleFollow: widget.onToggleFollow,
-                onPublishRecord: _reference == null
-                    ? null
-                    : () => widget.onCreateContent(_reference!),
-              ),
+              if (statItems.isNotEmpty) ...<Widget>[
+                SizedBox(height: AppSpacing.containerSm),
+                ObjectStatsRow(
+                  isDark: isDark,
+                  items: statItems,
+                  rowKey: const ValueKey<String>('homepage-stats-inline-row'),
+                ),
+              ],
+              SizedBox(height: AppSpacing.containerMd),
+              _buildEntityActionBar(isDark),
             ],
-            SizedBox(height: AppSpacing.containerSm),
-            _buildIntersectionCard(isDark),
-            _buildEntityImpactCard(isDark),
           ],
         ),
       ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        identityCard,
+        if (!widget.selectionMode) ...<Widget>[
+          SizedBox(height: AppSpacing.containerSm),
+          _buildIntersectionCard(isDark),
+          SizedBox(height: AppSpacing.containerSm),
+          _buildEntityImpactCard(isDark),
+        ],
+      ],
     );
   }
 
@@ -312,6 +383,49 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       return introductionSummary;
     }
     return (_reference?.subtitle ?? '').trim();
+  }
+
+  /// 实体首屏 CTA：主=关注/已关注，次=发记录（高保口径 #3 实体主动作是关注）。
+  /// 真相源下沉到共享 [ObjectActionBar]，主/次按钮 token 与用户主页 `ProfileActionBar` 同源。
+  Widget _buildEntityActionBar(bool isDark) {
+    final separator = AppColors.iosSeparator(
+      context,
+    ).withValues(alpha: isDark ? 0.22 : 0.14);
+    final neutralFill = AppColors.iosProfileSurface(context);
+    final neutralForeground = AppColors.iosLabel(context);
+    final isFollowing = widget.detail?.viewerFollowsHomepage ?? false;
+    final reference = _reference;
+    return ObjectActionBar(
+      actions: <ObjectAction>[
+        isFollowing
+            ? ObjectAction(
+                label: UITextConstants.following,
+                icon: CupertinoIcons.check_mark,
+                onPressed: widget.onToggleFollow,
+                style: ProfileIosActionStyle.outlined,
+                backgroundColor: neutralFill,
+                foregroundColor: neutralForeground,
+                borderColor: separator,
+              )
+            : ObjectAction(
+                label: UITextConstants.follow,
+                icon: CupertinoIcons.add,
+                onPressed: widget.onToggleFollow,
+                style: ProfileIosActionStyle.filled,
+              ),
+        ObjectAction(
+          label: UITextConstants.entityActionPublishRecord,
+          icon: CupertinoIcons.pencil,
+          onPressed: reference == null
+              ? null
+              : () => widget.onCreateContent(reference),
+          style: ProfileIosActionStyle.outlined,
+          backgroundColor: neutralFill,
+          foregroundColor: neutralForeground,
+          borderColor: separator,
+        ),
+      ],
+    );
   }
 
   Widget _buildPrimaryTabBar(BuildContext context) {
@@ -371,7 +485,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
   }) {
     return _buildSectionBlock(
       context: context,
-      title: title ?? '说明',
+      title: title ?? UITextConstants.homepageInfoUnavailableTitle,
       child: ProfileIosSectionCard(child: child),
     );
   }
@@ -382,15 +496,15 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       if (widget.isLoading) {
         return _buildMessageCard(
           context,
-          title: '加载中',
+          title: UITextConstants.loading,
           child: const Center(child: CupertinoActivityIndicator()),
         );
       }
       return _buildMessageCard(
         context,
-        title: '暂时不可用',
+        title: UITextConstants.homepageInfoUnavailableTitle,
         child: Text(
-          widget.errorText ?? '主页详情暂时不可用，请稍后重试',
+          widget.errorText ?? UITextConstants.contentLoadSoftFailed,
           style: TextStyle(
             fontSize: AppTypography.iosBody,
             color: AppColors.iosSecondaryLabel(context),
