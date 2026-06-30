@@ -170,6 +170,43 @@ def test_fetch_source_payload_allows_source_level_fetchable_override():
     assert "沈阳世博园" in payload["text"]
 
 
+def test_fetch_source_payload_returns_same_source_inline_images():
+    """RC3：图文混排游记 payload 携带同源内联图清单（绝对 URL，与正文占位同序）。"""
+    html = (
+        "<html><body><p>九寨沟游记开篇正文段。</p>"
+        "<figure><img src='/photo/lake.jpg' alt='五花海'></figure>"
+        "<p>沿栈道继续走的第二段正文。</p>"
+        "<img src='https://img.example/falls.jpg' alt='珍珠滩瀑布'>"
+        "</body></html>"
+    ).encode("utf-8")
+    orig_http = fetch_mod._http_get_bytes
+    try:
+        fetch_mod._http_get_bytes = lambda url, timeout=20, max_redirects=4, max_retries=4: (
+            200,
+            html,
+            "",
+        )
+        payload = fetch_mod.fetch_source_payload(
+            "https://travel.qunar.com/youji/7870084",
+            source={"extractor": "qunar_html", "fetchable": True},
+        )
+    finally:
+        fetch_mod._http_get_bytes = orig_http
+
+    inline = payload["inlineImages"]
+    assert [row["placeholderId"] for row in inline] == [
+        "source-inline-001",
+        "source-inline-002",
+    ]
+    # 相对 src 按页面 URL 解析为绝对，绝对 src 原样保留。
+    assert [row["src"] for row in inline] == [
+        "https://travel.qunar.com/photo/lake.jpg",
+        "https://img.example/falls.jpg",
+    ]
+    # 正文占位与清单同序对齐。
+    assert payload["text"].index("source-inline-001") < payload["text"].index("source-inline-002")
+
+
 def test_fetch_source_payload_uses_dpm_official_registry_source():
     html = "<html><body>故宫博物院 开放时间 在线订票 交通路线 参观须知</body></html>"
     orig_http = fetch_mod._http_get_bytes

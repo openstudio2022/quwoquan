@@ -880,17 +880,22 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
             "htmlBytes": body,
             "text": text[:50000],
             "assets": assets,
+            "inlineImages": [],
             "sha256": hashlib.sha256(body).hexdigest(),
             "runtime": {**runtime, "rawFormat": "mediawiki_api_json"},
         }
     status, body, _ = _http_get_bytes(url, timeout=20, max_redirects=4, max_retries=4)
     if status != 200 or not body:
         raise RuntimeError(f"fetch failed for {url} (status={status})")
+    # RC3：图文混排游记（qunar/generic）返回同源内联图清单（绝对 URL，与正文
+    # asset://source-inline-NNN 占位同序），供来源单元写入器就地下载并锚定。
+    text, inline_images = extract_page_text_with_inline_images(body, url, extractor=extractor)
     return {
         "url": url,
         "statusCode": status,
         "htmlBytes": body,
-        "text": extract_page_text(body, url, extractor=extractor),
+        "text": text,
+        "inlineImages": inline_images,
         "sha256": hashlib.sha256(body).hexdigest(),
         "runtime": runtime,
     }
