@@ -39,7 +39,11 @@ from _common.evidence_contract import quality_payload_contract_issues  # noqa: E
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
 from _common.io import write_json  # noqa: E402
 from _common.paths import batch_inputs_dir, ensure_batch_layout, ensure_task_layout  # noqa: E402
-from _common.content_evidence import extract_source_evidence, public_byline_label  # noqa: E402
+from _common.content_evidence import (  # noqa: E402
+    extract_source_evidence,
+    gate_route_evidence_bundle,
+    public_byline_label,
+)
 from _common.draft_io import read_writing_pack, write_agent_draft, prompt_path, read_draft_meta  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
 from plan.brief import resolve_compose_brief  # noqa: E402
@@ -107,6 +111,46 @@ def test_extract_source_evidence_folds_common_zh_variants_for_mainline():
 
     assert evidence["mainlineEvidence"]
     assert any("雲台山" in sentence for sentence in evidence["mainlineEvidence"])
+
+
+def test_gate_route_evidence_skips_narrative_requirements_for_image_carrier():
+    """载体错配根因：image/gallery 画报曾被线路叙事门（情感/storySpine/路线覆盖）误门控。
+
+    开放许可图集（Wikimedia/CC）只有事实性 caption、无 UGC 互动信号，必然缺 emotion evidence，
+    旧逻辑会把整批 produce_compose 判 `missing emotion evidence` 转人工。图片作品的把关由
+    许可(rights)/资产落盘/相关性/works_gate 负责，不应受线路证据门约束。
+    """
+    empty_bundle: dict = {
+        "coverage": {"coveredEntityCount": 0},
+        "routeNodes": [],
+        "emotionSignals": {"likes": [], "painPoints": []},
+        "storySpine": {},
+    }
+    for carrier in ("image", "gallery", "Image", "GALLERY"):
+        brief = {
+            "carrier": carrier,
+            "evidenceRequirements": {"emotion": {"required": True}},
+            "mustIncludeFacts": ["九寨沟五花海"],
+        }
+        assert gate_route_evidence_bundle(brief, empty_bundle) == [], carrier
+
+
+def test_gate_route_evidence_still_gates_narrative_carriers():
+    """回归护栏：article/route 等叙事载体在空证据下仍必须被拦截，禁止载体感知误伤叙事门。"""
+    empty_bundle: dict = {
+        "coverage": {"coveredEntityCount": 0},
+        "routeNodes": [],
+        "emotionSignals": {"likes": [], "painPoints": []},
+        "storySpine": {},
+    }
+    for carrier in ("article", "route", ""):
+        brief = {
+            "carrier": carrier,
+            "evidenceRequirements": {"emotion": {"required": True}},
+        }
+        issues = gate_route_evidence_bundle(brief, empty_bundle)
+        assert any("missing emotion evidence" in issue for issue in issues), (carrier, issues)
+        assert any("route progression spine" in issue for issue in issues), (carrier, issues)
 
 
 def test_route_workflow_generates_real_review_green():
@@ -506,6 +550,8 @@ retained: true
 
 if __name__ == "__main__":
     test_route_brief_includes_narrative_contract()
+    test_gate_route_evidence_skips_narrative_requirements_for_image_carrier()
+    test_gate_route_evidence_still_gates_narrative_carriers()
     test_route_workflow_generates_real_review_green()
     test_route_skip_does_not_prepare_writing_pack()
     test_route_review_blocks_intra_doc_repetition_padding()

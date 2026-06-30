@@ -842,7 +842,16 @@ def _fact_supported(fact: str, evidence_bundle: Mapping[str, Any]) -> bool:
 
 
 def gate_route_evidence_bundle(brief: Mapping[str, Any], evidence_bundle: Mapping[str, Any]) -> list[str]:
-    """检查线路级证据是否足以进入 compose。"""
+    """检查线路级证据是否足以进入 compose。
+
+    载体感知：image/gallery 画报是"专业图库一源一作品"的视觉载体，不承载线路/体验叙事证据
+    （UGC 情感信号 likes/painPoints、storySpine 进程、路线节点覆盖、mustIncludeFacts 叙事）。
+    对其施加线路叙事门属载体错配——会把开放许可图集（Wikimedia/CC 事实性 caption、无 UGC 互动）
+    误判为 `missing emotion evidence` 而整批转人工。图片作品的把关由许可(rights)、资产落盘、
+    相关性、works_gate 负责，不在此线路证据门内。故 image/gallery 直接放行（不产线路叙事 issue）。
+    """
+    if str(brief.get("carrier") or "").lower() in ("image", "gallery"):
+        return []
     issues: list[str] = []
     coverage = evidence_bundle.get("coverage") or {}
     route_nodes = evidence_bundle.get("routeNodes") or []
