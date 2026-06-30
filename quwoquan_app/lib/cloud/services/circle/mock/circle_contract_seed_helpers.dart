@@ -180,6 +180,22 @@ class CircleContractSeedHelpers {
     final description = (data['description'] ?? data['desc'] ?? '')
         .toString()
         .trim();
+    final rawTags =
+        (data['tags'] as List?)?.cast<Object?>() ?? const <Object?>[];
+    final rawThemeTags =
+        (data['themeTags'] as List?)?.cast<Object?>() ?? const <Object?>[];
+    final rawSecondaryThemes =
+        (data['secondaryThemes'] as List?)?.cast<Object?>() ??
+        const <Object?>[];
+    final primaryTheme = (data['primaryTheme'] ?? '').toString().trim();
+    final tags = <String>[
+      for (final item in rawTags) item.toString().trim(),
+      if (rawTags.isEmpty) ...<String>[
+        for (final item in rawThemeTags) item.toString().trim(),
+        if (primaryTheme.isNotEmpty) primaryTheme,
+        for (final item in rawSecondaryThemes) item.toString().trim(),
+      ],
+    ].where((item) => item.isNotEmpty).toSet().take(3).toList(growable: false);
     return <String, dynamic>{
       ...data,
       'id': circleId,
@@ -202,9 +218,7 @@ class CircleContractSeedHelpers {
           (data['defaultPublicGroupId'] ?? '${circleId}_group_default')
               .toString(),
       'autoSyncChat': data['autoSyncChat'] as bool? ?? true,
-      'tags': ((data['tags'] as List?) ?? const <Object?>[])
-          .map((Object? item) => item.toString())
-          .toList(growable: false),
+      'tags': tags,
       'createdAt': data['createdAt'] ?? fallbackUpdatedAt ?? now,
       'updatedAt': data['updatedAt'] ?? fallbackUpdatedAt ?? now,
       'role': (data['role'] ?? 'owner').toString(),

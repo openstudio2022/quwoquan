@@ -12,7 +12,6 @@
       "profiles": [
         {
           "userId": "fixture_user_current",
-          "verified": true,
           "displayName": "新同学_260622_6698692",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_current/v1/background.png",
@@ -169,18 +168,10 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_photo",
-          "verified": true,
           "displayName": "契约摄影师",
           "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
           "backgroundUrl": "media/background/s/archived-avatar/user/fixture_user_photo/v1/background.png",
@@ -327,14 +318,7 @@
               "sizeBytes": 1857474,
               "sourceHash": "sha256:bf14a1065a7e7777b5f691810e888d68d600c0b736f7535850e6d641f547f29c"
             }
-          },
-          "identityTags": [
-            "photography",
-            "travel",
-            "cityWalk"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_travel",
@@ -485,14 +469,7 @@
               "sizeBytes": 2522887,
               "sourceHash": "sha256:3b3c8c2a16bbbe3b097349cfaf08784fbbdecfbcd6a5f9b3de5d86c6929e5079"
             }
-          },
-          "identityTags": [
-            "travel",
-            "photography",
-            "outdoor"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_article",
@@ -591,14 +568,7 @@
               "sizeBytes": 1794125,
               "sourceHash": "sha256:68d9a9303e0a5b685f978f1c13681d23d159303304e1e09750fe7c4f55da35d5"
             }
-          },
-          "identityTags": [
-            "designWriting",
-            "tech",
-            "coffee"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_friend",
@@ -750,14 +720,7 @@
               "sizeBytes": 1117608,
               "sourceHash": "sha256:37dc09790fcc630ecfe492e0332a73575e571006a14b5836f03f5c82951a6bea"
             }
-          },
-          "identityTags": [
-            "coffee",
-            "food",
-            "designWriting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_weekend_1",
@@ -916,14 +879,7 @@
               "sizeBytes": 2570495,
               "sourceHash": "sha256:e259dcf1a6bbca4fe68492d15dc8920cb1eb586b13b1f430a6a7fca3fce05ef3"
             }
-          },
-          "identityTags": [
-            "lifestyle",
-            "coffee",
-            "parenting"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         },
         {
           "userId": "fixture_user_weekend_2",
@@ -1086,14 +1042,7 @@
               "sizeBytes": 2062449,
               "sourceHash": "sha256:bacfe716b92a789d7c398acd22465ba316a038490b4a242e3acd024c8f8db438"
             }
-          },
-          "identityTags": [
-            "food",
-            "coffee",
-            "lifestyle"
-          ],
-          "profileCompleteness": 100,
-          "profileCompletenessMissingItems": []
+          }
         }
       ]
     },
@@ -1195,6 +1144,85 @@
           "requiresSeedReset": true
         }
       }
+    },
+    {
+      "id": "creator_travel_travel_batch_100_v1_core",
+      "title": "Creator pool travel_batch_100_v1",
+      "type": "user_profile",
+      "domainId": "user",
+      "seedRefs": [
+        "creator_travel_travel_batch_100_v1_core"
+      ],
+      "uiExpectations": {
+        "userIds": [
+          "qwq_creator_travel_casual_tourist_001",
+          "qwq_creator_travel_casual_tourist_002",
+          "qwq_creator_travel_casual_tourist_003",
+          "qwq_creator_travel_casual_tourist_004",
+          "qwq_creator_travel_casual_tourist_005",
+          "qwq_creator_travel_casual_tourist_006",
+          "qwq_creator_travel_casual_tourist_007",
+          "qwq_creator_travel_casual_tourist_008",
+          "qwq_creator_travel_casual_tourist_009",
+          "qwq_creator_travel_casual_tourist_010",
+          "qwq_creator_travel_casual_tourist_011",
+          "qwq_creator_travel_casual_tourist_012",
+          "qwq_creator_travel_casual_tourist_013",
+          "qwq_creator_travel_casual_tourist_014",
+          "qwq_creator_travel_casual_tourist_015",
+          "qwq_creator_travel_local_walker_016",
+          "qwq_creator_travel_local_walker_017",
+          "qwq_creator_travel_local_walker_018",
+          "qwq_creator_travel_local_walker_019",
+          "qwq_creator_travel_local_walker_020"
+        ]
+      },
+      "remoteExpectations": {
+        "profileUserIds": [
+          "qwq_creator_travel_casual_tourist_001",
+          "qwq_creator_travel_casual_tourist_002",
+          "qwq_creator_travel_casual_tourist_003",
+          "qwq_creator_travel_casual_tourist_004",
+          "qwq_creator_travel_casual_tourist_005",
+          "qwq_creator_travel_casual_tourist_006",
+          "qwq_creator_travel_casual_tourist_007",
+          "qwq_creator_travel_casual_tourist_008",
+          "qwq_creator_travel_casual_tourist_009",
+          "qwq_creator_travel_casual_tourist_010",
+          "qwq_creator_travel_casual_tourist_011",
+          "qwq_creator_travel_casual_tourist_012",
+          "qwq_creator_travel_casual_tourist_013",
+          "qwq_creator_travel_casual_tourist_014",
+          "qwq_creator_travel_casual_tourist_015",
+          "qwq_creator_travel_local_walker_016",
+          "qwq_creator_travel_local_walker_017",
+          "qwq_creator_travel_local_walker_018",
+          "qwq_creator_travel_local_walker_019",
+          "qwq_creator_travel_local_walker_020"
+        ],
+        "subAccountIds": []
+      },
+      "environments": {
+        "alpha": {
+          "enabled": true,
+          "repository": "mock"
+        },
+        "beta": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        },
+        "gamma": {
+          "enabled": true,
+          "repository": "remote",
+          "requiresSeedReset": true
+        }
+      },
+      "tags": [
+        "creator_pool",
+        "travel",
+        "beta"
+      ]
     }
   ]
 }

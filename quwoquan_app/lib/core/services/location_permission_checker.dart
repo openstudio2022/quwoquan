@@ -1,19 +1,14 @@
 import 'package:geolocator/geolocator.dart';
+import 'package:quwoquan_app/cloud/runtime/startup_deferred_plugins.dart';
 
 /// 定位权限检查结果：已授予 / 需批准 / 已永久拒绝
-enum LocationPermissionResult {
-  granted,
-  needApproval,
-  permanentlyDenied,
-}
+enum LocationPermissionResult { granted, needApproval, permanentlyDenied }
 
 /// 定位权限检查接口，便于测试注入 FakeChecker。
 abstract class LocationPermissionChecker {
   /// 检查并请求定位权限；若已授予则返回当前位置。
-  Future<({
-    LocationPermissionResult result,
-    Position? position,
-  })> ensureLocationPermission();
+  Future<({LocationPermissionResult result, Position? position})>
+  ensureLocationPermission();
 
   /// 打开应用权限设置页面。
   Future<bool> openAppSettings();
@@ -24,10 +19,9 @@ class GeolocatorLocationPermissionChecker implements LocationPermissionChecker {
   const GeolocatorLocationPermissionChecker();
 
   @override
-  Future<({
-    LocationPermissionResult result,
-    Position? position,
-  })> ensureLocationPermission() async {
+  Future<({LocationPermissionResult result, Position? position})>
+  ensureLocationPermission() async {
+    await StartupDeferredPlugins.ensureLocationPlugins();
     final enabled = await Geolocator.isLocationServiceEnabled();
     if (!enabled) {
       return (result: LocationPermissionResult.needApproval, position: null);
@@ -64,5 +58,8 @@ class GeolocatorLocationPermissionChecker implements LocationPermissionChecker {
   }
 
   @override
-  Future<bool> openAppSettings() => Geolocator.openAppSettings();
+  Future<bool> openAppSettings() async {
+    await StartupDeferredPlugins.ensureLocationPlugins();
+    return Geolocator.openAppSettings();
+  }
 }

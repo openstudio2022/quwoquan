@@ -35,29 +35,50 @@ class AppPageErrorState extends StatelessWidget {
       resolvedSemantic,
       Builder(
         builder: (themedContext) {
+          final background = AppColors.iosPageBackground(themedContext);
           final fallbackStyle = TextStyle(
             color: AppColors.iosLabel(themedContext),
             fontSize: AppTypography.iosBody,
             decoration: TextDecoration.none,
           );
-          return DefaultTextStyle(
-            style: fallbackStyle,
-            child: Padding(
-              padding: EdgeInsets.zero,
-              child: Center(
-                child: Padding(
-                  padding: padding ?? EdgeInsets.all(AppSpacing.containerMd),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      maxWidth: AppSpacing.feedMaxContentWidth,
-                    ),
-                    child: _ErrorEmptyPageBody(
-                      semantic: resolvedSemantic,
-                      onAction: onAction,
+          return ColoredBox(
+            color: background,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final height = constraints.hasBoundedHeight
+                    ? constraints.maxHeight
+                    : MediaQuery.sizeOf(themedContext).height;
+                return SizedBox(
+                  width: double.infinity,
+                  height: height,
+                  child: DefaultTextStyle(
+                    style: fallbackStyle,
+                    child: Stack(
+                      children: <Widget>[
+                        Center(
+                          child: Padding(
+                            padding:
+                                padding ??
+                                EdgeInsets.all(AppSpacing.containerMd),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxWidth: AppSpacing.feedMaxContentWidth,
+                              ),
+                              child: _ErrorEmptyPageBody(
+                                semantic: resolvedSemantic,
+                                onAction: onAction,
+                              ),
+                            ),
+                          ),
+                        ),
+                        _PageErrorCloseButton(
+                          onPressed: () => _popOrGoHome(themedContext),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
           );
         },
@@ -283,6 +304,49 @@ class AppActionErrorFeedback {
             child: Text(primary.label),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PageErrorCloseButton extends StatelessWidget {
+  const _PageErrorCloseButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = AppColors.iosLabel(context);
+    return PositionedDirectional(
+      top: AppSpacing.sm,
+      start: AppSpacing.containerSm,
+      child: SafeArea(
+        bottom: false,
+        child: Semantics(
+          button: true,
+          label: UITextConstants.close,
+          child: CupertinoButton(
+            key: const ValueKey<String>('app-page-error-close-button'),
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(
+              AppSpacing.minInteractiveSize,
+              AppSpacing.minInteractiveSize,
+            ),
+            borderRadius: BorderRadius.circular(
+              AppSpacing.circularBorderRadius,
+            ),
+            onPressed: onPressed,
+            child: SizedBox(
+              width: AppSpacing.minInteractiveSize,
+              height: AppSpacing.minInteractiveSize,
+              child: Icon(
+                CupertinoIcons.xmark,
+                size: AppSpacing.iconMedium,
+                color: foreground,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

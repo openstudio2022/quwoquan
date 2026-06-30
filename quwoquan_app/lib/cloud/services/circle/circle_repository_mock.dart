@@ -703,12 +703,19 @@ class MockCircleRepository implements CircleRepository {
       final weeklyActive = CircleContractSeedHelpers.intValue(
         contractStats['weeklyActiveCount'],
       );
+      final discussionCount = CircleContractSeedHelpers.intValue(
+        contractStats['discussionCount'] ??
+            contractStats['discussions'] ??
+            contractStats['totalDiscussions'],
+      );
       return CircleStatsWireDto.fromMap(<String, dynamic>{
         'circleId': circleId,
         'members': memberCount,
         'totalMembers': memberCount,
         'posts': postCount,
         'totalPosts': postCount,
+        'discussions': discussionCount,
+        'totalDiscussions': discussionCount,
         'weeklyActive': weeklyActive,
         'active': weeklyActive,
         'likes': 0,
@@ -723,6 +730,8 @@ class MockCircleRepository implements CircleRepository {
         'totalMembers': circle.memberCount,
         'posts': circle.postCount,
         'totalPosts': circle.postCount,
+        'discussions': 0,
+        'totalDiscussions': 0,
         'weeklyActive': circle.weeklyActiveCount,
         'active': circle.weeklyActiveCount,
         'likes': 0,
@@ -735,6 +744,8 @@ class MockCircleRepository implements CircleRepository {
       'totalMembers': 0,
       'posts': 0,
       'totalPosts': 0,
+      'discussions': 0,
+      'totalDiscussions': 0,
       'weeklyActive': 0,
       'active': 0,
       'likes': 0,

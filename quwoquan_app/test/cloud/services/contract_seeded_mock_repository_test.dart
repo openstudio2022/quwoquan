@@ -34,6 +34,36 @@ void main() {
     );
   });
 
+  test('prod-sim Patrol smoke 可显式使用 mock 数据源但 release prod 仍锁 remote', () {
+    expect(
+      resolveAppDataSourceModeForEnvironment(
+        runtimeEnv: 'prod',
+        explicitDataSource: 'mock',
+        releaseMode: false,
+        runPatrolT4: true,
+      ),
+      AppDataSourceMode.mock,
+    );
+    expect(
+      resolveAppDataSourceModeForEnvironment(
+        runtimeEnv: 'prod',
+        explicitDataSource: 'mock',
+        releaseMode: true,
+        runPatrolT4: true,
+      ),
+      AppDataSourceMode.remote,
+    );
+    expect(
+      resolveAppDataSourceModeForEnvironment(
+        runtimeEnv: 'gamma',
+        explicitDataSource: 'mock',
+        releaseMode: false,
+        runPatrolT4: false,
+      ),
+      AppDataSourceMode.remote,
+    );
+  });
+
   test('content mock repository 可由 contracts fixture 初始化', () async {
     final pack = loadContentScenarioPack();
     final seedRefs = pack.seedRefsFor('content_discovery_feed_basic');
@@ -136,10 +166,16 @@ void main() {
     );
     final repo = buildContractSeededCircleRepository(seedRef: 'circle_core');
 
-    final circles = await repo.listCircles();
+    final circles = await repo.listCircles(limit: 100);
     expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
+    expect(
+      circles.map((item) => item.id),
+      contains('fixture_circle_gold_invest'),
+    );
     final detail = await repo.getCircle('fixture_circle_photo');
     expect(detail.circle.name, '契约摄影社');
+    final goldDetail = await repo.getCircle('fixture_circle_gold_invest');
+    expect(goldDetail.circle.name, '黄金投资圈');
   });
 
   test('circle mock repository 默认优先读取 contract fixture', () async {

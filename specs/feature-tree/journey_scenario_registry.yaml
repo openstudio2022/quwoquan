@@ -141,6 +141,7 @@ journeys:
     boundary_notes:
       - 归属决策（复用扩展，不新建独立后端服务进程）：交集行动深化挂 object-homepage-network/intersection-unified-experience；附近同趣/结伴同行/线下局挂 circle-community 新 L2 companionship-and-nearby-connection；派生称谓与联系人标签挂 user-identity-profile-relationship/persona-follow-graph。
       - UAT_INTERSECTION_ACTION_TO_COMPANIONSHIP 与下列 scenario 的新增 capability/story 为规划草案，待 design/acceptance 落地后回填双向绑定；当前 status:draft 仅登记归属与旅程范围。
+      - 2026-06-30「交集行动重建」：前台主词收敛为「同趣/找同趣/兴趣配对」，旧 plaza/connection 原型已整体下线；底栏 + 动作面板「兴趣配对」以 interest_match_page launcher 落地（导流到 /search、/search/network、/profile/intersections 等既有真实面 + 曝光埋点），不自建第二套 Mock 候选列表。附近同趣/结伴同行/线下局的真实聚合与风控仍 deferred，未落地前 status 保持 draft，详见 specs/product/intersection-action-deepening-and-social-ia.md §0。
     status: draft
 
 scenarios:
@@ -511,6 +512,7 @@ scenarios:
     boundary_notes:
       - 规划新增 L2 circle-community/companionship-and-nearby-connection（含 nearby-affinity-discovery / companion-trip-formation / offline-meetup-gathering 三 L3）；落地前复用 activity-member-governance 的成员/活动/生命周期基座，不新建独立后端服务进程。
       - trip/meetup 作为 circle 域 social 扩展对象；附近同趣复用 recommendation 交集 + integration/location 模糊位置 + 双向同意，不引入新关系等级。
+      - 2026-06-30：旧 plaza/connection 端侧原型（附近/结伴/局四 tab 连接中心）已删除；前台改为「同趣」launcher 导流既有真实面。本 scenario 的真实聚合（trip/meetup aggregate、附近 LBS、双向同意风控）仍 deferred，未落地前禁止以端侧行内 Mock 包装为正式能力。
     status: draft
 
   - id: contact-label-driven-connection

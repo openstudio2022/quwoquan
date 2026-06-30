@@ -6,20 +6,26 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/navigation/page_access_internal_routes.dart';
+import 'package:quwoquan_app/app/shell/object_detail_global_bottom_nav.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_ui_config.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart';
+import 'package:quwoquan_app/components/object_page/object_chrome_actions.dart';
 import 'package:quwoquan_app/components/object_page/object_impact_preview_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_preview_card.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
+import 'package:quwoquan_app/components/object_page/object_slogan_card.dart';
+import 'package:quwoquan_app/components/object_page/object_stats_row.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/circle/pages/circle_edit_settings_page.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_page_tab.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';
@@ -28,7 +34,6 @@ import 'package:quwoquan_app/ui/circle/widgets/circle_header.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_chat.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_creations.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_members.dart';
-import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
 import 'package:quwoquan_app/ui/content/models/create_entry_arguments.dart';
 
 part 'circle_shell_components.dart';
@@ -37,10 +42,16 @@ part 'circle_shell_builders.dart';
 /// 圈子/组织详情壳层（V3 统一对象页骨架 ObjectPageShell + standard 吸顶模式）。
 /// 几何/滚动/吸顶由 ObjectPageShell 收口；本壳只提供圈子业务插槽。
 class CircleShell extends ConsumerStatefulWidget {
-  const CircleShell({super.key, required this.circleId, this.onBack});
+  const CircleShell({
+    super.key,
+    required this.circleId,
+    this.onBack,
+    this.sourceAppearanceMode = UiErrorAppearanceMode.inherit,
+  });
 
   final String circleId;
   final VoidCallback? onBack;
+  final UiErrorAppearanceMode sourceAppearanceMode;
 
   @override
   ConsumerState<CircleShell> createState() => _CircleShellState();
@@ -60,27 +71,7 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     _activeTabId = _resolvedTabs.first.type;
   }
 
-  List<_TabSpec> _resolveTabs(CircleState? state) {
-    final sectionConfig = state?.circleData?.sectionConfig ?? const [];
-    final visible =
-        sectionConfig
-            .where((section) => section.visible)
-            .toList(growable: false)
-          ..sort((a, b) => a.order.compareTo(b.order));
-    final available = visible.isNotEmpty
-        ? visible.map((section) => section.sectionType).toSet()
-        : CircleUIConfig.sections.map((section) => section.sectionType).toSet();
-    final tabs = <_TabSpec>[];
-    for (final tab in CircleUIConfig.tabs) {
-      final hasVisibleSection = tab.sectionTypes.any(available.contains);
-      if (!hasVisibleSection) {
-        continue;
-      }
-      tabs.add(
-        _TabSpec(type: tab.id, label: circleTabLabelForKey(tab.labelKey)),
-      );
-    }
-    if (tabs.isNotEmpty) return tabs;
+  List<_TabSpec> _resolveTabs(CircleState? _) {
     return CircleUIConfig.tabs
         .map(
           (tab) =>
@@ -116,29 +107,31 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     _handleTabSwipe(direction);
   }
 
-  String _formatCount(dynamic value) {
-    if (value == null) return '0';
-    if (value is String) {
-      final parsed = int.tryParse(value.trim());
-      return parsed == null
-          ? (value.trim().isEmpty ? '0' : value.trim())
-          : formatCompactActionCount(parsed);
-    }
-    final parsed = value is int ? value : int.tryParse(value.toString()) ?? 0;
-    return formatCompactActionCount(parsed);
-  }
-
-  String _metaLine(CircleState state) {
+  /// 圈子轻统计：成员（主统计，高保口径 #6）+ 记录 + 讨论；下沉到共享 [ObjectStatsRow]。
+  /// 仅展示云侧可枚举字段，缺失字段不臆造、不补占位。
+  List<ObjectStatItem> _circleStatItems(CircleState state) {
     final circle = state.circleData;
     final cs = state.circleStats;
-    final members = _formatCount(
-      cs.members != 0 ? cs.members : circle?.memberCount,
-    );
-    final posts = _formatCount(cs.posts != 0 ? cs.posts : circle?.postCount);
-    return <String>[
-      '$members ${UITextConstants.circleMembers}',
-      '$posts ${UITextConstants.objectTabRecord}',
-    ].join(' · ');
+    final members = cs.members != 0 ? cs.members : (circle?.memberCount ?? 0);
+    final posts = cs.posts != 0 ? cs.posts : (circle?.postCount ?? 0);
+    final discussions = cs.discussions;
+    return <ObjectStatItem>[
+      if (members > 0)
+        ObjectStatItem(
+          value: formatCompactActionCount(members),
+          label: UITextConstants.circleMembers,
+        ),
+      if (posts > 0)
+        ObjectStatItem(
+          value: formatCompactActionCount(posts),
+          label: UITextConstants.objectTabRecord,
+        ),
+      if (discussions > 0)
+        ObjectStatItem(
+          value: formatCompactActionCount(discussions),
+          label: UITextConstants.objectTabDiscussion,
+        ),
+    ];
   }
 
   bool _isMemberLike(CircleState state) {
@@ -157,12 +150,9 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     return _isMemberLike(state);
   }
 
-  String? _badgeLabel(CircleState state) {
+  bool _isVerified(CircleState state) {
     final status = (state.circleData?.status ?? '').trim().toLowerCase();
-    if (status == 'official' || status == 'verified') {
-      return UITextConstants.circleOfficialBadge;
-    }
-    return null;
+    return status == 'official' || status == 'verified';
   }
 
   Future<void> _openEditor(
@@ -320,6 +310,30 @@ class _CircleShellState extends ConsumerState<CircleShell> {
     final border = AppColors.iosSeparator(context);
     final fg = AppColors.iosLabel(context);
 
+    if (!state.isLoading &&
+        state.circleData == null &&
+        state.loadError != null) {
+      return AppScaffold(
+        backgroundColor: bg,
+        body: AppPageErrorState(
+          semantic: runtimeErrorSemantic(
+            context,
+            error: state.loadError!,
+            category: UiErrorCategory.pageLoad,
+            scope: UiErrorScope.page,
+            appearanceMode: widget.sourceAppearanceMode,
+            sourceRouteId: AppRoutePaths.circleDetailPathTemplate,
+          ),
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await circleCtrl.loadCircle();
+            }
+          },
+        ),
+      );
+    }
+
     final nextTabs = _resolveTabs(state);
     if (nextTabs.length != _resolvedTabs.length ||
         !_tabsEqual(nextTabs, _resolvedTabs)) {
@@ -340,6 +354,10 @@ class _CircleShellState extends ConsumerState<CircleShell> {
       body: ObjectPageShell(
         keyPrefix: 'circle-shell',
         pinMode: ObjectPagePinMode.standard,
+        contentHorizontalPadding: 0,
+        surfaceBridgeOverride: 0,
+        tabSurfaceHorizontalPadding: 0,
+        tabSurfaceTopRadius: _cardRadius,
         identityPinExtent:
             CircleHeader.avatarOuterDiameter - CircleHeader.avatarIntrusion,
         onSwipe: _handleTabSwipeDragEnd,
@@ -373,6 +391,8 @@ class _CircleShellState extends ConsumerState<CircleShell> {
         ),
         tabBodyBuilder: (c) =>
             _buildInlineTabBody(c, isDark: isDark, state: state),
+        // 高保口径：圈子详情页底部保留全局导航栏（首页/视频书/+/联系/我）。
+        bottomBar: const ObjectDetailGlobalBottomNav(),
       ),
     );
   }

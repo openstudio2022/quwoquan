@@ -11,8 +11,8 @@ import 'package:quwoquan_app/components/object_page/intersection_statement_row.d
 ///
 /// 三对象页共用同一结构与口径：
 /// - 用户主页：`我与TA的交集` / `为什么推荐TA`
-/// - 圈子主页：`为什么推荐这个圈子`
-/// - 实体主页：`为什么推荐这里`
+/// - 圈子主页：`我的交集`
+/// - 实体主页：`我的交集`
 ///
 /// 设计：
 /// - 每条行只读云侧 [IntersectionReason.primaryText]；

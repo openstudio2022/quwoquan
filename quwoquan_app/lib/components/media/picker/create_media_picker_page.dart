@@ -59,6 +59,7 @@ class CreateMediaPickerPage extends StatefulWidget {
     required this.entryMode,
     required this.maxSelection,
     this.initialSelection = const <CreateMediaItem>[],
+    this.flowIntent = CreateMediaPickerFlowIntent.publish,
     MediaPickerService? mediaPickerService,
     OneTapMovieComposer? oneTapMovieComposer,
     this.imageEditorBuilder,
@@ -70,6 +71,7 @@ class CreateMediaPickerPage extends StatefulWidget {
   final MediaPickerEntryMode entryMode;
   final int maxSelection;
   final List<CreateMediaItem> initialSelection;
+  final CreateMediaPickerFlowIntent flowIntent;
   final MediaPickerService mediaPickerService;
   final OneTapMovieComposer oneTapMovieComposer;
   final CreateMediaPickerImageEditorBuilder? imageEditorBuilder;

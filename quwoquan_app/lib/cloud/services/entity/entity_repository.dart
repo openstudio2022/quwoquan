@@ -23,6 +23,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
 
 part 'entity_object_page_bundle_mock.dart';
 part 'entity_introduction_repository.dart';
@@ -179,10 +180,19 @@ class MockHomepageRepository implements HomepageRepository {
   }
 
   static List<HomepageDetail> _repositorySeedHomepages() {
-    return List<HomepageDetail>.from(
-      _contractSeedHomepages() ?? const <HomepageDetail>[],
-      growable: true,
-    );
+    final byId = <String, HomepageDetail>{};
+    void put(HomepageDetail homepage) {
+      byId[homepage.id] = homepage;
+    }
+
+    for (final homepage in HomepageMockData.cloneHomepageSeeds()) {
+      put(homepage);
+    }
+    for (final homepage
+        in _contractSeedHomepages() ?? const <HomepageDetail>[]) {
+      put(homepage);
+    }
+    return byId.values.toList(growable: true);
   }
 
   void _putHomepage(HomepageDetail next) {
@@ -329,7 +339,9 @@ class MockHomepageRepository implements HomepageRepository {
   /// 由已 contract-seed 的 [HomepageDetail] 真实字段派生「影响力」事实行，
   /// 与圈子影响卡同源（从 stats 派生）：关注连接 / 口碑评价 / 相关圈子讨论。
   /// 不伪造数字——无可派生事实（候选主页无口碑/相关圈子）时返回空 items，端侧整卡不展示（G2）。
-  static EntityImpactSummary _entityImpactFromHomepage(HomepageDetail homepage) {
+  static EntityImpactSummary _entityImpactFromHomepage(
+    HomepageDetail homepage,
+  ) {
     final followerCount = homepage.followerCount;
     final ratingCount = homepage.reviewSummary?.ratingCount ?? 0;
     final discussionCount = homepage.relatedGroups.fold<int>(
@@ -695,4 +707,3 @@ class MockHomepageRepository implements HomepageRepository {
     );
   }
 }
-

@@ -10,6 +10,7 @@ final class StartupDeferredPluginRegistry {
   private static final String TAG = "QWQStartup";
   private static boolean rtcRegistered;
   private static boolean contentEntryRegistered;
+  private static boolean locationRegistered;
 
   private StartupDeferredPluginRegistry() {}
 
@@ -51,6 +52,18 @@ final class StartupDeferredPluginRegistry {
         "xyz.justsoft.video_thumbnail.VideoThumbnailPlugin");
     contentEntryRegistered = true;
     Log.i(TAG, "android_deferred_content_entry_plugins_registered");
+  }
+
+  static synchronized void ensureLocation(@NonNull FlutterEngine flutterEngine) {
+    if (locationRegistered) {
+      return;
+    }
+    registerPlugin(
+        flutterEngine,
+        "geolocator_android",
+        "com.baseflow.geolocator.GeolocatorPlugin");
+    locationRegistered = true;
+    Log.i(TAG, "android_deferred_location_plugins_registered");
   }
 
   private static void registerPlugin(

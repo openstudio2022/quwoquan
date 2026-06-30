@@ -13,7 +13,6 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 
 final callKitServiceProvider = Provider<CallKitService>((ref) {
   final service = CallKitService();
-  service.startListening();
   ref.onDispose(() => service.dispose());
   return service;
 });
@@ -39,23 +38,32 @@ class IncomingCallCoordinator {
   /// 启动时缓存信令客户端，避免在 [stop]/[dispose] 生命周期内再 `ref.read`
   /// （Riverpod 禁止在 dispose 回调里读取其它 provider）。
   RtcSignalingClient? _signaling;
+  CallKitService? _callKit;
+  int _startGeneration = 0;
 
   String? _pendingCallId;
   String? _pendingCallType;
 
   void start(String userId) {
-    unawaited(StartupDeferredPlugins.ensureRtcPlugins());
-    final signaling = ref.read(rtcSignalingProvider);
-    final callKit = ref.read(callKitServiceProvider);
     final channel = resolveIncomingCallChannel(
       ref.read(platformCapabilitiesProvider),
     );
-    _signaling = signaling;
 
     // 实时通话能力不可用（如初始 ohos / desktop）：不建立来电监听，由入口
     // 能力位隐藏发起按钮，二者一致降级（R-XP1/R-XP5）。
     if (channel == IncomingCallChannel.unsupported) {
       return;
+    }
+
+    final signaling = ref.read(rtcSignalingProvider);
+    final callKit = channel == IncomingCallChannel.nativeCallKit
+        ? ref.read(callKitServiceProvider)
+        : null;
+    final generation = ++_startGeneration;
+    _signaling = signaling;
+    _callKit = callKit;
+    if (callKit != null) {
+      unawaited(_startCallKitListening(callKit, generation));
     }
 
     signaling.connect(userId);
@@ -70,21 +78,32 @@ class IncomingCallCoordinator {
       switch (channel) {
         case IncomingCallChannel.nativeCallKit:
           () async {
+            final nativeCallKit = callKit;
+            if (nativeCallKit == null) {
+              router.push(AppRoutePaths.rtcIncoming(callId: event.callId));
+              return;
+            }
+            await StartupDeferredPlugins.ensureRtcPlugins();
+            nativeCallKit.startListening();
             final settings = await ref
                 .read(callSettingsRepositoryProvider)
                 .getCallSettings();
             final initiatorRingtoneId = ringing.initiatorRingtoneId;
-            final ringtoneId = settings.allowCallerRingtoneOverride &&
+            final ringtoneId =
+                settings.allowCallerRingtoneOverride &&
                     initiatorRingtoneId != null &&
                     initiatorRingtoneId.isNotEmpty
                 ? initiatorRingtoneId
                 : settings.defaultIncomingCallRingtoneId;
-            await callKit.showIncomingCall(
+            final shown = await nativeCallKit.showIncomingCall(
               callId: event.callId,
               callerName: callerName,
               isVideo: _pendingCallType == 'video',
               ringtoneId: ringtoneId,
             );
+            if (!shown) {
+              router.push(AppRoutePaths.rtcIncoming(callId: event.callId));
+            }
           }();
           break;
         case IncomingCallChannel.webPushInApp:
@@ -97,44 +116,60 @@ class IncomingCallCoordinator {
       }
     });
 
-    _callKitSub = callKit.actions.listen((action) {
-      final callId = _pendingCallId;
-      if (callId == null) return;
+    if (callKit != null) {
+      _callKitSub = callKit.actions.listen((action) {
+        final callId = _pendingCallId;
+        if (callId == null) return;
 
-      switch (action) {
-        case CallKitAction.accept:
-          router.push(AppRoutePaths.rtcIncoming(callId: callId));
-          break;
-        case CallKitAction.decline:
-          _pendingCallId = null;
-          _pendingCallType = null;
-          break;
-        case CallKitAction.end:
-          _pendingCallId = null;
-          _pendingCallType = null;
-          break;
-        case CallKitAction.timeout:
-          _pendingCallId = null;
-          _pendingCallType = null;
-          break;
-      }
-    });
+        switch (action) {
+          case CallKitAction.accept:
+            router.push(AppRoutePaths.rtcIncoming(callId: callId));
+            break;
+          case CallKitAction.decline:
+            _pendingCallId = null;
+            _pendingCallType = null;
+            break;
+          case CallKitAction.end:
+            _pendingCallId = null;
+            _pendingCallType = null;
+            break;
+          case CallKitAction.timeout:
+            _pendingCallId = null;
+            _pendingCallType = null;
+            break;
+        }
+      });
+    }
 
     _endedSub = signaling.callEnded.listen((event) {
       if (event.callId == _pendingCallId) {
-        callKit.endCall();
+        callKit?.endCall();
         _pendingCallId = null;
       }
     });
   }
 
+  Future<void> _startCallKitListening(
+    CallKitService callKit,
+    int generation,
+  ) async {
+    await StartupDeferredPlugins.ensureRtcPlugins();
+    if (_startGeneration != generation || _callKit != callKit) {
+      return;
+    }
+    callKit.startListening();
+  }
+
   void stop() {
+    _startGeneration += 1;
     _signalSub?.cancel();
     _signalSub = null;
     _callKitSub?.cancel();
     _callKitSub = null;
     _endedSub?.cancel();
     _endedSub = null;
+    _callKit?.stopListening();
+    _callKit = null;
     _signaling?.disconnect();
     _signaling = null;
     _pendingCallId = null;

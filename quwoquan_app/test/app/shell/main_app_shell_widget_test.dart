@@ -26,6 +26,7 @@ import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
+import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
@@ -150,6 +151,10 @@ Widget _buildShellRouter({required bool authenticated}) {
                 }
                 return const Scaffold(body: Center(child: Text('CREATE_PAGE')));
               },
+            ),
+            GoRoute(
+              path: AppRoutePaths.interestMatch,
+              builder: (context, state) => const InterestMatchPage(),
             ),
           ],
         ),
@@ -463,13 +468,13 @@ void main() {
   });
 
   group('MainAppShell', () {
-    testWidgets('底部导航展示五栏，精品成为独立一级入口', (tester) async {
+    testWidgets('底部导航展示五栏，视频书成为独立一级入口', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShell(AppRoutePaths.home));
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('首页'), findsWidgets);
-      expect(find.text('精品'), findsWidgets);
+      expect(find.text('视频书'), findsWidgets);
       expect(find.text('我'), findsWidgets);
       expect(find.text(UITextConstants.bottomNavGuestProfile), findsNothing);
       expect(
@@ -489,9 +494,23 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text('精品'),
+          matching: find.text('视频书'),
         ),
         findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text(AppConceptConstants.interestMatch),
+        ),
+        findsNothing,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.text('精品'),
+        ),
+        findsNothing,
       );
       expect(
         find.descendant(
@@ -539,7 +558,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(BottomNavigationWidget),
-          matching: find.text('精品'),
+          matching: find.text('视频书'),
         ),
         findsOneWidget,
       );
@@ -608,6 +627,36 @@ void main() {
         find.text(UITextConstants.createActionCreateCircleShort),
         findsOneWidget,
       );
+      expect(
+        find.text(UITextConstants.createActionInterestMatchShort),
+        findsOneWidget,
+      );
+      expect(
+        find.text(UITextConstants.createActionInterestMatchSubtitle),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('加号面板的兴趣配对入口打开找同趣 launcher', (tester) async {
+      _suppressExpectedErrors();
+      await tester.pumpWidget(_buildShellRouter(authenticated: true));
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(BottomNavigationWidget),
+          matching: find.byIcon(CupertinoIcons.plus),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.text(UITextConstants.createActionInterestMatchShort),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(InterestMatchPage), findsOneWidget);
+      expect(find.byKey(InterestMatchPage.viewKey), findsOneWidget);
     });
 
     testWidgets('游客点加号先开动作面板（不弹登录），后置到具体动作再拦截', (tester) async {
@@ -974,6 +1023,80 @@ void main() {
       expect(await iconSizeForLogicalWidth(390), 28.0);
       expect(await iconSizeForLogicalWidth(820), 32.0);
       expect(await iconSizeForLogicalWidth(1200), 40.0);
+    });
+
+    test('视频书方案 B 图标几何算法支持三状态与多尺寸缩放', () {
+      void expectRectClose(Rect actual, Rect expected) {
+        expect(actual.left, closeTo(expected.left, 0.01));
+        expect(actual.top, closeTo(expected.top, 0.01));
+        expect(actual.width, closeTo(expected.width, 0.01));
+        expect(actual.height, closeTo(expected.height, 0.01));
+      }
+
+      const designSize = Size.square(AppVideoBookIconGeometry.designSize);
+      expectRectClose(
+        AppVideoBookIconGeometry.outerBounds(designSize),
+        AppVideoBookIconGeometry.outerBoundsInDesign,
+      );
+      expectRectClose(
+        AppVideoBookIconGeometry.frontCoverRect(designSize),
+        AppVideoBookIconGeometry.frontCoverRectInDesign,
+      );
+      expect(
+        AppVideoBookIconGeometry.coverCornerRadius(designSize),
+        closeTo(AppVideoBookIconGeometry.coverCornerRadiusInDesign, 0.01),
+      );
+
+      for (final state in AppVideoBookIconState.values) {
+        expect(
+          AppVideoBookIconGeometry.strokeWidth(designSize, state: state),
+          closeTo(AppVideoBookIconGeometry.unselectedStrokeWidth, 0.01),
+        );
+      }
+
+      final layerBounds = AppVideoBookIconGeometry.rightPageLayerPath(
+        designSize,
+      ).getBounds();
+      final frontBounds = AppVideoBookIconGeometry.frontCoverRect(designSize);
+      expect(
+        layerBounds.left,
+        greaterThan(
+          frontBounds.right -
+              AppVideoBookIconGeometry.coverCornerRadiusInDesign,
+        ),
+      );
+      expect(layerBounds.top, closeTo(frontBounds.top, 0.01));
+      expect(
+        layerBounds.right - frontBounds.right,
+        closeTo(AppVideoBookIconGeometry.rightPageLayerOffsetInDesign, 0.01),
+      );
+      expect(layerBounds.height, closeTo(frontBounds.height, 0.01));
+
+      final playBounds = AppVideoBookIconGeometry.playPath(
+        designSize,
+      ).getBounds();
+      expect(playBounds.center.dx, closeTo(frontBounds.center.dx, 0.4));
+      expect(playBounds.center.dy, closeTo(12.0, 0.01));
+      expect(playBounds.width, greaterThan(5.5));
+      expect(playBounds.width, lessThan(5.9));
+      expect(playBounds.height, greaterThan(6.4));
+      expect(playBounds.height, lessThan(6.9));
+
+      for (final iconSize in <double>[28.0, 32.0, 40.0]) {
+        final size = Size.square(iconSize);
+        final scale = iconSize / AppVideoBookIconGeometry.designSize;
+        expect(
+          AppVideoBookIconGeometry.strokeWidth(
+            size,
+            state: AppVideoBookIconState.selected,
+          ),
+          closeTo(AppVideoBookIconGeometry.selectedStrokeWidth * scale, 0.01),
+        );
+        expectRectClose(
+          AppVideoBookIconGeometry.outerBounds(size),
+          Rect.fromLTWH(3.75 * scale, 3.0 * scale, 16.45 * scale, 18.0 * scale),
+        );
+      }
     });
 
     testWidgets('底部导航自绘图标选中态使用主蓝并保持语义形态', (tester) async {

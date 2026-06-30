@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -29,7 +30,6 @@ import 'package:quwoquan_app/core/providers/app_providers.dart'
     show
         appResourceCacheProfileProvider,
         cacheTelemetrySinkProvider,
-        appLogUploaderProvider,
         mediaDownloadCacheProvider,
         postObjectCacheProvider,
         realtimeConnectionManagerProvider;
@@ -130,9 +130,34 @@ Widget wrapWithQuwoquanAppAppearance({
         boldText: false,
         highContrast: false,
       ),
-      child: child,
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(
+          decoration: TextDecoration.none,
+          decorationThickness: 0,
+        ),
+        child: _QuwoquanVisualDebugGuard(child: child),
+      ),
     ),
   );
+}
+
+class _QuwoquanVisualDebugGuard extends StatelessWidget {
+  const _QuwoquanVisualDebugGuard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    assert(() {
+      debugPaintSizeEnabled = false;
+      debugPaintBaselinesEnabled = false;
+      debugPaintPointersEnabled = false;
+      debugPaintLayerBordersEnabled = false;
+      debugRepaintRainbowEnabled = false;
+      return true;
+    }());
+    return Material(type: MaterialType.transparency, child: child);
+  }
 }
 
 /// 根组件：冷启动先直出轻量欢迎页，首帧后再并行恢复会话、装配路由与预热首页。

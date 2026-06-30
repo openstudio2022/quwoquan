@@ -471,6 +471,11 @@ class GlobalQuickActionSheet {
         });
   }
 
+  /// 打开「兴趣配对」发现入口。此页仅导流既有真实面，游客可浏览。
+  static void openInterestMatch(BuildContext context) {
+    context.push(AppRoutePaths.interestMatch);
+  }
+
   /// 登录成功后消费 [OpenSheetContinuation]：续接打开对应面板/流程。
   /// 由始终在场的外壳（MainAppShell）调用，确保 context 在路由树内、续接稳定。
   static void resumeSheetContinuation(
@@ -502,6 +507,7 @@ class _QuickActionSheet extends ConsumerWidget {
       onStartGroupChat: () => _openStartGroupChat(context, ref),
       onAddContact: () => _openAddContact(context, ref),
       onCreateCircle: () => _openCreateCircle(context, ref),
+      onInterestMatch: () => _openInterestMatch(context),
       onCancel: () => Navigator.of(context).pop(),
       priority: priority,
     );
@@ -574,6 +580,16 @@ class _QuickActionSheet extends ConsumerWidget {
       sheet: AuthContinuationSheet.createCircle,
       openNow: () => GlobalQuickActionSheet.openCreateCircle(rootContext),
     );
+  }
+
+  void _openInterestMatch(BuildContext sheetContext) {
+    Navigator.of(sheetContext).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!rootContext.mounted) {
+        return;
+      }
+      GlobalQuickActionSheet.openInterestMatch(rootContext);
+    });
   }
 
   /// 账号态动作门：已登录直接执行；未登录先登记续接再引导登录，登录成功后由

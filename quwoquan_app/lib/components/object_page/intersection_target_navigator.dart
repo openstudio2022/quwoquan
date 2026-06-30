@@ -4,6 +4,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 
 /// 交集导航归因（埋点上下文），由展示面在构造导航器时透传。
 ///
@@ -70,6 +71,7 @@ class IntersectionTargetNavigator {
   static String? resolvePath(
     IntersectionTarget? target, {
     String sourceRef = '',
+    String? sourceTheme,
   }) {
     if (target == null) {
       return null;
@@ -89,9 +91,9 @@ class IntersectionTargetNavigator {
       case 'userProfile':
         return AppRoutePaths.userProfile(username: id);
       case 'circleDetail':
-        return AppRoutePaths.circleDetail(id: id);
+        return AppRoutePaths.circleDetail(id: id, sourceTheme: sourceTheme);
       case 'homepageDetail':
-        return AppRoutePaths.homepageDetail(id: id);
+        return AppRoutePaths.homepageDetail(id: id, sourceTheme: sourceTheme);
       case 'myIntersections':
         return AppRoutePaths.myIntersections(
           dimension: id,
@@ -113,14 +115,22 @@ class IntersectionTargetNavigator {
     String sourceRef = '',
     IntersectionNavAttribution? attribution,
   }) {
-    final path = resolvePath(target, sourceRef: sourceRef);
+    final path = resolvePath(
+      target,
+      sourceRef: sourceRef,
+      sourceTheme: uiErrorAppearanceRouteValueFor(context),
+    );
     if (path == null || target == null) {
+      return false;
+    }
+    final router = GoRouter.maybeOf(context);
+    if (router == null) {
       return false;
     }
     if (attribution != null) {
       onTrack?.call(target, attribution);
     }
-    context.push(path);
+    router.push(path);
     return true;
   }
 }

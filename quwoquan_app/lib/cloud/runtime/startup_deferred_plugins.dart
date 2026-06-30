@@ -13,6 +13,7 @@ final class StartupDeferredPlugins {
 
   static bool _rtcEnsured = false;
   static bool _contentEntryEnsured = false;
+  static bool _locationEnsured = false;
 
   static Future<void> ensureRtcPlugins() async {
     if (_rtcEnsured || currentAppPlatform != AppPlatform.android) {
@@ -41,6 +42,21 @@ final class StartupDeferredPlugins {
       _contentEntryEnsured = true;
     } on PlatformException {
       _contentEntryEnsured = true;
+    }
+  }
+
+  static Future<void> ensureLocationPlugins() async {
+    if (_locationEnsured || currentAppPlatform != AppPlatform.android) {
+      _locationEnsured = true;
+      return;
+    }
+    try {
+      await _channel.invokeMethod<void>('ensureLocation');
+      _locationEnsured = true;
+    } on MissingPluginException {
+      _locationEnsured = true;
+    } on PlatformException {
+      _locationEnsured = true;
     }
   }
 }

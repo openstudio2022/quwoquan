@@ -14,12 +14,16 @@ class ArticlePageCurlRenderConfig {
     this.enableBackCreaseOcclusion = true,
     this.enableBottomProjection = true,
     this.enableSpineAmbient = true,
+    this.backfaceTextureLuminanceScale = 0.5,
   });
 
   final bool enableBackPaperWash;
   final bool enableBackCreaseOcclusion;
   final bool enableBottomProjection;
   final bool enableSpineAmbient;
+
+  /// 背面是纸张背侧透出的正面纹理，物理上应比正面暗淡。
+  final double backfaceTextureLuminanceScale;
 }
 
 @immutable
@@ -191,6 +195,7 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
       backSurface,
       scene.textures.verso,
       blendMode: BlendMode.src,
+      colorFilter: _backfaceTextureColorFilter(),
     );
   }
 
@@ -198,8 +203,7 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
     Canvas canvas,
     ArticlePageCurlMeshSurface backSurface,
   ) {
-    final paperWashAlpha =
-        0.012 + scene.lightState.backfaceTintStrength * 0.018;
+    final paperWashAlpha = 0.04 + scene.lightState.backfaceTintStrength * 0.035;
     canvas.drawVertices(
       backSurface.vertices,
       BlendMode.srcOver,
@@ -290,6 +294,7 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
     ArticlePageCurlMeshSurface surface,
     ArticlePageTextureSnapshot snapshot, {
     BlendMode blendMode = BlendMode.src,
+    ui.ColorFilter? colorFilter,
   }) {
     final imageShader = ui.ImageShader(
       snapshot.image,
@@ -307,8 +312,40 @@ class _ArticlePageCurlRendererPainter extends CustomPainter {
       Paint()
         ..isAntiAlias = false
         ..filterQuality = FilterQuality.none
+        ..colorFilter = colorFilter
         ..shader = imageShader,
     );
+  }
+
+  ui.ColorFilter? _backfaceTextureColorFilter() {
+    final luminanceScale = scene.renderConfig.backfaceTextureLuminanceScale
+        .clamp(0.0, 1.0)
+        .toDouble();
+    if (luminanceScale >= 0.999) {
+      return null;
+    }
+    return ui.ColorFilter.matrix(<double>[
+      luminanceScale,
+      0,
+      0,
+      0,
+      0,
+      0,
+      luminanceScale,
+      0,
+      0,
+      0,
+      0,
+      0,
+      luminanceScale,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ]);
   }
 
   void _drawSpineAmbient(Canvas canvas) {

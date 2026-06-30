@@ -1,0 +1,29 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/四川省/景区/景区记账
+title: 四川省景区景区记账
+intentLabel: 景区记账
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 四川省
+entityCategory: 景区
+parentTaskId: null
+status: draft
+scope:
+  region: 四川省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 九寨沟
+  - entityType: 地点/景区
+    name: 黄龙
+provenance:
+  createdAt: '2026-06-30T13:27:48.402440+00:00'
+  createdBy: task new
+content:
+  angles:
+  - 体验
+  - 攻略
+  carriers:
+  - article

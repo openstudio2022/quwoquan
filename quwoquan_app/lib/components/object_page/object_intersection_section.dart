@@ -12,7 +12,6 @@ import 'package:quwoquan_app/components/object_page/object_intersection_card.dar
 import 'package:quwoquan_app/components/object_page/object_intersection_card_skeleton.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
-import 'package:quwoquan_app/core/constants/plaza_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 
@@ -159,7 +158,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
           SizedBox(width: AppSpacing.intraGroupSm),
           Expanded(
             child: Text(
-              PlazaTextConstants.objectActionZoneEmptyHint,
+              AppConceptConstants.objectActionZoneEmptyHint,
               style: TextStyle(
                 fontSize: AppTypography.iosFootnote,
                 color: AppColors.iosSecondaryLabel(context),

@@ -33,6 +33,8 @@ from download.research.auto_plan_facade import (
     _wikidata_entity_aliases,
     _wikidata_item_for_entity_search,
     _wikidata_item_for_zhwiki,
+    _wiki_related_titles_for_entity,
+    _wiki_title_for_entity,
 )
 from download.research.image_provider_compliance import (
     professional_library_compliance_summary,
@@ -74,8 +76,6 @@ from download.research.source_quality import (
 from download.research.text_match import _entity_name_variants, _expanded_entity_aliases
 from download.research.wiki_discovery import (
     _BASE_DRAFT_IMAGE_CANDIDATES,
-    _wiki_related_titles_for_entity,
-    _wiki_title_for_entity,
     _wiki_url,
 )
 

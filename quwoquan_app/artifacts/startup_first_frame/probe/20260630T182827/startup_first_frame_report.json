@@ -1,0 +1,146 @@
+{
+  "outputDir": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260630T182827",
+  "runs": 1,
+  "passed": false,
+  "summary": {
+    "samples": [
+      {
+        "runId": "20260630T182827",
+        "activityDisplayedMs": null,
+        "activityOnCreateMs": 25,
+        "flutterEngineConfiguredMs": 1589,
+        "firstVisibleMs": null,
+        "reportPath": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260630T182827"
+      }
+    ],
+    "p50": {
+      "activityDisplayedMs": null,
+      "activityOnCreateMs": 25,
+      "flutterEngineConfiguredMs": 1589,
+      "firstVisibleMs": null
+    },
+    "p95": {
+      "activityDisplayedMs": null,
+      "activityOnCreateMs": 25,
+      "flutterEngineConfiguredMs": 1589,
+      "firstVisibleMs": null
+    }
+  },
+  "runReports": null,
+  "results": [
+    {
+      "platform": "android",
+      "device": "emulator-5554",
+      "apk": null,
+      "passed": false,
+      "visibleByMs": 2000,
+      "firstVisibleMs": null,
+      "ttidWithinBudget": false,
+      "activityDisplayedMs": null,
+      "activityOnCreateMs": 25,
+      "flutterEngineConfiguredMs": 1589,
+      "nativeWelcomeDetected": false,
+      "nativeWelcomeHits": [],
+      "blueScreenDetected": true,
+      "plainBackgroundDetected": false,
+      "flutterUiDisplayedMaxMs": 3000,
+      "flutterUiDisplayedWithinBudget": true,
+      "timings": {
+        "android_activity_on_create": 25,
+        "android_flutter_engine_configured": 1589
+      },
+      "screenshots": [
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260630T182827/android-0400ms.png",
+          "offsetMs": 405,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            10,
+            132,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": true,
+          "brandedOrContentVisible": false,
+          "brandTransitionVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260630T182827/android-0600ms.png",
+          "offsetMs": 1946,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            10,
+            132,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": true,
+          "brandedOrContentVisible": false,
+          "brandTransitionVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260630T182827/android-0800ms.png",
+          "offsetMs": 2454,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            10,
+            132,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": true,
+          "brandedOrContentVisible": false,
+          "brandTransitionVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260630T182827/android-1000ms.png",
+          "offsetMs": 3062,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            10,
+            132,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": true,
+          "brandedOrContentVisible": false,
+          "brandTransitionVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260630T182827/android-1500ms.png",
+          "offsetMs": 3586,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            10,
+            132,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": true,
+          "brandedOrContentVisible": false,
+          "brandTransitionVisible": true
+        },
+        {
+          "path": "/Users/zhaoyuxi/Projects/quwoquan/quwoquan_app/artifacts/startup_first_frame/probe/20260630T182827/android-2000ms.png",
+          "offsetMs": 4135,
+          "foregroundRatio": 0.0,
+          "stddevAvg": 0.0,
+          "medianRgb": [
+            10,
+            132,
+            255
+          ],
+          "plainBackground": false,
+          "blueBackground": true,
+          "brandedOrContentVisible": false,
+          "brandTransitionVisible": true
+        }
+      ]
+    }
+  ]
+}

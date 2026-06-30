@@ -214,6 +214,7 @@ python3 quwoquan_data/tests/local_contract/common/test_object_stages_and_wikitex
   quwoquan_data/tests/local_contract/download/test_auto_research_article_homepage__local_contract_test.py \
   quwoquan_data/tests/local_contract/download/test_auto_research_image_lane__local_contract_test.py \
   quwoquan_data/tests/local_contract/download/test_auto_research_transport__local_contract_test.py \
+  quwoquan_data/tests/local_contract/download/test_entity_homepage_image_wikitext_truth_source__local_contract_test.py \
   quwoquan_data/tests/local_contract/produce/test_route_assets_layout__local_contract_test.py
 
 echo "[verify-quwoquan-data] PASSED"

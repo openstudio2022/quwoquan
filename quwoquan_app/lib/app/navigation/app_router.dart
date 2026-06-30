@@ -44,6 +44,7 @@ import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/location_place_landing_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
+import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_claim_page.dart';
@@ -54,9 +55,6 @@ import 'package:quwoquan_app/ui/entity/pages/homepage_picker_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_status_report_page.dart';
 import 'package:quwoquan_app/ui/entity/pages/suggest_homepage_page.dart';
 import 'package:quwoquan_app/ui/intersection/pages/object_intersection_list_page.dart';
-import 'package:quwoquan_app/ui/plaza/pages/companion_trip_page.dart';
-import 'package:quwoquan_app/ui/plaza/pages/nearby_affinity_page.dart';
-import 'package:quwoquan_app/ui/plaza/pages/offline_meetup_page.dart';
 import 'package:quwoquan_app/ui/user/pages/add_contact_page.dart';
 import 'package:quwoquan_app/ui/user/pages/contact_confirm_page.dart';
 import 'package:quwoquan_app/ui/user/pages/contact_search_result_page.dart';
@@ -236,11 +234,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             ),
           ),
           GoRoute(
-            path: AppRoutePaths.plaza,
+            path: AppRoutePaths.interestMatch,
             pageBuilder: (context, state) => NoTransitionPage(
               key: state.pageKey,
-              child:
-                  const SizedBox.shrink(), // ConnectionHubPage 在 MainAppShell 中渲染
+              child: const InterestMatchPage(),
             ),
           ),
           GoRoute(
@@ -275,21 +272,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       ..._contactRoutes(),
-      GoRoute(
-        path: AppRoutePaths.plazaNearby,
-        pageBuilder: (context, state) =>
-            appRoutePage<void>(state: state, child: const NearbyAffinityPage()),
-      ),
-      GoRoute(
-        path: AppRoutePaths.plazaCompanion,
-        pageBuilder: (context, state) =>
-            appRoutePage<void>(state: state, child: const CompanionTripPage()),
-      ),
-      GoRoute(
-        path: AppRoutePaths.plazaMeetup,
-        pageBuilder: (context, state) =>
-            appRoutePage<void>(state: state, child: const OfflineMeetupPage()),
-      ),
       GoRoute(
         path: AppRoutePaths.globalSearch,
         pageBuilder: (context, state) {
@@ -406,6 +388,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialSummary: extra?.initialSummary,
               referralSource:
                   extra?.referralSource ?? ReferralSource.entityPage,
+              sourceAppearanceMode:
+                  extra?.sourceAppearanceMode ??
+                  uiErrorAppearanceModeFromRouteValue(
+                    state.uri.queryParameters['sourceTheme'],
+                  ),
               feedRequestId: extra?.feedRequestId ?? '',
               recommendationTraceId: extra?.recommendationTraceId ?? '',
               experimentBucket: extra?.experimentBucket ?? '',
@@ -594,6 +581,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               circleId: id,
               referralSource:
                   circleExtra?.referralSource ?? ReferralSource.organicFeed,
+              sourceAppearanceMode:
+                  circleExtra?.sourceAppearanceMode ??
+                  uiErrorAppearanceModeFromRouteValue(
+                    state.uri.queryParameters['sourceTheme'],
+                  ),
               onBack: () {
                 if (context.canPop()) {
                   context.pop();

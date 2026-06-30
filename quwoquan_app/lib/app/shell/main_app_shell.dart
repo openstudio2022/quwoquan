@@ -18,7 +18,6 @@ import 'package:quwoquan_app/ui/rtc/widgets/active_call_bar.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/pip_call_overlay.dart';
 import 'package:quwoquan_app/ui/discovery/pages/home_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
-import 'package:quwoquan_app/ui/plaza/pages/connection_hub_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/assistant/infrastructure/infrastructure.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/ops/app_log_bottom_nav_tap_meta.g.dart';
@@ -45,11 +44,11 @@ class MainAppShell extends ConsumerStatefulWidget {
 }
 
 class _MainAppShellState extends ConsumerState<MainAppShell> {
-  late int _currentIndex;
+  late MainTabDestination _currentDestination;
   late String _currentLocation;
   late String _currentPageVisitId;
   late DateTime _currentPageEnterAt;
-  late final Set<int> _initializedTabIndexes;
+  late final Set<MainTabDestination> _initializedTabDestinations;
 
   /// 供 [dispose] 使用；卸载时 [ref] 不可用，须在 [build] 中刷新。
   OpsEventRepository? _pageAccessOpsRepository;
@@ -110,8 +109,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = bottomNavIndexFromLocation(widget.currentLocation);
-    _initializedTabIndexes = <int>{_currentIndex};
+    _currentDestination = mainTabFromLocation(widget.currentLocation);
+    _initializedTabDestinations = <MainTabDestination>{_currentDestination};
     _currentLocation = widget.currentLocation;
     _currentPageVisitId = AppTraceContextStore.instance.newPageVisitId();
     _currentPageEnterAt = DateTime.now();
@@ -137,8 +136,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   void didUpdateWidget(MainAppShell oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentLocation != widget.currentLocation) {
-      _currentIndex = bottomNavIndexFromLocation(widget.currentLocation);
-      _initializedTabIndexes.add(_currentIndex);
+      _currentDestination = mainTabFromLocation(widget.currentLocation);
+      _initializedTabDestinations.add(_currentDestination);
       writeAppPageAccessReturn(
         location: _currentLocation,
         pageVisitId: _currentPageVisitId,
@@ -210,8 +209,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       });
     });
     final themeDark = ref.watch(isDarkProvider);
-    final isFeaturedActive =
-        _currentIndex == MainTabDestination.featured.bottomNavIndex;
+    final isFeaturedActive = _currentDestination == MainTabDestination.featured;
     final forceDark = ref.watch(videoForceDarkProvider).forceDark;
     final effectiveForceDark = forceDark || isFeaturedActive;
     final isDark = themeDark || effectiveForceDark;
@@ -221,6 +219,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     final bottomNavHidden =
         ref.watch(bottomNavHiddenProvider).hidden ||
         isFeaturedActive ||
+        !_currentDestination.isBottomNavDestination ||
         widget.currentLocation == AppRoutePaths.createEntry ||
         widget.currentLocation.startsWith(AppRoutePaths.createPathTemplate);
     final capabilities = ref.watch(platformCapabilitiesProvider);
@@ -254,9 +253,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                       ? Stack(
                           children: [
                             WebMainAppShell(
-                              currentDestination: mainTabFromBottomNavIndex(
-                                _currentIndex,
-                              ),
+                              currentDestination: _currentDestination,
                               currentLocation: _currentLocation,
                               backgroundColor: shellBackground,
                               onPrimarySelected: _handleWebPrimaryTap,
@@ -268,17 +265,22 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                           child: Stack(
                             children: [
                               IndexedStack(
-                                index: _currentIndex,
+                                index:
+                                    _currentDestination
+                                        .isMobileShellStackDestination
+                                    ? _currentDestination.mobileShellStackIndex
+                                    : MainTabDestination
+                                          .home
+                                          .mobileShellStackIndex,
                                 children: [
                                   _buildTabBody(
-                                    index: MainTabDestination.home.bottomNavIndex,
+                                    destination: MainTabDestination.home,
                                     child: HomePage(
                                       routeLocation: _currentLocation,
                                     ),
                                   ),
                                   _buildTabBody(
-                                    index:
-                                        MainTabDestination.featured.bottomNavIndex,
+                                    destination: MainTabDestination.featured,
                                     child: HomeFeaturedImmersivePage(
                                       onExitToHome: () => _selectMainTab(
                                         MainTabDestination.home,
@@ -287,28 +289,26 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
                                   ),
                                   const SizedBox.shrink(),
                                   _buildTabBody(
-                                    index: MainTabDestination.chat.bottomNavIndex,
+                                    destination: MainTabDestination.chat,
                                     child: const ChatPage(),
                                   ),
                                   _buildTabBody(
-                                    index:
-                                        MainTabDestination.plaza.bottomNavIndex,
-                                    child: const ConnectionHubPage(),
-                                  ),
-                                  _buildTabBody(
-                                    index:
-                                        MainTabDestination.profile.bottomNavIndex,
+                                    destination: MainTabDestination.profile,
                                     child: const MyProfilePage(),
                                   ),
                                 ],
                               ),
+                              if (!_currentDestination
+                                  .isMobileShellStackDestination)
+                                Positioned.fill(child: widget.child),
                               if (!bottomNavHidden)
                                 Positioned(
                                   left: 0,
                                   right: 0,
                                   bottom: 0,
                                   child: BottomNavigationWidget(
-                                    currentIndex: _currentIndex,
+                                    currentIndex:
+                                        _currentDestination.bottomNavIndex,
                                     onTap: _handleBottomNavTap,
                                   ),
                                 ),
@@ -329,7 +329,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   }
 
   void _handleBottomNavTap(int index) {
-    final previousIndex = _currentIndex;
+    final previousIndex = _currentDestination.bottomNavIndex;
     final nextTab = mainTabFromBottomNavIndex(index);
     _logBrowseEvent(
       action: 'bottom_nav_tap',
@@ -368,12 +368,12 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
   }
 
   void _handleWebPrimaryTap(MainTabDestination nextTab) {
-    final previousIndex = _currentIndex;
+    final previousIndex = _currentDestination.primaryNavigationIndex;
     _logBrowseEvent(
       action: 'web_primary_tap',
       bottomNavTap: AppLogBottomNavTapMeta(
         fromIndex: previousIndex,
-        toIndex: nextTab.bottomNavIndex,
+        toIndex: nextTab.primaryNavigationIndex,
       ),
     );
 
@@ -399,7 +399,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   void _selectWebCreateTab() {
     setState(() {
-      _currentIndex = MainTabDestination.create.bottomNavIndex;
+      _currentDestination = MainTabDestination.create;
     });
     ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
     ref.read(bottomNavHiddenProvider.notifier).setHidden(true);
@@ -407,8 +407,8 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
 
   void _selectMainTab(MainTabDestination nextTab) {
     setState(() {
-      _currentIndex = nextTab.bottomNavIndex;
-      _initializedTabIndexes.add(_currentIndex);
+      _currentDestination = nextTab;
+      _initializedTabDestinations.add(_currentDestination);
     });
 
     switch (nextTab) {
@@ -428,8 +428,9 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(nextTab.routePath);
         break;
-      case MainTabDestination.plaza:
-        // 同频/广场：游客可浏览，无登录门；保持底栏可见。
+      case MainTabDestination.interestMatch:
+        // 同趣（兴趣配对）：游客可浏览，无登录门；移动端由加号面板进入，
+        // Web 宽屏仍可作为主工作区 destination 承载。
         ref.read(lastMainTabBeforeAssistantProvider.notifier).set(null);
         ref.read(bottomNavHiddenProvider.notifier).setHidden(false);
         context.go(nextTab.routePath);
@@ -442,9 +443,13 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     }
   }
 
-  Widget _buildTabBody({required int index, required Widget child}) {
-    if (_initializedTabIndexes.contains(index) || _currentIndex == index) {
-      _initializedTabIndexes.add(index);
+  Widget _buildTabBody({
+    required MainTabDestination destination,
+    required Widget child,
+  }) {
+    if (_initializedTabDestinations.contains(destination) ||
+        _currentDestination == destination) {
+      _initializedTabDestinations.add(destination);
       return child;
     }
     return const SizedBox.shrink();
@@ -460,7 +465,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     // 强入口未登录：先把底层归位到首页（底栏第一项），再上推全屏登录页。
     // 这样无论登录成功（按 redirect 跳目标）还是关闭 / 稍后登录（回首页或原路返回），
     // 都稳定回到首页，避免从 premium/featured 等内存态 tab 进入后关闭仍停留在原 tab。
-    if (_currentIndex != MainTabDestination.home.bottomNavIndex) {
+    if (_currentDestination != MainTabDestination.home) {
       _selectMainTab(MainTabDestination.home);
     }
     openLoginPage(

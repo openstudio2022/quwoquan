@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
     show ReferralSource;
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 
 class HomepagePickerPageRouteExtra {
   const HomepagePickerPageRouteExtra({this.initialSelection});
@@ -30,6 +31,7 @@ class HomepageDetailPageRouteExtra {
     this.selectionMode = false,
     this.initialSummary,
     this.referralSource,
+    this.sourceAppearanceMode = UiErrorAppearanceMode.inherit,
     this.feedRequestId = '',
     this.recommendationTraceId = '',
     this.experimentBucket = '',
@@ -39,6 +41,7 @@ class HomepageDetailPageRouteExtra {
   final bool selectionMode;
   final HomepageSummary? initialSummary;
   final ReferralSource? referralSource;
+  final UiErrorAppearanceMode sourceAppearanceMode;
   final String feedRequestId;
   final String recommendationTraceId;
   final String experimentBucket;

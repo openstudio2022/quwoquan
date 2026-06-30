@@ -14,7 +14,7 @@ import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/discovery/services/home_feed_post_open_action.dart';
 import 'package:quwoquan_app/ui/discovery/widgets/home_multi_form_feed.dart';
-import 'package:quwoquan_app/ui/plaza/pages/connection_hub_page.dart';
+import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/welcome/welcome_appearance.dart';
 import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
@@ -510,10 +510,10 @@ class _WebPrimaryActions extends StatelessWidget {
           onTap: onSelected,
         ),
         _WebPrimaryActionButton(
-          destination: MainTabDestination.plaza,
-          label: AppConceptConstants.plaza,
+          destination: MainTabDestination.interestMatch,
+          label: AppConceptConstants.interestMatch,
           icon: CupertinoIcons.person_2,
-          selected: selected == MainTabDestination.plaza,
+          selected: selected == MainTabDestination.interestMatch,
           onTap: onSelected,
         ),
         _WebPrimaryActionButton(

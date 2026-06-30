@@ -78,20 +78,33 @@ class AppConceptConstants {
   // ==================== 五大频道 ====================
   static const String discovery = '首页';
   static const String circles = '圈子';
-  static const String premium = '精品';
+  static const String premium = '视频书';
   static const String create = '创作';
   static const String chat = '消息';
   static const String profile = '我';
 
-  // ==================== 同频/广场（社交连接一级入口） ====================
-  /// 同频/广场底栏标签：从内容交集走向同趣、同行、附近与线下局的连接中心
-  static const String plaza = '同频';
+  // ==================== 同趣 / 找同趣（兴趣配对发现入口） ====================
+  /// 同趣能力短标签：以交集与亲和力为半径，发现同趣的人 / 圈子 / 地点并行动。
+  static const String interestMatch = '同趣';
 
-  /// 同频/广场页标题（连接中心）
-  static const String plazaTitle = '同频广场';
+  /// 找同趣页标题（兴趣配对发现启动器）
+  static const String interestMatchTitle = '找同趣';
 
-  /// 同频/广场副标题：以交集为半径，找到同趣同行的人
-  static const String plazaSubtitle = '以兴趣为半径，遇见同频的人';
+  /// 找同趣页副标题：以交集为半径，遇见同趣的人、圈子与地点
+  static const String interestMatchSubtitle = '以交集为半径，遇见同趣的人、圈子与地点';
+
+  // ==================== 交集展示（发现流徽章 / 对象页行动区） ====================
+  /// 发现流连接徽章：内容挂载的对象主页前缀。
+  static const String feedBadgeEntity = '实体';
+
+  /// 发现流连接徽章：内容挂载的圈子前缀。
+  static const String feedBadgeCircle = '圈子';
+
+  /// 发现流连接徽章：有人同行（展示态）。
+  static const String feedBadgeCompanion = '有人同行';
+
+  /// 对象页交集行动区空态引导。
+  static const String objectActionZoneEmptyHint = '成为第一个在这里留下交集的人';
 
   // ==================== 趣聊 Tab ====================
   static const String messages = '消息';

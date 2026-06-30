@@ -12,6 +12,8 @@ documented_keys_examples:
   - totalMembers
   - members
   - posts
+  - totalDiscussions
+  - discussions
   - weeklyActive
   - storageUsedBytes
   - storageQuotaBytes

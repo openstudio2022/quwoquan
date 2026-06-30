@@ -4,7 +4,6 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_view_data.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_tab.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 
 /// 圈子内用户角色
 enum CircleRole { owner, admin, member, visitor }
@@ -32,7 +31,7 @@ class CircleState {
     this.sortMode = CreationSortMode.latest,
     this.viewMode = CreationViewMode.grid,
     this.isLoading = false,
-    this.error,
+    this.loadError,
     this.circleStats = CircleStatsViewData.empty,
   });
 
@@ -48,7 +47,7 @@ class CircleState {
   final CreationSortMode sortMode;
   final CreationViewMode viewMode;
   final bool isLoading;
-  final String? error;
+  final Object? loadError;
   final CircleStatsViewData circleStats;
 
   CircleState copyWith({
@@ -63,7 +62,8 @@ class CircleState {
     CreationSortMode? sortMode,
     CreationViewMode? viewMode,
     bool? isLoading,
-    String? error,
+    Object? loadError,
+    bool clearLoadError = false,
     CircleStatsViewData? circleStats,
   }) {
     return CircleState(
@@ -79,7 +79,7 @@ class CircleState {
       sortMode: sortMode ?? this.sortMode,
       viewMode: viewMode ?? this.viewMode,
       isLoading: isLoading ?? this.isLoading,
-      error: error,
+      loadError: clearLoadError ? null : (loadError ?? this.loadError),
       circleStats: circleStats ?? this.circleStats,
     );
   }
@@ -123,12 +123,10 @@ class CircleStateNotifier extends Notifier<CircleState> {
           circleFallback: dto,
         ),
         isLoading: false,
+        clearLoadError: true,
       );
     } catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: runtimeErrorDisplayMessage(e),
-      );
+      state = state.copyWith(isLoading: false, loadError: e);
     }
   }
 
@@ -241,11 +239,11 @@ class CircleStateNotifier extends Notifier<CircleState> {
         role: _circleRoleFromRaw(merged['role']),
         joinStatus: (merged['joinStatus'] ?? state.joinStatus).toString(),
         isFollowed: merged['isFollowed'] as bool? ?? state.isFollowed,
-        error: null,
+        clearLoadError: true,
       );
       return true;
     } catch (e) {
-      state = state.copyWith(error: runtimeErrorDisplayMessage(e));
+      state = state.copyWith(loadError: e);
       return false;
     }
   }

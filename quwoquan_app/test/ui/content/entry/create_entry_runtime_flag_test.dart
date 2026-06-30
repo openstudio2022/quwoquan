@@ -65,6 +65,14 @@ void main() {
       find.text(UITextConstants.createActionCreateCircleShort),
       findsOneWidget,
     );
+    expect(
+      find.text(UITextConstants.createActionInterestMatchShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionInterestMatchSubtitle),
+      findsOneWidget,
+    );
     expect(find.text('发点滴'), findsNothing);
   });
 }

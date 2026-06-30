@@ -67,6 +67,14 @@ void main() {
       find.text(UITextConstants.createActionCreateCircleShort),
       findsOneWidget,
     );
+    expect(
+      find.text(UITextConstants.createActionInterestMatchShort),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.createActionInterestMatchSubtitle),
+      findsOneWidget,
+    );
     expect(find.text('发图片'), findsNothing);
     expect(find.text('发视频'), findsNothing);
     expect(find.text('写长文'), findsNothing);

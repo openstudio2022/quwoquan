@@ -23,7 +23,8 @@
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
 | `lib/app/shell/main_app_shell.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 六栏 `IndexedStack`+状态栏（含同频/广场）；小趣退出底栏；移动端未登录点击消息/我的进入登录门禁，同频/广场游客可浏览；PC Web 不弹独立登录覆盖层；`isDarkProvider` / `AppColorsFunctional`；2026-06-18 非首页页签改为首次访问后再初始化 |
-| `lib/app/shell/bottom_navigation.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 六栏底栏（发现/精品/创作/消息/同频/我）；C 位创作触发动作面板；同频入口 `AppConceptConstants.plaza`；底栏背景 / `forceDark` 与壳一致 |
+| `lib/app/shell/bottom_navigation.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 五项底栏（发现/视频书/创作/联系/我）；C 位创作触发动作面板；「同趣 / 兴趣配对」不再占底栏常驻 tab，改由加号动作面板进入；底栏背景 / `forceDark` 与壳一致 |
+| `lib/app/shell/object_detail_global_bottom_nav.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | 对象页（实体/圈子主页）详情态全局底栏适配器，复用 `BottomNavigationWidget` 与主壳同款 token/图标/尺寸；浏览态不高亮任一项（传越界 index），加号触发 `GlobalQuickActionSheet`、其余 tab `context.go` 回对应根 tab；由实体/圈子 shell widget 测试覆盖 |
 | `lib/app/shell/web_app_install_banner.dart` | local_contract | ✓ | — | — | — | — | ✓ | ✓ | ✓ | Web 顶部 App 安装提示；由 `PlatformCapabilities.promotesAppInstall` 控制，手机/Pad 提供下载与分享安装页，PC 提供 iOS/Android(鸿蒙)安装包入口；P7 走 `AppSpacing.wideBreakpoint`/`webContentMaxWidth`，P8 走 `UITextConstants`/`AppColors`/`AppTypography` |
 | `lib/app/shell/web_main_app_shell.dart` | local_contract | ✓ | — | ✓ | ✓ | — | ✓ | ✓ | ✓ | PC Web 独立宽屏壳；顶部短欢迎区复用移动端 `WelcomeFlowerMark` 花瓣动效并居中展示品牌簇，不放登录/下载提示，内容页在欢迎区下方并随滚动推入/拉回，工具栏吸顶后再出现 `趣我圈` 花瓣图标/名称且左侧 tab 槽位稳定；Web 启动欢迎已改为 `QuWoQuanAppRoot` 上的 intro overlay（`WelcomeScreen.deferSequenceStart`），shell 仅承载内容首屏 hero，不再作为独立欢迎/登录主流程；右侧五个一级操作仅显示同尺寸图标并保留语义 label；**2026-06-06 商用收口**：首页/精品内容区改为复用移动端 `HomeMultiFormFeed`（多列瀑布 + 四态 + `referralSource: organicFeed`/`feedRequestId` 同源埋点），post 点击经统一 `openHomeFeedPost` → `MediaViewerExtra(dtoPosts)` 进沉浸 viewer（P3 端云一体复用 `discoveryFeed`/`PostBaseDto`，不另起 Web 数据/埋点链）；精品移除「精品队列」改干净多列墙；添加页复用分组模型分「内容创作/社交关系」两组（含发起群聊/加同好/创建圈子）并去掉「小趣创作助手」；消息右栏「消息助手」→「消息中心」且去掉「小趣」助手 tab；「我的」右栏去掉「多端同步」；字号/列宽/最大宽度走 Web PC 专用语义 token；P7 走 `PlatformCapabilities.wideScreenLayout`/`AppSpacing.wideBreakpoint`，P8 走既有 `AppColors`/`AppTypography`/`AppSpacing` token |
 | `lib/app/shell/web_main_app_shell_auth.dart` | T0 | — | — | — | — | — | — | — | — | `web_main_app_shell.dart` 的 `part` helper；仅承载 PC Web 登录守卫与规格类，不是独立页面，验收归入父壳 |
@@ -166,14 +167,11 @@
 
 ---
 
-## plaza（同频/广场 · 社交连接原型）
+## interest_match（同趣 / 找同趣 · 兴趣配对发现入口）
 
 | 路径 | 类型 | P1 | P2 | P3 | P4 | P5 | P6 | P7 | P8 | 备注 |
 |------|------|----|----|----|----|----|----|----|----|------|
-| `lib/ui/plaza/pages/connection_hub_page.dart` | local_contract | ✓ | ○ | ○ | ✓ | — | ✓ | ✓ | ✓ | **同频连接中心**（MainAppShell IndexedStack body）；四 tab 同趣/同行/附近/局；`ConnectionRepository` 三层 + `connectionRepositoryProvider`；四态（骨架/空/错/定位权限）；游客可浏览无登录门；曝光 `VisitTarget.page(plaza_*)`；**P2/P3 ○ 挂债**：后端 service.yaml / fixture loader 待方向确认后升级 |
-| `lib/ui/plaza/pages/nearby_affinity_page.dart` | local_contract | ✓ | ○ | ○ | ✓ | — | ✓ | ✓ | ✓ | 附近同趣全屏页；模糊位置 + 双向同意展示态；破冰复用 `GreetingRequest`；route `/plaza/nearby` route_only 登记 |
-| `lib/ui/plaza/pages/companion_trip_page.dart` | local_contract | ✓ | ○ | ○ | ✓ | — | ✓ | ✓ | ✓ | 结伴/行程页；Mock 含稻城亚丁等四川实体 id；发起结伴/加入同行 CTA → `start_group_chat`；route `/plaza/companion` |
-| `lib/ui/plaza/pages/offline_meetup_page.dart` | local_contract | ✓ | ○ | ○ | ✓ | — | ✓ | ✓ | ✓ | 线下局页；报名 CTA → 建群；route `/plaza/meetup` |
+| `lib/ui/interest_match/pages/interest_match_page.dart` | local_contract | ✓ | — | — | ✓ | — | ✓ | ✓ | ✓ | **找同趣 / 兴趣配对发现启动器**（加号动作面板「兴趣配对」入口，route `/interest-match`；不再占底栏常驻 tab）；不自建 Mock 候选列表（守 R16），按兴趣发现方式导流到既有真实面：找同趣的人 → `/search/network`、找圈子/找地点/按兴趣搜索 → `/search`、今日同趣机会 → `/profile/intersections`；游客可浏览无登录门；曝光 `VisitTarget.page(interest_match)`；**P2/P3 —**：本页为纯导流 launcher，不直接消费云契约（云契约在目标真实面）；附近/结伴/局真实聚合 deferred（见 specs/product/intersection-action-deepening-and-social-ia.md §0） |
 
 ---
 
@@ -221,7 +219,7 @@
 | `ui/**/pages/*_page.dart`（含 T0 一行） | 59 |
 | `welcome_screen.dart`（额外入口） | 1 |
 | `components/**/*_page.dart` | 5 |
-| `app/shell/*.dart`（主壳 + 底栏 + Web 安装提示 + PC Web 宽屏壳及 part helper） | 6 |
+| `app/shell/*.dart`（主壳 + 底栏 + 对象页详情态全局底栏 + Web 安装提示 + PC Web 宽屏壳及 part helper） | 7 |
 | **矩阵数据行（含 T0 + shell）** | **69** |
 | **需验收的独立页面行（排除 T0）** | **64** |
 | **P6 = ✓（full）** | **55** |

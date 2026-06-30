@@ -1,0 +1,18 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/海南省/飞碟/不存在类型
+title: 海南省飞碟不存在类型
+intentLabel: 不存在类型
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 海南省
+entityCategory: 飞碟
+parentTaskId: null
+status: draft
+scope:
+  region: 海南省
+  entityTypes:
+  - 地点/飞碟基地
+provenance:
+  createdAt: '2026-06-30T13:27:48.375720+00:00'
+  createdBy: task new

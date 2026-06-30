@@ -3,7 +3,7 @@ generated_by: python3 agent_ops/scaffold/generate_test_directory_inventory.py
 areas:
   app:
     pending_count: 0
-    bridged_count: 383
+    bridged_count: 381
     entries:
     - current_path: quwoquan_app/test/app/app_startup_welcome_test.dart
       layer: local_contract
@@ -468,11 +468,6 @@ areas:
     - current_path: quwoquan_app/test/cloud/services/business_beta_remote_repository_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/cloud/services/business_beta_remote_repository__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:cloud
-    - current_path: quwoquan_app/test/cloud/services/connection/connection_repository_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/cloud/services/connection/connection_repository__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:cloud
     - current_path: quwoquan_app/test/cloud/services/content/comment_counts_delta_mock_test.dart
@@ -1653,11 +1648,6 @@ areas:
     - current_path: quwoquan_app/test/ui/intersection/pages/object_intersection_list_page_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/ui/intersection/pages/object_intersection_list_page__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:ui
-    - current_path: quwoquan_app/test/ui/plaza/widgets/connection_hub_page_widget_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/ui/plaza/widgets/connection_hub_page_widget__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:ui
     - current_path: quwoquan_app/test/ui/rtc/models/call_summary_test.dart

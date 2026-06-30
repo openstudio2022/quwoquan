@@ -1,0 +1,384 @@
+--------- beginning of main
+06-30 18:27:15.553 27542 27542 I Finsky  : [2] akoj - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+06-30 18:27:15.567 27619 27619 I Finsky:background: [2] aknz - Received: android.intent.action.PACKAGE_ADDED, [nngGc6YVqrjRD_NpJM2lBYYq37T3CV2IyKb_yErnF5Y]
+--------- beginning of system
+06-30 18:27:15.701   527   527 W Looper  : Slow dispatch took 191ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@865df22 m=0
+06-30 18:27:15.701   527   611 I RoleService: Granting default roles...
+06-30 18:27:15.706   527   527 W Looper  : Slow delivery took 406ms main h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@df8307a m=0
+06-30 18:27:15.709   527   544 W Looper  : Slow dispatch took 406ms android.fg h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@9ce002b m=0
+06-30 18:27:15.710   527   544 W Looper  : Slow delivery took 414ms android.fg h=android.os.Handler c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@d055c88 m=0
+06-30 18:27:15.716  6621  6621 V MediaPlayerList: mPackageChangedBroadcastReceiver: action: android.intent.action.PACKAGE_ADDED
+06-30 18:27:15.716  6621  6621 D MediaPlayerList: Name of package changed: com.quwoquan.quwoquan_app
+06-30 18:27:15.747   527  1888 D CompatibilityChangeReporter: Compat change id reported: 168419799; UID 10102; state: DISABLED
+06-30 18:27:15.761   527   611 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 10137; state: DISABLED
+06-30 18:27:15.761   527   611 D CompatibilityChangeReporter: Compat change id reported: 177438394; UID 10137; state: DISABLED
+06-30 18:27:15.761   527   611 D CompatibilityChangeReporter: Compat change id reported: 135772972; UID 10137; state: DISABLED
+06-30 18:27:15.761   527   611 D CompatibilityChangeReporter: Compat change id reported: 135754954; UID 10137; state: DISABLED
+06-30 18:27:15.764   527   556 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10137; state: DISABLED
+06-30 18:27:15.771   527   540 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 10098; state: DISABLED
+06-30 18:27:15.771   527   540 D CompatibilityChangeReporter: Compat change id reported: 177438394; UID 10098; state: DISABLED
+06-30 18:27:15.771   527   540 D CompatibilityChangeReporter: Compat change id reported: 135772972; UID 10098; state: DISABLED
+06-30 18:27:15.771   527   540 D CompatibilityChangeReporter: Compat change id reported: 135754954; UID 10098; state: ENABLED
+06-30 18:27:15.784   527   628 D CompatibilityChangeReporter: Compat change id reported: 168419799; UID 10104; state: DISABLED
+06-30 18:27:15.816   527  1372 I ActivityManager: Force stopping com.quwoquan.quwoquan_app appid=10249 user=0: from pid 28034
+06-30 18:27:15.870   527   536 I system_server: Background young concurrent copying GC freed 392699(21MB) AllocSpace objects, 50(2408KB) LOS objects, 46% free, 24MB/45MB, paused 75us,46.893ms total 811.294ms
+06-30 18:27:15.870   527   536 W system_server: Reducing the number of considered missed Gc histogram windows from 236 to 100
+06-30 18:27:15.876   312   312 D Zygote  : Forked child process 28039
+06-30 18:27:15.887   527  1365 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.quwoquan.quwoquan_app flg=0x4000010 (has extras) } to com.google.android.packageinstaller/com.android.packageinstaller.PackageInstalledReceiver
+06-30 18:27:15.900   527   544 W Looper  : Drained
+06-30 18:27:15.900   527   544 W Looper  : Slow dispatch took 107ms android.fg h=android.os.Handler c=com.android.internal.infra.ServiceConnector$Impl$$ExternalSyntheticLambda2@20cf7b8 m=0
+06-30 18:27:15.907   527   527 W Looper  : Slow dispatch took 105ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@aa260f6 m=0
+06-30 18:27:15.925 28039 28039 I libc    : SetHeapTaggingLevel: tag level set to 0
+06-30 18:27:15.944   527   555 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.quwoquan.quwoquan_app flg=0x4000010 (has extras) } to com.android.vending/com.google.android.finsky.packagemonitor.impl.PackageMonitorReceiverImpl$RegisteredReceiver
+06-30 18:27:15.944   527   555 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.quwoquan.quwoquan_app flg=0x4000010 (has extras) } to com.android.vending/com.google.android.finsky.packagemonitor.backgroundimpl.BackgroundPackageMonitorReceiverImpl$RegisteredReceiver
+06-30 18:27:15.944   527   555 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.quwoquan.quwoquan_app flg=0x4000010 (has extras) } to com.google.android.gms/.gass.chimera.PackageChangeBroadcastReceiver
+06-30 18:27:15.945   527   555 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.quwoquan.quwoquan_app flg=0x4000010 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+06-30 18:27:15.945   527   555 W BroadcastQueue: Background execution not allowed: receiving Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.quwoquan.quwoquan_app flg=0x4000010 (has extras) } to com.google.android.googlequicksearchbox/com.google.android.apps.gsa.googlequicksearchbox.GelStubAppWatcher
+06-30 18:27:15.945   527   555 I ActivityManager: com.google.android.packageinstaller is exempt from freezer
+06-30 18:27:15.945   527   555 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 10072; state: DISABLED
+06-30 18:27:15.945   527   555 D CompatibilityChangeReporter: Compat change id reported: 177438394; UID 10072; state: DISABLED
+06-30 18:27:15.945   527   555 D CompatibilityChangeReporter: Compat change id reported: 135772972; UID 10072; state: DISABLED
+06-30 18:27:15.945   527   555 D CompatibilityChangeReporter: Compat change id reported: 135754954; UID 10072; state: ENABLED
+06-30 18:27:15.976   527   556 W ActivityManager: Slow operation: 216ms so far, now at startProcess: returned from zygote!
+06-30 18:27:15.976   527   556 W ActivityManager: Slow operation: 216ms so far, now at startProcess: done updating battery stats
+06-30 18:27:16.039   527   556 W ActivityManager: Slow operation: 280ms so far, now at startProcess: building log message
+06-30 18:27:16.040   527   556 I ActivityManager: Start proc 28039:com.google.android.permissioncontroller/u0a137 for service {com.google.android.permissioncontroller/com.android.permissioncontroller.role.service.RoleControllerServiceImpl}
+06-30 18:27:16.040   527   556 W ActivityManager: Slow operation: 280ms so far, now at startProcess: starting to update pids map
+06-30 18:27:16.050   527   556 W ActivityManager: Slow operation: 290ms so far, now at startProcess: done updating pids map
+06-30 18:27:16.050   527   556 W ActivityManager: Slow operation: 286ms so far, now at startProcess: asking zygote to start proc
+06-30 18:27:16.050   527   556 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10098; state: ENABLED
+06-30 18:27:16.056   527  1888 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.quwoquan.quwoquan_app/.MainActivity} from uid 2000
+06-30 18:27:16.059   312   312 D Zygote  : Forked child process 28053
+06-30 18:27:16.078   527   556 W ActivityManager: Slow operation: 314ms so far, now at startProcess: returned from zygote!
+06-30 18:27:16.082   527   556 W ActivityManager: Slow operation: 318ms so far, now at startProcess: done updating battery stats
+06-30 18:27:16.082   527   556 W ActivityManager: Slow operation: 318ms so far, now at startProcess: building log message
+06-30 18:27:16.082   527   556 I ActivityManager: Start proc 28053:com.google.android.apps.wellbeing/u0a98 for content provider {com.google.android.apps.wellbeing/com.google.android.apps.wellbeing.api.impl.WellbeingSettingsProvider}
+06-30 18:27:16.083   527   556 W ActivityManager: Slow operation: 318ms so far, now at startProcess: starting to update pids map
+06-30 18:27:16.103   527   527 I Telecom : DefaultDialerCache: Refreshing default dialer for user 0: now com.android.dialer: DDC.oR@AVo
+06-30 18:27:16.104   527   527 W Looper  : Slow dispatch took 133ms main h=android.app.ActivityThread$H c=android.app.LoadedApk$ReceiverDispatcher$Args$$ExternalSyntheticLambda0@ad37be6 m=0
+06-30 18:27:16.134 28053 28053 E .apps.wellbein: Not starting debugger since process cannot load the jdwp agent.
+06-30 18:27:16.136 28039 28039 E ssioncontrolle: Not starting debugger since process cannot load the jdwp agent.
+06-30 18:27:16.139   527   538 W System  : A resource failed to call close. 
+06-30 18:27:16.154   527   527 V BackupManagerConstants: getFullBackupIntervalMilliseconds(...) returns 86400000
+06-30 18:27:16.154   527   527 V BackupManagerConstants: getFullBackupRequiredNetworkType(...) returns 2
+06-30 18:27:16.154   527   527 V BackupManagerConstants: getFullBackupRequireCharging(...) returns true
+06-30 18:27:16.172  1549  1779 D EGL_emulation: app_time_stats: avg=625.95ms min=517.92ms max=733.99ms count=2
+06-30 18:27:16.177   856   856 D CarrierSvcBindHelper: No carrier app for: 0
+06-30 18:27:16.231   527   617 I InputReader: Reconfiguring input devices, changes=KEYBOARD_LAYOUTS | 
+06-30 18:27:16.235   527  1888 W ActivityTaskManager: Can't find TaskDisplayArea to determine support for multi window. Task id=298 attached=false
+06-30 18:27:16.277   527  1888 D CompatibilityChangeReporter: Compat change id reported: 174042980; UID 10249; state: DISABLED
+06-30 18:27:16.278   527  1888 D CompatibilityChangeReporter: Compat change id reported: 184838306; UID 10249; state: DISABLED
+06-30 18:27:16.282   527  1888 D CompatibilityChangeReporter: Compat change id reported: 185004937; UID 10249; state: DISABLED
+06-30 18:27:16.284   527  1888 D CompatibilityChangeReporter: Compat change id reported: 181136395; UID 10249; state: DISABLED
+06-30 18:27:16.285   527  1888 D CompatibilityChangeReporter: Compat change id reported: 174042936; UID 10249; state: DISABLED
+06-30 18:27:16.337   527   556 W ActivityManager: Slow operation: 573ms so far, now at startProcess: done updating pids map
+06-30 18:27:16.337   527   556 W ActivityManager: Slow operation: 392ms so far, now at startProcess: asking zygote to start proc
+06-30 18:27:16.337   527   556 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10072; state: ENABLED
+06-30 18:27:16.343   312   312 D Zygote  : Forked child process 28076
+06-30 18:27:16.343   527   556 W ActivityManager: Slow operation: 398ms so far, now at startProcess: returned from zygote!
+06-30 18:27:16.348   527   527 W Looper  : Slow dispatch took 170ms main h=com.android.server.job.JobSchedulerService$JobHandler c=null m=7
+06-30 18:27:16.351 27542 27550 W android.vendin: Reducing the number of considered missed Gc histogram windows from 287 to 100
+06-30 18:27:16.352   527   548 D CompatibilityChangeReporter: Compat change id reported: 158002302; UID 10104; state: ENABLED
+06-30 18:27:16.353   527   628 D CompatibilityChangeReporter: Compat change id reported: 168419799; UID 10137; state: DISABLED
+06-30 18:27:16.361   527   527 W Looper  : Drained
+06-30 18:27:16.367 28039 28039 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10137; state: DISABLED
+06-30 18:27:16.374   527   547 D CompatibilityChangeReporter: Compat change id reported: 135634846; UID 10249; state: DISABLED
+06-30 18:27:16.383   856   856 D CarrierSvcBindHelper: No carrier app for: 0
+06-30 18:27:16.383   527   547 D CompatibilityChangeReporter: Compat change id reported: 177438394; UID 10249; state: DISABLED
+06-30 18:27:16.383   527   547 D CompatibilityChangeReporter: Compat change id reported: 135772972; UID 10249; state: DISABLED
+06-30 18:27:16.383   527   547 D CompatibilityChangeReporter: Compat change id reported: 135754954; UID 10249; state: ENABLED
+06-30 18:27:16.383   856   856 D ImsResolver: maybeAddedImsService, packageName: com.quwoquan.quwoquan_app
+06-30 18:27:16.384   527   556 W ActivityManager: Slow operation: 439ms so far, now at startProcess: done updating battery stats
+06-30 18:27:16.384   527   556 W ActivityManager: Slow operation: 439ms so far, now at startProcess: building log message
+06-30 18:27:16.384   527   556 I ActivityManager: Start proc 28076:com.google.android.packageinstaller/u0a72 for broadcast {com.google.android.packageinstaller/com.android.packageinstaller.PackageInstalledReceiver}
+06-30 18:27:16.384   527   556 W ActivityManager: Slow operation: 439ms so far, now at startProcess: starting to update pids map
+06-30 18:27:16.384   527   556 W ActivityManager: Slow operation: 439ms so far, now at startProcess: done updating pids map
+06-30 18:27:16.384   527   556 D CompatibilityChangeReporter: Compat change id reported: 143937733; UID 10249; state: ENABLED
+06-30 18:27:16.389   527   575 E VerityUtils: Failed to measure fs-verity, errno 1: /data/app/~~vXO1hDdy-nWBF8FO5qfZrg==/com.quwoquan.quwoquan_app-_ovE4Xa1MmX_U-uhrnCYGg==/base.apk
+06-30 18:27:16.394   312   312 D Zygote  : Forked child process 28085
+06-30 18:27:16.396   527   556 I ActivityManager: Start proc 28085:com.quwoquan.quwoquan_app/u0a249 for pre-top-activity {com.quwoquan.quwoquan_app/com.quwoquan.quwoquan_app.MainActivity}
+06-30 18:27:16.403 28053 28053 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10098; state: DISABLED
+06-30 18:27:16.404   856   856 D CarrierConfigLoader: mHandler: EVENT_PACKAGE_CHANGED phoneId: 0
+06-30 18:27:16.481 28085 28085 I an.quwoquan_ap: Late-enabling -Xcheck:jni
+06-30 18:27:16.556 28076 28076 E ackageinstalle: Not starting debugger since process cannot load the jdwp agent.
+06-30 18:27:16.564 28039 28039 D ApplicationLoaders: Returning zygote-cached class loader: /system/framework/android.test.base.jar
+06-30 18:27:16.597 27619 28088 I Finsky:background: [98] Wrote row to frosting DB: 953
+06-30 18:27:16.643 28053 28053 D nativeloader: classloader namespace configured for unbundled product apk. library_path=/product/priv-app/WellbeingPrebuilt/lib/arm64:/product/lib64:/system/product/lib64
+06-30 18:27:16.646   368   423 I adbd    : jdwp connection from 28085
+06-30 18:27:16.652   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f0000000 0x1f09a4000]
+06-30 18:27:16.659 28076 28076 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10072; state: ENABLED
+06-30 18:27:16.678 27619 28088 I Finsky:background: [98] Wrote row to frosting DB: 954
+06-30 18:27:16.758 12324 28111 W GCM     : Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.quwoquan.quwoquan_app flg=0x4000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+06-30 18:27:16.782 12384 12384 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.safetynet.service.START pkg=com.google.android.gms }
+06-30 18:27:16.782 12384 12384 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.safetynet.service.START pkg=com.google.android.gms }
+06-30 18:27:16.806   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f2c6c000 0x1f3650000]
+06-30 18:27:16.820   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f49a4000 0x1f5388000]
+06-30 18:27:16.822   527   547 W ActivityTaskManager: Activity pause timeout for ActivityRecord{3bcbe82 u0 com.google.android.googlequicksearchbox/com.google.android.apps.search.googleapp.activity.GoogleAppActivity t286}
+06-30 18:27:16.833   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f5388000 0x1f5d6c000]
+06-30 18:27:16.861 28039 28039 V GraphicsEnvironment: ANGLE Developer option for 'com.google.android.permissioncontroller' set to: 'default'
+06-30 18:27:16.861 28039 28039 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+06-30 18:27:16.881 28039 28039 D NetworkSecurityConfig: No Network Security Config specified, using platform default
+06-30 18:27:16.891 28053 28053 V GraphicsEnvironment: ANGLE Developer option for 'com.google.android.apps.wellbeing' set to: 'default'
+06-30 18:27:16.891 28053 28053 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+06-30 18:27:16.898 12324 28097 W NetworkScheduler: Unexpected forwarded intent: Intent { act=android.intent.action.PACKAGE_ADDED dat=package:com.quwoquan.quwoquan_app flg=0x4000010 pkg=com.google.android.gms cmp=com.google.android.gms/.chimera.PersistentIntentOperationService (has extras) }
+06-30 18:27:16.903   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f3650000 0x1f3ca4000]
+06-30 18:27:16.915 28039 28039 D NetworkSecurityConfig: No Network Security Config specified, using platform default
+06-30 18:27:16.916 28053 28053 D NetworkSecurityConfig: No Network Security Config specified, using platform default
+06-30 18:27:16.916 28053 28053 D NetworkSecurityConfig: No Network Security Config specified, using platform default
+06-30 18:27:16.925 28076 28076 V GraphicsEnvironment: ANGLE Developer option for 'com.google.android.packageinstaller' set to: 'default'
+06-30 18:27:16.925 28076 28076 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+06-30 18:27:16.926 28076 28076 D NetworkSecurityConfig: No Network Security Config specified, using platform default
+06-30 18:27:16.926 28076 28076 D NetworkSecurityConfig: No Network Security Config specified, using platform default
+06-30 18:27:16.989 12384 28077 I Auth    : (REDACTED) [SupervisedAccountIntentOperation] onHandleIntent: %s
+06-30 18:27:17.002  1549  1549 I A       : Sending broadcast to stop hotword detection.
+06-30 18:27:17.015 27542 27542 I Finsky  : [2] DTU: Received onPackageAdded, replacing: false
+06-30 18:27:17.017 12384 28077 I Blockstore: (REDACTED) [DataStoreImpl] Clearing Blockstore Data for package %s
+06-30 18:27:17.029 12384 28077 I Blockstore: [DataStoreImpl] Keyless data not found or its IsLastInstallationData = false. [CONTEXT service_id=258 ]
+06-30 18:27:17.036  1295  1295 I GsaVoiceInteractionSrv: Handling ACTION_STOP_HOTWORD
+06-30 18:27:17.047 12384 28126 W AppInstallOperation: FDL Migration::InstallIntentOperation by FDL Module [CONTEXT service_id=77 ]
+06-30 18:27:17.052  1295  1295 E HwDetectorWithState: a: 3
+06-30 18:27:17.055 27542 27542 I Finsky  : [2] Resetting scheduler db
+06-30 18:27:17.067 28039 28039 I CarUiInstaller: CarUiInstaller started for com.google.android.permissioncontroller
+06-30 18:27:17.074 12384 12384 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.common.BIND_SHARED_PREFS pkg=com.google.android.gms }
+06-30 18:27:17.074 12384 12384 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.common.BIND_SHARED_PREFS pkg=com.google.android.gms }
+06-30 18:27:17.106 28053 28053 I MultiDex: VM with version 2.1.0 has multidex support
+06-30 18:27:17.106 28053 28053 I MultiDex: install
+06-30 18:27:17.106 28053 28053 I MultiDex: VM has multidex support, MultiDex support library is disabled.
+06-30 18:27:17.107 12384 28126 I FraudProtectUtils: Not in testing population, skipping local test bank apps. [CONTEXT service_id=469 ]
+06-30 18:27:17.107 12384 28126 I FraudProtectUtils: (REDACTED) Latest bank app list size: %d, %s isBankApp: false
+06-30 18:27:17.110 12384 28126 I PackageInstallIntentOp: (REDACTED) Package %s is not a bank app. Skipping updates.
+06-30 18:27:17.123   702   933 D EGL_emulation: app_time_stats: avg=7363262.50ms min=16.69ms max=29452952.00ms count=4
+06-30 18:27:17.138 12384 28124 I NearbyDiscovery: (REDACTED) processGrantSlicePermission: %s
+06-30 18:27:17.152 28039 28133 W Role    : Cannot get ApplicationInfo for default holder: com.google.android.contacts
+06-30 18:27:17.159 28039 28078 I PermissionControllerServiceImpl: Updating user sensitive for uid 10249
+06-30 18:27:17.164 12384 28125 I Dck     : (REDACTED) disableDckSupport: %s
+06-30 18:27:17.195 27542 27542 I Finsky  : [2] Do not start WearSupportService due to Wear service optimization
+06-30 18:27:17.195 27542 27542 I Finsky  : [2] Clearing split related stale data.
+06-30 18:27:17.209 12384 28125 E Dck     : Could not get ProviderInfo when resolving the content provider authority. [CONTEXT service_id=289 ]
+06-30 18:27:17.209 12384 28125 I Dck     : Samsung Content Provider failed app verification [CONTEXT service_id=289 ]
+06-30 18:27:17.222 27542 27578 I Finsky  : [61] SCH: Scheduling phonesky job Id: 1-1337, CT: 1782792578462, Constraints: [{ L: 43133421, D: 86333421, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-30 18:27:17.222 27542 27578 I Finsky  : [61] SCH: Scheduling phonesky job Id: 10-79, CT: 1782792577007, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_REQUIRED, N: NET_ANY, B: BATTERY_ANY }]
+06-30 18:27:17.222 27542 27578 I Finsky  : [61] SCH: Scheduling phonesky job Id: 10-168, CT: 1782792577007, Constraints: [{ L: 0, D: 86400000, C: CHARGING_NONE, I: IDLE_REQUIRED, N: NET_ANY, B: BATTERY_ANY }]
+06-30 18:27:17.222 27542 27578 I Finsky  : [61] SCH: Scheduling phonesky job Id: 24-77777777, CT: 1782729119542, Constraints: [{ L: 1, D: 82800000, C: CHARGING_NONE, I: IDLE_REQUIRED, N: NET_NONE, B: BATTERY_ANY }]
+06-30 18:27:17.222 27542 27578 I Finsky  : [61] SCH: Scheduling phonesky job Id: 26-1414141414, CT: 1782792430413, Constraints: [{ L: 43199999, D: 44099999, C: CHARGING_NONE, I: IDLE_NONE, N: NET_NONE, B: BATTERY_ANY }]
+06-30 18:27:17.224 28039 28133 W Role    : Cannot get ApplicationInfo for default holder: com.google.android.as
+06-30 18:27:17.227 12384 28125 I Dck     : [WirelessCapabilitiesFeatures] wccSysProp: 0 [CONTEXT service_id=289 ]
+06-30 18:27:17.227 12384 28125 I Dck     : [WirelessCapabilitiesFeatures] wccOverride: not set [CONTEXT service_id=289 ]
+06-30 18:27:17.247 12384 28125 I Dck     : (REDACTED) [WirelessCapabilitiesFeatures] returned wcc: %s
+06-30 18:27:17.247 12384 28125 I Dck     : Dck module condition - hasWccSupport: false [CONTEXT service_id=289 ]
+06-30 18:27:17.254 12384 28125 I Dck     : Dck module condition - downloadAllowed: false [CONTEXT service_id=289 ]
+06-30 18:27:17.254 12384 28125 I Dck     : Dck module not eligible for asynchronous downloading [CONTEXT service_id=289 ]
+06-30 18:27:17.254 27542 27578 I Finsky  : [61] SCH: Scheduling 0 system job(s)
+06-30 18:27:17.254 12384 14004 I Icing   : IndexChimeraService.getServiceInterface callingPackage=com.google.android.gms componentName=AppsCorpus serviceId=36
+06-30 18:27:17.310 28085 28085 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10249; state: ENABLED
+06-30 18:27:17.321   527  1891 D ActivityManager: sync unfroze 26503 com.google.process.gservices
+06-30 18:27:17.337 28039 28133 W Role    : Cannot get ApplicationInfo for default holder: com.google.android.as
+06-30 18:27:17.337 28039 28133 W Role    : Cannot get ApplicationInfo for default holder: com.google.android.as
+06-30 18:27:17.353 27542 28128 I Finsky  : [121] SCH: Received scheduling request: Id: 12-1, Constraints: [{ L: 15000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-30 18:27:17.395 12384 12384 D BoundBrokerSvc: onBind: Intent { act=com.google.android.gms.feedback.internal.IFeedbackService dat=chimera-action: cmp=com.google.android.gms/.chimera.GmsBoundBrokerService }
+06-30 18:27:17.395 12384 12384 D BoundBrokerSvc: Loading bound service for intent: Intent { act=com.google.android.gms.feedback.internal.IFeedbackService dat=chimera-action: cmp=com.google.android.gms/.chimera.GmsBoundBrokerService }
+06-30 18:27:17.402 28039 28133 W Role    : Cannot get ApplicationInfo for default holder: com.google.android.as
+06-30 18:27:17.409   702   933 D EGL_emulation: app_time_stats: avg=11873.62ms min=11873.62ms max=11873.62ms count=1
+06-30 18:27:17.450  1549  1779 D EGL_emulation: app_time_stats: avg=1277.49ms min=1277.49ms max=1277.49ms count=1
+06-30 18:27:17.467   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1fade0000 0x1fb7c4000]
+06-30 18:27:17.488   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-30 18:27:17.488 28121 28149 I Gralloc4: mapper 4.x is not supported
+06-30 18:27:17.516 28053 28152 W .apps.wellbein: Accessing hidden field Ljava/util/Collections$SynchronizedCollection;->mutex:Ljava/lang/Object; (max-target-o, reflection, denied)
+06-30 18:27:17.516 28053 28152 W .apps.wellbein: Accessing hidden method Ljava/util/Collections$SynchronizedSet;-><init>(Ljava/util/Set;Ljava/lang/Object;)V (max-target-o, reflection, denied)
+06-30 18:27:17.516 28053 28152 W .apps.wellbein: Accessing hidden method Ljava/util/Collections$SynchronizedCollection;-><init>(Ljava/util/Collection;Ljava/lang/Object;)V (max-target-o, reflection, denied)
+06-30 18:27:17.523 12384 14004 I Icing   : IndexChimeraService.getServiceInterface callingPackage=com.google.android.gms componentName=null serviceId=30
+06-30 18:27:17.585   527  3102 D HostConnection: createUnique: call
+06-30 18:27:17.588   527  3102 D HostConnection: HostConnection::get() New Host Connection established 0xb4000070adcf70d0, tid 3102
+06-30 18:27:17.596 28053 28053 I jsr     : SslGuard completed installation.
+06-30 18:27:17.624   527  3102 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:17.625 28121 28149 D HostConnection: createUnique: call
+06-30 18:27:17.625 28121 28149 D HostConnection: HostConnection::get() New Host Connection established 0xb400007823726190, tid 28149
+06-30 18:27:17.625 28121 28149 D goldfish-address-space: allocate: Ask for block of size 0x100
+06-30 18:27:17.626 28121 28149 D goldfish-address-space: allocate: ioctl allocate returned offset 0x1efff8000 size 0x8000
+06-30 18:27:17.626 12384 19422 I Icing   : Usage reports ok 0, Failed Usage reports 0, indexed 0, rejected 0
+06-30 18:27:17.630   527  3102 W OpenGLRenderer: Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+06-30 18:27:17.630   527  3102 W OpenGLRenderer: Failed to initialize 101010-2 format, error = EGL_SUCCESS
+06-30 18:27:17.664 27542 27568 I Finsky  : [51] WM::SCH: Logging work initialize for 12-1
+06-30 18:27:17.681   527  3102 D EGL_emulation: eglCreateContext: 0xb4000070add02f50: maj 3 min 0 rcv 3
+06-30 18:27:17.681 28121 28149 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:17.682   527  3102 D EGL_emulation: eglMakeCurrent: 0xb4000070add02f50: ver 3 0 (tinfo 0x72bbafb180) (first time)
+06-30 18:27:17.790   527   554 W PackageManager: Failed registering loading progress callback. Package is fully loaded.
+06-30 18:27:17.794 27542 27576 I Finsky  : [59] SCH: Scheduling phonesky job Id: 12-1, CT: 1782815237353, Constraints: [{ L: 15000, D: 86400000, C: CHARGING_NONE, I: IDLE_NONE, N: NET_ANY, B: BATTERY_ANY }]
+06-30 18:27:17.813 28053 28160 W DynamiteModule: Local module descriptor class for com.google.android.gms.googlecertificates not found.
+06-30 18:27:17.837 27542 27580 I Finsky  : [63] SCH: Scheduling 1 system job(s)
+06-30 18:27:17.842 27542 27580 I Finsky  : [63] SCH: Scheduling system job Id: 9688, L: 14515, D: 63674045, C: false, I: false, N: 1
+06-30 18:27:17.861 28053 28160 D StrictMode: StrictMode policy violation: android.os.strictmode.CustomViolation: gcore.dynamite
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.os.StrictMode$AndroidBlockGuardPolicy.onCustomSlowCall(StrictMode.java:1626)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.os.StrictMode.noteSlowCall(StrictMode.java:2694)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at bkju.a(:com.google.android.gms@262334029@26.23.34 (190400-933906539):3)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at com.google.android.gms.chimera.container.GmsModuleChimeraProvider.query(:com.google.android.gms@262334029@26.23.34 (190400-933906539):143)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at bdfp.query(:com.google.android.gms@262334029@26.23.34 (190400-933906539):84)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.content.ContentProvider.query(ContentProvider.java:1408)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at abce.superQuery(:com.google.android.gms@262334029@26.23.34 (190400-933906539):6)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at com.google.android.chimera.ContentProvider.query(:com.google.android.gms@262334029@26.23.34 (190400-933906539):8)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at bdfp.query(:com.google.android.gms@262334029@26.23.34 (190400-933906539):21)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.content.ContentProvider.query(ContentProvider.java:1504)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at abce.superQuery(:com.google.android.gms@262334029@26.23.34 (190400-933906539):1)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at com.google.android.chimera.ContentProvider.query(:com.google.android.gms@262334029@26.23.34 (190400-933906539):3)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at abce.query(:com.google.android.gms@262334029@26.23.34 (190400-933906539):64)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.content.ContentProvider$Transport.query(ContentProvider.java:272)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.content.ContentProviderNative.onTransact(ContentProviderNative.java:107)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.os.Binder.execTransactInternal(Binder.java:1179)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.os.Binder.execTransact(Binder.java:1143)
+06-30 18:27:17.861 28053 28160 D StrictMode: # via Binder call with stack:
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.os.StrictMode.readAndHandleBinderCallViolations(StrictMode.java:2497)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.os.Parcel.readExceptionCode(Parcel.java:2370)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.database.DatabaseUtils.readExceptionFromParcel(DatabaseUtils.java:139)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.content.ContentProviderProxy.query(ContentProviderNative.java:481)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.content.ContentResolver.query(ContentResolver.java:1219)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.content.ContentResolver.query(ContentResolver.java:1151)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at android.content.ContentResolver.query(ContentResolver.java:1107)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at hzi.e(PG:10)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at hzi.b(PG:10)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at hza.b(PG:1)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at hzb.a(PG:4)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at hzi.c(PG:5)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at hpm.f(PG:4)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at hpm.b(PG:2)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at hpu.b(PG:2)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at boj.a(Unknown Source:11)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at lsl.a(PG:2)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at mjz.f(PG:2)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at mka.run(PG:9)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at ita.run(PG:5)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1167)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:641)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at ism.run(Unknown Source:2)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at ise.run(Unknown Source:2)
+06-30 18:27:17.861 28053 28160 D StrictMode: 	at java.lang.Thread.run(Thread.java:920)
+06-30 18:27:17.877 28053 28160 W .apps.wellbein: ClassLoaderContext classpath size mismatch. expected=17, found=0 (DLC[];PCL[base.apk*3746966846:base.apk!classes2.dex*1257784702:base.apk!classes3.dex*55028904:base.apk!classes4.dex*2799966621:base.apk!classes5.dex*873903177:base.apk!classes6.dex*3195467065:base.apk!classes7.dex*1945640396:base.apk!classes8.dex*3751857078:base.apk!classes9.dex*1713129604:base.apk!classes10.dex*146061582:base.apk!classes11.dex*561873760:base.apk!classes12.dex*3560644785:base.apk!classes13.dex*2813663141:base.apk!classes14.dex*1838991991:base.apk!classes15.dex*45252937:base.apk!classes16.dex*3305394091:base.apk!classes17.dex*4011013487]{PCL[/system/framework/org.apache.http.legacy.jar*2058259660]#PCL[/system/framework/com.android.location.provider.jar*3633238673]#PCL[/system/framework/com.android.media.remotedisplay.jar*3472798122]#PCL[/system_ext/framework/androidx.window.sidecar.jar*3539530913]} | DLC[];PCL[])
+06-30 18:27:17.880 28053 28160 I DynamiteModule: Considering local module com.google.android.gms.googlecertificates:0 and remote module com.google.android.gms.googlecertificates:7
+06-30 18:27:17.880 28053 28160 I DynamiteModule: Selected remote version of com.google.android.gms.googlecertificates, version >= 7
+06-30 18:27:17.882 27542 27571 I Finsky  : [55] [ContentSync] finished, scheduled=true
+06-30 18:27:17.896 28053 28160 W System  : ClassLoader referenced unknown path: 
+06-30 18:27:17.931 28039 28133 W Role    : Cannot get ApplicationInfo for default holder: com.google.android.as
+06-30 18:27:17.932 28039 28133 W Role    : Cannot get ApplicationInfo for default holder: com.google.android.as
+06-30 18:27:17.941 12384 19422 I Icing   : Usage reports ok 0, Failed Usage reports 0, indexed 0, rejected 0
+06-30 18:27:17.949 28053 28160 W .apps.wellbein: ClassLoaderContext classpath size mismatch. expected=17, found=2 (DLC[];PCL[base.apk*3746966846:base.apk!classes2.dex*1257784702:base.apk!classes3.dex*55028904:base.apk!classes4.dex*2799966621:base.apk!classes5.dex*873903177:base.apk!classes6.dex*3195467065:base.apk!classes7.dex*1945640396:base.apk!classes8.dex*3751857078:base.apk!classes9.dex*1713129604:base.apk!classes10.dex*146061582:base.apk!classes11.dex*561873760:base.apk!classes12.dex*3560644785:base.apk!classes13.dex*2813663141:base.apk!classes14.dex*1838991991:base.apk!classes15.dex*45252937:base.apk!classes16.dex*3305394091:base.apk!classes17.dex*4011013487]{PCL[/system/framework/org.apache.http.legacy.jar*2058259660]#PCL[/system/framework/com.android.location.provider.jar*3633238673]#PCL[/system/framework/com.android.media.remotedisplay.jar*3472798122]#PCL[/system_ext/framework/androidx.window.sidecar.jar*3539530913]} | DLC[];PCL[/product/priv-app/WellbeingPrebuilt/WellbeingPrebuilt.apk*3473300342:/product/priv-app/WellbeingPrebuilt/WellbeingPrebuilt.apk!classes2.dex*763334795]{PCL[/system/framework/org.apache.http.legacy.jar*2058259660]})
+06-30 18:27:17.952 12384 19422 I Icing   : Indexing com.google.android.gms-apps from com.google.android.gms
+06-30 18:27:17.983 12384 19422 I Icing   : Indexing done com.google.android.gms-apps
+06-30 18:27:18.038 28085 28085 V GraphicsEnvironment: ANGLE Developer option for 'com.quwoquan.quwoquan_app' set to: 'default'
+06-30 18:27:18.038 28085 28085 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+06-30 18:27:18.044 28085 28085 D NetworkSecurityConfig: Using Network Security Config from resource beta_debug_network_security_config debugBuild: true
+06-30 18:27:18.047 28085 28085 D NetworkSecurityConfig: Using Network Security Config from resource beta_debug_network_security_config debugBuild: true
+06-30 18:27:18.121 28085 28166 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
+06-30 18:27:18.122 28085 28166 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+06-30 18:27:18.123 28085 28166 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
+06-30 18:27:18.132 28085 28085 I QWQStartup: android_activity_on_create elapsedMs=24
+06-30 18:27:18.210 28085 28170 I ResourceExtractor: Resource version mismatch res_timestamp-1-1782815234850
+06-30 18:27:18.210 28085 28168 D FlutterJNI: Beginning load of flutter...
+06-30 18:27:18.218 28085 28168 D FlutterJNI: flutter (null) was loaded normally!
+06-30 18:27:18.222 28085 28172 D skia    : [SkFontMgr Android Parser] '/product/etc/fonts_customization.xml' could not be opened
+06-30 18:27:18.332   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f18a4000 0x1f2288000]
+06-30 18:27:18.339   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-30 18:27:18.339 28171 28173 I Gralloc4: mapper 4.x is not supported
+06-30 18:27:18.359   527  1911 I ActivityManager: Background started FGS: Allowed [callingPackage: com.google.android.apps.wellbeing; callingUid: 10098; uidState: BFGS; intent: Intent { cmp=com.google.android.apps.wellbeing/com.google.apps.tiktok.concurrent.InternalForegroundService (has extras) }; code:BACKGROUND_ACTIVITY_PERMISSION; tempAllowListReason:<null>; targetSdkVersion:30; callerTargetSdkVersion:30; startForegroundCount:0; bindFromPackage:null]
+06-30 18:27:18.360 28171 28173 D HostConnection: createUnique: call
+06-30 18:27:18.361 28171 28173 D HostConnection: HostConnection::get() New Host Connection established 0xb4000079ade38bd0, tid 28173
+06-30 18:27:18.361 28171 28173 D goldfish-address-space: allocate: Ask for block of size 0x100
+06-30 18:27:18.361 28171 28173 D goldfish-address-space: allocate: ioctl allocate returned offset 0x1efff8000 size 0x8000
+06-30 18:27:18.364 28171 28173 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:18.374 28053 28163 D CompatibilityChangeReporter: Compat change id reported: 160794467; UID 10098; state: DISABLED
+06-30 18:27:18.395   527   527 I NotificationService: Cannot find enqueued record for key: 0|com.google.android.apps.wellbeing|174344743|null|10098
+06-30 18:27:18.717 28085 28170 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/kernel_blob.bin
+06-30 18:27:18.720 28085 28170 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/vm_snapshot_data
+06-30 18:27:18.764 28085 28170 I ResourceExtractor: Extracted baseline resource assets/flutter_assets/isolate_snapshot_data
+06-30 18:27:18.833 28085 28085 W an.quwoquan_ap: Accessing hidden method Landroid/view/SurfaceControl$Builder;->setHidden(Z)Landroid/view/SurfaceControl$Builder; (blocked, linking, denied)
+06-30 18:27:18.837 28085 28085 W an.quwoquan_app: type=1400 audit(0.0:7939): avc: denied { read } for name="max_map_count" dev="proc" ino=509658 scontext=u:r:untrusted_app:s0:c249,c256,c512,c768 tcontext=u:object_r:proc_max_map_count:s0 tclass=file permissive=0 app=com.quwoquan.quwoquan_app
+06-30 18:27:18.849 28085 28085 I flutter : [IMPORTANT:flutter/shell/common/shell.cc(528)] [Action Required]: Impeller opt-out deprecated.
+06-30 18:27:18.849 28085 28085 I flutter :     The application opted out of Impeller by either using the
+06-30 18:27:18.849 28085 28085 I flutter :     `--no-enable-impeller` flag or the
+06-30 18:27:18.849 28085 28085 I flutter :     `io.flutter.embedding.android.EnableImpeller` `AndroidManifest.xml` entry.
+06-30 18:27:18.849 28085 28085 I flutter :     These options are going to go away in an upcoming Flutter release. Remove
+06-30 18:27:18.849 28085 28085 I flutter :     the explicit opt-out. If you need to opt-out, please report a bug describing
+06-30 18:27:18.849 28085 28085 I flutter :     the issue.
+06-30 18:27:18.849 28085 28085 I flutter : 
+06-30 18:27:18.849 28085 28085 I flutter :     https://github.com/flutter/flutter/issues/new?template=02_bug.yml
+06-30 18:27:18.849 28085 28085 I flutter : 
+06-30 18:27:18.850 28085 28085 D HostConnection: createUnique: call
+06-30 18:27:18.850 28085 28085 D HostConnection: HostConnection::get() New Host Connection established 0xb4000070adc9de50, tid 28085
+06-30 18:27:18.854 28085 28085 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:18.856   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.configstore@1.0::ISurfaceFlingerConfigs/default in either framework or device VINTF manifest.
+06-30 18:27:18.856 28085 28085 D EGL_emulation: eglCreateContext: 0xb4000070adc9e5d0: maj 3 min 0 rcv 3
+06-30 18:27:18.857 28085 28085 D EGL_emulation: eglCreateContext: 0xb4000070adc9d6d0: maj 3 min 0 rcv 3
+06-30 18:27:18.857 28085 28179 D HostConnection: createUnique: call
+06-30 18:27:18.860 28085 28179 D HostConnection: HostConnection::get() New Host Connection established 0xb4000070adc9fa10, tid 28179
+06-30 18:27:18.863 28085 28179 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:18.863 28085 28179 D EGL_emulation: eglMakeCurrent: 0xb4000070adc9d6d0: ver 3 0 (tinfo 0x72cbc39100) (first time)
+06-30 18:27:18.869   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f09a4000 0x1f1388000]
+06-30 18:27:18.872   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-30 18:27:18.872 28177 28184 I Gralloc4: mapper 4.x is not supported
+06-30 18:27:18.877 28177 28184 D HostConnection: createUnique: call
+06-30 18:27:18.877 28177 28184 D HostConnection: HostConnection::get() New Host Connection established 0xb4000070b4e0f190, tid 28184
+06-30 18:27:18.878 28177 28184 D goldfish-address-space: allocate: Ask for block of size 0x100
+06-30 18:27:18.878 28177 28184 D goldfish-address-space: allocate: ioctl allocate returned offset 0x1efff8000 size 0x8000
+06-30 18:27:18.881 28177 28184 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:18.970 28085 28185 I flutter : The Dart VM service is listening on http://127.0.0.1:40271/DNENy4kUB54=/
+06-30 18:27:19.366   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f18a4000 0x1f2288000]
+06-30 18:27:19.370   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-30 18:27:19.370 28191 28192 I Gralloc4: mapper 4.x is not supported
+06-30 18:27:19.375 28191 28192 D HostConnection: createUnique: call
+06-30 18:27:19.376 28191 28192 D HostConnection: HostConnection::get() New Host Connection established 0xb400007b37c0a810, tid 28192
+06-30 18:27:19.376 28191 28192 D goldfish-address-space: allocate: Ask for block of size 0x100
+06-30 18:27:19.376 28191 28192 D goldfish-address-space: allocate: ioctl allocate returned offset 0x1efff8000 size 0x8000
+06-30 18:27:19.379 28191 28192 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:19.462 28085 28085 I QWQStartup: android_flutter_engine_configured elapsedMs=1354
+06-30 18:27:19.534 28085 28085 D FlutterGeolocator: Attaching Geolocator to activity
+06-30 18:27:19.666 28085 28085 W an.quwoquan_ap: Accessing hidden method Landroid/view/accessibility/AccessibilityNodeInfo;->getSourceNodeId()J (unsupported,test-api, reflection, allowed)
+06-30 18:27:19.668 28085 28085 W an.quwoquan_ap: Accessing hidden method Landroid/view/accessibility/AccessibilityRecord;->getSourceNodeId()J (unsupported, reflection, allowed)
+06-30 18:27:19.668 28085 28085 W an.quwoquan_ap: Accessing hidden field Landroid/view/accessibility/AccessibilityNodeInfo;->mChildNodeIds:Landroid/util/LongArray; (unsupported, reflection, allowed)
+06-30 18:27:19.668 28085 28085 W an.quwoquan_ap: Accessing hidden method Landroid/util/LongArray;->get(I)J (unsupported, reflection, allowed)
+06-30 18:27:19.701 28085 28085 D FlutterRenderer: Width is zero. 0,0
+06-30 18:27:19.808   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f09a4000 0x1f1388000]
+06-30 18:27:19.811   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-30 18:27:19.811 28198 28199 I Gralloc4: mapper 4.x is not supported
+06-30 18:27:19.817 28198 28199 D HostConnection: createUnique: call
+06-30 18:27:19.818 28198 28199 D HostConnection: HostConnection::get() New Host Connection established 0xb400007c9fe37510, tid 28199
+06-30 18:27:19.818 28198 28199 D goldfish-address-space: allocate: Ask for block of size 0x100
+06-30 18:27:19.818 28198 28199 D goldfish-address-space: allocate: ioctl allocate returned offset 0x1efff8000 size 0x8000
+06-30 18:27:19.822 28198 28199 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:20.256   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f18a4000 0x1f2288000]
+06-30 18:27:20.261   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-30 18:27:20.261 28202 28203 I Gralloc4: mapper 4.x is not supported
+06-30 18:27:20.265 28202 28203 D HostConnection: createUnique: call
+06-30 18:27:20.265 28202 28203 D HostConnection: HostConnection::get() New Host Connection established 0xb40000728716ce50, tid 28203
+06-30 18:27:20.266 28202 28203 D goldfish-address-space: allocate: Ask for block of size 0x100
+06-30 18:27:20.266 28202 28203 D goldfish-address-space: allocate: ioctl allocate returned offset 0x1efff8000 size 0x8000
+06-30 18:27:20.270 28202 28203 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:20.576 28085 28085 I Choreographer: Skipped 148 frames!  The application may be doing too much work on its main thread.
+06-30 18:27:20.617 28085 28085 D FlutterRenderer: Width is zero. 0,0
+06-30 18:27:20.641   352   465 W ServiceManager: Permission failure: android.permission.ACCESS_SURFACE_FLINGER from uid=10249 pid=28085
+06-30 18:27:20.641   352   465 D PermissionCache: checking android.permission.ACCESS_SURFACE_FLINGER for uid=10249 => denied (2142 us)
+06-30 18:27:20.641   527   548 D CompatibilityChangeReporter: Compat change id reported: 158002302; UID 10249; state: ENABLED
+06-30 18:27:20.641   352   465 W ServiceManager: Permission failure: android.permission.ROTATE_SURFACE_FLINGER from uid=10249 pid=28085
+06-30 18:27:20.641   352   465 D PermissionCache: checking android.permission.ROTATE_SURFACE_FLINGER for uid=10249 => denied (202 us)
+06-30 18:27:20.647 28085 28164 D HostConnection: createUnique: call
+06-30 18:27:20.647 28085 28164 D HostConnection: HostConnection::get() New Host Connection established 0xb4000070adc8a110, tid 28164
+06-30 18:27:20.649 28085 28164 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:20.649 28085 28164 W OpenGLRenderer: Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+06-30 18:27:20.651 28085 28085 D FlutterJNI: Sending viewport metrics to the engine.
+06-30 18:27:20.652 28085 28164 W OpenGLRenderer: Failed to initialize 101010-2 format, error = EGL_SUCCESS
+06-30 18:27:20.656 28085 28164 D EGL_emulation: eglCreateContext: 0xb4000070adca0490: maj 3 min 0 rcv 3
+06-30 18:27:20.658 28085 28164 D EGL_emulation: eglMakeCurrent: 0xb4000070adca0490: ver 3 0 (tinfo 0x72cbc39180) (first time)
+06-30 18:27:20.664   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device VINTF manifest.
+06-30 18:27:20.665 28085 28178 I Gralloc4: mapper 4.x is not supported
+06-30 18:27:20.666 28085 28178 D HostConnection: createUnique: call
+06-30 18:27:20.666   352   685 E HWComposer: getSupportedContentTypes: getSupportedContentTypes failed for display 4619827259835644672: Unsupported (8)
+06-30 18:27:20.668 28085 28178 D HostConnection: HostConnection::get() New Host Connection established 0xb4000070adca1c90, tid 28178
+06-30 18:27:20.668 28085 28178 D goldfish-address-space: allocate: Ask for block of size 0x100
+06-30 18:27:20.668 28085 28178 D goldfish-address-space: allocate: ioctl allocate returned offset 0x1efff8000 size 0x8000
+06-30 18:27:20.670   177   177 I hwservicemanager: getTransport: Cannot find entry android.hardware.graphics.allocator@4.0::IAllocator/default in either framework or device VINTF manifest.
+06-30 18:27:20.670 28085 28178 W Gralloc4: allocator 4.x is not supported
+06-30 18:27:20.672   328   494 D goldfish-address-space: claimShared: Ask to claim region [0x1f18a4000 0x1f2204000]
+06-30 18:27:20.673   328   404 D goldfish-address-space: claimShared: Ask to claim region [0x1f09a4000 0x1f1388000]
+06-30 18:27:20.674 28085 28178 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:20.674 28085 28178 D HostConnection: createUnique: call
+06-30 18:27:20.675 28085 28178 D HostConnection: HostConnection::get() New Host Connection established 0xb4000070adca0fd0, tid 28178
+06-30 18:27:20.677 28085 28178 D HostConnection: HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_native_sync_v3 ANDROID_EMU_native_sync_v4 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_vulkan_queue_submit_with_commands ANDROID_EMU_vulkan_batched_descriptor_set_update ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_0 
+06-30 18:27:20.678 28085 28178 D EGL_emulation: eglMakeCurrent: 0xb4000070adc9e5d0: ver 3 0 (tinfo 0x72cbc39200) (first time)
+06-30 18:27:20.679 28085 28178 D EGL_emulation: eglCreateContext: 0xb4000070adca1810: maj 3 min 0 rcv 3

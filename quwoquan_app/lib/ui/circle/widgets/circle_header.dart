@@ -1,231 +1,118 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
-import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
+import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
+/// 圈子身份头 —— 共享 [ObjectIdentityHeader] 的薄封装。
+///
+/// 真相源已下沉到 `object_page/object_page_sections.dart` 的身份头底座，与用户主页
+/// `ProfileHeader`、实体主页同源 token（`iosTitle3`/`regular` 名称、`iosFootnote` 副标题、
+/// 统一上探/留白几何）。此处只把圈子数据映射为：
+/// 标题(圈子名) + 圆角方头像([ObjectIdentityKind.circle]) + 类型标签副标题 + 认证勾。
+///
+/// 简介、统计、成员关系分别由 [ObjectSloganCard] / [ObjectStatsRow] / 成员 Tab 承载，
+/// 不再挤在头部（高保 3.3：封面表达圈子氛围，不做成员头像墙）。
 class CircleHeader extends StatelessWidget {
   const CircleHeader({
     super.key,
     required this.isDark,
-    this.avatarUrl,
     required this.name,
-    this.description,
-    this.tags = const [],
-    this.metaLine,
-    this.badgeLabel,
-    this.memberVisuals = const <IntersectionVisual>[],
-    this.onTagTap,
+    this.avatarUrl,
+    this.identityTags = const <String>[],
+    this.verified = false,
   });
 
   final bool isDark;
-  final String? avatarUrl;
   final String name;
-  final String? description;
-  final List<String> tags;
-  final String? metaLine;
-  final String? badgeLabel;
+  final String? avatarUrl;
 
-  /// 头部成员视觉簇（圈子里你认识的人，结构化样本视觉）；为空则不展示。
-  /// 走统一 [IntersectionVisualCluster]（形状区分 / 降级 / 语义一致），不再裸 URL 自绘。
-  final List<IntersectionVisual> memberVisuals;
-  final ValueChanged<String>? onTagTap;
+  /// 单行兴趣/类型标签（云侧直出，端以 ` · ` 拼接为副标题；最多 3 个由调用方收口）。
+  final List<String> identityTags;
 
-  static const double avatarRadius = AppSpacing.xl;
-  static const double _avatarBorder = AppSpacing.intraGroupXs;
-  static double get avatarOuterDiameter => (avatarRadius + _avatarBorder) * 2;
-  static double get avatarIntrusion => avatarOuterDiameter * 0.34;
+  /// 官方认证标识（蓝勾）。云侧 status=official/verified 直出，端只读展示。
+  final bool verified;
 
-  Widget _buildAvatar(Color bg, Color fgSecondary) {
-    final avatarProvider = mediaImageProvider(avatarUrl);
-    return Container(
-      key: const ValueKey<String>('circle-header-avatar'),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: bg, width: _avatarBorder),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.black.withValues(alpha: isDark ? 0.24 : 0.12),
-            blurRadius: AppSpacing.lg,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: avatarProvider != null
-          ? CircleAvatar(
-              radius: avatarRadius,
-              backgroundColor: fgSecondary.withValues(alpha: 0.2),
-              backgroundImage: avatarProvider,
-              onBackgroundImageError: (e, s) {},
-            )
-          : CircleAvatar(
-              radius: avatarRadius,
-              backgroundColor: fgSecondary.withValues(alpha: 0.2),
-              child: Icon(
+  /// 头像外径（含边框）与上探像素，供 [ObjectPageShell.identityPinExtent] 计算吸顶高度。
+  /// 代理共享身份头底座常量，保证四类主页几何一致。
+  static double get avatarOuterDiameter =>
+      ObjectIdentityHeader.avatarOuterExtentDefault;
+  static double get avatarIntrusion =>
+      ObjectIdentityHeader.avatarOuterExtentDefault *
+      ObjectIdentityHeader.avatarOverlapRatioDefault;
+
+  Widget _buildAvatarFallback(BuildContext context) {
+    final initial = name.trim().isEmpty ? '' : name.trim().characters.first;
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final bg = AppColors.iosAccent(context).withValues(alpha: 0.12);
+    return ColoredBox(
+      color: bg,
+      child: Center(
+        child: initial.isEmpty
+            ? Icon(
                 CupertinoIcons.person_3_fill,
-                size: AppSpacing.iconLarge,
-                color: fgSecondary,
+                size: AppSpacing.iconMedium,
+                color: fg.withValues(alpha: 0.72),
+              )
+            : Text(
+                initial,
+                style: TextStyle(
+                  fontSize: AppTypography.iosTitle3,
+                  fontWeight: AppTypography.semiBold,
+                  color: fg,
+                ),
               ),
-            ),
+      ),
     );
   }
 
-  /// 成员头像簇：叠加展示前若干位成员头像，传达「圈子里有真实的人」。
-  Widget _buildMemberCluster() {
-    // 归一到统一交集视觉簇：形状按 assetKind（成员头像走圆形 avatar）、降级占位、
-    // 超出「+N」收口、可点击都由 IntersectionVisualCluster 统一处理，不再裸 URL 自绘。
-    return IntersectionVisualCluster(
-      key: const ValueKey<String>('circle-header-member-cluster'),
-      visuals: memberVisuals,
-      maxVisuals: 4,
-      size: AppSpacing.avatarUserXs,
-    );
-  }
-
-  Widget _buildInfoChip({
-    required String label,
-    required Color foreground,
-    required Color background,
-    IconData? icon,
-    bool accent = false,
-  }) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppSpacing.circularBorderRadius),
-        border: accent
-            ? Border.all(color: AppColors.primaryColor.withValues(alpha: 0.14))
-            : null,
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(
-              icon,
-              size: AppSpacing.iconSmall,
-              color: accent ? AppColors.primaryColor : foreground,
-            ),
-            SizedBox(width: AppSpacing.intraGroupXs),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: AppTypography.xs,
-              fontWeight: AppTypography.semiBold,
-              color: accent ? AppColors.primaryColor : foreground,
-            ),
-          ),
-        ],
-      ),
+  Widget? _buildAvatarChild(BuildContext context) {
+    final url = (avatarUrl ?? '').trim();
+    if (url.isEmpty) {
+      return null;
+    }
+    if (isLocalFileImageSource(url)) {
+      return AppMediaImage(
+        key: const ValueKey<String>('circle-header-avatar-image'),
+        imageSource: url,
+        fit: BoxFit.cover,
+        errorWidget: _buildAvatarFallback(context),
+      );
+    }
+    return AppMediaImage(
+      key: const ValueKey<String>('circle-header-avatar-image'),
+      imageSource: url,
+      fit: BoxFit.cover,
+      errorWidget: _buildAvatarFallback(context),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final bg = AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
-    final fg = AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final fgSecondary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundSecondary,
-    );
-    final tertiary = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.backgroundTertiary,
-    );
+    final tags = identityTags
+        .map((tag) => tag.trim())
+        .where((tag) => tag.isNotEmpty)
+        .toList(growable: false);
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Padding(
-          padding: EdgeInsets.only(left: avatarOuterDiameter + AppSpacing.sm),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(height: AppSpacing.intraGroupXs),
-              Text(
-                name,
-                style: TextStyle(
-                  fontSize: AppTypography.xxl,
-                  fontWeight: AppTypography.bold,
-                  color: fg,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (metaLine != null && metaLine!.isNotEmpty) ...[
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  metaLine!,
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: fgSecondary,
-                    height: AppTypography.bodyLineHeight,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              if (memberVisuals.isNotEmpty) ...[
-                SizedBox(height: AppSpacing.intraGroupSm),
-                _buildMemberCluster(),
-              ],
-              if (description != null && description!.isNotEmpty) ...[
-                SizedBox(height: AppSpacing.intraGroupXs),
-                Text(
-                  description!,
-                  style: TextStyle(
-                    fontSize: AppTypography.md,
-                    color: fgSecondary,
-                    height: AppTypography.bodyLineHeight,
-                  ),
-                  textAlign: TextAlign.start,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              if ((badgeLabel != null && badgeLabel!.isNotEmpty) || tags.isNotEmpty) ...[
-                SizedBox(height: AppSpacing.intraGroupSm),
-                Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xs,
-                  children: [
-                    if (badgeLabel != null && badgeLabel!.isNotEmpty)
-                      _buildInfoChip(
-                        label: badgeLabel!,
-                        icon: CupertinoIcons.checkmark_seal_fill,
-                        foreground: fgSecondary,
-                        background: AppColors.primaryColor.withValues(alpha: 0.08),
-                        accent: true,
-                      ),
-                    ...tags.map(
-                      (tag) => GestureDetector(
-                        onTap: onTagTap != null ? () => onTagTap!(tag) : null,
-                        child: _buildInfoChip(
-                          label: tag,
-                          foreground: fgSecondary,
-                          background: tertiary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
-        ),
-        Positioned(
-          top: -avatarIntrusion,
-          left: 0,
-          child: _buildAvatar(bg, fgSecondary),
-        ),
-      ],
+    return ObjectIdentityHeader(
+      title: name,
+      media: ObjectIdentityAvatar(
+        key: const ValueKey<String>('circle-header-avatar'),
+        kind: ObjectIdentityKind.circle,
+        child: _buildAvatarChild(context),
+      ),
+      titleTrailing: verified
+          ? Icon(
+              key: const ValueKey<String>('circle-header-verified-badge'),
+              CupertinoIcons.checkmark_seal_fill,
+              size: AppSpacing.iconSmall,
+              color: AppColors.iosAccent(context),
+            )
+          : null,
+      subtitle: tags.isNotEmpty ? tags.join(' · ') : null,
     );
   }
 }

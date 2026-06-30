@@ -102,7 +102,6 @@ grandfathered_current_paths:
 - quwoquan_app/test/cloud/runtime/recommendation/intersection_action_keys_test.dart
 - quwoquan_app/test/cloud/services/assistant/assistant_creation_suggest_repository_test.dart
 - quwoquan_app/test/cloud/services/business_beta_remote_repository_test.dart
-- quwoquan_app/test/cloud/services/connection/connection_repository_test.dart
 - quwoquan_app/test/cloud/services/content/comment_counts_delta_mock_test.dart
 - quwoquan_app/test/cloud/services/content/comment_counts_delta_remote_test.dart
 - quwoquan_app/test/cloud/services/content/comment_sort_consistency_test.dart
@@ -340,7 +339,6 @@ grandfathered_current_paths:
 - quwoquan_app/test/ui/entity/pages/homepage_picker_page_widget_test.dart
 - quwoquan_app/test/ui/entity/pages/suggest_homepage_page_widget_test.dart
 - quwoquan_app/test/ui/intersection/pages/object_intersection_list_page_test.dart
-- quwoquan_app/test/ui/plaza/widgets/connection_hub_page_widget_test.dart
 - quwoquan_app/test/ui/rtc/models/call_summary_test.dart
 - quwoquan_app/test/ui/rtc/providers/call_session_provider_lifecycle_test.dart
 - quwoquan_app/test/ui/rtc/widgets/active_call_bar_test.dart

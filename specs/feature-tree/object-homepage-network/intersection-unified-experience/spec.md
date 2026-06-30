@@ -12,8 +12,8 @@
 | S1 首页推荐 | `home-recommend-intersection-redesign` | feed 卡 + spotlight |
 | S2 他人主页 | `user-profile-intersection-redesign`（他人） | 为什么推荐TA |
 | S2 我的主页 | `user-profile-intersection-redesign`（我的） | 我的连接 / 我的影响力 |
-| S3 实体主页 | `entity-homepage-intersection-redesign` | 为什么推荐这里 |
-| S4 圈子主页 | `circle-homepage-intersection-redesign` | 为什么推荐这个圈子 |
+| S3 实体主页 | `entity-homepage-intersection-redesign` | 我的交集 + 影响力 |
+| S4 圈子主页 | `circle-homepage-intersection-redesign` | 我的交集 + 影响力 |
 | S3/S4 端云闭环 | `object-homepage-gamma-real-data-closure` | gamma-local 真实 bundle / impact / object intersections |
 | S5 全局搜索 | `search-intersection-consumption` | 交集 Tab + 发现区分组 |
 | 横切 | `intersection-sentence-unification` | primaryText 单句 + G2 |
@@ -117,8 +117,8 @@
 |---|---|---|
 | A 我的主页 | 我的连接（lifecycle 分桶弱标）+ 我的影响力（传播视图） | 四槽样板首落；author_impact 路径节点 + secondarySpread 计数 |
 | B 用户主页(他人) | 为什么推荐TA + TA的影响力 | 证据组叠 lifecycle 弱标 + 句内头像 |
-| C 实体主页 | 为什么推荐这里 + 记录流单句 | 复用 ObjectIntersectionSection；对象封面缩略图 |
-| D 圈子主页 | 为什么推荐这个圈子 + 这个圈子帮助了很多人 | circle_impact 接统一三件套（解决 G4）+「你认识的人在这」 |
+| C 实体主页 | 我的交集 + 影响力 + 记录流单句 | 复用 ObjectIntersectionSection；对象封面缩略图；影响数字可枚举来源 |
+| D 圈子主页 | 我的交集 + 影响力 | circle_impact 接统一三件套（解决 G4）+ 成员/讨论/记录可追溯 |
 | E 首页 post | post 卡内单句 chip | 紧凑：1 句 + lifecycle 仅「新」，不堆叠 |
 
 ### 赞红线翻转（§21.9）

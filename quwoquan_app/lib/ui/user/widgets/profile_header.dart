@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
@@ -142,124 +143,74 @@ class ProfileHeader extends StatelessWidget {
         .where((tag) => tag.isNotEmpty)
         .toList(growable: false);
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Padding(
-          padding: EdgeInsets.only(left: avatarOuterDiameter + AppSpacing.sm),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(height: AppSpacing.intraGroupXs),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            displayName ?? '',
-                            style: TextStyle(
-                              fontSize: AppTypography.iosTitle3,
-                              fontWeight: AppTypography.regular,
-                              color: fg.withValues(alpha: 0.94),
-                              letterSpacing: -0.24,
-                              height: AppSpacing.textLineHeightDense,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (verified) ...[
-                          SizedBox(width: AppSpacing.intraGroupXs),
-                          Icon(
-                            key: verifiedBadgeKey,
-                            CupertinoIcons.checkmark_seal_fill,
-                            size: AppSpacing.iconSmall,
-                            color: AppColors.iosAccent(context),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (tags.isNotEmpty) ...[
-                      SizedBox(height: AppSpacing.intraGroupXs),
-                      Text(
-                        key: const ValueKey<String>(
-                          'profile-header-identity-tags',
-                        ),
-                        tags.join(' · '),
-                        style: TextStyle(
-                          fontSize: AppTypography.iosFootnote,
-                          color: fgSecondary,
-                          letterSpacing: -0.08,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ] else if (showIdentityTagPrompt && onEdit != null) ...[
-                      SizedBox(height: AppSpacing.intraGroupXs),
-                      CupertinoButton(
-                        key: const ValueKey<String>(
-                          'profile-header-tags-prompt',
-                        ),
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        onPressed: onEdit,
-                        child: Text(
-                          UITextConstants.profileEmptyTagsPrompt,
-                          style: TextStyle(
-                            fontSize: AppTypography.iosFootnote,
-                            color: fgSecondary,
-                            fontWeight: AppTypography.regular,
-                            letterSpacing: -0.08,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+    Widget? titleTrailing;
+    if (verified) {
+      titleTrailing = Icon(
+        key: verifiedBadgeKey,
+        CupertinoIcons.checkmark_seal_fill,
+        size: AppSpacing.iconSmall,
+        color: AppColors.iosAccent(context),
+      );
+    }
+
+    Widget? subtitleOverride;
+    if (tags.isEmpty && showIdentityTagPrompt && onEdit != null) {
+      subtitleOverride = CupertinoButton(
+        key: const ValueKey<String>('profile-header-tags-prompt'),
+        padding: EdgeInsets.zero,
+        minimumSize: Size.zero,
+        onPressed: onEdit,
+        child: Text(
+          UITextConstants.profileEmptyTagsPrompt,
+          style: TextStyle(
+            fontSize: AppTypography.iosFootnote,
+            color: fgSecondary,
+            fontWeight: AppTypography.regular,
+            letterSpacing: -0.08,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+
+    Widget? trailing;
+    if (showQrCode && onQrCode != null) {
+      trailing = Padding(
+        padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
+        child: CupertinoButton(
+          key: const ValueKey<String>('profile-header-qr-code'),
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(
+            AppSpacing.appChromeActionButtonSize,
+            AppSpacing.appChromeActionButtonSize,
+          ),
+          onPressed: onQrCode,
+          child: SizedBox(
+            width: AppSpacing.appChromeActionButtonSize,
+            height: AppSpacing.appChromeActionButtonSize,
+            child: Center(
+              child: Icon(
+                CupertinoIcons.qrcode,
+                size: AppSpacing.iconMedium,
+                color: fg.withValues(alpha: 0.88),
               ),
-              if (showQrCode && onQrCode != null) ...[
-                SizedBox(width: AppSpacing.intraGroupXs),
-                Padding(
-                  padding: EdgeInsets.only(top: AppSpacing.intraGroupXs),
-                  child: CupertinoButton(
-                    key: const ValueKey<String>('profile-header-qr-code'),
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(
-                      AppSpacing.appChromeActionButtonSize,
-                      AppSpacing.appChromeActionButtonSize,
-                    ),
-                    onPressed: onQrCode,
-                    child: SizedBox(
-                      width: AppSpacing.appChromeActionButtonSize,
-                      height: AppSpacing.appChromeActionButtonSize,
-                      child: Center(
-                        child: Icon(
-                          CupertinoIcons.qrcode,
-                          size: AppSpacing.iconMedium,
-                          color: fg.withValues(alpha: 0.88),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
-        Positioned(
-          top: -avatarOverlapPx,
-          left: 0,
-          child: _buildAvatar(context, bg, fgSecondary),
-        ),
-      ],
+      );
+    }
+
+    return ObjectIdentityHeader(
+      title: displayName ?? '',
+      media: _buildAvatar(context, bg, fgSecondary),
+      titleTrailing: titleTrailing,
+      subtitle: tags.isNotEmpty ? tags.join(' · ') : null,
+      subtitleOverride: subtitleOverride,
+      trailing: trailing,
+      avatarOuterExtent: avatarOuterDiameter,
+      avatarOverlapRatio:
+          UserProfileUIConfig.headerLayout.avatarOverlapRatio,
     );
   }
 }

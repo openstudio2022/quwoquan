@@ -10,7 +10,8 @@ layering is pinned (R-CONTENTDIR-001):
    directory unification.
 2. Pageflip engine isolation — `lib/components/pageflip/` (StPageFlip engine,
    platform-agnostic geometry/calculation) may only be consumed by the
-   `lib/ui/content/article_reader/` host and by tests (host->engine layering,
+   `lib/ui/content/article_reader/` host, the generic media pageflip host
+   `lib/components/media/shared/pageflip/`, and tests (host->engine layering,
    see rules 11/12).
 3. Render/read layering — `lib/ui/content/article_render/` (markdown render &
    pagination engine) must not depend on `lib/ui/content/article_reader/`
@@ -37,6 +38,8 @@ PAGEFLIP_ENGINE_ROOT = COMPONENTS_ROOT / "pageflip"
 RETIRED_PAGEFLIP_ENGINE_ROOT = CONTENT_ROOT / "pageflip"
 ARTICLE_READER_ROOT = CONTENT_ROOT / "article_reader"
 ARTICLE_RENDER_ROOT = CONTENT_ROOT / "article_render"
+MEDIA_PAGEFLIP_ROOT = COMPONENTS_ROOT / "media" / "shared" / "pageflip"
+MEDIA_IMAGE_BOOK_ROOT = COMPONENTS_ROOT / "media" / "image" / "book"
 PAGEFLIP_ENGINE_IMPORT = "package:quwoquan_app/components/pageflip/"
 ARTICLE_READER_IMPORT = "package:quwoquan_app/ui/content/article_reader/"
 ARTICLE_RENDER_IMPORT = "package:quwoquan_app/ui/content/article_render/"
@@ -109,8 +112,9 @@ def main() -> int:
             )
 
     # Invariant 2: the generic pageflip engine must live under components/,
-    # never under the content UI domain. It may only be consumed by itself and
-    # the article_reader host in production lib code.
+    # never under the content UI domain. It may only be consumed by itself, the
+    # article_reader host, and the generic media pageflip host in production lib
+    # code.
     if RETIRED_PAGEFLIP_ENGINE_ROOT.exists():
         failures.append(
             f"retired pageflip engine root still exists: {rel(RETIRED_PAGEFLIP_ENGINE_ROOT)}"
@@ -120,10 +124,12 @@ def main() -> int:
             continue
         if path.is_relative_to(ARTICLE_READER_ROOT):
             continue
+        if path.is_relative_to(MEDIA_PAGEFLIP_ROOT):
+            continue
         if contains(path, PAGEFLIP_ENGINE_IMPORT):
             failures.append(
                 f"{rel(path)} imports pageflip engine (components/pageflip) "
-                f"outside the article_reader host (host->engine layering)"
+                f"outside article_reader or media pageflip host (host->engine layering)"
             )
 
     # Invariant 3: the article_render markdown/pagination engine must not depend
@@ -139,6 +145,30 @@ def main() -> int:
         text = path.read_text(encoding="utf-8")
         if path.is_relative_to(PAGEFLIP_ENGINE_ROOT) and "package:quwoquan_app/ui/" in text:
             failures.append(f"{rel(path)} imports ui/** from generic pageflip engine")
+        if path.is_relative_to(MEDIA_PAGEFLIP_ROOT):
+            for forbidden in (
+                "package:quwoquan_app/ui/",
+                "package:quwoquan_app/cloud/runtime/generated/content/",
+                "package:flutter_riverpod/",
+                "package:go_router/",
+                "PostBaseDto",
+            ):
+                if forbidden in text:
+                    failures.append(
+                        f"{rel(path)} violates media pageflip component boundary with {forbidden}"
+                    )
+        if path.is_relative_to(MEDIA_IMAGE_BOOK_ROOT):
+            for forbidden in (
+                "package:quwoquan_app/ui/",
+                "package:quwoquan_app/cloud/runtime/generated/content/",
+                "package:flutter_riverpod/",
+                "package:go_router/",
+                "PostBaseDto",
+            ):
+                if forbidden in text:
+                    failures.append(
+                        f"{rel(path)} violates image book component boundary with {forbidden}"
+                    )
         if "package:quwoquan_app/ui/content/" not in text:
             continue
         if path.is_relative_to(COMPONENTS_ROOT / "content"):

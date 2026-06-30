@@ -242,6 +242,50 @@ class CircleMockData {
       'domainId': 'culture_arts',
     },
     {
+      'id': 'fixture_circle_gold_invest',
+      'name': '黄金投资圈',
+      'coverUrl':
+          'media/image/s/mock/seed/p_1677442135136-760c813028c4/v1/image.jpg',
+      'cover':
+          'media/image/s/mock/seed/p_1677442135136-760c813028c4/v1/image.jpg',
+      'avatar':
+          'media/image/s/mock/seed/p_1677442135136-760c813028c4/v1/image.jpg',
+      'desc': '围绕黄金、贵金属和长期资产配置展开事实讨论。',
+      'description': '围绕黄金、贵金属和长期资产配置展开事实讨论。',
+      'tags': ['黄金', '贵金属', '资产配置'],
+      'memberCount': 8426,
+      'postCount': 1200,
+      'discussionCount': 326,
+      'weeklyActiveCount': 326,
+      'categoryId': 'finance',
+      'subCategory': '黄金',
+      'domainId': 'finance',
+      'joinStatus': 'not_joined',
+      'isFollowed': false,
+    },
+    {
+      'id': 'fixture_circle_neworiental_alumni',
+      'name': '新东方校友圈',
+      'coverUrl':
+          'media/image/s/mock/seed/p_1522202176988-66273c2fd55f/v1/image.jpg',
+      'cover':
+          'media/image/s/mock/seed/p_1522202176988-66273c2fd55f/v1/image.jpg',
+      'avatar':
+          'media/image/s/mock/seed/p_1522202176988-66273c2fd55f/v1/image.jpg',
+      'desc': '新东方校友围绕学习、成长和职业转型形成的兴趣圈。',
+      'description': '新东方校友围绕学习、成长和职业转型形成的兴趣圈。',
+      'tags': ['教育', '校友', '成长'],
+      'memberCount': 3120,
+      'postCount': 426,
+      'discussionCount': 88,
+      'weeklyActiveCount': 88,
+      'categoryId': 'education',
+      'subCategory': '校友',
+      'domainId': 'education',
+      'joinStatus': 'not_joined',
+      'isFollowed': false,
+    },
+    {
       'id': 'c-tech-admin',
       'name': 'AI 前沿探索者',
       'coverUrl':

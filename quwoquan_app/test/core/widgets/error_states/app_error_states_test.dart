@@ -24,6 +24,14 @@ void main() {
     );
 
     expect(find.text(UITextConstants.temporarilyUnavailable), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('app-page-error-close-button')),
+      findsOneWidget,
+    );
+    final closeButton = tester.widget<CupertinoButton>(
+      find.byKey(const ValueKey<String>('app-page-error-close-button')),
+    );
+    expect(closeButton.child, isA<SizedBox>());
     expect(find.text(UITextConstants.tryAgain), findsOneWidget);
     expect(find.text(UITextConstants.loadFailed), findsNothing);
     expect(find.text(UITextConstants.retry), findsNothing);
@@ -40,6 +48,10 @@ void main() {
     await tester.tap(find.text(UITextConstants.tryAgain));
     await tester.pump();
     expect(retryCount, 1);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('app-page-error-close-button')),
+    );
+    await tester.pump();
   });
 
   testWidgets('AppPageErrorState 的返回动作使用中性色胶囊按钮', (tester) async {
@@ -118,6 +130,16 @@ void main() {
     );
     final titleColor = titleText.style!.color!;
     expect(titleColor.computeLuminance(), lessThan(0.5));
+
+    final backgroundBox = tester.widget<ColoredBox>(
+      find
+          .descendant(
+            of: find.byType(AppPageErrorState),
+            matching: find.byType(ColoredBox),
+          )
+          .first,
+    );
+    expect(backgroundBox.color.computeLuminance(), greaterThan(0.5));
   });
 
   testWidgets('AppTransientErrorNotice 渲染刷新失败轻提示', (tester) async {

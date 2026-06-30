@@ -1,8 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
+import 'package:quwoquan_app/components/object_page/object_stats_row.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 
+/// 用户主页统计行 —— 共享 [ObjectStatsRow] 的薄封装。
+///
+/// 真相源已下沉到 `object_page/object_stats_row.dart`；此处把 [SubAccountProfileViewData]
+/// 映射为粉丝/关注/获赞/圈子四项 [ObjectStatItem]，保留 `profile-stats-inline-row` 根 key
+/// 与既有点击分发顺序（fans/following/likes/circles）。
 class ProfileStatsRow extends StatelessWidget {
   const ProfileStatsRow({
     super.key,
@@ -15,110 +21,36 @@ class ProfileStatsRow extends StatelessWidget {
   final SubAccountProfileViewData? profile;
   final void Function(String type)? onStatTap;
 
-  String _formatCount(int count) {
-    return formatCompactActionCount(count);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final fg = AppColors.iosLabel(context);
-    final fgSecondary = AppColors.iosSecondaryLabel(context);
     final subject = profile;
-
-    final items = [
-      _StatItem(
-        value: _formatCount(subject?.followerCount ?? 0),
+    final items = <ObjectStatItem>[
+      ObjectStatItem(
+        value: formatCompactActionCount(subject?.followerCount ?? 0),
         label: UITextConstants.profileStatFollowers,
         type: 'fans',
       ),
-      _StatItem(
-        value: _formatCount(subject?.followingCount ?? 0),
+      ObjectStatItem(
+        value: formatCompactActionCount(subject?.followingCount ?? 0),
         label: UITextConstants.follow,
         type: 'following',
       ),
-      _StatItem(
-        value: _formatCount(subject?.likeCount ?? 0),
+      ObjectStatItem(
+        value: formatCompactActionCount(subject?.likeCount ?? 0),
         label: UITextConstants.circleLikes,
         type: 'likes',
       ),
-      _StatItem(
-        value: _formatCount(subject?.circleCount ?? 0),
+      ObjectStatItem(
+        value: formatCompactActionCount(subject?.circleCount ?? 0),
         label: UITextConstants.contactsTabCircles,
         type: 'circles',
       ),
     ];
-
-    return Wrap(
-      key: const ValueKey<String>('profile-stats-inline-row'),
-      spacing: AppSpacing.intraGroupXs,
-      runSpacing: AppSpacing.intraGroupXs,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: <Widget>[
-        for (var i = 0; i < items.length; i += 1) ...<Widget>[
-          _buildInlineStat(items[i], fg, fgSecondary),
-          if (i != items.length - 1)
-            Text(
-              '·',
-              style: TextStyle(
-                fontSize: AppTypography.iosSubheadline,
-                fontWeight: AppTypography.regular,
-                color: fg.withValues(alpha: 0.86),
-              ),
-            ),
-        ],
-      ],
+    return ObjectStatsRow(
+      isDark: isDark,
+      items: items,
+      onStatTap: onStatTap,
+      rowKey: const ValueKey<String>('profile-stats-inline-row'),
     );
   }
-}
-
-extension on ProfileStatsRow {
-  Widget _buildInlineStat(_StatItem item, Color fg, Color fgSecondary) {
-    final content = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Text(
-          item.value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: AppTypography.iosSubheadline,
-            fontWeight: AppTypography.regular,
-            color: fg.withValues(alpha: 0.9),
-            letterSpacing: -0.08,
-          ),
-        ),
-        SizedBox(width: AppSpacing.intraGroupXs / 2),
-        Text(
-          item.label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: AppTypography.iosFootnote,
-            fontWeight: AppTypography.regular,
-            color: fgSecondary,
-          ),
-        ),
-      ],
-    );
-    if (onStatTap == null || item.type.isEmpty) {
-      return content;
-    }
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.square(AppSpacing.minInteractiveSize),
-      onPressed: () => onStatTap!(item.type),
-      child: content,
-    );
-  }
-}
-
-class _StatItem {
-  const _StatItem({
-    required this.value,
-    required this.label,
-    required this.type,
-  });
-  final String value;
-  final String label;
-  final String type;
 }

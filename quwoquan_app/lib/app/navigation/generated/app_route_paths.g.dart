@@ -28,17 +28,8 @@ class AppRoutePaths {
   static const String circles = '/circles';
   static const String circlesSegment = 'circles';
 
-  static const String plaza = '/plaza';
-  static const String plazaSegment = 'plaza';
-
-  static const String plazaNearby = '/plaza/nearby';
-  static const String plazaNearbySegment = 'nearby';
-
-  static const String plazaCompanion = '/plaza/companion';
-  static const String plazaCompanionSegment = 'companion';
-
-  static const String plazaMeetup = '/plaza/meetup';
-  static const String plazaMeetupSegment = 'meetup';
+  static const String interestMatch = '/interest-match';
+  static const String interestMatchSegment = 'interest-match';
 
   static const String chat = '/chat';
   static const String chatSegment = 'chat';
@@ -79,10 +70,11 @@ class AppRoutePaths {
   static const String createEditImageSegment = 'edit-image';
 
   static const String circleDetailPathTemplate = '/circle/{id}';
-  static String circleDetail({required String id}) {
+  static String circleDetail({required String id, String? sourceTheme}) {
     return _buildPath(circleDetailPathTemplate, <String, String>{
       'id': id,
     }, <String, String?>{
+      'sourceTheme': sourceTheme,
     });
   }
   static const String circleDetailSegment = '{id}';
@@ -168,10 +160,11 @@ class AppRoutePaths {
   static const String suggestHomepageSegment = 'suggest';
 
   static const String homepageDetailPathTemplate = '/homepages/{id}';
-  static String homepageDetail({required String id}) {
+  static String homepageDetail({required String id, String? sourceTheme}) {
     return _buildPath(homepageDetailPathTemplate, <String, String>{
       'id': id,
     }, <String, String?>{
+      'sourceTheme': sourceTheme,
     });
   }
   static const String homepageDetailSegment = '{id}';

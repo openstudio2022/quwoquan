@@ -16,6 +16,7 @@ class HomepageMockData {
     _westLakeDetail,
     _nightMarketDetail,
     _campusHomepage('fixture_homepage_university_pku', '北京大学', '北京'),
+    _schoolHomepage('fixture_homepage_school_neworiental', '新东方', '北京'),
     _campusHomepage('fixture_homepage_university_tsinghua', '清华大学', '北京'),
     _campusHomepage('fixture_homepage_university_fudan', '复旦大学', '上海'),
     _campusHomepage('fixture_homepage_university_zju', '浙江大学', '杭州'),
@@ -42,12 +43,18 @@ class HomepageMockData {
       '东京城市摄影路线',
       '东京',
     ),
+    _photoSpotHomepage(
+      'fixture_homepage_photo_spot_hengshu_studio',
+      '横竖影像馆取景地',
+      '上海',
+    ),
   ];
 
   static final HomepageDetail _westLakeDetail = HomepageDetail(
     id: 'homepage_sight_west_lake',
     homepageType: 'sight',
     title: '西湖景区',
+    canonicalEntityId: 'entity:sight:west_lake',
     subtitle: '杭州西湖核心游览区',
     coverUrl:
         'media/image/s/mock/seed/p_1506744038136-46273834b3fb/v1/image.jpg',
@@ -81,6 +88,8 @@ class HomepageMockData {
         contentType: 'article',
         coverUrl:
             'media/image/s/mock/seed/p_1506744038136-46273834b3fb/v1/image.jpg',
+        authorName: '湖畔慢行者',
+        likeCount: 328,
       ),
       HomepageContentPreview(
         postId: 'west_lake_post_2',
@@ -89,6 +98,8 @@ class HomepageMockData {
         contentType: 'image',
         coverUrl:
             'media/image/s/mock/seed/p_1506744038136-46273834b3fb/v1/image.jpg',
+        authorName: '夜色摄影手',
+        likeCount: 156,
       ),
     ],
     questionPreview: <HomepageQuestionPreview>[
@@ -146,6 +157,8 @@ class HomepageMockData {
         contentType: 'article',
         coverUrl:
             'media/image/s/mock/seed/p_1517248135467-4c7edcad34c4/v1/image.jpg',
+        authorName: '深夜觅食家',
+        likeCount: 92,
       ),
     ],
     questionPreview: <HomepageQuestionPreview>[
@@ -189,6 +202,8 @@ HomepageDetail _campusHomepage(String id, String title, String city) {
         title: '$title 校园指南',
         summary: '以可信资料、创作内容和校友圈承接校园冷启动。',
         contentType: 'article',
+        authorName: '$title 校园号',
+        likeCount: 64,
       ),
     ],
     relatedGroups: <HomepageRelatedGroupSummary>[
@@ -203,6 +218,51 @@ HomepageDetail _campusHomepage(String id, String title, String city) {
     createdAt: _dt('2026-05-01T00:00:00.000Z'),
     updatedAt: _dt('2026-05-01T00:00:00.000Z'),
     publishedAt: _dt('2026-05-01T00:00:00.000Z'),
+  );
+}
+
+HomepageDetail _schoolHomepage(String id, String title, String city) {
+  return HomepageDetail(
+    id: id,
+    homepageType: 'school',
+    title: title,
+    canonicalEntityId: title == '新东方' ? 'entity:school:neworiental' : null,
+    subtitle: '教育培训 · 语言学习 · 校友网络',
+    status: 'published',
+    sourceType: 'contract_fixture',
+    claimStatus: 'unclaimed',
+    categoryTags: <String>['教育培训', '语言学习', city],
+    city: city,
+    followerCount: 8600,
+    contentPreview: <HomepageContentPreview>[
+      HomepageContentPreview(
+        postId: '${id}_post_001',
+        title: '$title 校友成长记录',
+        summary: '聚合学习经历、职业转型、校友讨论和长期连接。',
+        contentType: 'article',
+        authorName: '$title 校友号',
+        likeCount: 248,
+      ),
+    ],
+    questionPreview: <HomepageQuestionPreview>[
+      HomepageQuestionPreview(
+        postId: '${id}_question_001',
+        title: '$title 校友现在都在讨论什么？',
+        summary: '围绕学习、成长和城市校友连接沉淀真实问答。',
+      ),
+    ],
+    relatedGroups: <HomepageRelatedGroupSummary>[
+      HomepageRelatedGroupSummary(
+        circleId: 'fixture_circle_neworiental_alumni',
+        name: '$title 校友圈',
+        memberCount: 3120,
+        linkedHomepageId: id,
+        linkedHomepageTitle: title,
+      ),
+    ],
+    createdAt: _dt('2026-05-01T00:00:00.000Z'),
+    updatedAt: _dt('2026-06-30T00:00:00.000Z'),
+    publishedAt: _dt('2026-06-30T00:00:00.000Z'),
   );
 }
 
@@ -223,6 +283,8 @@ HomepageDetail _travelPhotoHomepage(String id, String title, String city) {
         title: '$title 路线与机位',
         summary: '聚合最佳时段、作品精选、问答和结伴交流。',
         contentType: 'article',
+        authorName: '$title 旅拍号',
+        likeCount: 88,
       ),
     ],
     relatedGroups: <HomepageRelatedGroupSummary>[
@@ -237,6 +299,53 @@ HomepageDetail _travelPhotoHomepage(String id, String title, String city) {
     createdAt: _dt('2026-05-01T00:00:00.000Z'),
     updatedAt: _dt('2026-05-01T00:00:00.000Z'),
     publishedAt: _dt('2026-05-01T00:00:00.000Z'),
+  );
+}
+
+HomepageDetail _photoSpotHomepage(String id, String title, String city) {
+  return HomepageDetail(
+    id: id,
+    homepageType: 'photo_spot',
+    title: title,
+    canonicalEntityId: title == '横竖影像馆取景地'
+        ? 'entity:photo_spot:hengshu_studio'
+        : null,
+    subtitle: '摄影取景地 · 城市影像 · 胶片旅拍',
+    status: 'published',
+    sourceType: 'contract_fixture',
+    claimStatus: 'unclaimed',
+    categoryTags: <String>['摄影取景地', '城市影像', city],
+    city: city,
+    followerCount: 980,
+    contentPreview: <HomepageContentPreview>[
+      HomepageContentPreview(
+        postId: '${id}_post_001',
+        title: '$title 光影记录',
+        summary: '记录同一组取景地的构图、安全宽高比和圆角展示。',
+        contentType: 'image',
+        authorName: '横竖影像馆',
+        likeCount: 980,
+      ),
+    ],
+    questionPreview: <HomepageQuestionPreview>[
+      HomepageQuestionPreview(
+        postId: '${id}_question_001',
+        title: '这组取景地适合什么时段拍？',
+        summary: '围绕机位、光线和拍摄安全沉淀讨论。',
+      ),
+    ],
+    relatedGroups: <HomepageRelatedGroupSummary>[
+      HomepageRelatedGroupSummary(
+        circleId: 'fixture_circle_photo',
+        name: '契约摄影社',
+        memberCount: 128,
+        linkedHomepageId: id,
+        linkedHomepageTitle: title,
+      ),
+    ],
+    createdAt: _dt('2026-05-01T00:00:00.000Z'),
+    updatedAt: _dt('2026-06-30T00:00:00.000Z'),
+    publishedAt: _dt('2026-06-30T00:00:00.000Z'),
   );
 }
 
@@ -278,6 +387,8 @@ HomepageDetail _sightHomepage(
         contentType: 'article',
         coverUrl:
             'media/image/s/mock/seed/p_1500530855697-b586d89ba3ee/v1/image.jpg',
+        authorName: '$title 体验官',
+        likeCount: 213,
       ),
     ],
     questionPreview: <HomepageQuestionPreview>[

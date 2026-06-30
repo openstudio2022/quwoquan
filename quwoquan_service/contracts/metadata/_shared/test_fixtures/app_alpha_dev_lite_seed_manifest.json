@@ -45,7 +45,8 @@
       "domain": "circle",
       "fixturePath": "social/circle/test_fixtures/scenarios/circle_scenarios.lite.json",
       "refs": [
-        "circle_core"
+        "circle_core",
+        "circle_profile_core"
       ],
       "resetScope": "fixture_circle_*",
       "targetStore": "alpha-dev-lite:app-fixture-json",

@@ -12,12 +12,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('startup_ttid local_contract', () {
-    test('welcome screen defers animation controllers until after first frame', () {
-      expect(
-        const WelcomeScreen(onFinish: _noop).runtimeType,
-        WelcomeScreen,
-      );
-    });
+    test(
+      'welcome screen defers animation controllers until after first frame',
+      () {
+        expect(const WelcomeScreen(onFinish: _noop).runtimeType, WelcomeScreen);
+      },
+    );
 
     test('app router library is not loaded before explicit ensure', () {
       expect(isAppRouterLibraryLoaded, isFalse);
@@ -31,10 +31,14 @@ void main() {
       expect(props.keys, contains('elapsedMs'));
     });
 
-    test('deferred plugin ensure APIs are idempotent no-ops off Android', () async {
-      await StartupDeferredPlugins.ensureRtcPlugins();
-      await StartupDeferredPlugins.ensureContentEntryPlugins();
-    });
+    test(
+      'deferred plugin ensure APIs are idempotent no-ops off Android',
+      () async {
+        await StartupDeferredPlugins.ensureRtcPlugins();
+        await StartupDeferredPlugins.ensureContentEntryPlugins();
+        await StartupDeferredPlugins.ensureLocationPlugins();
+      },
+    );
 
     test('startup screen util scope widget exists for post-welcome shell', () {
       expect(const StartupScreenUtilScope(child: SizedBox.shrink()), isNotNull);

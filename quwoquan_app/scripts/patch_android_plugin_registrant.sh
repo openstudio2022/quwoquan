@@ -43,6 +43,7 @@ optional_dev_plugins = {
 startup_deferred_plugin_classes = (
     "com.hiennv.flutter_callkit_incoming.FlutterCallkitIncomingPlugin",
     "com.cloudwebrtc.webrtc.FlutterWebRTCPlugin",
+    "com.baseflow.geolocator.GeolocatorPlugin",
     "io.livekit.plugin.LiveKitPlugin",
     "io.flutter.plugins.camerax.CameraAndroidCameraxPlugin",
     "io.flutter.plugins.imagepicker.ImagePickerPlugin",

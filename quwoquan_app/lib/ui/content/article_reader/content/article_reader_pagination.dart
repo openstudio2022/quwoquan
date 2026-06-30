@@ -24,11 +24,15 @@ List<ArticlePageData> resolvePaginatedArticlePages({
       fallbackPages.isNotEmpty) {
     return fallbackPages;
   }
-  final preferStructuredFallbackPages = fallbackPages
-      .skip(1)
-      .any(
-        (page) => page.title.trim().isNotEmpty || page.body.trim().isNotEmpty,
-      );
+  final documentHasImages = document.assets.any((asset) => asset.hasImage);
+  final preferStructuredFallbackPages =
+      !documentHasImages &&
+      fallbackPages
+          .skip(1)
+          .any(
+            (page) =>
+                page.title.trim().isNotEmpty || page.body.trim().isNotEmpty,
+          );
   if (preferStructuredFallbackPages) {
     return fallbackPages;
   }

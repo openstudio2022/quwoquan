@@ -39,23 +39,11 @@
           "thumbnailUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "mediaUrls": [
             "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-5.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-6.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-7.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-8.png"
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
           ],
           "imageUrls": [
             "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-5.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-6.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-7.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-8.png"
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
           ],
           "circleIds": [
             "fixture_circle_photo"
@@ -69,8 +57,11 @@
           "height": 960,
           "likeCount": 80,
           "commentCount": 0,
+          "favoriteCount": 26,
           "shareCount": 3,
           "createdAt": "2026-05-01T00:00:00Z",
+          "updatedAt": "2026-05-01T00:00:00Z",
+          "publishedAt": "2026-05-02T00:00:00Z",
           "authorDisplayNameSnapshot": "契约摄影师",
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
@@ -79,13 +70,7 @@
           "thumbnailObjectKey": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "mediaObjectKeys": [
             "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-3.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-4.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-5.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-6.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-7.png",
-            "media/image/s/archived-image/post/fixture_photo_001/v1/image-8.png"
+            "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png"
           ],
           "imageObjectKeys": [
             "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
@@ -96,15 +81,7 @@
             "photography",
             "galleryPost"
           ],
-          "locationName": "杭州西湖",
-          "intersectionReasons": [
-            {
-              "primaryText": "你关注的3人在这个圈子发布过作品",
-              "displayText": "你关注的3人在这个圈子发布过作品",
-              "dimension": "relationship",
-              "relationKind": "circle"
-            }
-          ]
+          "locationName": "杭州西湖"
         },
         {
           "postId": "fixture_photo_002",
@@ -151,8 +128,11 @@
           "height": 720,
           "likeCount": 97,
           "commentCount": 1,
+          "favoriteCount": 32,
           "shareCount": 4,
           "createdAt": "2026-05-01T01:00:00Z",
+          "updatedAt": "2026-05-01T01:00:00Z",
+          "publishedAt": "2026-05-02T01:00:00Z",
           "authorDisplayNameSnapshot": "契约摄影师",
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
@@ -219,8 +199,11 @@
           "height": 720,
           "likeCount": 131,
           "commentCount": 1,
+          "favoriteCount": 43,
           "shareCount": 6,
           "createdAt": "2026-05-01T03:00:00Z",
+          "updatedAt": "2026-05-01T03:00:00Z",
+          "publishedAt": "2026-05-02T03:00:00Z",
           "authorDisplayNameSnapshot": "契约旅行家",
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
@@ -242,45 +225,7 @@
           ],
           "locationName": "杭州",
           "videoUrl": "media/video/s/archived-video/beta-sample.mp4",
-          "durationMs": 45000,
-          "mediaItems": [
-            {
-              "kind": "video",
-              "url": "media/video/s/archived-video/beta-sample.mp4",
-              "coverUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
-              "durationMs": 36000,
-              "width": 1280,
-              "height": 720,
-              "title": "晨雾断桥"
-            },
-            {
-              "kind": "video",
-              "url": "media/video/s/archived-video/beta-sample.mp4",
-              "coverUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
-              "durationMs": 42000,
-              "width": 1280,
-              "height": 720,
-              "title": "曲院风荷"
-            },
-            {
-              "kind": "video",
-              "url": "media/video/s/archived-video/beta-sample.mp4",
-              "coverUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
-              "durationMs": 45000,
-              "width": 1280,
-              "height": 720,
-              "title": "雷峰落日"
-            },
-            {
-              "kind": "video",
-              "url": "media/video/s/archived-video/beta-sample.mp4",
-              "coverUrl": "media/image/s/archived-image/post/fixture_video_001/v1/cover.png",
-              "durationMs": 39000,
-              "width": 1280,
-              "height": 720,
-              "title": "夜泊湖心"
-            }
-          ]
+          "durationMs": 45000
         },
         {
           "postId": "fixture_article_001",
@@ -304,9 +249,9 @@
             "designWriting",
             "tech"
           ],
-          "title": "杭州一日游：从西湖晨光到河坊街夜色",
-          "summary": "西湖、灵隐寺与河坊街串成的一日步行线路。",
-          "body": "从西湖晨光出发，穿过灵隐寺与河坊街，适合第一次来杭州的轻量路线。",
+          "title": "契约驱动的发现页文章",
+          "summary": "契约驱动的发现页文章。",
+          "body": "文章、攻略与长图文作者。",
           "coverUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
           "thumbnailUrl": "media/image/s/archived-image/post/fixture_article_001/v1/cover.png",
           "mediaUrls": [
@@ -329,6 +274,7 @@
           "height": 720,
           "likeCount": 165,
           "commentCount": 1,
+          "favoriteCount": 55,
           "shareCount": 4,
           "createdAt": "2026-05-01T05:00:00Z",
           "updatedAt": "2026-05-03T05:00:00Z",
@@ -349,26 +295,17 @@
           ],
           "tagRefs": [
             "fixture",
-            "travel",
+            "designWriting",
             "articlePost"
           ],
-          "entityRefs": [
-            "homepage/homepage_sight_west_lake",
-            "homepage/homepage_sight_west_lake",
-            "homepage/homepage_sight_west_lake",
-            "homepage/homepage_restaurant_night_market"
-          ],
-          "contentVertical": "travel",
-          "paperThemeMode": "system",
-          "paperTexture": "warmBlack",
-          "locationName": "杭州",
-          "articleMarkdown": "---\ntitle: 杭州一日游：从西湖晨光到河坊街夜色\nsummary: 西湖、灵隐寺与河坊街串成的一日步行线路。\ntemplate: journal\nfontPreset: clean\ncoverImage: asset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n---\n\n# 杭州一日游：从西湖晨光到河坊街夜色\n\n清晨从@[断桥残雪](entity:homepage/homepage_sight_west_lake)出发，沿白堤慢慢走到@[曲院风荷](entity:homepage/homepage_sight_west_lake)，把湖面最安静的一段留给第一杯咖啡。\n\n:::figure id=\"fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\" layout=\"fullWidth\" caption=\"西湖晨光适合作为一日游封面\"\nasset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n:::\n\n## 午前：寺院与山脚\n\n10 点前抵达@[灵隐寺](entity:homepage/homepage_sight_west_lake)，避开拥挤队列。午餐建议回到湖滨，选择步行可达的小店，不把时间浪费在跨城移动上。\n\n## 傍晚：老街收尾\n\n日落后到@[河坊街](entity:homepage/homepage_restaurant_night_market)，用小吃和夜色结束路线。Tip：这条线路适合轻装，雨天把灵隐寺和河坊街顺序对调。\n",
+          "locationName": "线上专栏",
+          "articleMarkdown": "---\ntitle: 契约驱动的发现页文章\nsummary: 契约驱动的发现页文章。\ntemplate: journal\nfontPreset: clean\ncoverImage: asset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n---\n\n# 契约驱动的发现页文章\n\n文章、攻略与长图文作者。\n\n:::figure id=\"fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\" layout=\"fullWidth\" caption=\"\"\nasset://fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png\n:::\n",
           "articleMarkdownVersion": "qwq-rich-md/1",
-          "articleMarkdownDigest": "sha256:101b5125705d313e0373f3f59c736eccf493b89677a09c65e538391c808e4980",
+          "articleMarkdownDigest": "sha256:3881015eef939f99c698c71b5901e02714a17bf6f1b42e5da0ce46be57726507",
           "articleAssetManifest": {
             "schemaVersion": 1,
             "articleMarkdownVersion": "qwq-rich-md/1",
-            "articleMarkdownDigest": "sha256:101b5125705d313e0373f3f59c736eccf493b89677a09c65e538391c808e4980",
+            "articleMarkdownDigest": "sha256:3881015eef939f99c698c71b5901e02714a17bf6f1b42e5da0ce46be57726507",
             "assets": [
               {
                 "assetId": "fixture_asset_media_image_s_archived-image_post_fixture_article_001_v1_cover_png",
@@ -383,44 +320,11 @@
           "articleRenderProfile": {
             "template": "journal",
             "fontPreset": "clean",
-            "paperThemeMode": "system",
-            "paperTexture": "warmBlack",
-            "contentVertical": "travel",
             "layoutPolicy": {
               "wrapDowngrade": "compactWidthToFullWidth",
               "galleryDowngrade": "singleColumn"
             }
-          },
-          "entityMentions": [
-            {
-              "subjectType": "homepage",
-              "subjectId": "homepage_sight_west_lake",
-              "displayName": "断桥残雪",
-              "rangeStart": 0,
-              "rangeEnd": 4
-            },
-            {
-              "subjectType": "homepage",
-              "subjectId": "homepage_sight_west_lake",
-              "displayName": "曲院风荷",
-              "rangeStart": 0,
-              "rangeEnd": 4
-            },
-            {
-              "subjectType": "homepage",
-              "subjectId": "homepage_sight_west_lake",
-              "displayName": "灵隐寺",
-              "rangeStart": 0,
-              "rangeEnd": 3
-            },
-            {
-              "subjectType": "homepage",
-              "subjectId": "homepage_restaurant_night_market",
-              "displayName": "河坊街",
-              "rangeStart": 0,
-              "rangeEnd": 3
-            }
-          ]
+          }
         },
         {
           "postId": "fixture_moment_001",
@@ -467,8 +371,11 @@
           "height": 720,
           "likeCount": 199,
           "commentCount": 1,
+          "favoriteCount": 66,
           "shareCount": 6,
           "createdAt": "2026-05-01T07:00:00Z",
+          "updatedAt": "2026-05-01T07:00:00Z",
+          "publishedAt": "2026-05-02T07:00:00Z",
           "authorDisplayNameSnapshot": "新同学_260622_6698692",
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
@@ -533,8 +440,11 @@
           "height": 720,
           "likeCount": 48,
           "commentCount": 1,
+          "favoriteCount": 16,
           "shareCount": 2,
           "createdAt": "2026-05-12T16:00:00Z",
+          "updatedAt": "2026-05-12T16:00:00Z",
+          "publishedAt": "2026-05-13T16:00:00Z",
           "authorDisplayNameSnapshot": "契约摄影师",
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
@@ -599,8 +509,11 @@
           "height": 720,
           "likeCount": 48,
           "commentCount": 0,
+          "favoriteCount": 16,
           "shareCount": 2,
           "createdAt": "2026-05-19T08:00:00Z",
+          "updatedAt": "2026-05-19T08:00:00Z",
+          "publishedAt": "2026-05-20T08:00:00Z",
           "authorDisplayNameSnapshot": "新同学_260622_6698692",
           "authorAvatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
           "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
@@ -625,32 +538,38 @@
         {
           "postId": "fixture_photo_001",
           "userId": "fixture_user_current",
-          "liked": true
+          "liked": true,
+          "favorited": true
         },
         {
           "postId": "fixture_photo_002",
           "userId": "fixture_user_friend",
-          "liked": true
+          "liked": true,
+          "favorited": false
         },
         {
           "postId": "fixture_video_001",
           "userId": "fixture_user_friend",
-          "liked": true
+          "liked": true,
+          "favorited": true
         },
         {
           "postId": "fixture_article_001",
           "userId": "fixture_user_friend",
-          "liked": true
+          "liked": true,
+          "favorited": false
         },
         {
           "postId": "fixture_moment_001",
           "userId": "fixture_user_friend",
-          "liked": true
+          "liked": true,
+          "favorited": false
         },
         {
           "postId": "fixture_post_photography_001",
           "userId": "fixture_user_current",
-          "liked": true
+          "liked": true,
+          "favorited": false
         }
       ],
       "comments": [
@@ -1693,15 +1612,15 @@
                 "alpha/showcase/photo_work"
               ],
               "relationKind": "place",
-              "objectKind": "place",
-              "relationObjectId": "homepage_sight_west_lake",
+              "objectKind": "photo_spot",
+              "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "primaryText": "你与山川手账等 7 位都关注「横竖影像馆取景地」",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_landscape_single",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "7 位都关注同一组取景地",
+              "connectionSummary": "7 位都关注「横竖影像馆取景地」",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -1712,9 +1631,9 @@
                   "text": "山川手账",
                   "role": "object",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 },
                 {
@@ -1731,7 +1650,20 @@
                   }
                 },
                 {
-                  "text": " 位都关注同一组取景地",
+                  "text": " 位都关注「",
+                  "role": "plain"
+                },
+                {
+                  "text": "横竖影像馆取景地",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_homepage_photo_spot_hengshu_studio",
+                    "objectKind": "photo_spot",
+                    "routeId": "homepageDetail"
+                  }
+                },
+                {
+                  "text": "」",
                   "role": "plain"
                 }
               ],
@@ -1741,12 +1673,13 @@
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
                   "displayName": "山川手账",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 }
-              ]
+              ],
+              "actionTargetId": "fixture_homepage_photo_spot_hengshu_studio"
             }
           ]
         },
@@ -1803,15 +1736,15 @@
                 "alpha/showcase/photo_work"
               ],
               "relationKind": "place",
-              "objectKind": "place",
-              "relationObjectId": "homepage_sight_west_lake",
+              "objectKind": "photo_spot",
+              "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "primaryText": "你与山川手账等 7 位都关注「横竖影像馆取景地」",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_landscape_carousel",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "7 位都关注同一组取景地",
+              "connectionSummary": "7 位都关注「横竖影像馆取景地」",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -1822,9 +1755,9 @@
                   "text": "山川手账",
                   "role": "object",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 },
                 {
@@ -1841,7 +1774,20 @@
                   }
                 },
                 {
-                  "text": " 位都关注同一组取景地",
+                  "text": " 位都关注「",
+                  "role": "plain"
+                },
+                {
+                  "text": "横竖影像馆取景地",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_homepage_photo_spot_hengshu_studio",
+                    "objectKind": "photo_spot",
+                    "routeId": "homepageDetail"
+                  }
+                },
+                {
+                  "text": "」",
                   "role": "plain"
                 }
               ],
@@ -1851,12 +1797,13 @@
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
                   "displayName": "山川手账",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 }
-              ]
+              ],
+              "actionTargetId": "fixture_homepage_photo_spot_hengshu_studio"
             }
           ]
         },
@@ -1901,15 +1848,15 @@
                 "alpha/showcase/photo_work"
               ],
               "relationKind": "place",
-              "objectKind": "place",
-              "relationObjectId": "homepage_sight_west_lake",
+              "objectKind": "photo_spot",
+              "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "primaryText": "你与山川手账等 7 位都关注「横竖影像馆取景地」",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_portrait_single",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "7 位都关注同一组取景地",
+              "connectionSummary": "7 位都关注「横竖影像馆取景地」",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -1920,9 +1867,9 @@
                   "text": "山川手账",
                   "role": "object",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 },
                 {
@@ -1939,7 +1886,20 @@
                   }
                 },
                 {
-                  "text": " 位都关注同一组取景地",
+                  "text": " 位都关注「",
+                  "role": "plain"
+                },
+                {
+                  "text": "横竖影像馆取景地",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_homepage_photo_spot_hengshu_studio",
+                    "objectKind": "photo_spot",
+                    "routeId": "homepageDetail"
+                  }
+                },
+                {
+                  "text": "」",
                   "role": "plain"
                 }
               ],
@@ -1949,12 +1909,13 @@
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
                   "displayName": "山川手账",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 }
-              ]
+              ],
+              "actionTargetId": "fixture_homepage_photo_spot_hengshu_studio"
             }
           ]
         },
@@ -2007,15 +1968,15 @@
                 "alpha/showcase/photo_work"
               ],
               "relationKind": "place",
-              "objectKind": "place",
-              "relationObjectId": "homepage_sight_west_lake",
+              "objectKind": "photo_spot",
+              "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "primaryText": "你与山川手账等 7 位都关注「横竖影像馆取景地」",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_portrait_carousel",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "7 位都关注同一组取景地",
+              "connectionSummary": "7 位都关注「横竖影像馆取景地」",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -2026,9 +1987,9 @@
                   "text": "山川手账",
                   "role": "object",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 },
                 {
@@ -2045,7 +2006,20 @@
                   }
                 },
                 {
-                  "text": " 位都关注同一组取景地",
+                  "text": " 位都关注「",
+                  "role": "plain"
+                },
+                {
+                  "text": "横竖影像馆取景地",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_homepage_photo_spot_hengshu_studio",
+                    "objectKind": "photo_spot",
+                    "routeId": "homepageDetail"
+                  }
+                },
+                {
+                  "text": "」",
                   "role": "plain"
                 }
               ],
@@ -2055,12 +2029,13 @@
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
                   "displayName": "山川手账",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 }
-              ]
+              ],
+              "actionTargetId": "fixture_homepage_photo_spot_hengshu_studio"
             }
           ]
         },
@@ -2105,15 +2080,15 @@
                 "alpha/showcase/photo_work"
               ],
               "relationKind": "place",
-              "objectKind": "place",
-              "relationObjectId": "homepage_sight_west_lake",
+              "objectKind": "photo_spot",
+              "relationObjectId": "fixture_homepage_photo_spot_hengshu_studio",
               "strength": 0.86,
-              "primaryText": "你与山川手账等 7 位都关注同一组取景地",
+              "primaryText": "你与山川手账等 7 位都关注「横竖影像馆取景地」",
               "source": "alpha_showcase",
               "intersectionId": "alpha_ix_alpha_photo_extreme_ratio_guard",
               "intersectionClass": "fact",
               "displayName": "山川手账",
-              "connectionSummary": "7 位都关注同一组取景地",
+              "connectionSummary": "7 位都关注「横竖影像馆取景地」",
               "rankState": "fresh",
               "primarySpans": [
                 {
@@ -2124,9 +2099,9 @@
                   "text": "山川手账",
                   "role": "object",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 },
                 {
@@ -2143,7 +2118,20 @@
                   }
                 },
                 {
-                  "text": " 位都关注同一组取景地",
+                  "text": " 位都关注「",
+                  "role": "plain"
+                },
+                {
+                  "text": "横竖影像馆取景地",
+                  "role": "object",
+                  "target": {
+                    "objectId": "fixture_homepage_photo_spot_hengshu_studio",
+                    "objectKind": "photo_spot",
+                    "routeId": "homepageDetail"
+                  }
+                },
+                {
+                  "text": "」",
                   "role": "plain"
                 }
               ],
@@ -2153,12 +2141,13 @@
                   "imageUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/image-2.png",
                   "displayName": "山川手账",
                   "target": {
-                    "objectId": "homepage_sight_west_lake",
-                    "objectKind": "place",
-                    "routeId": "entityObjectPage"
+                    "objectId": "fixture_user_shanchuan",
+                    "objectKind": "person",
+                    "routeId": "userProfile"
                   }
                 }
-              ]
+              ],
+              "actionTargetId": "fixture_homepage_photo_spot_hengshu_studio"
             }
           ]
         },
@@ -7753,17 +7742,6 @@
                 "visibility": "public",
                 "count": 0,
                 "sampleText": ""
-              },
-              {
-                "pointId": "objix_user_u_lin_p4",
-                "pointClass": "recommended",
-                "dimension": "interest",
-                "label": "可能合得来",
-                "displayText": "可能合得来",
-                "sourceRef": "affinity",
-                "visibility": "public",
-                "count": 0,
-                "sampleText": ""
               }
             ]
           }
@@ -7849,17 +7827,6 @@
                 "visibility": "public",
                 "count": 0,
                 "sampleText": ""
-              },
-              {
-                "pointId": "objix_circle_c_photo_p4",
-                "pointClass": "recommended",
-                "dimension": "interest",
-                "label": "你可能感兴趣",
-                "displayText": "你可能感兴趣",
-                "sourceRef": "affinity",
-                "visibility": "public",
-                "count": 0,
-                "sampleText": ""
               }
             ]
           }
@@ -7935,17 +7902,6 @@
                 "sampleAvatarUrls": [
                   "media/avatar/s/mock/seed/u_1499952127939-9bbf5af6c51c/v1/avatar.jpg"
                 ]
-              },
-              {
-                "pointId": "objix_entity_e_pku_p3",
-                "pointClass": "recommended",
-                "dimension": "interest",
-                "label": "可能想去",
-                "displayText": "可能想去",
-                "sourceRef": "affinity",
-                "visibility": "public",
-                "count": 0,
-                "sampleText": ""
               }
             ]
           }

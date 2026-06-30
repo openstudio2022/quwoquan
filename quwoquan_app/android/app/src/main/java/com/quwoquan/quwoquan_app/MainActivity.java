@@ -102,6 +102,10 @@ public class MainActivity extends FlutterFragmentActivity {
                   StartupDeferredPluginRegistry.ensureContentEntry(flutterEngine);
                   result.success(null);
                   break;
+                case "ensureLocation":
+                  StartupDeferredPluginRegistry.ensureLocation(flutterEngine);
+                  result.success(null);
+                  break;
                 default:
                   result.notImplemented();
                   break;

@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
+import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 
 /// T2：对象页统一交集卡口径（V5 · primaryText 单通道 / 全局验收 G2）。
 /// - 无 primaryText → 不展示；
@@ -41,7 +42,7 @@ void main() {
     test('reasons 为 null → 返回 null（不展示）', () {
       expect(
         ObjectIntersectionCard.fromReasons(
-          title: '为什么推荐这里',
+          title: UITextConstants.objectMyIntersectionsTitle,
           reasons: null,
           isDark: false,
         ),
@@ -52,7 +53,7 @@ void main() {
     test('reasons 为空或无 primaryText → 返回 null', () {
       expect(
         ObjectIntersectionCard.fromReasons(
-          title: '为什么推荐这个圈子',
+          title: UITextConstants.objectMyIntersectionsTitle,
           reasons: const <IntersectionReason>[],
           isDark: false,
         ),
@@ -60,7 +61,7 @@ void main() {
       );
       expect(
         ObjectIntersectionCard.fromReasons(
-          title: '为什么推荐这里',
+          title: UITextConstants.objectMyIntersectionsTitle,
           reasons: <IntersectionReason>[
             _reason(id: 'blank', primaryText: '   '),
           ],
@@ -74,7 +75,7 @@ void main() {
       tester,
     ) async {
       final card = ObjectIntersectionCard.fromReasons(
-        title: '为什么推荐这里',
+        title: UITextConstants.objectMyIntersectionsTitle,
         reasons: <IntersectionReason>[
           _reason(
             id: 'ix_primary',
@@ -96,7 +97,10 @@ void main() {
 
       await tester.pumpWidget(CupertinoApp(home: card!));
 
-      expect(find.text('为什么推荐这里'), findsOneWidget);
+      expect(
+        find.text(UITextConstants.objectMyIntersectionsTitle),
+        findsOneWidget,
+      );
       expect(find.text('4 位共同关注的人正在这里讨论'), findsOneWidget);
       expect(find.text('最近有你关注的人参与讨论'), findsOneWidget);
       expect(find.text('共同关注 4'), findsNothing);
@@ -119,7 +123,7 @@ void main() {
         ],
       );
       final card = ObjectIntersectionCard.fromReasons(
-        title: '为什么推荐这里',
+        title: UITextConstants.objectMyIntersectionsTitle,
         reasons: <IntersectionReason>[reason],
         isDark: false,
         onReasonTap: (r) => tapped = r,
@@ -136,7 +140,7 @@ void main() {
 
     testWidgets('affinity 只显示推荐辅助文案，不伪装成事实计数', (tester) async {
       final card = ObjectIntersectionCard.fromReasons(
-        title: '为什么推荐这个圈子',
+        title: UITextConstants.objectMyIntersectionsTitle,
         reasons: <IntersectionReason>[
           _reason(
             id: 'ix_affinity',
@@ -160,33 +164,33 @@ void main() {
 
     testWidgets('就地展开：默认 inlineExpandCount 条 reason，点击展开余下理由', (tester) async {
       final card = ObjectIntersectionCard.fromReasons(
-        title: '为什么推荐这里',
+        title: UITextConstants.objectMyIntersectionsTitle,
         inlineExpandCount: 2,
         reasons: <IntersectionReason>[
-          _reason(id: 'r1', primaryText: '第一条推荐理由'),
-          _reason(id: 'r2', primaryText: '第二条推荐理由'),
-          _reason(id: 'r3', primaryText: '第三条推荐理由'),
+          _reason(id: 'r1', primaryText: '第一条交集事实'),
+          _reason(id: 'r2', primaryText: '第二条交集事实'),
+          _reason(id: 'r3', primaryText: '第三条交集事实'),
         ],
         isDark: false,
       );
 
       await tester.pumpWidget(CupertinoApp(home: card!));
-      expect(find.text('第一条推荐理由'), findsOneWidget);
-      expect(find.text('第二条推荐理由'), findsOneWidget);
-      expect(find.text('第三条推荐理由'), findsNothing);
+      expect(find.text('第一条交集事实'), findsOneWidget);
+      expect(find.text('第二条交集事实'), findsOneWidget);
+      expect(find.text('第三条交集事实'), findsNothing);
 
       await tester.tap(find.text(DiscoveryFeedText.intersectionExpandMore));
       await tester.pumpAndSettle();
-      expect(find.text('第三条推荐理由'), findsOneWidget);
+      expect(find.text('第三条交集事实'), findsOneWidget);
     });
 
     testWidgets('旅程高亮：highlightKind 命中折叠区 reason 时自动展开', (tester) async {
       final card = ObjectIntersectionCard.fromReasons(
-        title: '为什么推荐这个圈子',
+        title: UITextConstants.objectMyIntersectionsTitle,
         inlineExpandCount: 1,
         highlightKind: 'coCommented',
         reasons: <IntersectionReason>[
-          _reason(id: 'r1', primaryText: '第一条推荐理由', source: 'sharedFollowees'),
+          _reason(id: 'r1', primaryText: '第一条交集事实', source: 'sharedFollowees'),
           _reason(id: 'r2', primaryText: '共同讨论正在升温', source: 'coCommented'),
         ],
         isDark: false,
@@ -200,13 +204,13 @@ void main() {
     testWidgets('展开更多两段式：先展开，再进入全部连接', (tester) async {
       var openedAll = false;
       final card = ObjectIntersectionCard.fromReasons(
-        title: '为什么推荐这里',
+        title: UITextConstants.objectMyIntersectionsTitle,
         inlineExpandCount: 1,
         moreLabel: '全部连接',
         onMoreTap: () => openedAll = true,
         reasons: <IntersectionReason>[
-          _reason(id: 'r1', primaryText: '第一条推荐理由'),
-          _reason(id: 'r2', primaryText: '第二条推荐理由'),
+          _reason(id: 'r1', primaryText: '第一条交集事实'),
+          _reason(id: 'r2', primaryText: '第二条交集事实'),
         ],
         isDark: false,
       );
@@ -214,8 +218,8 @@ void main() {
       await tester.pumpWidget(CupertinoApp(home: card!));
       await tester.pumpAndSettle();
 
-      expect(find.text('第一条推荐理由'), findsOneWidget);
-      expect(find.text('第二条推荐理由'), findsNothing);
+      expect(find.text('第一条交集事实'), findsOneWidget);
+      expect(find.text('第二条交集事实'), findsNothing);
       expect(
         find.text(DiscoveryFeedText.intersectionExpandMore),
         findsOneWidget,
@@ -224,7 +228,7 @@ void main() {
       await tester.tap(find.text(DiscoveryFeedText.intersectionExpandMore));
       await tester.pumpAndSettle();
 
-      expect(find.text('第二条推荐理由'), findsOneWidget);
+      expect(find.text('第二条交集事实'), findsOneWidget);
       expect(find.text('全部连接'), findsOneWidget);
       expect(openedAll, isFalse);
 

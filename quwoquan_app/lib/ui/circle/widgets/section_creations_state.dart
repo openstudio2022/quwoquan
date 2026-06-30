@@ -56,12 +56,15 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
       ColorType.borderPrimary,
     );
 
-    final contentSurface = _buildSurface(
-      backgroundColor: bgSecondary,
-      borderColor: borderColor,
-      padding: EdgeInsets.zero,
-      child: _buildContent(circleState, fgSecondary),
-    );
+    final content = _buildContent(circleState, fgSecondary);
+    final contentSurface = widget.inlineScroll
+        ? content
+        : _buildSurface(
+            backgroundColor: bgSecondary,
+            borderColor: borderColor,
+            padding: EdgeInsets.zero,
+            child: content,
+          );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -87,31 +90,40 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             : AppSpacing.sm;
         final filterGap = compactHeight ? AppSpacing.xs : AppSpacing.sm;
 
-        final filterSurface = _buildSurface(
-          backgroundColor: bgSecondary,
-          borderColor: borderColor,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildCreationFilterRow(circleState, circleCtrl, fg, fgSecondary),
-              if (_isAdminOrOwner && !compactHeight) ...[
-                SizedBox(height: filterGap),
-                _buildSortControls(circleState, circleCtrl, fg, fgSecondary),
-                SizedBox(
-                  height: compactHeight
-                      ? AppSpacing.intraGroupXs
-                      : AppSpacing.xs,
+        final filterSurface = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildCreationFilterRow(circleState, circleCtrl),
+            if (_isAdminOrOwner && !compactHeight) ...[
+              SizedBox(height: filterGap),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerMd,
                 ),
-                _buildViewModeToggle(
+                child: _buildSortControls(
+                  circleState,
+                  circleCtrl,
+                  fg,
+                  fgSecondary,
+                ),
+              ),
+              SizedBox(
+                height: compactHeight ? AppSpacing.intraGroupXs : AppSpacing.xs,
+              ),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerMd,
+                ),
+                child: _buildViewModeToggle(
                   circleState,
                   circleCtrl,
                   fgSecondary: fgSecondary,
                   borderColor: borderColor,
                   backgroundColor: bgTertiary,
                 ),
-              ],
+              ),
             ],
-          ),
+          ],
         );
 
         if (compactEmptyState) {
@@ -173,96 +185,36 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     }
   }
 
-  static const Key creationFilterButtonKey = ValueKey<String>(
-    'circle-creations-filter-button',
-  );
-
-  /// 二级过滤（全部/图片/视频/文字）：与用户主页同范式，去胶囊横滑，
-  /// 收敛为最右侧单一过滤入口（当前过滤名 + 漏斗图标），点击弹层选择。
+  /// 二级过滤（全部/图片/视频/长文）：高保口径横向胶囊条，左对齐、选中淡蓝底，
+  /// 与实体主页共用 [ObjectSecondaryFilterBar]（漏斗 + 弹层改回胶囊，单一真相源）。
   Widget _buildCreationFilterRow(
     CircleState circleState,
     CircleStateNotifier circleCtrl,
-    Color fg,
-    Color fgSecondary,
   ) {
     final activeFilter = _creationFilters.firstWhere(
       (filter) => _creationSubTabForId(filter.id) == circleState.activeSubTab,
       orElse: () => _creationFilters.first,
     );
-    final activeLabel = UITextConstants.contentLabelForKey(
-      activeFilter.labelKey,
-    );
-    final accent = AppColors.iosAccent(context);
-    final isAll = circleState.activeSubTab == CreationSubTab.all;
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: <Widget>[
-          CupertinoButton(
-            key: creationFilterButtonKey,
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.containerSm,
-              vertical: AppSpacing.intraGroupXs,
+    return ObjectSecondaryFilterBar(
+      barKey: const ValueKey<String>('circle-creations-filter-bar'),
+      optionKeyPrefix: 'circle-creations-filter-option-',
+      items: _creationFilters
+          .map(
+            (filter) => ObjectSecondaryFilterItem(
+              id: filter.id,
+              label: UITextConstants.contentLabelForKey(filter.labelKey),
             ),
-            minimumSize: Size.zero,
-            onPressed: () => _openCreationFilterSheet(circleState, circleCtrl),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text(
-                  activeLabel,
-                  style: TextStyle(
-                    fontSize: AppTypography.iosSubheadline,
-                    fontWeight: AppTypography.medium,
-                    color: isAll ? fg : accent,
-                  ),
-                ),
-                SizedBox(width: AppSpacing.intraGroupXs),
-                Icon(
-                  CupertinoIcons.line_horizontal_3_decrease,
-                  size: AppSpacing.iconSmall,
-                  color: isAll ? fgSecondary : accent,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+          )
+          .toList(growable: false),
+      activeId: activeFilter.id,
+      onSelect: (id) {
+        final next = _creationSubTabForId(id);
+        if (next != circleState.activeSubTab) {
+          circleCtrl.setSubTab(next);
+          _loadFeed();
+        }
+      },
     );
-  }
-
-  Future<void> _openCreationFilterSheet(
-    CircleState circleState,
-    CircleStateNotifier circleCtrl,
-  ) async {
-    final selected = await showCupertinoModalPopup<CreationSubTab>(
-      context: context,
-      builder: (sheetContext) => CupertinoActionSheet(
-        title: Text(UITextConstants.profileWorksFilterTitle),
-        actions: <Widget>[
-          for (final filter in _creationFilters)
-            CupertinoActionSheetAction(
-              key: ValueKey<String>(
-                'circle-creations-filter-option-${filter.id}',
-              ),
-              onPressed: () => Navigator.of(
-                sheetContext,
-              ).pop(_creationSubTabForId(filter.id)),
-              child: Text(UITextConstants.contentLabelForKey(filter.labelKey)),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(sheetContext).pop(),
-          child: Text(UITextConstants.cancel),
-        ),
-      ),
-    );
-    if (selected != null && selected != circleState.activeSubTab) {
-      circleCtrl.setSubTab(selected);
-      _loadFeed();
-    }
   }
 
   CreationSubTab _creationSubTabForId(String id) {
@@ -453,9 +405,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     Color fgSecondary,
   ) {
     final activeSortMode = circleState.sortMode;
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: CreationSortMode.values.map((mode) {
           final selected = mode == activeSortMode;
           return Padding(
@@ -509,9 +463,10 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     required Color backgroundColor,
   }) {
     final activeMode = circleState.viewMode;
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerMd),
+    return Align(
+      alignment: Alignment.centerRight,
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           _ViewModeButton(

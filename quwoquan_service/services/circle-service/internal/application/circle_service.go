@@ -598,6 +598,7 @@ func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (_ 
 		"totalMembers":      c.MemberCount,
 		"weeklyActive":      c.WeeklyActiveCount,
 		"totalPosts":        c.PostCount,
+		"totalDiscussions":  0,
 		"storageUsedBytes":  c.StorageUsedBytes,
 		"storageQuotaBytes": c.StorageQuotaBytes,
 	}, nil

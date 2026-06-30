@@ -18,6 +18,7 @@ import 'package:quwoquan_app/ui/content/models/content_surface_view_mapper.dart'
 import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/components/content/intersection_reason_chip.dart';
 import 'package:quwoquan_app/components/content/record_post_card.dart';
+import 'package:quwoquan_app/components/object_page/object_secondary_filter_bar.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_hub_feed_post_entry.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_state_provider.dart';

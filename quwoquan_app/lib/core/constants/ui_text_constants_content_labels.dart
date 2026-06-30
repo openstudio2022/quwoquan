@@ -41,8 +41,10 @@ String _contentLabelForKey(String labelKey) {
       return UITextConstants.creationSubImage;
     case 'homepage_sub_video':
       return UITextConstants.creationSubVideo;
-    case 'homepage_sub_article':
-      return UITextConstants.creationSubArticle;
+    case 'homepage_sub_opinion':
+      return UITextConstants.homepageSubOpinion;
+    case 'homepage_sub_question':
+      return UITextConstants.homepageSubQuestion;
     case 'homepage_sub_campus_life':
       return UITextConstants.homepageSubCampusLife;
     case 'circle_tab_record':
@@ -53,8 +55,8 @@ String _contentLabelForKey(String labelKey) {
       return UITextConstants.objectTabMembers;
     case 'circle_section_works':
       return UITextConstants.circleWorksTab;
-    case 'circle_section_interaction':
-      return UITextConstants.circleInteractionTab;
+    case 'circle_section_members':
+      return UITextConstants.objectTabMembers;
     case 'circle_section_chat':
       return UITextConstants.circleGroups;
     case 'circle_section_storage':

@@ -345,15 +345,16 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
             );
       },
     );
+    final sourceRef = _sourceRefForReason(reason);
     navigator.open(
       context,
       span.target,
-      sourceRef: reason.source,
+      sourceRef: sourceRef,
       attribution: IntersectionNavAttribution(
         intersectionId: reason.intersectionId,
         dimension: reason.dimension,
         intersectionClass: reason.intersectionClass,
-        sourceRef: reason.source,
+        sourceRef: sourceRef,
         tagRefs: reason.tagRefs,
         evidenceId: reason.pointSummarySnapshotId,
       ),
@@ -388,15 +389,16 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
             );
       },
     );
+    final sourceRef = _sourceRefForReason(reason);
     final opened = navigator.open(
       context,
       firstVisualTarget,
-      sourceRef: reason.source,
+      sourceRef: sourceRef,
       attribution: IntersectionNavAttribution(
         intersectionId: reason.intersectionId,
         dimension: reason.dimension,
         intersectionClass: reason.intersectionClass,
-        sourceRef: reason.source,
+        sourceRef: sourceRef,
         tagRefs: reason.tagRefs,
         evidenceId: reason.pointSummarySnapshotId,
       ),
@@ -411,16 +413,24 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
         objectKind: 'tag',
         routeId: 'myIntersections',
       ),
-      sourceRef: reason.source,
+      sourceRef: sourceRef,
       attribution: IntersectionNavAttribution(
         intersectionId: reason.intersectionId,
         dimension: reason.dimension,
         intersectionClass: reason.intersectionClass,
-        sourceRef: reason.source,
+        sourceRef: sourceRef,
         tagRefs: reason.tagRefs,
         evidenceId: reason.pointSummarySnapshotId,
       ),
     );
+  }
+
+  String _sourceRefForReason(IntersectionReason reason) {
+    for (final point in reason.intersectionPoints) {
+      final sourceRef = point.sourceRef.trim();
+      if (sourceRef.isNotEmpty) return sourceRef;
+    }
+    return reason.source.trim();
   }
 
   static String _timeAgo(BuildContext context, DateTime t) {
@@ -558,7 +568,8 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
     required String sourceCircleName,
     required IntersectionReason? primaryReason,
   }) {
-    return _entityLabel(primaryReason) != null ||
+    final hasInlineIntersection = _shouldShowIntersection(primaryReason);
+    return (!hasInlineIntersection && _entityLabel(primaryReason) != null) ||
         sourceCircleName.trim().isNotEmpty ||
         _showCompanionBadge(item, primaryReason);
   }
@@ -612,13 +623,15 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
     final accent = AppColors.iosAccent(context);
     final chips = <Widget>[];
 
-    final entity = _entityLabel(primaryReason);
+    final entity = _shouldShowIntersection(primaryReason)
+        ? null
+        : _entityLabel(primaryReason);
     if (entity != null) {
       chips.add(
         _badgeChip(
           context,
           label: entity,
-          prefix: PlazaTextConstants.feedBadgeEntity,
+          prefix: AppConceptConstants.feedBadgeEntity,
           accent: accent,
         ),
       );
@@ -630,7 +643,7 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
         _badgeChip(
           context,
           label: circle,
-          prefix: PlazaTextConstants.feedBadgeCircle,
+          prefix: AppConceptConstants.feedBadgeCircle,
           accent: accent,
         ),
       );
@@ -640,7 +653,7 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
       chips.add(
         _badgeChip(
           context,
-          label: PlazaTextConstants.feedBadgeCompanion,
+          label: AppConceptConstants.feedBadgeCompanion,
           accent: accent,
         ),
       );

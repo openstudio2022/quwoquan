@@ -133,9 +133,10 @@ Offset resolveBackwardVisualReplayCanonicalPoint({
   final dragProgress = (-localPagePoint.dx / pageWidth)
       .clamp(0.0, 1.0)
       .toDouble();
-  final visualProgress = dragProgress <= 0.55
-      ? dragProgress
-      : 0.55 + (dragProgress - 0.55) * 0.5;
+  // BACK follow-through must stay one-to-one with the held finger. Older
+  // compression kept late drag poses visually in the middle of the page, so
+  // slow backward drags appeared stuck until release animation completed.
+  final visualProgress = dragProgress;
   final visualX = (-pageWidth + 2 * pageWidth * visualProgress)
       .clamp(-pageWidth, maxVisualX)
       .toDouble();

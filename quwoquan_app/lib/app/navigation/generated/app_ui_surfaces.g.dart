@@ -325,8 +325,10 @@ class AppUiSurfaces {
     owner: 'entity',
     routeId: 'homepageDetail',
     pathTemplate: '/homepages/{id}',
-    description: '主页详情与阅读壳层',
+    description: '实体（共享主页）统一对象页：身份 / 我的交集 / 影响力 / Tab 内容（含详情与阅读壳层、口碑、相关群组）',
     operationIds: <String>[
+      'GetObjectPageBundle',
+      'GetEntityImpact',
       'GetHomepageDetail',
       'GetHomepageShell',
       'GetHomepageReviewSummary',
@@ -386,9 +388,10 @@ class AppUiSurfaces {
     owner: 'circle',
     routeId: 'circleDetail',
     pathTemplate: '/circle/{id}',
-    description: '圈子/组织详情壳层（统一对象页 + 你认识的人有 N 个在这交集卡）',
+    description: '圈子/组织统一对象页：身份 / 我的交集 / 影响力 / Tab 内容（你认识的人有 N 个在这交集卡）',
     operationIds: <String>[
       'GetCircle',
+      'GetCircleImpact',
       'GetCircleFeed',
       'ListCircleMembers',
       'ListCircleGroups',

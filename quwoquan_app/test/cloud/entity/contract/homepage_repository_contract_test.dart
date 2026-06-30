@@ -185,6 +185,28 @@ void main() {
           travelPhoto.map((h) => h.id),
           contains('fixture_homepage_travel_photo_west_lake'),
         );
+
+        final newOriental = await repo.searchHomepages(
+          query: '新东方',
+          homepageType: 'school',
+          status: 'published',
+          limit: 10,
+        );
+        expect(
+          newOriental.map((h) => h.id),
+          contains('fixture_homepage_school_neworiental'),
+        );
+
+        final photoSpot = await repo.searchHomepages(
+          query: '横竖影像馆取景地',
+          homepageType: 'photo_spot',
+          status: 'published',
+          limit: 10,
+        );
+        expect(
+          photoSpot.map((h) => h.id),
+          contains('fixture_homepage_photo_spot_hengshu_studio'),
+        );
       },
     );
   });

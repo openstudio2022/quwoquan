@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,8 +16,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
+import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/constants/homepage_detail_text_constants.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_detail_page.dart';
 
@@ -47,7 +46,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          // 「为什么推荐这里」交集卡需要当前用户（你×这里）；游客无「你」即收起（G2）。
+          // 「我的交集」卡需要当前用户（你×对象）；游客无「你」即收起（G2）。
           currentUserIdProvider.overrideWithValue('viewer_demo'),
           intersectionRepositoryProvider.overrideWithValue(
             _HomepageIntersectionRepository(),
@@ -61,15 +60,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('西湖景区'), findsWidgets);
-    expect(find.text(UITextConstants.objectMyIntersectionsTitle), findsOneWidget);
+    expect(
+      find.text(UITextConstants.objectMyIntersectionsTitle),
+      findsOneWidget,
+    );
     expect(find.text(UITextConstants.objectImpactTitle), findsOneWidget);
-    expect(find.text(UITextConstants.entityWhyRecommendTitle), findsNothing);
     expect(find.text('认领主页'), findsNothing);
     expect(find.text(UITextConstants.follow), findsWidgets);
     expect(find.text(UITextConstants.entityActionPublishRecord), findsWidgets);
     expect(find.text(UITextConstants.profileDirectMessage), findsNothing);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-compact-avatar')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-back-button')),
+      findsNothing,
+    );
     expect(find.text(UITextConstants.objectTabRecord), findsWidgets);
     expect(find.text(UITextConstants.objectTabDiscussion), findsWidgets);
     expect(find.text(UITextConstants.objectTabRelatedCircles), findsOneWidget);
@@ -81,13 +90,18 @@ void main() {
     expect(find.text('灰度 cohort'), findsNothing);
     expect(find.text('主页管理'), findsNothing);
 
+    // P3b 高保：记录 tab（默认激活=content）记录卡 footer 展示作者名 + 心形赞数，
+    // 与圈子记录卡 footer 统一（作者名来自 HomepageContentPreview.authorName，
+    // 赞数走 PostCardMetric(likeCount)）。MasonryGridView 一次性 build，
+    // 折叠区内允许 offstage；赞数数值由数据层 contract 断言保证（见末尾用例）。
+    expect(find.text('湖畔慢行者', skipOffstage: false), findsWidgets);
+    expect(find.byType(PostCardMetric, skipOffstage: false), findsWidgets);
+
     await tester.tap(find.text(UITextConstants.objectTabRelatedCircles).last);
     await tester.pumpAndSettle();
     expect(find.text(HomepageDetailText.relatedGroupOpenAction), findsWidgets);
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('homepage-detail-more-button')),
-    );
+    await tester.tap(find.byKey(const ValueKey<String>('object-chrome-more')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('认领主页'), findsWidgets);
@@ -120,6 +134,52 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('峨眉山'), findsWidgets);
+    expect(find.byType(AppPageErrorState), findsNothing);
+  });
+
+  testWidgets('我的交集中的新东方实体出点可直达实体主页', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: HomepageDetailPage(
+            homepageId: 'fixture_homepage_school_neworiental',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('新东方'), findsWidgets);
+    expect(find.byType(AppPageErrorState), findsNothing);
+  });
+
+  testWidgets('canonical 新东方实体出点可直达实体主页', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: HomepageDetailPage(homepageId: 'entity:school:neworiental'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('新东方'), findsWidgets);
+    expect(find.byType(AppPageErrorState), findsNothing);
+  });
+
+  testWidgets('首页推荐取景地实体出点可直达实体主页', (tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(
+          home: HomepageDetailPage(
+            homepageId: 'entity:photo_spot:hengshu_studio',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('横竖影像馆取景地'), findsWidgets);
     expect(find.byType(AppPageErrorState), findsNothing);
   });
 
@@ -158,6 +218,35 @@ void main() {
     expect(find.text('HOME'), findsOneWidget);
   });
 
+  testWidgets('失效主页错误态跟随来源页面 appearance', (tester) async {
+    Future<void> pumpFailure(UiErrorAppearanceMode mode) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: ThemeData(
+              brightness: mode == UiErrorAppearanceMode.light
+                  ? Brightness.dark
+                  : Brightness.light,
+            ),
+            home: HomepageDetailPage(
+              homepageId: 'homepage_missing_for_source_appearance',
+              sourceAppearanceMode: mode,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final errorState = tester.widget<AppPageErrorState>(
+        find.byType(AppPageErrorState),
+      );
+      expect(errorState.semantic.appearanceMode, mode);
+      await tester.pumpWidget(const SizedBox.shrink());
+    }
+
+    await pumpFailure(UiErrorAppearanceMode.light);
+    await pumpFailure(UiErrorAppearanceMode.dark);
+  });
+
   testWidgets('对象页 bundle 请求透传推荐与灰度上下文', (tester) async {
     final repository = _RecordingHomepageRepository();
     await tester.pumpWidget(
@@ -189,7 +278,10 @@ void main() {
     expect(repository.lastRolloutCohort, 'city-hz');
     expect(find.text('认领主页'), findsNothing);
     expect(find.text(UITextConstants.follow), findsOneWidget);
-    expect(find.text(UITextConstants.entityActionPublishRecord), findsOneWidget);
+    expect(
+      find.text(UITextConstants.entityActionPublishRecord),
+      findsOneWidget,
+    );
   });
 
   testWidgets('认识摘要卡使用 introduction summary 并跳转介绍页', (tester) async {
@@ -232,11 +324,28 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('真实 introduction summary'), findsOneWidget);
-    final introCard = find.byKey(const ValueKey<String>('profile-slogan-card'));
+    final introCard = find.byKey(
+      const ValueKey<String>('homepage-intro-slogan-card'),
+    );
     await tester.ensureVisible(introCard);
     await tester.tap(introCard);
     await tester.pumpAndSettle();
     expect(find.text('介绍页:homepage_sight_west_lake'), findsOneWidget);
+  });
+
+  // P3b 数据契约：mock 对象页 bundle 的 highlightItems 必须透传记录卡 footer
+  // 所需的 authorName / likeCount（contract seed = entity_scenarios.lite.json）。
+  // 与 widget 测试一体：UI 断言作者名/赞数结构，此处锁定字段数值。
+  test('mock 对象页 bundle highlightItems 透传记录卡 footer 作者名与赞数', () async {
+    final repository = MockHomepageRepository();
+    final bundle = await repository.getObjectPageBundle(
+      'homepage_sight_west_lake',
+    );
+    expect(bundle.highlightItems, isNotEmpty);
+    final first = bundle.highlightItems.first;
+    expect(first.title, '西湖日落散步路线');
+    expect(first.authorName, '湖畔慢行者');
+    expect(first.likeCount, 328);
   });
 }
 
