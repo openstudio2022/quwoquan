@@ -1,0 +1,12 @@
+template: review_repair
+system:
+  required: []
+  optional: []
+task:
+  required:
+    - ref
+    - failed_stage
+    - failed_gate
+    - fallback_stage
+    - issues_block
+  optional: []

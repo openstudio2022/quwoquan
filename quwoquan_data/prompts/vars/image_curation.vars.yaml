@@ -1,0 +1,16 @@
+template: image_curation
+system:
+  required:
+    - title_max_chars
+    - caption_max_chars
+  optional: []
+task:
+  required:
+    - title
+    - ref
+    - carrier
+    - source_collection
+    - byline
+    - assets_block
+  optional:
+    - creator_lock_line
