@@ -762,6 +762,18 @@ def build_route_evidence_bundle(
                 top_excerpt = assessment.excerpt
                 break
 
+        # route 单一多目的地底稿模型：每个目的地节点各自认领「单一最佳保留源」作节点底稿，
+        # 节点配图只来自该节点底稿（节点内不跨源、节点间不互借）。无保留源 ⇒ 该节点文字承载。
+        node_base_id = ""
+        node_base_url = ""
+        if retained_items:
+            best_row = max(
+                retained_items,
+                key=lambda r: int(getattr(r.get("assessment"), "score", 0) or 0),
+            )
+            node_base_id = str(best_row.get("sourceId") or "")
+            node_base_url = str(best_row.get("url") or "")
+
         route_nodes.append(
             {
                 "sequence": index,
@@ -769,6 +781,8 @@ def build_route_evidence_bundle(
                 "entityName": entity_name,
                 "sourceCount": len(entity_items),
                 "retainedSourceCount": len(retained_items),
+                "baseSourceId": node_base_id,
+                "baseSourceUrl": node_base_url,
                 "rejectOnly": bool(entity_items) and not retained_items,
                 "topExcerpt": top_excerpt,
                 "factEvidence": _unique_fact_entries(fact_entries, limit=6),

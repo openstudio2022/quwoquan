@@ -117,6 +117,8 @@ python3 quwoquan_data/scripts/cli.py quality dirty-scan --fail-on-issues
 python3 quwoquan_data/tests/integration/test_hitl_autopass.py
 # Phase 1：实体 composer 红绿契约 + entityRef 全路径回归（发布门主实体不被误过滤）
 python3 quwoquan_data/tests/produce/test_entity_composer.py
+# 线路 brief + 证据 + route 单一多目的地底稿模型（每目的地节点各自单一底稿、节点内不跨源）
+"$PYTEST_RUNNER" -m pytest -q quwoquan_data/tests/produce/test_route_brief_and_evidence.py
 # 内容质量：asset:// 引用闭环（引用↔manifest↔fileName↔物理文件↔sha256）+ assetId 可读化 + gallery caption 语义化
 python3 quwoquan_data/tests/common/test_asset_refs.py
 # 资产 ID 真相源：新命名格式、右锚定解析、跨批次变换
