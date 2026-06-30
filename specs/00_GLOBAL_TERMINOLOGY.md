@@ -14,7 +14,7 @@
 - 用户语言、PRD 语言、技术语言没有分层
 - 记录设计稿、旧 spec、metadata、代码注释对同一对象使用了不同叫法
 
-本文件不替代 metadata 中的字段、route、surface、operation 定义；  
+本文件不替代 metadata 中的字段、route、surface、operation 定义；
 本文件只定义**概念名称、使用边界、优先级和迁移口径**。
 
 与 `00_PRODUCT_CONCEPT_SYSTEM.md` 的分工：
