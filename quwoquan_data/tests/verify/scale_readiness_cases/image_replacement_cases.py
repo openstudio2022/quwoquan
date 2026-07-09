@@ -15,7 +15,7 @@ def test_scale_readiness_reports_structural_open_license_image_shortage():
             "quality": {"firstPassRate": 0.82},
         },
     )
-    write_json(root / "_shared" / "token_ledger.json", {"summary": {"unitCost": 1}})
+    _write_token_ledger("open_license_shortage")
     write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
     write_json(
         release_root("open_license_shortage_release") / "release_manifest.json",
@@ -82,7 +82,7 @@ def test_scale_readiness_warns_reference_only_strategy_for_publishable_image_quo
             "quality": {"firstPassRate": 0.82},
         },
     )
-    write_json(root / "_shared" / "token_ledger.json", {"summary": {"unitCost": 1}})
+    _write_token_ledger("reference_only")
     write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
     write_json(
         release_root("reference_only_release") / "release_manifest.json",
@@ -140,7 +140,7 @@ def test_scale_readiness_trial_allows_replaced_abandoned_entity():
             "quality": {"firstPassRate": 0.82},
         },
     )
-    write_json(root / "_shared" / "token_ledger.json", {"summary": {"unitCost": 1}})
+    _write_token_ledger("trial_replaced")
     write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
     write_json(release_root("trial_replaced_release") / "release_manifest.json", {"releaseId": "trial_replaced_release"})
 
@@ -198,7 +198,7 @@ def test_scale_readiness_trial_closes_by_active_targets_not_replacement_history_
             "quality": {"firstPassRate": 0.82},
         },
     )
-    write_json(root / "_shared" / "token_ledger.json", {"summary": {"unitCost": 1}})
+    _write_token_ledger("trial_replacement_history")
     write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
     write_json(
         release_root("trial_replacement_history_release") / "release_manifest.json",
@@ -255,7 +255,7 @@ def test_scale_readiness_commercial_allows_replaced_abandoned_entity_with_warnin
             "quality": {"firstPassRate": 0.82},
         },
     )
-    write_json(root / "_shared" / "token_ledger.json", {"summary": {"unitCost": 1}})
+    _write_token_ledger("commercial_replaced")
     write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
     write_json(release_root("commercial_replaced_release") / "release_manifest.json", {"releaseId": "commercial_replaced_release"})
 
@@ -293,5 +293,166 @@ def test_scale_readiness_commercial_allows_replaced_abandoned_entity_with_warnin
     assert report["passed"], report["blockers"]
     assert not any("zero abandoned entities" in item for item in report["blockers"])
     assert any("excluded from published entity/tag refs" in item for item in report["warnings"])
+
+
+def test_scale_readiness_source_admission_uses_active_replacement_targets():
+    _save_spec()
+    spec = store.load_spec(TASK)
+    spec["scope"]["reserveCoverageTargets"] = [{"entityType": "地点/景区", "name": "都江堰"}]
+    store.save_spec(spec)
+    batch_id = "source_admission_active_replacement"
+    root = batch_root(TASK, batch_id)
+    _write_env_ready(batch_id)
+    write_json(
+        root / "_shared" / "task_workflow_state.json",
+        {
+            "status": "succeeded",
+            "throughput": {"objectsPerHour": 500},
+            "quality": {"firstPassRate": 0.82},
+            "abandonedObjects": [{"entityId": "九寨沟", "status": "abandoned"}],
+            "replacementObjects": [{"entityId": "都江堰", "entityType": "地点/景区", "status": "active"}],
+        },
+    )
+    _write_token_ledger(batch_id)
+    write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
+    write_json(
+        release_root("source_admission_active_replacement_release") / "release_manifest.json",
+        {"releaseId": "source_admission_active_replacement_release"},
+    )
+
+    entity_dir = root / "entities" / "地点" / "景区" / "都江堰"
+    sources: list[dict[str, str]] = []
+    long_text = "都江堰水利工程以鱼嘴、飞沙堰、宝瓶口组织岷江水势，体现四川古代工程智慧。" * 40
+    for index, lane in enumerate(["homepage", "article", "article", "article", "article", "image"], start=1):
+        unit = root / "sources" / f"{index:02d}_{lane}"
+        unit.mkdir(parents=True, exist_ok=True)
+        (unit / "source.md").write_text(long_text if lane != "image" else "都江堰图库底稿", encoding="utf-8")
+        write_json(unit / "meta.json", {"researchLane": lane, "sourceId": f"unit_{index}_{lane}"})
+        if lane == "image":
+            write_json(unit / "assets" / "index.json", {"assets": [{"sourceAssetId": "asset_001"}]})
+        sources.append({"sourceRef": f"sources/{unit.name}/source.md"})
+    write_json(entity_dir / "1.download" / "source_refs.json", {"sources": sources})
+
+    import task.target_selection as target_selection
+    import verify.scale_readiness as scale_readiness
+
+    original = target_selection.audit_managed_batch
+    original_integrity = scale_readiness.scan_runtime_batch_integrity
+    try:
+        target_selection.audit_managed_batch = lambda task_id, batch_id: {
+            "targetCount": 1,
+            "lanePassed": {"homepage": 1, "article": 1, "image": 1},
+            "failedLaneCount": 0,
+            "failedLanes": [],
+            "abandonedCount": 1,
+            "abandonedContentCount": 0,
+            "replacementCount": 1,
+            "replacementObjects": [{"entityId": "都江堰", "status": "active"}],
+        }
+        scale_readiness.scan_runtime_batch_integrity = lambda task_id, batch_id: {
+            "passed": True,
+            "stats": {"postCount": 5, "articleCount": 4, "imageCount": 1, "assetCount": 5},
+            "issues": [],
+        }
+        report = build_scale_readiness_report(
+            TASK,
+            batch_id,
+            daily_target=10_000,
+            source_ready_goal=6,
+            release_id="source_admission_active_replacement_release",
+            require_import=True,
+            mode="trial",
+        )
+    finally:
+        target_selection.audit_managed_batch = original
+        scale_readiness.scan_runtime_batch_integrity = original_integrity
+    assert report["passed"], report["blockers"]
+    assert report["sourceAdmission"]["targetEntityCount"] == 1
+    assert report["sourceAdmission"]["sourceReadyObjectCapacity"] == 6
+    assert [item["entity"] for item in report["sourceAdmission"]["perEntity"]] == ["都江堰"]
+
+
+def test_scale_readiness_source_admission_reports_source_mix_breakdown():
+    """H100/H1000 准出证据：homepage 主源的源站组合分布必须进 sourceAdmission 报告。"""
+    _save_spec()
+    batch_id = "source_admission_source_mix"
+    root = batch_root(TASK, batch_id)
+    _write_env_ready(batch_id)
+    write_json(
+        root / "_shared" / "task_workflow_state.json",
+        {
+            "status": "succeeded",
+            "throughput": {"objectsPerHour": 500},
+            "quality": {"firstPassRate": 0.82},
+        },
+    )
+    _write_token_ledger(batch_id)
+    write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
+    write_json(
+        release_root("source_admission_source_mix_release") / "release_manifest.json",
+        {"releaseId": "source_admission_source_mix_release"},
+    )
+
+    entity_dir = root / "entities" / "地点" / "景区" / "九寨沟"
+    long_text = "九寨沟以钙华彩池、瀑布群与藏族村寨闻名，是四川代表性的世界自然遗产地。" * 40
+    homepage_metas = [
+        {"researchLane": "homepage", "url": "https://zh.wikipedia.org/wiki/九寨沟"},
+        {"researchLane": "homepage", "platform": "百度百科", "url": "https://baike.baidu.com/item/九寨沟"},
+        {"researchLane": "homepage", "sourceKind": "sogou_baike"},
+        # focus 被判弱相关的 homepage 源不得进入 sourceMixBreakdown。
+        {
+            "researchLane": "homepage",
+            "platform": "头条百科",
+            "entityFocusVerdict": "off_entity",
+        },
+    ]
+    sources: list[dict[str, str]] = []
+    for index, meta in enumerate(homepage_metas, start=1):
+        unit = root / "sources" / f"mix_{index:02d}_homepage"
+        unit.mkdir(parents=True, exist_ok=True)
+        (unit / "source.md").write_text(long_text, encoding="utf-8")
+        write_json(unit / "meta.json", {"sourceId": f"mix_{index}", **meta})
+        sources.append({"sourceRef": f"sources/{unit.name}/source.md"})
+    write_json(entity_dir / "1.download" / "source_refs.json", {"sources": sources})
+
+    import task.target_selection as target_selection
+    import verify.scale_readiness as scale_readiness
+
+    original = target_selection.audit_managed_batch
+    original_integrity = scale_readiness.scan_runtime_batch_integrity
+    try:
+        target_selection.audit_managed_batch = lambda task_id, batch_id: {
+            "targetCount": 1,
+            "lanePassed": {"homepage": 1, "article": 1, "image": 1},
+            "failedLaneCount": 0,
+            "failedLanes": [],
+            "abandonedCount": 0,
+            "abandonedContentCount": 0,
+        }
+        scale_readiness.scan_runtime_batch_integrity = lambda task_id, batch_id: {
+            "passed": True,
+            "stats": {"postCount": 5, "articleCount": 4, "imageCount": 1, "assetCount": 5},
+            "issues": [],
+        }
+        report = build_scale_readiness_report(
+            TASK,
+            batch_id,
+            daily_target=10_000,
+            release_id="source_admission_source_mix_release",
+            require_import=True,
+            mode="trial",
+        )
+    finally:
+        target_selection.audit_managed_batch = original
+        scale_readiness.scan_runtime_batch_integrity = original_integrity
+    admission = report["sourceAdmission"]
+    assert admission["sourceMixBreakdown"] == {
+        "wikipedia": 1,
+        "baidu_baike": 1,
+        "sogou_baike": 1,
+    }
+    assert "toutiao_baike" not in admission["sourceMixBreakdown"]
+    per_entity = {item["entity"]: item for item in admission["perEntity"]}
+    assert per_entity["九寨沟"]["focusBlockedSourceUnits"] == 1
 
 __all__ = [name for name in globals() if not name.startswith("__")]

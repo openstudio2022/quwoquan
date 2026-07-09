@@ -103,8 +103,8 @@ flowchart TD
 
 本轮必须通过：
 
-- `bash agent_ops/scaffold/verify_feature_tree_refactor.sh`
-- `bash agent_ops/scaffold/verify_acceptance_standard.sh`
+- `bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh`
+- `bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh`
 
 ## 8. 历史规划段：2026-06-17 本轮不执行
 
@@ -144,7 +144,7 @@ flowchart TD
 - 排序：候选级质量分、垂类、供给来源、交集 fact/affinity 特征进入融合；fact 权重高于 affinity，affinity 必须带置信标签。
 - 解释：首页 post 删除“推荐理由”标签与旧交集图标，只显示云侧 `IntersectionReason.primaryText`；精品详情标题改为“与你相关的线索”。
 - 观测归因：P0+ 已让 feed 下发、行为上报、raw event、learning context 和 Prometheus 指标带上 bounded attribution，覆盖 `channel/vertical/supply_source/recall_path/ranking_version/reason_version/intersection_class`。
-- 商用看板：P1 已新增 `deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json`，只消费 `recommendation_feed_served_by_attribution_total` 与 `recommendation_behavior_by_attribution_total`，覆盖 served、CTR、负反馈率、unknown attribution、旅行/精品消费、fact/affinity 交集解释、reason version 和供给来源占比。
+- 商用看板：P1 已新增 `quwoquan_ops/observability/monitoring/dashboards/l2_recommendation_commercial_maturity.json`，只消费 `recommendation_feed_served_by_attribution_total` 与 `recommendation_behavior_by_attribution_total`，覆盖 served、CTR、负反馈率、unknown attribution、旅行/精品消费、fact/affinity 交集解释、reason version 和供给来源占比。
 - 商用告警：P1a 已新增 `recommendation-commercial-alerting`，只消费 P0+ 真实 emitter，覆盖 unknown attribution、供给来源负反馈异常、召回路径 CTR 异常、旅行/精品消费断崖、UGC/数据工程供给 share 失衡；同时将 `alerts_source` 对齐到实际 Prometheus group `quwoquan_rec_model`。
 - 离线 replay：P1b 已补 `ReplayDataset/ReplayReport` 的商用归因字段、数据窗口、策略/排序/解释版本、无效样本原因、MAP@K、协同召回 lift、fact/affinity 解释 CTR、供给占比与晋级/回滚判断；报告指标通过 `recommendation_offline_eval_metric_value` 暴露给 SLO。
 - AB 分析：P1c 已补 `BuildABExperimentReport`，按控制组/实验组输出样本量、SRM、显著性、置信区间、effect size、保护指标违规、晋级与回滚结论；低流量或保护指标异常不会被误判为可晋级。

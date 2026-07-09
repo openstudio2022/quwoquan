@@ -39,10 +39,11 @@
 1. `specs/00_MASTER_DEVELOPMENT_FLOW.md`
 2. `specs/feature-tree/README.md`
 3. `specs/feature-tree/journey_scenario_registry.yaml`
-4. `quwoquan_service/contracts/metadata/README.md`
-5. `docs/agent_context_contract.md`
-6. `docs/agent_command_simulation_matrix.md`
-7. `docs/codex_workflow.md`
+4. `specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md`
+5. `quwoquan_service/contracts/metadata/README.md`
+6. `docs/agent_context_contract.md`
+7. `docs/agent_command_simulation_matrix.md`
+8. `docs/codex_workflow.md`
 
 只有在任务相关时，再继续读取对应 `.cursor/commands/*.md` 与 `.cursor/rules/*.md`，避免一次性灌入无关规则。
 
@@ -88,8 +89,8 @@ Codex 在本仓库做任何增量，都必须同时用这些视角审视，不�
 
 ## 编码总约束
 
-- `contracts/metadata/**` 是字段、错误码、path、route、surface、operation、decoder context 的唯一真相源。
-- `contracts/metadata/**/errors.yaml` 是错误码、用户可见提示、恢复动作和端云错误语义的唯一真相源；稳定错误码使用 `MODULE.KIND.REASON`，上下文只进 string-only `context.attributes`。
+- `quwoquan_service/contracts/metadata/**` 是字段、错误码、path、route、surface、operation、decoder context 的唯一真相源。
+- `quwoquan_service/contracts/metadata/**/errors.yaml` 是错误码、用户可见提示、恢复动作和端云错误语义的唯一真相源；稳定错误码使用 `MODULE.KIND.REASON`，上下文只进 string-only `context.attributes`。
 - 先 metadata，后 verify/codegen，再写业务逻辑；禁止手改 codegen 产物。
 - 不维护第二套路由、错误码、UI IA、mock 数据或特性树。
 - 当前阶段按未上线处理：对不合理实现零兼容、零技术债容忍，优先替换为正确契约与正确架构；禁止为错误实现继续加 shim、fallback、allowlist 或旁路。

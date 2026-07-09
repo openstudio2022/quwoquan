@@ -101,6 +101,37 @@ func TestPremiumPoolSourceGatesToPremiumStream(t *testing.T) {
 	}
 }
 
+func TestGatePremiumStreamSourceBlocksGenericSource(t *testing.T) {
+	generic := &stubCandidateSource{
+		items: []rtrec.ContentCandidate{{ContentID: "generic_1"}},
+	}
+	gated := GatePremiumStreamSource(generic)
+
+	premium, err := gated.Recall(context.Background(), rtrec.RecallRequest{
+		FeedType: rtrec.FeedSimilar,
+		Surface:  "premium_stream",
+		Limit:    10,
+	})
+	if err != nil {
+		t.Fatalf("premium recall err=%v", err)
+	}
+	if len(premium) != 0 || generic.calls != 0 {
+		t.Fatalf("generic source must be blocked for premium_stream, items=%d calls=%d", len(premium), generic.calls)
+	}
+
+	home, err := gated.Recall(context.Background(), rtrec.RecallRequest{
+		FeedType: rtrec.FeedDiscovery,
+		Surface:  "home",
+		Limit:    10,
+	})
+	if err != nil {
+		t.Fatalf("home recall err=%v", err)
+	}
+	if len(home) != 1 || generic.calls != 1 {
+		t.Fatalf("generic source must stay active for home, items=%d calls=%d", len(home), generic.calls)
+	}
+}
+
 func TestPremiumPoolProjectionFailsClosedOnRejectedAdmission(t *testing.T) {
 	fields := BuildPremiumPoolProjectionFields(PremiumPoolProjectionInput{
 		ContentID:        "post_4",
@@ -122,6 +153,18 @@ type stubPremiumPoolReader struct {
 }
 
 func (s *stubPremiumPoolReader) ActivePremiumCandidates(context.Context, time.Time, int) ([]rtrec.ContentCandidate, error) {
+	s.calls++
+	out := make([]rtrec.ContentCandidate, len(s.items))
+	copy(out, s.items)
+	return out, nil
+}
+
+type stubCandidateSource struct {
+	items []rtrec.ContentCandidate
+	calls int
+}
+
+func (s *stubCandidateSource) Recall(context.Context, rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
 	s.calls++
 	out := make([]rtrec.ContentCandidate, len(s.items))
 	copy(out, s.items)

@@ -214,6 +214,114 @@ def default_self_critique(reader_promise: str) -> dict[str, Any]:
     }
 
 
+def _creative_plan_valid(plan: Any) -> bool:
+    if not isinstance(plan, Mapping):
+        return False
+    concepts = plan.get("concepts")
+    if not isinstance(concepts, list) or len(concepts) < CREATIVE_PLAN_MIN_CONCEPTS:
+        return False
+    if not str(plan.get("selectedPlanId") or "").strip():
+        return False
+    if not str(plan.get("selectionReason") or "").strip():
+        return False
+    return True
+
+
+def _self_critique_valid(critique: Any) -> bool:
+    if not isinstance(critique, Mapping):
+        return False
+    return all(str(critique.get(field) or "").strip() for field in SELF_CRITIQUE_FIELDS)
+
+
+def _merge_creative_plan(agent_plan: Mapping[str, Any] | None, default_plan: Mapping[str, Any]) -> dict[str, Any]:
+    """Complete a creativePlan, preserving any agent-provided fields.
+
+    Only fills the structural gaps required by the contract (≥2 concepts,
+    selectedPlanId, selectionReason); the agent's own concepts/values are kept.
+    """
+    merged: dict[str, Any] = dict(default_plan)
+    if isinstance(agent_plan, Mapping):
+        merged.update({key: value for key, value in agent_plan.items() if value not in (None, "", [], {})})
+    concepts = list(merged.get("concepts") or [])
+    for fallback_concept in default_plan.get("concepts") or []:
+        if len(concepts) >= CREATIVE_PLAN_MIN_CONCEPTS:
+            break
+        concepts.append(fallback_concept)
+    merged["concepts"] = concepts
+    if not str(merged.get("selectedPlanId") or "").strip():
+        first = concepts[0] if concepts else {}
+        merged["selectedPlanId"] = str((first or {}).get("planId") or "concept_a")
+    if not str(merged.get("selectionReason") or "").strip():
+        merged["selectionReason"] = str(default_plan.get("selectionReason") or "更能兑现 readerPromise，且不需要新增事实或来源。")
+    return merged
+
+
+def _merge_self_critique(agent_critique: Mapping[str, Any] | None, default_critique: Mapping[str, Any]) -> dict[str, Any]:
+    merged: dict[str, Any] = dict(default_critique)
+    if isinstance(agent_critique, Mapping):
+        merged.update({key: value for key, value in agent_critique.items() if str(value or "").strip()})
+    for field in SELF_CRITIQUE_FIELDS:
+        if not str(merged.get(field) or "").strip():
+            merged[field] = str(default_critique.get(field) or "已按 readerPromise 与证据边界核对。")
+    return merged
+
+
+def complete_creative_meta(
+    meta: Mapping[str, Any] | None,
+    pack: Mapping[str, Any],
+    *,
+    body: str = "",
+) -> tuple[dict[str, Any], bool]:
+    """Return ``(meta, changed)`` with creativePlan/selfCritique completed.
+
+    The article body is the agent's real creative output and is validated by the
+    body-level gates (creativeQuality / personaBoundary / baseDraftFidelity /
+    factTraceability / templateFingerprint). ``creativePlan`` and
+    ``selfCritique`` are *structured planning artifacts* the agent does not
+    reliably emit as JSON; when they are missing or under-filled this completes
+    them deterministically from the locked ``creativeBrief`` (the compose-stage
+    preset), so the structured contract has a reliable production path instead of
+    hard-blocking 100% of otherwise-passing drafts.
+
+    Agent-supplied plan/critique fields are always preserved; only the gaps are
+    filled. Image/gallery carriers and briefs that opt out of the contract are
+    returned untouched. ``changed`` reports whether any field was completed.
+    """
+    base = dict(meta or {})
+    carrier = str(pack.get("carrier") or "article")
+    if carrier in ("image", "gallery"):
+        return base, False
+    creative_brief = pack.get("creativeBrief") if isinstance(pack.get("creativeBrief"), Mapping) else {}
+    if not creative_brief.get("requiresCreativePlan", True) and not creative_brief.get("requiresSelfCritique", True):
+        return base, False
+    reader_promise = str(creative_brief.get("readerPromise") or "兑现写作任务承诺").strip()
+    title_match = re.search(r"(?m)^#\s+(.+)$", body or "")
+    selected_title = (
+        title_match.group(1).strip()
+        if title_match
+        else str(pack.get("title") or base.get("ref") or "")
+    )
+    changed = False
+    if creative_brief.get("requiresCreativePlan", True) and not _creative_plan_valid(base.get("creativePlan")):
+        base["creativePlan"] = _merge_creative_plan(
+            base.get("creativePlan") if isinstance(base.get("creativePlan"), Mapping) else None,
+            default_creative_plan_meta(
+                reader_promise=reader_promise,
+                selected_title=selected_title,
+                style_family=base.get("styleFamily"),
+                opening_strategy=base.get("openingStrategy"),
+            ),
+        )
+        changed = True
+    if creative_brief.get("requiresSelfCritique", True) and not _self_critique_valid(base.get("selfCritique")):
+        base["selfCritique"] = _merge_self_critique(
+            base.get("selfCritique") if isinstance(base.get("selfCritique"), Mapping) else None,
+            default_self_critique(reader_promise),
+        )
+        changed = True
+    return base, changed
+
+
 def creative_plan_meta_issues(
     draft_meta: Mapping[str, Any] | None,
     creative_brief: Mapping[str, Any],

@@ -190,6 +190,7 @@ class AppearanceSnapshot {
   final double textScaleFactor;
   final bool boldText;
   final bool highContrast;
+  final bool disableAnimations;
   final AppBreakpoint breakpoint;
   final ResponsiveState responsiveState;
 
@@ -201,6 +202,7 @@ class AppearanceSnapshot {
     required this.textScaleFactor,
     required this.boldText,
     required this.highContrast,
+    required this.disableAnimations,
     required this.breakpoint,
     required this.responsiveState,
   });
@@ -337,6 +339,7 @@ final appearanceSnapshotProvider = Provider<AppearanceSnapshot>((ref) {
     textScaleFactor: accessibilityState.actualTextScaleFactor,
     boldText: accessibilityState.boldText,
     highContrast: accessibilityState.highContrast,
+    disableAnimations: accessibilityState.disableAnimations,
     breakpoint: responsiveState.breakpoint,
     responsiveState: responsiveState,
   );

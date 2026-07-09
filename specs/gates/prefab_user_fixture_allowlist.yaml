@@ -1,7 +1,7 @@
 version: 1
-description: Legacy prefab user fixture ratchet baseline (T0). Only decrease entries;
+description: Archive prefab user fixture ratchet baseline (T0). Only decrease entries;
   new fixture_user_* references are GATE_BLOCK.
-legacyUserIds:
+archiveUserIds:
 - fixture_user_article
 - fixture_user_cheng
 - fixture_user_citywalk_01

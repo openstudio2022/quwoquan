@@ -1,0 +1,146 @@
+# 全国地点主清单 · 四川省资阳市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 资阳市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 乐至县
+  leaves:
+  - name: 陈毅故里
+    canonicalName: 陈毅故里
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
+    aliases:
+    - 陈毅故居
+    - 陈毅纪念馆
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 报国寺
+    canonicalName: 乐至报国寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 蟠龙湖
+    canonicalName: 乐至蟠龙湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/乐至县
+    selectionPriority: 3
+    sourceReadiness: ready
+- district: 安岳县
+  leaves:
+  - name: 圆觉洞
+    canonicalName: 安岳圆觉洞
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
+    aliases:
+    - 圆觉洞石刻
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 毗卢洞
+    canonicalName: 安岳毗卢洞
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
+    aliases:
+    - 紫竹观音
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 卧佛院
+    canonicalName: 安岳卧佛院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 千佛寨
+    canonicalName: 安岳千佛寨
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 华严洞
+    canonicalName: 安岳华严洞
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 茗山寺
+    canonicalName: 安岳茗山寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 玄妙观
+    canonicalName: 安岳玄妙观
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
+    selectionPriority: 7
+    sourceReadiness: ready
+  - name: 孔雀洞
+    canonicalName: 安岳孔雀洞
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
+    selectionPriority: 8
+    sourceReadiness: ready
+  - name: 木门寺
+    canonicalName: 安岳木门寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/安岳县
+    aliases:
+    - 无际禅师塔亭
+    selectionPriority: 9
+    sourceReadiness: pending
+- district: 雁江区
+  leaves:
+  - name: 半月山大佛
+    canonicalName: 半月山大佛
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 三贤文化公园
+    canonicalName: 资阳三贤文化公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 花溪谷
+    canonicalName: 资阳花溪谷
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/资阳市/雁江区
+    selectionPriority: 3
+    sourceReadiness: pending

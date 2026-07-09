@@ -87,6 +87,65 @@ def test_image_collection_gate_rejects_prior_collection_id_only_match():
         entity_id="嵖岈山旅游景区",
     )
 
+def test_image_collection_gate_rejects_known_same_name_wrong_place():
+    collection = {
+        "sourceCollectionId": "open_license_file:剑门关:hangzhou_wrong_place",
+        "creator": "Panoramio user",
+        "collectionPageUrl": (
+            "https://commons.wikimedia.org/wiki/"
+            "File:20120430%E6%9D%AD%E5%B7%9E%E4%B8%B4%E5%AE%89"
+            "%E6%B5%99%E8%A5%BF%E5%A4%A7%E5%B3%A1%E8%B0%B7"
+            "%E5%89%91%E9%97%A8%E5%85%B3%E6%B0%B4%E5%BA%93.jpg"
+        ),
+        "platform": "Wikimedia Commons",
+        "license": "CC BY-SA 3.0",
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:wrong.jpg",
+        "usageScope": "app_publish",
+        "images": [
+            {
+                "url": "https://upload.wikimedia.org/wikipedia/commons/wrong.jpg",
+                "creator": "Panoramio user",
+                "caption": "20120430杭州临安浙西大峡谷剑门关水库",
+                "relevance": "20120430杭州临安浙西大峡谷剑门关水库",
+                "width": 1600,
+                "height": 900,
+            }
+        ],
+    }
+
+    verdict = _collection_gate(collection, entity_id="剑门关")
+
+    assert not verdict["passed"]
+    assert any("relevance" in issue for issue in verdict["issues"])
+
+def test_image_collection_gate_rejects_garbled_500px_caption():
+    collection = {
+        "sourceCollectionId": "open_license_file:光雾山:garbled_500px",
+        "creator": "无相",
+        "collectionPageUrl": "https://commons.wikimedia.org/wiki/File:%E5%85%89%E9%9B%BE%E5%B1%B1.jpg",
+        "platform": "Wikimedia Commons",
+        "license": "CC BY 3.0",
+        "termsUrl": "https://creativecommons.org/licenses/by/3.0/",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:%E5%85%89%E9%9B%BE%E5%B1%B1.jpg",
+        "usageScope": "app_publish",
+        "images": [
+            {
+                "url": "https://upload.wikimedia.org/wikipedia/commons/guangwushan.jpg",
+                "creator": "无相",
+                "caption": "500px provided description: ???????????????????????????????? [#?? ,#??]",
+                "relevance": "500px provided description: ???????????????????????????????? [#?? ,#??]",
+                "width": 1400,
+                "height": 937,
+            }
+        ],
+    }
+
+    verdict = _collection_gate(collection, entity_id="光雾山")
+
+    assert not verdict["passed"]
+    assert any("imageCaption" in issue for issue in verdict["issues"])
+
 def test_image_collection_gate_rejects_oversized_assets_before_fetch():
     collection = {
         "sourceCollectionId": "commons:巨幅图:oversized",
@@ -123,6 +182,7 @@ def test_image_collection_gate_accepts_verified_entity_alias():
         "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
         "authorizationProof": "https://commons.wikimedia.org/wiki/File:South_gate_of_Sansu_Shrine.jpg",
         "usageScope": "app_publish",
+        "modelReleaseStatus": "not_required",
         "images": [
             {
                 "url": "https://img.example/south-gate.jpg",
@@ -178,6 +238,7 @@ def test_image_collection_gate_accepts_core_name_from_english_scenic_alias():
         "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
         "authorizationProof": "https://commons.wikimedia.org/wiki/File:Wutai_Shan_from_the_air.jpg",
         "usageScope": "app_publish",
+        "modelReleaseStatus": "not_required",
         "images": [
             {
                 "url": "https://upload.wikimedia.org/wikipedia/commons/7/70/Wutai_Shan_from_the_air.jpg",
@@ -328,4 +389,3 @@ def test_qunar_travelogue_sources_require_entity_route_and_stay_text_only():
     # RC4：UGC 游记是 text-only 文章底稿，绝不携带跨源「授权图集」替代图——
     # imageEvidenceMode 恒为空（同源忠实，无假图；已删除 authorized_images 死参）。
     assert sources[0]["imageEvidenceMode"] == ""
-

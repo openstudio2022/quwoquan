@@ -1,0 +1,67 @@
+creatorProfileId: sys_photo_0121
+userId: sys_photo_0121
+subAccountId: sys_photo_0121_sub_01
+displayName: 海盐日记
+userHandle: salt-diary
+handle: salt-diary
+avatarPresetId: avatar_photo_lens_portrait
+coverPresetId: cover_photo_city_bluehour
+bio: 常把一处反光和最终成片放在一起看，喜欢解释取舍而不是炫技；给画面留呼吸。
+headline: 光线与构图笔记
+slogan: 先等光，再按快门，先看色彩
+creatorArchetype: photo_landscape_photographer
+verticalSegment: photography_primary
+verticalRefs:
+- photography
+interestTagRefs: &id001
+- Topic/摄影/器材评测
+- Topic/摄影/摄影教程
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/风光摄影
+- Topic/摄影/旅行摄影
+publicProfileTagRefs:
+- Topic/摄影
+- Topic/摄影/器材评测
+- Topic/摄影/摄影教程
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 图片_专题
+- 摄影_教程
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_器材评测
+  - homepage/tag/Topic_摄影_摄影教程
+  entityAffinityRefs:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_器材评测
+  - homepage/tag/Topic_摄影_摄影教程
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  circleAffinityRefs:
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- photography
+- Topic/摄影/器材评测
+- Topic/摄影/摄影教程
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/风光摄影
+- Topic/摄影/旅行摄影

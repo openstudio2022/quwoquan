@@ -979,4 +979,4 @@ class UserLifeItem {
   final String refId;
 }
 
-// ─── 主页首屏聚合（homepage-bundle，锁定决策 #1：一次聚合 + 交集/影响力并发补充）──
+// ─── 主页首屏聚合（homepage-bundle，锁定决策 #1：一次聚合 + 交集/打动并发补充）──

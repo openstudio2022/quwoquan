@@ -1,9 +1,9 @@
 version: 2
-generated_by: python3 agent_ops/scaffold/generate_test_directory_inventory.py
+generated_by: python3 quwoquan_ops/gate/scaffold/generate_test_directory_inventory.py
 areas:
   app:
     pending_count: 0
-    bridged_count: 381
+    bridged_count: 380
     entries:
     - current_path: quwoquan_app/test/app/app_startup_welcome_test.dart
       layer: local_contract
@@ -493,11 +493,6 @@ areas:
     - current_path: quwoquan_app/test/cloud/services/content/intersection_inbox_synthesis_test.dart
       layer: local_contract
       target_path: quwoquan_app/test/local_contract/cloud/services/content/intersection_inbox_synthesis__local_contract_test.dart
-      migration_status: bridged
-      classification_basis: app:local_contract:cloud
-    - current_path: quwoquan_app/test/cloud/services/content/intersection_object_evidence_test.dart
-      layer: local_contract
-      target_path: quwoquan_app/test/local_contract/cloud/services/content/intersection_object_evidence__local_contract_test.dart
       migration_status: bridged
       classification_basis: app:local_contract:cloud
     - current_path: quwoquan_app/test/cloud/services/content/mock_comment_seed_test.dart
@@ -3343,52 +3338,52 @@ areas:
       target_path: quwoquan_data/tests/local_contract/vertical/test_vertical_maturity__local_contract_test.py
       migration_status: bridged
       classification_basis: data:local_contract:vertical
-  agent_ops:
+  quwoquan_ops:
     pending_count: 0
     bridged_count: 9
     entries:
-    - current_path: agent_ops/tests/test_check_device_matrix_gate.py
+    - current_path: quwoquan_ops/tests/test_check_device_matrix_gate.py
       layer: local_contract
-      target_path: agent_ops/tests/local_contract/test_check_device_matrix_gate__local_contract_test.py
+      target_path: quwoquan_ops/tests/local_contract/test_check_device_matrix_gate__local_contract_test.py
       migration_status: bridged
-      classification_basis: agent_ops:local_contract:test_check_device_matrix_gate
-    - current_path: agent_ops/tests/test_detect_ci_impacted_scopes.py
+      classification_basis: quwoquan_ops:local_contract:test_check_device_matrix_gate
+    - current_path: quwoquan_ops/tests/test_detect_ci_impacted_scopes.py
       layer: local_contract
-      target_path: agent_ops/tests/local_contract/test_detect_ci_impacted_scopes__local_contract_test.py
+      target_path: quwoquan_ops/tests/local_contract/test_detect_ci_impacted_scopes__local_contract_test.py
       migration_status: bridged
-      classification_basis: agent_ops:local_contract:test_detect_ci_impacted_scopes
-    - current_path: agent_ops/tests/test_dev_up.py
+      classification_basis: quwoquan_ops:local_contract:test_detect_ci_impacted_scopes
+    - current_path: quwoquan_ops/tests/test_dev_up.py
       layer: user_acceptance
-      target_path: agent_ops/acceptance/user_acceptance/test_dev_up__user_acceptance_test.py
+      target_path: quwoquan_ops/tests/acceptance/user_acceptance/test_dev_up__user_acceptance_test.py
       migration_status: bridged
-      classification_basis: agent_ops:user_acceptance:test_dev_up
-    - current_path: agent_ops/tests/test_prod_deploy_contract.py
+      classification_basis: quwoquan_ops:user_acceptance:test_dev_up
+    - current_path: quwoquan_ops/tests/test_prod_deploy_contract.py
       layer: api_integration
-      target_path: agent_ops/acceptance/api_integration/test_prod_deploy_contract__api_integration_test.py
+      target_path: quwoquan_ops/tests/acceptance/api_integration/test_prod_deploy_contract__api_integration_test.py
       migration_status: bridged
-      classification_basis: agent_ops:api_integration:test_prod_deploy_contract
-    - current_path: agent_ops/tests/test_prod_plane_access_isolation.py
+      classification_basis: quwoquan_ops:api_integration:test_prod_deploy_contract
+    - current_path: quwoquan_ops/tests/test_prod_plane_access_isolation.py
       layer: api_integration
-      target_path: agent_ops/acceptance/api_integration/test_prod_plane_access_isolation__api_integration_test.py
+      target_path: quwoquan_ops/tests/acceptance/api_integration/test_prod_plane_access_isolation__api_integration_test.py
       migration_status: bridged
-      classification_basis: agent_ops:api_integration:test_prod_plane_access_isolation
-    - current_path: agent_ops/tests/test_prod_plane_runtime_stack.py
+      classification_basis: quwoquan_ops:api_integration:test_prod_plane_access_isolation
+    - current_path: quwoquan_ops/tests/test_prod_plane_runtime_stack.py
       layer: api_integration
-      target_path: agent_ops/acceptance/api_integration/test_prod_plane_runtime_stack__api_integration_test.py
+      target_path: quwoquan_ops/tests/acceptance/api_integration/test_prod_plane_runtime_stack__api_integration_test.py
       migration_status: bridged
-      classification_basis: agent_ops:api_integration:test_prod_plane_runtime_stack
-    - current_path: agent_ops/tests/test_prod_plane_ssh_setup.py
+      classification_basis: quwoquan_ops:api_integration:test_prod_plane_runtime_stack
+    - current_path: quwoquan_ops/tests/test_prod_plane_ssh_setup.py
       layer: api_integration
-      target_path: agent_ops/acceptance/api_integration/test_prod_plane_ssh_setup__api_integration_test.py
+      target_path: quwoquan_ops/tests/acceptance/api_integration/test_prod_plane_ssh_setup__api_integration_test.py
       migration_status: bridged
-      classification_basis: agent_ops:api_integration:test_prod_plane_ssh_setup
-    - current_path: agent_ops/tests/test_resolve_prod_release_state.py
+      classification_basis: quwoquan_ops:api_integration:test_prod_plane_ssh_setup
+    - current_path: quwoquan_ops/tests/test_resolve_prod_release_state.py
       layer: api_integration
-      target_path: agent_ops/acceptance/api_integration/test_resolve_prod_release_state__api_integration_test.py
+      target_path: quwoquan_ops/tests/acceptance/api_integration/test_resolve_prod_release_state__api_integration_test.py
       migration_status: bridged
-      classification_basis: agent_ops:api_integration:test_resolve_prod_release_state
-    - current_path: agent_ops/tests/test_stackctl_up_runtime.py
+      classification_basis: quwoquan_ops:api_integration:test_resolve_prod_release_state
+    - current_path: quwoquan_ops/tests/test_stackctl_up_runtime.py
       layer: user_acceptance
-      target_path: agent_ops/acceptance/user_acceptance/test_stackctl_up_runtime__user_acceptance_test.py
+      target_path: quwoquan_ops/tests/acceptance/user_acceptance/test_stackctl_up_runtime__user_acceptance_test.py
       migration_status: bridged
-      classification_basis: agent_ops:user_acceptance:test_stackctl_up_runtime
+      classification_basis: quwoquan_ops:user_acceptance:test_stackctl_up_runtime

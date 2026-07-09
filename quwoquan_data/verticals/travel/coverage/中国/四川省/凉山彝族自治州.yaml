@@ -1,0 +1,517 @@
+# 全国地点主清单 · 四川省凉山彝族自治州（discovery_seed/2，WP2 区县级全量枚举，含跨省地点示例）
+# 泸沽湖为跨省地点（裁决 7）：主归属 = 四川省凉山州盐源县（geoTagRef 单值，仅在本文件登记一次），
+# 云南次归属经 geoTagRefs 全量数组表达；云南丽江侧不得重复登记（canonicalName 跨文件全局唯一）。
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 凉山彝族自治州
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 盐源县
+  leaves:
+  - name: 泸沽湖
+    canonicalName: 泸沽湖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县
+    geoTagRefs:
+    - Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县
+    - Topic/地理/行政区/中国/云南省/丽江市/宁蒗彝族自治县
+    aliases:
+    - 泸沽湖风景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 公母山
+    canonicalName: 盐源公母山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县
+    aliases:
+    - 公母山景区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 西昌市
+  leaves:
+  - name: 邛海
+    canonicalName: 邛海
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    aliases:
+    - 邛海泸山景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 礼州古镇
+    canonicalName: 礼州古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    selectionPriority: 2
+    sourceReadiness: no_primary_source
+  - name: 建昌古城
+    canonicalName: 西昌建昌古城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    aliases:
+    - 建昌古城景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 凉山彝族奴隶社会博物馆
+    canonicalName: 凉山彝族奴隶社会博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 安哈彝寨仙人洞
+    canonicalName: 西昌安哈彝寨仙人洞
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 建川电影博物馆聚落
+    canonicalName: 西昌建川电影博物馆聚落
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 黄联土林
+    canonicalName: 西昌黄联土林
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/湿地荒漠
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    aliases:
+    - 黄联土林旅游区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 茅坡樱红旅游景区
+    canonicalName: 西昌茅坡樱红旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 会理市
+  leaves:
+  - name: 会理古城
+    canonicalName: 会理古城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    aliases:
+    - 会理古城旅游景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 会理会议纪念地
+    canonicalName: 会理会议纪念地
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 皎平渡遗址
+    canonicalName: 会理皎平渡遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    aliases:
+    - 红军巧渡金沙江皎平渡
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 龙肘山
+    canonicalName: 会理龙肘山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 德昌县
+  leaves:
+  - name: 傈僳水寨
+    canonicalName: 德昌傈僳水寨
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
+    aliases:
+    - 傈僳水寨旅游景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 六所古镇
+    canonicalName: 德昌六所古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 会东县
+  leaves:
+  - name: 老君峰
+    canonicalName: 会东老君峰
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会东县
+    aliases:
+    - 老君峰旅游景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 野租泉
+    canonicalName: 会东野租泉
+    entityType: 地点/温泉
+    typeTagRefs:
+    - Entity/地点/温泉
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会东县
+    aliases:
+    - 野租泉民俗生态度假区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 姜州花湖
+    canonicalName: 会东姜州花湖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会东县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 宁南县
+  leaves:
+  - name: 金钟山
+    canonicalName: 宁南金钟山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/宁南县
+    aliases:
+    - 金钟山景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 凯地里拉温泉
+    canonicalName: 宁南凯地里拉温泉
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/温泉
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/宁南县
+    aliases:
+    - 凯地里拉温泉旅游区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 白鹤滩景区
+    canonicalName: 宁南白鹤滩景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/宁南县
+    aliases:
+    - 白鹤滩水电站观景点
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 普格县
+  leaves:
+  - name: 螺髻山
+    canonicalName: 螺髻山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/普格县
+    aliases:
+    - 螺髻山旅游景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 螺髻九十九里温泉瀑布
+    canonicalName: 螺髻九十九里温泉瀑布
+    entityType: 地点/温泉
+    typeTagRefs:
+    - Entity/地点/温泉
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/普格县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 布拖县
+  leaves:
+  - name: 乐安湿地
+    canonicalName: 布拖乐安湿地
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/湿地荒漠
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/布拖县
+    aliases:
+    - 乐安黑鹳自然保护区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 布江蜀丰现代农业科技示范园
+    canonicalName: 布拖布江蜀丰现代农业科技示范园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/布拖县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 金阳县
+  leaves:
+  - name: 丙乙底索玛花景区
+    canonicalName: 金阳丙乙底索玛花景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/金阳县
+    aliases:
+    - 丙乙底村索玛花海
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 金阳百草坡
+    canonicalName: 金阳百草坡
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/金阳县
+    aliases:
+    - 百草坡自然保护区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 昭觉县
+  leaves:
+  - name: 谷克德
+    canonicalName: 昭觉谷克德
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/湿地荒漠
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/昭觉县
+    aliases:
+    - 谷克德高山云地景区
+    - 大凉山谷克德国家湿地公园
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 悬崖村
+    canonicalName: 昭觉悬崖村
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/昭觉县
+    aliases:
+    - 阿土列尔村
+    selectionPriority: 2
+    sourceReadiness: ready
+- district: 喜德县
+  leaves:
+  - name: 小相岭
+    canonicalName: 喜德小相岭
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/喜德县
+    aliases:
+    - 小相岭风景区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 彝族母语文化博览园
+    canonicalName: 喜德彝族母语文化博览园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/喜德县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 冕宁县
+  leaves:
+  - name: 彝海
+    canonicalName: 冕宁彝海
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    aliases:
+    - 彝海结盟纪念地
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 灵山旅游景区
+    canonicalName: 冕宁灵山旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    aliases:
+    - 灵山寺
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 西昌卫星发射中心
+    canonicalName: 西昌卫星发射中心
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    aliases:
+    - 冕宁航天旅游景区
+    - 西昌卫星发射基地
+    selectionPriority: 2
+    sourceReadiness: ready
+- district: 越西县
+  leaves:
+  - name: 文昌故里
+    canonicalName: 越西文昌故里
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/越西县
+    aliases:
+    - 文昌故里旅游景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 水韵花红旅游景区
+    canonicalName: 越西水韵花红旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/越西县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 呷古彝寨
+    canonicalName: 越西呷古彝寨
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/越西县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 甘洛县
+  leaves:
+  - name: 海棠古镇
+    canonicalName: 甘洛海棠古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/甘洛县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 普昌水墨梯田
+    canonicalName: 甘洛普昌水墨梯田
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/甘洛县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 美姑县
+  leaves:
+  - name: 美姑大风顶国家级自然保护区
+    canonicalName: 美姑大风顶国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/美姑县
+    aliases:
+    - 美姑大风顶
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 黄茅埂
+    canonicalName: 美姑黄茅埂
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/美姑县
+    aliases:
+    - 黄茅埂索玛花景区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 雷波县
+  leaves:
+  - name: 马湖
+    canonicalName: 雷波马湖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/雷波县
+    aliases:
+    - 马湖旅游景区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 箐口苗寨
+    canonicalName: 雷波箐口苗寨
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/雷波县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 木里藏族自治县
+  leaves:
+  - name: 木里大寺
+    canonicalName: 木里大寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 色拉尼布景区
+    canonicalName: 木里色拉尼布景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 木里香格里拉湖
+    canonicalName: 木里香格里拉湖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    aliases:
+    - 康坞牧场香格里拉湖
+    selectionPriority: 3
+    sourceReadiness: pending

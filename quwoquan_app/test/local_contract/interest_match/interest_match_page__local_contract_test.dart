@@ -6,6 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/interest_match_text_constants.dart';
+import 'package:quwoquan_app/core/models/visit_models.dart';
+import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/visit_recorder_service.dart';
 import 'package:quwoquan_app/ui/interest_match/pages/interest_match_page.dart';
 
 const Key _searchMarker = ValueKey<String>('stub-search');
@@ -116,7 +119,7 @@ Future<void> _pumpRouter(
 }
 
 void main() {
-  group('InterestMatchPage 找同趣 launcher（local_contract）', () {
+  group('InterestMatchPage 交集配对 launcher（local_contract）', () {
     testWidgets('渲染：返回、标题、今日机会、三段发现入口、搜索 CTA 与安全提示', (tester) async {
       await _pump(tester);
 
@@ -168,7 +171,7 @@ void main() {
       expect(find.byKey(_networkMarker), findsOneWidget);
     });
 
-    testWidgets('今日同趣机会 → 导流到 /profile/intersections（我的交集）', (tester) async {
+    testWidgets('我的交集 → 导流到 /profile/intersections（我的交集）', (tester) async {
       await _pump(tester);
 
       await tester.tap(find.byKey(InterestMatchPage.todayCtaKey));
@@ -184,5 +187,58 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(_searchMarker), findsOneWidget);
     });
+
+    testWidgets(
+      '零伪候选（UAT-8 / 08-mock-isolation）：无候选列表/头像，无需任何 Repository 即渲染',
+      (tester) async {
+        // 无任何 Repository / 候选 provider override 也能完整渲染：证明 launcher 不依赖、
+        // 也不自建第二套候选数据源（守 08-mock-isolation / R16）。
+        await _pump(tester);
+
+        expect(find.byKey(InterestMatchPage.viewKey), findsOneWidget);
+        // 无候选卡头像 / 缩略图（伪候选的典型痕迹）。
+        expect(find.byType(Image), findsNothing);
+        // 页面只有固定导流入口（我的交集 + 三段发现 + 搜索），无动态生成的候选行。
+        expect(find.byKey(InterestMatchPage.todayCtaKey), findsOneWidget);
+        expect(find.byKey(InterestMatchPage.findPeopleKey), findsOneWidget);
+        expect(find.byKey(InterestMatchPage.findCirclesKey), findsOneWidget);
+        expect(find.byKey(InterestMatchPage.findPlacesKey), findsOneWidget);
+        expect(find.byKey(InterestMatchPage.searchKey), findsOneWidget);
+        // R-IX01-04 未闭前：不得出现「已按模型为你配同趣」等伪匹配结论断言。
+        expect(find.textContaining('为你匹配'), findsNothing);
+        expect(find.textContaining('已配对'), findsNothing);
+      },
+    );
+
+    testWidgets('曝光埋点（R20）：进入 launcher 记录 page 曝光 interest_match', (
+      tester,
+    ) async {
+      final recorder = _CapturingVisitRecorder();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [visitRecorderServiceProvider.overrideWithValue(recorder)],
+          child: MaterialApp.router(
+            routerConfig: _router(initialLocation: AppRoutePaths.interestMatch),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(
+        recorder.recorded.map((t) => t.targetKey),
+        contains(const VisitTarget.page('interest_match').targetKey),
+      );
+    });
   });
+}
+
+/// 捕获式访问记录器：断言 launcher 页面曝光埋点（不落 Hive / 不发远端）。
+class _CapturingVisitRecorder extends VisitRecorderService {
+  final List<VisitTarget> recorded = <VisitTarget>[];
+
+  @override
+  Future<void> recordVisit(VisitTarget target) async {
+    recorded.add(target);
+  }
 }

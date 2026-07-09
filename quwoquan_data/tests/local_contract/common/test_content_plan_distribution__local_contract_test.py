@@ -6,7 +6,7 @@ from support.content_plan_source_reject_fixtures import *  # noqa: F401,F403
 
 
 
-def test_content_plan_separated_research_has_no_per_target_quota_floor():
+def test_content_plan_separated_research_enforces_per_target_quota_count():
     batch = "per_target_quotas"
     entity = "四姑娘山"
     items = []
@@ -130,11 +130,86 @@ def test_content_plan_separated_research_has_no_per_target_quota_floor():
         batch_content_plan_packet_path(TASK, batch),
         {"schemaVersion": cp.CONTENT_PLAN_SCHEMA, "items": items[:-1]},
     )
-    # 底稿中心：separated_research 下配额降级为车道开关，不存在 per-target 数量地板；
-    # 删掉一件图片作品后不再触发 imageWorksPerTarget / entityArticlesPerTarget 配额报错。
+    # separated_research 仍是一源一稿/一源一图，但 per-target quota 是放量对象数合同。
     issues = cp.validate_content_plan(TASK, batch, spec)
-    assert not any("imageWorksPerTarget quota" in issue for issue in issues), issues
+    assert any("imageWorksPerTarget quota" in issue for issue in issues), issues
     assert not any("entityArticlesPerTarget quota" in issue for issue in issues), issues
+
+
+def test_content_plan_commercial_closure_treats_per_target_quota_as_ceiling():
+    batch = "commercial_closure_ceiling"
+    entity = "黄龙"
+    root = batch_root(TASK, batch)
+    source_dir = root / "entities/地点/景区/黄龙/1.download/sources/01.article"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_path = source_dir / "source.md"
+    source_path.write_text(
+        ("黄龙单底稿证据，包含交通、预约、海拔、步道节奏和季节体验。" * 80),
+        encoding="utf-8",
+    )
+    write_json(
+        source_dir / "meta.json",
+        {
+            "sourceUseMode": "factual_reference_only",
+            "researchLane": "article",
+            "sourceRole": "base",
+            "category": "travelogue",
+        },
+    )
+    ref = "huanglong_article_1"
+    title = "黄龙行前实用底稿"
+    content_object.register_content_object(
+        TASK,
+        batch,
+        ref,
+        content_type="article",
+        angle="攻略",
+        title=title,
+    )
+    brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+    write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": title})
+    source_ref = source_path.relative_to(root).as_posix()
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {
+            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "items": [
+                {
+                    "ref": ref,
+                    "kind": "entity",
+                    "carrier": "article",
+                    "researchLane": "article",
+                    "title": title,
+                    "entityRefs": [f"/entity/地点/景区/{entity}"],
+                    "evidenceRefs": [source_ref],
+                    "rationale": "商业闭环下 shared pool 只要求最小可交付作品",
+                    "writingIntent": "planning_consultation",
+                    "baseSourceRef": source_ref,
+                    "sourceUseMode": "factual_reference_only",
+                }
+            ],
+        },
+    )
+    spec = {
+        "workflowPolicy": {
+            "articleCommercialClosure": True,
+            "targetObjectCount": 100,
+        },
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {
+                "entityArticlesPerTarget": 4,
+                "imageWorksPerTarget": 0,
+                "entityHomepagesPerTarget": 0,
+                "routeArticles": 0,
+            },
+        },
+    }
+
+    issues = cp.validate_content_plan(TASK, batch, spec)
+
+    assert issues == [], issues
 
 def test_content_plan_separated_research_keeps_image_lane_without_angle_coverage():
     batch = "per_target_4_plus_1"
@@ -294,11 +369,10 @@ def test_content_plan_separated_research_keeps_image_lane_without_angle_coverage
             ]
         },
     )
-    # 底稿中心：writingIntent 降为派生可选标签，不再有 acceptance.requiredAngles 角度覆盖硬门，
-    # 也不再有 entityArticlesPerTarget 配额地板；缺角度/缺篇数都不阻断。
+    # writingIntent 仍是派生可选标签，但 per-target 数量是放量对象数合同；
+    # 未开启 allowContentQuotaShortfall 时缺篇数应阻断。
     issues = cp.validate_content_plan(TASK, batch, spec)
     assert not any("acceptance.requiredAngles" in issue for issue in issues), issues
-    assert not any("entityArticlesPerTarget quota" in issue for issue in issues), issues
+    assert any("entityArticlesPerTarget quota" in issue for issue in issues), issues
     partial_spec = {**spec, "workflowPolicy": {"allowContentQuotaShortfall": True}}
     assert cp.validate_content_plan(TASK, batch, partial_spec) == []
-

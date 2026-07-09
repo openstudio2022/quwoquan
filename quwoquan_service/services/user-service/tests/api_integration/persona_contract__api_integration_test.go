@@ -2,11 +2,34 @@
 package api_integration
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestPersonaContractApiIntegrationTest(t *testing.T) {
+	exists := func(path string) bool {
+		info, err := os.Stat(path)
+		return err == nil && info.IsDir()
+	}
+	repoRoot := func() string {
+		_, filename, _, ok := runtime.Caller(0)
+		if !ok {
+			t.Fatal("cannot resolve bridge file path")
+		}
+		for dir := filepath.Dir(filename); ; dir = filepath.Dir(dir) {
+			if exists(filepath.Join(dir, "quwoquan_service")) && exists(filepath.Join(dir, "quwoquan_ops")) {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				t.Fatal("cannot locate quwoquan repo root")
+			}
+		}
+		return ""
+	}
 	cmd := exec.Command(
 		"go",
 		"test",
@@ -15,6 +38,7 @@ func TestPersonaContractApiIntegrationTest(t *testing.T) {
 		"^(TestActivatePersona_Transaction|TestApplyPersonaProfileSync_ReturnsAppliedCount|TestCreatePersona_Success|TestCreatePersona_UserHandleReadonly|TestDeleteEmptyPersona_HistoryRequiresRetireConflict|TestDeletePersona_PrimaryForbidden|TestGetPersonaLifecycleGuard_ActivePersonaRequiresSuccessor|TestGetPersonaLifecycleGuard_HistoryCoverageBySource|TestGetPersonaLifecycleGuard_HistoryRequiresRetire|TestGetPersonaLifecycleGuard_RecordsMongoHistoryFallbackMetric|TestGetPersonaManagementSummary_ReturnsQuotaAndActiveContext|TestRetirePersona_PersistsRetiredStatus|TestRetiredPersona_CannotBeActivatedOrUpdated|TestUpdatePersona_ReflectsManagementFields|TestUpdatePersona_UserHandleReadonly)$",
 		"-count=1",
 	)
+	cmd.Env = append(os.Environ(), "QWQ_OUTPUT_ROOT="+filepath.Join(repoRoot(), ".qwq_output"))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("source bridge failed for quwoquan_service/services/user-service/tests/persona_contract_test.go: %v\n%s", err, output)

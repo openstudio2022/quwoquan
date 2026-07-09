@@ -170,7 +170,7 @@ gwt_acceptance:
     - 2026-06-22 已通过 local_contract 证明导入视频与用户上传视频在 DTO/display mapper 上共享同一封面展示合同；gamma import feed roundtrip 与 UAT 尚未落盘，状态保持 pending。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

@@ -5,6 +5,7 @@ import os
 import shutil
 import sys
 import tempfile
+import hashlib
 from pathlib import Path
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -155,6 +156,40 @@ def _seed_release_post(
     write_json(release_post / "manifest.json", manifest)
 
 
+def _seed_runtime_image_post(
+    title: str,
+    *,
+    entity: str,
+    source_ref: str,
+    caption: str,
+) -> None:
+    runtime_post = batch_root(TASK, BATCH) / "posts/image/画报" / title / "1"
+    asset_bytes = b"image-post-bytes"
+    (runtime_post / "assets").mkdir(parents=True, exist_ok=True)
+    (runtime_post / "assets" / "cover.jpg").write_bytes(asset_bytes)
+    write_json(
+        runtime_post / "manifest.json",
+        {
+            "topicId": title,
+            "contentType": "image",
+            "carrier": "image",
+            "entityRefs": [f"/entity/地点/景区/{entity}"],
+            "assets": [
+                {
+                    "assetId": "cover",
+                    "fileName": "cover.jpg",
+                    "sha256": hashlib.sha256(asset_bytes).hexdigest(),
+                    "caption": caption,
+                    "sourceRef": source_ref,
+                    "sourceAssetRef": source_ref.replace("source.md", "assets/001.jpg"),
+                    "authorizationProof": "fixture-proof",
+                    "sourceCollectionId": f"fixture:{entity}:image",
+                }
+            ],
+        },
+    )
+
+
 def _seed_release_root() -> None:
     write_json(
         release_root(RELEASE) / "release_manifest.json",
@@ -215,6 +250,73 @@ def test_runtime_integrity_allows_same_asset_contract_before_release():
     assert "missing manifest.assets[].sourceRef" in text
     assert "asset sha reused across posts" not in text
     assert "base draft ledger does not map" in text
+
+
+def test_runtime_integrity_blocks_garbled_caption_for_image_post():
+    _reset()
+    _seed_release_root()
+    source_ref = _seed_source("光雾山", "01.image", kind="维基百科")
+    _seed_runtime_image_post(
+        "光雾山乱码图",
+        entity="光雾山",
+        source_ref=source_ref,
+        caption="500px provided description: ???????????????????????????????? [#?? ,#??]",
+    )
+
+    report = scan_runtime_batch_integrity(TASK, BATCH)
+    text = "\n".join(report["issues"])
+
+    assert not report["passed"]
+    assert "imageCaption" in text
+
+
+def test_release_integrity_blocks_known_wrong_place_image_even_after_entity_ref_filter():
+    _reset()
+    _seed_release_root()
+    source_ref = _seed_source("剑门关", "01.image", kind="维基百科")
+    title = "剑门关·20120430杭州临安浙西大峡谷剑门关水库"
+    release_post = release_root(RELEASE) / "posts/image/画报" / title / "1"
+    asset_bytes = b"wrong-place-image"
+    asset_sha = hashlib.sha256(asset_bytes).hexdigest()
+    (release_post / "assets").mkdir(parents=True, exist_ok=True)
+    (release_post / "assets" / "cover.jpg").write_bytes(asset_bytes)
+    source_fields = {
+        "sourceCollectionId": "fixture:wrong-place",
+        "creator": "fixture",
+        "collectionPageUrl": "https://example.test/wrong-place",
+        "license": "CC-BY-SA 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "authorizationProof": "fixture-proof",
+    }
+    write_json(
+        release_post / "manifest.json",
+        {
+            "topicId": title,
+            "contentType": "image",
+            "carrier": "image",
+            "title": title,
+            "caption": "20120430杭州临安浙西大峡谷剑门关水库",
+            "entityRefs": [],
+            **source_fields,
+            "assets": [
+                {
+                    "assetId": "cover",
+                    "fileName": "cover.jpg",
+                    "sha256": asset_sha,
+                    "caption": "20120430杭州临安浙西大峡谷剑门关水库",
+                    "sourceRef": source_ref,
+                    "sourceAssetRef": source_ref.replace("source.md", "assets/001.jpg"),
+                    **source_fields,
+                }
+            ],
+        },
+    )
+
+    report = scan_release_integrity(RELEASE)
+    text = "\n".join(report["issues"])
+
+    assert not report["passed"]
+    assert "已知错位图片词" in text
 
 
 def test_release_integrity_allows_article_asset_from_independent_source_unit():
@@ -327,7 +429,7 @@ def test_release_integrity_flags_entity_homepage_using_guide_base():
     write_json(entity_release / "manifest.json", {"assets": []})
     report = scan_release_integrity(RELEASE)
     text = "\n".join(report["issues"])
-    assert "entity homepage base draft must be encyclopedia/wiki/official/government source" in text
+    assert "entity homepage base draft must be homepage primary authority source" in text
     assert "must not be author travelogue/guide/comment source" in text
 
 
@@ -344,13 +446,13 @@ def test_homepage_base_draft_never_falls_back_to_guide_source():
 
 
 def test_homepage_base_draft_picks_best_single_baike_no_cross_source():
-    """百科择优单源：多百科同存时取最高优先级单一源（维基>百度>搜狗），主页三件套同源不混源。"""
+    """主权威百科单源择优：主页三件套必须同源，不允许跨源拼接。"""
     _reset()
     sogou = _seed_source("毕棚沟", "01.sogou", kind="搜狗百科", source_use_mode="factual_reference_only")
     baidu = _seed_source("毕棚沟", "02.baidu", kind="百度百科", source_use_mode="factual_reference_only")
     wiki = _seed_source("毕棚沟", "03.wiki", kind="维基百科", source_use_mode="factual_reference_only")
     chosen = _entity_base_draft(TASK, BATCH, "地点", "景区", "毕棚沟")
-    # 维基百科优先级最高（120>110>105）→ 取单一最佳源；三件套（text/outline/primaryEvidenceRef）同源。
+    # registry authority 顺序与质量共同裁决；当前应稳定选到维基百科，且三件套同源。
     assert chosen["sourceRef"] == wiki, chosen
     assert chosen["primaryEvidenceRef"] == wiki
     assert chosen["sourceRef"] not in (baidu, sogou)

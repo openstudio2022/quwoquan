@@ -1,79 +1,71 @@
 schemaVersion: prefab_user_migration_map/1
-description: |
-  域级 pilot 显式映射：未映射条目继续走 legacy。T3 切流完成后可逐步扩展至 100%。
-  canonical batch = travel_batch_100_v1（与 creator_travel_batch100.seed.json 同源）。
-
+description: 域级 pilot 显式映射：未映射条目继续走 archive。active canonical batch = travel_photo_1k_v1。
 content_pilot_20:
-  description: content 域 20 帖 authorId pilot（creator 轨，travel_batch_100_v1）
+  description: content 域 20 帖 authorId pilot（creator 轨，travel_photo_1k_v1）
   mappings:
-    - legacyAuthorId: fixture_user_photo
-      creatorProfileId: qwq_creator_travel_casual_tourist_001
-      authorId: agent_author_travel_travel_batch_100_v1_001
-    - legacyAuthorId: fixture_user_travel
-      creatorProfileId: qwq_creator_travel_casual_tourist_002
-      authorId: agent_author_travel_travel_batch_100_v1_002
-    - legacyAuthorId: fixture_user_travel_01
-      creatorProfileId: qwq_creator_travel_casual_tourist_003
-      authorId: agent_author_travel_travel_batch_100_v1_003
-    - legacyAuthorId: fixture_user_travel_02
-      creatorProfileId: qwq_creator_travel_casual_tourist_004
-      authorId: agent_author_travel_travel_batch_100_v1_004
-    - legacyAuthorId: fixture_user_travel_03
-      creatorProfileId: qwq_creator_travel_casual_tourist_005
-      authorId: agent_author_travel_travel_batch_100_v1_005
-    - legacyAuthorId: fixture_user_travel_04
-      creatorProfileId: qwq_creator_travel_casual_tourist_006
-      authorId: agent_author_travel_travel_batch_100_v1_006
-    - legacyAuthorId: fixture_user_travel_05
-      creatorProfileId: qwq_creator_travel_casual_tourist_007
-      authorId: agent_author_travel_travel_batch_100_v1_007
-    - legacyAuthorId: fixture_user_travel_06
-      creatorProfileId: qwq_creator_travel_casual_tourist_008
-      authorId: agent_author_travel_travel_batch_100_v1_008
-    - legacyAuthorId: fixture_user_travel_07
-      creatorProfileId: qwq_creator_travel_casual_tourist_009
-      authorId: agent_author_travel_travel_batch_100_v1_009
-    - legacyAuthorId: fixture_user_travel_08
-      creatorProfileId: qwq_creator_travel_casual_tourist_010
-      authorId: agent_author_travel_travel_batch_100_v1_010
-    - legacyAuthorId: fixture_user_photography_01
-      creatorProfileId: qwq_creator_travel_casual_tourist_011
-      authorId: agent_author_travel_travel_batch_100_v1_011
-    - legacyAuthorId: fixture_user_photography_02
-      creatorProfileId: qwq_creator_travel_casual_tourist_012
-      authorId: agent_author_travel_travel_batch_100_v1_012
-    - legacyAuthorId: fixture_user_photography_03
-      creatorProfileId: qwq_creator_travel_casual_tourist_013
-      authorId: agent_author_travel_travel_batch_100_v1_013
-    - legacyAuthorId: fixture_user_photography_04
-      creatorProfileId: qwq_creator_travel_casual_tourist_014
-      authorId: agent_author_travel_travel_batch_100_v1_014
-    - legacyAuthorId: fixture_user_photography_05
-      creatorProfileId: qwq_creator_travel_casual_tourist_015
-      authorId: agent_author_travel_travel_batch_100_v1_015
-    - legacyAuthorId: fixture_user_photography_06
-      creatorProfileId: qwq_creator_travel_local_walker_016
-      authorId: agent_author_travel_travel_batch_100_v1_016
-    - legacyAuthorId: fixture_user_photography_07
-      creatorProfileId: qwq_creator_travel_local_walker_017
-      authorId: agent_author_travel_travel_batch_100_v1_017
-    - legacyAuthorId: fixture_user_photography_08
-      creatorProfileId: qwq_creator_travel_local_walker_018
-      authorId: agent_author_travel_travel_batch_100_v1_018
-    - legacyAuthorId: fixture_user_lifestyle_01
-      creatorProfileId: qwq_creator_travel_local_walker_019
-      authorId: agent_author_travel_travel_batch_100_v1_019
-    - legacyAuthorId: fixture_user_lifestyle_02
-      creatorProfileId: qwq_creator_travel_local_walker_020
-      authorId: agent_author_travel_travel_batch_100_v1_020
-
+  - archiveAuthorId: fixture_user_photo
+    creatorProfileId: sys_photo_0001
+    subAccountId: sys_photo_0001_sub_01
+  - archiveAuthorId: fixture_user_travel
+    creatorProfileId: sys_photo_0002
+    subAccountId: sys_photo_0002_sub_01
+  - archiveAuthorId: fixture_user_travel_01
+    creatorProfileId: sys_photo_0003
+    subAccountId: sys_photo_0003_sub_01
+  - archiveAuthorId: fixture_user_travel_02
+    creatorProfileId: sys_photo_0004
+    subAccountId: sys_photo_0004_sub_01
+  - archiveAuthorId: fixture_user_travel_03
+    creatorProfileId: sys_photo_0005
+    subAccountId: sys_photo_0005_sub_01
+  - archiveAuthorId: fixture_user_travel_04
+    creatorProfileId: sys_photo_0006
+    subAccountId: sys_photo_0006_sub_01
+  - archiveAuthorId: fixture_user_travel_05
+    creatorProfileId: sys_photo_0007
+    subAccountId: sys_photo_0007_sub_01
+  - archiveAuthorId: fixture_user_travel_06
+    creatorProfileId: sys_photo_0008
+    subAccountId: sys_photo_0008_sub_01
+  - archiveAuthorId: fixture_user_travel_07
+    creatorProfileId: sys_photo_0009
+    subAccountId: sys_photo_0009_sub_01
+  - archiveAuthorId: fixture_user_travel_08
+    creatorProfileId: sys_photo_0010
+    subAccountId: sys_photo_0010_sub_01
+  - archiveAuthorId: fixture_user_photography_01
+    creatorProfileId: sys_photo_0011
+    subAccountId: sys_photo_0011_sub_01
+  - archiveAuthorId: fixture_user_photography_02
+    creatorProfileId: sys_photo_0012
+    subAccountId: sys_photo_0012_sub_01
+  - archiveAuthorId: fixture_user_photography_03
+    creatorProfileId: sys_photo_0013
+    subAccountId: sys_photo_0013_sub_01
+  - archiveAuthorId: fixture_user_photography_04
+    creatorProfileId: sys_photo_0014
+    subAccountId: sys_photo_0014_sub_01
+  - archiveAuthorId: fixture_user_photography_05
+    creatorProfileId: sys_photo_0015
+    subAccountId: sys_photo_0015_sub_01
+  - archiveAuthorId: fixture_user_photography_06
+    creatorProfileId: sys_photo_0016
+    subAccountId: sys_photo_0016_sub_01
+  - archiveAuthorId: fixture_user_photography_07
+    creatorProfileId: sys_photo_0017
+    subAccountId: sys_photo_0017_sub_01
+  - archiveAuthorId: fixture_user_photography_08
+    creatorProfileId: sys_photo_0018
+    subAccountId: sys_photo_0018_sub_01
+  - archiveAuthorId: fixture_user_lifestyle_01
+    creatorProfileId: sys_photo_0019
+    subAccountId: sys_photo_0019_sub_01
+  - archiveAuthorId: fixture_user_lifestyle_02
+    creatorProfileId: sys_photo_0020
+    subAccountId: sys_photo_0020_sub_01
 user_pilot:
-  scenarioId: creator_travel_travel_batch_100_v1_core
-  sampleSize: 20
-
+  scenarioId: creator_travel_photo_1k_v1_core
+  sampleSize: 100
 currentUserVariant:
-  userId: qwq_creator_current_user_variant
-  subAccountId: agent_sub_account_travel_current_user_variant
-  legacyAliases:
-    - fixture_user_current
-    - user_001
+  userId: fixture_user_current
+  subAccountId: fixture_sub_current

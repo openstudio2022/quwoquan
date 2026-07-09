@@ -26,7 +26,7 @@
 
 ### 4.1 download_plan
 
-- `source_plan.json` 至少 2 条可消费 source。
+- `homepage_source_plan.json` 至少 1 条可消费主权威主页 source；`article_source_plan.json` 至少 2 条可消费 article source。
 - source platform 命中来源类目表。
 
 ### 4.2 download_fetch

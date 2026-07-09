@@ -97,6 +97,37 @@ class BatchAssetRegistry:
         self.save()
         return True
 
+    def rename_asset_id(self, old_id: str, new_id: str) -> bool:
+        """把已登记的 assetId 原位改名（owner_key 不变）。
+
+        成稿阶段 fold_to_simplified 会折叠繁体图注段（见
+        build/homepage.py `_fold_homepage_manifest_assets`）；manifest 与
+        磁盘文件名折叠后，registry 必须同步改名，否则登记表留下孤儿
+        繁体 ID，目录证据链门会判 registry↔manifest 断链。
+        """
+        old = str(old_id or "").strip()
+        new = str(new_id or "").strip()
+        if not old or not new or old == new:
+            return False
+        if old not in self.asset_ids:
+            return False
+        if new in self.asset_ids:
+            raise RuntimeError(
+                f"asset id rename collision: {new!r} already registered "
+                f"(task={self.task_id} batch={self.batch_id})"
+            )
+        changed = False
+        for owner_key, asset_id in self.entries.items():
+            if asset_id == old:
+                self.entries[owner_key] = new
+                changed = True
+        if not changed:
+            return False
+        self.asset_ids.discard(old)
+        self.asset_ids.add(new)
+        self.save()
+        return True
+
     def save(self) -> Path:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         write_json(
@@ -136,8 +167,15 @@ def allocate_post_asset_id(
     global_batch_seq: int,
     registry: BatchAssetRegistry,
     max_nonce: int = 32,
+    caption: str = "",
+    section_slug: str = "",
+    ordinal: int = 0,
 ) -> str:
-    """在批内登记表中分配唯一 assetId；重复 owner_key 直接复用。"""
+    """在批内登记表中分配唯一 assetId；重复 owner_key 直接复用。
+
+    owner key 不含图注（幂等优先）：同一 owner 重跑即使图注文案调整，
+    也复用首次登记的 assetId，保证批内文件名稳定。
+    """
     owner_key = batch_asset_owner_key(
         global_batch_seq=global_batch_seq,
         entity_name=entity_name,
@@ -156,6 +194,9 @@ def allocate_post_asset_id(
             global_batch_seq=global_batch_seq,
             ref=ref,
             nonce=nonce,
+            caption=caption,
+            section_slug=section_slug,
+            ordinal=ordinal,
         )
         if registry.claim(owner_key, asset_id):
             return asset_id

@@ -1,2 +1,0 @@
-viewer snapshot reasons=1
-  primaryText= dim=relationship src=followEdge

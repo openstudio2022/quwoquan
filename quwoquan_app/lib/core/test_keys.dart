@@ -124,6 +124,15 @@ class TestKeys {
   static const modalBottomSheetPanel = ValueKey<String>(
     'modal_bottom_sheet_panel',
   );
+  static const appModalBrightnessLayer = ValueKey<String>(
+    'app_modal_brightness_layer',
+  );
+  static const appBottomModalSlideTransition = ValueKey<String>(
+    'app_bottom_modal_slide_transition',
+  );
+  static const appDialogScaleTransition = ValueKey<String>(
+    'app_dialog_scale_transition',
+  );
   static const modalBottomSheetQuickActionsRail = ValueKey<String>(
     'modal_bottom_sheet_quick_actions_rail',
   );

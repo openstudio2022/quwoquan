@@ -236,6 +236,8 @@ void main() {
       );
       expect(find.text(UITextConstants.userAgreement), findsOneWidget);
       expect(find.text(UITextConstants.privacyPolicy), findsOneWidget);
+      expect(find.text(UITextConstants.permissionsStatement), findsOneWidget);
+      expect(find.text(UITextConstants.thirdPartySdkList), findsOneWidget);
 
       await tester.tap(find.text(UITextConstants.userAgreement));
       await tester.pumpAndSettle();
@@ -250,6 +252,20 @@ void main() {
       await tester.tap(find.text(UITextConstants.privacyPolicy));
       await tester.pumpAndSettle();
       expect(find.text(_RouteProbe.privacyPolicy), findsOneWidget);
+
+      router.go(AppRoutePaths.settingsAbout);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(UITextConstants.permissionsStatement));
+      await tester.pumpAndSettle();
+      expect(find.text(_RouteProbe.permissions), findsOneWidget);
+
+      router.go(AppRoutePaths.settingsAbout);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(UITextConstants.thirdPartySdkList));
+      await tester.pumpAndSettle();
+      expect(find.text(_RouteProbe.thirdPartySdkList), findsOneWidget);
     });
 
     testWidgets('退出登录默认走软退出：不远端吊销、不清本机凭证', (tester) async {
@@ -396,6 +412,15 @@ Widget _buildSettingsApp({
             path: AppRoutePaths.legalPrivacyPolicy,
             builder: (context, state) => const Text(_RouteProbe.privacyPolicy),
           ),
+          GoRoute(
+            path: AppRoutePaths.legalPermissions,
+            builder: (context, state) => const Text(_RouteProbe.permissions),
+          ),
+          GoRoute(
+            path: AppRoutePaths.legalThirdPartySdkList,
+            builder: (context, state) =>
+                const Text(_RouteProbe.thirdPartySdkList),
+          ),
         ],
       ),
     ),
@@ -408,6 +433,8 @@ abstract final class _RouteProbe {
   static const String login = 'login-route';
   static const String userAgreement = 'user-agreement-route';
   static const String privacyPolicy = 'privacy-policy-route';
+  static const String permissions = 'permissions-route';
+  static const String thirdPartySdkList = 'third-party-sdk-list-route';
 }
 
 abstract final class SettingsRemovedText {

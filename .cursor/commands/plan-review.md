@@ -13,7 +13,7 @@ description: 规划前多角色交叉检视规格、任务清单与验收标准�
 
 对标基线：交互与视觉对标 **微信 / 小红书** 与 **Apple HIG**；功能完备性、可靠性与可运营性对标成熟商用 App。
 
-真相源（不得绕过）：`specs/00_MASTER_DEVELOPMENT_FLOW.md`、特性树 `spec.md/design.md/acceptance.yaml`、`contracts/metadata/**`、`.cursor/rules/**`（尤其 `13-coding-discipline.mdc` 八角色 R01–R32）。
+真相源（不得绕过）：`specs/00_MASTER_DEVELOPMENT_FLOW.md`、特性树 `spec.md/design.md/acceptance.yaml`、`quwoquan_service/contracts/metadata/**`、`.cursor/rules/**`（尤其 `13-coding-discipline.mdc` 八角色 R01–R32）。
 
 ---
 
@@ -25,7 +25,7 @@ description: 规划前多角色交叉检视规格、任务清单与验收标准�
 |---|---|
 | 设计师 / UX | 信息架构与导航壳；按住/松手/滑动等交互范式对标微信/小红书；录制/加载/上传/发送等**过程动效**；空态/错误态/权限态/加载态四态齐全；深浅色、断点自适应、无障碍与触控热区；视觉全部走 `AppColors/AppSpacing/AppTypography/UITextConstants` 语义 token。 |
 | 产品经理 / 产品设计师 | 用户价值与北极星指标；功能闭环**无盲区**（主流程 + 边界 + 失败 + 并发）；AppRoot Journey/Scenario 影响；Out of Scope 明确；登录/权限入口满足「关闭安全态 + 成功目标态」无死循环。 |
-| 架构设计专家 | 一棵树归属正确；DDD 单向依赖与边界合理；抽象克制（R24，不新增旁路分支）；存储无关、`contracts/metadata` 为字段/错误码/path/surface/operation 唯一真相源；端云 DTO↔struct↔YAML 对齐；可扩展不可逆。 |
+| 架构设计专家 | 一棵树归属正确；DDD 单向依赖与边界合理；抽象克制（R24，不新增旁路分支）；存储无关、`quwoquan_service/contracts/metadata` 为字段/错误码/path/surface/operation 唯一真相源；端云 DTO↔struct↔YAML 对齐；可扩展不可逆。 |
 | 代码评审专家 | 规划是否要求强类型（禁 `Map<String,dynamic>`/`any` 穿透）、无硬编码 path/错误码/surface、无空 catch、codegen 不手改；**未上线即清理过往兼容与死代码，统一升级到新契约**，不保留兼容分支。 |
 | 测试与质量专家 | 验收意图 UAT/SIT/GWT/contract 完整；三层测试 证据矩阵可形成；Mock↔Remote 一致（api_integration 断言在 local_contract 有对应）；`acceptance.yaml` 声明的测试路径可落地；门禁可绿。 |
 | 运维与运营专家 | SLO/KPI、告警阈值、采样与 TTL；灰度与回滚演练；新页面/新 API/新行为信号的**埋点与归因链**（曝光/停留/异常 + referralSource/feedRequestId）；AB 可分桶；env-seed-first（alpha/beta/gamma）。 |
@@ -57,7 +57,7 @@ description: 规划前多角色交叉检视规格、任务清单与验收标准�
 ## 阻断（返回 `GATE_BLOCK`）
 
 - 无法定位一棵树归属，或验收不可测、缺三层测试证据矩阵。
-- 字段/错误码/path/surface/operation 未以 `contracts/metadata` 为真相源。
+- 字段/错误码/path/surface/operation 未以 `quwoquan_service/contracts/metadata` 为真相源。
 - 用户可见可发布能力缺 SLO/KPI、权限、生命周期、灰度、回滚或观测。
 - 发现方案未收敛或存在重大架构分叉 → 退回 `/prd` + `/design`。
 

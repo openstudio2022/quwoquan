@@ -25,13 +25,17 @@ void main() {
       final apiClient = MockClient((request) async {
         if (request.url.path == ChatApiMetadata.initChatUploadPath) {
           initRequest = request;
-          final body = jsonDecode(utf8.decode((request as http.Request).bodyBytes))
-              as Map<String, dynamic>;
+          final body =
+              jsonDecode(utf8.decode(request.bodyBytes))
+                  as Map<String, dynamic>;
           expect(body['mediaType'], equals('video'));
           expect(body['assetScope'], equals('draft'));
           expect(body['sourceKind'], equals('chat_attachment'));
           expect(body['fileName'], equals('clip.mp4'));
-          expect(request.headers['X-Client-Page-Id'], equals(ChatRequestPageIds.initChatUpload));
+          expect(
+            request.headers['X-Client-Page-Id'],
+            equals(ChatRequestPageIds.initChatUpload),
+          );
           return http.Response(
             jsonEncode(<String, dynamic>{
               'sessionId': 'chat_session_1',
@@ -47,18 +51,23 @@ void main() {
         }
         if (request.url.path == ChatApiMetadata.completeChatUploadPath) {
           completeRequest = request;
-          final body = jsonDecode(utf8.decode((request as http.Request).bodyBytes))
-              as Map<String, dynamic>;
+          final body =
+              jsonDecode(utf8.decode(request.bodyBytes))
+                  as Map<String, dynamic>;
           expect(body['sessionId'], equals('chat_session_1'));
           expect(body['mediaType'], equals('video'));
           expect(body['assetScope'], equals('draft'));
           expect(body['sourceKind'], equals('chat_attachment'));
-          expect(request.headers['X-Client-Page-Id'], equals(ChatRequestPageIds.completeChatUpload));
+          expect(
+            request.headers['X-Client-Page-Id'],
+            equals(ChatRequestPageIds.completeChatUpload),
+          );
           return http.Response(
             jsonEncode(<String, dynamic>{
               'sessionId': 'chat_session_1',
               'status': 'ready',
-              'cdnUrl': 'https://cdn.example.com/uploads/chat/chat_session_1/clip.mp4',
+              'cdnUrl':
+                  'https://cdn.example.com/uploads/chat/chat_session_1/clip.mp4',
               'assetId': 'chat_media_1',
             }),
             200,
@@ -106,7 +115,10 @@ void main() {
       expect(uploadRequest, isNotNull);
       expect(result.sessionId, equals('chat_session_1'));
       expect(result.assetId, equals('chat_media_1'));
-      expect(result.cdnUrl, equals('https://cdn.example.com/uploads/chat/chat_session_1/clip.mp4'));
+      expect(
+        result.cdnUrl,
+        equals('https://cdn.example.com/uploads/chat/chat_session_1/clip.mp4'),
+      );
     });
   });
 }

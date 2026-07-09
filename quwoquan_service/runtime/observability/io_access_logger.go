@@ -1,7 +1,6 @@
 package runtimeobservability
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"regexp"
@@ -25,11 +24,7 @@ func (l *IOAccessLogger) Write(entry IOAccessLog) error {
 		return fmt.Errorf("invalid errorCode format: %s", entry.ErrorCode)
 	}
 
-	payload, err := json.Marshal(entry)
-	if err != nil {
-		return err
-	}
-	_, err = l.writer.Write(append(payload, '\n'))
+	payload := formatDelimitedLog("access", compactIOAccessLog(entry))
+	_, err := l.writer.Write([]byte(payload + "\n"))
 	return err
 }
-

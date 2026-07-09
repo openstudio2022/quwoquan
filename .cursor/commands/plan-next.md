@@ -13,7 +13,7 @@ description: 任务后多角色自检功能与计划的完成情况，按商用�
 
 对标基线：交互与视觉对标 **微信 / 小红书** 与 **Apple HIG**；功能完备性、可靠性与可运营性对标成熟商用 App。
 
-真相源（不得绕过）：`specs/00_MASTER_DEVELOPMENT_FLOW.md`、特性树 `spec.md/design.md/acceptance.yaml`、`contracts/metadata/**`、`.cursor/rules/**`（尤其 `13-coding-discipline.mdc` 八角色 R01–R32）。
+真相源（不得绕过）：`specs/00_MASTER_DEVELOPMENT_FLOW.md`、特性树 `spec.md/design.md/acceptance.yaml`、`quwoquan_service/contracts/metadata/**`、`.cursor/rules/**`（尤其 `13-coding-discipline.mdc` 八角色 R01–R32）。
 
 ---
 

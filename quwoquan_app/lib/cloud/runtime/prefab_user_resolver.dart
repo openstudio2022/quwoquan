@@ -1,16 +1,14 @@
-import 'dart:convert';
-import 'dart:io';
+import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 
-/// 预制用户双轨 resolver：creator_pool 优先，legacy alias 兼容。
+/// 预制用户双轨 resolver：creator_pool 优先，archive alias 兼容。
 class PrefabUserResolver {
   PrefabUserResolver._();
 
   static Map<String, dynamic>? _manifestCache;
   static Map<String, dynamic>? _creatorSliceCache;
-  static Map<String, String>? _aliasCache;
 
   static String resolveUserId(String userId) {
-    final normalized = _legacyAliases()[userId] ?? userId;
+    final normalized = userId;
     final creator = _creatorIndex();
     if (creator.containsKey(normalized)) {
       return creator[normalized]!['userId'] as String? ?? normalized;
@@ -19,7 +17,7 @@ class PrefabUserResolver {
   }
 
   static String resolveSubAccountId(String subAccountId) {
-    final normalized = _legacyAliases()[subAccountId] ?? subAccountId;
+    final normalized = subAccountId;
     final creator = _creatorIndex();
     if (creator.containsKey(normalized)) {
       return creator[normalized]!['subAccountId'] as String? ?? normalized;
@@ -33,7 +31,7 @@ class PrefabUserResolver {
     if (sub != null && sub.isNotEmpty) {
       return sub;
     }
-    return 'agent_sub_account_travel_current_user_variant';
+    return 'fixture_sub_current';
   }
 
   static String get currentUserVariantUserId {
@@ -42,20 +40,22 @@ class PrefabUserResolver {
     if (userId != null && userId.isNotEmpty) {
       return userId;
     }
-    return 'qwq_creator_current_user_variant';
+    return 'fixture_user_current';
   }
 
   static Map<String, dynamic>? creatorProfileWireFor(String id) {
-    final normalized = _legacyAliases()[id] ?? id;
+    final normalized = id;
     final entry = _creatorIndex()[normalized] ?? _creatorIndex()[id];
     if (entry == null) {
       return null;
     }
     final userId = entry['userId']?.toString() ?? normalized;
-    final subAccountId = entry['subAccountId']?.toString() ??
+    final subAccountId =
+        entry['subAccountId']?.toString() ??
         ((entry['subAccountRefs'] as List<dynamic>?)?.first?.toString()) ??
         userId;
-    final avatarKey = entry['avatarObjectKey']?.toString() ?? '';
+    final avatarKey = _mediaObjectKey(entry, 'avatar');
+    final backgroundKey = _mediaObjectKey(entry, 'cover');
     return <String, dynamic>{
       'subAccountId': subAccountId,
       'ownerUserId': userId,
@@ -66,7 +66,7 @@ class PrefabUserResolver {
       'nickname': entry['displayName']?.toString() ?? userId,
       'avatarUrl': avatarKey.isEmpty ? '' : avatarKey,
       'avatarVersion': 1,
-      'backgroundUrl': entry['backgroundObjectKey']?.toString() ?? '',
+      'backgroundUrl': backgroundKey,
       'bio': entry['bio']?.toString() ?? '',
       'identityTags': (entry['tags'] as List<dynamic>? ?? const [])
           .map((e) => e.toString())
@@ -85,27 +85,15 @@ class PrefabUserResolver {
 
   static bool isCurrentUserVariantId(String id) {
     return id == currentUserVariantUserId ||
-        id == currentUserVariantSubAccountId ||
-        _legacyAliases().containsKey(id);
+        id == currentUserVariantSubAccountId;
   }
 
   static bool isOwnerLikeSubAccountId(String subAccountId) {
-    const legacyOwnerLike = {'me', 'fixture_user_current', 'user_001'};
-    if (legacyOwnerLike.contains(subAccountId)) {
+    const archiveOwnerLike = {'me', 'fixture_user_current'};
+    if (archiveOwnerLike.contains(subAccountId)) {
       return true;
     }
     return isCurrentUserVariantId(subAccountId);
-  }
-
-  static Map<String, String> _legacyAliases() {
-    return _aliasCache ??= () {
-      final slot = _manifest()?['currentUserVariant'] as Map<String, dynamic>?;
-      final target = slot?['userId'] as String? ?? 'qwq_creator_current_user_variant';
-      final aliases = (slot?['legacyAliases'] as List<dynamic>? ?? const ['fixture_user_current', 'user_001'])
-          .map((e) => e.toString())
-          .toList();
-      return {for (final alias in aliases) alias: target};
-    }();
   }
 
   static Map<String, Map<String, dynamic>> _creatorIndex() {
@@ -114,51 +102,47 @@ class PrefabUserResolver {
     for (final raw in users) {
       if (raw is! Map<String, dynamic>) continue;
       final userId = raw['userId']?.toString();
-      final subAccountId = raw['subAccountId']?.toString() ??
+      final subAccountId =
+          raw['subAccountId']?.toString() ??
           ((raw['subAccountRefs'] as List<dynamic>?)?.first?.toString());
-      final authorId = raw['authorId']?.toString();
       if (userId != null) index[userId] = raw;
       if (subAccountId != null) index[subAccountId] = raw;
-      if (authorId != null) index[authorId] = raw;
     }
     return index;
   }
 
+  static String _mediaObjectKey(Map<String, dynamic> entry, String kind) {
+    final direct = kind == 'avatar'
+        ? entry['avatarObjectKey']?.toString()
+        : entry['backgroundObjectKey']?.toString();
+    if (direct != null && direct.isNotEmpty) {
+      return direct;
+    }
+    final media = kind == 'avatar'
+        ? entry['avatarMedia']
+        : entry['backgroundMedia'];
+    if (media is Map<String, dynamic>) {
+      final objectKey = media['objectKey']?.toString() ?? '';
+      if (objectKey.isNotEmpty) {
+        return objectKey;
+      }
+    }
+    return '';
+  }
+
   static Map<String, dynamic>? _manifest() {
     return _manifestCache ??= _readFixtureJson(
-      '_shared/test_fixtures/user_pool.manifest.json',
+      '_shared/test_fixtures/user_pool.manifest.travel_photo_1k_v1.json',
     );
   }
 
   static Map<String, dynamic>? _creatorSlice() {
     return _creatorSliceCache ??= _readFixtureJson(
-      '_shared/test_fixtures/user_pool.creator_pool.json',
+      '_shared/test_fixtures/user_pool.creator_pool.travel_photo_1k_v1.json',
     );
   }
 
   static Map<String, dynamic>? _readFixtureJson(String relativePath) {
-    for (final root in _metadataRoots()) {
-      final file = File('$root/$relativePath');
-      if (file.existsSync()) {
-        return jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
-      }
-    }
-    return null;
-  }
-
-  static Iterable<String> _metadataRoots() sync* {
-    final fromEnv = Platform.environment['QWQ_REPO_ROOT'];
-    if (fromEnv != null && fromEnv.isNotEmpty) {
-      yield '$fromEnv/quwoquan_service/contracts/metadata';
-    }
-    var dir = Directory.current;
-    for (var i = 0; i < 8; i++) {
-      final candidate = '${dir.path}/quwoquan_service/contracts/metadata';
-      if (Directory(candidate).existsSync()) {
-        yield candidate;
-        return;
-      }
-      dir = dir.parent;
-    }
+    return ContractFixtureRuntimeLoader.metadataJson(relativePath);
   }
 }

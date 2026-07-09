@@ -19,7 +19,7 @@ entries:
       G0 门禁基建：新增 verify_file_line_budget.py(R03 ratchet：>1000 行 allowlist，排除
       *.g.dart/l10n/test/mock，只降不升) 与 verify_repository_interface_method_budget.py
       (R02 ratchet：>10 方法登记，伞组合接口 body 空自然计 0 免登记)；tag-service 入
-      Makefile build + scripts/gate.sh go test；三脚本挂进 agent_ops/gate/gate_repo.sh。
+      Makefile build + scripts/gate.sh go test；三脚本挂进 quwoquan_ops/gate/gate_repo.sh。
       G1 登记豁免：R03 46 文件(含 pageflip 3 文件标 pageflip-locked 专项后置)、R02 10 接口
       (Circle34/Chat31/UserProfile27 等)冻结基线，不拆文件。
       G2 tag 501 闭合：实现 search/related/search-by-tags/graph-cooccurrence/related-objects

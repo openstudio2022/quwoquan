@@ -65,7 +65,7 @@
 3. T2：发布确认页 widget 测试（标签选择、多实体、摘要编辑、AI 摘要按钮三态：加载/成功/失败结构化错误）。
 4. T3：gamma 发布一篇带 实体提及+多实体+圈子+标签+AI 摘要 的长文，读侧 entityMentions 可点。
 5. 新增发布 UI 与提及 picker 均为独立文件；`create_page.dart` 未降至 <1000 的剩余拆分登记到 CR convergence item。
-6. `bash agent_ops/gate/gate_repo.sh --scope app` 全绿；若本地只跑子集，必须在 CR dev_log 记录未跑项/阻断。
+6. `bash quwoquan_ops/gate/gate_repo.sh --scope app` 全绿；若本地只跑子集，必须在 CR dev_log 记录未跑项/阻断。
 
 ## 6. 验收标准（GWT 样例）
 

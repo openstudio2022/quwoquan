@@ -16,10 +16,14 @@ func TestBuildRecommendationProjectionFields_DataEngineeringTravelQuality(t *tes
 		"tagRefs":              []string{"Topic/旅行"},
 		"entityRefs":           []string{"地点/景区/甲居藏寨"},
 		"semanticMentions":     []any{map[string]any{"targetRef": "地点/景区/甲居藏寨"}},
-		"sourceTaskId":         "旅行/环线/川西环线",
-		"coverUrl":             "https://img.example.com/cover.jpg",
-		"status":               "published",
-		"visibility":           "public",
+		"intersectionHints": []map[string]any{
+			{"dimension": "content", "source": "entityRef", "actionType": "view_object", "actionTargetId": "entity:景区:甲居藏寨"},
+			{"dimension": "interest", "source": "tagRef", "actionType": "join", "actionTargetId": "Topic/旅行"},
+		},
+		"sourceTaskId": "旅行/环线/川西环线",
+		"coverUrl":     "https://img.example.com/cover.jpg",
+		"status":       "published",
+		"visibility":   "public",
 	})
 
 	if got := fields["supplySource"]; got != recommendation.SupplySourceDataEngineering {
@@ -40,6 +44,18 @@ func TestBuildRecommendationProjectionFields_DataEngineeringTravelQuality(t *tes
 	}
 	if got := fields["mediaCompleteness"]; got != 1.0 {
 		t.Fatalf("mediaCompleteness=%v want 1.0", got)
+	}
+	if got := fields["intersectionFactStrength"]; got != 2.0 {
+		t.Fatalf("intersectionFactStrength=%v want 2.0", got)
+	}
+	if got := fields["intersectionFreshness"]; got != 1.0 {
+		t.Fatalf("intersectionFreshness=%v want 1.0", got)
+	}
+	if got := fields["intersectionClass"]; got != "fact" {
+		t.Fatalf("intersectionClass=%v want fact", got)
+	}
+	if got := fields["intersectionSourceRefTop"]; got != "entity:景区:甲居藏寨" {
+		t.Fatalf("intersectionSourceRefTop=%v want entity target", got)
 	}
 }
 

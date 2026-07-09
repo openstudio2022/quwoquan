@@ -38,8 +38,8 @@ abstract class OneTapLoginClient {
 
 class MethodChannelOneTapLoginClient implements OneTapLoginClient {
   MethodChannelOneTapLoginClient({
-    MethodChannel channel = const MethodChannel('quwoquan/auth/one_tap'),
-  }) : _channel = channel;
+    this._channel = const MethodChannel('quwoquan/auth/one_tap'),
+  });
 
   final MethodChannel _channel;
 

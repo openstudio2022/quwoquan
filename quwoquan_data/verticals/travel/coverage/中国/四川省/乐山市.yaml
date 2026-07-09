@@ -1,0 +1,294 @@
+# 全国地点主清单 · 四川省乐山市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 乐山市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 市中区
+  leaves:
+  - name: 乐山大佛
+    canonicalName: 乐山大佛
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    aliases:
+    - 乐山大佛景区
+    - 凌云大佛
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 东方佛都
+    canonicalName: 乐山东方佛都
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    aliases:
+    - 东方佛都旅游区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 乌木文化博览苑
+    canonicalName: 乐山乌木文化博览苑
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    aliases:
+    - 乌木博物馆
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 乐山金鹰山荘
+    canonicalName: 乐山金鹰山荘
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 天工开物文化旅游景区
+    canonicalName: 乐山天工开物文化旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 峨眉山市
+  leaves:
+  - name: 峨眉山
+    canonicalName: 峨眉山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/自然景观/山岳
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    aliases:
+    - 峨眉山风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 峨眉山大佛禅院
+    canonicalName: 峨眉山大佛禅院
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    aliases:
+    - 大佛禅院佛教文化旅游区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 四川旅博天地
+    canonicalName: 峨眉山四川旅博天地
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 报国寺
+    canonicalName: 峨眉山报国寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 万年寺
+    canonicalName: 峨眉山万年寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    selectionPriority: 2
+    sourceReadiness: ready
+- district: 五通桥区
+  leaves:
+  - name: 中国根书艺术馆
+    canonicalName: 中国根书艺术馆
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/五通桥区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 五通桥小西湖
+    canonicalName: 五通桥小西湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/五通桥区
+    aliases:
+    - 小西湖景区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 沙湾区
+  leaves:
+  - name: 郭沫若故居
+    canonicalName: 乐山郭沫若故居
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/沙湾区
+    aliases:
+    - 郭沫若故居纪念馆
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 沫若戏剧文创园
+    canonicalName: 沫若戏剧文创园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/沙湾区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 金口河区
+  leaves:
+  - name: 大渡河金口大峡谷
+    canonicalName: 大渡河金口大峡谷
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/金口河区
+    aliases:
+    - 金口大峡谷旅游景区
+    selectionPriority: 2
+    sourceReadiness: pending
+- district: 犍为县
+  leaves:
+  - name: 嘉阳·桫椤湖景区
+    canonicalName: 嘉阳桫椤湖景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    aliases:
+    - 嘉阳小火车
+    - 芭石铁路
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 罗城古镇
+    canonicalName: 犍为罗城古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    aliases:
+    - 船形街
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 犍为文庙
+    canonicalName: 犍为文庙
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 世界茉莉博览园
+    canonicalName: 犍为世界茉莉博览园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 井研县
+  leaves:
+  - name: 雷畅故居
+    canonicalName: 井研雷畅故居
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/井研县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 夹江县
+  leaves:
+  - name: 东风堰-千佛岩景区
+    canonicalName: 夹江东风堰千佛岩景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/夹江县
+    aliases:
+    - 夹江千佛岩
+    - 东风堰
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 天福观光茶园
+    canonicalName: 夹江天福观光茶园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/夹江县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 沐川县
+  leaves:
+  - name: 沐川竹海
+    canonicalName: 沐川竹海
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/沐川县
+    aliases:
+    - 沐川竹海旅游景区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 桃源山居
+    canonicalName: 沐川桃源山居
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/沐川县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 峨边彝族自治县
+  leaves:
+  - name: 黑竹沟
+    canonicalName: 峨边黑竹沟
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨边彝族自治县
+    aliases:
+    - 黑竹沟风景区
+    selectionPriority: 1
+    sourceReadiness: ready
+- district: 马边彝族自治县
+  leaves:
+  - name: 云上福来景区
+    canonicalName: 马边云上福来景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/马边彝族自治县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 马边大风顶国家级自然保护区
+    canonicalName: 马边大风顶国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/马边彝族自治县
+    selectionPriority: 3
+    sourceReadiness: ready

@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import socket
 import time
 from contextlib import contextmanager
@@ -487,9 +488,30 @@ def append_conflict(
     )
 
 
-def source_unit_id(*, canonical_url: str = "", snapshot_hash: str = "", source_ref: str = "") -> str:
+def source_unit_id(
+    *,
+    canonical_url: str = "",
+    snapshot_hash: str = "",
+    source_ref: str = "",
+    entity_name: str = "",
+    source_kind: str = "",
+) -> str:
+    """sourceUnitId（= sources/ 目录名）。
+
+    可读契约（pipeline_directory_layout_spec §3）：提供 entity_name + source_kind 时
+    返回 `{实体名}__{sourceKind}__{hash8}`（实体名保留中文，仅替换路径危险字符）。
+    hash8 由 canonical URL / snapshot hash / source ref 稳定派生，跨批可复算。
+    未提供实体语境（如 fanout job 标识）时回退纯哈希 `su_{hash20}`。
+    """
     seed = f"{canonical_url.strip()}|{snapshot_hash.strip()}|{source_ref.strip()}"
-    return "su_" + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:20]
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    name = str(entity_name or "").strip()
+    kind = str(source_kind or "").strip()
+    if name and kind:
+        safe_name = re.sub(r"[\\/:*?\"<>|\s]+", "_", name).strip("_.") or "entity"
+        safe_kind = re.sub(r"[^a-zA-Z0-9_\-]+", "_", kind).strip("_") or "web"
+        return f"{safe_name}__{safe_kind}__{digest[:8]}"
+    return "su_" + digest[:20]
 
 
 def source_unit_root_from_ref(ref: object) -> str:

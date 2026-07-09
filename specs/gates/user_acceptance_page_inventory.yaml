@@ -354,6 +354,14 @@ route_only:
   owner: runtime
   source_tests:
   - quwoquan_app/test/app/app_startup_welcome_test.dart
+- route_id: legalPermissions
+  owner: runtime
+  source_tests:
+  - quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
+- route_id: legalThirdPartySdkList
+  owner: runtime
+  source_tests:
+  - quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
 - route_id: home
   owner: discovery
   source_tests:

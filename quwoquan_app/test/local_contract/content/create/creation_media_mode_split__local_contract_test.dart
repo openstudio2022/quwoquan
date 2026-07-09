@@ -27,12 +27,9 @@ void main() {
       expect(categories, isEmpty);
       expect(
         actions.map((action) => action.label),
-        isNot(contains(UITextConstants.mediaPickerOneTapMovie)),
+        contains(UITextConstants.mediaPickerOneTapMovie),
       );
-      expect(
-        actions.map((action) => action.label),
-        contains(UITextConstants.mediaPickerEditImage),
-      );
+      expect(actions.map((action) => action.label), contains('下一步(2)'));
       expect(payload['contentType'], 'image');
       expect(payload['mediaUrls'], <String>['/tmp/a.jpg', '/tmp/b.jpg']);
     });

@@ -1,0 +1,65 @@
+version: 1
+# 实体主页 introduction / bundle / search 读路径 SLI/SLO 声明（单一真相源：本文件 + 指标）。
+#   1) HTTP 边界（延迟/错误/可用性）：runtime/observability http_server_* 中间件按
+#      route 自动产出，无需服务自埋；分位数取自 histogram（禁止算术平均代替分位数）。
+#   2) 数据通路（导入新鲜度/完整性）：qwq-data ship → entity-service homepage-import
+#      的导入报告（publish/env_releases/<releaseId>/import-homepage-<env>.json），
+#      CLI 导入为离线批任务，不产 Prometheus 长驻指标，观测经告警组的日志/报告断言承接。
+# 告警规则落在单一源 quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml 的
+# quwoquan_entity_homepage 组，expr 直接消费下列指标，阈值与本文件 objective 对齐。
+service: entity-service
+domain: entity
+capability: object-homepage-network / homepage introduction 读模型
+
+# 路由集合（HTTP SLI 的 route label 过滤；与 homepage_handler.go 一致）。
+routes:
+  homepage_search: /v1/homepages/search
+  homepage_candidates: /v1/homepages/candidates
+  homepage_detail_and_projections: /v1/homepages/{homepageId}/*   # object-page-bundle / introduction / intersections
+
+# 指标真相源（Prometheus，promauto 默认注册表，/metrics 暴露）
+metrics:
+  http_requests_total: http_server_requests_total       # labels: service, route, method, status
+  http_duration_seconds: http_server_duration_seconds   # labels: service, route, method
+  http_error_codes_total: http_server_error_codes_total # labels: service, error_code, module, kind
+
+slis:
+  # ---- HTTP 边界（用户感知延迟与可用性）----
+  - id: homepage_read_latency
+    description: 主页读路由（search/bundle/introduction）的用户感知延迟；单文档
+      homepage_state 读模型 + 无请求期聚合，目标对齐 intersection 读路径。
+    sli: histogram_quantile(q, sum(rate(http_server_duration_seconds_bucket{service="entity-service", route=~"/v1/homepages.*"}[5m])) by (le))
+    objectives:
+      p50_ms: 60
+      p95_ms: 300
+  - id: homepage_read_availability
+    description: 主页读路由可用性 = 1 - 5xx 错误率（status 以 5 开头）
+    sli: 1 - sum(rate(http_server_requests_total{service="entity-service", route=~"/v1/homepages.*", status=~"5.."}[5m])) / sum(rate(http_server_requests_total{service="entity-service", route=~"/v1/homepages.*"}[5m]))
+    objective: 0.995
+  - id: homepage_read_error_rate
+    description: 主页读路由结构化错误率（runtime/errors 错误码，含 4xx 语义错误），
+      用于区分“可用但契约漂移”（如 introduction 缺投影导致 404 暴涨）
+    sli: sum(rate(http_server_error_codes_total{service="entity-service"}[15m])) by (error_code)
+    objective_max: 0.05
+
+  # ---- 数据通路（introduction 投影完整性 / 新鲜度）----
+  - id: introduction_import_integrity
+    description: homepage-import 导入报告中 imported == expected 且 issues 为空；
+      由 ship 一致性预检 + 导入报告断言承接（离线批任务，不产长驻指标）
+    evidence: publish/env_releases/<releaseId>/import-homepage-<env>.json
+    objective: imported_ratio == 1.0 且 issues == []
+  - id: introduction_media_url_validity
+    description: introductionAssets URL 必须来自 topology manifest 解析的环境
+      CDN base；prod 出现 media.quwoquan.invalid 占位即发布阻断（ship 门禁）
+    evidence: quwoquan_data/scripts/_common/media_asset_url.py::resolve_media_cdn_bases
+    objective: prod 占位 URL 数 == 0
+
+# 灰度/回滚分层（与 prod rolloutStagePolicy 一致）：
+#   1) gray-initial：单实例承接 /v1/homepages*，SLO gate 通过后 full。
+#   2) 回滚：stackctl deploy 回退上一镜像版本；数据层用
+#      qwq-data ship rollback --to-release <dataReleaseId> 幂等重放历史 bundle。
+rollback_layers:
+  - redeploy_previous_image
+  - ship_rollback_to_release
+
+alerts_source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_entity_homepage

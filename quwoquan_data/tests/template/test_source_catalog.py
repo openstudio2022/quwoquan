@@ -42,13 +42,17 @@ def test_platform_category_maps_vertical_sources():
     assert platform_category("高德地图") == "map_geo"
     assert platform_category("景区官网") == "official"
     assert platform_category("官方文章") == "official"
+    assert platform_category("今日头条") == "platform_article"
+    assert platform_category("Toutiao") == "platform_article"
+    assert platform_category("微博") == "community_post"
     assert platform_category("web") is None  # 通用兜底不计类别
     assert platform_category("某不存在平台xyz") is None
 
 
 def test_photography_image_work_sources_route_by_license_metadata_first():
     """图片作品=专业图库一源一作品：开放许可图库可发布；图虫等摄影社区需逐图授权；
-    Pinterest/灵感站仅编辑参考不可入库发布。来源类目与许可分流的唯一真相源是
+    Pinterest 在 source_catalog 中仍归入 editorial_reference_only 覆盖类别，但真实可发布性
+    由 content_source_registry / rights policy 决定。来源类目与许可分流的唯一真相源是
     source_catalog.yaml（metadata-first），代码只读不另立第二真相源。"""
     # 开放许可图库（Wikimedia Commons / Unsplash / Pexels / Pixabay / Openverse）→ open_license。
     for platform in ("Wikimedia Commons", "unsplash", "pexels", "pixabay", "openverse"):
@@ -57,9 +61,9 @@ def test_photography_image_work_sources_route_by_license_metadata_first():
     for platform in ("图虫", "tuchong", "500px", "flickr", "behance"):
         assert platform_category(platform) == "photography_platform", platform
     # 授权图库（Getty/Adobe Stock/视觉中国授权）→ stock_authorized（须授权凭证）。
-    for platform in ("Adobe Stock", "depositphotos", "摄图网"):
+    for platform in ("Adobe Stock", "depositphotos", "摄图网", "图虫创意"):
         assert platform_category(platform) == "stock_authorized", platform
-    # Pinterest / 摄影灵感 → editorial_reference_only：仅选题参考，禁止下载入库发布。
+    # Pinterest / 摄影灵感 → editorial_reference_only：这里只表达 coverage 类别，不直接代表最终发布资格。
     for platform in ("Pinterest", "pinterest", "小红书摄影灵感"):
         assert platform_category(platform) == "editorial_reference_only", platform
 

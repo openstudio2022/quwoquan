@@ -637,7 +637,7 @@ void main() {
       );
     });
 
-    testWidgets('加号面板的兴趣配对入口打开找同趣 launcher', (tester) async {
+    testWidgets('加号面板的交集配对入口打开交集配对 launcher', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildShellRouter(authenticated: true));
       await tester.pumpAndSettle();

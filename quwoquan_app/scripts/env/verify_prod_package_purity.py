@@ -24,8 +24,8 @@ PROD_SOURCE_GLOBS = [
     ROOT.glob("quwoquan_service/services/*/configs/prod/config.yaml"),
 ]
 PROD_ARTIFACT_GLOBS = [
-    ROOT.glob("artifacts/app-env-packages/prod/**/*"),
-    ROOT.glob("artifacts/service-env-packages/*/prod/**/*"),
+    ROOT.glob(".qwq_output/release/app/prod/**/*"),
+    ROOT.glob(".qwq_output/release/service/*/prod/**/*"),
 ]
 # 纯度校验对象是 prod「生效配置」（env overlay），不是配置分层的 dev 默认基层，
 # 也不是天然多环境的拓扑清单：

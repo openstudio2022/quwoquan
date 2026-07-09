@@ -18,13 +18,15 @@ SKIP_DIRS = {
     ".venv",
     # git worktree 检出目录：内容随各自分支治理，不属于主树扫描面。
     ".worktrees",
+    # 本地数据工程沙盒运行残留：与 artifacts/runtime 同类，为机器生成或实验产物，不参与源码用语门禁。
+    ".qwq_sandbox",
+    # 本地统一运行输出根：数据/观测/验证报告均为机器生成运行物，不参与源码用语门禁。
+    ".qwq_output",
     # 本地测试 Python 虚拟环境（PIL/pytest/numpy 等第三方包），非本仓库源码，不参与用语门禁。
     ".qwq_test_venv",
     "site-packages",
     # 本地可选克隆的 Cursor 侧向仓库；锁文件等含第三方用语，不参与本仓库用语门禁。
     "cursor-cookbook",
-    # 打包/发布/验证证据产物为机器生成输出，不参与源码用语门禁。
-    "artifacts",
 }
 
 TEXT_SUFFIXES = {
@@ -75,7 +77,7 @@ ALLOWLIST_PREFIXES = {
     "quwoquan_data/docs/",
     "quwoquan_data/data/",
     # data task 规格/notes/runs 与对应测试允许出现“历史/既往”等真实领域与迁移语义。
-    "quwoquan_data/tasks/",
+    "quwoquan_data/control_plane/tasks/",
     "quwoquan_data/tests/",
     "quwoquan_data/schema/produce/templates/",
     # 数据工程领域内容/模板（文旅实体的过往脉络与背景等核心领域文案）。
@@ -84,17 +86,11 @@ ALLOWLIST_PREFIXES = {
     "quwoquan_data/scripts/",
     # 变更日志为只追加的过往记录，天然描述既往清理过程。
     "specs/changelog/",
-    # 生成的环境包与 stackctl 运行报告：内容派生自被扫描的 deploy/shared 源，
-    # 退场词治理在源头 + 重新打包，不在产物逐份改写（与 build/ 等生成目录同理）。
-    "artifacts/",
 }
 
 ALLOWLIST_PATHS = {
     # 门禁脚本自身需要声明被检词与报错文案，允许自引用。
     "quwoquan_app/scripts/runtime/verify_retired_terms_zero.py",
-    "agent_ops/avatar/verify_avatar_user_pool_consistency.py",
-    "agent_ops/ci/verify_ci_profile_consistency.py",
-    "quwoquan_service/scripts/gamma/verify_gamma_validation_profiles.py",
     "quwoquan_data/tools/catalog_iteration.py",
     "quwoquan_data/tools/semantic_entity_resolution.py",
     ".cursor/commands/data-explore.md",
@@ -117,7 +113,7 @@ ALLOWLIST_PATHS = {
     "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/design.md",
     "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md",
     # 门禁脚本：职责即检测/禁止退役项，故自身含被检词。
-    "agent_ops/gate/verify_prod_rollout_stackctl_contract.py",
+    "quwoquan_ops/gate/verify_prod_rollout_stackctl_contract.py",
     "specs/gates/file_line_budget_allowlist.yaml",
     "specs/gates/repository_interface_method_budget_allowlist.yaml",
     # 端侧技术注释：过往数据回退/过往归属键，非用户可见退役术语。
@@ -139,7 +135,7 @@ ALLOWLIST_PATHS = {
     "specs/product/2026H1-positioning-refactor/90-integration-acceptance.md",
     # 部署域 prod 共享集群拓扑 rationale（sharedClusterLegacy 键）：键名退场需 deploy 域
     # 重命名 + 重新打包 + 包契约重校验，属独立 deploy 域任务；散文 legacy 已去除。
-    "deploy/shared/environment_topology_manifest.yaml",
+    "quwoquan_ops/environments/environment_topology_manifest.yaml",
     # 强制治理：「遗留事项」backlog 系统由 AGENTS.md 与 .cursor/rules/16-outstanding-risk-backlog.mdc
     # 强制要求使用该用语，是项目治理唯一真相源，不可改名（否则违反 always-applied 规则）。
     "AGENTS.md",
@@ -161,12 +157,12 @@ ALLOWLIST_PATHS = {
     "specs/feature-tree/runtime/runtime-testinfra/design.md",
     "specs/feature-tree/runtime/runtime-testinfra/acceptance.yaml",
     "specs/product/intersection-definition-and-application.md",
-    "agent_ops/scaffold/generate_canonical_test_bridges.py",
-    "agent_ops/scaffold/generate_app_canonical_test_wrappers.py",
-    "agent_ops/scaffold/test_directory_inventory_lib.py",
-    "agent_ops/scaffold/verify_test_directory_inventory.py",
-    "agent_ops/scaffold/verify_test_no_fake.py",
-    "agent_ops/scaffold/verify_test_specs.py",
+    "quwoquan_ops/gate/scaffold/generate_canonical_test_bridges.py",
+    "quwoquan_ops/gate/scaffold/generate_app_canonical_test_wrappers.py",
+    "quwoquan_ops/gate/scaffold/test_directory_inventory_lib.py",
+    "quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py",
+    "quwoquan_ops/gate/scaffold/verify_test_no_fake.py",
+    "quwoquan_ops/gate/scaffold/verify_test_specs.py",
     "quwoquan_service/scripts/recommendation/verify_impact_help_type_registry.py",
     # 规格冻结语言「零历史兼容」= 零向后兼容 + 单一真相源，是约束表述而非退役命名。
     "specs/feature-tree/global-search-experience/spec.md",

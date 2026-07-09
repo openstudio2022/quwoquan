@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,11 @@ import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -26,6 +32,7 @@ import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
+import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -45,6 +52,98 @@ Map<String, MediaViewerPostWireRow> _viewerRawByPostId(
 ) => raw.map(
   (id, row) => MapEntry(id, MediaViewerPostWireRow.fromDynamicMap(row)),
 );
+
+IntersectionReason _displayableIntersectionReason({
+  required String primaryText,
+  required String dimension,
+  required String source,
+  String intersectionId = '',
+  String intersectionClass = 'fact',
+  String pointSummarySnapshotId = '',
+  int totalPointCount = 1,
+  List<String> tagRefs = const <String>[],
+  List<IntersectionTextSpan>? primarySpans,
+  List<IntersectionVisual> sampleVisuals = const <IntersectionVisual>[],
+  String objectKind = '',
+  String actionTargetId = '',
+}) {
+  final text = primaryText.trim();
+  final targetId = actionTargetId.trim().isNotEmpty
+      ? actionTargetId.trim()
+      : 'display_anchor_${intersectionId.isEmpty ? dimension : intersectionId}';
+  final target = _intersectionTargetFor(
+    objectKind: objectKind.trim().isEmpty ? 'content' : objectKind.trim(),
+    objectId: targetId,
+  );
+  return IntersectionReason(
+    intersectionId: intersectionId,
+    dimension: dimension,
+    primaryText: text,
+    primarySpans:
+        primarySpans ?? <IntersectionTextSpan>[_plain(text), _anchor(target)],
+    totalPointCount: totalPointCount,
+    source: source,
+    tagRefs: tagRefs,
+    intersectionClass: intersectionClass,
+    pointSummarySnapshotId: pointSummarySnapshotId,
+    sampleVisuals: sampleVisuals,
+    objectKind: objectKind,
+    actionTargetId: actionTargetId,
+    actorEvidenceTotalCount: 1,
+    actorEvidenceCompleteness: 'complete',
+    representativeActor: IntersectionRepresentativeActor(
+      actorId: 'u_lin',
+      displayName: '林清越',
+      relationLabel: '联系人',
+      privacyState: 'visible',
+      target: _intersectionTargetFor(objectKind: 'person', objectId: 'u_lin'),
+    ),
+  );
+}
+
+IntersectionTextSpan _plain(String text) => IntersectionTextSpan(text: text);
+
+IntersectionTextSpan _anchor(IntersectionTarget target) =>
+    IntersectionTextSpan(text: '', role: 'object', target: target);
+
+IntersectionTarget _intersectionTargetFor({
+  required String objectKind,
+  required String objectId,
+}) {
+  switch (objectKind.trim()) {
+    case 'person':
+      return IntersectionTarget(
+        objectType: 'user',
+        objectId: objectId,
+        objectKind: 'person',
+        routeId: 'userProfile',
+      );
+    case 'circle':
+      return IntersectionTarget(
+        objectType: 'circle',
+        objectId: objectId,
+        objectKind: 'circle',
+        routeId: 'circleDetail',
+      );
+    case 'content':
+      return IntersectionTarget(
+        objectType: 'post',
+        objectId: objectId,
+        objectKind: 'content',
+        routeId: 'workBrowser',
+      );
+    case 'route':
+    case 'place':
+    case 'homepage':
+    default:
+      return IntersectionTarget(
+        objectType: 'homepage',
+        objectId: objectId,
+        objectKind: objectKind.trim().isEmpty ? 'homepage' : objectKind.trim(),
+        routeId: 'homepageDetail',
+      );
+  }
+}
 
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -398,6 +497,7 @@ PhotoPostDto _photoPost({
   List<String> imageUrls = const ['media/image/s/fixture/photo.jpg'],
   int? width,
   int? height,
+  List<IntersectionReason>? intersectionReasons,
 }) {
   return PhotoPostDto(
     id: 'photo-1',
@@ -419,6 +519,7 @@ PhotoPostDto _photoPost({
     commentCount: 0,
     shareCount: 0,
     createdAt: DateTime.now(),
+    intersectionReasons: intersectionReasons,
   );
 }
 
@@ -447,7 +548,7 @@ VideoPostDto _videoPost({int? width, int? height}) {
   );
 }
 
-ArticlePostDto _articlePost() {
+ArticlePostDto _articlePost({List<IntersectionReason>? intersectionReasons}) {
   return ArticlePostDto(
     id: 'article-1',
     type: 'article',
@@ -469,6 +570,7 @@ ArticlePostDto _articlePost() {
     commentCount: 0,
     shareCount: 0,
     createdAt: DateTime.now(),
+    intersectionReasons: intersectionReasons,
   );
 }
 
@@ -549,6 +651,16 @@ Future<void> _flipArticleToLastPage(WidgetTester tester) async {
   for (var guard = 0; guard < 200; guard += 1) {
     final parts = _articleProgressLabel(tester).split(' / ');
     if (parts.length == 2 && parts[0].trim() == parts[1].trim()) {
+      final total = int.tryParse(parts[1].trim()) ?? 1;
+      final lastSurfaceKey = ValueKey<String>(
+        'article-reader-page-surface-${total - 1}',
+      );
+      for (var settleGuard = 0; settleGuard < 12; settleGuard += 1) {
+        if (find.byKey(lastSurfaceKey).evaluate().isNotEmpty) {
+          return;
+        }
+        await tester.pump(const Duration(milliseconds: 16));
+      }
       return;
     }
     if (next.evaluate().isEmpty) {
@@ -557,6 +669,16 @@ Future<void> _flipArticleToLastPage(WidgetTester tester) async {
     await tester.tap(next);
     await _pumpSettledFrames(tester);
   }
+}
+
+Future<void> _flipArticleToSecondPage(WidgetTester tester) async {
+  final next = find.byKey(const ValueKey<String>('works-article-page-next'));
+  if (next.evaluate().isEmpty ||
+      _articleProgressLabel(tester).startsWith('2 / ')) {
+    return;
+  }
+  await tester.tap(next);
+  await _pumpSettledFrames(tester);
 }
 
 MicroPostDto _textMoment({List<IntersectionReason>? intersectionReasons}) {
@@ -736,7 +858,7 @@ void main() {
 
   test('沉浸媒体滑动顺滑性静态契约', () {
     // 视频书重构后，图片横滑翻书迁移到 components/media 公共层；
-    // viewer/canvas 只保留 discovery adapter，视频保留原横滑预构建/保活逻辑。
+    // viewer/canvas 只保留 discovery adapter，视频只保活当前页以控制解码器压力。
     final viewerSource =
         File(
           'lib/ui/discovery/widgets/works_immersive_viewer.dart',
@@ -781,13 +903,13 @@ void main() {
     );
     expect(
       viewerSource,
-      contains('allowImplicitScrolling: true'),
-      reason: '视频横滑应允许 PageView 提前构建相邻页以降低黑屏概率。',
+      contains('allowImplicitScrolling: false'),
+      reason: '视频书滚动性能优先：不提前构建相邻视频页。',
     );
     expect(
       viewerSource,
-      contains('class _KeepAliveStage'),
-      reason: '视频相邻页构建后应保活，避免来回滑动反复初始化。',
+      contains('final keepAlive = isCurrent'),
+      reason: '视频书只保活当前视频页，切页后释放非活跃页。',
     );
     expect(
       videoPlayerSource,
@@ -1168,7 +1290,7 @@ void main() {
     expect(find.byType(MediaBlurCaptionOverlay), findsNothing);
   });
 
-  testWidgets('首页进入沉浸浏览器后上下滑动不切换推荐流并提示返回首页继续浏览', (tester) async {
+  testWidgets('首页进入视频书沉浸浏览器后上下滑动切换推荐流且不弹旧禁用提示', (tester) async {
     final first = _photoPost(
       imageUrls: const ['media/image/s/fixture/home-first.jpg'],
     );
@@ -1194,18 +1316,22 @@ void main() {
     );
     await _pumpImmersiveViewerFirstFrames(tester);
 
-    final viewer = find.byType(WorksImmersiveViewer);
-    await tester.drag(viewer, const Offset(0, -360));
+    final gestureLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    expect(gestureLayer, findsOneWidget);
+    await tester.timedDrag(
+      gestureLayer,
+      const Offset(0, -360),
+      const Duration(milliseconds: 420),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('dto body'), findsOneWidget);
-    expect(find.text('second body'), findsNothing);
-    expect(
-      find.text(DiscoveryFeedText.homeFeedVerticalSwitchUnavailable),
-      findsOneWidget,
-    );
-    await tester.pump(const Duration(seconds: 3));
+    _consumeImageLoadExceptions(tester);
+    expect(find.text('second body'), findsOneWidget);
+    expect(find.text('dto body'), findsNothing);
+    expect(find.textContaining('不支持上下切换'), findsNothing);
   });
 
   testWidgets('视频书竖向作品流慢速拖过阈值后吸附到下一作品不弹回', (tester) async {
@@ -1579,7 +1705,7 @@ void main() {
   testWidgets('交集以具象化句子呈现在底部并可点击弹出推荐解释详情', (tester) async {
     final post = _textMoment(
       intersectionReasons: <IntersectionReason>[
-        IntersectionReason(
+        _displayableIntersectionReason(
           dimension: 'identity',
           primaryText: '你和 TA 都来自同一校园',
           totalPointCount: 2,
@@ -1613,10 +1739,10 @@ void main() {
     );
     await _pumpSettledFrames(tester);
 
-    // 视频书：交集作为三类媒体底部统一具象化句子，不回退到「N 个交集」摘要。
+    // 视频书：交集作为内容区底部统一具象化句子，不回退到「N 个交集」摘要。
     expect(
       find.byKey(const ValueKey<String>('works-caption-intersection-reason')),
-      findsNothing,
+      findsOneWidget,
     );
     expect(
       find.byKey(const ValueKey('immersive-intersection-statement')),
@@ -1627,6 +1753,24 @@ void main() {
       findsNothing,
     );
     expect(find.text('你和 TA 都来自同一校园'), findsOneWidget);
+
+    final intersectionRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-caption-intersection-reason')),
+    );
+    final textRailRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-text-stage-rail')),
+    );
+    final toolbarRect = tester.getRect(find.byType(ImmersiveEngagementBar));
+    expect(
+      intersectionRect.top,
+      greaterThan(textRailRect.bottom),
+      reason: '交集句应独立位于内容文字下方，而不是塞回正文卡片或工具栏。',
+    );
+    expect(
+      toolbarRect.top - intersectionRect.bottom,
+      moreOrLessEquals(AppSpacing.intraGroupXs, epsilon: 1),
+      reason: '交集句应作为内容区最底部一行，贴近但不进入底部工具栏。',
+    );
 
     // 点击降级整句弹出交集详情面板，展示完整 displayText。
     await tester.tap(find.text('你和 TA 都来自同一校园'));
@@ -1644,6 +1788,259 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('works-intersection-check')),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('视频书交集 span 点击进入对象并透传 feedRequestId 归因', (tester) async {
+    final behaviorRepo = MockBehaviorRepository();
+    final tracker = ContentBehaviorTracker(
+      repository: behaviorRepo,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
+
+    final post = _textMoment(
+      intersectionReasons: <IntersectionReason>[
+        _displayableIntersectionReason(
+          intersectionId: 'ix_works_span',
+          dimension: 'relationship',
+          primaryText: '你和 林清越 都收藏过这条路线',
+          primarySpans: <IntersectionTextSpan>[
+            IntersectionTextSpan(text: '你和 '),
+            IntersectionTextSpan(
+              text: '林清越',
+              role: 'object',
+              target: IntersectionTarget(
+                objectType: 'homepage',
+                objectId: 'hp_lin',
+                objectKind: 'homepage',
+                routeId: 'homepageDetail',
+              ),
+            ),
+            IntersectionTextSpan(text: ' 都收藏过这条路线'),
+          ],
+          totalPointCount: 1,
+          source: 'sharedFollowees',
+          tagRefs: const <String>['relationship/sharedFollowees'],
+          intersectionClass: 'fact',
+          pointSummarySnapshotId: 'ev_works_span',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'micro',
+              'contentType': 'micro',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '临时改地点提醒',
+              'body': post.body,
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [contentBehaviorTrackerProvider.overrideWithValue(tracker)],
+      ),
+    );
+    await _pumpSettledFrames(tester);
+
+    final richTextFinder = find.descendant(
+      of: find.byKey(
+        const ValueKey<String>('works-caption-intersection-reason'),
+      ),
+      matching: find.byType(RichText),
+    );
+    await _tapRichTextSubstring(tester, richTextFinder, '林清越');
+    await _pumpSettledFrames(tester);
+    await tracker.flush();
+
+    final clicks = behaviorRepo.recorded
+        .where((event) => event.action == BehaviorAction.tagClick)
+        .toList(growable: false);
+    expect(clicks, hasLength(1));
+    final click = clicks.single;
+    expect(click.feedRequestId, isNotNull);
+    expect(click.feedRequestId!.trim(), isNotEmpty);
+    expect(click.referralSource, ReferralSource.organicFeed);
+    expect(click.intersectionId, 'ix_works_span');
+    expect(click.intersectionSourceRef, 'sharedFollowees');
+    expect(click.intersectionEvidenceId, 'ev_works_span');
+    expect(click.intersectionClass, 'fact');
+    expect(
+      AppRoutePaths.homepageDetail(id: 'hp_lin'),
+      startsWith('/homepages/hp_lin'),
+    );
+  });
+
+  testWidgets('视频书交集 fallback 点击经 sample visual 进对象并透传归因', (tester) async {
+    final behaviorRepo = MockBehaviorRepository();
+    final tracker = ContentBehaviorTracker(
+      repository: behaviorRepo,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
+
+    final post = _textMoment(
+      intersectionReasons: <IntersectionReason>[
+        _displayableIntersectionReason(
+          intersectionId: 'ix_works_fallback',
+          dimension: 'place',
+          primaryText: '林清越也收藏过剑门关主页',
+          totalPointCount: 2,
+          source: 'coLikedEntity',
+          tagRefs: const <String>['place/jianmen'],
+          intersectionClass: 'fact',
+          pointSummarySnapshotId: 'ev_works_fallback',
+          sampleVisuals: <IntersectionVisual>[
+            IntersectionVisual(
+              assetKind: 'coverImage',
+              displayName: '剑门关',
+              target: IntersectionTarget(
+                objectType: 'homepage',
+                objectId: 'hp_jianmen',
+                objectKind: 'homepage',
+                routeId: 'homepageDetail',
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'micro',
+              'contentType': 'micro',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '临时改地点提醒',
+              'body': post.body,
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [contentBehaviorTrackerProvider.overrideWithValue(tracker)],
+      ),
+    );
+    await _pumpSettledFrames(tester);
+
+    await tester.tap(find.text('林清越也收藏过剑门关主页'));
+    await _pumpSettledFrames(tester);
+    await tracker.flush();
+
+    final clicks = behaviorRepo.recorded
+        .where((event) => event.action == BehaviorAction.tagClick)
+        .toList(growable: false);
+    expect(clicks, hasLength(1));
+    final click = clicks.single;
+    expect(click.feedRequestId, isNotNull);
+    expect(click.feedRequestId!.trim(), isNotEmpty);
+    expect(click.intersectionSourceRef, 'coLikedEntity');
+    expect(click.intersectionEvidenceId, 'ev_works_fallback');
+    expect(click.intersectionDimension, 'place');
+    expect(
+      AppRoutePaths.homepageDetail(id: 'hp_jianmen'),
+      startsWith('/homepages/hp_jianmen'),
+    );
+  });
+
+  testWidgets('视频书交集 fallback 点击消费 reason actionTargetId 进对象并透传归因', (
+    tester,
+  ) async {
+    final behaviorRepo = MockBehaviorRepository();
+    final tracker = ContentBehaviorTracker(
+      repository: behaviorRepo,
+      maxBatchSize: 1,
+      enablePeriodicFlush: false,
+    );
+    addTearDown(tracker.dispose);
+
+    final post = _textMoment(
+      intersectionReasons: <IntersectionReason>[
+        _displayableIntersectionReason(
+          intersectionId: 'ix_works_action_target',
+          dimension: 'location',
+          primaryText: '你和 TA 都想去这条路线',
+          totalPointCount: 3,
+          source: 'coWishlistedEntity',
+          tagRefs: const <String>['location/wishlist'],
+          intersectionClass: 'fact',
+          pointSummarySnapshotId: 'ev_works_action_target',
+          objectKind: 'route',
+          actionTargetId: 'hp_route_dianchi',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _wrapWithRouter(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: <String, dynamic>{
+              'postId': post.id,
+              'type': 'micro',
+              'contentType': 'micro',
+              'authorId': post.authorId,
+              'authorNickname': post.displayName,
+              'authorAvatarUrl': post.avatarUrl,
+              'title': '临时改地点提醒',
+              'body': post.body,
+            },
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+        overrides: [contentBehaviorTrackerProvider.overrideWithValue(tracker)],
+      ),
+    );
+    await _pumpSettledFrames(tester);
+
+    await tester.tap(find.text('你和 TA 都想去这条路线'));
+    await _pumpSettledFrames(tester);
+    await tracker.flush();
+
+    final clicks = behaviorRepo.recorded
+        .where((event) => event.action == BehaviorAction.tagClick)
+        .toList(growable: false);
+    expect(clicks, hasLength(1));
+    final click = clicks.single;
+    expect(click.contentId, 'hp_route_dianchi');
+    expect(click.contentType, 'route');
+    expect(click.feedRequestId, isNotNull);
+    expect(click.feedRequestId!.trim(), isNotEmpty);
+    expect(click.intersectionId, 'ix_works_action_target');
+    expect(click.intersectionSourceRef, 'coWishlistedEntity');
+    expect(click.intersectionEvidenceId, 'ev_works_action_target');
+    expect(
+      AppRoutePaths.homepageDetail(id: 'hp_route_dianchi'),
+      startsWith('/homepages/hp_route_dianchi'),
     );
   });
 
@@ -1949,6 +2346,14 @@ void main() {
       find.byKey(const ValueKey<String>('media-pageflip-gesture-layer')),
     );
     final gesture = await tester.startGesture(initialRect.center);
+    await gesture.moveBy(const Offset(-12, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    _consumeImageLoadExceptions(tester);
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+      reason: 'Work Browser 父级 Listener 与图片书子级手势层共存时，第一页中心小幅左滑也必须立即前翻跟手。',
+    );
     await gesture.moveBy(const Offset(-180, 0));
     await tester.pump();
     await gesture.moveBy(const Offset(-180, 0));
@@ -1972,6 +2377,129 @@ void main() {
     expect(dismissed, isFalse);
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-static-page-1')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('图片视频书横向带角度拖动只翻页不切换作品', (tester) async {
+    final first = _photoPost(
+      imageUrls: const [
+        'media/image/s/fixture/photo.jpg',
+        'media/image/s/fixture/photo-2.jpg',
+      ],
+    );
+    final second = _photoPost(
+      imageUrls: const ['media/image/s/fixture/photo-3.jpg'],
+    ).copyWith(id: 'photo-2', body: 'second body');
+    final changedPosts = <int>[];
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: false,
+          showTopNavigation: false,
+          externalPosts: [first, second],
+          externalPostViews: [
+            ContentSurfaceViewMapper.fromDto(first),
+            ContentSurfaceViewMapper.fromDto(second),
+          ],
+          initialImageIndex: 0,
+          onPostIndexChanged: changedPosts.add,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    final gestureLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    final rect = tester.getRect(gestureLayer);
+    final gesture = await tester.startGesture(rect.center);
+    await gesture.moveBy(const Offset(-120, -68));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-120, -68));
+    for (var i = 0; i < 8; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+      _consumeImageLoadExceptions(tester);
+    }
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+    );
+
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1100));
+    await _pumpSettledFrames(tester);
+
+    expect(changedPosts, isNot(contains(1)));
+    expect(
+      find.byKey(const ValueKey<String>('works-status-content-canvas-photo-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-static-page-1')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('图片视频书纵向带角度拖动只切换作品不启动翻页', (tester) async {
+    final first = _photoPost(
+      imageUrls: const [
+        'media/image/s/fixture/photo.jpg',
+        'media/image/s/fixture/photo-2.jpg',
+      ],
+    );
+    final second = _photoPost(
+      imageUrls: const ['media/image/s/fixture/photo-3.jpg'],
+    ).copyWith(id: 'photo-2', body: 'second body');
+    final changedPosts = <int>[];
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: false,
+          showTopNavigation: false,
+          externalPosts: [first, second],
+          externalPostViews: [
+            ContentSurfaceViewMapper.fromDto(first),
+            ContentSurfaceViewMapper.fromDto(second),
+          ],
+          initialImageIndex: 0,
+          onPostIndexChanged: changedPosts.add,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    final gestureLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    await tester.timedDrag(
+      gestureLayer,
+      const Offset(-72, -272),
+      const Duration(milliseconds: 420),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+    _consumeImageLoadExceptions(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsNothing,
+    );
+    expect(changedPosts, contains(1));
+    expect(
+      find.byKey(const ValueKey<String>('works-status-content-canvas-photo-2')),
       findsOneWidget,
     );
   });
@@ -2067,6 +2595,57 @@ void main() {
     expect(switchedToCircles, isFalse);
   });
 
+  testWidgets('文章纵向带角度拖动只切换作品不抢成翻页', (tester) async {
+    final article = _articlePost();
+    final nextPhoto = _photoPost(
+      imageUrls: const ['media/image/s/fixture/photo-next.jpg'],
+    ).copyWith(id: 'photo-2', body: 'next photo body');
+    final changedPosts = <int>[];
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: false,
+          showTopNavigation: false,
+          externalPosts: [article, nextPhoto],
+          externalPostViews: [
+            ContentSurfaceViewMapper.fromDto(article),
+            ContentSurfaceViewMapper.fromDto(nextPhoto),
+          ],
+          rawPostsById: _viewerRawByPostId({
+            article.id: _articleMarkdownRaw(
+              article,
+              _multiPageArticleMarkdown(article),
+            ),
+          }),
+          onPostIndexChanged: changedPosts.add,
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    final stage = find.byKey(const ValueKey<String>('article-boundary-stage'));
+    await tester.timedDrag(
+      stage,
+      const Offset(-72, -272),
+      const Duration(milliseconds: 420),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+    _consumeImageLoadExceptions(tester);
+
+    expect(changedPosts, contains(1));
+    expect(
+      find.byKey(const ValueKey<String>('works-status-content-canvas-photo-2')),
+      findsOneWidget,
+      reason: '文章内容区纵向优势斜拖应进入作品流切换，不能被页角翻页 pan 抢走。',
+    );
+  });
+
   testWidgets('多页文章在首页从内容区继续横滑时会出现回弹并恢复原位', (tester) async {
     final post = _articlePost();
     var dismissed = false;
@@ -2150,9 +2729,8 @@ void main() {
     await _flipArticleToLastPage(tester);
 
     final stage = find.byKey(const ValueKey<String>('article-boundary-stage'));
-    final stageRect = tester.getRect(stage);
     final gesture = await tester.startGesture(
-      Offset(stageRect.right - 120, stageRect.center.dy),
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomRight)),
     );
     await gesture.moveBy(const Offset(-24, 0));
     await tester.pump();
@@ -2475,7 +3053,50 @@ void main() {
     container.dispose();
   });
 
-  testWidgets('Android 下文章右边缘横滑会退出当前沉浸页', (tester) async {
+  testWidgets('文章第二页左边缘右拉优先后翻，不误退出沉浸页', (tester) async {
+    final post = _articlePost();
+    var dismissed = false;
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: _articleMarkdownRaw(post, _multiPageArticleMarkdown(post)),
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+          onTapBack: () {
+            dismissed = true;
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    await _flipArticleToSecondPage(tester);
+    expect(_articleProgressLabel(tester), startsWith('2 / '));
+    expect(
+      find.byKey(const ValueKey<String>('works-edge-dismiss-previous')),
+      findsNothing,
+      reason: '文章当前页可后翻时，左边缘退出热区必须退场，把右拉手势交给翻页层。',
+    );
+
+    await tester.dragFrom(
+      tester.getCenter(find.byKey(TestKeys.articlePageCurlHotzoneBottomLeft)),
+      const Offset(220, -20),
+    );
+    await _pumpSettledFrames(tester);
+
+    expect(dismissed, isFalse);
+  });
+
+  testWidgets('Android 下文章末页右边缘继续前翻会退出当前沉浸页', (tester) async {
     final post = _articlePost();
     var dismissed = false;
 
@@ -2508,15 +3129,70 @@ void main() {
     final rightHotzoneRect = tester.getRect(
       find.byKey(TestKeys.articlePageCurlHotzoneBottomRight),
     );
-    expect(rightHotzoneRect.right, lessThan(deckRect.right));
+    expect(rightHotzoneRect.right, closeTo(deckRect.right, 0.1));
 
-    await tester.dragFrom(
-      Offset(deckRect.right - 6, deckRect.bottom - 80),
+    await tester.drag(
+      find.byKey(const ValueKey<String>('works-edge-dismiss-next')),
       const Offset(-220, -20),
     );
     await _pumpSettledFrames(tester);
 
     expect(dismissed, isTrue);
+  });
+
+  testWidgets('文章沉浸浏览使用与图片视频一致的深色状态栏', (tester) async {
+    final post = _articlePost();
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          topChromeSafeInset: AppSpacing.twenty,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: _articleMarkdownRaw(post, _multiPageArticleMarkdown(post)),
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    final styles = tester
+        .widgetList<AnnotatedRegion<SystemUiOverlayStyle>>(
+          find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+        )
+        .map((region) => region.value);
+    expect(
+      styles,
+      contains(
+        isA<SystemUiOverlayStyle>()
+            .having(
+              (style) => style.statusBarColor,
+              'statusBarColor',
+              AppColors.black,
+            )
+            .having(
+              (style) => style.statusBarIconBrightness,
+              'statusBarIconBrightness',
+              Brightness.light,
+            )
+            .having(
+              (style) => style.statusBarBrightness,
+              'statusBarBrightness',
+              Brightness.dark,
+            ),
+      ),
+    );
+    final statusScrim = tester.getRect(
+      find.byKey(const ValueKey<String>('works-article-status-bar-scrim')),
+    );
+    expect(statusScrim.height, moreOrLessEquals(AppSpacing.twenty));
   });
 
   testWidgets('文章阅读使用底部页码且封面与标题正文共用第一页', (tester) async {
@@ -2616,9 +3292,17 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is ColoredBox &&
-            widget.color == ArticlePaperPaletteColors.darkPaperStage,
+            widget.color == ArticlePaperPaletteColors.darkPaperPaper,
       ),
       findsWidgets,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ColoredBox &&
+            widget.color == ArticlePaperPaletteColors.darkPaperStage,
+      ),
+      findsNothing,
     );
     expect(
       find.byKey(const ValueKey<String>('works-article-page-prev')),
@@ -2627,6 +3311,60 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('works-article-page-next')),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('文章交集句位于翻页指示器下方并保持在内容区底部', (tester) async {
+    final post = _articlePost(
+      intersectionReasons: <IntersectionReason>[
+        _displayableIntersectionReason(
+          dimension: 'article',
+          primaryText: '林清越等9位联系人读过这篇长文',
+          totalPointCount: 9,
+          source: 'article_reader',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _wrap(
+        WorksImmersiveViewer(
+          showWorksToolbar: true,
+          showTopNavigation: false,
+          externalPosts: [post],
+          externalPostViews: [ContentSurfaceViewMapper.fromDto(post)],
+          rawPostsById: _viewerRawByPostId({
+            post.id: _articleMarkdownRaw(
+              post,
+              _multiPageArticleMarkdown(post, sections: 4),
+            ),
+          }),
+          onUserTap: (_, {avatarUrl, displayName, backgroundUrl}) {},
+          onAssistantTap: () {},
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageLoadExceptions(tester);
+    await _pumpSettledFrames(tester);
+
+    final progressRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-article-page-progress')),
+    );
+    final intersectionRect = tester.getRect(
+      find.byKey(const ValueKey<String>('works-caption-intersection-reason')),
+    );
+    final toolbarRect = tester.getRect(find.byType(ImmersiveEngagementBar));
+
+    expect(
+      intersectionRect.top,
+      greaterThan(progressRect.bottom),
+      reason: '文章交集句应位于翻页指示器下方。',
+    );
+    expect(
+      toolbarRect.top - intersectionRect.bottom,
+      moreOrLessEquals(AppSpacing.intraGroupXs, epsilon: 1),
+      reason: '文章交集句应贴近底部工具栏，但仍属于内容区。',
     );
   });
 
@@ -2668,7 +3406,7 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is ColoredBox &&
-            widget.color == ArticlePaperPaletteColors.warmBlackStage,
+            widget.color == ArticlePaperPaletteColors.warmBlackPaper,
       ),
       findsWidgets,
     );
@@ -2677,6 +3415,14 @@ void main() {
         (widget) =>
             widget is ColoredBox &&
             widget.color == ArticlePaperPaletteColors.darkPaperStage,
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ColoredBox &&
+            widget.color == ArticlePaperPaletteColors.warmBlackStage,
       ),
       findsNothing,
     );
@@ -2699,9 +3445,17 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is ColoredBox &&
-            widget.color == ArticlePaperPaletteColors.coolGrayStage,
+            widget.color == ArticlePaperPaletteColors.coolGrayPaper,
       ),
       findsWidgets,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ColoredBox &&
+            widget.color == ArticlePaperPaletteColors.coolGrayStage,
+      ),
+      findsNothing,
     );
   });
 

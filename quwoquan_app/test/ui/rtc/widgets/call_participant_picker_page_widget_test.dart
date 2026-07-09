@@ -6,9 +6,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_memb
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/ui/rtc/pages/call_participant_picker_page.dart';
 
 class _MockAppDataSourceModeNotifier extends AppDataSourceModeNotifier {
@@ -122,7 +119,7 @@ class _PickerChatRepository extends MockChatRepository {
     return [
       ChatContactRowDto(
         userId: 'user_006',
-          displayName: '联系人小雨',
+        displayName: '联系人小雨',
         avatarUrl: '',
         bio: '',
         metFrom: '',
@@ -132,7 +129,7 @@ class _PickerChatRepository extends MockChatRepository {
       ),
       ChatContactRowDto(
         userId: 'user_007',
-          displayName: '联系人阿青',
+        displayName: '联系人阿青',
         avatarUrl: '',
         bio: '',
         metFrom: '',
@@ -288,7 +285,9 @@ void main() {
             appDataSourceModeProvider.overrideWith(
               _MockAppDataSourceModeNotifier.new,
             ),
-            chatRepositoryProvider.overrideWithValue(_FailingPickerChatRepository()),
+            chatRepositoryProvider.overrideWithValue(
+              _FailingPickerChatRepository(),
+            ),
           ],
           child: const CupertinoApp(
             home: CallParticipantPickerPage(conversationId: 'conv_002'),

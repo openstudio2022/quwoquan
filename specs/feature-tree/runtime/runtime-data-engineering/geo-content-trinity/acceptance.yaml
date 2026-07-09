@@ -12,25 +12,50 @@ scope:
   out_of_scope: []
 gwt_acceptance:
   GWT1:
-    title: geo content trinity GWT
+    title: Pinterest image-only commercial lane stays scoped and auditable
     given:
-    - 前置条件明确。
+    - 商业验证任务显式声明只做 Pinterest `image` lane，且 workflowPolicy 绑定唯一执行分支。
+    - Pinterest 来源 registry、content_source_registry 与 vertical license policy 同时声明 `attribution_no_watermark`。
+    - local runtime 以任务级 `QWQ_DATA_ROOT/QWQ_RUNTIME_ROOT/QWQ_PUBLISH_ROOT` 运行，shell supervisor 不再用全局 `pkill` 或日志猜完成。
     when:
-    - 用户或系统动作发生。
+    - 运营通过 `site-supply ingest-attributed-assets` 或等价正式入口导入 Pinterest 公开图归因清单，并推进到 image work content_plan 与 managed author/review。
     then:
-    - 可观察结果符合预期。
+    - 只有具备 `pinUrl/discoveryUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt` 的图片才可进入发布候选。
+    - content_plan / base draft / release integrity 保持单一 `sourceCollectionId`，禁止多来源拼接和大改重写。
+    - workflow 完成判定来自 task workflow state / audit / downstream evidence，而不是 `WORKFLOW COMPLETE` 文本 grep。
     done_when:
-    - 最小价值点闭环。
-    edge_cases: []
-    contract_refs: []
-    performance_points: []
+    - H100/H1000 前置代码路径都已被 local_contract 锁住，且商业评估只依赖真实下载、真实 author、真实 release、真实 TokenLedger/firstPassRate/throughput 证据。
+    edge_cases:
+    - Pinterest 受控试跑 `controlled_trial` 仍不能冒充真实发布，必须走 `attribution_publish_ingest`。
+    - 原图或 pin 缺作者、转载出处、无水印/OCR 扫描时必须阻断。
+    - local runtime 存在其他批次运行时，只允许观察，不得跨任务误清理。
+    contract_refs:
+    - quwoquan_data/verticals/travel/sources/source_registry.yaml
+    - quwoquan_data/verticals/photography/sources/source_registry.yaml
+    - quwoquan_data/verticals/travel/rights/license_policy.yaml
+    - quwoquan_data/verticals/photography/rights/license_policy.yaml
+    - quwoquan_data/scripts/site_supply/authorized_assets.py
+    - quwoquan_data/scripts/task/run.py
+    - quwoquan_data/scripts/task/fanout_runner.py
+    performance_points:
+    - H100 至少产出真实 TokenLedger / firstPassRate / objectsPerHour / release-import-search-reco 证据。
+    - H1000 只在 H100 全绿后推进，并以 reliabletask + local runtime isolation 作为并发基线。
     tests:
       planned:
-      - file: quwoquan_data/tests/template/test_template_cli.py
-      - file: quwoquan_data/scripts/template/condition.py
-      - file: quwoquan_data/scripts/verify/verify_content_quality.py
+      - file: quwoquan_data/tests/local_contract/site_supply/test_tuchong_authorized_assets__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/site_supply/test_pinterest_public_pin__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/common/test_image_provider_compliance__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/vertical/test_image_rights_asset_level__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_managed_preflight_workspace__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py
+      - file: quwoquan_data/tests/verify/test_site_scale_readiness.py
       recorded:
-      - file: quwoquan_data/tests/local_contract/template/test_template_cli__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/site_supply/test_tuchong_authorized_assets__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/site_supply/test_pinterest_public_pin__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/common/test_image_provider_compliance__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/vertical/test_image_rights_asset_level__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py
     status: pending
     test_evidence:
       primary:
@@ -41,14 +66,19 @@ gwt_acceptance:
         envs: &id001
         - local
       - layer: local_contract
-        suite: gwt1_local_contract
+        suite: gwt1_pinterest_image_only_local_contract
         cases:
-        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt1_local_contract
+        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt1_pinterest_image_only_local_contract
         envs: *id001
-      supporting: []
+      supporting:
+      - layer: api_integration
+        suite: image_release_visibility
+        cases:
+        - api_integration.runtime.runtime_data_engineering.geo_content_trinity.image_release_visibility
+        envs:
+        - gamma
     notes:
-    - '[migrated_from_recorded_noncanonical] quwoquan_data/scripts/template/condition.py'
-    - '[migrated_from_recorded_noncanonical] quwoquan_data/scripts/verify/verify_content_quality.py'
+    - Pinterest image-only 商业验证仅接受单源图片作品与真实下载证据，不接受 homepage/article 泛改造冒充完成。
   GWT2:
     title: partial delivery and failed entity reference isolation
     given:
@@ -129,7 +159,7 @@ gwt_acceptance:
     notes: []
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

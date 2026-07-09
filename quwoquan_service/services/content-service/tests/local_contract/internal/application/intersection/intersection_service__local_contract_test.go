@@ -2,19 +2,43 @@
 package local_contract
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestIntersectionServiceLocalContractTest(t *testing.T) {
+	exists := func(path string) bool {
+		info, err := os.Stat(path)
+		return err == nil && info.IsDir()
+	}
+	repoRoot := func() string {
+		_, filename, _, ok := runtime.Caller(0)
+		if !ok {
+			t.Fatal("cannot resolve bridge file path")
+		}
+		for dir := filepath.Dir(filename); ; dir = filepath.Dir(dir) {
+			if exists(filepath.Join(dir, "quwoquan_service")) && exists(filepath.Join(dir, "quwoquan_ops")) {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				t.Fatal("cannot locate quwoquan repo root")
+			}
+		}
+		return ""
+	}
 	cmd := exec.Command(
 		"go",
 		"test",
 		"../../../../../internal/application/intersection",
 		"-run",
-		"^(TestEvidenceKindRank_MatchesWP1AppendixA|TestIntersectionService_AffinityChannelLabeled|TestIntersectionService_ExplainPipelineInstantiatesPrimaryText|TestIntersectionService_ExposureRetainsButDemotesSeen|TestIntersectionService_FeedFactBeforeAffinityAndFreshness|TestIntersectionService_ListFiltersAndPaginates|TestIntersectionService_MarkVisited_DurableErrorSurfaces|TestIntersectionService_MarkVisited_RedisDownPersistsDurable|TestIntersectionService_MaxCandidateWindowCapsBeforeLimit|TestIntersectionService_ObjectIntersectionsEmptyObjectID|TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength|TestIntersectionService_PointSummaryDerivedFromVisiblePoints|TestIntersectionService_ReportExposure_RedisDownDegrades|TestIntersectionService_SpotlightFiltersIncompleteDisplay|TestIntersectionService_SummaryNewCountAndVisitClears|TestIntersectionService_Watermarks_RedisDownFallsBackToDurable|TestIntersectionService_Watermarks_RedisFlushRecoversAndWarms)$",
+		"^(TestEvidenceKindRank_MatchesWP1AppendixA|TestIntersectionDisplayStatementRecomputesBadRawStatsText|TestIntersectionService_ActorEvidenceContractHydratesCompleteList|TestIntersectionService_AffinityChannelLabeled|TestIntersectionService_ExplainPipelineInstantiatesPrimaryText|TestIntersectionService_ExposureRetainsButDemotesSeen|TestIntersectionService_FeedFactBeforeAffinityAndFreshness|TestIntersectionService_ListDedupeBeforeBucketAndPagination|TestIntersectionService_ListDerivesExclusiveTimeBuckets|TestIntersectionService_ListFiltersAndPaginates|TestIntersectionService_MarkVisited_DurableErrorSurfaces|TestIntersectionService_MarkVisited_RedisDownPersistsDurable|TestIntersectionService_MaxCandidateWindowCapsBeforeLimit|TestIntersectionService_NegativeFeedbackCooldownExpires|TestIntersectionService_NegativeFeedbackFiltersFromFeed|TestIntersectionService_ObjectIntersectionsEmptyObjectID|TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength|TestIntersectionService_ObjectSharedTagSampleVagueSubjectFailsClosed|TestIntersectionService_PointSummaryDerivedFromVisiblePoints|TestIntersectionService_ReportExposure_RedisDownDegrades|TestIntersectionService_ReportNegativeFeedback_InvalidInputRejected|TestIntersectionService_ReportNegativeFeedback_RedisDownDegrades|TestIntersectionService_RepresentativeActorPrefersClosestRelationship|TestIntersectionService_SpotlightFiltersIncompleteDisplay|TestIntersectionService_SummaryNewCountAndVisitClears|TestIntersectionService_Watermarks_RedisDownFallsBackToDurable|TestIntersectionService_Watermarks_RedisFlushRecoversAndWarms)$",
 		"-count=1",
 	)
+	cmd.Env = append(os.Environ(), "QWQ_OUTPUT_ROOT="+filepath.Join(repoRoot(), ".qwq_output"))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("source bridge failed for quwoquan_service/services/content-service/internal/application/intersection/intersection_service_test.go: %v\n%s", err, output)

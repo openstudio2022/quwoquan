@@ -16,7 +16,9 @@ const int kMaxRecordDurationMs = 120000;
 /// Encapsulates AAC recording with waveform amplitude collection.
 class VoiceRecorder {
   VoiceRecorder({int maxDurationMs = kMaxRecordDurationMs})
-      : _maxDurationMs = maxDurationMs;
+    : this._(maxDurationMs);
+
+  VoiceRecorder._(this._maxDurationMs);
 
   final int _maxDurationMs;
   final AudioRecorder _recorder = AudioRecorder();
@@ -28,8 +30,9 @@ class VoiceRecorder {
   String? get filePath => _filePath;
 
   DateTime? _startTime;
-  int get elapsedMs =>
-      _startTime == null ? 0 : DateTime.now().difference(_startTime!).inMilliseconds;
+  int get elapsedMs => _startTime == null
+      ? 0
+      : DateTime.now().difference(_startTime!).inMilliseconds;
 
   final List<double> _amplitudes = [];
   List<double> get amplitudes => List.unmodifiable(_amplitudes);

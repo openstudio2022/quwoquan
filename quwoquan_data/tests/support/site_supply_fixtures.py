@@ -67,7 +67,7 @@ def _cli_env() -> dict[str, str]:
     DATA_ROOT 指向隔离 tmp，并通过 verticals symlink 读取真实 source registry；
     运行态/发布/committed 根也隔离到本测试 tmp。必须显式构造而非继承全局
     os.environ：同一 pytest 进程内其他测试模块会改写 QWQ_*，子进程若继承污染值
-    会读到错误的 runtime/tasks。
+    会读到错误的 local/data-runtime/tasks。
     """
     env = dict(os.environ)
     env["QWQ_DATA_ROOT"] = str(TEST_DATA_ROOT)

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
@@ -17,9 +19,9 @@ import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 typedef AuthorImpactEvidenceFetcher =
     Future<AuthorImpactEvidencePage> Function({String cursor});
 
-/// 影响力条目交互的统一真相源（横切复用，R25）。
+/// 打动条目交互的统一真相源（横切复用，R25）。
 ///
-/// 「我的主页」影响力卡（[AuthorImpactCard]）与「我的影响力」详情时间线共用同一套：
+/// 「我的主页」打动卡（[AuthorImpactCard]）与「打动」详情时间线共用同一套：
 /// - [attributionFor]：归因（dimension/source/evidence/tagRefs）；
 /// - [onSpanTap]：名字/对象片段进对应主页，数字片段进影响明细 sheet；
 /// - [onActionHintTap]：行动建议有目标则导航，否则进影响明细；
@@ -87,24 +89,45 @@ class AuthorImpactEvidence {
     required bool isMine,
     required AuthorImpactEvidenceFetcher fetchEvidence,
   }) {
-    return showCupertinoModalPopup<void>(
+    return showAppBottomModal<void>(
       context: context,
-      barrierColor: AppColors.black.withValues(alpha: 0.32),
       builder: (sheetContext) => AuthorImpactEvidenceSheet(
         item: item,
         isMine: isMine,
         fetchEvidence: fetchEvidence,
         onVisualTap: (visual) {
-          Navigator.of(sheetContext).pop();
-          navigator.open(
-            context,
-            visual.target,
-            attribution: attributionFor(item),
+          unawaited(
+            dismissAppModalAndRun(
+              sheetContext,
+              action: () {
+                if (!context.mounted) {
+                  return;
+                }
+                navigator.open(
+                  context,
+                  visual.target,
+                  attribution: attributionFor(item),
+                );
+              },
+            ),
           );
         },
         onContentTap: (target) {
-          Navigator.of(sheetContext).pop();
-          navigator.open(context, target, attribution: attributionFor(item));
+          unawaited(
+            dismissAppModalAndRun(
+              sheetContext,
+              action: () {
+                if (!context.mounted) {
+                  return;
+                }
+                navigator.open(
+                  context,
+                  target,
+                  attribution: attributionFor(item),
+                );
+              },
+            ),
+          );
         },
       ),
     );

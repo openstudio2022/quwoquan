@@ -1,0 +1,342 @@
+# 全国地点主清单 · 四川省宜宾市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 宜宾市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 翠屏区
+  leaves:
+  - name: 李庄古镇
+    canonicalName: 宜宾李庄古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    aliases:
+    - 中国李庄
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 五粮液旅游景区
+    canonicalName: 五粮液旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    aliases:
+    - 五粮液酒文化博览馆
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 流杯池公园
+    canonicalName: 宜宾流杯池公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 翠屏山
+    canonicalName: 宜宾翠屏山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    aliases:
+    - 翠屏山公园
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 天池公园
+    canonicalName: 宜宾天池公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 南溪区
+  leaves:
+  - name: 南溪古街
+    canonicalName: 宜宾南溪古街
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/南溪区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 月亮湾景区
+    canonicalName: 南溪月亮湾景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/南溪区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 叙州区
+  leaves:
+  - name: 横江古镇
+    canonicalName: 宜宾横江古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 世界樟海-长滩樟林景区
+    canonicalName: 叙州世界樟海长滩樟林景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 石城山
+    canonicalName: 宜宾石城山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    aliases:
+    - 石城山森林公园
+    selectionPriority: 3
+    sourceReadiness: ready
+- district: 江安县
+  leaves:
+  - name: 夕佳山民居
+    canonicalName: 夕佳山民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/江安县
+    aliases:
+    - 夕佳山古民居
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 红岩柿子部落旅游景区
+    canonicalName: 江安红岩柿子部落旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/江安县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 长宁县
+  leaves:
+  - name: 蜀南竹海
+    canonicalName: 蜀南竹海
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    aliases:
+    - 蜀南竹海风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 七洞沟旅游景区
+    canonicalName: 长宁七洞沟旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 蜀南花海
+    canonicalName: 长宁蜀南花海
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 西部竹石林景区
+    canonicalName: 长宁西部竹石林景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 佛来山旅游景区
+    canonicalName: 长宁佛来山旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 余泽鸿故居
+    canonicalName: 长宁余泽鸿故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 高县
+  leaves:
+  - name: 胜天红岩山旅游景区
+    canonicalName: 高县胜天红岩山旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/高县
+    aliases:
+    - 红岩山
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 大雁岭旅游景区
+    canonicalName: 高县大雁岭旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/高县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 文武荷田景区
+    canonicalName: 高县文武荷田景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/高县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 珙县
+  leaves:
+  - name: 珙县僰人悬棺
+    canonicalName: 珙县僰人悬棺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/珙县
+    aliases:
+    - 僰人悬棺遗址
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 龙茶花海景区
+    canonicalName: 珙县龙茶花海景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/珙县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 鹿鸣茶海旅游景区
+    canonicalName: 珙县鹿鸣茶海旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/珙县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 筠连县
+  leaves:
+  - name: 古楼峰丛
+    canonicalName: 筠连古楼峰丛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/筠连县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 筠连大雪山
+    canonicalName: 筠连大雪山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/筠连县
+    aliases:
+    - 大雪山生态旅游区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 春风村
+    canonicalName: 筠连春风村
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/筠连县
+    aliases:
+    - 石漠花海
+    selectionPriority: 3
+    sourceReadiness: ready
+- district: 兴文县
+  leaves:
+  - name: 兴文石海
+    canonicalName: 兴文石海
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/景区/地质公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/兴文县
+    aliases:
+    - 兴文石海洞乡旅游区
+    - 兴文世界地质公园
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 僰王山
+    canonicalName: 僰王山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/兴文县
+    aliases:
+    - 僰王山风景名胜区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 僰人巨石阵景区
+    canonicalName: 兴文僰人巨石阵景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/兴文县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 石菊古地旅游景区
+    canonicalName: 兴文石菊古地旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/兴文县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 屏山县
+  leaves:
+  - name: 八仙山旅游景区
+    canonicalName: 屏山八仙山旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    aliases:
+    - 八仙山大佛
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 龙华古镇
+    canonicalName: 屏山龙华古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 锦屏山景区
+    canonicalName: 屏山锦屏山景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    selectionPriority: 3
+    sourceReadiness: pending

@@ -13,6 +13,7 @@ from _common.entity_object import collect_task_entity_objects
 from _common.io import read_json, write_ndjson
 from _common.paths import (
     batch_post_roots,
+    batch_root,
     iter_task_batch_ids,
     task_entities,
     task_tags,
@@ -57,6 +58,26 @@ def _candidate_batches(task_id: str, batch_id: str) -> list[str]:
     return iter_task_batch_ids(task_id)
 
 
+def _abandoned_content_refs(task_id: str, batch_id: str) -> set[str]:
+    state_path = batch_root(task_id, batch_id) / "_shared" / "task_workflow_state.json"
+    if not state_path.is_file():
+        return set()
+    try:
+        state = read_json(state_path)
+    except Exception:  # noqa: BLE001
+        return set()
+    out: set[str] = set()
+    for item in state.get("abandonedContentObjects") or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("status") or "").strip() != "abandoned":
+            continue
+        ref = str(item.get("ref") or "").strip()
+        if ref:
+            out.add(ref)
+    return out
+
+
 def _collect_task_publish_inputs(task_id: str, batch_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], int]:
     """聚合任务级 publish 输入，不决定落盘位置。"""
     entity_rows: list[dict[str, Any]] = []
@@ -87,11 +108,15 @@ def _collect_task_publish_inputs(task_id: str, batch_id: str) -> tuple[list[dict
     post_tag_counts: Counter[str] = Counter()
     post_count = 0
     for candidate_batch in _candidate_batches(task_id, batch_id):
+        abandoned_refs = _abandoned_content_refs(task_id, candidate_batch)
         for posts_root in batch_post_roots(task_id, candidate_batch):
             for manifest in sorted(posts_root.rglob("manifest.json")):
                 try:
                     data = read_json(manifest)
                 except Exception:  # noqa: BLE001
+                    continue
+                ref = str(data.get("topicId") or data.get("ref") or "").strip()
+                if ref and ref in abandoned_refs:
                     continue
                 post_count += 1
                 rel = manifest.parent.relative_to(posts_root).as_posix()

@@ -2,24 +2,43 @@
 name: /data-reset-runtime
 id: data-reset-runtime
 category: Workflow
-description: 应用数据生成工作流 · full runtime reset
+description: 数据工程 · 清理本地运行输出
 ---
 
 ## 目标
 
-清空当前 `quwoquan_data/runtime/`，恢复 tracked baseline，重建目录布局。
+清理当前数据工程本地运行输出。当前只允许通过 `qwq-data reset`，不再调用
+不存在的 `reset_quwoquan_data_runtime_full.sh`，也不恢复旧 `quwoquan_data/runtime/**`。
 
-## 真实实现
+## 自然语言等价触发
+
+用户说“清空数据运行态”“重置本地 data runtime”“删除生成输出重跑”时，按本命令语义执行。
+
+## Spec Entry
+
+- AppRoot Journey/Scenario：`runtime/system-architecture-and-engineering-guide`
+- L1/L2/L3：按当前数据任务绑定。
+- 验收意图：`SIT + contract`
+- 测试证据：`local_contract`
+
+## Pre-work Reflection
+
+- 不删除 `quwoquan_data/publish/**`，除非用户明确要求并确认影响。
+- 不删除 service/app/ops 输出。
+- 输出根只认 `.qwq_output/**`。
+
+## 当前实现
 
 ```bash
-bash quwoquan_data/scripts/util/reset_quwoquan_data_runtime_full.sh
+python3 quwoquan_data/scripts/cli.py reset
+python3 quwoquan_data/scripts/cli.py reset --include-release
 ```
 
-## 边界
+## 输出
 
-- 该脚本会删除当前 runtime 下的 generated 数据
-- baseline 恢复以当前工作树中的 tracked runtime 文件为准
+- 清理摘要和后续需要重跑的任务列表。
 
-自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/data-reset-runtime` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
+## Exit Review
 
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+- 复跑 `python3 quwoquan_data/scripts/cli.py verify output-root-isolation`。
+- 如仍有后台任务写入，必须先停止外部写入源再重试。

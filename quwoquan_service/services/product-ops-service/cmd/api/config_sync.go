@@ -88,7 +88,31 @@ func resolveSnapshotPath(configRoot, serviceName, instanceID string) string {
 	if strings.TrimSpace(configRoot) != "" {
 		return filepath.Join(configRoot, "runtime-cache", serviceName, instanceID+".json")
 	}
-	return filepath.Join("state", "runtime-cache", serviceName, instanceID+".json")
+	return filepath.Join(resolveLocalOutputRoot(), "local", "runtime-cache", serviceName, instanceID+".json")
+}
+
+func resolveLocalOutputRoot() string {
+	if outputRoot := strings.TrimSpace(os.Getenv("QWQ_OUTPUT_ROOT")); outputRoot != "" {
+		return outputRoot
+	}
+	if cwd, err := os.Getwd(); err == nil {
+		for dir := cwd; ; dir = filepath.Dir(dir) {
+			if directoryExists(filepath.Join(dir, "quwoquan_service")) &&
+				directoryExists(filepath.Join(dir, "quwoquan_ops")) {
+				return filepath.Join(dir, ".qwq_output")
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+		}
+	}
+	return filepath.Join(os.TempDir(), "quwoquan", ".qwq_output")
+}
+
+func directoryExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func defaultClusterName(appEnv string) string {

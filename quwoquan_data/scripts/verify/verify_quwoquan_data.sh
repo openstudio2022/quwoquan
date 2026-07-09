@@ -7,6 +7,9 @@ PYTEST_RUNNER="${PYTEST_RUNNER:-$ROOT/quwoquan_data/.venv/bin/python}"
 if [ ! -x "$PYTEST_RUNNER" ]; then
   PYTEST_RUNNER="${PYTHON:-python3}"
 fi
+export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} -p no:cacheprovider"
+DATA_VERIFY_OUTPUT_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/qwq_data_verify_output.XXXXXX")"
+trap 'rm -rf "$DATA_VERIFY_OUTPUT_ROOT"' EXIT
 
 # CLI-first ratchet：拦截新增直跑业务入口脚本（必须经 qwq-data 暴露给 skill）
 python3 quwoquan_data/scripts/verify/verify_cli_first.py
@@ -16,11 +19,13 @@ python3 quwoquan_data/scripts/verify/verify_prefab_user_provenance.py
 "$PYTEST_RUNNER" -m pytest -q quwoquan_data/tests/local_contract/creator_pool/
 python3 quwoquan_data/scripts/cli.py verify data-role-gate
 python3 quwoquan_data/scripts/verify/verify_no_flat_roots.py
+# 仓外输出根隔离门：repo 仅 publish 可入库生成输出 + canonical 批次轴/committed 回指 + artifacts index-first
+python3 quwoquan_data/scripts/cli.py verify output-root-isolation
 # 单一门库 quality_gates：writingIntent 契约 + 图文闭环 + 写作主线一致性 + 模板骨架相似度 + 语域 + source reject 阻断
 python3 quwoquan_data/tests/common/test_quality_gates.py
 # 简体中文发布门：发布标题/正文/caption 必须简体中文(非中文先译中、繁体折叠简体)；
 #                繁简折叠表与拉丁主导阈值单一真相源(_common.localization)，caption 门与主页门共用
-python3 quwoquan_data/tests/common/test_localization_simplified_chinese.py
+python3 quwoquan_data/tests/local_contract/common/test_localization_simplified_chinese__local_contract_test.py
 # 扫描门：禁止 scripts/tasks/runtime 复用测试专用正文骨架 agent_draft_kit（脚本拼文章正文反模式），
 #         并禁止重新引入「脚本拼实体主页正文」机械骨架函数（主页 page.md 须 Agent 创作）。
 python3 quwoquan_data/scripts/verify/verify_no_runtime_draft_kit.py
@@ -55,7 +60,8 @@ python3 quwoquan_data/tests/task/test_harness_hooks.py
   quwoquan_data/tests/local_contract/common/test_base_draft_fidelity__local_contract_test.py \
   quwoquan_data/tests/local_contract/common/test_content_plan_distribution__local_contract_test.py \
   quwoquan_data/tests/local_contract/common/test_content_plan_source_gate__local_contract_test.py \
-  quwoquan_data/tests/local_contract/common/test_prompt_render__local_contract_test.py
+  quwoquan_data/tests/local_contract/common/test_prompt_render__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_source_structure_fidelity__local_contract_test.py
 # golden set 标定：好稿/坏稿语义门拦截率/误杀率达标
 python3 quwoquan_data/scripts/verify/measure_gate_goldenset.py
 # 契约门：会话 agent = 唯一模型执行者（禁外部 LLM SDK/端点 + 交付正文 agent-only 防线）
@@ -72,12 +78,20 @@ python3 quwoquan_data/tests/template/test_creator_match.py
 python3 quwoquan_data/scripts/cli.py verify --scope current
 # 任务工程：committed 任务规格校验（路径↔id、archetype scope、实体类型真相源、重复）
 python3 quwoquan_data/scripts/cli.py task lint
+# 全国地点主清单门禁（discovery_seed/2）：目录归属/schema 同口径/类型 scope/行政区叶子/canonicalName 全局唯一
+python3 quwoquan_data/scripts/cli.py verify coverage-master-list
+# WP1 契约测试：主清单 schema/C1-C9 反例门 + 类型唯一真相源（裁决 6 优先级表 + 收债 9 口径归一 + _entity.json 必填集不漂移）
+"$PYTEST_RUNNER" -m pytest -q \
+  quwoquan_data/tests/local_contract/verify/test_coverage_master_list__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_entity_type_taxonomy__local_contract_test.py
 # 垂类规模化治理：coverage registry / 脚本目录 / golden samples / 摄影版权策略
 python3 quwoquan_data/scripts/cli.py vertical governance
 python3 quwoquan_data/scripts/cli.py vertical source-registry
 python3 quwoquan_data/scripts/cli.py vertical quality
 # 任务工程 + 采样回填契约测试
 python3 quwoquan_data/tests/task/test_task_cli.py
+# 任务控制面：preset/recipe 契约（lint 全量家族包 + presetRef 合并 + run-recipe 四段主干 + 契约门阻断）
+python3 quwoquan_data/tests/local_contract/task/test_task_recipe__local_contract_test.py
 python3 quwoquan_data/tests/ship/test_ship_sampling.py
 # 环境数据发布契约：release artifact + 引用闭包 + 生产硬删除审批门
 python3 quwoquan_data/tests/ship/test_data_release_consistency.py
@@ -90,21 +104,22 @@ python3 quwoquan_data/tests/download/test_download_source_plan.py
 python3 quwoquan_data/tests/download/test_download_images.py
 # Phase 1：build 实体主页真实链路（prepare 下发契约 + validate 采纳门）
 python3 quwoquan_data/tests/build/test_build_homepage.py
-# 实体主页=百科择优单源（维基>百度>搜狗）+ 三件套同源 + 禁游记 + 发布完整性门
+# 实体主页=主权威百科单源择优（维基百科/维基导游/百度/搜狗）+ 三件套同源 + 禁游记 + 发布完整性门
 "$PYTEST_RUNNER" -m pytest -q quwoquan_data/tests/verify/test_release_integrity_gate.py
 # Phase 1：实体主页图片闭环全量扫描/修复（page.md ↔ manifest.assets ↔ assets/）
 python3 quwoquan_data/tests/homepage_assets/test_homepage_assets.py
-python3 quwoquan_data/scripts/cli.py homepage-assets --dirty-only --fail-on-issues --include-runtime --include-publish
+QWQ_OUTPUT_ROOT="$DATA_VERIFY_OUTPUT_ROOT" python3 quwoquan_data/scripts/cli.py homepage-assets --dirty-only --fail-on-issues --include-runtime --include-publish
 # 实体主页结构(原文关键章节覆盖) + 配图 caption 语义门（新批次 opt-in：batch_manifest.homepageStructureGate=true）
 python3 quwoquan_data/scripts/verify/verify_homepage_structure_and_assets.py --all-runtime-opt-in
 # 历史脏数据：工程污染主页 / 伪图片 / 悬空 asset 必须清零
 python3 quwoquan_data/tests/quality/test_dirty_data_cleanup.py
-python3 quwoquan_data/scripts/cli.py quality dirty-scan --fail-on-issues
+QWQ_OUTPUT_ROOT="$DATA_VERIFY_OUTPUT_ROOT" python3 quwoquan_data/scripts/cli.py quality dirty-scan --fail-on-issues
 # Phase 1：无人值守 workflow 编排 DAG（三层测试：local_contract/api_integration/user_acceptance）
 "$PYTEST_RUNNER" -m pytest -q \
   quwoquan_data/tests/local_contract/cli/test_cli_environment__local_contract_test.py \
   quwoquan_data/tests/local_contract/cli/test_cli_finalize_author__local_contract_test.py \
   quwoquan_data/tests/local_contract/cli/test_cli_verify_audit__local_contract_test.py \
+  quwoquan_data/tests/local_contract/cli/test_cli_verify_sdk_monitoring__local_contract_test.py \
   quwoquan_data/tests/local_contract/cli/test_cli_workflow_commands__local_contract_test.py
 "$PYTEST_RUNNER" -m pytest -q \
   quwoquan_data/tests/local_contract/build/test_homepage_prepare__local_contract_test.py \
@@ -148,6 +163,8 @@ python3 quwoquan_data/tests/produce/test_post_dir_layout.py
 python3 quwoquan_data/tests/common/test_batch_object_paths.py
 # M2 对象优先：source_plan 落实体对象 1.download + 批次级公共信息上提（batch_manifest + _shared/source_catalog）
 python3 quwoquan_data/tests/common/test_batch_shared_artifacts.py
+# 跨批去重账本：文件锁并发不丢更新 + 幂等 + 全国维度常量（多省并行前置）
+"$PYTEST_RUNNER" -m pytest -q quwoquan_data/tests/local_contract/common/test_dedup_ledger__local_contract_test.py
 # 全局批次号 / 批内 registry / 双批稳定性
 python3 quwoquan_data/tests/common/test_global_batch_seq.py
 python3 quwoquan_data/tests/common/test_batch_asset_registry.py
@@ -174,8 +191,12 @@ python3 quwoquan_data/tests/local_contract/common/test_image_provider_compliance
 python3 quwoquan_data/tests/local_contract/common/test_soft_gate_unification__local_contract_test.py
 # P6 无人托管可靠性：错峰冷启释放器+per-worker warm bridge+冷启并发上限+吞吐/connection-refused 量化+cloud orchestrator 硬超时看门狗
 python3 quwoquan_data/tests/local_contract/task/test_unattended_reliability__local_contract_test.py
+# 并发横向扩展：bridge 启动锁 per-workspace（解多 clone 全局串行）+ throughput-plan 确定性容量推算（十万级量化）
+"$PYTEST_RUNNER" -m pytest -q quwoquan_data/tests/local_contract/task/test_throughput_scaling__local_contract_test.py
 # 标签可点击态：tag 本体保持语义定义，link target 由 publish index 派生
 python3 quwoquan_data/tests/publish/test_tag_link_targets.py
+# 覆盖账本：coverage/{省}.ndjson 派生（主清单×publish×env_releases）+ 跨省 isPrimary + 主页路由绑定
+python3 quwoquan_data/tests/local_contract/publish/test_coverage_index__local_contract_test.py
 # 行政区标签层级：V1 中国两级选择依赖 34 省级、广东完整地级市、北京区县 direct children
 python3 quwoquan_data/tests/local_contract/publish/test_admin_region_tags__local_contract_test.py
 # 结构化出处：5.review/provenance.json 统一回查入口（agent 输入/最终结果/原始源/证据源/门结果）+ 强制完整性/一致性门
@@ -205,10 +226,15 @@ python3 quwoquan_data/tests/local_contract/common/test_object_stages_and_wikitex
   quwoquan_data/tests/local_contract/env/test_cursor_probe__local_contract_test.py \
   quwoquan_data/tests/local_contract/task/test_cursor_credentials__local_contract_test.py \
   quwoquan_data/tests/local_contract/task/test_scaled_e2e_run__local_contract_test.py \
-  quwoquan_data/tests/local_contract/common/test_sandbox_root_isolation__local_contract_test.py \
+  quwoquan_data/tests/local_contract/task/test_task_input_contract__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_output_root_isolation__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_batch_shared_evidence_slim__local_contract_test.py \
+  quwoquan_data/tests/local_contract/common/test_artifacts_index__local_contract_test.py \
+  quwoquan_data/tests/local_contract/verify/test_output_root_isolation_gate__local_contract_test.py \
   quwoquan_data/tests/local_contract/common/test_adaptive_word_gate__local_contract_test.py \
   quwoquan_data/tests/local_contract/common/test_entity_focus__local_contract_test.py \
   quwoquan_data/tests/local_contract/download/test_source_quality_gate__local_contract_test.py \
+  quwoquan_data/tests/local_contract/download/test_homepage_source_judge__local_contract_test.py \
   quwoquan_data/tests/local_contract/download/test_image_collection_gate__local_contract_test.py \
   quwoquan_data/tests/local_contract/download/test_source_plan_registry_guidance__local_contract_test.py \
   quwoquan_data/tests/local_contract/download/test_auto_research_article_homepage__local_contract_test.py \

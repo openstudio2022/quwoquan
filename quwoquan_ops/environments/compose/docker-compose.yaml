@@ -1,0 +1,115 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: quwoquan
+      POSTGRES_PASSWORD: quwoquan
+      POSTGRES_DB: quwoquan
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quwoquan"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mongodb:
+    image: mongo:7-jammy
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mongo-init:
+    image: mongo:7-jammy
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    entrypoint: >
+      mongosh --host mongodb --eval '
+        rs.initiate({
+          _id: "rs0",
+          members: [{_id: 0, host: "mongodb:27017"}]
+        })
+      '
+    restart: "no"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: quwoquan
+      MINIO_ROOT_PASSWORD: quwoquan123
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set qwq http://minio:9000 quwoquan quwoquan123 &&
+        mc mb --ignore-existing qwq/quwoquan-media &&
+        mc anonymous set download qwq/quwoquan-media/public
+      "
+    restart: "no"
+
+  rec-model-service:
+    networks:
+      default:
+        aliases:
+          - recommendation-service
+          - rec-model-service
+    build:
+      context: ../../..
+      dockerfile: quwoquan_service/services/rec-model-service/deploy/Dockerfile
+    ports:
+      - "18090:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MONGODB_URI=mongodb://mongodb:27017/?directConnection=true
+      - APP_ENV=alpha
+    volumes:
+      - ./.local_models:/app/cache
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  pg-data:
+  mongo-data:
+  minio-data:

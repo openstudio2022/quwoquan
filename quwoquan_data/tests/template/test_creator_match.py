@@ -32,6 +32,22 @@ def _registry() -> TemplateRegistry:
     return TemplateRegistry.load()
 
 
+def _travel_blogger_specialty_tag() -> str:
+    for creator in _registry().creators_by_archetype("travel_blogger"):
+        if str(creator.get("status") or "") != "active":
+            continue
+        if (creator.get("verticalRefs") or []) != ["travel"]:
+            continue
+        if (creator.get("carrierAffinity") or {}).get("article", 0) <= 0:
+            continue
+        scope = creator.get("coverageScope") if isinstance(creator.get("coverageScope"), dict) else {}
+        topic_refs = [str(item) for item in (scope.get("topicRefs") or []) if str(item).strip()]
+        for topic in topic_refs:
+            if topic.startswith("Topic/旅行/") and topic != "Topic/旅行":
+                return topic
+    raise AssertionError("missing topical travel_blogger creator in active registry")
+
+
 def test_chuanxi_region_content_prefers_regional_creator():
     creator = match_creator(
         _registry(),
@@ -46,23 +62,23 @@ def test_chuanxi_region_content_prefers_regional_creator():
 
 
 def test_specialty_content_prefers_matching_specialist_creator():
-    # 标签体系规范化（2 级短标签 → 3 级规范叶子）后，内容 tagRef 能与池内专精作者的
-    # recommendationTagRefs 精确重叠：海岛度假内容必须命中携带该专精标签的作者，而非泛化全国
-    # builtin。这正是放量到 100「按内容适配把内容分摊给专精作者」的目标行为；
-    # 「无信号回退全国作者」由 test_no_region_signal_defaults_to_nationwide 守护。
+    # 不再把某个固定标签硬编码到测试里；直接从 active creator registry 里挑一个
+    # 真实存在的 topical travel_blogger 专精标签，验证 match_creator 会优先命中
+    # 携带该标签的作者，而不是退回无关全国作者。
+    specialty_tag = _travel_blogger_specialty_tag()
     creator = match_creator(
         _registry(),
         _TRAVEL_BLUEPRINT,
         carrier="article",
-        tag_refs=["Topic/旅行/旅行主题/海岛度假"],
-        region="沿海海岛",
+        tag_refs=[specialty_tag],
+        region=None,
         vertical="travel",
-        seed="entity/地点/景区/鼓浪屿",
+        seed=f"entity/specialty/{specialty_tag}",
     )
     creator_tags = set(creator.get("publicProfileTagRefs", [])) | set(
         creator.get("recommendationTagRefs", [])
     )
-    assert "Topic/旅行/旅行主题/海岛度假" in creator_tags, creator["creatorProfileId"]
+    assert specialty_tag in creator_tags, creator["creatorProfileId"]
 
 
 def test_no_region_signal_defaults_to_nationwide():
@@ -82,6 +98,48 @@ def test_deterministic_same_seed_same_creator():
     first = match_creator(reg, _TRAVEL_BLUEPRINT, **kwargs)
     second = match_creator(reg, _TRAVEL_BLUEPRINT, **kwargs)
     assert first["creatorProfileId"] == second["creatorProfileId"]
+
+
+def test_spread_mode_distributes_equal_fit_creators_by_seed():
+    reg = _registry()
+    picks = {
+        match_creator(
+            reg,
+            {"carrier": "image", "vertical": "travel", "creatorPersona": {}},
+            carrier="image",
+            tag_refs=["Topic/旅行", "Topic/旅行/玩法/摄影旅拍"],
+            region="四川省",
+            vertical="travel",
+            seed=f"spread-seed-{index}",
+            preferred_archetype="",
+            selection_mode="spread",
+        )["creatorProfileId"]
+        for index in range(40)
+    }
+    stable_a = match_creator(
+        reg,
+        {"carrier": "image", "vertical": "travel", "creatorPersona": {}},
+        carrier="image",
+        tag_refs=["Topic/旅行", "Topic/旅行/玩法/摄影旅拍"],
+        region="四川省",
+        vertical="travel",
+        seed="same-spread-seed",
+        preferred_archetype="",
+        selection_mode="spread",
+    )
+    stable_b = match_creator(
+        reg,
+        {"carrier": "image", "vertical": "travel", "creatorPersona": {}},
+        carrier="image",
+        tag_refs=["Topic/旅行", "Topic/旅行/玩法/摄影旅拍"],
+        region="四川省",
+        vertical="travel",
+        seed="same-spread-seed",
+        preferred_archetype="",
+        selection_mode="spread",
+    )
+    assert len(picks) >= 20
+    assert stable_a["creatorProfileId"] == stable_b["creatorProfileId"]
 
 
 def test_single_candidate_archetype_returns_that_creator():

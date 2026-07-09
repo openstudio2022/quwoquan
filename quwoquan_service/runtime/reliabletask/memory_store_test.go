@@ -194,7 +194,7 @@ func TestNotificationWorkerRetriesOnlyFailedRecipients(t *testing.T) {
 }
 
 func TestCatalogLoaderValidatesChatAvatarTask(t *testing.T) {
-	catalog, err := LoadCatalog("../../../deploy/shared/reliable_task_module_catalog.yaml")
+	catalog, err := LoadCatalog("../../../quwoquan_ops/environments/reliable_task_module_catalog.yaml")
 	if err != nil {
 		t.Fatalf("load catalog: %v", err)
 	}
@@ -457,7 +457,7 @@ func TestDispatcherReadyIndexAndWorkerProcessOne(t *testing.T) {
 }
 
 func TestPolicyCatalogLoaderAndShardLease(t *testing.T) {
-	policies, err := LoadPolicyCatalog("../../../deploy/shared/reliable_task_retention_policy.yaml")
+	policies, err := LoadPolicyCatalog("../../../quwoquan_ops/environments/reliable_task_retention_policy.yaml")
 	if err != nil {
 		t.Fatalf("load policy catalog: %v", err)
 	}
@@ -468,8 +468,8 @@ func TestPolicyCatalogLoaderAndShardLease(t *testing.T) {
 		t.Fatalf("expected chat avatar rate limit")
 	}
 	catalog, err := LoadCatalogWithPolicies(
-		"../../../deploy/shared/reliable_task_module_catalog.yaml",
-		"../../../deploy/shared/reliable_task_retention_policy.yaml",
+		"../../../quwoquan_ops/environments/reliable_task_module_catalog.yaml",
+		"../../../quwoquan_ops/environments/reliable_task_retention_policy.yaml",
 	)
 	if err != nil {
 		t.Fatalf("load catalog with policies: %v", err)

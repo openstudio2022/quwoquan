@@ -2,44 +2,43 @@
 name: /data-trace-source
 id: data-trace-source
 category: Workflow
-description: 归一化工作流 · 单来源全链路追查
+description: 数据工程 · 发布产物与任务来源反查
 ---
 
 ## 目标
 
-按来源 URL、页面标题、`source.md` 路径追查它在归一化工作流中的全部文件引用。
+从 publish 路径片段或 taskId 反查来源、任务、批次和运行证据。当前入口是
+`task trace`，不再使用已退役的 `data trace-source` 子命令。
 
-## 输入
+## 自然语言等价触发
 
-- `--batch-label`
-- `--source-ref` 或 `--source-md` 或 `--source-url`
+用户说“追查来源”“这条 source 从哪来”“这个发布物对应哪个任务”时，按本命令语义执行。
 
-## 真实实现
+## Spec Entry
+
+- AppRoot Journey/Scenario：`runtime/system-architecture-and-engineering-guide`
+- L1/L2/L3：按当前数据任务绑定。
+- 验收意图：`SIT + contract`
+- 测试证据：`local_contract`
+
+## Pre-work Reflection
+
+- publish-first：以 `quwoquan_data/publish/**` 为发布真相源。
+- runtime evidence：运行证据只从 `.qwq_output/local/data-runtime/**` 和 `.qwq_output/runs/data/**` 回查。
+- 不补写缺失证据；缺失就是缺失。
+
+## 当前实现
 
 ```bash
-python3 quwoquan_data/scripts/cli.py data trace-source \
-  --batch-label "<batch>" \
-  --source-md "<source.md>"
+python3 quwoquan_data/scripts/cli.py task trace --ref "<publish-path-fragment>"
+python3 quwoquan_data/scripts/cli.py task trace --task-id "<task-id>"
 ```
 
 ## 输出
 
-- `runtime/runs/<batch>/normalization/compiled/trace/<source_ref>.json`
+- 反查摘要、任务/批次引用、publish 路径和必要的缺口说明。
 
-## 门禁 / 准出
+## Exit Review
 
-- 至少能定位 extract / review / authority 三阶段结果路径
-
-## 失败后动作
-
-- 若找不到来源：先检查 `/data-source-fetch` 是否成功落盘
-
-自然语言等价触发：用户说“追查来源”“这条 source 从哪来”“source 证据链断了”时，也按本命令语义执行。
-
-## Trace Keys
-
-- `sourceUrl`
-- `pageTitle`
-- `sourceMarkdownPath`
-
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+- 说明可追溯链路是否完整。
+- 如果找不到来源，给出下一步应跑的 `task show/status` 或 `data download` 命令。

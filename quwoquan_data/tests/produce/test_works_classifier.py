@@ -115,10 +115,19 @@ def test_image_collection_is_work_image():
     assert v["carrier"] == "image"
 
 
-def test_image_too_few_is_abandoned():
+def test_explicit_single_image_carrier_is_work():
     v = classify_works(
         "img_few", source_class="photography_community", source_text="黄山",
-        narrative_volume=0, image_count=2, declared_carrier="image",
+        narrative_volume=0, image_count=1, declared_carrier="image",
+    )
+    assert v["decision"] == "work"
+    assert v["carrier"] == "image"
+
+
+def test_explicit_image_carrier_with_zero_images_is_abandoned():
+    v = classify_works(
+        "img_zero", source_class="photography_community", source_text="黄山",
+        narrative_volume=0, image_count=0, declared_carrier="image",
     )
     assert v["decision"] == "abandoned"
     assert v["abandonReason"] == "insufficient_evidence"

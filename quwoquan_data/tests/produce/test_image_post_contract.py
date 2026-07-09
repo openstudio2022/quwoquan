@@ -89,7 +89,7 @@ def test_object_image_candidates_preserve_sha_and_rights_metadata():
     assert first["license"] == "CC-BY-4.0"
 
 
-def _seed_image_post() -> None:
+def _seed_image_post(*, public_title: str = "结构化组图") -> None:
     ensure_task_layout(TASK)
     ensure_batch_layout(TASK, BATCH, "produce")
     register_content_object(TASK, BATCH, REF, content_type="image", angle="画报", title="结构化组图")
@@ -150,14 +150,14 @@ def _seed_image_post() -> None:
                 },
             ],
             "publishLayout": "gallery",
-            "publishTitle": "结构化组图",
+            "publishTitle": public_title,
             "createdAt": "2026-06-13T00:00:00Z",
             "updatedAt": "2026-06-13T00:00:00Z",
         },
     )
 
 
-def _materialize_image() -> Path:
+def _materialize_image(*, public_title: str = "结构化组图") -> Path:
     import shutil
 
     posts = batch_root(TASK, BATCH) / "posts"
@@ -166,7 +166,7 @@ def _materialize_image() -> Path:
     shared = batch_root(TASK, BATCH) / "_shared"
     if shared.exists():
         shutil.rmtree(shared)
-    _seed_image_post()
+    _seed_image_post(public_title=public_title)
     materialized = materialize_posts(TASK, BATCH, "image")
     assert len(materialized) == 1, materialized
     return materialized[0]
@@ -197,6 +197,13 @@ def test_image_materialize_is_structured_only():
     }
     assert manifest["licenseProofRef"] == "https://example.com/licenses/alpine"
     assert provenance_issues(post_dir, manifest) == []
+
+
+def test_image_materialize_does_not_backfill_publish_title_from_object_coords():
+    post_dir = _materialize_image(public_title="")
+    manifest = read_json(post_dir / "manifest.json")
+    assert manifest["title"] == ""
+    assert manifest["publishTitle"] == ""
 
 
 def test_image_materialize_writes_download_stage_source_refs():

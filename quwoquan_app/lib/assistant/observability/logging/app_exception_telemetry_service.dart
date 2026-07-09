@@ -30,9 +30,8 @@ class AppExceptionTelemetryFailureState {
 class AppExceptionTelemetryService {
   AppExceptionTelemetryService({
     OpsEventRepository? eventRepository,
-    String queueBoxName = kAppExceptionQueueBoxName,
-  }) : _eventRepository = eventRepository ?? RemoteOpsEventRepository(),
-       _queueBoxName = queueBoxName;
+    this._queueBoxName = kAppExceptionQueueBoxName,
+  }) : _eventRepository = eventRepository ?? RemoteOpsEventRepository();
 
   static final AppExceptionTelemetryService instance =
       AppExceptionTelemetryService();
@@ -43,8 +42,7 @@ class AppExceptionTelemetryService {
   final Set<String> _recentFingerprints = <String>{};
   AppExceptionTelemetryFailureState? _lastFlushFailure;
 
-  AppExceptionTelemetryFailureState? get lastFlushFailure =>
-      _lastFlushFailure;
+  AppExceptionTelemetryFailureState? get lastFlushFailure => _lastFlushFailure;
 
   Future<void> recordGlobalException({
     required String source,
@@ -106,11 +104,7 @@ class AppExceptionTelemetryService {
     await _enqueue(event);
     unawaited(
       flushPending().catchError((Object error, StackTrace stackTrace) async {
-        await _recordFlushFailure(
-          error,
-          stackTrace,
-          phase: 'background_flush',
-        );
+        await _recordFlushFailure(error, stackTrace, phase: 'background_flush');
       }),
     );
   }

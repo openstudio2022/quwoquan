@@ -28,8 +28,8 @@ gwt_acceptance:
     - beta 继续依赖 self-hosted macOS runner 与本地设备，不引入新的 beta hosted。
     - '`prod full` 自动推进失败时必须能回滚，但回滚仍属于 `prod` 生命周期。'
     contract_refs:
-    - deploy/shared/environment_matrix.md
-    - deploy/shared/gray_rollout_stages.yaml
+    - quwoquan_ops/environments/environment_matrix.md
+    - quwoquan_ops/environments/gray_rollout_stages.yaml
     performance_points:
     - '`mainline_auto_prod` blocking critical path `<= 900s`'
     tests:
@@ -62,7 +62,7 @@ gwt_acceptance:
     - '[migrated_from_planned] main promotion workflow 通过 timing summary 证明关键路径预算'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

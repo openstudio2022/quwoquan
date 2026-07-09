@@ -1,14 +1,18 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/share/forward_share_models.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_recipient_widgets.dart';
 
@@ -29,7 +33,7 @@ class ForwardConfirmSheet extends ConsumerStatefulWidget {
     required AppForwardPayload payload,
     required AppForwardRecipient recipient,
   }) {
-    return showCupertinoModalPopup<bool>(
+    return showAppBottomModal<bool>(
       context: context,
       builder: (sheetContext) {
         final isDark =
@@ -255,12 +259,26 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
       }
       AppToast.show(context, UITextConstants.forwardSendSuccess);
       Navigator.of(context).pop(true);
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() => _busy = false);
-      AppToast.show(context, UITextConstants.forwardSendFailed);
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _send();
+          }
+        },
+      );
     }
   }
 

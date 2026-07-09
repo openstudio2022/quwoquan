@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Emit T2 stability report for creator prefab user dual-track migration."""
+"""Emit T2 stability report for creator prefab user creator/archive migration."""
 from __future__ import annotations
 
 import json
@@ -9,7 +9,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-ARTIFACT = REPO_ROOT / "artifacts" / "creator_prefab_user_t2_stability_report.json"
+SCRIPTS_ROOT = REPO_ROOT / "quwoquan_data" / "scripts"
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
+
+from _common.creator_pool.batch_policy import default_target_for_batch
+from _common.creator_pool.io import artifacts_readiness_path
+
+ARTIFACT = artifacts_readiness_path("creator_prefab_user_t2_stability_report.json")
+CANONICAL_TARGET = default_target_for_batch("travel_photo_1k_v1")
+EXPECTED_CREATOR_SLICE_COUNT = CANONICAL_TARGET + 1
 
 
 def _run(cmd: list[str], *, cwd: Path | None = None) -> tuple[int, str]:
@@ -46,18 +55,20 @@ def main() -> int:
     if code != 0:
         blockers.append("CreatorPool beta handler seed test failed")
 
-    manifest_path = REPO_ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/user_pool.manifest.json"
-    creator_path = REPO_ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/user_pool.creator_pool.json"
+    manifest_path = REPO_ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/user_pool.manifest.travel_photo_1k_v1.json"
+    creator_path = REPO_ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/user_pool.creator_pool.travel_photo_1k_v1.json"
     if manifest_path.is_file() and creator_path.is_file():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         creator = json.loads(creator_path.read_text(encoding="utf-8"))
         checks["dualTrackConsistency"] = {
             "creatorPoolUserCount": len(creator.get("users") or []),
-            "legacyUserCount": manifest.get("statistics", {}).get("legacyUserCount"),
-            "passed": len(creator.get("users") or []) >= 101,
+            "archiveUserCount": manifest.get("statistics", {}).get("archiveUserCount"),
+            "passed": len(creator.get("users") or []) == EXPECTED_CREATOR_SLICE_COUNT,
         }
-        if len(creator.get("users") or []) < 101:
-            blockers.append("creator slice < 101 users")
+        if len(creator.get("users") or []) != EXPECTED_CREATOR_SLICE_COUNT:
+            blockers.append(
+                f"creator slice must contain {EXPECTED_CREATOR_SLICE_COUNT} users"
+            )
     else:
         blockers.append("missing creator slice or manifest")
 

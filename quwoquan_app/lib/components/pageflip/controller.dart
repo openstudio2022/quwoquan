@@ -27,6 +27,18 @@ class StPageFlipAnimationPlan {
   final StPageFlipDirection direction;
   final StPageFlipCorner corner;
   final List<ReverseFlipPose>? reversePoses;
+
+  StPageFlipAnimationPlan copyWith({Duration? duration}) {
+    return StPageFlipAnimationPlan(
+      frames: frames,
+      duration: duration ?? this.duration,
+      isTurned: isTurned,
+      needReset: needReset,
+      direction: direction,
+      corner: corner,
+      reversePoses: reversePoses,
+    );
+  }
 }
 
 @immutable
@@ -73,13 +85,12 @@ class StPageFlipScene {
 
 class StPageFlipController {
   StPageFlipController({
-    required StPageFlipSpreadModel spreadModel,
-    required StPageFlipLayout layout,
+    required this._spreadModel,
+    required this._layout,
     int initialPage = 0,
     this.flippingTimeMs = 1000,
     this.maxShadowOpacity = 1.0,
-  }) : _spreadModel = spreadModel,
-       _layout = layout {
+  }) {
     setCurrentPage(initialPage);
   }
 

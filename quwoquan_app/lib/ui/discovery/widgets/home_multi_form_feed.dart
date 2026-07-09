@@ -6,6 +6,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/content/generated/content_ui_config.g.dart';
@@ -13,6 +14,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/icons/app_custom_icons.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -425,9 +427,11 @@ class HomeMultiFormFeed extends ConsumerWidget {
         : null;
 
     final topPad = isMultiColumn ? AppSpacing.sm : AppSpacing.zero;
+    final resourceProfile = ref.watch(appResourceCacheProfileProvider);
     final scrollView = _HomeFeedScrollView(
       pageBackground: pageBackground,
       isDark: isDark,
+      resourceProfile: resourceProfile,
       isMultiColumn: isMultiColumn,
       columns: columns,
       horizontalPad: horizontalPad,
@@ -454,17 +458,16 @@ class HomeMultiFormFeed extends ConsumerWidget {
       onReachBottom: () =>
           ref.read(discoveryFeedMapProvider.notifier).appendNextPage(channelId),
       onResourceSample: () {
-        final profile = ref.read(appResourceCacheProfileProvider);
         final imageCache = PaintingBinding.instance.imageCache;
         final downloadCache = ref.read(mediaDownloadCacheProvider);
         final observability = ref.read(feedPerformanceObservabilityProvider);
         observability.recordImageCacheBudget(
-          profile: profile.name,
+          profile: resourceProfile.name,
           currentSizeBytes: imageCache.currentSizeBytes,
           maxSizeBytes: imageCache.maximumSizeBytes,
         );
         observability.recordMediaDownloadQueue(
-          profile: profile.name,
+          profile: resourceProfile.name,
           activeDownloads: downloadCache.activeDownloadCount,
           queuedDownloads: downloadCache.queuedDownloadCount,
           inflightDownloads: downloadCache.inflightDownloadCount,

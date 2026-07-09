@@ -329,9 +329,9 @@ class _PageflipWidgetState extends State<PageflipWidget> {
     final availableSnapshotIndices = _pageSnapshots.keys.toList()..sort();
     final activeBinding = activeSession?.binding;
     final requestedIndices = <int>{
-      if (requestedBinding?.rectoPageIndex case final recto?) recto,
-      if (requestedBinding?.versoPageIndex case final verso?) verso,
-      if (requestedBinding?.bottomPageIndex case final bottom?) bottom,
+      ?requestedBinding?.rectoPageIndex,
+      ?requestedBinding?.versoPageIndex,
+      ?requestedBinding?.bottomPageIndex,
     }.toList()..sort();
     final missingSnapshotIndices = requestedIndices
         .where((index) => !availableSnapshotIndices.contains(index))

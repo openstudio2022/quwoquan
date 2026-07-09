@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "ml"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import model_registry
 import model_registry_cli
@@ -143,4 +143,3 @@ def test_rollback_restores_previous_production(monkeypatch: pytest.MonkeyPatch) 
     assert fake_coll.docs["candidate"]["production"] is True
     assert "restoredAt" in fake_coll.docs["candidate"]
     assert fake_coll.docs["rolled"]["production"] is False
-

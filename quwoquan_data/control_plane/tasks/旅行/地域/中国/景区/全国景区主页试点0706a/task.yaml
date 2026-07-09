@@ -1,0 +1,132 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/中国/景区/全国景区主页试点0706a
+title: 全国景区主页试点0706a
+intentLabel: 主页试点0706
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 中国
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 中国
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 黄龙
+  - entityType: 地点/景区
+    name: 武侯祠
+  - entityType: 地点/景区
+    name: 西岭雪山
+  - entityType: 地点/景区
+    name: 木格措
+  - entityType: 地点/景区
+    name: 故宫
+  - entityType: 地点/景区
+    name: 长白山
+  - entityType: 地点/景区
+    name: 黄山
+  - entityType: 地点/景区
+    name: 张家界国家森林公园
+  - entityType: 地点/景区
+    name: 桂林漓江
+  - entityType: 地点/景区
+    name: 九寨沟
+  - entityType: 地点/景区
+    name: 秦始皇兵马俑
+  - entityType: 地点/景区
+    name: 香港迪士尼乐园
+  - entityType: 地点/景区
+    name: 颐和园
+  - entityType: 地点/景区
+    name: 镜泊湖
+  - entityType: 地点/景区
+    name: 西湖
+  - entityType: 地点/景区
+    name: 天门山
+  - entityType: 地点/景区
+    name: 阳朔西街
+  - entityType: 地点/景区
+    name: 稻城亚丁
+  - entityType: 地点/景区
+    name: 华山
+  - entityType: 地点/景区
+    name: 香港海洋公园
+  - entityType: 地点/景区
+    name: 八达岭长城
+  - entityType: 地点/景区
+    name: 五大连池
+  - entityType: 地点/景区
+    name: 鼓浪屿
+  - entityType: 地点/景区
+    name: 凤凰古城
+  - entityType: 地点/景区
+    name: 龙脊梯田
+  reserveCoverageTargets:
+  - entityType: 地点/景区
+    name: 天坛
+  - entityType: 地点/景区
+    name: 圆明园
+  - entityType: 地点/景区
+    name: 北海公园
+  - entityType: 地点/景区
+    name: 香山公园
+  - entityType: 地点/景区
+    name: 慕田峪长城
+provenance:
+  createdAt: '2026-07-06T18:23:05.687846+00:00'
+  createdBy: run-recipe content/travel/homepage/pilot
+presetRef: content/travel/homepage/base
+content:
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+    imageAssetStrategy: open_license_publish
+    imageCountPolicy: score_bonus
+    allowAiImages: false
+  quotas:
+    entityArticlesPerTarget: 0
+    imageWorksPerTarget: 0
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 25
+  minPostsPerEntity: 1
+  requiredAngles: []
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+  maxReplacementWaves: 3
+  maxReplacementCandidatesPerWave: 8
+  maxReplacementScreenedPerRun: 8
+  elasticOverfetch: false
+  overfetchMultiplier: 2.0
+  targetEntityCount: 25
+  targetObjectCount: 25
+  allowQuotaShortfall: true
+  allowContentQuotaShortfall: true
+  allowMinEntityShortfall: true
+  allowOverProduction: false
+  minBatchCompletionMode: best_effort_with_reasoned_rejects
+  publishCadence:
+    mode: deterministic_creator_day_spread
+    targetDailyObjects: 25
+    maxDailyPostsPerCreator: 1
+  executionBranch: feature/homepage-commercial-lane
+queuePolicy:
+  backend: reliabletask
+  reliableTask:
+    taskType: data.content_object.execute
+    queue: reliabletask.data.content_supply
+    store: MongoStore
+    readyIndex: RedisReadyIndex
+  leaseSeconds: 900
+  heartbeatSeconds: 60
+  deadLetterAfterAttempts: 3
+sourceTaskId: 旅行/地域/四川省/景区/景区精选

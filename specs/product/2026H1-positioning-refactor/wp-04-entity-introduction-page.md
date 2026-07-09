@@ -66,7 +66,7 @@
 2. T2：介绍页 widget 测试（摘要/分节/时间线/相关对象渲染、空 section 容错、错误态结构化）。
 3. T3：beta 环境从实体主页摘要进入介绍页，渲染真实样本；深链直达可用。
 4. 新页面登记页面矩阵 + gap inventory + PR checklist；曝光/停留/深度埋点齐备。
-5. `make verify-metadata`、`bash agent_ops/gate/gate_repo.sh --scope app` 与 `--scope service` 全绿。
+5. `make verify-metadata`、`bash quwoquan_ops/gate/gate_repo.sh --scope app` 与 `--scope service` 全绿。
 6. 前台文案无「实体」字样（§18 禁用词约束）。
 
 ## 6. 验收标准（GWT 样例）

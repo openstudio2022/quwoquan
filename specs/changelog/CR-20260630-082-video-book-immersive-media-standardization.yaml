@@ -79,10 +79,10 @@ entries:
         - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
         - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
         - "make verify-app-pageflip-back-mainline（66 过 / 3 跳，既有 skip）"
-        - "python3 agent_ops/scaffold/generate_test_directory_inventory.py && python3 agent_ops/scaffold/verify_test_directory_inventory.py（OK）"
+        - "python3 quwoquan_ops/gate/scaffold/generate_test_directory_inventory.py && python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py（OK）"
         - "make verify-test-coverage-map（OK）"
-        - "bash agent_ops/scaffold/verify_acceptance_standard.sh && bash agent_ops/scaffold/verify_feature_tree_refactor.sh（OK）"
-        - "python3 agent_ops/deploy/stackctl.py verify --env alpha|beta|gamma|prod --kind packaging --tier t1（四环境均 passed，各 4 checks）"
+        - "bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh && bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh（OK）"
+        - "python3 quwoquan_ops/cli/stackctl.py verify --env alpha|beta|gamma|prod --kind packaging --tier t1（四环境均 passed，各 4 checks）"
     notes:
       - "本 CR 不改云 API、外部 route、错误码或四环境拓扑。"
       - "本 CR 不把视频帧做物理翻页；如需视频 texture snapshot 翻页，应另起独立专项。"

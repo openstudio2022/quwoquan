@@ -29,11 +29,10 @@ import 'package:quwoquan_app/core/services/search_repository.dart';
 ///   `runtimeFailure`），本类不吞异常、不返回假数据，由上层结果页统一降级展示。
 class RemoteSearchRepository implements SearchRepository {
   RemoteSearchRepository({
-    required SearchRepository localFanout,
+    required this._localFanout,
     CloudHttpClient? httpClient,
     String? baseUrl,
-  }) : _localFanout = localFanout,
-       _httpClient = httpClient ?? CloudHttpClient(),
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
@@ -44,7 +43,10 @@ class RemoteSearchRepository implements SearchRepository {
   Future<SearchResponse> search(SearchRequest request) async {
     final normalized = request.normalized();
     if (normalized.query.isEmpty) {
-      return SearchResponse(request: normalized, sections: const <SearchSection>[]);
+      return SearchResponse(
+        request: normalized,
+        sections: const <SearchSection>[],
+      );
     }
 
     // suggest 模式：保留本地命名空间组合（chat/contact/circle 本地检索不破坏）。
@@ -57,12 +59,18 @@ class RemoteSearchRepository implements SearchRepository {
     // 避免误触云侧 DefaultResultTargets 全量扇出。
     if (normalized.objectTypes.isNotEmpty &&
         !normalized.objectTypes.any(_isCloudRetrievable)) {
-      return SearchResponse(request: normalized, sections: const <SearchSection>[]);
+      return SearchResponse(
+        request: normalized,
+        sections: const <SearchSection>[],
+      );
     }
 
     final targets = _cloudTargets(normalized);
     if (targets.isEmpty) {
-      return SearchResponse(request: normalized, sections: const <SearchSection>[]);
+      return SearchResponse(
+        request: normalized,
+        sections: const <SearchSection>[],
+      );
     }
 
     final uri = Uri.parse('$_baseUrl${SearchApiMetadata.searchQueryPath}');
@@ -88,8 +96,7 @@ class RemoteSearchRepository implements SearchRepository {
   /// 云侧 `/v1/search` 仅认 [RetrieveTarget] 的 wire 值。复用 [RetrieveRequest] 的
   /// 单一真相源映射后剔除 `chat`（本地命名空间，不外发），保证结果模式只取云侧对象。
   List<RetrieveTarget> _cloudTargets(SearchRequest request) {
-    return RetrieveRequest.fromSearchRequest(request)
-        .targets
+    return RetrieveRequest.fromSearchRequest(request).targets
         .where((target) => target != RetrieveTarget.chat)
         .toList(growable: false);
   }
@@ -140,7 +147,9 @@ class RemoteSearchRepository implements SearchRepository {
         .map(
           (entry) => SearchSection(
             id: entry.key.wireValue,
-            title: SearchRegistry.entryFor(entry.key)?.label ?? entry.key.wireValue,
+            title:
+                SearchRegistry.entryFor(entry.key)?.label ??
+                entry.key.wireValue,
             objectTypes: <SearchObjectType>[entry.key],
             hits: entry.value,
             resolvedFrom: SearchResolvedFrom.remote,
@@ -186,7 +195,9 @@ class RemoteSearchRepository implements SearchRepository {
     final rankReasons = _rankReasonLabels(map['rankReasons']);
     final rankPosition = (map['rankPosition'] as num?)?.toInt();
     final coverWidth = _dimension(map['coverWidth'] ?? payload['coverWidth']);
-    final coverHeight = _dimension(map['coverHeight'] ?? payload['coverHeight']);
+    final coverHeight = _dimension(
+      map['coverHeight'] ?? payload['coverHeight'],
+    );
 
     // 交集 / 连接态：由 search-service 从统一交集真相源附着，端侧只透传不合成。
     final connectionState = map['connectionState']?.toString();
@@ -206,7 +217,9 @@ class RemoteSearchRepository implements SearchRepository {
         if (intersectionReason is Map)
           'intersectionReason': Map<String, dynamic>.from(intersectionReason),
       };
-      hitPayload = SearchHitPayloadContentPost(PostSearchItemView.fromMap(merged));
+      hitPayload = SearchHitPayloadContentPost(
+        PostSearchItemView.fromMap(merged),
+      );
     } else {
       hitPayload = SearchHitPayloadWireMap(<String, dynamic>{
         ...payload,
@@ -264,7 +277,9 @@ class RemoteSearchRepository implements SearchRepository {
     if (value == null) {
       return null;
     }
-    final parsed = value is num ? value.toDouble() : double.tryParse(value.toString());
+    final parsed = value is num
+        ? value.toDouble()
+        : double.tryParse(value.toString());
     if (parsed == null || parsed <= 0) {
       return null;
     }
@@ -295,7 +310,9 @@ class RemoteSearchRepository implements SearchRepository {
         continue;
       }
       final code = (item['code'] ?? item['Code'] ?? '').toString().trim();
-      final message = (item['message'] ?? item['Message'] ?? '').toString().trim();
+      final message = (item['message'] ?? item['Message'] ?? '')
+          .toString()
+          .trim();
       if (code.isEmpty && message.isEmpty) {
         continue;
       }

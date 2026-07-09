@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 
 import 'qwq_markdown_ast.dart';
 
@@ -20,7 +21,9 @@ class QwqMarkdownPaginationProfile {
   final double horizontalPadding;
   final double verticalPadding;
 
-  bool get isCompactWidth => viewportSize.width < 420 || textScaleFactor >= 1.25;
+  bool get isCompactWidth =>
+      viewportSize.width < AppSpacing.markdownCompactBreakpoint ||
+      textScaleFactor >= 1.25;
 
   double get effectiveHeight =>
       (viewportSize.height - verticalPadding * 2).clamp(240, 2400).toDouble();
@@ -38,7 +41,8 @@ class QwqMarkdownPageData {
   final List<QwqMarkdownBlock> blocks;
   final QwqMarkdownPaginationProfile profile;
 
-  List<String> get blockIds => blocks.map((block) => block.id).toList(growable: false);
+  List<String> get blockIds =>
+      blocks.map((block) => block.id).toList(growable: false);
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
@@ -58,7 +62,11 @@ class MarkdownPaginationEngine {
   }) {
     if (document.blocks.isEmpty) {
       return <QwqMarkdownPageData>[
-        QwqMarkdownPageData(pageIndex: 0, blocks: const <QwqMarkdownBlock>[], profile: profile),
+        QwqMarkdownPageData(
+          pageIndex: 0,
+          blocks: const <QwqMarkdownBlock>[],
+          profile: profile,
+        ),
       ];
     }
     final maxUnits = _pageCapacityUnits(profile);
@@ -111,9 +119,11 @@ class MarkdownPaginationEngine {
     return switch (block.kind) {
       QwqMarkdownBlockKind.heading => 2 + block.level.clamp(1, 3),
       QwqMarkdownBlockKind.paragraph => textUnits,
-      QwqMarkdownBlockKind.orderedItem || QwqMarkdownBlockKind.bulletItem => textUnits,
+      QwqMarkdownBlockKind.orderedItem ||
+      QwqMarkdownBlockKind.bulletItem => textUnits,
       QwqMarkdownBlockKind.quote => textUnits + 1,
-      QwqMarkdownBlockKind.codeBlock => (block.text.split('\n').length + 1).clamp(2, 16),
+      QwqMarkdownBlockKind.codeBlock =>
+        (block.text.split('\n').length + 1).clamp(2, 16),
       QwqMarkdownBlockKind.image => profile.isCompactWidth ? 8 : 7,
       QwqMarkdownBlockKind.figure => _figureUnits(block, profile),
       QwqMarkdownBlockKind.gallery => profile.isCompactWidth ? 12 : 10,
@@ -125,7 +135,10 @@ class MarkdownPaginationEngine {
     };
   }
 
-  int _figureUnits(QwqMarkdownBlock block, QwqMarkdownPaginationProfile profile) {
+  int _figureUnits(
+    QwqMarkdownBlock block,
+    QwqMarkdownPaginationProfile profile,
+  ) {
     final layout = block.assetRef?.layout ?? QwqMarkdownImageLayout.fullWidth;
     if (profile.isCompactWidth || layout == QwqMarkdownImageLayout.fullWidth) {
       return 9;

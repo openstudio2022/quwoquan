@@ -11,4 +11,5 @@ from site_supply.content_plan import *  # noqa: F403
 from site_supply.reports import *  # noqa: F403
 from site_supply.trial import *  # noqa: F403
 from site_supply.crawler import *  # noqa: F403
+from site_supply.authorized_assets import *  # noqa: F403
 from site_supply.cli_handlers import *  # noqa: F403

@@ -7,12 +7,13 @@ import (
 )
 
 type captureMetrics struct {
-	feedCandidates map[string]int // class|rankState
-	feedFiltered   map[string]int // reason
-	exposure       int
-	inboxVisit     map[string]int // dimension
-	inboxFiltered  map[string]int // reason
-	redisDegraded  map[string]int // op
+	feedCandidates   map[string]int // class|rankState
+	feedFiltered     map[string]int // reason
+	exposure         int
+	negativeFeedback int
+	inboxVisit       map[string]int // dimension
+	inboxFiltered    map[string]int // reason
+	redisDegraded    map[string]int // op
 }
 
 func newCaptureMetrics() *captureMetrics {
@@ -28,11 +29,12 @@ func newCaptureMetrics() *captureMetrics {
 func (c *captureMetrics) ObserveFeedCandidate(_, class, rankState string) {
 	c.feedCandidates[class+"|"+rankState]++
 }
-func (c *captureMetrics) ObserveFeedFiltered(_, reason string) { c.feedFiltered[reason]++ }
-func (c *captureMetrics) ObserveExposureReported(count int)    { c.exposure += count }
-func (c *captureMetrics) ObserveInboxVisit(dimension string)   { c.inboxVisit[dimension]++ }
-func (c *captureMetrics) ObserveInboxFiltered(reason string)   { c.inboxFiltered[reason]++ }
-func (c *captureMetrics) ObserveRedisDegraded(op string)       { c.redisDegraded[op]++ }
+func (c *captureMetrics) ObserveFeedFiltered(_, reason string)      { c.feedFiltered[reason]++ }
+func (c *captureMetrics) ObserveExposureReported(count int)         { c.exposure += count }
+func (c *captureMetrics) ObserveNegativeFeedbackReported(count int) { c.negativeFeedback += count }
+func (c *captureMetrics) ObserveInboxVisit(dimension string)        { c.inboxVisit[dimension]++ }
+func (c *captureMetrics) ObserveInboxFiltered(reason string)        { c.inboxFiltered[reason]++ }
+func (c *captureMetrics) ObserveRedisDegraded(op string)            { c.redisDegraded[op]++ }
 
 // TestIntersectionService_FunnelMetrics 验证业务 SLI 漏斗信号在真实分支上发射：
 // Feed 候选/保鲜过滤/展示不完备过滤、ReportExposure 冷却写入、MarkVisited 清零。
@@ -44,15 +46,11 @@ func TestIntersectionService_FunnelMetrics(t *testing.T) {
 	src := stubSource{
 		facts: []IntersectionReasonView{
 			// 新鲜 + 完备事实候选（sharedFollowees → primaryText）。
-			{
-				IntersectionID:    "f1",
-				Dimension:         "relationship",
-				IntersectionClass: "fact",
-				FreshAt:           fresh,
-				IntersectionPoints: []IntersectionPointView{
-					{PointID: "pf", SourceRef: "sharedFollowees", Count: 3, Visibility: "public"},
-				},
-			},
+			func() IntersectionReasonView {
+				r := displayReadyFactReason("f1", "relationship", "sharedFollowees", "u1", "person", "陆衡", 3, 0.9)
+				r.FreshAt = fresh
+				return r
+			}(),
 			// 展示不完备：未登记 kind → primaryText 空 → display_incomplete。
 			{
 				IntersectionID: "inc",
@@ -67,15 +65,11 @@ func TestIntersectionService_FunnelMetrics(t *testing.T) {
 		},
 		affinities: []IntersectionReasonView{
 			// 概率候选（affinity → primaryText「为你推荐…」）。
-			{
-				IntersectionID:    "a1",
-				Dimension:         "interest",
-				IntersectionClass: "affinity",
-				FreshAt:           fresh,
-				IntersectionPoints: []IntersectionPointView{
-					{PointID: "pa", SourceRef: "sharedTagSample", PointClass: "recommended", Visibility: "public"},
-				},
-			},
+			func() IntersectionReasonView {
+				r := displayReadyAffinityReason("a1", "interest", "sharedTagSample", "p1", "content", "摄影内容", 0.7)
+				r.FreshAt = fresh
+				return r
+			}(),
 		},
 	}
 

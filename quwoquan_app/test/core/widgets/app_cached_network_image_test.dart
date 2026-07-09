@@ -155,6 +155,35 @@ void main() {
       expect(image.maxHeightDiskCache, physicalExtent);
     });
 
+    testWidgets(
+      'derives memory decode size from layout and caps large images',
+      (tester) async {
+        await tester.binding.setSurfaceSize(const Size(3200, 2600));
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+
+        await tester.pumpWidget(
+          _wrap(
+            const SizedBox(
+              width: 3000,
+              height: 2500,
+              child: AppCachedNetworkImage(
+                imageUrl: 'media/image/s/archived-image/post/p1/v1/cover.png',
+                cdnPreset: CdnImagePreset.cover,
+              ),
+            ),
+          ),
+        );
+
+        final image = tester.widget<CachedNetworkImage>(
+          find.byType(CachedNetworkImage),
+        );
+        expect(image.memCacheWidth, appImageDecodeMaxPhysicalExtent);
+        expect(image.memCacheHeight, appImageDecodeMaxPhysicalExtent);
+        expect(image.maxWidthDiskCache, appImageDecodeMaxPhysicalExtent);
+        expect(image.maxHeightDiskCache, appImageDecodeMaxPhysicalExtent);
+      },
+    );
+
     testWidgets('auto resolves raw background media object keys', (
       tester,
     ) async {

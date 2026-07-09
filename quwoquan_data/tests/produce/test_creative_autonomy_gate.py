@@ -19,7 +19,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 
 os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp(prefix="creative_autonomy_")
 
-from _common.creative_brief import creative_governance_issues  # noqa: E402
+from _common.creative_brief import complete_creative_meta, creative_governance_issues  # noqa: E402
 from _common.writing_pack import build_writing_pack, render_prompt_md  # noqa: E402
 
 
@@ -64,6 +64,9 @@ def test_writing_pack_carries_creative_brief_and_prompt_contract():
     assert "reviewGateChecklist" not in prompt
     assert "creativePlan" in prompt
     assert "selfCritique" in prompt
+    assert "主实体: **九寨沟**" in prompt
+    assert "正文必须至少自然出现一次完整名称" in prompt
+    assert "去过…之后" in prompt
 
 
 def test_prompt_limits_numeric_facts_to_source_allowlist():
@@ -143,6 +146,74 @@ def test_creative_governance_blocks_false_first_person_experience():
     )
     issues = creative_governance_issues(article, pack, meta)
     assert any("personaBoundary" in issue for issue in issues), issues
+
+
+_PASSING_ARTICLE = (
+    "# 九寨沟·值不值得去\n\n"
+    "先说结论：如果你重视湖泊景观和成熟动线，九寨沟值得优先规划；"
+    "但如果你只能旺季临时出发，就要提前接受排队和预算的不确定。\n\n"
+    "## 适合和不适合的人\n\n"
+    "资料里反复出现的价值，是景观密度高、游览组织成熟；不足则是旺季人流和预约压力。"
+)
+
+
+def test_complete_creative_meta_unblocks_body_passing_draft():
+    # fix A：creativePlan/selfCritique 是结构化规划产物，正文已由 body 级门把关。
+    # agent 漏填结构化字段时按锁定的 creativeBrief 预置补全，让正文达标稿有可靠成稿路径，
+    # 不再被 creativeGovernance 100% 硬拦。
+    pack = _pack()
+    raw_meta = {"generator": "agent", "model": "cursor"}
+    assert any(
+        "creativePlan" in issue or "selfCritique" in issue
+        for issue in creative_governance_issues(_PASSING_ARTICLE, pack, raw_meta)
+    )
+
+    completed, changed = complete_creative_meta(raw_meta, pack, body=_PASSING_ARTICLE)
+    assert changed is True
+    assert len(completed["creativePlan"]["concepts"]) >= 2
+    assert completed["creativePlan"]["selectedPlanId"]
+    assert completed["creativePlan"]["selectionReason"]
+    assert all(
+        "creativePlan" not in issue and "selfCritique" not in issue
+        for issue in creative_governance_issues(_PASSING_ARTICLE, pack, completed)
+    )
+    # body 不在补全范围（只补 meta），generator 维持 agent。
+    assert completed["generator"] == "agent"
+
+
+def test_complete_creative_meta_preserves_agent_supplied_fields():
+    pack = _pack()
+    agent_meta = {
+        "generator": "agent",
+        "creativePlan": {
+            "concepts": [
+                {"planId": "agent_a", "titleCandidate": "AGENT 自定义"},
+                {"planId": "agent_b", "titleCandidate": "AGENT 自定义2"},
+            ],
+            "selectedPlanId": "agent_a",
+            "selectionReason": "AGENT 自己的理由",
+        },
+        "selfCritique": {
+            "readerPromise": "AGENT readerPromise",
+            "titlePromise": "AGENT titlePromise",
+            "informationDensity": "AGENT density",
+            "evidenceBoundary": "AGENT boundary",
+            "personaBoundary": "AGENT persona",
+        },
+    }
+    completed, changed = complete_creative_meta(agent_meta, pack, body=_PASSING_ARTICLE)
+    assert changed is False
+    assert completed["creativePlan"]["selectedPlanId"] == "agent_a"
+    assert completed["creativePlan"]["selectionReason"] == "AGENT 自己的理由"
+    assert completed["selfCritique"]["readerPromise"] == "AGENT readerPromise"
+
+
+def test_complete_creative_meta_noop_for_image_carrier():
+    pack = _pack()
+    pack["carrier"] = "image"
+    completed, changed = complete_creative_meta({"generator": "agent"}, pack, body="")
+    assert changed is False
+    assert "creativePlan" not in completed
 
 
 def _run_all() -> None:

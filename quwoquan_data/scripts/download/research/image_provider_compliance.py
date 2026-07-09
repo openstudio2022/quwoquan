@@ -1,12 +1,11 @@
 """图库来源合规分级 + 受限如实标注（单一真相源 = content_source_registry.yaml）。
 
-P4 诚实约束：图虫 / Pinterest 等"专业图库 / 视觉发现平台"绝大多数受版权保护，平台 ToS /
-robots / 登录墙禁止抓取他人图片后再发布。诚实做法**不是**写一个绕过 ToS / 登录墙的抓取器，
-而是：
+P4 诚实约束：图虫等"专业图库 / 摄影社区"大多受版权保护，平台 ToS / robots / 登录墙禁止抓取
+他人图片后再发布。诚实做法**不是**写一个绕过 ToS / 登录墙的抓取器，而是：
 
 1. 以 registry 的 ``rightsPolicy`` / ``fetchMode`` / ``defaultRole`` 为唯一真相源，把每个
-   图库来源分级为「开放许可可发布 / 逐资产授权后可发布 / 逐图创作者授权后可发布 /
-   商业授权后可发布 / 仅参考」。
+   图库来源分级为「开放许可可发布 / 归因无水印可发布 / 逐资产授权后可发布 /
+   逐图创作者授权后可发布 / 商业授权后可发布 / 仅参考」。
 2. 对受限来源产出**如实**的受限记录（受限原因 + ``bypassAttempted=false`` + 需要的授权凭证），
    并给出**替代路径**（回到 Wikimedia Commons / Openverse 等开放许可图池）。
 3. 授权完整性硬门（``source_quality._collection_gate`` / ``vertical.validate_image_rights``）
@@ -30,6 +29,7 @@ from _common.content_source_registry import (
 # 禁止在判定/抓取代码里另维护第二套"哪些图库可发布"的映射。
 RIGHTS_POLICY_ACCESS_MODE: dict[str, str] = {
     "open_license_required": "open_license_publishable",
+    "attribution_no_watermark": "attribution_publishable",
     "asset_level_required": "asset_level_conditional",
     "creator_authorization_required": "restricted_creator_authorization",
     "commercial_license_required": "restricted_commercial_license",
@@ -51,6 +51,7 @@ _RESTRICTED_ACCESS_MODES = frozenset(
 _PUBLISHABLE_ACCESS_MODES = frozenset(
     {
         "open_license_publishable",
+        "attribution_publishable",
         "asset_level_conditional",
     }
 )

@@ -28,13 +28,13 @@
 - `flutter test test/core/services/content_cache_services_test.dart`
 - `flutter test test/ui/chat/widgets/chat_page_widget_test.dart`
 - `python3 quwoquan_app/scripts/media/verify_app_network_image_surface.py`
-- `python3 agent_ops/gate/verify_alpha_media_fixture_surface.py --env alpha|beta|gamma`
+- `python3 quwoquan_ops/gate/verify_alpha_media_fixture_surface.py --env alpha|beta|gamma`
 - `specs/feature-tree/runtime/runtime-client-foundation/local-cache-architecture/*` 文档包存在性检查
 
 ## Seeded Media Surface 阻断口径
 
 - `verify_alpha_media_fixture_surface.py` 虽保留历史文件名，但语义已升级为 `alpha / beta / gamma` 共用的全量 seeded media surface gate。
-- 枚举范围：`quwoquan_service/contracts/metadata/**/test_fixtures/**/*.json`、`deploy/shared/gamma_curated_media_bundle.json` 中所有 `media/avatar/`、`media/image/`、`media/background/`、`media/video/` 引用；`alpha` 额外覆盖 App mock 群会话 `groupAvatarFor(...)` 物化头像。
+- 枚举范围：`quwoquan_service/contracts/metadata/**/test_fixtures/**/*.json`、`quwoquan_ops/environments/gamma_curated_media_bundle.json` 中所有 `media/avatar/`、`media/image/`、`media/background/`、`media/video/` 引用；`alpha` 额外覆盖 App mock 群会话 `groupAvatarFor(...)` 物化头像。
 - 阻断条件：任一引用缺少 shared media 源文件、HTTPS 访问失败、头像/图片/背景图未返回 `200 + image/*`、视频未返回 `206 + video/*` Range 响应，均视为环境验证失败。
 - `stackctl verify --env alpha|beta|gamma --tier t4` 必须执行该 gate，并显式使用 topology 中的 `mediaAvatar / mediaImage / mediaVideo` public bases；不得退回抽样 URL 或 `--insecure`。
 

@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	defaultSchemaVersion = "v1"
 	defaultSourceApp     = "app"
 	defaultSourceService = "service"
 )

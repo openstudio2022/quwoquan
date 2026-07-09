@@ -60,6 +60,89 @@ def test_recover_running_auto_research_without_live_process_immediately(monkeypa
         == "orphaned running auto research without live workflow process"
     )
 
+def test_download_auto_research_uses_image_only_quota_lanes(monkeypatch):
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec["content"]["quotas"]["entityArticlesPerTarget"] = 0
+    spec["content"]["quotas"]["entityHomepagesPerTarget"] = 0
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 1
+    spec["content"]["carriers"] = ["image"]
+    store.save_spec(spec)
+    batch_id = "download_auto_research_image_only_lanes"
+    ctx = _ctx(task_id, batch_id)
+
+    captured: list[set[str] | None] = []
+
+    def _writer(*_args, lanes=None, progress_callback=None, **_kwargs):
+        captured.append(lanes)
+        if progress_callback:
+            progress_callback(
+                {
+                    "status": "completed",
+                    "entityCount": 1,
+                    "completedCount": 1,
+                    "remainingCount": 0,
+                    "workers": 1,
+                }
+            )
+        return {
+            "schemaVersion": "quwoquan.download.auto_research_plan",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "updated": [],
+            "issues": [],
+            "sourceAvailability": {"readyTargets": [_EID], "ineligibleTargets": []},
+        }
+
+    monkeypatch.setattr("download.research_plan.write_auto_research_plans", _writer)
+
+    run_mod._run_download_auto_research(
+        ctx,
+        [_EID],
+        entity_type="地点/景区",
+        force=True,
+    )
+
+    assert captured == [{"image"}]
+
+def test_download_auto_research_keeps_all_quota_enabled_lanes(monkeypatch):
+    task_id = _make_task()
+    batch_id = "download_auto_research_all_quota_lanes"
+    ctx = _ctx(task_id, batch_id)
+    captured: list[set[str] | None] = []
+
+    def _writer(*_args, lanes=None, progress_callback=None, **_kwargs):
+        captured.append(lanes)
+        if progress_callback:
+            progress_callback(
+                {
+                    "status": "completed",
+                    "entityCount": 1,
+                    "completedCount": 1,
+                    "remainingCount": 0,
+                    "workers": 1,
+                }
+            )
+        return {
+            "schemaVersion": "quwoquan.download.auto_research_plan",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "updated": [],
+            "issues": [],
+            "sourceAvailability": {"readyTargets": [_EID], "ineligibleTargets": []},
+        }
+
+    monkeypatch.setattr("download.research_plan.write_auto_research_plans", _writer)
+
+    run_mod._run_download_auto_research(
+        ctx,
+        [_EID],
+        entity_type="地点/景区",
+        force=True,
+    )
+
+    assert captured == [{"article", "homepage", "image"}]
+
 def test_download_plan_auto_research_repeats_replacement_waves(monkeypatch):
     task_id = _make_task(workflow_policy={"allowPartialContent": True})
     spec = store.load_spec(task_id)
@@ -118,6 +201,7 @@ def test_download_plan_auto_research_repeats_replacement_waves(monkeypatch):
     monkeypatch.setattr("task.run._source_plan_filled", _filled)
     monkeypatch.setattr("task.run._run_download_auto_research", _auto)
     monkeypatch.setattr("task.run._replacement_fetch_gate_passed", lambda *_args, **_kwargs: (True, []))
+    monkeypatch.setattr("task.run._homepage_base_draft_gate_for_entity", lambda *_args, **_kwargs: (True, []))
     monkeypatch.setattr(
         "task.run._content_capacity_gate_for_entity",
         lambda *_args, **_kwargs: (True, [], {"fixture": "passed"}),
@@ -335,7 +419,7 @@ def test_run_download_auto_research_chunks_primary_waves(monkeypatch):
     ctx = _ctx(task_id, batch_id)
     ctx.entity_ids = ["测试景区甲", "测试景区乙", "测试景区丙"]
     ctx.max_workers = 3
-    calls: list[tuple[list[str], int]] = []
+    calls: list[tuple[list[str], int, set[str] | None]] = []
 
     def _fake_write_auto_research_plans(
         task: str,
@@ -344,11 +428,12 @@ def test_run_download_auto_research_chunks_primary_waves(monkeypatch):
         *,
         entity_type: str,
         force: bool = False,
+        lanes: set[str] | None = None,
         max_workers: int = 1,
         progress_callback=None,
     ) -> dict:
         del task, batch, entity_type, force, progress_callback
-        calls.append((list(entity_ids), max_workers))
+        calls.append((list(entity_ids), max_workers, lanes))
         entity_id = entity_ids[0]
         return {
             "schemaVersion": "quwoquan.download.auto_research_plan",
@@ -383,9 +468,9 @@ def test_run_download_auto_research_chunks_primary_waves(monkeypatch):
     )
 
     assert calls == [
-        (["测试景区甲"], 3),
-        (["测试景区乙"], 3),
-        (["测试景区丙"], 3),
+        (["测试景区甲"], 3, {"article", "homepage", "image"}),
+        (["测试景区乙"], 3, {"article", "homepage", "image"}),
+        (["测试景区丙"], 3, {"article", "homepage", "image"}),
     ]
     assert report["waveCount"] == 3
     assert [wave["scope"] for wave in report["waves"]] == [
@@ -398,6 +483,97 @@ def test_run_download_auto_research_chunks_primary_waves(monkeypatch):
     persisted = read_json(batch_root(task_id, batch_id) / "_shared" / "auto_research_plan.json")
     assert persisted["waveCount"] == 3
     assert persisted["sourceAvailability"]["readyTargetCount"] == 3
+
+def test_run_download_auto_research_resumes_from_remaining_entity_ids(monkeypatch):
+    import download.research_plan as research_mod
+
+    task_id = _make_task(workflow_policy={"autoResearchWaveSize": 2, "maxAutoResearchWavesPerRun": 1})
+    batch_id = "auto_research_resume_remaining"
+    ctx = _ctx(task_id, batch_id)
+    ctx.max_workers = 1
+    shared = batch_root(task_id, batch_id) / "_shared"
+    shared.mkdir(parents=True, exist_ok=True)
+    write_json(
+        shared / "auto_research_plan.json",
+        {
+            "schemaVersion": "quwoquan.download.auto_research_plan",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "partialRun": True,
+            "partialReason": "max_auto_research_waves_per_run",
+            "waveCount": 1,
+            "remainingEntityIds": ["测试景区丙", "测试景区丁", "测试景区戊"],
+            "remainingEntityCount": 3,
+            "waves": [
+                {
+                    "scope": "primary",
+                    "entityIds": ["测试景区甲", "测试景区乙"],
+                    "readyTargetCount": 2,
+                    "ineligibleTargetCount": 0,
+                    "elapsedSeconds": 4,
+                }
+            ],
+            "sourceAvailability": {
+                "readyTargets": ["测试景区甲", "测试景区乙"],
+                "readyTargetCount": 2,
+                "ineligibleTargets": [],
+                "ineligibleTargetCount": 0,
+            },
+            "throughput": {"entityCount": 2, "elapsedSeconds": 4},
+        },
+    )
+    calls: list[list[str]] = []
+
+    def _fake_write_auto_research_plans(
+        _task,
+        _batch,
+        entity_ids: list[str],
+        *,
+        entity_type: str,
+        force: bool = False,
+        lanes: set[str] | None = None,
+        max_workers: int = 1,
+        progress_callback=None,
+    ) -> dict:
+        del entity_type, force, lanes, max_workers, progress_callback
+        calls.append(list(entity_ids))
+        return {
+            "schemaVersion": "quwoquan.download.auto_research_plan",
+            "taskId": task_id,
+            "batchId": batch_id,
+            "updated": [{"entityId": entity_id, "lane": "article"} for entity_id in entity_ids],
+            "issues": [],
+            "candidates": [],
+            "imageCollections": [],
+            "sourceUnavailable": [],
+            "sourceAvailability": {
+                "readyTargets": list(entity_ids),
+                "readyTargetCount": len(entity_ids),
+                "ineligibleTargets": [],
+                "ineligibleTargetCount": 0,
+            },
+            "throughput": {
+                "maxWorkers": 1,
+                "entityCount": len(entity_ids),
+                "elapsedSeconds": 3,
+                "entitiesPerMinute": 40,
+            },
+        }
+
+    monkeypatch.setattr(research_mod, "write_auto_research_plans", _fake_write_auto_research_plans)
+
+    report = run_mod._run_download_auto_research(
+        ctx,
+        ["测试景区甲", "测试景区乙", "测试景区丙", "测试景区丁", "测试景区戊"],
+        entity_type="景区",
+        scope="primary",
+    )
+
+    assert calls == [["测试景区丙", "测试景区丁"]]
+    assert report["waveCount"] == 2
+    assert report["waves"][-1]["scope"] == "primary_wave_2"
+    assert report["remainingEntityIds"] == ["测试景区戊"]
+    assert report["remainingEntityCount"] == 1
 
 def test_reset_download_plan_retry_clears_interrupted_auto_research_marker():
     task_id = _make_task()
@@ -592,3 +768,41 @@ def test_download_fetch_does_not_auto_research_fetch_stale_only_entities(monkeyp
     assert captured["download_entity_ids"] == f"{_EID},额外景区乙"
     assert captured["download_lane"] == "all"
 
+def test_download_plan_network_outage_zero_progress_yields_network_manual_required():
+    """网络出口故障且零有效进展 → failed，failedObjects 携带网络自愈标记。
+
+    文案必须命中 recipe._NETWORK_FAILURE_MARKERS，run-recipe resume 循环据此
+    等待出口自愈后自动 resume，而不是把批次交人工（H100 卡死 42 分钟的根治）。
+    """
+    task_id = _make_task()
+    ctx = _ctx(task_id, "network_outage_zero_progress")
+    report = {
+        "updated": [],
+        "networkOutage": {
+            "openHosts": ["zh.wikipedia.org"],
+            "noProgress": True,
+            "threshold": 6,
+        },
+    }
+    result = run_mod._download_plan_network_outage_result(ctx, report)
+    assert result is not None and result.status == "failed"
+    combined = " ".join(result.issues)
+    assert "network_unreachable" in combined
+    assert "retry_source_discovery" in combined
+
+    from task import recipe as recipe_mod
+    blob = combined.casefold()
+    assert any(marker in blob for marker in recipe_mod._NETWORK_FAILURE_MARKERS), (
+        "outage 文案必须与 recipe 网络类标记同源"
+    )
+
+def test_download_plan_network_outage_with_partial_progress_falls_through():
+    """网络退化但仍有实体产出 → 不触发网络失败终止，交常规缺口修复。"""
+    task_id = _make_task()
+    ctx = _ctx(task_id, "network_outage_partial_progress")
+    report = {
+        "updated": [{"entityId": _EID, "lane": "homepage"}],
+        "networkOutage": {"openHosts": ["zh.wikipedia.org"], "noProgress": False},
+    }
+    assert run_mod._download_plan_network_outage_result(ctx, report) is None
+    assert run_mod._download_plan_network_outage_result(ctx, {"updated": []}) is None

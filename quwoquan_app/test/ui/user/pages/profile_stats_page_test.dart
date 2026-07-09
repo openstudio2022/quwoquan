@@ -16,7 +16,7 @@ import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/widgets/app_list_page_semantics.dart';
+import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/ui/user/pages/profile_stats_page.dart';
 
 class _FakeHttpOverrides extends HttpOverrides {
@@ -572,7 +572,7 @@ Widget _buildTestApp({
 }
 
 Finder _segmentedControl() =>
-    find.byWidgetPredicate((widget) => widget is AppSegmentedChoiceBar);
+    find.byKey(const ValueKey<String>('profile-stats-primary-tabs'));
 
 Finder _segmentedLabel(String label) {
   return find.descendant(of: _segmentedControl(), matching: find.text(label));
@@ -617,7 +617,7 @@ void main() {
   });
 
   group('ProfileStatsPage 商用重设计', () {
-    testWidgets('顶栏使用 segmented selector，固定三 tab，不包含获赞', (tester) async {
+    testWidgets('顶栏使用主页同源一级 Tab，固定三 tab，不包含获赞', (tester) async {
       final repository = _TestUserProfileRepository(
         bundle: _bundle(
           subjectUserId: 'me',
@@ -658,6 +658,7 @@ void main() {
       await _pumpInitialLoad(tester);
 
       expect(_segmentedControl(), findsOneWidget);
+      expect(find.byType(CenteredScrollableTabBar), findsOneWidget);
       expect(_segmentedLabel(UITextConstants.circleFans), findsOneWidget);
       expect(_segmentedLabel(UITextConstants.follow), findsOneWidget);
       expect(
@@ -667,7 +668,7 @@ void main() {
       expect(find.text('获赞'), findsNothing);
     });
 
-    testWidgets('顶栏 segmented selector 为 tap-only，横向拖动不切换 tab', (tester) async {
+    testWidgets('顶栏一级 Tab 横向拖动不切换 tab，点击才切换', (tester) async {
       final repository = _TestUserProfileRepository(
         bundle: _bundle(
           subjectUserId: 'me',
@@ -1041,7 +1042,10 @@ void main() {
       );
       await _pumpInitialLoad(tester);
 
-      expect(find.text(UITextConstants.loadFailed), findsOneWidget);
+      expect(
+        find.text(UITextConstants.sectionLoadFailedTitleDefault),
+        findsOneWidget,
+      );
       expect(find.text(UITextConstants.tryAgain), findsOneWidget);
     });
 

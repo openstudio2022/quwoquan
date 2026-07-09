@@ -5,7 +5,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts" / "ml"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import feature_drift_monitor
 import online_guardrail

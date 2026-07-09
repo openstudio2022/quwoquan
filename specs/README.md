@@ -29,6 +29,7 @@
 | `RUNTIME_DEVELOPMENT_PLAN.md` | Runtime 商用准出开发计划（P0-fix → P0 → P1 → P2 → P3） |
 | `runtime_gap_analysis_and_plan.md` | Runtime Gap 全景分析与详细开发任务 |
 | `runtime_extension_catalog.md` | 20 个端云扩展场景详解（0→1 和 1→N） |
+| `feature-tree/runtime/system-architecture-and-engineering-guide/` | 端云系统架构与工程导引：服务目录、部署进程、one-box 拓扑、能力现状与 gap 矩阵 |
 
 ---
 
@@ -49,9 +50,9 @@
 | 入口 | 说明 |
 |------|------|
 | `quwoquan_service/contracts/metadata/DESIGN.md` | 业务对象元数据设计总览（5 聚合 + 7 实体 + 契约测试） |
-| `quwoquan_service/specs/` | 各服务 API 与领域边界（11 个 service spec） |
-| `quwoquan_service/design.md` | 云侧架构设计 |
-| `quwoquan_service/tasks.md` | 云侧任务清单 |
+| `specs/feature-tree/` + `quwoquan_service/contracts/metadata/` | 各服务 API、领域边界与验收真相源 |
+| `feature-tree/runtime/system-architecture-and-engineering-guide/` | 云侧服务目录、部署进程、工程导引与 one-box 组网权威入口 |
+| `quwoquan_service/README.md` | 当前服务域目录职责索引 |
 
 ---
 
@@ -61,7 +62,6 @@
 |------|------|
 | `02_IOS_NATIVE_FRONTEND_UX_SPEC.md` | iOS 原生前端 UX 规范（作者主页、沉浸式浏览器、创作编辑、post、导航、tab、sheet，含组件级响应式清单与门禁） |
 | `quwoquan_app/.cursor/rules/` | App 编码/设计/测试/状态管理/语义审计 |
-| `quwoquan_app/openspec/specs/` | App 能力规格（personal-assistant 等） |
 
 ---
 
@@ -72,4 +72,3 @@
 | `specs/feature-tree/tree_index.yaml` | 特性树结构索引唯一真相源 |
 | `specs/feature-tree/<l1>/<l2>/` | Journey / Scenario 节点四件套（`spec/design/plan/acceptance`） |
 | `specs/changelog/CR-*.yaml` | 增量变更台账与 revision 真相源 |
-| `changes/README.md` | 记录变更体系，迁移期仅供参考 |

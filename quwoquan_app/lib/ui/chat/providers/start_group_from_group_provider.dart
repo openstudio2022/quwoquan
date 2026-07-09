@@ -19,21 +19,14 @@ class GroupWithFriendCount {
   final String conversationId;
   final String title;
 
-  /// 已做无效/归档头像占位处理（合成群头像置空，交由 UI 走稳定占位图标）。
+  /// 与 inbox 同源：云侧预合成群头像 [avatarUrl] 经 [resolveAvatarImageUrl] 解析。
   final String avatarUrl;
   final int friendCount;
 }
 
-/// 合成 / 归档群头像在 alpha/mock 下并无真实媒体文件，直连会 404 刷屏；
-/// 一律置空，交由 `RoundedSquareAvatar` 的群占位图标兜底。
+/// 选群列表头像与 inbox 同源：只解析云侧预合成 [avatarUrl]，不做端侧合成或 strip。
 String resolveSelectableGroupAvatar(String raw) {
-  final lower = raw.trim().toLowerCase();
-  if (lower.isEmpty) {
-    return '';
-  }
-  if (lower.contains('archived-avatar/conversation') ||
-      lower.contains('/mock/conversation') ||
-      lower.contains('s/mock/group')) {
+  if (raw.trim().isEmpty) {
     return '';
   }
   return resolveAvatarImageUrl(raw);

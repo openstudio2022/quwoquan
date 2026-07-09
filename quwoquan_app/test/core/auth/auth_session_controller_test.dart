@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
 
@@ -25,6 +26,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
         authSessionRefreshExecutorProvider.overrideWithValue((
           refreshToken,
@@ -56,6 +58,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
         authSessionRefreshExecutorProvider.overrideWithValue((_) async {
           throw CloudException(
@@ -84,6 +87,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
         authSessionRefreshExecutorProvider.overrideWithValue((_) async {
           throw CloudException(
@@ -107,54 +111,58 @@ void main() {
     expect(state.errorMessage, isNotNull);
   });
 
-  test('softLogout 置 guest+manualLoggedOut，保留 refreshToken 与 remembered 摘要', () async {
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-    final store = _MemoryAuthSessionStore(
-      stored: StoredAuthSession(
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        ownerId: 'owner-1',
-        activeSubAccountId: 'sub-1',
-        accountState: 'active',
-        identityOrigin: 'phone',
-        installId: 'install-id',
-        lastRefreshAtEpochMs: nowMs,
-        lastForegroundAuthCheckAtEpochMs: nowMs,
-        rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
-        rememberedLoginMaskedIdentifier: '138****0001',
-        rememberedDisplayName: '趣友A',
-        manualLoggedOut: false,
-        launchPromptDismissed: true,
-      ),
-    );
-    final container = ProviderContainer(
-      overrides: [
-        appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
-        authSessionStoreProvider.overrideWithValue(store),
-        authSessionRefreshExecutorProvider.overrideWithValue(
-          (_) async => AuthLoginResultDto(),
+  test(
+    'softLogout 置 guest+manualLoggedOut，保留 refreshToken 与 remembered 摘要',
+    () async {
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      final store = _MemoryAuthSessionStore(
+        stored: StoredAuthSession(
+          accessToken: 'access-token',
+          refreshToken: 'refresh-token',
+          ownerId: 'owner-1',
+          activeSubAccountId: 'sub-1',
+          accountState: 'active',
+          identityOrigin: 'phone',
+          installId: 'install-id',
+          lastRefreshAtEpochMs: nowMs,
+          lastForegroundAuthCheckAtEpochMs: nowMs,
+          rememberedLoginMethod: AuthRememberedLoginMethod.phoneOtp,
+          rememberedLoginMaskedIdentifier: '138****0001',
+          rememberedDisplayName: '趣友A',
+          manualLoggedOut: false,
+          launchPromptDismissed: true,
         ),
-      ],
-    );
-    addTearDown(container.dispose);
+      );
+      final container = ProviderContainer(
+        overrides: [
+          appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
+          startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
+          authSessionStoreProvider.overrideWithValue(store),
+          authSessionRefreshExecutorProvider.overrideWithValue(
+            (_) async => AuthLoginResultDto(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    container.read(authSessionControllerProvider);
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-    final notifier = container.read(authSessionControllerProvider.notifier);
-    await notifier.softLogout();
+      container.read(authSessionControllerProvider);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final notifier = container.read(authSessionControllerProvider.notifier);
+      await notifier.softLogout();
 
-    final state = container.read(authSessionControllerProvider);
-    expect(state.isAuthenticated, isFalse);
-    expect(state.status, AuthSessionStatus.guest);
-    expect(state.promptReason, AuthPromptReason.manualLoggedOut);
-    expect(state.rememberedLoginMethod, AuthRememberedLoginMethod.phoneOtp);
+      final state = container.read(authSessionControllerProvider);
+      expect(state.isAuthenticated, isFalse);
+      expect(state.status, AuthSessionStatus.guest);
+      expect(state.promptReason, AuthPromptReason.manualLoggedOut);
+      expect(state.rememberedLoginMethod, AuthRememberedLoginMethod.phoneOtp);
 
-    final stored = await store.read();
-    expect(stored.accessToken, isEmpty);
-    expect(stored.refreshToken, 'refresh-token');
-    expect(stored.manualLoggedOut, isTrue);
-    expect(stored.hasValidQuickLoginCredential, isTrue);
-  });
+      final stored = await store.read();
+      expect(stored.accessToken, isEmpty);
+      expect(stored.refreshToken, 'refresh-token');
+      expect(stored.manualLoggedOut, isTrue);
+      expect(stored.hasValidQuickLoginCredential, isTrue);
+    },
+  );
 
   test('hardLogout 清除 refreshToken，下次登录无可用快速登录凭证', () async {
     final nowMs = DateTime.now().millisecondsSinceEpoch;
@@ -176,6 +184,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         appDataSourceModeProvider.overrideWith(_MockRemoteMode.new),
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(store),
         authSessionRefreshExecutorProvider.overrideWithValue(
           (_) async => AuthLoginResultDto(),
@@ -203,6 +212,11 @@ void main() {
 final class _MockRemoteMode extends AppDataSourceModeNotifier {
   @override
   AppDataSourceMode build() => AppDataSourceMode.remote;
+}
+
+final class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
+  @override
+  bool build() => true;
 }
 
 final class _MemoryAuthSessionStore implements AuthSessionStore {

@@ -72,10 +72,10 @@ flowchart TD
 - **CHECKPOINT 接缝复用**：`task/run.py` 的 CHECKPOINT 节点在 single 模式是「pause(10)→会话 Agent→--resume」，
   在 fanout 模式由 worker 把该接缝替换为「lease packet→cloud agent 创作→回写产物→complete」，**DAG/门/回退逻辑不改**。
 
-## 4. SDK 映射（外部 runner）
+## 4. SDK 映射（执行引擎）
 
-外部 runner [`agent_ops/runners/fanout_runner.py`](../../agent_ops/runners/fanout_runner.py)
-（cursor-sdk Python，归 `agent_ops` 不违反 scripts 目录军规）：
+执行引擎 [`quwoquan_data/scripts/task/fanout_runner.py`](../scripts/task/fanout_runner.py)
+（cursor-sdk Python，经 `qwq-data task scaled-e2e author-runner` 暴露）：
 
 - worker 循环 `object-queue lease-next [--ref]` → 用 lease packet（含执行合约 5 要素）`Agent.create(cloud)` →
   stream → `run.wait()` → 按 `ref_review_gate.passed` 回写。
@@ -107,7 +107,7 @@ worker 像会话一样逐叶子调用同一动词；缺省行为不变（全量�
 - 断路器/通知：复用 `object_queue` 的 stuck-detection + token/cost cap + `_notifications.jsonl`；
   分区 reducer 通过才 roll-up 到父节点。
 - hooks 分区隔离：`.cursor/hooks.json` 的 `subagentStart`
-  （[`agent_ops/hooks/subagent_start_guard.py`](../../agent_ops/hooks/subagent_start_guard.py)）注入
+  （[`quwoquan_ops/hooks/subagent_start_guard.py`](../../quwoquan_ops/hooks/subagent_start_guard.py)）注入
   「单 ref 隔离 + 最小工具集 + Ralph 出口判据」，**当前 observe-only（始终 allow）**，稳定后可转 ask/deny。
 
 ## 7. 两模式适配矩阵

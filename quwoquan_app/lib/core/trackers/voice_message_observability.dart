@@ -20,8 +20,7 @@ class VoiceMessageEventNames {
 }
 
 class VoiceMessageObservability {
-  VoiceMessageObservability({required AnalyticsService analytics})
-    : _analytics = analytics;
+  VoiceMessageObservability({required this._analytics});
 
   final AnalyticsService _analytics;
 
@@ -42,14 +41,14 @@ class VoiceMessageObservability {
           eventType: 'voice_message_action',
           eventName: eventName,
           properties: <String, dynamic>{
-            if (conversationId != null) 'conversationId': conversationId,
-            if (messageId != null) 'messageId': messageId,
-            if (durationMs != null) 'durationMs': durationMs,
-            if (fileSizeBytes != null) 'fileSizeBytes': fileSizeBytes,
-            if (waveformSamples != null) 'waveformSamples': waveformSamples,
-            if (uploadProgress != null) 'uploadProgress': uploadProgress,
-            if (failureKind != null) 'failureKind': failureKind,
-            if (cacheHit != null) 'cacheHit': cacheHit,
+            'conversationId': ?conversationId,
+            'messageId': ?messageId,
+            'durationMs': ?durationMs,
+            'fileSizeBytes': ?fileSizeBytes,
+            'waveformSamples': ?waveformSamples,
+            'uploadProgress': ?uploadProgress,
+            'failureKind': ?failureKind,
+            'cacheHit': ?cacheHit,
           },
         ),
       ),

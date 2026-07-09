@@ -2,7 +2,7 @@
 
 来源候选由任务/Agent 在 download source_plan 输入中给出，主线不内置任何区域语料。
 对象优先布局（真相源 docs/pipeline_directory_layout_spec.md §15）：
-  runtime/tasks/{task}/batches/{batch}/entities/{domain}/{type}/{name}/1.download/{homepage,article,image}_source_plan.json
+  local/data-runtime/tasks/{task}/batches/{batch}/entities/{domain}/{type}/{name}/1.download/{homepage,article,image}_source_plan.json
 统一 payload 形态：
   homepage/article: {"sources": [{"source_id","platform","url","body?","imageUrls?"}]}
   image: {"collections": [{"sourceCollectionId", "creator", "images": [...]}]}
@@ -45,7 +45,7 @@ def content_type_for_lane(lane: str) -> str:
     """research lane → 发布内容类型路由真相源。
 
     三类物理解耦后，每条来源按其 lane 路由到对应内容类型：homepage=实体、article=文章、image=图片。
-    未知/空/legacy 混合计划回落为 article（旧 source_plan.json 是文章态文本计划，无独立 lane）。
+    未知/空 lane 仅作 article 兜底，不能再借 legacy 混合计划绕回统一 source_plan.json。
     """
     return LANE_CONTENT_TYPE.get(str(lane or "").strip(), "article")
 
@@ -61,9 +61,8 @@ def _source_plan_files(
     """Return independent lane plans.
 
     A lane-specific caller is strict: ``research_lane=image`` must read only
-    ``image_source_plan.json``. Legacy fallback is kept only for unscoped older
-    helper calls so separated research workflows cannot be satisfied by the old
-    mixed ``source_plan.json`` by accident.
+    ``image_source_plan.json``. Legacy mixed ``source_plan.json`` is no longer
+    consumable truth; stale batches must regenerate lane plans.
     """
     obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
     selected = list(lanes or ("homepage", "article"))
@@ -75,12 +74,7 @@ def _source_plan_files(
         path = obj / STAGE_DOWNLOAD / filename
         if path.is_file():
             found.append((lane, path))
-    if lanes is not None:
-        return found
-    legacy = obj / STAGE_DOWNLOAD / "source_plan.json"
-    if found and (not legacy.is_file() or any(_plan_has_payload(path) for _lane, path in found)):
-        return found
-    return [("legacy", legacy)] if legacy.is_file() else []
+    return found
 
 
 def _extract_sources(data: Any) -> list[dict[str, Any]]:
@@ -241,15 +235,6 @@ def curated_images_for_entity(
         files = _source_plan_files(
             task_id, batch_id, entity_id, entity_type, lanes=("image",)
         )
-        obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
-        legacy = obj / STAGE_DOWNLOAD / "source_plan.json"
-        if (
-            selected_lane is None
-            and (not files or not any(_plan_has_payload(path) for _lane, path in files))
-            and legacy.is_file()
-            and _plan_has_payload(legacy)
-        ):
-            files = [("legacy", legacy)] if legacy.is_file() else []
     specs: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for lane_name, plan_file in files:
@@ -259,10 +244,6 @@ def curated_images_for_entity(
         payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
         raw_specs = data.get("imageUrls") or payload.get("imageUrls") or []
         for extra in _normalize_image_specs(raw_specs):
-            if lane_name == "legacy" and not extra.get("sourceCollectionId"):
-                extra["sourceCollectionId"] = f"legacy:{entity_id}:source_plan"
-                extra["creator"] = extra.get("creator") or extra.get("credit") or "legacy-source-plan"
-                extra["collectionPageUrl"] = extra.get("collectionPageUrl") or extra.get("sourceUrl") or extra.get("url") or ""
             lane_key = str(extra.get("researchLane") or lane_name or "image")
             key = (lane_key, extra["url"])
             if key not in seen:
@@ -282,6 +263,8 @@ def curated_images_for_entity(
                 "authorizationProof": collection.get("authorizationProof") or "",
                 "usageScope": collection.get("usageScope") or "",
                 "platform": collection.get("platform") or "",
+                "modelReleaseRequired": collection.get("modelReleaseRequired") or "",
+                "modelReleaseStatus": collection.get("modelReleaseStatus") or "",
             }
             images = collection.get("images") or []
             for extra in _normalize_image_specs(images):
@@ -344,6 +327,8 @@ def curated_images_for_entity(
                         "licenseSnapshot": raw_source.get("licenseSnapshot") or "",
                         "authorizationProof": raw_source.get("authorizationProof") or "",
                         "usageScope": raw_source.get("usageScope") or "",
+                        "modelReleaseRequired": raw_source.get("modelReleaseRequired") or "",
+                        "modelReleaseStatus": raw_source.get("modelReleaseStatus") or "",
                         "platform": raw_source.get("platform") or "",
                         "researchLane": "homepage",
                         "sourceId": raw_id,

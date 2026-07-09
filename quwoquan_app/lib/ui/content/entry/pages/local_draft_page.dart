@@ -226,7 +226,7 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
     if (!mounted) {
       return;
     }
-    final confirmed = await showCupertinoDialog<bool>(
+    final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
@@ -280,7 +280,7 @@ class _LocalDraftPageState extends ConsumerState<LocalDraftPage>
       if (!mounted) {
         return;
       }
-      final confirmedDelete = await showCupertinoDialog<bool>(
+      final confirmedDelete = await showAppCupertinoDialog<bool>(
         context: context,
         builder: (dialogContext) {
           return CupertinoAlertDialog(

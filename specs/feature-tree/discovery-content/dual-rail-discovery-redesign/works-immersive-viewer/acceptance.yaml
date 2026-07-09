@@ -119,8 +119,8 @@ gwt_acceptance:
     - '[migrated_from_recorded_command] flutter test test/ui/circle/pages/home_circles_hub_page_test.dart
       test/ui/circle/widgets/section_widgets_test.dart test/ui/circle/circle_content_identity_widget_test.dart'
     - '[migrated_from_recorded_command] flutter test test/app/navigation/native_back_navigation_policy_test.dart'
-    - '[migrated_from_recorded_command] bash agent_ops/scaffold/verify_acceptance_standard.sh'
-    - '[migrated_from_recorded_command] bash agent_ops/scaffold/verify_feature_tree_refactor.sh'
+    - '[migrated_from_recorded_command] bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh'
+    - '[migrated_from_recorded_command] bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh'
   GWT3:
     title: 三类媒体内部导航状态信息与图片书体验
     given:
@@ -130,17 +130,34 @@ gwt_acceptance:
     then:
     - 图片作品使用 `components/media/image/book/ImageBookCanvas` 与 `components/media/shared/pageflip/MediaPageFlipBook` 形成物理翻书体验，不回退为 rubber-band PageView 主体验。
     - 图片作品横滑按住时出现同源动态翻页层，正面、背面、底页三面材质齐备，翻页边界与折线可见，背面不得采样黑屏、空纹理或 loading 模糊材质。
+    - 图片书默认仍提供原生翻书体验；普通图片左右淡入/页态更新只在系统 Reduce Motion / `MediaQueryData.disableAnimations` 开启时作为替代。
+    - 图片书连续前后翻 10 次时，动态层不得黑屏、loading、瞬间换纹理、自由边或 seam 异常跳变；前翻前 `120ms` 内当前页 front 必须仍在同一 moving sheet 随手指离场，后翻前 `120ms` 内上一页 front 必须仍在同一 moving sheet 可见。
+    - 图片书直接 page surface 材质生成器是 active 翻页的纹理真相源；外部图片 ready/precache 状态不得阻塞第一页中心左滑前翻，也不得在拖动中清空动态材质。
     - 图片书前翻绑定为 `recto=current.front / verso=next.back / bottom=next.front`，后翻绑定为 `recto=prev.front / verso=prev.back / bottom=current.front`；back 必须是独立暗淡背面纹理，不得复用 front。
+    - 图片书 active sheet 的 `recto/verso` 必须在同一个 `media-pageflip-flipping-layer` 内分段/渐进呈现，不得一进入 curl 就把整张 moving sheet 离散替换为下一页/上一页背面。
+    - 图片背面必须是低饱和、低对比、纸张 wash 的 photo backface，平均亮度需落在对应 front 的 `0.62..0.78`，不得保留高对比镜像图作为主要视觉。
     - 横图、竖图、极端比例图统一 rasterize 成同一书页 logicalSize，图片自然尺寸只影响 cover 裁剪，不改变翻页几何。
     - 图片加载中只作为静态等待态；active 翻页中如图片尚未解码或加载失败，必须输出同尺寸 failure front/back page surface，表达“图片未正确加载”的状态而非黑屏、跳页或 loading 模糊页。
     - 图片作品在内容下方、标题上方显示点状页态，最多 6 点且明确当前位置；单图无指示器。
     - 视频作品显示自绘极简控制行（播放态/当前时间/进度/总时长）与 `视频集 · n/m ↔` 胶囊（时间轴下、标题上）；无点状指示器；单视频无胶囊；无平台默认控制层。
     - 文章作品使用深色纸张阅读，页码 `n / m` 位于正文后、作者栏前，chevron 可切页；顶部无页码。
     - 文章默认不使用白纸，翻页正面、背面、底页共用同一纸张 palette。
+    - 图片书与文章浏览器的前/后翻方向只由累计横向位移决定：左滑前翻、右滑后翻；起手左右半区不得参与方向判定。
+    - 图片书与文章浏览器必须共享同一 pointer 级手势采样层，统一单指追踪、delta、velocity 与 start/update/end/cancel 语义；Work Browser 父级是沉浸手势仲裁器的唯一坐标源，图片书/文章子级只能消费 intent 结果并用本地坐标驱动各自 pageflip fold，不得父子用不同 localPosition 同时 update 同一 controller。
+    - 斜向手势在 preview 阶段不得冻结父级竖向作品流；只有锁定横向翻页或横向边界回弹后才阻断上下切作品。
+    - 图片书运动曲线默认使用舒适 profile：drag travel factor 为 `1.0`，前 `24px` 只做浅 edge lift；释放动画使用 ease-out 连续采样，不得通过线性 `round()` 离散跳帧。
+    - 翻页释放动画统一走共享 release policy，提交翻页时长限制在 `320ms..520ms`，取消回弹时长限制在 `220ms..360ms`，高速 fling 不得闪缩，慢速释放不得拖沓。
+    - 开启系统 Reduce Motion / `MediaQueryData.disableAnimations` 时，图片书不得启动 `media-pageflip-flipping-layer`，不得使用 3D curl、镜像背面或多轴深度模拟，只允许轻量页态更新并继续同步页码。
+    - 图片书通过现有 `ContentBehaviorTracker` 记录 `works_image_pageflip_motion`，字段包含 `direction`、`motionProfile`、`settleMs`、`reducedMotion`、`committed`，不新增云 API。
     done_when:
-    - local_contract 覆盖 `MediaPageFlipBook` 全屏左滑 0→1、右滑 1→0、前翻/后翻 held dynamic layer 三面 face binding、斜向拖拽 rotation 与同尺寸，且 `ImageBookCanvas` 会同步当前图片页码。
-    - local_contract 覆盖 `ImageBookPageSurfaceFactory` 横图、竖图、loading、failure 四类输入均输出同尺寸非空 front/back page surface，且 back 亮度低于 front；同时覆盖 `ImageBookCanvas` active texture builder 不返回 loading 材质。
-    - widget 测试覆盖 Work Browser 图片书组件接入、首图 held curl 与翻到下一张、末图继续左滑不退出、三类媒体导航状态信息位置与上限断言。
+    - local_contract 覆盖 `MediaPageFlipBook` 全屏左滑 0→1、右滑 1→0、前翻/后翻 held dynamic layer 三面 face binding、斜向拖拽 rotation 与同尺寸、直接纹理路径不被 ready=false 或加载回调打断，且 `ImageBookCanvas` 会同步当前图片页码并在第一页中心左滑立即进入跟手层。
+    - local_contract 覆盖共享 pointer 手势层对单指 start/update/end、累计 delta 与水平 velocity 的采样，图片书与文章宿主均通过该层接收拖动事件。
+    - local_contract 覆盖 `ImmersiveGestureIntentController` 同一起手区域左滑/右滑分别锁定前/后翻、纵向优势锁上下切、preview 阶段不冻结父级竖向滚动。
+    - pageflip release policy 测试覆盖不同 `progress/velocity` 的 commit settle duration 均在 `320ms..520ms`、cancel settle duration 均在 `220ms..360ms`，且图片书 release 后短时间内仍保留动态翻页层。
+    - local_contract 覆盖 `MediaPageFlipBook` forward/back 同一 moving sheet 内 recto/verso 分段可见，覆盖系统 Reduce Motion 下不启动 `media-pageflip-flipping-layer`，并覆盖图片书/文章宿主不再二次写入外部 `ImmersiveGestureIntentController.update(position:)`。
+    - local_contract 覆盖 `ImageBookPageSurfaceFactory` 横图、竖图、loading、failure 四类输入均输出同尺寸非空 front/back page surface，且 back 亮度为 front 的 `0.62..0.78` 并降低饱和度；同时覆盖 `ImageBookCanvas` active texture builder 不返回 loading 材质。
+    - local_contract 覆盖 `works_image_pageflip_motion` 字段进入现有 behavior payload；widget/几何回归覆盖连续前后翻 10 次 seam/free-edge 无异常跳变、动态层不黑屏、不 loading、不瞬间换纹理。
+    - widget 测试覆盖 Work Browser 图片书组件接入、首图中心小幅左滑 held curl 与翻到下一张、末图继续左滑不退出、三类媒体导航状态信息位置与上限断言。
     - pageflip 测试覆盖文章深色纸张正反面材质同源。
     edge_cases:
     - 8 图作品只渲染 6 点，以首尾淡化表达更多。
@@ -176,6 +193,13 @@ gwt_acceptance:
     - '[recorded_command] python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py'
     - '[recorded_command] cd quwoquan_app && flutter test test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart'
     - '[recorded_command] cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
+    - '[recorded_command] cd quwoquan_app && flutter test --no-pub test/components/pageflip/release_policy_test.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/cloud/content/content_behavior_tracker_test.dart test/core/design_system/providers/appearance_runtime_test.dart'
+    - '[recorded_command] cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart --plain-name "图片作品使用公共翻书组件，首图左滑翻到下一张且不触发退出"'
+    - '[recorded_command] cd quwoquan_app && flutter test --no-pub test/ui/content/article_reader'
+    - '[recorded_command] cd quwoquan_app && flutter analyze --no-fatal-infos lib/components/pageflip/release_policy.dart lib/components/media/shared/pageflip/media_page_flip_book.dart lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart lib/components/media/image/book/image_book_page_surface.dart lib/app/providers/accessibility_provider.dart lib/core/providers/app_providers.dart lib/app/startup_welcome_appearance.dart lib/cloud/services/behavior/behavior_repository.dart lib/core/trackers/content_behavior_tracker.dart lib/components/media/image/book/image_book_canvas.dart lib/ui/discovery/widgets/works_immersive_viewer.dart test/components/pageflip/release_policy_test.dart test/components/pageflip/pageflip_widget_test.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/core/design_system/providers/appearance_runtime_test.dart test/cloud/content/content_behavior_tracker_test.dart'
+    - '[recorded_command] make verify-app-page-horizontal-quality'
+    - '[recorded_failure_unrelated] make verify-test-coverage-map failed on runtime-data-engineering/object-homepage-network pre-existing canonical evidence drift and retired commands; no failure pointed to works-immersive-viewer/pageflip changes.'
+    - '[recorded_failure_unrelated] cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart --plain-name "视频书视频可铺入状态栏" failed with canvas top 20 vs expected <1; this path does not exercise image pageflip/motion changes.'
   GWT4:
     title: 媒体筛选进入更多菜单
     given:
@@ -367,7 +391,7 @@ gwt_acceptance:
       test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

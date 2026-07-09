@@ -94,8 +94,8 @@ gwt_acceptance:
       真实 spotlight 链路待 WP-D。'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
   full_gate:
   - make gate

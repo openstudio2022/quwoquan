@@ -11,7 +11,9 @@ extension _VideoEditorPageStateCover on _VideoEditorPageState {
         ),
         alignment: Alignment.center,
         child: Text(
-          _framesLoading ? '正在缓存更细颗粒度视频帧...' : '暂无可用预览帧',
+          _framesLoading
+              ? UITextConstants.videoEditorPreviewFramesLoading
+              : UITextConstants.videoEditorNoPreviewFrames,
           style: TextStyle(
             color: CupertinoColors.secondaryLabel.resolveFrom(context),
             fontSize: AppTypography.sm,
@@ -142,8 +144,10 @@ extension _VideoEditorPageStateCover on _VideoEditorPageState {
 
   Widget _buildCoverSection() {
     return _EditorSection(
-      title: '封面时间轴',
-      trailing: _framesLoading ? '生成中' : '${_frames.length} 帧',
+      title: UITextConstants.videoEditorCoverTimeline,
+      trailing: _framesLoading
+          ? UITextConstants.videoEditorGenerating
+          : '${_frames.length} ${UITextConstants.videoEditorFrameCountSuffix}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -161,7 +165,9 @@ extension _VideoEditorPageStateCover on _VideoEditorPageState {
             child: _frames.isEmpty
                 ? Center(
                     child: Text(
-                      _framesLoading ? '正在生成视频帧...' : '暂无可选封面帧',
+                      _framesLoading
+                          ? UITextConstants.videoEditorFramesLoading
+                          : UITextConstants.videoEditorNoFrames,
                       style: TextStyle(
                         color: CupertinoColors.secondaryLabel.resolveFrom(
                           context,

@@ -31,6 +31,7 @@ export 'design_system/icons/app_custom_icons.dart';
 // Core widgets
 export 'widgets/app_action_sheet.dart';
 export 'widgets/conversation_sheet.dart';
+export 'widgets/app_modal_presenter.dart';
 export 'widgets/app_modal_surface.dart';
 export 'widgets/app_list_page_semantics.dart';
 export 'widgets/app_search_field.dart';

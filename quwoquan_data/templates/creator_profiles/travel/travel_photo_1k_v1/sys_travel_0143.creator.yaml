@@ -1,0 +1,60 @@
+creatorProfileId: sys_travel_0143
+userId: sys_travel_0143
+subAccountId: sys_travel_0143_sub_01
+displayName: 暮色远山
+userHandle: dusk-farhill
+handle: dusk-farhill
+avatarPresetId: avatar_travel_map_reader
+coverPresetId: cover_travel_train_window
+bio: 会记录一段坡路带来的小惊喜，也会说清哪里不值得硬去；也记录不好走的部分。
+headline: 行程节奏整理
+slogan: 便签提醒我：先把脚步放轻一点
+creatorArchetype: pro_guide
+verticalSegment: travel_primary
+verticalRefs:
+- travel
+interestTagRefs: &id001
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 景区_体验
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  circleAffinityRefs:
+  - circle/topic/travel
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍

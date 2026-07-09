@@ -1,0 +1,60 @@
+creatorProfileId: sys_photo_0065
+userId: sys_photo_0065
+subAccountId: sys_photo_0065_sub_01
+displayName: 薄荷路书
+userHandle: mint-route
+handle: mint-route
+avatarPresetId: avatar_photo_lens_portrait
+coverPresetId: cover_photo_city_bluehour
+bio: 常在暗房红灯里找画面，记录高光、秩序和成片取舍，偏爱耐看的组图；喜欢留一点安静。
+headline: 光线与构图笔记
+slogan: 画面提醒我：宁愿少拍，也要看准
+creatorArchetype: gear_reviewer
+verticalSegment: photography_primary
+verticalRefs:
+- photography
+interestTagRefs: &id001
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+publicProfileTagRefs:
+- Topic/摄影
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 图片_专题
+- 摄影_教程
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  entityAffinityRefs:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  circleAffinityRefs:
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- photography
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程

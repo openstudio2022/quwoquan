@@ -1,17 +1,20 @@
 {
   "schemaVersion": "content-recommendation-social-graph-seed.v1",
   "environment": "gamma",
-  "description": "gamma-local 内容推荐社交图读模型种子（env-seed-first 单一真相源）。content-service 的交集计算（MongoIntersectionSource.FactReasons）读自身库 quwoquan_content 的 follow_edges + rm_recommend_feature 读模型；真实部署里这些读模型由 user-service 关注事件投影而来，gamma-local 未接线该跨服务投影，故 follow_edges 恒空、feed envelope intersectionReasons 恒空。本 fixture 为鉴权会话 viewer 注入关注边 + 关注对象兴趣特征，使 friend_tags 事实交集通道（你关注的人也在讨论这些主题）产出，feed intersectionReasons 可非空且语义正确。应用器：quwoquan_service/scripts/seed/apply_content_social_graph_seed.py（幂等可重跑）。",
+  "description": "gamma-local 内容推荐社交图读模型种子（env-seed-first 单一真相源）。content-service 的对象交集 / feed 交集计算读取 quwoquan_content 库中的 follow_edges、rm_recommend_feature、rm_entity_tags、rm_behavior_events 与 circle_members；真实部署里这些读模型分别由 user/circle/content 的事件投影维护，gamma-local 未完整接线，因此需要用同一 fixture 为 canonical viewer + homepage + circle 补最小事实闭环。应用器：quwoquan_service/services/seed-box/scripts/apply_content_social_graph_seed.py（幂等可重跑）。",
   "targetStore": "content-service:quwoquan_content",
   "collections": [
     "follow_edges",
     "rm_recommend_feature",
+    "rm_entity_tags",
+    "rm_behavior_events",
+    "circle_members",
     "rm_viewer_object_intersection(invalidate)"
   ],
   "viewers": [
     {
-      "viewerId": "us_01_3278_01kvevr8s7s3b0arr7x3p27efe",
-      "note": "gamma anonymous device-login 恢复路径的稳定 subAccount（T3 会话主体）",
+      "viewerId": "fixture_user_current",
+      "note": "交集四主页 / 对象页 story strict gate 的 canonical viewer（与 runtime refs 保持一致）",
       "follows": [
         {
           "followeeId": "fixture_user_travel",
@@ -26,8 +29,73 @@
             "Topic/旅行/露营": 4,
             "Topic/户外/装备": 2
           }
+        },
+        {
+          "followeeId": "fixture_user_photo",
+          "interestTags": {
+            "Topic/摄影/城市影像": 4,
+            "Topic/摄影/胶片": 3
+          }
         }
       ]
+    }
+  ],
+  "entityTags": [
+    {
+      "entityId": "homepage_sight_west_lake",
+      "tags": [
+        "景点",
+        "西湖",
+        "城市漫游"
+      ]
+    },
+    {
+      "entityId": "fixture_circle_photo",
+      "tags": [
+        "摄影",
+        "城市影像",
+        "胶片"
+      ]
+    }
+  ],
+  "objectVisits": [
+    {
+      "userId": "fixture_user_travel",
+      "objectId": "homepage_sight_west_lake",
+      "objectType": "homepage",
+      "displayName": "西湖景区"
+    },
+    {
+      "userId": "fixture_user_outdoor_01",
+      "objectId": "homepage_sight_west_lake",
+      "objectType": "homepage",
+      "displayName": "西湖景区"
+    },
+    {
+      "userId": "fixture_user_photo",
+      "objectId": "fixture_circle_photo",
+      "objectType": "circle",
+      "displayName": "契约摄影社"
+    },
+    {
+      "userId": "fixture_user_travel",
+      "objectId": "fixture_circle_photo",
+      "objectType": "circle",
+      "displayName": "契约摄影社"
+    }
+  ],
+  "circleMemberships": [
+    {
+      "circleId": "fixture_circle_photo",
+      "userId": "fixture_user_current"
+    },
+    {
+      "circleId": "fixture_circle_photo",
+      "userId": "fixture_user_photo"
+    },
+    {
+      "circleId": "fixture_circle_photo",
+      "userId": "fixture_user_travel"
     }
   ],
   "invalidateViewerIntersectionCache": true

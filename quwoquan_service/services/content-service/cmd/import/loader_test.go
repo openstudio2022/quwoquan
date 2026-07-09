@@ -21,7 +21,7 @@ func fixturePublish(t *testing.T) string {
 	root := t.TempDir()
 	// 两篇文章
 	writeFile(t, filepath.Join(root, "posts/article/体验/甲居藏寨体验/1/manifest.json"),
-		`{"contentType":"article","authorId":"builtin_travel_blogger","creatorProfileId":"qwq_creator_travel_blogger_001","creatorArchetype":"travel_blogger","creatorProfileVersion":"1.0.0","creatorDisclosure":{"type":"platform_virtual_creator","displayText":"平台虚拟创作者","visible":true},"experienceClaimMode":"editorial_synthesis","authorQualitySignals":{"qualityScore":0.85,"fatigueScore":0.2,"riskTier":"low"},"entityRefs":["地点/景区/甲居藏寨"],"normalizedEntityRefs":["entity:景区:甲居藏寨"],"tagRefs":["Topic/旅行"],"template":"journal","generatorModel":"agent/x","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","publishTitle":"甲居藏寨体验","publishAngle":"体验","publishSeq":1,"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾","createdAt":"2026-05-01T00:00:00Z","updatedAt":"2026-05-03T00:00:00Z","publishedAt":"2026-05-04T00:00:00Z","articleAssetManifest":{"schemaVersion":1,"articleMarkdownVersion":"qwq-rich-md/1","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","documentSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111","assetManifestSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222","documentVersionSha256":"sha256:3333333333333333333333333333333333333333333333333333333333333333","assets":[{"assetId":"cover","objectKey":"media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","cdnUrl":"https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}}`)
+		`{"contentType":"article","authorId":"builtin_travel_blogger","creatorProfileId":"qwq_creator_travel_blogger_001","creatorArchetype":"travel_blogger","creatorProfileVersion":"1.0.0","creatorDisclosure":{"type":"platform_virtual_creator","displayText":"平台虚拟创作者","visible":true},"experienceClaimMode":"editorial_synthesis","authorQualitySignals":{"qualityScore":0.85,"fatigueScore":0.2,"riskTier":"low"},"entityRefs":["地点/景区/甲居藏寨"],"normalizedEntityRefs":["entity:景区:甲居藏寨"],"tagRefs":["Topic/旅行"],"intersectionHints":[{"dimension":"content","source":"entityRef","tagRefs":[],"actionType":"view_object","actionTargetId":"entity:景区:甲居藏寨"},{"dimension":"interest","source":"tagRef","tagRefs":["Topic/旅行"],"actionType":"join","actionTargetId":"Topic/旅行"}],"template":"journal","generatorModel":"agent/x","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","publishTitle":"甲居藏寨体验","publishAngle":"体验","publishSeq":1,"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾","createdAt":"2026-05-01T00:00:00Z","updatedAt":"2026-05-03T00:00:00Z","publishedAt":"2026-05-04T00:00:00Z","articleAssetManifest":{"schemaVersion":1,"articleMarkdownVersion":"qwq-rich-md/1","articleMarkdownDigest":"sha256:1111111111111111111111111111111111111111111111111111111111111111","documentSha256":"sha256:1111111111111111111111111111111111111111111111111111111111111111","assetManifestSha256":"sha256:2222222222222222222222222222222222222222222222222222222222222222","documentVersionSha256":"sha256:3333333333333333333333333333333333333333333333333333333333333333","assets":[{"assetId":"cover","objectKey":"media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","cdnUrl":"https://img.example.com/media/objects/sha256/aa/aa/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.jpg","sha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}}`)
 	writeFile(t, filepath.Join(root, "posts/article/体验/甲居藏寨体验/1/article.md"), "# 甲居藏寨体验\n正文\n")
 	writeFile(t, filepath.Join(root, "posts/article/攻略/色达攻略/1/manifest.json"),
 		`{"contentType":"article","entityRefs":["地点/景区/色达"],"tagRefs":[],"publishTitle":"色达攻略","publishAngle":"攻略","publishSeq":1,"createdAt":"2026-04-01T00:00:00Z","updatedAt":"2026-04-01T00:00:00Z","publishedAt":"2026-04-02T00:00:00Z"}`)
@@ -62,6 +62,9 @@ func TestLoadPostsFull(t *testing.T) {
 	}
 	if p.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
 		t.Fatalf("sourceTaskId not loaded: %q", p.SourceTaskId)
+	}
+	if len(p.IntersectionHints) != 2 || p.IntersectionHints[0].ActionTargetID != "entity:景区:甲居藏寨" {
+		t.Fatalf("intersectionHints not loaded: %+v", p.IntersectionHints)
 	}
 	if p.AuthorID != "builtin_travel_blogger" || p.CreatorProfileID != "qwq_creator_travel_blogger_001" {
 		t.Fatalf("creator projection not loaded: %+v", p)
@@ -367,6 +370,26 @@ func TestLoadPostsRejectsCandidateActiveRef(t *testing.T) {
 	}`)
 	if _, err := LoadPosts(root, nil); err == nil {
 		t.Fatal("expected candidate active ref rejection")
+	}
+}
+
+func TestLoadPostsRejectsDanglingIntersectionHint(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "posts/article/攻略/悬空交集/1/manifest.json"), `{
+		"contentType":"article",
+		"entityRefs":["地点/景区/黄山风景区"],
+		"normalizedEntityRefs":["entity:景区:黄山风景区"],
+		"tagRefs":["Topic/旅行"],
+		"intersectionHints":[
+			{"dimension":"content","source":"entityRef","tagRefs":[],"actionType":"view_object","actionTargetId":"entity:景区:不存在"}
+		],
+		"publishTitle":"悬空交集",
+		"publishAngle":"攻略",
+		"publishSeq":1,
+		"publishedAt":"2026-06-13T02:00:00Z"
+	}`)
+	if _, err := LoadPosts(root, nil); err == nil {
+		t.Fatal("expected dangling intersection hint rejection")
 	}
 }
 

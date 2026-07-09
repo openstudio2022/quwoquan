@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="qwq-legal-document-id" content="third-party-sdk-list">
+  <meta name="qwq-legal-version" content="2026-07">
+  <title>趣我圈第三方 SDK 清单</title>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; color: #1f2933; background: #fff; line-height: 1.72; }
+    main { max-width: 1080px; margin: 0 auto; padding: 32px 20px 56px; }
+    h1 { font-size: 28px; line-height: 1.25; margin: 0 0 8px; }
+    h2 { font-size: 20px; margin: 32px 0 10px; }
+    p, li { font-size: 15px; }
+    .meta, .notice { color: #5d6673; font-size: 14px; }
+    .notice { background: #f6f8fa; border: 1px solid #e5e7eb; padding: 14px 16px; border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+    th, td { border: 1px solid #e5e7eb; padding: 10px; text-align: left; vertical-align: top; }
+    th { background: #f6f8fa; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>趣我圈第三方 SDK 清单</h1>
+  <p class="meta">版本号：2026-07 ｜ 生效日期：2026 年 7 月 5 日</p>
+  <p class="notice">本清单披露当前工程版本涉及的第三方 SDK、开源插件、系统能力或预留能力。生产发布前应以最终 iOS PrivacyInfo.xcprivacy、Android 数据安全表单、依赖锁文件和实际接入 SDK 为准复核。</p>
+
+  <h2>一、当前免费社区版本说明</h2>
+  <p>当前免费社区版本默认不启用广告 SDK、支付 SDK、自动续费 SDK、商业化埋点 SDK 或第三方追踪脚本。微信、QQ、支付宝等入口如仅为非生产沙箱或 UI 预留，不代表生产环境已接入对应 SDK 或向对应第三方共享个人信息。</p>
+
+  <h2>二、SDK 与能力清单</h2>
+  <table>
+    <tr><th>名称</th><th>提供方</th><th>状态</th><th>用途</th><th>可能处理的数据</th><th>共享方式</th></tr>
+    <tr><td>Flutter / Dart / 系统运行框架</td><td>Flutter 社区、Dart 社区及操作系统厂商</td><td>已使用</td><td>App 基础运行、界面渲染、路由、平台通道和国际化</td><td>设备系统能力调用所需的基础技术信息</td><td>通常不因本能力向第三方共享个人信息</td></tr>
+    <tr><td>网络请求与连接状态插件</td><td>开源插件作者及操作系统厂商</td><td>已使用</td><td>访问趣我圈 API、上传下载内容、判断网络状态</td><td>请求日志、网络状态、IP 地址、设备和 App 版本</td><td>默认只与趣我圈服务端通信，不向插件作者共享</td></tr>
+    <tr><td>本地存储、安全存储、数据库与缓存插件</td><td>开源插件作者及操作系统厂商</td><td>已使用</td><td>保存登录态、设置、草稿、图片缓存、离线状态和安全令牌</td><td>本机缓存、加密令牌、草稿、设置、数据库文件</td><td>默认在本机处理，不向插件作者共享</td></tr>
+    <tr><td>相机、相册、文件选择与二维码扫描插件</td><td>开源插件作者及操作系统厂商</td><td>已使用</td><td>拍摄、选择媒体、扫码、读取本机文件</td><td>您主动选择或拍摄的图片、视频、二维码内容、文件元数据</td><td>默认在本机或趣我圈服务端处理，不向插件作者共享</td></tr>
+    <tr><td>图片加载、图片预览、视频播放和缩略图插件</td><td>开源插件作者及操作系统厂商</td><td>已使用</td><td>展示图片、视频、封面、视频书和沉浸浏览</td><td>媒体 URL、缓存文件、播放状态、基础设备能力</td><td>默认访问趣我圈或用户主动打开的资源，不向插件作者共享</td></tr>
+    <tr><td>定位相关插件</td><td>开源插件作者及操作系统厂商</td><td>按功能触发</td><td>添加地点、附近内容、地点搜索</td><td>粗略或精确位置、定位状态</td><td>默认不向插件作者共享；系统定位服务按系统规则处理</td></tr>
+    <tr><td>通讯录相关插件</td><td>开源插件作者及操作系统厂商</td><td>按功能触发</td><td>手机联系人发现、添加联系人</td><td>通讯录手机号本地规范化结果及哈希匹配信息</td><td>默认不上传通讯录原文，不向插件作者共享</td></tr>
+    <tr><td>录音、音频播放与音频会话插件</td><td>开源插件作者及操作系统厂商</td><td>按功能触发</td><td>语音消息、音频播放、通话音频会话管理</td><td>录音文件、播放状态、麦克风和音频设备状态</td><td>默认在本机或趣我圈服务端处理，不向插件作者共享</td></tr>
+    <tr><td>LiveKit 实时音视频能力</td><td>LiveKit 开源项目及趣我圈配置的音视频服务端</td><td>按功能触发</td><td>音视频通话、实时连接、通话质量保障</td><td>通话连接令牌、音视频流、网络质量、设备音视频状态、连接日志</td><td>仅为实现通话所需处理；具体服务端和地域以实际部署为准</td></tr>
+    <tr><td>CallKit / 来电展示插件</td><td>开源插件作者及操作系统厂商</td><td>按功能触发</td><td>展示来电提醒、接听、拒接、结束通话</td><td>通话标识、来电显示信息、通话状态</td><td>通过系统能力展示，不向插件作者共享</td></tr>
+    <tr><td>WebView</td><td>操作系统 WebView 组件及插件作者</td><td>已使用</td><td>展示用户协议、隐私政策、权限说明、SDK 清单和用户主动打开的网页</td><td>页面访问状态、WebView 基础状态、用户主动打开的链接</td><td>法律页面禁用 JS，不嵌入第三方追踪脚本；外部网页按其规则处理</td></tr>
+    <tr><td>系统分享插件</td><td>开源插件作者及操作系统厂商</td><td>按功能触发</td><td>调用系统分享面板分享内容、链接或图片</td><td>您主动分享的内容、目标渠道、系统分享状态</td><td>分享给目标 App 后由目标 App 按其规则处理</td></tr>
+    <tr><td>包信息、URL 打开、二维码生成、拼音分组等工具插件</td><td>开源插件作者及操作系统厂商</td><td>已使用或按功能触发</td><td>展示版本号、打开链接、生成二维码、联系人首字母分组</td><td>App 版本、链接、二维码内容、联系人分组结果</td><td>默认本机处理，不向插件作者共享</td></tr>
+    <tr><td>微信登录 SDK</td><td>腾讯</td><td>Android 生产能力按平台能力位启用；非生产可使用沙箱票据；iOS 当前不启用微信原生登录</td><td>微信授权登录</td><td>授权凭证、第三方账号标识、头像昵称、设备信息</td><td>仅在您主动选择微信登录并完成授权时与腾讯交互；非生产沙箱不调用腾讯 SDK</td></tr>
+    <tr><td>微信定向分享能力</td><td>腾讯及操作系统</td><td>Android 按功能触发；其他平台默认走系统分享或不可用降级</td><td>分享到微信好友或朋友圈</td><td>您主动分享的链接、图片、标题、摘要</td><td>分享给微信后由微信按其规则处理</td></tr>
+    <tr><td>Apple 登录</td><td>Apple</td><td>iOS 按功能触发</td><td>通过 Apple 账号登录</td><td>Apple 授权凭证、账号标识、用户授权返回的信息</td><td>仅在您主动选择 Apple 登录并完成授权时与 Apple 交互</td></tr>
+    <tr><td>QQ 登录/分享 SDK</td><td>腾讯</td><td>生产未接入；非生产可使用沙箱票据</td><td>预留 QQ 登录或分享验证</td><td>授权凭证、头像昵称、设备信息等</td><td>生产正式接入前需更新清单、隐私政策和授权流程</td></tr>
+    <tr><td>支付宝 SDK</td><td>支付宝</td><td>生产未接入；非生产可使用沙箱票据</td><td>预留登录、支付或实名能力验证</td><td>授权凭证、支付订单、实名或设备信息等</td><td>生产正式接入前必须先补付费、支付、退款、发票等条款</td></tr>
+    <tr><td>广告、归因、商业化追踪 SDK</td><td>未接入</td><td>未接入</td><td>广告投放、归因、商业化分析</td><td>广告标识符、设备信息、行为事件等</td><td>上线前必须更新 SDK 清单、隐私政策和广告条款</td></tr>
+  </table>
+
+  <h2>三、外部平台内容说明</h2>
+  <p>图虫、微信、今日头条、微博、小红书等平台可能作为用户分享、外链打开、授权登录、内容发现参考或来源核验对象出现。除本清单明确启用的 SDK 或您主动打开、分享、授权的场景外，趣我圈不会默认向这些平台共享您的个人信息，也不会默认下载或发布未授权的平台素材。</p>
+
+  <h2>四、更新机制</h2>
+  <p>任何新增 SDK、变更提供方、扩大数据处理范围、启用广告或支付能力前，必须先更新本清单和隐私政策，经法务审核后通过 legal-static 独立发布。若变更影响用户重大权益，应以显著方式提示并在必要时重新取得授权或同意。</p>
+
+  <h2>五、联系方式</h2>
+  <p>如您对第三方 SDK 或个人信息共享有疑问，可联系 privacy@quwoquan.com 或 support@quwoquan.com。</p>
+</main>
+</body>
+</html>

@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_BUNDLE = ROOT / "deploy" / "shared" / "gamma_curated_media_bundle.json"
-DEFAULT_REPORT = ROOT / "artifacts" / "local-gamma" / "gamma_curated_media_routes.json"
+DEFAULT_BUNDLE = ROOT / "quwoquan_ops" / "environments" / "gamma_curated_media_bundle.json"
+DEFAULT_REPORT = ROOT / ".qwq_output" / "runs" / "local-gamma" / "gamma_curated_media_routes.json"
 RETRY_MARKERS = (
     "timed out",
     "Remote end closed connection without response",

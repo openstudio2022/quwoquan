@@ -560,7 +560,7 @@
   "mediaPickerCategoryFullscreen": "全屏图",
   "mediaPickerCameraEntry": "拍摄",
   "mediaPickerOneTapMovie": "一键成片",
-  "mediaPickerOneTapMovieQueued": "已加入一键成片，请在发视频页继续",
+  "mediaPickerOneTapMovieQueued": "已加入一键成片，请在发布页继续",
   "mediaPickerNextStep": "下一步",
   "mediaPickerOverLimit": "已达到可选数量上限",
   "mediaPickerPermissionDenied": "请允许相册访问权限后再选择媒体",

@@ -1,7 +1,7 @@
 """
 API tests for POST /v1/score and GET /health.
 Run from services/rec-model-service: python -m pytest tests/ -v
-Requires: pip install fastapi uvicorn pydantic httpx pytest
+Requires: pip install fastapi uvicorn pydantic httpx httpx2 pytest
 """
 from __future__ import annotations
 

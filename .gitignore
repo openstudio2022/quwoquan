@@ -21,6 +21,7 @@ tmp/
 build/
 dist/
 .test-dist/
+.gradle/
 *.o
 *.a
 
@@ -57,10 +58,27 @@ logs/
 # Assistant reference implementations (synced from upstream, do not commit)
 ref/
 
-# In-project gitignored sandbox data root (unattended / scaled e2e scratch root).
-# Canonical SSOT: quwoquan_data/scripts/_common/paths.py::default_sandbox_root().
-# Replaces the legacy ~/qwq_scale_verify HOME drift; never commit sandbox output.
+# Unified in-project output root (runtime batches / release / artifacts index / app evidence).
+# Canonical SSOT: quwoquan_data/scripts/_common/paths.py::default_output_root().
+# All runtime-phase output lives here (gitignored); only publish/** stays version-controlled.
+.qwq_output/
+
+# Retired generated roots and local-only assistant state.
+.mainline-release-artifact/
+quwoquan_app/assistant/
+quwoquan_app/personal_assistant/
+
+# Retired sandbox root; do not use it as a runtime fallback.
 .qwq_sandbox/
+
+# Control plane task registry: committed task.yaml specs are version-controlled
+# input contracts; run progress / runs / notes stay local (never commit).
+# Family packages (control_plane/families/**) and shared runtime profiles
+# (control_plane/_shared/**) are fully version-controlled (no ignore rule needed).
+quwoquan_data/control_plane/tasks/**
+!quwoquan_data/control_plane/tasks/
+!quwoquan_data/control_plane/tasks/**/
+!quwoquan_data/control_plane/tasks/**/task.yaml
 
 # quwoquan_data runtime roots
 quwoquan_data/runtime/**
@@ -75,25 +93,33 @@ quwoquan_data/runs/
 quwoquan_data/publish/**
 !quwoquan_data/publish/tags/
 !quwoquan_data/publish/tags/**
+!quwoquan_data/publish/creators/
+!quwoquan_data/publish/creators/**
+!quwoquan_data/publish/user_media/
+!quwoquan_data/publish/user_media/**
 quwoquan_data/out/
 quwoquan_data/raw/
 quwoquan_data/batch_plans/
 
-# artifacts — runtime/build products (already-tracked declarative files stay)
-artifacts/local-gamma/
-artifacts/ecs-onebox/
-artifacts/app-env-packages/
-artifacts/service-env-packages/
-artifacts/stackctl/
-artifacts/stackctl-contract/
+# Retired top-level runtime/output roots. They are ignored if recreated locally,
+# and quwoquan_ops/gate/verify_root_layout.py fails when they exist in repo root.
+.qwq_output/runs/
+state/
+runtime/
+app_log/
+tmp/
+build/
 
 # quwoquan_data release artifacts are generated outputs, not source truth.
 quwoquan_data/release/
 
-# Local runtime state
-state/
 quwoquan_service/.local_models/
+quwoquan_service/.control-plane-state/
+quwoquan_service/**/.venv/
+quwoquan_service/**/.pytest_cache/
+quwoquan_service/**/__pycache__/
+quwoquan_service/**/.qwq_output/
+quwoquan_service/services/*/state/
 
 # Git worktrees
 .worktrees/
-

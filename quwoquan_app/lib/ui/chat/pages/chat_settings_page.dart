@@ -35,7 +35,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
 
   /// 退出群聊：二次确认 → removeMember(self) 走 Remote → 返回会话列表。
   Future<void> _confirmExitGroup() async {
-    final confirmed = await showCupertinoDialog<bool>(
+    final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: Text(UITextConstants.exitGroupChat),
@@ -57,9 +57,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
     final selfId = ref.read(currentUserIdProvider);
     try {
       await ref
-          .read(
-            conversationMembersProvider(widget.conversationId).notifier,
-          )
+          .read(conversationMembersProvider(widget.conversationId).notifier)
           .removeMember(selfId);
       if (!mounted) return;
       ref.invalidate(conversationMembersProvider(widget.conversationId));
@@ -90,7 +88,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
         membersState.groupSettings.nameEditableByAdminOnly;
 
     if (nameEditableByAdminOnly && !isAdminOrOwner) {
-      showCupertinoDialog<void>(
+      showAppCupertinoDialog<void>(
         context: context,
         builder: (_) => CupertinoAlertDialog(
           content: Text(UITextConstants.groupNameAdminOnly),
@@ -105,7 +103,7 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
       return;
     }
 
-    showCupertinoDialog<void>(
+    showAppCupertinoDialog<void>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: Text(UITextConstants.editGroupName),
@@ -278,12 +276,10 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                                           .insetFormListHorizontalPadding *
                                       2;
                         final memberCellWidth =
-                            (availableWidth -
-                                gridGap * (_memberColumns - 1)) /
+                            (availableWidth - gridGap * (_memberColumns - 1)) /
                             _memberColumns;
                         final memberLabelHeight =
-                            AppTypography.xs *
-                            AppTypography.lineHeightCompact;
+                            AppTypography.xs * AppTypography.lineHeightCompact;
                         final memberCellHeight =
                             AppSpacing.avatarUserLg +
                             AppSpacing.xs +
@@ -294,12 +290,12 @@ class _ChatSettingsPageState extends ConsumerState<ChatSettingsPage> {
                           physics: const NeverScrollableScrollPhysics(),
                           gridDelegate:
                               SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: _memberColumns,
-                            childAspectRatio:
-                                memberCellWidth / memberCellHeight,
-                            crossAxisSpacing: gridGap,
-                            mainAxisSpacing: gridGap,
-                          ),
+                                crossAxisCount: _memberColumns,
+                                childAspectRatio:
+                                    memberCellWidth / memberCellHeight,
+                                crossAxisSpacing: gridGap,
+                                mainAxisSpacing: gridGap,
+                              ),
                           itemCount: totalCells,
                           itemBuilder: (context, index) {
                             if (index == visibleMemberCount) {

@@ -24,12 +24,23 @@ os.environ["QWQ_PUBLISH_ROOT"] = str(_TMP / "publish")
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
+from _common import paths as paths_mod  # noqa: E402
 from publish_ops.rebuild_directory_layout_sample import rebuild  # noqa: E402
 from verify.verify_batch_stability_compare import compare_batches, snapshot_batch, write_snapshot  # noqa: E402
 
 TASK = "旅行/地域/四川省/景区/景区全覆盖"
 BASELINE = "e2e_baseline"
 STABILITY = "e2e_stability_2"
+
+
+def _cli_env() -> dict[str, str]:
+    """CLI 子进程 env 与父进程已冻结的 paths 常量对齐（防跨模块 env 污染）。"""
+    return {
+        **os.environ,
+        "QWQ_DATA_ROOT": str(paths_mod.DATA_ROOT),
+        "QWQ_RUNTIME_ROOT": str(paths_mod.RUNTIME_ROOT),
+        "QWQ_PUBLISH_ROOT": str(paths_mod.PUBLISH_ROOT),
+    }
 
 
 def test_two_batch_sample_compare_passes():
@@ -76,6 +87,7 @@ def test_verify_cli_batch_stability_entrypoint():
         capture_output=True,
         text=True,
         check=False,
+        env=_cli_env(),
     )
     assert result.returncode == 0, result.stderr + result.stdout
     assert baseline_snapshot.is_file()

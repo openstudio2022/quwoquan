@@ -43,6 +43,36 @@ errors:
       en: Greeting rate limit exceeded, please try again later
     debug_hint: sender exceeded daily greeting quota
 
+  # §24 M0.1 safetyGate 重行动拦截：realName / minorMode 两类前置门在 greeting/conversation/circle
+  #   现有码中均缺失；约伴（start_companion）复用 GreetingRequest 破冰流程，是这两个门最自然的承接。
+  #   端消费 IntersectionActionHint.requiredGates=[realName]/[minorMode]，被拦时映射到本组码优雅降级，
+  #   不静默失败、不死循环（守 15-auth-entry-no-loop），拦截语义与 gateKeys 闭集同源。
+  - code: USER.GREETING.sender_realname_required
+    kind: GREETING
+    reason: sender_realname_required
+    http_status: 403
+    recovery_action: surface
+    go_const: ErrGreetingSenderRealnameRequired
+    dart_const: greetingSenderRealnameRequired
+    l10n_key: error_greeting_sender_realname_required
+    user_message:
+      zh: 完成实名认证后才能发起打招呼或约伴
+      en: Complete real-name verification before greeting or inviting a companion
+    debug_hint: safetyGate realName not satisfied for heavy social action
+
+  - code: USER.GREETING.minor_restricted
+    kind: GREETING
+    reason: minor_restricted
+    http_status: 403
+    recovery_action: surface
+    go_const: ErrGreetingMinorRestricted
+    dart_const: greetingMinorRestricted
+    l10n_key: error_greeting_minor_restricted
+    user_message:
+      zh: 青少年模式下暂不支持向陌生人打招呼或约伴
+      en: Greeting or companion invites to strangers are unavailable in minor mode
+    debug_hint: safetyGate minorMode restricts stranger social actions
+
   - code: USER.GREETING.already_contact
     kind: GREETING
     reason: already_contact

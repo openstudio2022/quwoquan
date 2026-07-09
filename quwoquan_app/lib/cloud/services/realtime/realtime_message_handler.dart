@@ -4,23 +4,30 @@ import 'dart:developer' as developer;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/chat/models/message_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
-import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
-import 'package:riverpod/misc.dart' show ProviderListenable;
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart';
+import 'package:riverpod/misc.dart' show ProviderListenable, ProviderOrFamily;
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
+import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
 
 /// 与 [Ref.read] / [WidgetRef.read] 兼容，避免 `Ref` 与 `WidgetRef` 类型分裂。
 typedef ChatProviderRead = T Function<T>(ProviderListenable<T> listenable);
 
+/// 与 [Ref.invalidate] 兼容，用于 roster / avatar 事件后刷新 group home。
+typedef ChatProviderInvalidate =
+    void Function(ProviderOrFamily provider, {bool asReload});
+
 /// Routes incoming realtime events to the appropriate domain handlers.
 /// Called by realtime connection delegates when a WebSocket, long-poll,
 /// or mock catalog event arrives.
 class RealtimeMessageHandler {
-  RealtimeMessageHandler(ChatProviderRead read) : _read = read;
+  RealtimeMessageHandler(ChatProviderRead read, {this._invalidate})
+    : _read = read;
 
   final ChatProviderRead _read;
+  final ChatProviderInvalidate? _invalidate;
   final Set<String> _pendingConversationRefreshes = <String>{};
   Timer? _conversationRefreshTimer;
   Timer? _avatarPatchTimer;
@@ -77,18 +84,12 @@ class RealtimeMessageHandler {
       case 'MemberJoined':
         if (conversationId.isEmpty) return;
         _insertSystemMessage(conversationId, payload, '加入了讨论');
-        unawaited(
-          _read(conversationMembersProvider(conversationId).notifier).load(),
-        );
-        _refreshConversationCache(conversationId);
+        _reloadGroupRosterProviders(conversationId);
         return;
 
       case 'ConversationRosterUpdated':
         if (conversationId.isEmpty) return;
-        unawaited(
-          _read(conversationMembersProvider(conversationId).notifier).load(),
-        );
-        _refreshConversationCache(conversationId);
+        _reloadGroupRosterProviders(conversationId);
         return;
 
       case 'UserAvatarUpdated':
@@ -100,6 +101,7 @@ class RealtimeMessageHandler {
           unawaited(
             _read(conversationMembersProvider(conversationId).notifier).load(),
           );
+          _invalidate?.call(groupHomeProvider(conversationId));
           _refreshConversationCache(conversationId);
         }
         return;
@@ -110,6 +112,7 @@ class RealtimeMessageHandler {
             (payload['latestSyncSeq'] as num?)?.toInt();
         _scheduleAvatarPatchSync(conversationLatestSeq);
         if (conversationId.isNotEmpty) {
+          _invalidate?.call(groupHomeProvider(conversationId));
           _refreshConversationCache(conversationId);
         }
         return;
@@ -117,10 +120,7 @@ class RealtimeMessageHandler {
       case 'MemberLeft':
         if (conversationId.isEmpty) return;
         _insertSystemMessage(conversationId, payload, '离开了讨论');
-        unawaited(
-          _read(conversationMembersProvider(conversationId).notifier).load(),
-        );
-        _refreshConversationCache(conversationId);
+        _reloadGroupRosterProviders(conversationId);
         return;
 
       case 'ConversationSettingsUpdated':
@@ -230,6 +230,15 @@ class RealtimeMessageHandler {
       timestamp: DateTime.tryParse(payload['timestamp'] as String? ?? ''),
     );
     _read(chatMessageProvider(conversationId).notifier).addMessage(msg);
+  }
+
+  /// 成员 / roster 变更 → 刷新成员 provider、group home 与缓存。
+  void _reloadGroupRosterProviders(String conversationId) {
+    unawaited(
+      _read(conversationMembersProvider(conversationId).notifier).load(),
+    );
+    _invalidate?.call(groupHomeProvider(conversationId));
+    _refreshConversationCache(conversationId);
   }
 
   /// 设置/成员变更 → 强制刷新该会话的缓存（下次读取时从云端拉取最新）

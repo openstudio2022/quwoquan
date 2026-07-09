@@ -26,27 +26,26 @@ sit_acceptance:
     - generate_canonical_test_bridges.py 能为 App / Service / Data / Ops 生成 canonical
       bridge，并补齐 page-level user_acceptance wrapper。
     - specs/gates/test_directory_inventory.yaml 记录 current_path -> target_path ->
-      classification_basis -> migration_status 全链路映射，且 pending=0；该状态表示 bridge
-      覆盖完备，不要求 legacy 文件已从磁盘移除。
-    - specs/gates/user_acceptance_page_inventory.yaml 与 metadata ui_surfaces /
-      app_routes 无漂移。
-    - verify-test-no-fake 与 verify-test-coverage-map 能独立阻断伪迁移、假报告和 page case
-      漏覆盖。
+      classification_basis -> migration_status 全链路映射，且 pending=0；该状态表示 bridge 覆盖完备，不要求
+      legacy 文件已从磁盘移除。
+    - specs/gates/user_acceptance_page_inventory.yaml 与 metadata ui_surfaces / app_routes
+      无漂移。
+    - verify-test-no-fake 与 verify-test-coverage-map 能独立阻断伪迁移、假报告和 page case 漏覆盖。
     performance_points: []
     tests:
       planned:
-      - file: agent_ops/scaffold/test_directory_inventory_lib.py
-      - file: agent_ops/scaffold/generate_canonical_test_bridges.py
-      - file: agent_ops/scaffold/generate_test_directory_inventory.py
+      - file: quwoquan_ops/gate/scaffold/test_directory_inventory_lib.py
+      - file: quwoquan_ops/gate/scaffold/generate_canonical_test_bridges.py
+      - file: quwoquan_ops/gate/scaffold/generate_test_directory_inventory.py
       - file: specs/gates/user_acceptance_page_inventory.yaml
-      - command: python3 agent_ops/scaffold/verify_test_directory_inventory.py
-      - command: python3 agent_ops/scaffold/verify_test_no_fake.py
-      - command: python3 agent_ops/scaffold/verify_test_coverage_map.py
+      - command: python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
+      - command: python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
+      - command: python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
       recorded:
-      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
       - file: quwoquan_data/tests/local_contract/verify/test_directory_evidence_gate__local_contract_test.py
-      - file: agent_ops/acceptance/user_acceptance/test_stackctl_up_runtime__user_acceptance_test.py
+      - file: quwoquan_ops/tests/acceptance/user_acceptance/test_stackctl_up_runtime__user_acceptance_test.py
     status: implemented
     test_evidence:
       primary:
@@ -78,18 +77,18 @@ sit_acceptance:
         - local_contract.runtime.runtime_testinfra.sit1.no_fake_guard
         envs: *id001
     notes:
-    - 2026-06-22 bridge 生成结果：App 377、Service 183、Data 101、agent_ops 9 个 suite 全部
-      生成 canonical bridge，额外生成 28 个页面级 user_acceptance wrapper。
-    - 2026-06-22 inventory 升级：`pending_count` 表示尚未 bridge 的 suite 数，新增
-      `bridged_count` 与 `classification_basis`，可直接定位 suite 的 canonical 归属理由。
-    - 2026-06-22 完成定义校准：`pending_count=0` 与 canonical bridge 全覆盖表示治理执行面
-      已收口，不等于 legacy 测试文件已全部物理搬迁或从磁盘移除。
-    - 2026-06-22 门禁拆分：verify-test-no-fake 与 verify-test-coverage-map 不再是
-      verify_test_specs.py 的别名，已独立阻断 canonical 根中的假测试与证据漂移。
+    - 2026-06-22 bridge 生成结果：App 377、Service 183、Data 101、quwoquan_ops 9 个 suite 全部 生成
+      canonical bridge，额外生成 28 个页面级 user_acceptance wrapper。
+    - 2026-06-22 inventory 升级：`pending_count` 表示尚未 bridge 的 suite 数，新增 `bridged_count`
+      与 `classification_basis`，可直接定位 suite 的 canonical 归属理由。
+    - 2026-06-22 完成定义校准：`pending_count=0` 与 canonical bridge 全覆盖表示治理执行面 已收口，不等于 legacy
+      测试文件已全部物理搬迁或从磁盘移除。
+    - 2026-06-22 门禁拆分：verify-test-no-fake 与 verify-test-coverage-map 不再是 verify_test_specs.py
+      的别名，已独立阻断 canonical 根中的假测试与证据漂移。
 execution:
   local_gate:
-  - python3 agent_ops/scaffold/verify_test_directory_inventory.py
-  - python3 agent_ops/scaffold/verify_test_no_fake.py
-  - python3 agent_ops/scaffold/verify_test_coverage_map.py
+  - python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
+  - python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
+  - python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
   full_gate:
   - make gate

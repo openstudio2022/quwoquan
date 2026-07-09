@@ -1,9 +1,8 @@
 """Per-entity auto research plan implementation."""
 from __future__ import annotations
-
 import urllib.parse
 from typing import Any
-
+from _common.article_commercial_policy import article_commercial_closure_enabled
 from _common.image_asset_strategy import (
     image_count_is_hard_quota,
     image_count_policy,
@@ -15,7 +14,6 @@ from _common.paths import STAGE_DOWNLOAD
 from _common.source_catalog import vertical_from_task_id
 from _common.source_unit import resolve_entity_object_dir
 from download.prepare import prepare_source_plan
-
 from download.research.auto_plan_facade import (
     _discover_open_license_image_pools,
     _external_article_category,
@@ -47,6 +45,7 @@ from download.research.plan_state import (
     _accept_source,
     _accept_source_with_reject_memory,
     _download_reject_memory,
+    _hydrate_mediawiki_same_source_images,
     _homepage_urls_from_current_plan,
     _image_at,
     _image_window,
@@ -78,7 +77,6 @@ from download.research.wiki_discovery import (
     _BASE_DRAFT_IMAGE_CANDIDATES,
     _wiki_url,
 )
-
 def _write_auto_research_plans_impl(
     task_id: str,
     batch_id: str,
@@ -91,8 +89,11 @@ def _write_auto_research_plans_impl(
 ) -> dict[str, Any]:
     selected_lanes = lanes or {"homepage", "article", "image"}
     vertical = vertical_from_task_id(task_id)
+    # 单值 entity_type 只作 fallback；每个实体目录类型以 task spec coverageTargets 为准。
+    from download.prepare import resolve_research_entity_types
+    resolved_types = resolve_research_entity_types(task_id, entity_ids, fallback_type=entity_type)
     entities = [
-        {"entityId": entity_id, "canonicalName": entity_id, "entityType": entity_type}
+        {"entityId": entity_id, "canonicalName": entity_id, "entityType": resolved_types[entity_id]}
         for entity_id in entity_ids
     ]
     prepare_source_plan(task_id, batch_id, entities)
@@ -113,9 +114,11 @@ def _write_auto_research_plans_impl(
     }
     quotas = _task_content_quotas(task_id)
     strategy_spec = _task_spec(task_id)
+    article_commercial_mode = article_commercial_closure_enabled(strategy_spec)
     image_strategy = image_asset_strategy(strategy_spec)
     image_policy = image_count_policy(strategy_spec)
     requires_publishable_images = image_strategy_requires_publishable_images(strategy_spec)
+    report["articleCommercialClosure"] = article_commercial_mode
     report["imageAssetStrategy"] = image_strategy
     report["imageCountPolicy"] = image_policy
     report["imagePublishableAssetsRequired"] = requires_publishable_images
@@ -129,7 +132,6 @@ def _write_auto_research_plans_impl(
     )
     try:
         from download.gate import download_requirements
-
         required_publishable_images = max(
             hard_image_works,
             int(download_requirements(task_id).get("minImages") or 0),
@@ -137,7 +139,6 @@ def _write_auto_research_plans_impl(
     except Exception:  # noqa: BLE001
         required_publishable_images = hard_image_works
     from _common.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS
-
     report["scoringPolicy"] = {
         "imageCountPolicy": image_policy,
         "imageBonusSaturationCount": image_bonus_saturation_count,
@@ -146,6 +147,7 @@ def _write_auto_research_plans_impl(
         "articleLengthPassChars": ARTICLE_MIN_BASE_DRAFT_CHARS,
     }
     for entity_id in entity_ids:
+        entity_type = resolved_types[entity_id]
         obj = resolve_entity_object_dir(task_id, batch_id, entity_id, etype_hint=entity_type)
         dl = obj / STAGE_DOWNLOAD
         initial_aliases = _entity_name_variants(entity_id)
@@ -179,29 +181,22 @@ def _write_auto_research_plans_impl(
             if title and title != wiki_title
         ]
         needs_visual_pool = bool(selected_lanes & {"article", "image"})
+        needs_homepage_media = "homepage" in selected_lanes
         voyage_title = (
             _wiki_title_for_entity(
                 "zh.wikivoyage.org",
                 entity_id,
                 entity_aliases=entity_aliases,
             )
-            if needs_visual_pool
+            if needs_visual_pool or needs_homepage_media
             else ""
         )
         wiki_url = _wiki_url("zh.wikipedia.org", wiki_title)
         voyage_url = _wiki_url("zh.wikivoyage.org", voyage_title)
         registry_official_url = _known_official_website(entity_id)
         official_url = registry_official_url or _official_website(qid)
-        official_provider = (
-            "travel_source_registry"
-            if registry_official_url
-            else "wikidata_official_website"
-        )
-        official_reason_provider = (
-            "Travel source registry official website"
-            if registry_official_url
-            else "Wikidata official website"
-        )
+        official_provider = "travel_source_registry" if registry_official_url else "wikidata_official_website"
+        official_reason_provider = "Travel source registry official website" if registry_official_url else "Wikidata official website"
         reject_memory = _download_reject_memory(
             task_id,
             batch_id,
@@ -230,10 +225,11 @@ def _write_auto_research_plans_impl(
                 batch_id,
                 entity_id,
                 entity_type=entity_type,
+                entity_aliases=entity_aliases,
                 rejected_source_urls=rejected_source_urls,
                 limit=_article_base_candidate_limit(required_article_bases),
             )
-            if "article" in selected_lanes
+            if "article" in selected_lanes and not article_commercial_mode
             else []
         )
         prior_homepage_sources = (
@@ -360,23 +356,12 @@ def _write_auto_research_plans_impl(
             def _accept_homepage_source(source: dict[str, Any]) -> dict[str, Any] | None:
                 return _accept_source_with_reject_memory(
                     report,
-                    source,
+                    _hydrate_mediawiki_same_source_images(source, entity_id=entity_id),
                     entity_id=entity_id,
                     lane="homepage",
                     entity_aliases=entity_aliases,
                     rejected_source_urls=rejected_source_urls,
                 )
-
-            def _encyclopedia_role() -> str:
-                # P3 三类解耦：实体主页主源【只限百科】。首个被接受的百科作 primary，
-                # 其余百科与官网/补充源一律 supporting，使 plan 的 sourceRole 与消费侧择优一致（消除第二真相源）。
-                for existing in homepage_sources:
-                    if (
-                        str(existing.get("category") or "").casefold() == "encyclopedia"
-                        and str(existing.get("sourceRole") or "") == "primary"
-                    ):
-                        return "supporting"
-                return "primary"
 
             for prior_source in prior_homepage_sources:
                 if len(homepage_sources) >= _HOMEPAGE_CORE_SOURCE_LIMIT:
@@ -396,7 +381,7 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "homepage", official_reason_provider, "official"
                         ),
-                        # P3: 官网降为 supporting（只补事实，不得作 base draft 主源）。
+                        # R-HSE06：官网是第二权威主源候选；最终 primary 由排序后统一仲裁。
                         source_role="supporting",
                     )
                 )
@@ -414,9 +399,30 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "homepage", "Chinese Wikipedia", "encyclopedia"
                         ),
-                        source_role=_encyclopedia_role(),
+                        # 主权威百科候选；最终 primary 由排序后统一仲裁（消除插入序第二真相源）。
+                        source_role="supporting",
                         images=_image_window(wiki_page_images, 0, count=_BASE_DRAFT_IMAGE_CANDIDATES),
                         image_evidence_mode="same_source" if wiki_page_images else "",
+                    )
+                )
+                if accepted:
+                    homepage_sources.append(accepted)
+            if voyage_url:
+                accepted = _accept_homepage_source(
+                    _source(
+                        source_id="home_wikivoyage",
+                        platform="维基导游",
+                        url=voyage_url,
+                        category="encyclopedia",
+                        discovery_provider="wikivoyage_exact_title",
+                        match_confidence=0.90,
+                        evidence_reason=_evidence_reason(
+                            entity_id, "homepage", "Chinese Wikivoyage", "encyclopedia"
+                        ),
+                        # 主权威百科候选；最终 primary 由排序后统一仲裁（消除插入序第二真相源）。
+                        source_role="supporting",
+                        images=_image_window(voyage_page_images, 0, count=_BASE_DRAFT_IMAGE_CANDIDATES),
+                        image_evidence_mode="same_source" if voyage_page_images else "",
                     )
                 )
                 if accepted:
@@ -456,8 +462,8 @@ def _write_auto_research_plans_impl(
                     evidence_reason=_evidence_reason(
                         entity_id, "homepage", "Baidu Baike item URL", "encyclopedia"
                     ),
-                    # P3 多源择优：百度百科作百科候选，若 wiki 缺失则升为 primary。
-                    source_role=_encyclopedia_role(),
+                    # 主权威百科候选；最终 primary 由排序后统一仲裁（消除插入序第二真相源）。
+                    source_role="supporting",
                     images=[],
                     image_evidence_mode="",
                 )
@@ -510,8 +516,8 @@ def _write_auto_research_plans_impl(
                         evidence_reason=_evidence_reason(
                             entity_id, "homepage", "Sogou Baike query URL", "encyclopedia"
                         ),
-                        # P3 多源择优：搜狗百科作百科候选，若 wiki/百度均缺失则升为 primary。
-                        source_role=_encyclopedia_role(),
+                        # 主权威百科候选；最终 primary 由排序后统一仲裁（消除插入序第二真相源）。
+                        source_role="supporting",
                         images=[],
                         image_evidence_mode="",
                     )
@@ -519,6 +525,16 @@ def _write_auto_research_plans_impl(
                 if accepted:
                     homepage_sources.append(accepted)
             homepage_core_sources = _homepage_core_sources(homepage_sources)
+            # 主源统一仲裁（单一真相源）：排序后首个具备主源资格（registry 两级权威）者标
+            # primary，其余 supporting——与消费侧 primaryEvidenceRef 择优同口径；
+            # 百科缺位时第二权威官网/政务文旅按排序自然兜底为 primary。
+            primary_assigned = False
+            for core_source in homepage_core_sources:
+                if not primary_assigned and _homepage_can_seed_base_draft(core_source):
+                    core_source["sourceRole"] = "primary"
+                    primary_assigned = True
+                elif str(core_source.get("sourceRole") or "") == "primary":
+                    core_source["sourceRole"] = "supporting"
             if _write_lane(
                 dl / "homepage_source_plan.json",
                 "homepage",
@@ -547,9 +563,34 @@ def _write_auto_research_plans_impl(
                     report,
                     entity_id=entity_id,
                     lane="homepage",
-                    reason="homepage has no encyclopedia (wiki/baidu/sogou) seed source for baseDraft",
+                    reason=(
+                        "homepage has no primary authority seed source for baseDraft "
+                        "(encyclopedia wiki/wikivoyage/baidu/sogou or secondary authority "
+                        "official/government tourism site)"
+                    ),
                     next_action="manual_homepage_seed_source_or_target_replacement",
                 )
+            else:
+                homepage_same_source_seed_sources = [
+                    source
+                    for source in homepage_seed_sources
+                    if str(source.get("imageEvidenceMode") or "").strip() == "same_source"
+                    and any(
+                        isinstance(item, dict) and str(item.get("url") or "").strip()
+                        for item in (source.get("imageUrls") or [])
+                    )
+                ]
+                if not homepage_same_source_seed_sources:
+                    _record_unavailable(
+                        report,
+                        entity_id=entity_id,
+                        lane="homepage",
+                        reason=(
+                            "homepage authority encyclopedia sources lack same-source "
+                            "publishable image evidence"
+                        ),
+                        next_action="manual_homepage_seed_source_or_target_replacement",
+                    )
 
         article_sources: list[dict[str, Any]] = []
         if "article" in selected_lanes:
@@ -667,39 +708,40 @@ def _write_auto_research_plans_impl(
                 )
                 if accepted:
                     article_sources.append(accepted)
-            for index, known in enumerate(_known_article_sources(entity_id), start=1):
-                if _url_in_memory(str(known.get("url") or ""), rejected_source_urls):
-                    continue
-                category = str(known.get("category") or "travelogue").strip()
-                source_role = "base" if category in _ARTICLE_BASE_CATEGORIES else "supporting"
-                accepted = _accept_source(
-                    report,
-                    _source(
-                        source_id=known["source_id"] or f"article_registry_base_{index}",
-                        platform=known["platform"] or "垂类专业站",
-                        url=known["url"],
-                        category=category,
-                        discovery_provider="travel_source_registry",
-                        match_confidence=0.88,
-                        evidence_reason=_evidence_reason(
-                            entity_id,
-                            "article",
-                            "Travel source registry known article source",
-                            category,
+            if not article_commercial_mode:
+                for index, known in enumerate(_known_article_sources(entity_id), start=1):
+                    if _url_in_memory(str(known.get("url") or ""), rejected_source_urls):
+                        continue
+                    category = str(known.get("category") or "travelogue").strip()
+                    source_role = "base" if category in _ARTICLE_BASE_CATEGORIES else "supporting"
+                    accepted = _accept_source(
+                        report,
+                        _source(
+                            source_id=known["source_id"] or f"article_registry_base_{index}",
+                            platform=known["platform"] or "垂类专业站",
+                            url=known["url"],
+                            category=category,
+                            discovery_provider="travel_source_registry",
+                            match_confidence=0.88,
+                            evidence_reason=_evidence_reason(
+                                entity_id,
+                                "article",
+                                "Travel source registry known article source",
+                                category,
+                            ),
+                            source_role=source_role,
+                            images=[],
+                            image_evidence_mode="",
+                            fetchable_override=bool(known.get("fetchable")),
                         ),
-                        source_role=source_role,
-                        images=[],
-                        image_evidence_mode="",
-                        fetchable_override=bool(known.get("fetchable")),
-                    ),
-                    entity_id=entity_id,
-                    lane="article",
-                    entity_aliases=entity_aliases,
-                )
-                if accepted:
-                    if known.get("title"):
-                        accepted["title"] = known["title"]
-                    article_sources.append(accepted)
+                        entity_id=entity_id,
+                        lane="article",
+                        entity_aliases=entity_aliases,
+                    )
+                    if accepted:
+                        if known.get("title"):
+                            accepted["title"] = known["title"]
+                        article_sources.append(accepted)
             commons_visual = _image_at(commons, 5)
             open_visual = _image_at(openverse, 0)
             if commons_visual or open_visual:
@@ -863,6 +905,7 @@ def _write_auto_research_plans_impl(
                     item["sourceCollectionId"] = collection_id
                     item["creator"] = item.get("creator") or item.get("credit") or "Wikimedia Commons contributor"
                     item["collectionPageUrl"] = item.get("collectionPageUrl") or item.get("sourceUrl") or item.get("url") or ""
+                    item["modelReleaseStatus"] = item.get("modelReleaseStatus") or "not_required"
                     item["researchLane"] = "image"
                     collection = {
                         "sourceCollectionId": collection_id,
@@ -875,6 +918,7 @@ def _write_auto_research_plans_impl(
                         "licenseSnapshot": item.get("licenseSnapshot") or "",
                         "authorizationProof": item.get("authorizationProof") or item["collectionPageUrl"],
                         "usageScope": "app_publish",
+                        "modelReleaseStatus": item["modelReleaseStatus"],
                         "discoveryProvider": "open_license_image_search",
                         "evidenceReason": _evidence_reason(
                             entity_id, "image", "Open license image search", "open_license"

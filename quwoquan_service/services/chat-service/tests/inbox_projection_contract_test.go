@@ -31,7 +31,7 @@ func newInboxTestEnv(t *testing.T) (
 		testChatMediaRoot,
 	)
 	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
-	catalog, err := reliabletask.LoadCatalog("../../../../deploy/shared/reliable_task_module_catalog.yaml")
+	catalog, err := reliabletask.LoadCatalog("../../../../quwoquan_ops/environments/reliable_task_module_catalog.yaml")
 	if err != nil {
 		t.Fatalf("load reliable task catalog: %v", err)
 	}

@@ -19,7 +19,7 @@ scenarios:
     description: 推荐策略激活后，模型投影与 guardrail 摘要同步刷新
     test_type: api_contract
     actors:
-      portal: apps/ops-portal/src/domains/product/RecommendationPage.tsx
+      portal: quwoquan_ops/portal/src/domains/product/RecommendationPage.tsx
       control_plane: product-ops-service POST /v1/control-plane/product/recommendation/policies/{policyId}:activate
       service: recommendation-service projections/model_registry
     steps:

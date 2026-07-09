@@ -3167,7 +3167,7 @@ abstract class AppLocalizations {
   /// No description provided for @mediaPickerOneTapMovieQueued.
   ///
   /// In zh, this message translates to:
-  /// **'已加入一键成片，请在发视频页继续'**
+  /// **'已加入一键成片，请在发布页继续'**
   String get mediaPickerOneTapMovieQueued;
 
   /// No description provided for @mediaPickerNextStep.

@@ -199,6 +199,17 @@ func (h *Handler) handleHomepageRoute(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, summary)
+	case "impact":
+		if r.Method != http.MethodGet || len(segments) != 2 {
+			writeRuntimeNotFound(w, r)
+			return
+		}
+		summary, err := h.service.GetHomepageImpact(r.Context(), homepageID)
+		if err != nil {
+			writeError(w, r, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, summary)
 	case "object-page-bundle":
 		if r.Method != http.MethodGet || len(segments) != 2 {
 			writeRuntimeNotFound(w, r)

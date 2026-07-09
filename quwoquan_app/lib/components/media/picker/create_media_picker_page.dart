@@ -4,7 +4,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/camera/camera_session_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/image_editor_page.dart';
@@ -12,6 +14,7 @@ import 'package:quwoquan_app/components/media/picker/create_media_picker_present
 import 'package:quwoquan_app/components/media/picker/one_tap_movie_composer.dart';
 import 'package:quwoquan_app/components/media/picker/one_tap_movie_preview_page.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
+import 'package:quwoquan_app/components/media/shared/media_creation_bottom_button.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';

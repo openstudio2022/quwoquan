@@ -34,14 +34,21 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 from _common.io import read_json, write_json  # noqa: E402
 from _common.batch_asset_registry import allocate_post_asset_id, load_batch_asset_registry  # noqa: E402
 from _common.batch_manifest import load_batch_manifest, write_batch_manifest  # noqa: E402
+from _common.entity_object import sync_entity_object_to_task_mirror, write_entity_object_index  # noqa: E402
+from _common.localization import has_traditional_chars  # noqa: E402
 from _common.paths import batch_entity_object_dir, batch_entity_page_input_path, batch_root, task_data  # noqa: E402
 from _common.source_unit import write_source_unit  # noqa: E402
+from _common.wiki_wikitext import parse_wikitext_placements  # noqa: E402
 from build.handler import handle_build  # noqa: E402
 from build.homepage import (  # noqa: E402
     MIN_PAGE_CHARS,
     _entity_draft_dir,
+    _homepage_outline_issues,
+    _homepage_source_figure_issues,
+    _replace_homepage_source_asset_refs,
     _split_fact_sentences,
     materialize_entity_pages,
+    validate_entity_page_inputs,
     validate_entity_pages,
 )
 from task.store import load_spec, save_spec  # noqa: E402
@@ -49,6 +56,9 @@ from task.store import load_spec, save_spec  # noqa: E402
 _TASK = "旅行/地域/四川省/景区/景区全覆盖"
 _BATCH = "build_test"
 _DOMAIN, _ETYPE, _NAME = "地点", "景区", "稻城亚丁"
+# discovery_seed/2 起 geoTagRef 为物化必填（_REQUIRED_ENTITY_FIELDS）；
+# coverageTargets 契约字段经 prepare payload 透传写入 _entity.json。
+_GEO_TAG_REF = "Topic/地理/行政区/中国/四川省/甘孜藏族自治州/稻城县"
 
 
 def _seed_spec() -> None:
@@ -57,13 +67,13 @@ def _seed_spec() -> None:
     save_spec({
         "schemaVersion": "quwoquan.task.spec",
         "taskId": _TASK,
-        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": _NAME}]},
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": _NAME, "geoTagRef": _GEO_TAG_REF}]},
         "conditionAxes": {"region": {"applicable": True}, "season": {"applicable": True}},
     })
     write_batch_manifest(
         _TASK,
         _BATCH,
-        coverage_targets=[{"entityType": f"{_DOMAIN}/{_ETYPE}", "name": _NAME}],
+        coverage_targets=[{"entityType": f"{_DOMAIN}/{_ETYPE}", "name": _NAME, "geoTagRef": _GEO_TAG_REF}],
         command="test:build-homepage",
     )
 
@@ -90,6 +100,7 @@ def _materialize_entity(regions: list[str], seasons: list[str], *, page_chars: i
         "domain": _DOMAIN,
         "type": _ETYPE,
         "sourceTaskId": _TASK,
+        "geoTagRef": _GEO_TAG_REF,
         "conditionProfile": {
             "regions": regions,
             "seasons": seasons,
@@ -163,6 +174,49 @@ def _homepage_asset_id(source_refs: dict[str, str]) -> str:
     )
 
 
+def _seed_entity_review_sidecars(source_refs: list[str]) -> None:
+    entity_dir = batch_entity_object_dir(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME)
+    draft_dir = entity_dir / "4.draft"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    draft_path = draft_dir / "page.md"
+    final_path = entity_dir / "page.md"
+    if not draft_path.is_file() and final_path.is_file():
+        draft_path.write_text(final_path.read_text(encoding="utf-8"), encoding="utf-8")
+    review_dir = entity_dir / "5.review"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    write_json(
+        review_dir / "review.json",
+        {
+            "decision": "approved",
+            "issues": [],
+            "checks": {
+                "entityPageQuality": {"passed": True, "issues": []},
+                "sourceReadiness": {"passed": True, "issues": []},
+            },
+        },
+    )
+    write_json(
+        review_dir / "provenance.json",
+        {
+            "originalSources": [{"sourceRef": ref} for ref in source_refs],
+            "agentInput": {"writingPack": "fixture homepage writing pack"},
+            "final": {"generator": "agent"},
+        },
+    )
+    write_json(
+        review_dir / "finalization_report.json",
+        {
+            "schemaVersion": "quwoquan_data.finalization_report",
+            "draftArticleRef": "4.draft/page.md",
+            "finalArticleRef": "page.md",
+            "draftSha256": "fixture-draft-sha",
+            "finalSha256": "fixture-final-sha",
+        },
+    )
+    write_entity_object_index(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME)
+    sync_entity_object_to_task_mirror(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME)
+
+
 def _seed_official_homepage_source(asset_name: str = "") -> str:
     entity_dir = batch_entity_object_dir(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME)
     images = []
@@ -203,6 +257,25 @@ def _seed_official_homepage_source(asset_name: str = "") -> str:
         batch_id=_BATCH,
     )
     return manifest["sourceRef"]
+
+
+def _seed_official_judge_verdict(source_ref: str) -> None:
+    """官方（非百科）主页源 fail-closed：必须有 homepage_source_judge primary verdict 才可晋升。"""
+    from _common.homepage_source_judge import SOURCE_JUDGE_SCHEMA_VERSION, SOURCE_JUDGE_VERDICT_FILE
+
+    # sourceRef 相对 batch 根（base_draft_candidates 契约）。
+    unit_dir = batch_root(_TASK, _BATCH) / Path(source_ref).parent
+    write_json(unit_dir / SOURCE_JUDGE_VERDICT_FILE, {
+        "schemaVersion": SOURCE_JUDGE_SCHEMA_VERSION,
+        "targetEntity": _NAME,
+        "sourcePageType": "entity_homepage",
+        "entityMatch": "exact",
+        "primaryEligible": True,
+        "recommendedAction": "primary",
+        "confidence": 0.9,
+        "reasons": ["官方页面围绕稻城亚丁本体介绍"],
+        "evidence": [{"field": "headText", "quote": f"{_NAME}位于四川省甘孜藏族自治州稻城县"}],
+    })
 
 
 def _seed_factready_encyclopedia_homepage_source(asset_name: str = "") -> str:
@@ -251,14 +324,93 @@ def _seed_factready_encyclopedia_homepage_source(asset_name: str = "") -> str:
     return manifest["sourceRef"]
 
 
+def _long_section(label: str, repeated: int = 18) -> str:
+    return "".join(f"稻城亚丁的{label}包含可核验的景观、方位、游览观察和背景事实。" for _ in range(repeated))
+
+
+def _seed_structured_wiki_homepage_source() -> str:
+    entity_dir = batch_entity_object_dir(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME)
+    source_md = (
+        f"{_NAME}位于四川甘孜州稻城县，是以高原雪山和湖泊为代表的自然景区。"
+        f"{_NAME}的核心景观围绕仙乃日、央迈勇、夏诺多吉展开。\n\n"
+        "== 三怙主雪山 ==\n"
+        + _long_section("三怙主雪山")
+        + "\n\n=== 仙乃日 ===\n"
+        "[[File:Valley near sacred mountain Xiannairi Yading Biosphere Reserve.jpg|thumb|仙乃日峰]]\n"
+        + _long_section("仙乃日")
+        + "\n\n=== 央迈勇 ===\n"
+        "[[File:Yading Sacred Mountain.jpg|thumb|央迈勇峰南坡]]\n"
+        + _long_section("央迈勇")
+        + "\n\n=== 夏诺多吉 ===\n"
+        + _long_section("夏诺多吉")
+        + "\n\n== 相关问题 ==\n"
+        + _long_section("相关问题")
+    )
+    clean_md = (
+        f"{_NAME}位于四川甘孜州稻城县，是以高原雪山和湖泊为代表的自然景区。"
+        f"{_NAME}的核心景观围绕仙乃日、央迈勇、夏诺多吉展开。\n\n"
+        + _long_section("三怙主雪山")
+        + "\n\n"
+        + _long_section("仙乃日")
+        + "\n\n"
+        + _long_section("央迈勇")
+        + "\n\n"
+        + _long_section("夏诺多吉")
+        + "\n\n"
+        + _long_section("相关问题")
+    )
+    outline, placements = parse_wikitext_placements(source_md, min_section_body_chars=60)
+    manifest = write_source_unit(
+        entity_dir,
+        ordinal=3,
+        source_id="home_wikipedia_structured",
+        source_md=source_md,
+        clean_md=clean_md,
+        quality={"quality": "A-fact", "score": 9, "fetchSucceeded": True},
+        platform="维基百科",
+        source_category="encyclopedia",
+        source_use_mode="factual_reference_only",
+        research_lane="homepage",
+        images=[
+            {
+                "fileName": "Valley_near_sacred_mountain_Xiannairi_Yading_Biosphere_Reserve.jpg",
+                "bytes": b"fake-xiannairi",
+                "ext": ".jpg",
+                "license": "CC BY-SA 4.0",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Valley_near_sacred_mountain_Xiannairi_Yading_Biosphere_Reserve.jpg",
+                "caption": "仙乃日峰",
+            },
+            {
+                "fileName": "Yading_Sacred_Mountain.jpg",
+                "bytes": b"fake-yangmaiyong",
+                "ext": ".jpg",
+                "license": "CC BY-SA 4.0",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "authorizationProof": "https://commons.wikimedia.org/wiki/File:Yading_Sacred_Mountain.jpg",
+                "caption": "央迈勇峰南坡",
+            },
+        ],
+        task_id=_TASK,
+        batch_id=_BATCH,
+    )
+    meta_path = batch_root(_TASK, _BATCH) / manifest["sourceUnitRef"] / "meta.json"
+    meta = read_json(meta_path)
+    meta["sectionOutline"] = outline
+    meta["imagePlacements"] = placements
+    write_json(meta_path, meta)
+    return manifest["sourceRef"]
+
+
 def _materialize_entity_with_asset() -> None:
     _materialize_entity(["高原"], ["秋"])
     entity_dir = batch_entity_object_dir(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME)
     source_refs = _seed_homepage_source("cover.jpg")
     asset_id = _homepage_asset_id(source_refs)
     file_name = f"{asset_id}.jpg"
+    # 三段结构契约：成品 page.md 必须在 frontmatter 声明唯一 coverImage。
     (entity_dir / "page.md").write_text(
-        f"# 稻城亚丁\n\n{'稻' * 900}\n",
+        f"---\ncoverImage: asset://{asset_id}\n---\n\n# 稻城亚丁\n\n{'稻' * 900}\n",
         encoding="utf-8",
     )
     assets_dir = entity_dir / "assets"
@@ -279,6 +431,7 @@ def _materialize_entity_with_asset() -> None:
             **source_refs,
         }],
     })
+    _seed_entity_review_sidecars([unit_ref])
 
 
 def test_prepare_writes_entity_page_contract():
@@ -304,15 +457,27 @@ def test_prepare_promotes_fact_ready_encyclopedia_over_short_wiki_redirect():
     assert len(payload["baseDraft"]["text"]) > 100
 
 
-def test_prepare_does_not_promote_official_homepage_source():
-    # P3 三类解耦：官网/官方不得作 base draft 主源（只补事实，不可 seed）。
+def test_prepare_promotes_official_homepage_source():
+    # 主页权威源已收敛为百科/官方同级：fact-ready 官方 source 可作为 baseDraft，
+    # 但官方（非百科）源必须先过 homepage_source_judge 语义判别（fail-closed）。
     _seed_spec()
     _seed_homepage_source("cover.jpg")  # 短 wiki，非 fact-ready
-    _seed_official_homepage_source()    # fact-ready 官方，但 P3 下不得 seed
+    official_ref = _seed_official_homepage_source()
     handle_build(argparse.Namespace(task=_TASK, batch=_BATCH, stage="prepare"))
     inp = batch_entity_page_input_path(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME)
     payload = read_json(inp)["payload"]
+    # 无 verdict：灰区来源不得晋升，且判别请求已落盘等待 Agent。
+    from _common.homepage_source_judge import SOURCE_JUDGE_REQUEST_FILE
+
     assert payload["baseDraft"] == {}
+    unit_dir = batch_root(_TASK, _BATCH) / Path(official_ref).parent
+    assert (unit_dir / SOURCE_JUDGE_REQUEST_FILE).is_file()
+    # Agent 写回 primary verdict 后重跑 prepare → 官方源晋升 baseDraft。
+    _seed_official_judge_verdict(official_ref)
+    handle_build(argparse.Namespace(task=_TASK, batch=_BATCH, stage="prepare"))
+    payload = read_json(inp)["payload"]
+    assert payload["baseDraft"]["sourceRef"] == official_ref
+    assert len(payload["baseDraft"]["text"]) > 100
 
 
 def test_prepare_does_not_promote_non_fact_ready_homepage_source():
@@ -322,6 +487,84 @@ def test_prepare_does_not_promote_non_fact_ready_homepage_source():
     inp = batch_entity_page_input_path(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME)
     payload = read_json(inp)["payload"]
     assert payload["baseDraft"] == {}
+
+
+def test_validate_entity_page_inputs_blocks_homepage_without_publishable_asset():
+    _seed_spec()
+    _seed_factready_encyclopedia_homepage_source()
+    handle_build(argparse.Namespace(task=_TASK, batch=_BATCH, stage="prepare"))
+    issues = validate_entity_page_inputs(_TASK, _BATCH, load_spec(_TASK))
+    assert any("homepage lane 无可发布图片资产" in issue for issue in issues), issues
+
+
+def test_prepare_homepage_prompt_embeds_outline_and_source_asset_figures():
+    _seed_spec()
+    source_ref = _seed_structured_wiki_homepage_source()
+
+    handle_build(argparse.Namespace(task=_TASK, batch=_BATCH, stage="prepare"))
+
+    payload = read_json(batch_entity_page_input_path(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME))["payload"]
+    base = payload["baseDraft"]
+    assert base["sourceRef"] == source_ref
+    assert "## 三怙主雪山" in base["markdown"]
+    assert "### 仙乃日" in base["markdown"]
+    assert "### 央迈勇" in base["markdown"]
+    assert payload["availableImages"][0]["sectionAnchor"] == "仙乃日"
+    assert payload["availableImages"][1]["sectionAnchor"] == "央迈勇"
+    # AI 最小干扰协议：模型输入零 asset:// / :::figure；非封面同源图以
+    # [[IMG:fig_NN]] 极简单行占位进入底稿原位（不含图注；图注真相源在 bindings）。
+    assert "asset://" not in base["markdown"]
+    assert ":::figure" not in base["markdown"]
+    assert "[[IMG:fig_02]]" in base["markdown"]
+    assert "[[IMG:fig_02]] 央迈勇峰南坡" not in base["markdown"]
+    bindings = payload["imagePlaceholderBindings"]
+    assert [row["figId"] for row in bindings] == ["fig_02"], bindings
+    assert bindings[0]["sourceAssetId"] == "003_002"
+    assert bindings[0]["caption"] == "央迈勇峰南坡"
+
+    prompt = (_entity_draft_dir(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME) / "prompt.md").read_text(encoding="utf-8")
+    assert "## 底稿材料" in prompt
+    assert "## 三怙主雪山" in prompt
+    assert "### 仙乃日" in prompt
+    # 契约 partial 中允许出现 `asset://` 字样（禁令说明），但真实 asset id 不得泄漏。
+    assert "asset://003_" not in prompt
+    assert "[[IMG:fig_02]]" in prompt
+    assert "央迈勇峰南坡" not in prompt  # 图注不进 prompt（bindings 是唯一真相源）
+    assert "图片占位符纪律" in prompt
+    assert "无需也不必" not in prompt
+
+
+def test_homepage_contract_blocks_flattened_sections_and_dropped_figures():
+    outline = [
+        {"level": 2, "title": "三怙主雪山"},
+        {"level": 3, "title": "仙乃日"},
+        {"level": 3, "title": "央迈勇"},
+    ]
+    good = (
+        "# 稻城亚丁\n\n"
+        "## 三怙主雪山\n\n概述。\n\n"
+        "### 仙乃日\n\n:::figure id=\"cover\" layout=\"fullWidth\" caption=\"仙乃日峰\"\nasset://003_001\n:::\n\n正文。\n\n"
+        "### 央迈勇\n\n:::figure id=\"homepage-source-002\" layout=\"wrapRight\" caption=\"央迈勇峰南坡\"\nasset://003_002\n:::\n\n正文。\n"
+    )
+    flat = good.replace("### 仙乃日", "## 仙乃日")
+    assert not _homepage_outline_issues(outline, good, "地点/景区/稻城亚丁")
+    assert any("仙乃日" in issue and "`###`" in issue for issue in _homepage_outline_issues(outline, flat, "地点/景区/稻城亚丁"))
+
+    base = {"markdown": ":::figure\nasset://003_001\n:::\n\n:::figure\nasset://003_002\n:::"}
+    assert not _homepage_source_figure_issues(base, good, "地点/景区/稻城亚丁")
+    dropped = good.replace("asset://003_002", "asset://other")
+    assert any("asset://003_002" in issue for issue in _homepage_source_figure_issues(base, dropped, "地点/景区/稻城亚丁"))
+
+    replaced = _replace_homepage_source_asset_refs(
+        good,
+        [
+            {"sourceAssetId": "003_001", "assetId": "稻城亚丁_cover_abcd"},
+            {"sourceAssetId": "003_002", "assetId": "稻城亚丁_detail_efgh"},
+        ],
+    )
+    assert "asset://003_001" not in replaced
+    assert "asset://稻城亚丁_cover_abcd" in replaced
+    assert "asset://稻城亚丁_detail_efgh" in replaced
 
 
 def test_validate_blocks_missing_homepage():
@@ -338,8 +581,9 @@ def test_validate_passes_when_complete():
     source_refs = _seed_homepage_source("cover.jpg")
     asset_id = _homepage_asset_id(source_refs)
     file_name = f"{asset_id}.jpg"
+    # 三段结构契约：成品 page.md 必须在 frontmatter 声明唯一 coverImage。
     page.write_text(
-        page.read_text(encoding="utf-8") + "\n",
+        f"---\ncoverImage: asset://{asset_id}\n---\n\n" + page.read_text(encoding="utf-8") + "\n",
         encoding="utf-8",
     )
     (entity_dir / "assets").mkdir(parents=True, exist_ok=True)
@@ -358,6 +602,7 @@ def test_validate_passes_when_complete():
     manifest["imageSourceRefs"] = [unit_ref]
     manifest["sourceRefs"] = [unit_ref]
     write_json(entity_dir / "manifest.json", manifest)
+    _seed_entity_review_sidecars([unit_ref])
     issues = validate_entity_pages(_TASK, _BATCH, load_spec(_TASK))
     assert issues == [], issues
     assert (entity_dir / "4.draft" / "page.md").is_file()
@@ -452,6 +697,8 @@ def test_validate_blocks_repeated_padding_homepage():
 
 # 会话模型在底稿基础上轻改创作的实体主页正文（逐句改写、保留底稿枚举事实、≥800 字、不照搬）。
 # 经 base_draft_similarity 实测对官方底稿贴合度约 0.91 ∈ [0.55, 0.995]，无模板指纹/质量门问题。
+# AI 最小干扰协议：创作 agent 只写纯文字 + 多级标题，不书写 asset:// / :::figure；
+# 封面与配图注入全部由 finalize 代码侧完成。
 _AGENT_HOMEPAGE_DRAFT = (
     "# 稻城亚丁\n\n"
     "稻城亚丁位于四川省甘孜藏族自治州稻城县香格里拉镇，是川西高原上重要的自然景区。"
@@ -498,14 +745,75 @@ def test_finalize_materializes_agent_homepage_draft_with_generator_agent():
     assert "稻城亚丁位于四川省甘孜藏族自治州稻城县香格里拉镇" in final_page
     assert manifest["assets"]
     assert manifest["assets"][0]["role"] == "cover"
-    # 当前契约：finalize 确定性把真实授权图以 asset:// figure 注入正文，并在 frontmatter 标 coverImage。
+    # 三段结构契约：封面只在 frontmatter 声明，正文不重复展示封面（Agent 内联的
+    # 封面 figure 由 finalize 代码侧剥离）；仅有封面一张图时正文无 figure 属合法形态。
     cover_asset_id = manifest["assets"][0]["assetId"]
     assert final_page.startswith("---\n"), final_page[:80]
-    assert "coverImage: asset://" in final_page
-    assert f"asset://{cover_asset_id}" in final_page
-    assert ":::figure" in final_page
+    assert f"coverImage: asset://{cover_asset_id}" in final_page
+    body = final_page.split("\n---\n", 1)[1]
+    assert f"asset://{cover_asset_id}" not in body, "封面不得在正文重复展示"
     validate_issues = validate_entity_pages(_TASK, _BATCH, load_spec(_TASK))
     assert validate_issues == [], validate_issues
+
+
+def test_finalize_folds_traditional_homepage_text_to_simplified():
+    _seed_spec()
+    _seed_homepage_source("cover.jpg")
+    _seed_factready_encyclopedia_homepage_source("enc_cover.jpg")
+    handle_build(argparse.Namespace(task=_TASK, batch=_BATCH, stage="prepare"))
+    entity_dir = batch_entity_object_dir(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME)
+    draft_page = _entity_draft_dir(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME) / "page.md"
+    draft_page.write_text(
+        _AGENT_HOMEPAGE_DRAFT
+        + "\n\n山區雲霧會隨季節變化，遊覽時經龍門一線也應留意天氣。\n",
+        encoding="utf-8",
+    )
+
+    issues = materialize_entity_pages(_TASK, _BATCH, load_spec(_TASK))
+
+    assert issues == [], issues
+    final_page = (entity_dir / "page.md").read_text(encoding="utf-8")
+    assert "山区云雾会随季节变化" in final_page
+    assert not has_traditional_chars(final_page)
+    validate_issues = validate_entity_pages(_TASK, _BATCH, load_spec(_TASK))
+    assert validate_issues == [], validate_issues
+
+
+def test_validate_homepage_fidelity_folds_traditional_base_text():
+    _seed_spec()
+    _seed_homepage_source("cover.jpg")
+    source_ref = _seed_factready_encyclopedia_homepage_source("enc_cover.jpg")
+    source_path = batch_root(_TASK, _BATCH) / source_ref
+    source_dir = source_path.parent
+    original_source = (source_dir / "source.md").read_text(encoding="utf-8")
+    clean_path = source_dir / "source.clean.md"
+    original_clean = clean_path.read_text(encoding="utf-8") if clean_path.is_file() else None
+    traditional_base = (
+        "# 稻城亚丁\n\n"
+        "稻城亚丁位於四川省甘孜藏族自治州稻城縣香格里拉鎮。"
+        "稻城亚丁以仙乃日、央邁勇、夏諾多吉三座雪山為核心景觀。"
+        "稻城亚丁景區包含高山湖泊、草甸、峽谷和藏族聚落等自然與人文資源。"
+        "稻城亚丁遊覽需要關注海拔、天氣、步道和交通接駁等官方提示。"
+        "稻城亚丁的開放、預約和票務規則應以景區官方公告為準。"
+    )
+    try:
+        (source_dir / "source.md").write_text(traditional_base, encoding="utf-8")
+        (source_dir / "source.clean.md").write_text(traditional_base, encoding="utf-8")
+        handle_build(argparse.Namespace(task=_TASK, batch=_BATCH, stage="prepare"))
+        draft_page = _entity_draft_dir(_TASK, _BATCH, _DOMAIN, _ETYPE, _NAME) / "page.md"
+        draft_page.write_text(_AGENT_HOMEPAGE_DRAFT, encoding="utf-8")
+
+        issues = materialize_entity_pages(_TASK, _BATCH, load_spec(_TASK))
+
+        assert issues == [], issues
+        validate_issues = validate_entity_pages(_TASK, _BATCH, load_spec(_TASK))
+        assert validate_issues == [], validate_issues
+    finally:
+        (source_dir / "source.md").write_text(original_source, encoding="utf-8")
+        if original_clean is None:
+            clean_path.unlink(missing_ok=True)
+        else:
+            clean_path.write_text(original_clean, encoding="utf-8")
 
 
 def test_finalize_waits_when_agent_draft_is_placeholder():
@@ -598,6 +906,41 @@ def test_homepage_fact_split_counts_official_meta_level_titles():
     assert any("AAAA级旅游景区" in fact for fact in facts)
     assert any("国家级风景名胜区" in fact for fact in facts)
     assert any("六大景区" in fact for fact in facts)
+
+
+def test_homepage_tag_refs_merge_master_list_type_and_geo_tags():
+    """WP3 统一打标：typeTagRefs + geoTagRef/geoTagRefs 全量并进 tagRefs（不编造）。"""
+    from build.homepage import _homepage_tag_refs
+
+    payload = {
+        "typeTagRefs": ["Entity/地点/景区/4A景区", "Entity/地点/博物馆"],
+        "geoTagRef": "Topic/地理/行政区/中国/四川省/成都市/武侯区",
+        "geoTagRefs": ["Topic/地理/行政区/中国/四川省/成都市/武侯区"],
+        "tagRefs": ["Topic/旅行/玩法/观光游览"],
+    }
+    refs = _homepage_tag_refs(_DOMAIN, _ETYPE, "武侯祠", payload)
+
+    assert refs[:3] == [
+        "Entity/地点/景区/4A景区",
+        "Entity/地点/博物馆",
+        "Topic/地理/行政区/中国/四川省/成都市/武侯区",
+    ]
+    assert "Topic/旅行/玩法/观光游览" in refs
+    # geoTagRef 与 geoTagRefs 重复项去重，只出现一次。
+    assert refs.count("Topic/地理/行政区/中国/四川省/成都市/武侯区") == 1
+    # Format 最小集兜底仍在（manifest.tagRefs >= 2 合法 ref 契约）。
+    assert any(ref.startswith("Format/") for ref in refs)
+
+
+def test_homepage_tag_refs_do_not_fabricate_when_master_list_fields_missing():
+    from build.homepage import _homepage_tag_refs
+
+    refs = _homepage_tag_refs(_DOMAIN, _ETYPE, "无契约字段景区", {})
+
+    assert not any(ref.startswith("Entity/") for ref in refs)
+    assert not any(ref.startswith("Topic/地理/") for ref in refs)
+    # Topic/Format 最小集兜底仍保证非空。
+    assert len(refs) == 2
 
 
 def _run_all() -> None:

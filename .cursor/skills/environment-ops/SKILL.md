@@ -8,21 +8,21 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 
 在本仓库处理环境相关任务时，优先使用统一入口：
 
-- `python3 agent_ops/deploy/stackctl.py package --env <alpha|beta|gamma|prod>`
-- `python3 agent_ops/deploy/stackctl.py up --env <alpha|beta|gamma|prod-sim|prod> [--device-id <id>]`
+- `python3 quwoquan_ops/cli/stackctl.py package --env <alpha|beta|gamma|prod>`
+- `python3 quwoquan_ops/cli/stackctl.py up --env <alpha|beta|gamma|prod-sim|prod> [--device-id <id>]`
 - `make dev-up ENV=<alpha|beta|gamma|prod-sim|prod> [DEVICE_ID=<id>]`
-- `python3 agent_ops/deploy/stackctl.py verify [--env <env>] [--kind <topology|config|packaging|all>] [--tier <t1|t2|t3|t4|all>]`
-- `python3 agent_ops/deploy/stackctl.py health --target <target> --scope <edge|media|service|full>`
-- `python3 agent_ops/deploy/stackctl.py inspect --target <target> --kind <logs|network|data|metrics|config|security|all>`
-- `python3 agent_ops/deploy/stackctl.py doctor --target <target>`
-- `python3 agent_ops/deploy/stackctl.py repair --target <target> --fix <rebuild-packages|restart-stack|reclaim-ports>`
-- `python3 agent_ops/deploy/stackctl.py deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>`
+- `python3 quwoquan_ops/cli/stackctl.py verify [--env <env>] [--kind <topology|config|packaging|all>] [--tier <t1|t2|t3|t4|all>]`
+- `python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope <edge|media|service|full>`
+- `python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind <logs|network|data|metrics|config|security|all>`
+- `python3 quwoquan_ops/cli/stackctl.py doctor --target <target>`
+- `python3 quwoquan_ops/cli/stackctl.py repair --target <target> --fix <rebuild-packages|restart-stack|reclaim-ports>`
+- `python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>`
 
 ## Rules
 
 1. 不要把 `prod-gray` 当成额外环境。生产灰度是 `prod` 下的 rollout stage。
-2. 不要手写本地 canonical 端口；读取 `deploy/shared/local_env_port_manifest.yaml` 对应 profile。
-3. 不要手写 public topology；读取 `deploy/shared/environment_topology_manifest.yaml`。
+2. 不要手写本地 canonical 端口；读取 `quwoquan_ops/environments/local_env_port_manifest.yaml` 对应 profile。
+3. 不要手写 public topology；读取 `quwoquan_ops/environments/environment_topology_manifest.yaml`。
 4. 需要环境打包、纯度、URL 契约或 artifact 隔离时，先跑 `stackctl package`，再跑 `stackctl verify --kind ...`；需要 T1~T4 证据时再显式追加 `--tier ...`。
 5. 需要诊断时，先 `health`，再 `inspect`，最后 `doctor`。只有白名单问题才执行 `repair`。
 6. 远端/hosted 目标只有 `prod-hosted`（backend SSH 托管，gray 与 full 共享同一集群）；`gamma` 仅本地（`gamma-local`），不存在远端 gamma。`prod-hosted` 只通过 `stackctl deploy --target prod-hosted` 驱动 `gray-initial / carry-on / full` rollout stage，真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成；不要跳回旧脚本，除非是在修 `stackctl` 本身。
@@ -54,7 +54,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 1. 先确认 `stackctl verify --env prod --kind all` 通过。
 2. 使用 `stackctl deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>`。
 3. `prod-hosted` 走 `gray-initial / carry-on / full` rollout stage；真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成（不再有独立的远端 gamma-hosted 阶段）。
-4. 每步产物以 `artifacts/stackctl/prod/**` 和 `state/release/<service>.state` 为准。
+4. 每步产物以 `.qwq_output/runs/prod/**` 和 `.qwq_output/local/release-state/<service>.state` 为准。
 
 ## Stop Conditions
 
@@ -71,6 +71,6 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 
 优先引用这些产物：
 
-- `artifacts/stackctl/<env>/<run-id>/report.json`
-- `artifacts/stackctl/<env>/<run-id>/summary.md`
-- `artifacts/local-gamma/report.json`
+- `.qwq_output/runs/<env>/<run-id>/report.json`
+- `.qwq_output/runs/<env>/<run-id>/summary.md`
+- `.qwq_output/local/gamma-local/report.json`

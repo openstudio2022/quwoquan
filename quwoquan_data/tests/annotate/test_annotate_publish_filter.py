@@ -23,7 +23,8 @@ from pathlib import Path
 sys.path.insert(0, str(SCRIPTS_ROOT))
 os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp(prefix="anno_rt_")
 
-from _common.io import write_json  # noqa: E402
+from _common.io import read_json, write_json  # noqa: E402
+from _common.article_package import compute_document_sha256  # noqa: E402
 from _common.paths import ensure_batch_layout  # noqa: E402
 from _common import content_object  # noqa: E402
 from _common.review_ledger import (  # noqa: E402
@@ -206,6 +207,43 @@ def test_publish_filter_syncs_readonly_ref_projections_after_entity_filter():
     assert "entity:景区:无主页" not in action_targets
     assert "entity:景区:有主页" in action_targets
     assert "Topic/旅行" in action_targets
+
+
+def test_publish_filter_syncs_article_digest_and_provenance_after_filter():
+    publish_root = Path(tempfile.mkdtemp(prefix="pf_digest_pub_"))
+    topic = Path(tempfile.mkdtemp(prefix="pf_digest_topic_"))
+    article = (
+        "# t\n\n"
+        "正文提到[无主页](/entity/地点/景区/无主页)，发布过滤后链接会降级为普通文本。\n"
+    )
+    original_digest = compute_document_sha256(article)
+    write_json(topic / "manifest.json", {
+        "topicId": REF,
+        "contentType": "article",
+        "entityRefs": ["/entity/地点/景区/无主页"],
+        "normalizedEntityRefs": ["entity:景区:无主页"],
+        "tagRefs": ["Topic/旅行/玩法/观光游览", "Format/内容角度/攻略"],
+        "assets": [],
+    })
+    (topic / "article.md").write_text(article, encoding="utf-8")
+    (topic / "5.review").mkdir(parents=True, exist_ok=True)
+    write_json(topic / "5.review" / "provenance.json", {
+        "schemaVersion": "quwoquan_data.provenance",
+        "final": {"contentType": "article", "generator": "agent", "articleDigest": original_digest},
+    })
+
+    verdict = apply_publish_filter(topic, publish_root)
+    verdict.write_into(topic)
+
+    filtered_article = (topic / "article.md").read_text(encoding="utf-8")
+    filtered_digest = compute_document_sha256(filtered_article)
+    manifest = read_json(topic / "manifest.json")
+    provenance = read_json(topic / "5.review" / "provenance.json")
+    assert "[无主页](/entity/地点/景区/无主页)" not in filtered_article
+    assert manifest["articleMarkdownDigest"] == filtered_digest
+    assert manifest["documentSha256"] == filtered_digest
+    assert provenance["final"]["articleDigest"] == filtered_digest
+    assert filtered_digest != original_digest
 
 
 def _run_all() -> None:

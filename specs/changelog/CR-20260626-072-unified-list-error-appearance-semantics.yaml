@@ -68,7 +68,7 @@ entries:
       - "通过：cd quwoquan_app && flutter test test/core/widgets/app_list_page_semantics_test.dart test/core/widgets/error_states/app_error_states_test.dart test/core/errors/ui_error_semantics_test.dart"
       - "通过：cd quwoquan_app && flutter test test/ui/user/pages/profile_stats_page_test.dart test/ui/user/pages/my_intersection_inbox_page_test.dart test/ui/intersection/pages/object_intersection_list_page_test.dart test/ui/discovery/pages/work_browser_entry_page_test.dart"
       - "通过：make verify-app-page-horizontal-quality"
-      - "通过：bash agent_ops/scaffold/verify_acceptance_standard.sh"
+      - "通过：bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh"
     notes:
       - 本轮不新增服务错误码，不改变 HTTP 响应语义；sourceTheme 仅用于 App 错误页来源外观。
       - 外部深链缺省 sourceTheme 时按当前全局主题继承，不保存 system。

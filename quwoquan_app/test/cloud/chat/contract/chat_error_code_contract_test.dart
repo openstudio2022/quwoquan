@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 
-/// L1a 契约测试：ChatErrorCode — 覆盖 errors.yaml 中 8 个错误码
+/// L1a 契约测试：ChatErrorCode — 覆盖 errors.yaml 中 10 个错误码
 ///
 /// 三维度覆盖：
 ///   常规契约  — 每个已知错误码正确解析，错误码解析与状态码正确
@@ -75,8 +75,8 @@ void main() {
       expect(code, ChatErrorCode.unknown);
     });
 
-    test('enum 总数 = 9 (8 已知 + 1 unknown)', () {
-      expect(ChatErrorCode.values.length, 9);
+    test('enum 总数 = 11 (10 已知 + 1 unknown)', () {
+      expect(ChatErrorCode.values.length, 11);
     });
 
     test('每个 code 可以 round-trip：fromCode(code) == self', () {
@@ -106,10 +106,7 @@ void main() {
 
     test('defaultMessage 中文非空', () {
       expect(ChatErrorCode.notMutual.defaultMessage, contains('互相关注'));
-      expect(
-        ChatErrorCode.greetingRequired.defaultMessage,
-        contains('打招呼'),
-      );
+      expect(ChatErrorCode.greetingRequired.defaultMessage, contains('打招呼'));
       expect(ChatErrorCode.blocked.defaultMessage, contains('不能继续发送消息'));
     });
   });

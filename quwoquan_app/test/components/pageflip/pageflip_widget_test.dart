@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../../support/pageflip/pageflip.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
+import 'package:quwoquan_app/ui/content/article_reader/content/article_reader_page_surfaces.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/diagnostics/article_reader_diagnostic_signatures.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
@@ -457,6 +458,78 @@ void main() {
       await gesture.up();
       await tester.pump(const Duration(milliseconds: 16));
       await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    },
+  );
+
+  testWidgets(
+    'ArticleReadOnlyBookDeck immersive paper fills the whole content rect',
+    (WidgetTester tester) async {
+      const stageSize = Size(360, 640);
+      await tester.binding.setSurfaceSize(stageSize);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SizedBox.fromSize(
+            size: stageSize,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final baseMetrics = resolveArticleCanvasMetrics(
+                  context,
+                  constraints,
+                  variant: ArticleCanvasVariant.immersive,
+                );
+                final metrics = ArticleCanvasMetrics(
+                  aspectRatio: stageSize.width / stageSize.height,
+                  outerPadding: EdgeInsets.zero,
+                  contentPadding: baseMetrics.contentPadding,
+                  headerReservedHeight: baseMetrics.headerReservedHeight,
+                  footerReservedHeight: baseMetrics.footerReservedHeight,
+                  wrapImageGap: baseMetrics.wrapImageGap,
+                  wrapImageMaxWidth: baseMetrics.wrapImageMaxWidth,
+                  fullWidthImageAspectRatio:
+                      baseMetrics.fullWidthImageAspectRatio,
+                  journalImageAspectRatio: baseMetrics.journalImageAspectRatio,
+                  inlineImageSpacing: baseMetrics.inlineImageSpacing,
+                );
+                return ArticleReadOnlyBookDeck(
+                  pages: _diagnosticPages(),
+                  template: ArticleTemplatePreset.tech,
+                  fontPreset: ArticleFontPreset.classic,
+                  metrics: metrics,
+                  pagePadding: EdgeInsets.zero,
+                  initialPage: 0,
+                  coverUrl: '',
+                  showFooterPageLabel: false,
+                  presentationStyle:
+                      ArticleReadOnlyBookDeckPresentationStyle.immersive,
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      for (var i = 0; i < 8; i += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      final deckRect = tester.getRect(find.byType(ArticleReadOnlyBookDeck));
+      final visiblePageRect = tester.getRect(
+        find
+            .byKey(const ValueKey<String>('article-reader-page-surface-0'))
+            .first,
+      );
+      final shell = tester.widget<ArticlePageShell>(
+        find
+            .byKey(const ValueKey<String>('article-reader-page-surface-0'))
+            .first,
+      );
+
+      expect(shell.variant, ArticlePageShellVariant.immersiveEdgeToEdge);
+      expect(visiblePageRect.topLeft, deckRect.topLeft);
+      expect(visiblePageRect.size.width, closeTo(deckRect.size.width, 0.1));
+      expect(visiblePageRect.size.height, closeTo(deckRect.size.height, 0.1));
     },
   );
 
@@ -1194,6 +1267,9 @@ void main() {
     expect(find.byType(ArticlePageCurlRenderer), findsNothing);
 
     await gesture.up();
+    for (var i = 0; i < 40; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
     await tester.pumpAndSettle();
 
     final backwardAnimationStates = debugStates.where(

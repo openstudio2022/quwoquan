@@ -62,7 +62,7 @@ sit_acceptance:
         envs:
         - gamma_local
     notes:
-    - '[migrated_from_planned] `deploy/shared/gamma_validation_suites.json` 新增 `mainline_auto_prod`
+    - '[migrated_from_planned] `quwoquan_ops/environments/gamma_validation_suites.json` 新增 `mainline_auto_prod`
       profile，并由 workflow / verify 脚本消费。'
     - '[migrated_from_planned] `stackctl deploy/health/inspect/doctor` 在 beta/gamma/prod
       阶段输出统一证据。'
@@ -81,10 +81,10 @@ sit_acceptance:
     - '`gamma-local` 与 `prod-hosted` 工作负载图谱（含数据面 Service 名/DSN 变量）同构；`stackctl` /
       workflow / ACK root 对同一 inventory 解释一致。'
     contract_refs:
-    - deploy/shared/process_domain_mapping.yaml
-    - deploy/shared/module_package_mapping.yaml
-    - deploy/kustomization/aliyun-prod/kustomization.yaml
-    - deploy/shared/environment_topology_manifest.yaml
+    - quwoquan_ops/environments/process_domain_mapping.yaml
+    - quwoquan_ops/environments/module_package_mapping.yaml
+    - quwoquan_ops/environments/kustomization/aliyun-prod/kustomization.yaml
+    - quwoquan_ops/environments/environment_topology_manifest.yaml
     performance_points:
     - 成本优化走标准 K8s 能力（requests/limits + bin-packing + HPA + cluster-autoscaler），低峰可缩容降本。
     tests:
@@ -129,14 +129,14 @@ sit_acceptance:
       + 用户主链路无感知漂移（local_contract/user_acceptance）。'
     - '[migrated_from_planned] 反模式门禁：拒绝多业务容器共享 Pod 当常态、sidecar 承载领域职责、集群内自建 DB StatefulSet
       默认、硬编码 DB 连接/跨域直连。'
-    - '[migrated_from_recorded_reference] deploy/shared/workload_topology_inventory.yaml'
+    - '[migrated_from_recorded_reference] quwoquan_ops/environments/workload_topology_inventory.yaml'
     - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/deploy/verify_strangler_contract_invariants.py'
     - '[migrated_from_recorded_reference] quwoquan_service/scripts/deploy/verify_topology_contract_regression.sh'
     - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/deploy/verify_gamma_local_prod_isomorphism.py'
-    - '[migrated_from_recorded_reference] deploy/kustomization/aliyun-prod/kustomization.yaml'
+    - '[migrated_from_recorded_reference] quwoquan_ops/environments/kustomization/aliyun-prod/kustomization.yaml'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

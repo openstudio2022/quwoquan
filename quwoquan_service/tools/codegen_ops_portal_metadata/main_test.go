@@ -63,8 +63,8 @@ minimum_package:
   template_domain: content
   first_wave_replica_domains: [chat]
   required_deploy_sources:
-    current: deploy/shared/process_domain_mapping.yaml
-    plane_aware: deploy/shared/process_domain_plane_mapping.yaml
+    current: quwoquan_ops/environments/process_domain_mapping.yaml
+    plane_aware: quwoquan_ops/environments/process_domain_plane_mapping.yaml
 `)
 	writePortalFixture(t, filepath.Join(metadataDir, "_control_plane", "domains", "content.yaml"), `
 version: 1
@@ -94,8 +94,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: content
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: [chat]

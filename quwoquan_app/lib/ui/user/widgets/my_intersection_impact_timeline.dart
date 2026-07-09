@@ -5,18 +5,17 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summa
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_evidence.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_inbox_timeline.dart';
 
-/// 「我的影响力」时间线：与交集 tab 同款最近时间桶脚手架（[IntersectionBucketTimeline]），
+/// 「打动」时间线：与交集 tab 同款最近时间桶脚手架（[IntersectionBucketTimeline]），
 /// 逐条复用详情页紧凑行，只展示云侧下发的 primaryText。
 /// 名字/对象片段进对应主页，数字片段/整行进影响明细 sheet（[AuthorImpactEvidence]）。
 ///
-/// 从 `my_intersection_inbox_page.dart` 抽出（R03 文件体量收敛）：影响力 tab 的时间线渲染、
+/// 从 `my_intersection_inbox_page.dart` 抽出（R03 文件体量收敛）：打动 tab 的时间线渲染、
 /// impact item 装配与 evidence 接线集中在此，页面只负责 tab 切换与状态注入。
 class ImpactTimeline extends ConsumerWidget {
   const ImpactTimeline({super.key, required this.state, this.filter = 'all'});

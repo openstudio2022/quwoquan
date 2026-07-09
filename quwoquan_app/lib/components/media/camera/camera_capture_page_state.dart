@@ -49,6 +49,13 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
   bool get _canSwitchCaptureMode =>
       _modePolicy == CameraCaptureModePolicy.switchable;
 
+  void _setMountedState(VoidCallback update) {
+    if (!mounted) {
+      return;
+    }
+    setState(update);
+  }
+
   MediaPickerEntryMode _normalizedInitialMode() {
     switch (_modePolicy) {
       case CameraCaptureModePolicy.photoOnly:

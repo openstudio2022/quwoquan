@@ -65,7 +65,7 @@
 - **R-S06 App 接线**：`RemoteSearchRepository` 走 `CloudHttpClient` + codegen path 调 `/v1/search`，按 `appDataSourceModeProvider` 切换；读路径护栏（metadata path + header 审计）成立。
 - **R-S07 反馈/热力/排序**：`feedbackstore`(Mongo, TTL) + `queryheat` 派生 `rm_search_term_heat`(TTL 86400) + 排序透明化信封；多读切片原则在 ES 分片/副本弹性上落地。
 - **R-S07-5 推荐信号注入**：search → Redis Stream `events.search.recommendation_signals` → content-service consumer → `rm_recommend_feature`（代码 local_contract 通过）。
-- **R-S06-S 端到端冒烟**：stackctl 实例化 search-service 进 local-gamma（ES-enabled，`quwoquan_objects` backfill），网关 `/v1/search` 200、`/v1/search/feedback` 202，证据 `artifacts/local-gamma/search_smoke_report.json` 与 `artifacts/stackctl/gamma/**`。
+- **R-S06-S 端到端冒烟**：stackctl 实例化 search-service 进 local-gamma（ES-enabled，`quwoquan_objects` backfill），网关 `/v1/search` 200、`/v1/search/feedback` 202，证据 `.qwq_output/local/gamma-local/search_smoke_report.json` 与 `.qwq_output/runs/gamma/**`。
 
 ## 未完成风险（弹性/长稳缺口，登记为后续 /dev）
 
@@ -77,13 +77,13 @@
 
 | Backlog | 任务 | 完成条件 | 验收证据 |
 |---|---|---|---|
-| R-S06-S-1 | 真集群/prod-sim 原生 ES/OpenSearch 容量校准 | 回填 measured RPS/P95/P99、饱和点、最大稳定 RPS、推荐 shard/replica/节点规格、refresh/bulk/circuit 阈值；多副本 `preference` 验证 TopN 不跳变 | `artifacts/search-load/**` 真集群报告、`search_slo.yaml` 回填、`stackctl verify --env prod --kind all --tier all` |
+| R-S06-S-1 | 真集群/prod-sim 原生 ES/OpenSearch 容量校准 | 回填 measured RPS/P95/P99、饱和点、最大稳定 RPS、推荐 shard/replica/节点规格、refresh/bulk/circuit 阈值；多副本 `preference` 验证 TopN 不跳变 | `.qwq_output/runs/search-load/**` 真集群报告、`search_slo.yaml` 回填、`stackctl verify --env prod --kind all --tier all` |
 | R-S06-S-2 | 写时增量 + backfill 幂等长稳 | content/entity/circle/user/location publish/update/unpublish 触发索引收敛；backfill rerun count/hash 不漂移；ES restart 后恢复 SLA 达标 | api_integration soak 报告、`search_index_restart_recovery_t3.json` 扩展、projector/backfill tests |
-| R-S06-S-3 | search-service module + release config 干净检出可复现 | `services/search-service`、`deploy/service/search-service`、`releases/config/search-service/vX.yaml`、backlog/CR 全部 git-tracked；config PR policy 绿 | `verify_search_service_module.sh`、`verify_config_pr_policy.sh`、`gate_repo.sh --scope service` |
+| R-S06-S-3 | search-service module + release config 干净检出可复现 | `services/search-service`、`quwoquan_service/services/search-service/deploy`、`quwoquan_service/services/search-service/vX.yaml`、backlog/CR 全部 git-tracked；config PR policy 绿 | `verify_search_service_module.sh`、`verify_config_pr_policy.sh`、`gate_repo.sh --scope service` |
 
 ## 容量校准（capacity calibration / R-S06-S-1）
 
-> 真相源：本节方法学 + `configs/observability/search_slo.yaml#load_model`（目标值）+ `artifacts/search-load/**`（压测实测）+ `artifacts/local-gamma/*search*`（local 证据）。
+> 真相源：本节方法学 + `configs/observability/search_slo.yaml#load_model`（目标值）+ `.qwq_output/runs/search-load/**`（压测实测）+ `.qwq_output/local/gamma-local/*search*`（local 证据）。
 > 业界搜索容量共识（吸收 Elastic/OpenSearch 官方实践），用于真集群/prod-sim 校准；local-gamma 单节点模拟不能代表生产，measured 值必须在真集群回填。
 
 ### 校准方法学
@@ -118,8 +118,8 @@
 ### 本轮 local 校准证据（不代表生产）
 
 - 单节点 ES `quwoquan_objects`：1 shard / 1 replica → cluster 永久 **yellow**（replica unassigned，active_shards 50%）；搜索读不受影响。生产应 ≥2 data node + replicas≥1 转 green，或单节点部署显式 replicas=0。
-- ES 重启恢复 ≈108s（amd64 模拟），索引文档数持久（675→675），搜索恢复一致 TopN（见 `artifacts/local-gamma/search_index_restart_recovery_t3.json`）。
-- `python3 quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py` 是 R-S06-S-1 的 **local-gamma 可验证入口**：聚合 stackctl gamma verify、ES health/index/shards/threadpool、小型 warm/cold/mixed/feedback 并发压测、单节点 repeatability、故障/回滚证据存在性，报告落 `artifacts/local-gamma/search_r_s06_s1_local_gamma_report.json`。
+- ES 重启恢复 ≈108s（amd64 模拟），索引文档数持久（675→675），搜索恢复一致 TopN（见 `.qwq_output/local/gamma-local/search_index_restart_recovery_t3.json`）。
+- `python3 quwoquan_service/scripts/search/verify_search_local_gamma_capacity.py` 是 R-S06-S-1 的 **local-gamma 可验证入口**：聚合 stackctl gamma verify、ES health/index/shards/threadpool、小型 warm/cold/mixed/feedback 并发压测、单节点 repeatability、故障/回滚证据存在性，报告落 `.qwq_output/local/gamma-local/search_r_s06_s1_local_gamma_report.json`。
 - 该报告固定写入 `r_s06_s1_closed_by_local_gamma=false`：local 只能证明方法学、单节点稳定性、基本背压/退化和重复查询不跳变，不能关闭真集群 measured 容量阻断。
 
 ### 未闭合（R-S06-S-1 BLOCK，需真集群）
@@ -135,7 +135,7 @@
 | 稳定全序 tie-break | `runtime/search.SortHitsStable`：`Score desc → Title asc → Target asc → ObjectID asc`（recall 合并与 search-service `term_heat` 重排共用同一排序真相源，无第二套排序） | `TestSortHitsStableTotalOrderUnderPermutation` |
 | ES 候选截断确定性 | `es/query_builder` Build 显式 `sort:[_score desc, objectId asc]` + `track_total_hits:false`，使 top-`size` 截断在多副本/段合并/refresh 后确定 | `query_builder` 单测 + 现有 DSL 断言 |
 | AB bucket 粘性 | `subjectKeyFor` 仅用 viewerId/sessionId；匿名无 session 返回空 → `Assign` 强制 `control`，绝不用 per-request id 参与分桶（否则同一 query 每次重掷实验臂） | `TestAssignEmptySubjectIsControlAndSticky`、`TestSubjectKeyForStableIdentityOnly` |
-| 重复查询 golden diff | 同 viewer/session/query 连续 25 次，TopN keys + bucket 0 跳变 | `artifacts/local-gamma/search_repeatability_golden_diff.json` |
+| 重复查询 golden diff | 同 viewer/session/query 连续 25 次，TopN keys + bucket 0 跳变 | `.qwq_output/local/gamma-local/search_repeatability_golden_diff.json` |
 
 **未闭合（scoped 到真集群，非本环境 debt）**：多副本下跨副本 `_score` 漂移（分布式 df 统计差异）需 ES `preference`（按 viewer/session/query 稳定派生，路由到同一副本）兜底；该 preference 需通过 Searcher 透传查询参数实现。local 单节点无副本（replicas unassigned，永久 yellow）无法验证 preference 收益，故列入 R-S06-S-1 真集群里程碑实现并验收，避免在无副本环境提前接入半成品。
 
@@ -149,8 +149,8 @@
 | Feedback | `/v1/search/feedback` 记录点击、曝光、反馈，202 accepted，不阻塞 result | search-service contract test |
 | Queryheat | `rm_search_term_heat` TTL 86400，基于次数、点击、共现、时间衰减计算 relatedTerms 与 term heat | queryheat tests + storage TTL contract |
 | Result ranking | term-heat 由 RankingDecorator 注入，输出 rankReasons/rankPosition/rankingVersion/experimentBucket | application ranking tests |
-| Recommendation | Redis Stream → content-service consumer → `rm_recommend_feature.searchTermAffinity` → FeatureStore → RuleScorer | `search_signal_consumer_test.go`、`runtime/recommendation` tests、`artifacts/local-gamma/search_signal_t3_report.json` |
-| AB / Ops | control/term_heat bucket 可查询；线上收益显著性是发布后观察项，不影响稳定性准出 | `artifacts/search-obs/search_observability_ab_recommendation_report.md` |
+| Recommendation | Redis Stream → content-service consumer → `rm_recommend_feature.searchTermAffinity` → FeatureStore → RuleScorer | `search_signal_consumer_test.go`、`runtime/recommendation` tests、`.qwq_output/local/gamma-local/search_signal_t3_report.json` |
+| AB / Ops | control/term_heat bucket 可查询；线上收益显著性是发布后观察项，不影响稳定性准出 | `.qwq_output/runs/search-obs/search_observability_ab_recommendation_report.md` |
 
 ## 验收重点
 

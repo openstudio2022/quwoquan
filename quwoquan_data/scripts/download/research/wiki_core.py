@@ -29,6 +29,7 @@ def _wiki_title(host: str, entity_id: str) -> str:
                 "titles": title,
                 "prop": "extracts",
                 "explaintext": "1",
+                "redirects": "1",
                 "format": "json",
             },
         )
@@ -45,7 +46,7 @@ def _wiki_title(host: str, entity_id: str) -> str:
                 return str(page.get("title") or title)
         return ""
 
-    exact = _wiki_api(host, {"action": "query", "titles": entity_id, "format": "json"})
+    exact = _wiki_api(host, {"action": "query", "titles": entity_id, "redirects": "1", "format": "json"})
     pages = (exact.get("query") or {}).get("pages") or {}
     for page in pages.values():
         if isinstance(page, dict) and int(page.get("pageid") or -1) > 0:

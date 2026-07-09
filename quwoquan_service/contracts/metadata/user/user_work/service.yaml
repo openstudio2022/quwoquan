@@ -10,6 +10,10 @@ api_routes:
     path: /v1/users/{userId}/works
     operation: ListUserWorks
     description: 用户作品集列表
+    query_params: [cursor, limit]
+    response_entity: UserWork
+    response_body: UserWork
+    response_body_kind: page
 
 consumers:
   - name: app

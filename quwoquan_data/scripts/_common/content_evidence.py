@@ -1,15 +1,17 @@
 """内容来源脱敏、质量评分与线路证据聚合。"""
 from __future__ import annotations
-
 from dataclasses import asdict, dataclass
 from pathlib import Path
 import re
 from typing import Any, Iterable, Mapping, Sequence
-
 from _common.io import read_json
 from _common.localization import fold_to_simplified
 from _common.paths import batch_root
-
+from _common.qunar_template import (
+    QUNAR_FRESH_STALE_OVER_3Y,
+    QUNAR_PAGE_SEARCH_RESULT,
+    qunar_template_metadata,
+)
 
 @dataclass(frozen=True)
 class SourceAssessment:
@@ -18,7 +20,6 @@ class SourceAssessment:
     score: int
     reasons: tuple[str, ...]
     excerpt: str
-
 
 _PLATFORM_MARKERS = ("马蜂窝", "携程", "小红书", "知乎", "大众点评", "去哪儿", "微博")
 _META_MARKERS = (
@@ -74,8 +75,44 @@ _FACT_CATEGORY_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("risk", ("风险", "路况", "落石", "雨季", "应急", "封山", "末班")),
     ("ticket", ("门票", "预约", "开放", "观光车")),
 )
-_POSITIVE_EMOTION_MARKERS = ("喜欢", "愿意", "惊喜", "值", "值得", "震撼", "舒服", "推荐", "松弛", "治愈")
-_NEGATIVE_EMOTION_MARKERS = ("累", "怕", "槽点", "麻烦", "失望", "排队", "高反", "后悔", "拥挤", "赶", "湿滑")
+_POSITIVE_EMOTION_MARKERS = (
+    "喜欢",
+    "愿意",
+    "惊喜",
+    "值",
+    "值得",
+    "震撼",
+    "舒服",
+    "推荐",
+    "松弛",
+    "治愈",
+    "心心念念",
+    "幸运",
+    "幸福",
+    "美味",
+    "满足",
+    "惊艳",
+    "太美",
+    "好吃",
+    "巴适",
+)
+_NEGATIVE_EMOTION_MARKERS = (
+    "累",
+    "怕",
+    "害怕",
+    "槽点",
+    "麻烦",
+    "失望",
+    "排队",
+    "高反",
+    "后悔",
+    "拥挤",
+    "赶",
+    "湿滑",
+    "腿抖",
+    "担心",
+    "辛苦",
+)
 _SCENIC_VIEW_MARKERS = (
     "日出",
     "云海",
@@ -115,7 +152,6 @@ _TRANSITION_MARKERS = (
 )
 _FORBIDDEN_EXCERPT_MARKERS = ("来源平台：", "url:", "platform:", "title:", "entity:", "retained:")
 _MANUAL_SOURCE_PLAN_RE = re.compile(r"(?mi)^manual_source_plan_note:\s.*$")
-
 # 样板/导航/页脚/广告行标记：来源单元净化与底稿正文提取共用同一份唯一真相源，
 # 避免在 base_draft / content_evidence 各维护一份漂移列表（编码军规 R25/single-source）。
 SOURCE_BOILERPLATE_MARKERS: tuple[str, ...] = (
@@ -166,7 +202,6 @@ SOURCE_BOILERPLATE_MARKERS: tuple[str, ...] = (
     "互联网档案馆",
     "Toggle navigation",
 )
-
 # 维基/百科常见的"非正文尾节"，命中该节标题后整节剔除（含其子节），
 # 直到出现一个不在剔除集合内的同级或更高级标题。
 _CLEAN_DROP_SECTIONS: tuple[str, ...] = (
@@ -200,6 +235,14 @@ _CLEAN_DROP_SECTIONS: tuple[str, ...] = (
     "圖集",
     "来源",
     "來源",
+    "评论",
+    "評論",
+    "相关游记",
+    "相關遊記",
+    "相关攻略",
+    "相關攻略",
+    "热门游记",
+    "熱門遊記",
 )
 # 行内引用/失链标记：[1]、[12]、[来源请求]、[註 3]、[失效链接] 等。
 _CITATION_MARKER_RE = re.compile(
@@ -210,21 +253,38 @@ _CITATION_MARKER_RE = re.compile(
 )
 # MediaWiki explaintext(默认 exsectionformat=wiki)的小节标题：== 标题 == / === 标题 ===。
 _WIKI_HEADING_RE = re.compile(r"^\s*(={2,6})\s*(.+?)\s*=*\s*$")
-
+_MARKDOWN_HEADING_RE = re.compile(r"^\s{0,3}(#{1,6})\s+(.+?)\s*#*\s*$")
+_QUNAR_PRIVATE_ICON_RE = re.compile(r"^[\uf000-\uf8ff]")
+_QUNAR_TAG_LINE_RE = re.compile(r"^(人物|玩法|人均|天数|出发|目的地|行程)[/：:].{0,48}$")
 
 _STRUCTURAL_FIGURE_LINE_RE = re.compile(r"^\s*(?::::|!\[[^\]]*\]\(asset://)")
-
+# GFM 表格结构行：`| a | b |` 数据/表头行与 `|---|---|` 分隔行。
+# 分隔行不含字母数字，会被「无字母→样板噪声」误删，必须整体豁免。
+_GFM_TABLE_LINE_RE = re.compile(r"^\s*\|.*\|\s*$")
+# wikitable cell 属性残留行：`valign=top|…`、`avlign=top|…`、`style="…"|…`。
+# 解析层已按语法位置剥离；此处是 clean 层兜底，防旧产物/其它前端漏网。
+_CELL_ATTR_RESIDUE_RE = re.compile(
+    r"^(?P<marker>[-*]\s+)?"
+    r"(?:[A-Za-z][A-Za-z0-9_-]*\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^|\s]+)\s*)+\|\s*"
+    r"(?P<rest>.*)$"
+)
 
 def _is_structural_figure_line(line: str) -> bool:
     """图文混排结构行：`:::figure` / `:::figuregroup` / 收尾 `:::` 围栏，或 `![..](asset://..)` 图片引用。"""
     return bool(_STRUCTURAL_FIGURE_LINE_RE.match(str(line or "")))
 
+def _is_gfm_table_line(line: str) -> bool:
+    return bool(_GFM_TABLE_LINE_RE.match(str(line or "")))
 
 def source_line_is_boilerplate(line: str) -> bool:
     """判断一行是否为导航/页脚/广告/纯链接等样板噪声（净化与底稿提取共用）。"""
     compact = re.sub(r"\s+", "", line)
     letters = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", compact)
     if not letters:
+        return True
+    if _QUNAR_PRIVATE_ICON_RE.match(line.strip()):
+        return True
+    if _QUNAR_TAG_LINE_RE.match(compact):
         return True
     if any(marker in line for marker in SOURCE_BOILERPLATE_MARKERS):
         return True
@@ -236,16 +296,13 @@ def source_line_is_boilerplate(line: str) -> bool:
         return True
     return False
 
-
 def clean_source_markdown(text: str, *, raw_format: str = "") -> str:
     """结构化净化来源正文，产出 source.clean.md。
-
     在 anonymize（脱敏/去平台/去元信息）基础上再做：
     - 剔除维基/百科尾节（参考文献/外部链接/参见/注释/分类等，含子节）；
     - 去除行内引用/失链标记（[1]、[来源请求]、[失效链接]…）；
     - 去除导航/页脚/广告/纯链接等样板行；
     - 折叠多余空行。
-
     raw_format 预留给来源类型分流（如 mediawiki_api_json），当前净化规则对各来源通用。
     """
     anon = anonymize_source_markdown(text)
@@ -255,7 +312,9 @@ def clean_source_markdown(text: str, *, raw_format: str = "") -> str:
     drop_level = 0
     for raw_line in anon.splitlines():
         line = raw_line.rstrip()
-        heading = _WIKI_HEADING_RE.match(line)
+        wiki_heading = _WIKI_HEADING_RE.match(line)
+        markdown_heading = _MARKDOWN_HEADING_RE.match(line)
+        heading = wiki_heading or markdown_heading
         if heading:
             level = len(heading.group(1))
             name = heading.group(2).strip()
@@ -268,7 +327,7 @@ def clean_source_markdown(text: str, *, raw_format: str = "") -> str:
             dropping = False
             drop_level = 0
             if name:
-                kept.append(name)
+                kept.append(line.strip() if markdown_heading else name)
             continue
         if dropping:
             continue
@@ -279,6 +338,18 @@ def clean_source_markdown(text: str, *, raw_format: str = "") -> str:
             # 图文混排结构行（:::figure/:::figuregroup 围栏、asset:// 图片引用）必须保结构原样保留，
             # 不能被「无字母→样板噪声」误删（否则 source.clean.md 里的图文块围栏被打散，P2 图文混排丢失）。
             kept.append(line.strip())
+            continue
+        if _is_gfm_table_line(line):
+            # GFM 表格行整体保留：分隔行 `|---|---|` 无字母数字，会被样板噪声规则误删打散表格。
+            kept.append(line.strip())
+            continue
+        attr_residue = _CELL_ATTR_RESIDUE_RE.match(line.strip())
+        if attr_residue:
+            # wikitable cell 属性残留（valign=top| / avlign=top| / style="…"|）不得进入 clean 文本；
+            # 属性后仍有正文则剥前缀保正文，纯属性行整行剔除。
+            rest = attr_residue.group("rest").strip()
+            if rest:
+                kept.append(f"{attr_residue.group('marker') or ''}{rest}".strip())
             continue
         if source_line_is_boilerplate(line):
             continue
@@ -300,16 +371,13 @@ def _fold_zh_variants(value: str) -> str:
     # 繁→简折叠表单一真相源在 _common.localization，全仓共用（R24）。
     return fold_to_simplified(value)
 
-
 def entity_names_from_refs(entity_refs: Sequence[str] | None) -> list[str]:
     return [ref.split("/")[-1] for ref in (entity_refs or []) if isinstance(ref, str) and ref.strip()]
-
 
 def _value(source: Any, key: str, default: Any = None) -> Any:
     if isinstance(source, Mapping):
         return source.get(key, default)
     return getattr(source, key, default)
-
 
 def _strip_frontmatter(text: str) -> tuple[str, str]:
     if not text.startswith("---"):
@@ -318,7 +386,6 @@ def _strip_frontmatter(text: str) -> tuple[str, str]:
     if len(parts) < 3:
         return "", text
     return parts[1], parts[2]
-
 
 def _frontmatter_map(text: str) -> dict[str, str]:
     frontmatter, _ = _strip_frontmatter(text)
@@ -330,7 +397,6 @@ def _frontmatter_map(text: str) -> dict[str, str]:
         key, value = line.split(":", 1)
         data[key.strip()] = value.strip()
     return data
-
 
 def _entity_match_terms(entity_name: str | None) -> tuple[str, ...]:
     raw = str(entity_name or "").strip()
@@ -350,7 +416,6 @@ def _entity_match_terms(entity_name: str | None) -> tuple[str, ...]:
                     terms.append(part[: -len(suffix)])
                     break
     return tuple(dict.fromkeys(term for term in terms if len(term) >= 2))
-
 
 def anonymize_source_markdown(text: str) -> str:
     """移除来源平台、作者与前台不可见的元信息。"""
@@ -376,15 +441,23 @@ def anonymize_source_markdown(text: str) -> str:
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
-
 def score_source_markdown(source_id: str, text: str, *, entity_name: str | None = None) -> SourceAssessment:
     """给来源打质量分，供下载/证据阶段阻断。"""
     _, body = _strip_frontmatter(text)
+    qunar_meta = qunar_template_metadata(text=text)
+    if qunar_meta.get("pageType") == QUNAR_PAGE_SEARCH_RESULT:
+        links = qunar_meta.get("discoveredDetailLinks") or []
+        return SourceAssessment(
+            source_id=source_id,
+            quality="Reject",
+            score=0,
+            reasons=("qunar_search_result_directory", "detail_links_discovered" if links else "no_detail_link"),
+            excerpt="去哪儿搜索结果页是目录页，必须下钻到具体游记详情后才可作为候选底稿。",
+        )
     cleaned = anonymize_source_markdown(text)
     compact = re.sub(r"\s+", " ", cleaned)
     score = 0
     reasons: list[str] = []
-
     if len(compact) > 120:
         score += 2
         reasons.append("length_ok")
@@ -410,7 +483,6 @@ def score_source_markdown(source_id: str, text: str, *, entity_name: str | None 
     if entity_grounded:
         score += 1
         reasons.append("entity_grounded")
-
     content_score = score
     # 详尽且实体相关的正文（detail_rich + entity_grounded）即便残留页眉页脚/导航/外链，
     # 也只是 source.clean.md 还没清干净的「噪声」，不该被惩罚直接打成 Reject。
@@ -431,7 +503,9 @@ def score_source_markdown(source_id: str, text: str, *, entity_name: str | None 
     if "http" in body:
         penalties += 1
         reasons.append("url_visible")
-
+    if qunar_meta.get("freshnessTier") == QUNAR_FRESH_STALE_OVER_3Y:
+        penalties += 2
+        reasons.append("qunar_stale_over_3y")
     score = max(score - penalties, 0)
     if not reasons:
         reasons.append("empty_or_unfetchable_body")
@@ -448,7 +522,6 @@ def score_source_markdown(source_id: str, text: str, *, entity_name: str | None 
         reasons.append("noise_penalized_kept_as_context")
     else:
         quality = "Reject"
-
     excerpt = compact[:180].rstrip("。") + ("。" if compact else "")
     return SourceAssessment(
         source_id=source_id,
@@ -457,7 +530,6 @@ def score_source_markdown(source_id: str, text: str, *, entity_name: str | None 
         reasons=tuple(dict.fromkeys(reasons)),
         excerpt=excerpt,
     )
-
 
 def _sentences(text: str) -> list[str]:
     cleaned = anonymize_source_markdown(text)
@@ -468,13 +540,11 @@ def _sentences(text: str) -> list[str]:
             rows.append(sentence)
     return rows
 
-
 def _fact_category(sentence: str) -> str | None:
     for category, markers in _FACT_CATEGORY_MARKERS:
         if any(marker in sentence for marker in markers):
             return category
     return None
-
 
 def _looks_like_scenic_admiration(sentence: str) -> bool:
     if any(marker in sentence for marker in ("风景秀丽", "峨眉天下秀", "名胜云集", "景色优美")):
@@ -482,7 +552,6 @@ def _looks_like_scenic_admiration(sentence: str) -> bool:
     scenic_hits = sum(1 for marker in _SCENIC_VIEW_MARKERS if marker in sentence)
     appraisal_hits = sum(1 for marker in _SCENIC_APPRAISAL_MARKERS if marker in sentence)
     return scenic_hits >= 2 and appraisal_hits >= 1
-
 
 def _classify_emotion(sentence: str) -> str | None:
     if any(marker in sentence for marker in _POSITIVE_EMOTION_MARKERS):
@@ -492,7 +561,6 @@ def _classify_emotion(sentence: str) -> str | None:
     if any(marker in sentence for marker in _NEGATIVE_EMOTION_MARKERS):
         return "pain"
     return None
-
 
 def _unique_strings(values: Iterable[str], *, limit: int) -> list[str]:
     result: list[str] = []
@@ -508,7 +576,6 @@ def _unique_strings(values: Iterable[str], *, limit: int) -> list[str]:
         if len(result) >= limit:
             break
     return result
-
 
 def _unique_fact_entries(entries: Iterable[dict[str, Any]], *, limit: int) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
@@ -527,7 +594,6 @@ def _unique_fact_entries(entries: Iterable[dict[str, Any]], *, limit: int) -> li
             break
     return result
 
-
 def _fact_categories(entries: Iterable[dict[str, Any]]) -> dict[str, list[str]]:
     categories: dict[str, list[str]] = {}
     for entry in entries:
@@ -539,7 +605,6 @@ def _fact_categories(entries: Iterable[dict[str, Any]]) -> dict[str, list[str]]:
         if sentence not in categories[category]:
             categories[category].append(sentence)
     return {key: values[:3] for key, values in categories.items()}
-
 
 def extract_source_evidence(text: str, *, entity_name: str | None = None) -> dict[str, list[Any]]:
     """从单条来源中抽取事实、情感和主线证据。"""
@@ -568,7 +633,6 @@ def extract_source_evidence(text: str, *, entity_name: str | None = None) -> dic
         "mainlineEvidence": _unique_strings(mainline_entries, limit=8),
     }
 
-
 def _source_dirs_for_entity(
     task_id: str,
     batch_id: str,
@@ -578,7 +642,6 @@ def _source_dirs_for_entity(
 ) -> list[Path]:
     """优先对象同构来源单元；有显式 entityRef 时禁止回退到按名字跨类型模糊搜。"""
     from _common.source_unit import find_entity_object_dirs, iter_source_units
-
     dirs: list[Path] = []
     if entity_ref:
         for obj in find_entity_object_dirs(task_id, batch_id, entity_ref):
@@ -589,7 +652,6 @@ def _source_dirs_for_entity(
     if dirs:
         return dirs
     return []
-
 
 def _source_record_from_dir(
     task_id: str,
@@ -627,7 +689,6 @@ def _source_record_from_dir(
         "text": text,
         "assessment": assessment,
     }
-
 
 def load_source_records(
     task_id: str,
@@ -674,7 +735,6 @@ def load_source_records(
                 records.append(row)
     return records
 
-
 def build_route_evidence_bundle(
     ref: str,
     brief: Mapping[str, Any],
@@ -689,7 +749,6 @@ def build_route_evidence_bundle(
     if not route_entities:
         route_entities = _unique_strings((str(row.get("entityName") or "") for row in source_records), limit=12)
         route_entity_refs = [name for name in route_entities]
-
     route_nodes: list[dict[str, Any]] = []
     all_fact_entries: list[dict[str, Any]] = []
     all_mainline: list[str] = []
@@ -697,13 +756,11 @@ def build_route_evidence_bundle(
     pain_points: list[str] = []
     source_quality: list[dict[str, Any]] = []
     related_topics = list(route_entities)
-
     for index, entity_name in enumerate(route_entities, start=1):
         entity_ref = route_entity_refs[index - 1] if index - 1 < len(route_entity_refs) else entity_name
         entity_items = [row for row in source_records if str(row.get("entityName") or "") == entity_name]
         retained_items = [row for row in entity_items if getattr(row.get("assessment"), "quality", "Reject") != "Reject"]
         effective_items = retained_items or entity_items
-
         fact_entries: list[dict[str, Any]] = []
         emotion_entries: list[dict[str, str]] = []
         mainline_entries: list[str] = []
@@ -718,7 +775,6 @@ def build_route_evidence_bundle(
         for row in retained_items:
             evidence = extract_source_evidence(str(row.get("text") or ""), entity_name=entity_name)
             emotion_entries.extend(evidence.get("emotionEvidence", []))
-
         node_likes = _unique_strings(
             (entry.get("sentence", "") for entry in emotion_entries if entry.get("kind") == "like"),
             limit=2,
@@ -732,14 +788,12 @@ def build_route_evidence_bundle(
         all_fact_entries.extend(fact_entries)
         all_mainline.extend(mainline_entries)
         related_topics.extend(node_likes + node_pains)
-
         top_excerpt = ""
         for row in effective_items:
             assessment = row.get("assessment")
             if isinstance(assessment, SourceAssessment) and assessment.excerpt:
                 top_excerpt = assessment.excerpt
                 break
-
         # route 单一多目的地底稿模型：每个目的地节点各自认领「单一最佳保留源」作节点底稿，
         # 节点配图只来自该节点底稿（节点内不跨源、节点间不互借）。无保留源 ⇒ 该节点文字承载。
         node_base_id = ""
@@ -751,7 +805,6 @@ def build_route_evidence_bundle(
             )
             node_base_id = str(best_row.get("sourceId") or "")
             node_base_url = str(best_row.get("url") or "")
-
         route_nodes.append(
             {
                 "sequence": index,
@@ -772,13 +825,11 @@ def build_route_evidence_bundle(
                 "mainlineEvidence": _unique_strings(mainline_entries, limit=4),
             }
         )
-
     progression = [f"先从 {node['entityName']} 进入主线。" for node in route_nodes[:1]]
     for node in route_nodes[1:-1]:
         progression.append(f"再把重心转到 {node['entityName']}。")
     if len(route_nodes) >= 2:
         progression.append(f"最后留给 {route_nodes[-1]['entityName']} 做收束与回程判断。")
-
     source_note = ""
     retained_quality = [row for row in source_quality if row.get("quality") != "Reject" and row.get("excerpt")]
     if retained_quality:
@@ -788,7 +839,6 @@ def build_route_evidence_bundle(
             f"这条线不是单点打卡，而是按 {' -> '.join(node['entityName'] for node in route_nodes)} "
             "一路推进，转场和体力分配比景点数量更影响体验。"
         )
-
     story_spine = {
         "primaryEntity": route_nodes[0]["entityName"] if route_nodes else "",
         "routeEntities": [node["entityName"] for node in route_nodes],
@@ -806,7 +856,6 @@ def build_route_evidence_bundle(
         "mustIncludeFacts": [str(item) for item in brief.get("mustIncludeFacts") or [] if item],
         "sourceQuality": source_quality,
     }
-
     coverage = {
         "expectedEntityCount": len(route_entities),
         "coveredEntityCount": sum(1 for node in route_nodes if node.get("retainedSourceCount", 0) > 0),
@@ -818,7 +867,6 @@ def build_route_evidence_bundle(
             if not node.get("emotionEvidence", {}).get("likes") and not node.get("emotionEvidence", {}).get("painPoints")
         ],
     }
-
     return {
         "schemaVersion": "quwoquan_data.route_evidence_bundle",
         "topicId": ref,
@@ -834,7 +882,6 @@ def build_route_evidence_bundle(
         "mainlineSignals": _unique_strings(all_mainline, limit=8),
         "storySpine": story_spine,
     }
-
 
 def _fact_supported(fact: str, evidence_bundle: Mapping[str, Any]) -> bool:
     fact_text = str(fact).strip()
@@ -853,10 +900,8 @@ def _fact_supported(fact: str, evidence_bundle: Mapping[str, Any]) -> bool:
     tokens = [token for token in re.split(r"[、/，,\s]+", fact_text) if len(token) >= 2]
     return any(token in combined for token in tokens)
 
-
 def gate_route_evidence_bundle(brief: Mapping[str, Any], evidence_bundle: Mapping[str, Any]) -> list[str]:
     """检查线路级证据是否足以进入 compose。
-
     载体感知：image/gallery 画报是"专业图库一源一作品"的视觉载体，不承载线路/体验叙事证据
     （UGC 情感信号 likes/painPoints、storySpine 进程、路线节点覆盖、mustIncludeFacts 叙事）。
     对其施加线路叙事门属载体错配——会把开放许可图集（Wikimedia/CC 事实性 caption、无 UGC 互动）
@@ -877,7 +922,6 @@ def gate_route_evidence_bundle(brief: Mapping[str, Any], evidence_bundle: Mappin
         issues.append(f"evidenceQuality: reject-only entities {coverage['rejectOnlyEntities']}")
     if coverage.get("missingMainlineEntities"):
         issues.append(f"routeCoverage: missing mainline evidence for {coverage['missingMainlineEntities']}")
-
     evidence_requirements = brief.get("evidenceRequirements") or {}
     if evidence_requirements.get("emotion", {}).get("required", True):
         likes = (evidence_bundle.get("emotionSignals") or {}).get("likes") or []
@@ -890,7 +934,6 @@ def gate_route_evidence_bundle(brief: Mapping[str, Any], evidence_bundle: Mappin
     if not (evidence_bundle.get("storySpine") or {}).get("progression"):
         issues.append("routeCoverage: missing route progression spine")
     return issues
-
 
 def build_related_search_plan(meta: Any, story_or_bundle: Mapping[str, Any]) -> dict[str, Any]:
     """基于主线和证据摘要给出扩搜词，但锁住线路主线。"""
@@ -921,7 +964,6 @@ def build_related_search_plan(meta: Any, story_or_bundle: Mapping[str, Any]) -> 
         },
     }
 
-
 def public_byline_label(template_id: str, creator: Mapping[str, Any]) -> str:
     role_map = {
         "古镇_叙事": "在路上的旅人",
@@ -951,14 +993,12 @@ def public_byline_label(template_id: str, creator: Mapping[str, Any]) -> str:
     }
     return archetype_map.get(archetype, "内容编辑")
 
-
 def json_safe_dump(value: Any) -> str:
     if isinstance(value, Mapping):
         return " ".join(f"{key}:{json_safe_dump(child)}" for key, child in value.items())
     if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
         return " ".join(json_safe_dump(item) for item in value)
     return str(value or "")
-
 
 __all__ = [
     "SourceAssessment",

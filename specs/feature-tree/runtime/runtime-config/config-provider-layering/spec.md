@@ -50,12 +50,12 @@
 加载顺序（固定）：
 1. `${CONFIG_ROOT}/configs/${SERVICE_NAME}/default/config.yaml`
 2. `${CONFIG_ROOT}/configs/${SERVICE_NAME}/${APP_ENV}/config.yaml`
-3. `${CONFIG_ROOT}/releases/config/${SERVICE_NAME}/${CONFIG_VERSION}.yaml`
+3. `${CONFIG_ROOT}/quwoquan_service/services/${SERVICE_NAME}/${CONFIG_VERSION}.yaml`
 4. 环境变量覆盖（最高优先级）
 
 ## Environment Topology Manifest
 
-统一环境真相源：`deploy/shared/environment_topology_manifest.yaml`
+统一环境真相源：`quwoquan_ops/environments/environment_topology_manifest.yaml`
 
 每个环境必须显式声明：
 
@@ -71,7 +71,7 @@
 
 - `alpha` 的 topology 字段必须完整，不能通过缺字段表达“简化环境”。
 - `prod` 只允许 `artifactPolicy.app.runtimeEnv=prod`，禁止任何 `prod-gray` 目录或枚举。
-- 本地 profile 与 host 端口必须来自 `deploy/shared/local_env_port_manifest.yaml`，不得散落在脚本内作为官方默认值。
+- 本地 profile 与 host 端口必须来自 `quwoquan_ops/environments/local_env_port_manifest.yaml`，不得散落在脚本内作为官方默认值。
 
 ## Packaging Contract
 
@@ -85,7 +85,7 @@
 
 ## Stackctl Contract
 
-统一自动化入口：`agent_ops/deploy/stackctl.py`
+统一自动化入口：`quwoquan_ops/cli/stackctl.py`
 
 命令面至少覆盖：
 
@@ -98,7 +98,7 @@
 - `repair`
 - `deploy`
 
-所有命令必须输出稳定的 JSON 报告，并将 Markdown 摘要归档到 `artifacts/stackctl/<env>/<run-id>/`。
+所有命令必须输出稳定的 JSON 报告，并将 Markdown 摘要归档到 `.qwq_output/runs/<env>/<run-id>/`。
 
 ## 子节点
 

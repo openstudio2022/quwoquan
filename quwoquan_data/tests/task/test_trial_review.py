@@ -97,6 +97,30 @@ def test_trial_review_blocks_when_runtime_never_started():
     assert report["decision"]["canScale"] is False
 
 
+def test_trial_review_scope_omits_homepage_stage_for_image_only_quota():
+    task_id = _make_task("Pinterest图片作品only", target_count=1)
+    spec = store.load_spec(task_id)
+    spec["content"]["carriers"] = ["image"]
+    spec["content"]["quotas"] = {
+        "entityArticlesPerTarget": 0,
+        "imageWorksPerTarget": 1,
+        "entityHomepagesPerTarget": 0,
+    }
+    store.save_spec(spec)
+
+    report = build_trial_review(task_id, "run_image_only", env={"CURSOR_API_KEY": "present"})
+
+    assert report["scope"]["carriers"] == ["image"]
+    assert report["scope"]["quotas"]["entityArticlesPerTarget"] == 0
+    assert report["scope"]["quotas"]["entityHomepagesPerTarget"] == 0
+    assert report["scope"]["estimatedObjects"]["homepages"] == 0
+    assert report["scope"]["estimatedObjects"]["imageWorks"] == 1
+    assert report["scope"]["agentCallPlan"]["deterministicFirstStages"] == [
+        "download_plan_prepare",
+        "content_plan",
+    ]
+
+
 def test_trial_review_classifies_cursor_infra_failure_and_efficiency_risk():
     task_id = _make_task("基础设施失败")
     shared = batch_shared_dir(task_id, "run_infra")
@@ -241,6 +265,19 @@ def test_trial_review_classifies_source_sufficiency_blocker():
                 {"entity": "景区乙", "lane": "article", "issues": ["article sources=0 need>=4"]},
                 {"entity": "景区乙", "lane": "image", "issues": ["image collection missing"]},
             ],
+            "sourcePrecheck": {
+                "enabled": True,
+                "thresholds": {
+                    "minArticleBaseSources": 4,
+                    "minImageSourceCollections": 2,
+                    "minSourceCategories": 3,
+                },
+                "failedEntities": ["景区甲", "景区乙"],
+                "failedLanes": [
+                    {"entity": "景区甲", "lane": "article", "issues": ["source precheck article base sources=0 need>=4"]},
+                    {"entity": "景区乙", "lane": "image", "issues": ["source precheck publishable image source collections=0 need>=2"]},
+                ],
+            },
             "abandonedCount": 0,
         },
     )
@@ -254,6 +291,9 @@ def test_trial_review_classifies_source_sufficiency_blocker():
     assert report["evidence"]["sourceReadiness"]["status"] == "blocked"
     assert report["evidence"]["sourceReadiness"]["allLaneReadyTargetCount"] == 0
     assert report["evidence"]["sourceReadiness"]["laneCoverage"]["article"]["passed"] == 0
+    assert report["evidence"]["sourceReadiness"]["sourcePrecheck"]["enabled"] is True
+    assert report["evidence"]["sourceReadiness"]["sourcePrecheck"]["failedEntityCount"] == 2
+    assert report["evidence"]["sourceReadiness"]["sourcePrecheck"]["failedLaneCount"] == 2
     assert any("partial failed lanes=3" in item for item in report["qualityAndScaleGate"]["warnings"])
     assert report["terminalCause"]["stage"] == "download_plan"
 
@@ -440,6 +480,45 @@ def test_trial_review_infers_isolated_release_evidence():
 
     assert report["evidence"]["releaseEvidenceExists"] is True
     assert report["evidence"]["releaseId"] == inferred_release
+
+
+def test_trial_review_ignores_stale_agent_failure_after_reasoned_terminal_completion():
+    task_id = _make_task("合理隔离终态", target_count=2)
+    shared = batch_shared_dir(task_id, "run_reasoned_terminal")
+    write_json(shared / "env_ready_report.json", {"ready": True, "issues": []})
+    write_json(shared / "token_ledger.json", {"entries": [{"ref": "景区001__article"}]})
+    write_json(
+        shared / "task_workflow_state.json",
+        {
+            "status": "completed_with_reasoned_rejects",
+            "failedObjects": [],
+            "waitingCheckpoint": None,
+            "throughput": {"objectsPerHour": 240},
+            "quality": {"firstPassRate": 0.91},
+            "lastAgentRun": {
+                "stage": "produce_author",
+                "plannedJobCount": 4,
+                "jobCount": 4,
+                "startedCount": 0,
+                "finishedCount": 0,
+                "infrastructureFailures": 4,
+            },
+        },
+    )
+
+    report = build_trial_review(task_id, "run_reasoned_terminal", env={})
+
+    blockers = report["qualityAndScaleGate"]["blockers"]
+    warnings = report["qualityAndScaleGate"]["warnings"]
+    assert report["qualityAndScaleGate"]["passed"] is True
+    assert "Cursor SDK infrastructure failures=4" not in blockers
+    assert "agent jobs planned but no worker started" not in blockers
+    assert "agent jobs unfinished: 0/4" not in blockers
+    assert any("ignored stale lastAgentRun infrastructure failures" in item for item in warnings)
+    assert report["terminalCause"]["category"] == "no_blocking_terminal_cause"
+    assert report["decision"]["canScale"] is True
+    hundred = report["scaleLadder"]["levels"][0]
+    assert "workflow status must be terminal; got completed_with_reasoned_rejects" not in hundred["requiredBeforeGo"]
 
 
 def _run_all() -> None:

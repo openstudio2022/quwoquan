@@ -93,6 +93,18 @@ def test_extract_source_evidence_recognizes_scenic_appreciation_as_like():
     assert any("风景秀丽" in sentence or "峨眉天下秀" in sentence for sentence in likes)
 
 
+def test_extract_source_evidence_recognizes_travelogue_emotion_phrases():
+    evidence = extract_source_evidence(
+        "吃上了心心念念的雅鱼，真的很幸运。那一口太美味了，是这趟路上一大幸福。过桥时全程腿抖，确实害怕。",
+        entity_name="海螺沟",
+    )
+
+    likes = [entry["sentence"] for entry in evidence["emotionEvidence"] if entry.get("kind") == "like"]
+    pains = [entry["sentence"] for entry in evidence["emotionEvidence"] if entry.get("kind") == "pain"]
+    assert any("心心念念" in sentence or "太美味" in sentence for sentence in likes)
+    assert any("腿抖" in sentence for sentence in pains)
+
+
 def test_extract_source_evidence_uses_scenic_alias_for_mainline():
     evidence = extract_source_evidence(
         "五台山国家公园位于忻州五台县东北隅。五台山属有华北屋脊之称的太行山系北端山峰群。",
@@ -589,6 +601,53 @@ def test_article_section_intents_do_not_force_single_entity_focus():
     assert ("全部站点" in joined) or ("多目的地" in joined), joined
 
 
+def test_article_prompt_first_pass_hardening_contract():
+    """0704a 弃稿主因修复（cs100 可靠性 S1）：同实体多篇骨架/开篇趋同、底稿重复段落轻改保留、
+    平台词泄漏、单章节吞篇/时间线回跳，都必须在 prompt 合同中有明确针对性指令。"""
+    from _common.writing_pack import _preferred_opening_index, render_prompt_md
+
+    def _pack(ref: str) -> dict:
+        return {
+            "ref": ref,
+            "kind": "entity",
+            "carrier": "article",
+            "title": "青城山两日慢游记",
+            "templateId": "travel.entity.guide",
+            "byline": "虚拟创作者",
+            "writingIntent": "planning_consultation",
+            "sourceUseMode": "factual_reference_only",
+            "styleFamily": "旅途随笔风",
+            "baseSourceRef": "sources/su_demo/source.md",
+            "baseDraftText": "青城山的清晨，山门薄雾。\n**住宿**：成都东站附近公寓。\n" * 30,
+            "wordCount": {"min": 600, "max": 2000},
+        }
+
+    prompt = render_prompt_md(_pack("青城山__article_qunar_base_12"))
+    # ① 同实体差异化：确定性优先开篇策略 + 禁通用模板骨架。
+    assert "本篇优先" in prompt, prompt[:600]
+    assert "同实体差异化" in prompt
+    assert "禁止与其它文章共用同一套开场白或标题序列" in prompt
+    # ② 底稿内重复段落去重（治 intraDocRepetition）。
+    assert "底稿内重复去重" in prompt
+    assert "只保留一次" in prompt
+    # ③ 平台词点名（治 provenanceRewrite 泄漏「大众点评」等）。
+    assert "大众点评" in prompt
+    assert "去哪儿" in prompt
+    # ④ 章节结构合同（治 carrierConsistency/sectionBalance/timelineOrder）。
+    assert "章节结构合同" in prompt
+    assert "60%" in prompt
+    assert "单一时间顺序" in prompt
+
+    # 确定性轮转：同一 ref 稳定；不同 sibling ref 在候选数 >1 时应可分散（crc32 轮转）。
+    n = 3
+    idx_a = _preferred_opening_index("青城山__article_qunar_base_12", n)
+    assert idx_a == _preferred_opening_index("青城山__article_qunar_base_12", n)
+    spread = {
+        _preferred_opening_index(f"青城山__article_qunar_base_{i}", n) for i in range(8)
+    }
+    assert len(spread) > 1, spread
+
+
 def test_base_aware_word_count_tracks_long_base_draft():
     """根因：wordCount 固定上限(1600)远小于长底稿(~8900字)时，baseDraftFidelity>=55% 数学不可达
     （成稿最多覆盖底稿 ~18% 三连）。light-edit 文章字数目标必须按清洗底稿长度派生。"""
@@ -620,5 +679,6 @@ if __name__ == "__main__":
     test_route_review_blocks_intra_doc_repetition_padding()
     test_article_prompt_preserves_whole_base_draft_no_irrelevant_city_trim()
     test_article_section_intents_do_not_force_single_entity_focus()
+    test_article_prompt_first_pass_hardening_contract()
     test_base_aware_word_count_tracks_long_base_draft()
     print("route brief and evidence tests passed")

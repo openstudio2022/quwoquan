@@ -85,6 +85,7 @@ def main() -> None:
     from vertical.handler import register_parser as reg_vertical
     from quality.handler import register_parser as reg_quality
     from data.handler import register_parser as reg_data
+    from fixture.handler import register_parser as reg_fixture
     from governance.handler import register_parser as reg_governance
     from audit.handler import register_parser as reg_audit
     from site_supply.handler import register_parser as reg_site_supply
@@ -101,6 +102,7 @@ def main() -> None:
     reg_verify(subparsers)
     reg_annotate(subparsers)
     reg_ship(subparsers)
+    reg_fixture(subparsers)
     reg_task(subparsers)
     reg_homepage_assets(subparsers)
     reg_vertical(subparsers)

@@ -2,6 +2,8 @@
 ///
 /// 验证编辑态 `_buildWrapGroup` 接入 `resolveArticleWrapLayout()` 后，
 /// 两侧在同一文档、同一宽度下产出一致的图片宽度、gap、分割点。
+library;
+
 import 'package:flutter/painting.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';

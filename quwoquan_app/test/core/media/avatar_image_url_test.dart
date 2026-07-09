@@ -75,22 +75,60 @@ void main() {
       );
     });
 
-    test('expands secure local env domains to HTTPS loopback candidates', () {
+    test('expands secure local env domains by manifest port profile', () {
+      const objectKey =
+          'media/avatar/s/archived-avatar/circle/demo/v1/avatar.png';
+      final cases = <({String api, String avatar})>[
+        (
+          api: 'alpha-api.quwoquan-env.test:17000',
+          avatar: 'alpha-avatar.quwoquan-env.test:17100',
+        ),
+        (
+          api: 'beta-api.quwoquan-env.test:18000',
+          avatar: 'beta-avatar.quwoquan-env.test:18100',
+        ),
+        (
+          api: 'gamma-api.quwoquan-env.test:19000',
+          avatar: 'gamma-avatar.quwoquan-env.test:19100',
+        ),
+        (
+          api: 'prod-api.quwoquan-env.test:20000',
+          avatar: 'prod-avatar.quwoquan-env.test:20100',
+        ),
+      ];
+
+      for (final scenario in cases) {
+        final avatarPort = scenario.avatar.split(':').last;
+        final apiPort = scenario.api.split(':').last;
+        final candidates = resolveAvatarImageUrlCandidates(
+          objectKey,
+          gatewayBaseUrl: 'https://${scenario.api}',
+          avatarCdnBaseUrl: 'https://${scenario.avatar}',
+        );
+        expect(candidates, <String>[
+          'https://localhost:$avatarPort/$objectKey',
+          'https://127.0.0.1:$avatarPort/$objectKey',
+          'https://${scenario.avatar}/$objectKey',
+          'https://localhost:$apiPort/$objectKey',
+          'https://127.0.0.1:$apiPort/$objectKey',
+          'https://${scenario.api}/$objectKey',
+        ], reason: scenario.api);
+        expect(candidates.join('\n'), isNot(contains('https://10.0.2.2')));
+      }
+    });
+
+    test('normalizes secure Android-emulator avatar base to loopback HTTPS', () {
       expect(
         resolveAvatarImageUrlCandidates(
           'media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
-          gatewayBaseUrl: 'https://alpha-api.quwoquan-env.test:17000',
-          avatarCdnBaseUrl: 'https://alpha-avatar.quwoquan-env.test:17100',
+          gatewayBaseUrl: 'https://10.0.2.2:17000',
+          avatarCdnBaseUrl: 'https://10.0.2.2:17100',
         ),
         <String>[
           'https://localhost:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
           'https://127.0.0.1:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
-          'https://10.0.2.2:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
-          'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
           'https://localhost:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
           'https://127.0.0.1:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
-          'https://10.0.2.2:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
-          'https://alpha-api.quwoquan-env.test:17000/media/avatar/s/archived-avatar/circle/demo/v1/avatar.png',
         ],
       );
     });

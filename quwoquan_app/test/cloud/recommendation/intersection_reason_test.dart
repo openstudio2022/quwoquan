@@ -61,6 +61,57 @@ void main() {
       expect(r.relationObjectId, 'user_friend_1');
     });
 
+    test('解析人数句逐人证据 actorEvidence', () {
+      final r = IntersectionReason.fromMap(<String, dynamic>{
+        'primaryText': '联系人林清越等 2 人：1赞 1评',
+        'actorEvidenceTotalCount': 2,
+        'actorEvidenceCompleteness': 'complete',
+        'actorEvidence': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'actorId': 'u_lin',
+            'displayName': '林清越',
+            'relationLabel': '联系人',
+            'relationSourceRef': 'contact',
+            'sourcePointId': 'p_contact',
+            'sourceRef': 'commonContact',
+            'actionSummaryText': '点赞了这条记录',
+            'likeCount': 1,
+            'target': <String, dynamic>{
+              'objectId': 'u_lin',
+              'objectKind': 'person',
+              'routeId': 'userProfile',
+            },
+            'evidenceRank': 5,
+            'snapshotVersion': 'snap_home_1',
+            'sortKey': 1,
+          },
+          <String, dynamic>{
+            'actorId': 'u_zhou',
+            'displayName': '周屿',
+            'relationLabel': '你关注的人',
+            'relationSourceRef': 'followee',
+            'sourcePointId': 'p_followee',
+            'sourceRef': 'sharedFollowees',
+            'actionSummaryText': '评论了这条记录',
+            'commentCount': 1,
+            'evidenceRank': 10,
+            'snapshotVersion': 'snap_home_1',
+            'sortKey': 2,
+          },
+        ],
+      });
+
+      expect(r.actorEvidenceTotalCount, 2);
+      expect(r.actorEvidenceCompleteness, 'complete');
+      expect(r.actorEvidence, hasLength(2));
+      expect(r.actorEvidence.first.relationLabel, '联系人');
+      expect(r.actorEvidence.first.actionSummaryText, '点赞了这条记录');
+      expect(r.actorEvidence.first.likeCount, 1);
+      expect(r.actorEvidence.first.target?.routeId, 'userProfile');
+      expect(r.actorEvidence.last.relationLabel, '你关注的人');
+      expect(r.actorEvidence.last.commentCount, 1);
+    });
+
     test('toMap round-trip 保持字段', () {
       final r = IntersectionReason(
         dimension: 'interest',

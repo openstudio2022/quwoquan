@@ -1,0 +1,126 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+from .common import ROOT, load_json_yaml
+
+
+DEFAULT_PATH = ROOT / "quwoquan_ops" / "environments" / "local_env_port_manifest.yaml"
+REQUIRED_PROFILES = ("alpha-local", "beta-local", "gamma-local", "prod-sim")
+REQUIRED_PLANES = ("edge", "media", "service", "dataDebug")
+
+
+def load_port_manifest(path: Path | None = None) -> dict[str, Any]:
+    loaded = load_json_yaml(path or DEFAULT_PATH)
+    if not isinstance(loaded, dict):
+        raise RuntimeError("local env port manifest must be a mapping")
+    return loaded
+
+
+def validate_port_manifest(manifest: dict[str, Any]) -> list[str]:
+    issues: list[str] = []
+    if manifest.get("schemaVersion") != "local-env-port-manifest/v1":
+        issues.append("schemaVersion must be local-env-port-manifest/v1")
+
+    planes = manifest.get("planes")
+    roles = manifest.get("roles")
+    profiles = manifest.get("profiles")
+    if not isinstance(planes, dict):
+        issues.append("planes must be a mapping")
+        return issues
+    if not isinstance(roles, dict):
+        issues.append("roles must be a mapping")
+        return issues
+    if not isinstance(profiles, dict):
+        issues.append("profiles must be a mapping")
+        return issues
+
+    for plane_name in REQUIRED_PLANES:
+        plane = planes.get(plane_name)
+        if not isinstance(plane, dict):
+            issues.append(f"missing plane definition: {plane_name}")
+            continue
+        if not isinstance(plane.get("offsetStart"), int):
+            issues.append(f"{plane_name}: offsetStart must be int")
+        if not isinstance(plane.get("offsetEnd"), int):
+            issues.append(f"{plane_name}: offsetEnd must be int")
+
+    for role_name, role in roles.items():
+        if not isinstance(role, dict):
+            issues.append(f"{role_name}: role definition must be a mapping")
+            continue
+        plane = str(role.get("plane", "")).strip()
+        slot = role.get("slotOffset")
+        if plane not in planes:
+            issues.append(f"{role_name}: plane must be one of {', '.join(planes)}")
+            continue
+        if not isinstance(slot, int):
+            issues.append(f"{role_name}: slotOffset must be int")
+            continue
+        plane_range = planes[plane]
+        start = int(plane_range["offsetStart"])
+        end = int(plane_range["offsetEnd"])
+        if slot < start or slot > end:
+            issues.append(
+                f"{role_name}: slotOffset {slot} must stay within plane {plane} range {start}-{end}"
+            )
+        if slot % 10 != 0:
+            issues.append(f"{role_name}: slotOffset must end with 0")
+
+    for profile_name in REQUIRED_PROFILES:
+        profile = profiles.get(profile_name)
+        if not isinstance(profile, dict):
+            issues.append(f"missing profile definition: {profile_name}")
+            continue
+        start = profile.get("blockStart")
+        end = profile.get("blockEnd")
+        if not isinstance(start, int) or not isinstance(end, int):
+            issues.append(f"{profile_name}: blockStart/blockEnd must be int")
+            continue
+        if start % 1000 != 0:
+            issues.append(f"{profile_name}: blockStart must align to 1000-port block")
+        if end - start != 999:
+            issues.append(f"{profile_name}: blockEnd must close a 1000-port block")
+
+    seen_ports: dict[int, str] = {}
+    for profile_name, profile in profiles.items():
+        if not isinstance(profile, dict):
+            continue
+        start = profile.get("blockStart")
+        end = profile.get("blockEnd")
+        if not isinstance(start, int) or not isinstance(end, int):
+            continue
+        for role_name, role in roles.items():
+            if not isinstance(role, dict):
+                continue
+            slot = role.get("slotOffset")
+            if not isinstance(slot, int):
+                continue
+            canonical = start + slot
+            if canonical % 10 != 0:
+                issues.append(f"{profile_name}/{role_name}: canonical port must end with 0")
+            if canonical < start or canonical > end:
+                issues.append(
+                    f"{profile_name}/{role_name}: canonical port {canonical} escapes block {start}-{end}"
+                )
+            owner = seen_ports.setdefault(canonical, f"{profile_name}/{role_name}")
+            if owner != f"{profile_name}/{role_name}":
+                issues.append(
+                    f"duplicate canonical port {canonical}: {owner} and {profile_name}/{role_name}"
+                )
+
+    return issues
+
+
+def canonical_port(manifest: dict[str, Any], profile_name: str, role_name: str) -> int:
+    profile = manifest["profiles"][profile_name]
+    role = manifest["roles"][role_name]
+    return int(profile["blockStart"]) + int(role["slotOffset"])
+
+
+def profile_ports(manifest: dict[str, Any], profile_name: str) -> dict[str, int]:
+    return {
+        role_name: canonical_port(manifest, profile_name, role_name)
+        for role_name in manifest.get("roles", {})
+    }

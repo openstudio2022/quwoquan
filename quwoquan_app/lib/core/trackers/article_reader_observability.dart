@@ -24,8 +24,7 @@ class ArticleReaderMetricNames {
 }
 
 class ArticleReaderObservability {
-  ArticleReaderObservability({required AnalyticsService analytics})
-    : _analytics = analytics;
+  ArticleReaderObservability({required this._analytics});
 
   final AnalyticsService _analytics;
   final Set<String> _openReportedPostIds = <String>{};

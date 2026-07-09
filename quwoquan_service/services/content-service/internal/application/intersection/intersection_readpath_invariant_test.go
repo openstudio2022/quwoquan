@@ -42,24 +42,16 @@ func TestIntersectionService_ReadPathZeroSynchronousScoring(t *testing.T) {
 	const materializedStrength = 0.4242
 	src := &countingSource{
 		facts: []IntersectionReasonView{
-			{
-				IntersectionID: "f1", IntersectionClass: "fact", Dimension: "relationship",
-				Strength: 0.9, ActionTargetID: "u1",
-				IntersectionPoints: []IntersectionPointView{
-					{PointID: "p1", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", Count: 2, Visibility: "public"},
-				},
-			},
+			displayReadyFactReason("f1", "relationship", "sharedFollowees", "u1", "person", "陆衡", 2, 0.9),
 		},
 		affinities: []IntersectionReasonView{
-			{
+			func() IntersectionReasonView {
+				r := displayReadyAffinityReason("aff1", "content", "sharedCircle", "c1", "content", "摄影内容", materializedStrength)
 				// 预物化的模型分通过 Strength/modelReasonBucket 携带；读路径只能直出。
-				IntersectionID: "aff1", IntersectionClass: "affinity", Dimension: "content",
-				Strength: materializedStrength, ActionTargetID: "c1", Source: "social_circle",
-				ModelReasonBucket: "affinity:circle_hot",
-				IntersectionPoints: []IntersectionPointView{
-					{PointID: "a1", PointClass: "recommended", Dimension: "content", SourceRef: "sharedCircle", Label: "圈子热看", Visibility: "public"},
-				},
-			},
+				r.Source = "social_circle"
+				r.ModelReasonBucket = "affinity:circle_hot"
+				return r
+			}(),
 		},
 	}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))

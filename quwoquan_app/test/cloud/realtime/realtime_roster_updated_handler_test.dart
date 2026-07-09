@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 
 class _CountingMembersRepo extends MockChatRepository {
   int listMembersCallCount = 0;
@@ -51,6 +52,39 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     expect(repo.listMembersCallCount, greaterThanOrEqualTo(1));
+    await tester.pump(const Duration(milliseconds: 200));
+  });
+
+  testWidgets('ConversationRosterUpdated invalidate groupHomeProvider', (
+    tester,
+  ) async {
+    final repo = _CountingMembersRepo();
+    late ProviderContainer container;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+        child: Consumer(
+          builder: (context, ref, _) {
+            container = ProviderScope.containerOf(context);
+            return const MaterialApp(home: SizedBox());
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    await container.read(groupHomeProvider('conv_002').future);
+    RealtimeMessageHandler(
+      container.read,
+      invalidate: container.invalidate,
+    ).handle({
+      'type': 'ConversationRosterUpdated',
+      'conversationId': 'conv_002',
+    });
+    await tester.pump();
+    final state = container.read(groupHomeProvider('conv_002'));
+    expect(state.isLoading, isTrue);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 200));
   });
 }

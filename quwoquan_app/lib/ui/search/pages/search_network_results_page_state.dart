@@ -38,6 +38,13 @@ class _SearchNetworkResultsPageState
   ContentBehaviorTracker? _behaviorTracker;
   String? _feedRequestIdAtEnter;
 
+  void _setMountedState(VoidCallback update) {
+    if (!mounted) {
+      return;
+    }
+    setState(update);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -779,9 +786,7 @@ class _SearchNetworkResultsPageState
     return switch (_activeTabId) {
       _tabImage =>
         _contentResults
-            .where(
-              (item) => item.contentType == 'image',
-            )
+            .where((item) => item.contentType == 'image')
             .toList(growable: false),
       _tabVideo =>
         _contentResults

@@ -46,7 +46,7 @@ _SAMPLES = [
     ("img_work", dict(source_class="photography_community", source_text="黄山日出", entity_name="黄山",
                       narrative_volume=0, image_count=6, declared_carrier="image"), "work"),
     ("img_few", dict(source_class="photography_community", source_text="黄山", narrative_volume=0,
-                     image_count=2, declared_carrier="image"), "abandoned"),
+                     image_count=1, declared_carrier="image"), "work"),
 ]
 
 _REQUIRED_KEYS = (

@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
+import 'package:quwoquan_app/components/media/picker/one_tap_movie_composer.dart';
 import 'package:quwoquan_app/components/media/reorderable/media_reorderable_view.dart';
+import 'package:quwoquan_app/components/media/shared/media_creation_bottom_button.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -39,7 +41,7 @@ void main() {
       AppPermissionCoordinator.instance.clearSession();
     });
 
-    test('图片模式隐藏视频分类与一键成片，只显示编辑图片和完成', () {
+    test('图片模式隐藏视频分类，显示一键成片和下一步', () {
       final categories = mediaPickerCategoriesForEntryMode(
         MediaPickerEntryMode.image,
       );
@@ -51,8 +53,8 @@ void main() {
       );
 
       expect(actions.map((action) => action.label), <String>[
-        UITextConstants.mediaPickerEditImage,
-        '完成(4)',
+        UITextConstants.mediaPickerOneTapMovie,
+        '下一步(4)',
       ]);
       expect(
         actions.map((action) => action.action),
@@ -63,7 +65,7 @@ void main() {
       );
       expect(
         actions.map((action) => action.label),
-        isNot(contains(UITextConstants.mediaPickerOneTapMovie)),
+        contains(UITextConstants.mediaPickerOneTapMovie),
       );
     });
 
@@ -75,7 +77,24 @@ void main() {
 
       expect(actions, hasLength(2));
       expect(actions.every((action) => !action.enabled), isTrue);
-      expect(actions.last.label, '完成(0)');
+      expect(actions.first.label, UITextConstants.mediaPickerOneTapMovie);
+      expect(actions.last.label, '下一步(0)');
+    });
+
+    test('选择一张图片时只能下一步，至少两张才可一键成片', () {
+      final singleActions = mediaPickerBottomActionsForEntryMode(
+        mode: MediaPickerEntryMode.image,
+        selectionCount: 1,
+      );
+      final multiActions = mediaPickerBottomActionsForEntryMode(
+        mode: MediaPickerEntryMode.image,
+        selectionCount: 2,
+      );
+
+      expect(singleActions.first.enabled, isFalse);
+      expect(singleActions.last.enabled, isTrue);
+      expect(multiActions.first.enabled, isTrue);
+      expect(multiActions.last.enabled, isTrue);
     });
 
     test('视频模式不复用图片完成与编辑图片语义', () {
@@ -122,7 +141,7 @@ void main() {
         find.byKey(const ValueKey<String>('media-picker-camera-tile')),
         findsOneWidget,
       );
-      expect(find.text(UITextConstants.mediaPickerOneTapMovie), findsNothing);
+      expect(find.text(UITextConstants.mediaPickerOneTapMovie), findsOneWidget);
       expect(
         find.text(UITextConstants.mediaPickerVideoCameraEntry),
         findsNothing,
@@ -360,22 +379,27 @@ void main() {
         title.style?.color,
         AppColorsFunctional.getColor(true, ColorType.foregroundPrimary),
       );
-      final editButton = tester.widget<CupertinoButton>(
-        find.widgetWithText(
-          CupertinoButton,
-          UITextConstants.mediaPickerEditImage,
-        ),
-      );
-      expect(editButton.onPressed, isNull);
-      final editButtonSurface = tester.widget<Container>(
+      final editButton = tester.widget<MediaCreationBottomButton>(
         find.byKey(
           const ValueKey<String>('media-picker-bottom-action-editImage'),
         ),
       );
-      final editDecoration = editButtonSurface.decoration as BoxDecoration?;
-      expect(editDecoration?.color, isNot(AppColors.primaryColor));
-      expect(editDecoration?.border, isNull);
-      expect(find.text('完成(0)'), findsOneWidget);
+      expect(editButton.onPressed, isNull);
+      expect(
+        editButton.variant,
+        MediaCreationBottomButtonVariant.secondaryNeutral,
+      );
+      final nextButton = tester.widget<MediaCreationBottomButton>(
+        find.byKey(
+          const ValueKey<String>('media-picker-bottom-action-completeImage'),
+        ),
+      );
+      expect(nextButton.onPressed, isNull);
+      expect(
+        nextButton.variant,
+        MediaCreationBottomButtonVariant.partialPrimary,
+      );
+      expect(find.text('下一步(0)'), findsOneWidget);
     });
 
     testWidgets('相册弹层在浅色系统下仍强制深色，且最高不越过顶部工具栏', (tester) async {
@@ -450,7 +474,7 @@ void main() {
       );
       await _pumpMediaPickerFrame(tester);
 
-      expect(find.text('完成(0)'), findsOneWidget);
+      expect(find.text('下一步(0)'), findsOneWidget);
       expect(
         find.byKey(const ValueKey<String>('media-picker-selected-thumb-a1')),
         findsNothing,
@@ -484,6 +508,15 @@ void main() {
                           entryMode: MediaPickerEntryMode.image,
                           maxSelection: 9,
                           mediaPickerService: service,
+                          imageEditorBuilder: (context, request) =>
+                              _FakeImageEditorPage(
+                                result: <String, Object>{
+                                  'index': request.index,
+                                  'path': request.imagePaths[request.index],
+                                  'paths': request.imagePaths,
+                                  'action': 'continueToCreate',
+                                },
+                              ),
                         ),
                       ),
                     );
@@ -558,8 +591,7 @@ void main() {
 
       await gesture.up();
       await _pumpMediaPickerFrame(tester);
-      await tester.tap(_completeImageActionFinder());
-      await _pumpMediaPickerFrame(tester);
+      await _tapNextAndFinishFakeEditor(tester);
 
       expect(picked?.items.map((item) => item.id).toList(), <String>[
         orderedIds[1],
@@ -591,6 +623,15 @@ void main() {
                           entryMode: MediaPickerEntryMode.image,
                           maxSelection: 9,
                           mediaPickerService: service,
+                          imageEditorBuilder: (context, request) =>
+                              _FakeImageEditorPage(
+                                result: <String, Object>{
+                                  'index': request.index,
+                                  'path': request.imagePaths[request.index],
+                                  'paths': request.imagePaths,
+                                  'action': 'continueToCreate',
+                                },
+                              ),
                         ),
                       ),
                     );
@@ -606,24 +647,163 @@ void main() {
         find.byKey(const ValueKey<String>('media-picker-asset-a1')),
       );
       await _pumpMediaPickerFrame(tester);
-      expect(find.text('完成(1)'), findsOneWidget);
+      expect(find.text('下一步(1)'), findsOneWidget);
       expect(find.text('1'), findsWidgets);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('media-picker-selected-delete-a1')),
       );
       await _pumpMediaPickerFrame(tester);
-      expect(find.text('完成(0)'), findsOneWidget);
+      expect(find.text('下一步(0)'), findsOneWidget);
 
       await tester.tap(
         find.byKey(const ValueKey<String>('media-picker-asset-a2')),
       );
       await _pumpMediaPickerFrame(tester);
-      await tester.tap(_completeImageActionFinder());
-      await _pumpMediaPickerFrame(tester);
+      await _tapNextAndFinishFakeEditor(tester);
 
       expect(picked?.items.map((item) => item.id).toList(), <String>['a2']);
       expect(picked?.items.single.path, '/tmp/a2.jpg');
+    });
+
+    testWidgets('一键成片从图片选择页进入并返回锁定单素材结果', (tester) async {
+      CreateMediaPickerResult? picked;
+      final composer = _FakeOneTapMovieComposer();
+      final service = _FakeMediaPickerService(
+        albums: <AssetPathEntity>[_album('recent', '最近项目')],
+        assetsByAlbumId: <String, List<AssetEntity>>{
+          'recent': <AssetEntity>[_image('a1'), _image('a2'), _image('a3')],
+        },
+      );
+
+      await tester.pumpWidget(
+        CupertinoApp(
+          home: Builder(
+            builder: (context) => CupertinoButton(
+              child: const Text('open'),
+              onPressed: () async {
+                picked = await Navigator.of(context)
+                    .push<CreateMediaPickerResult>(
+                      CupertinoPageRoute<CreateMediaPickerResult>(
+                        builder: (_) => CreateMediaPickerPage(
+                          entryMode: MediaPickerEntryMode.image,
+                          maxSelection: 9,
+                          mediaPickerService: service,
+                          oneTapMovieComposer: composer,
+                        ),
+                      ),
+                    );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await _pumpMediaPickerFrame(tester);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('media-picker-asset-a1')),
+      );
+      await _pumpMediaPickerFrame(tester);
+      final oneTapButtonWhenSingle = tester.widget<CupertinoButton>(
+        find.widgetWithText(
+          CupertinoButton,
+          UITextConstants.mediaPickerOneTapMovie,
+        ),
+      );
+      expect(oneTapButtonWhenSingle.onPressed, isNull);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('media-picker-asset-a2')),
+      );
+      await _pumpMediaPickerFrame(tester);
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('media-picker-bottom-action-editImage'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(UITextConstants.mediaPickerOneTapMovieOriginal),
+        findsOneWidget,
+      );
+      await tester.tap(find.text(UITextConstants.mediaPickerNextStep));
+      await tester.pumpAndSettle();
+
+      expect(composer.images, isEmpty);
+      expect(picked, isNotNull);
+      expect(picked!.openOneTapMovie, isTrue);
+      expect(picked!.lockedSingleMedia, isTrue);
+      expect(picked!.items.map((item) => item.id), <String>['a1', 'a2']);
+      expect(picked!.items.every((item) => item.isImage), isTrue);
+      expect(picked!.oneTapMovieEffectId, 'original');
+    });
+
+    testWidgets('一键成片基础效果在设备不支持时降级进入图片创作', (tester) async {
+      CreateMediaPickerResult? picked;
+      final service = _FakeMediaPickerService(
+        albums: <AssetPathEntity>[_album('recent', '最近项目')],
+        assetsByAlbumId: <String, List<AssetEntity>>{
+          'recent': <AssetEntity>[_image('a1'), _image('a2')],
+        },
+      );
+
+      await tester.pumpWidget(
+        CupertinoApp(
+          home: Builder(
+            builder: (context) => CupertinoButton(
+              child: const Text('open'),
+              onPressed: () async {
+                picked = await Navigator.of(context)
+                    .push<CreateMediaPickerResult>(
+                      CupertinoPageRoute<CreateMediaPickerResult>(
+                        builder: (_) => CreateMediaPickerPage(
+                          entryMode: MediaPickerEntryMode.image,
+                          maxSelection: 9,
+                          mediaPickerService: service,
+                          oneTapMovieComposer:
+                              const _UnsupportedOneTapMovieComposer(),
+                        ),
+                      ),
+                    );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await _pumpMediaPickerFrame(tester);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('media-picker-asset-a1')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey<String>('media-picker-asset-a2')),
+      );
+      await _pumpMediaPickerFrame(tester);
+      await tester.tap(
+        find.byKey(
+          const ValueKey<String>('media-picker-bottom-action-editImage'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(
+        find.text(UITextConstants.mediaPickerOneTapMovieGentleMotion),
+      );
+      await tester.tap(find.text(UITextConstants.mediaPickerNextStep));
+      await tester.pumpAndSettle();
+
+      expect(picked, isNotNull);
+      expect(picked!.openOneTapMovie, isTrue);
+      expect(picked!.lockedSingleMedia, isTrue);
+      expect(picked!.items.map((item) => item.id), <String>['a1', 'a2']);
+      expect(picked!.items.every((item) => item.isImage), isTrue);
+      expect(picked!.oneTapMovieEffectId, 'gentle_motion');
+      expect(
+        find.text(UITextConstants.mediaPickerOneTapMovieUnavailable),
+        findsNothing,
+      );
     });
 
     testWidgets('点击已选图片进入编辑器并按编辑器返回的多图 index 回填路径', (tester) async {
@@ -688,8 +868,7 @@ void main() {
 
       await tester.tap(find.text('save edit'));
       await _pumpMediaPickerFrame(tester);
-      await tester.tap(_completeImageActionFinder());
-      await _pumpMediaPickerFrame(tester);
+      await _tapNextAndFinishFakeEditor(tester);
 
       expect(picked?.items.map((item) => item.path).toList(), <String>[
         '/tmp/a1.jpg',
@@ -708,7 +887,16 @@ Widget _pickerApp({
       entryMode: MediaPickerEntryMode.image,
       maxSelection: 9,
       mediaPickerService: service,
-      imageEditorBuilder: imageEditorBuilder,
+      imageEditorBuilder:
+          imageEditorBuilder ??
+          (context, request) => _FakeImageEditorPage(
+            result: <String, Object>{
+              'index': request.index,
+              'path': request.imagePaths[request.index],
+              'paths': request.imagePaths,
+              'action': 'continueToCreate',
+            },
+          ),
     ),
   );
 }
@@ -723,6 +911,13 @@ Finder _completeImageActionFinder() {
   return find.byKey(
     const ValueKey<String>('media-picker-bottom-action-completeImage'),
   );
+}
+
+Future<void> _tapNextAndFinishFakeEditor(WidgetTester tester) async {
+  await tester.tap(_completeImageActionFinder());
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('save edit'));
+  await tester.pumpAndSettle();
 }
 
 AssetPathEntity _album(String id, String name, {bool isAll = false}) {
@@ -841,5 +1036,32 @@ class _FakeImageEditorPage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _FakeOneTapMovieComposer implements OneTapMovieComposer {
+  List<CreateMediaItem> images = const <CreateMediaItem>[];
+
+  @override
+  Future<OneTapMovieComposeResult> compose({
+    required List<CreateMediaItem> images,
+  }) async {
+    this.images = List<CreateMediaItem>.of(images);
+    return OneTapMovieComposeResult(
+      videoPath: '/tmp/one_tap_movie.mp4',
+      durationMs: images.length * 3000,
+      coverPath: '/tmp/one_tap_movie_cover.jpg',
+    );
+  }
+}
+
+class _UnsupportedOneTapMovieComposer implements OneTapMovieComposer {
+  const _UnsupportedOneTapMovieComposer();
+
+  @override
+  Future<OneTapMovieComposeResult> compose({
+    required List<CreateMediaItem> images,
+  }) async {
+    throw UnsupportedError('unsupported');
   }
 }

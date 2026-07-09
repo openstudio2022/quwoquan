@@ -411,7 +411,7 @@ class _AssistantSkillCenterPageState
             value: _highRiskNeedDoubleConfirm,
             onChanged: (value) async {
               if (!value) {
-                await showCupertinoDialog<void>(
+                await showAppCupertinoDialog<void>(
                   context: context,
                   builder: (context) => CupertinoAlertDialog(
                     title: Text(l10n.cancel),

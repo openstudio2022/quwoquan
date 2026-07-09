@@ -1,7 +1,7 @@
-// L2 api_integration: batch-100 创作者经 match_creator 绑定的真实内容流入发现 feed。
+// L2 api_integration: canonical 双 1k 创作者经 match_creator 绑定的真实内容流入发现 feed。
 //
-// 守护 Phase3 端到端无断点：creator_content.seed.json 的作者绑定（article/image/video）
-// 必须能经真实发布管线投影进发现 feed，并以 batch-100 作者身份返回。这条链路证明
+// 守护 Phase3 端到端无断点：creator_content.travel_photo_1k_v1.seed.json 的作者绑定（article/image/video）
+// 必须能经真实发布管线投影进发现 feed，并以 canonical creator pool 作者身份返回。这条链路证明
 // 创作者人设 → 内容载体 → 作者归属 → feed 曝光没有断点。
 package tests
 
@@ -16,7 +16,7 @@ import (
 	"quwoquan_service/runtime/contractfixture"
 )
 
-const batchAuthorPrefix = "agent_author_travel_travel_batch_100_v1_"
+const canonicalBatchID = "travel_photo_1k_v1"
 
 type creatorContentSeed struct {
 	BatchID         string               `json:"batchId"`
@@ -40,7 +40,7 @@ type creatorContentPost struct {
 func loadCreatorContentSeed(t *testing.T) creatorContentSeed {
 	t.Helper()
 	seed, err := contractfixture.LoadMetadataJSON[creatorContentSeed](
-		"_shared/test_fixtures/creator_pool/creator_content.seed.json",
+		"_shared/test_fixtures/creator_pool/creator_content.travel_photo_1k_v1.seed.json",
 	)
 	if err != nil {
 		t.Fatalf("load creator content seed: %v", err)
@@ -73,13 +73,13 @@ func publishCreatorPost(t *testing.T, post creatorContentPost) {
 
 // TestCreatorPoolAuthoredContentFlowsToFeed publishes the canonical creator-bound
 // content subset through the real publish pipeline and asserts every carrier shows
-// up in the discovery feed attributed to its batch-100 author.
+// up in the discovery feed attributed to its canonical creator author.
 func TestCreatorPoolAuthoredContentFlowsToFeed(t *testing.T) {
 	requireMongoDB(t)
 	t.Cleanup(func() { cleanPosts(t) })
 
 	seed := loadCreatorContentSeed(t)
-	if seed.BatchID != "travel_batch_100_v1" {
+	if seed.BatchID != canonicalBatchID {
 		t.Fatalf("unexpected batch %q", seed.BatchID)
 	}
 	if seed.PreviewOnly {
@@ -95,8 +95,8 @@ func TestCreatorPoolAuthoredContentFlowsToFeed(t *testing.T) {
 	authors := map[string]bool{}
 	carriers := map[string]bool{}
 	for _, post := range seed.Posts {
-		if !strings.HasPrefix(post.AuthorID, batchAuthorPrefix) {
-			t.Fatalf("post %s bound to non-batch author %q", post.PostID, post.AuthorID)
+		if !strings.HasPrefix(post.AuthorID, "sys_") || !strings.HasSuffix(post.AuthorID, "_sub_01") {
+			t.Fatalf("post %s bound to non-canonical creator author %q", post.PostID, post.AuthorID)
 		}
 		if post.ContentType != post.Carrier {
 			t.Fatalf("post %s contentType %q != carrier %q", post.PostID, post.ContentType, post.Carrier)

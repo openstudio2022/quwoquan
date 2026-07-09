@@ -65,7 +65,7 @@
 1. T1：创作辅助 API 契约测试（请求/响应形状、tagRef 必须存在于 taxonomy、对象 id 必须可解析）。
 2. T2：技能目录登记 + 订阅开关行为测试；提醒频控测试。
 3. T3：gamma 环境——发布草稿调用创作辅助返回可用建议；制造新交集后收到小趣提醒并跳转收件箱。
-4. `bash agent_ops/gate/gate_repo.sh --scope service` 与 `--scope app` 全绿；`verify-app-assistant-old-stack-retired` 等 assistant 门禁保持绿。
+4. `bash quwoquan_ops/gate/gate_repo.sh --scope service` 与 `--scope app` 全绿；`verify-app-assistant-old-stack-retired` 等 assistant 门禁保持绿。
 5. 答案边界：解释推荐回答仅基于透传上下文（既有 answer_boundary_policy 测试覆盖新入口）。
 6. AppMessage route/query roundtrip 与端侧点击跳转测试通过；未知 target 结构化降级、不 crash。
 

@@ -14,12 +14,12 @@ class PhotoPostDto extends PostBaseDto {
   @override final String displayName;
   @override final String avatarUrl;
   @override final String? authorBackgroundUrl;
-  final String authorRoleLabel;
-  final List<String> authorIdentityTags;
-  final bool authorVerified;
-  final String? body;
+  @override final String authorRoleLabel;
+  @override final List<String> authorIdentityTags;
+  @override final bool authorVerified;
+  @override final String? body;
   final String coverUrl;
-  final List<String> imageUrls;
+  @override final List<String> imageUrls;
   final int? width;
   final int? height;
   @override final int likeCount;
@@ -28,9 +28,9 @@ class PhotoPostDto extends PostBaseDto {
   @override final DateTime createdAt;
   @override final DateTime? updatedAt;
   @override final DateTime? publishedAt;
-  final String? contentVertical;
-  final String? recallPath;
-  final String? supplySource;
+  @override final String? contentVertical;
+  @override final String? recallPath;
+  @override final String? supplySource;
   @override final List<IntersectionReason>? intersectionReasons;
 
   const PhotoPostDto({

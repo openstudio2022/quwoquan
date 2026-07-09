@@ -252,11 +252,11 @@ contract_acceptance:
     - '[migrated_from_planned] quwoquan_app/test/cloud/notification/app_message_repository_contract_test.dart'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
   - make verify-app-mock-isolation
   - make verify-app-login-entry-loop-contract
   full_gate:
-  - bash agent_ops/gate/gate_repo.sh --scope app
+  - bash quwoquan_ops/gate/gate_repo.sh --scope app
   - make gate

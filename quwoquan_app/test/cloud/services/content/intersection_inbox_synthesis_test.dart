@@ -21,6 +21,7 @@ void main() {
     String objectId = '',
     required String objectKind,
     int count = 0,
+    String primaryText = '',
     String? repName,
     String? repId,
     String repPrivacy = 'visible',
@@ -36,6 +37,7 @@ void main() {
       actionTargetId: objectId,
       totalPointCount: count,
       source: kind,
+      primaryText: primaryText,
       primarySpans: primarySpans,
       intersectionPoints: <IntersectionPoint>[
         IntersectionPoint(
@@ -64,15 +66,17 @@ void main() {
   ) => spans.firstWhere((s) => s.role == role);
 
   group('buildInboxStatementSpans / normalizeInboxReason', () {
-    test('sharedFollowees 无代表人：你关注的N人也关注了[对象]', () {
-      final r = normalizeInboxReason(reason(
-        kind: 'sharedFollowees',
-        objectName: '林清越',
-        objectId: 'u_lin',
-        objectKind: 'person',
-        count: 4,
-      ));
-      expect(r.primaryText, '你关注的4人也关注了林清越');
+    test('sharedFollowees 无代表人：4位你关注的人也关注了[对象]', () {
+      final r = normalizeInboxReason(
+        reason(
+          kind: 'sharedFollowees',
+          objectName: '林清越',
+          objectId: 'u_lin',
+          objectKind: 'person',
+          count: 4,
+        ),
+      );
+      expect(r.primaryText, '4位你关注的人也关注了林清越');
       expect(r.iconKey, 'people');
       expect(r.mutualCount, 4);
       // 数字片段：role=count，文本=N，下钻 myIntersections。
@@ -80,8 +84,9 @@ void main() {
       expect(countSpan.text, '4');
       expect(countSpan.target?.routeId, 'myIntersections');
       // 对象人名：role=object，可点 userProfile。
-      final objectSpan = r.primarySpans
-          .firstWhere((s) => s.role == 'object' && s.text == '林清越');
+      final objectSpan = r.primarySpans.firstWhere(
+        (s) => s.role == 'object' && s.text == '林清越',
+      );
       expect(objectSpan.target?.objectId, 'u_lin');
       expect(objectSpan.target?.routeId, 'userProfile');
       // 文本=span 拼接（端不再二次拼装）。
@@ -96,21 +101,22 @@ void main() {
     });
 
     test('coCommented 含代表人：代表人纯文本蓝字恒在数字前', () {
-      final r = normalizeInboxReason(reason(
-        kind: 'coCommented',
-        dimension: 'content',
-        objectName: '黄金投资圈',
-        objectId: 'circle_gold',
-        objectKind: 'circle',
-        count: 8,
-        repName: '王然',
-        repId: 'u_wang',
-      ));
-      expect(r.primaryText, '你和王然等8人都讨论过黄金投资圈');
+      final r = normalizeInboxReason(
+        reason(
+          kind: 'coCommented',
+          dimension: 'content',
+          objectName: '黄金投资圈',
+          objectId: 'circle_gold',
+          objectKind: 'circle',
+          count: 8,
+          repName: '王然',
+          repId: 'u_wang',
+        ),
+      );
+      expect(r.primaryText, '你和王然等8人都评论过黄金投资圈');
       expect(r.iconKey, 'discussion');
       // 代表人是可点 person span，且出现在数字之前。
-      final repIndex =
-          r.primarySpans.indexWhere((s) => s.text == '王然');
+      final repIndex = r.primarySpans.indexWhere((s) => s.text == '王然');
       final countIndex = r.primarySpans.indexWhere((s) => s.role == 'count');
       expect(repIndex, greaterThanOrEqualTo(0));
       expect(repIndex, lessThan(countIndex));
@@ -119,8 +125,9 @@ void main() {
       expect(repSpan.target?.objectKind, 'person');
       expect(repSpan.target?.objectId, 'u_wang');
       // 圈子对象可点 circleDetail。
-      final objectSpan = r.primarySpans
-          .firstWhere((s) => s.role == 'object' && s.text == '黄金投资圈');
+      final objectSpan = r.primarySpans.firstWhere(
+        (s) => s.role == 'object' && s.text == '黄金投资圈',
+      );
       expect(objectSpan.target?.routeId, 'circleDetail');
       // 主行动由 codegen 注册表 actionHintsByKind 首位驱动（端不再硬编码 kind→action）。
       expect(
@@ -131,15 +138,17 @@ void main() {
     });
 
     test('sharedTagSample：标签无路由 → 纯文本，不生成死蓝字', () {
-      final r = normalizeInboxReason(reason(
-        kind: 'sharedTagSample',
-        dimension: 'interest',
-        objectName: '胶片摄影',
-        objectId: 'tag_film',
-        objectKind: 'tag',
-        repName: '林清越',
-        repId: 'u_lin',
-      ));
+      final r = normalizeInboxReason(
+        reason(
+          kind: 'sharedTagSample',
+          dimension: 'interest',
+          objectName: '胶片摄影',
+          objectId: 'tag_film',
+          objectKind: 'tag',
+          repName: '林清越',
+          repId: 'u_lin',
+        ),
+      );
       expect(r.primaryText, '你和林清越都关注胶片摄影');
       expect(r.iconKey, 'interest');
       // 代表人可点。
@@ -151,16 +160,18 @@ void main() {
       expect(tagSpan.target, isNull);
     });
 
-    test('affinity：你可能和[对象]兴趣相投（概率推荐）', () {
-      final r = normalizeInboxReason(reason(
-        kind: 'affinity',
-        dimension: 'interest',
-        objectName: '陆衡',
-        objectId: 'u_lu',
-        objectKind: 'person',
-        intersectionClass: 'affinity',
-      ));
-      expect(r.primaryText, '你可能和陆衡兴趣相投');
+    test('affinity：推荐认识：[对象]和你兴趣相近（概率推荐）', () {
+      final r = normalizeInboxReason(
+        reason(
+          kind: 'affinity',
+          dimension: 'interest',
+          objectName: '陆衡',
+          objectId: 'u_lu',
+          objectKind: 'person',
+          intersectionClass: 'affinity',
+        ),
+      );
+      expect(r.primaryText, '推荐认识：陆衡和你兴趣相近');
       expect(r.iconKey, 'interest');
       final objectSpan = r.primarySpans.firstWhere((s) => s.text == '陆衡');
       expect(objectSpan.role, 'object');
@@ -168,13 +179,15 @@ void main() {
     });
 
     test('commonContact：对象是人、数字落末尾', () {
-      final r = normalizeInboxReason(reason(
-        kind: 'commonContact',
-        objectName: '李航',
-        objectId: 'u_li',
-        objectKind: 'person',
-        count: 3,
-      ));
+      final r = normalizeInboxReason(
+        reason(
+          kind: 'commonContact',
+          objectName: '李航',
+          objectId: 'u_li',
+          objectKind: 'person',
+          count: 3,
+        ),
+      );
       expect(r.primaryText, '你和李航有3位共同联系人');
       expect(r.iconKey, 'contact');
       expect(spanOfRole(r.primarySpans, 'count').text, '3');
@@ -182,33 +195,37 @@ void main() {
     });
 
     test('代表人隐私态非 visible → 不外显具体名字', () {
-      final r = normalizeInboxReason(reason(
-        kind: 'coLiked',
-        dimension: 'content',
-        objectName: '一条记录',
-        objectId: 'post_1',
-        objectKind: 'content',
-        count: 6,
-        repName: '私密用户',
-        repId: 'u_secret',
-        repPrivacy: 'hidden',
-      ));
+      final r = normalizeInboxReason(
+        reason(
+          kind: 'coLiked',
+          dimension: 'content',
+          objectName: '一条记录',
+          objectId: 'post_1',
+          objectKind: 'content',
+          count: 6,
+          repName: '私密用户',
+          repId: 'u_secret',
+          repPrivacy: 'hidden',
+        ),
+      );
       expect(r.primaryText.contains('私密用户'), isFalse);
-      expect(r.primaryText, '你和6人都赞过一条记录');
+      expect(r.primaryText, '你和6人都赞过《一条记录》');
     });
 
     test('已携带 primarySpans 的不二次合成，只补 iconKey 等元数据', () {
       final preset = <IntersectionTextSpan>[
         IntersectionTextSpan(text: '云侧直出富文本', role: 'plain'),
       ];
-      final r = normalizeInboxReason(reason(
-        kind: 'sharedFollowees',
-        objectName: '林清越',
-        objectId: 'u_lin',
-        objectKind: 'person',
-        count: 4,
-        primarySpans: preset,
-      ));
+      final r = normalizeInboxReason(
+        reason(
+          kind: 'sharedFollowees',
+          objectName: '林清越',
+          objectId: 'u_lin',
+          objectKind: 'person',
+          count: 4,
+          primarySpans: preset,
+        ),
+      );
       expect(r.primarySpans, same(preset));
       // iconKey 仍按 kind 回填。
       expect(r.iconKey, 'people');
@@ -237,7 +254,10 @@ void main() {
       );
       final n = normalizeInboxReason(r);
       // point.sourceRef=coVisitedEntity → codegen iconKey=place。
-      expect(n.iconKey, IntersectionKindMetadata.of('coVisitedEntity')!.iconKey);
+      expect(
+        n.iconKey,
+        IntersectionKindMetadata.of('coVisitedEntity')!.iconKey,
+      );
       expect(n.iconKey, 'place');
       expect(intersectionMutualCountOf(r), 5);
     });
@@ -263,7 +283,10 @@ void main() {
       expect(IntersectionKindMetadata.of('sharedFollowees')!.iconKey, 'people');
       expect(IntersectionKindMetadata.of('commonContact')!.iconKey, 'contact');
       expect(IntersectionKindMetadata.of('coVisitedEntity')!.iconKey, 'place');
-      expect(IntersectionKindMetadata.of('followeeVisited')!.iconKey, 'placeHere');
+      expect(
+        IntersectionKindMetadata.of('followeeVisited')!.iconKey,
+        'placeHere',
+      );
       expect(IntersectionKindMetadata.of('sharedCircle')!.iconKey, 'circle');
       // 未登记 kind 返回 null（端据此安全降级，不再硬编码 default 分支）。
       expect(IntersectionKindMetadata.of('unknown_future_kind'), isNull);
@@ -290,6 +313,51 @@ void main() {
           expect(s.role, isNot('image'));
         }
       }
+    });
+  });
+
+  group('normalizeDisplayReason 单一真相源', () {
+    test('云侧主句为空时，展示层不再补写 primaryText', () {
+      final original = reason(
+        kind: 'sharedFollowees',
+        objectName: '林清越',
+        objectId: 'u_lin',
+        objectKind: 'person',
+        count: 4,
+      );
+      final normalized = normalizeDisplayReason(original);
+      expect(normalized.primaryText, isEmpty);
+      expect(normalized.primarySpans, isEmpty);
+    });
+
+    test('已有云侧主句且端侧模板不等价时，不改写 primaryText', () {
+      final original = reason(
+        kind: 'followeeVisited',
+        dimension: 'relationship',
+        objectName: '西湖景区',
+        objectId: 'homepage_sight_west_lake',
+        objectKind: 'place',
+        count: 1,
+        primaryText: '1位你关注的人来过「西湖景区」',
+      );
+      final normalized = normalizeDisplayReason(original);
+      expect(normalized.primaryText, original.primaryText);
+      expect(normalized.primarySpans, isEmpty);
+    });
+
+    test('已有云侧主句时不补 spans，展示合同另行 fail-closed', () {
+      final original = reason(
+        kind: 'sharedFollowees',
+        objectName: '林清越',
+        objectId: 'u_lin',
+        objectKind: 'person',
+        count: 4,
+        primaryText: '4位你关注的人也关注了林清越',
+      );
+      final normalized = normalizeDisplayReason(original);
+      expect(normalized.primaryText, original.primaryText);
+      expect(normalized.primarySpans, isEmpty);
+      expect(displayReadyIntersectionReason(normalized), isNull);
     });
   });
 }

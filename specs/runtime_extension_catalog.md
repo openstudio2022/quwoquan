@@ -48,7 +48,7 @@
 | 领域模型 | `domain/entity.go` | `cloud/models/{entity}_dto.dart` | `fields.yaml` |
 | 接口契约 | `adapters/http/handler.go` | `cloud/services/{domain}_repository.dart` | `service.yaml` + OpenAPI |
 | 字段策略 | `runtime/interceptor` 强制执行 | `cloud/runtime/field_policy.dart` 强制执行 | `fields.yaml` |
-| 错误码 | `runtime/errors` | `cloud/runtime/error_codes.dart` | `contracts/error_codes.md` |
+| 错误码 | `runtime/errors` | `cloud/runtime/error_codes.dart` | `contracts/runtime_errors/errors/runtime_failure_codes.yaml` |
 | 事件 | `domain/events.go` | `cloud/events/{entity}_events.dart` | `events.yaml` |
 
 ---
@@ -223,7 +223,7 @@ qwq new aggregate --name=<AggName> --domain=<domain> --service=<svc> --storage=<
 | ③ 生成云侧代码 | `make codegen target={agg}` | `domain/{entity}.go` + `{entity}_repository.go` + `{entity}_events.go` + `infrastructure/persistence/{entity}_{storage}_repo.go` + `adapters/http/{entity}_handler.go` + `migration/` + `tests/` |
 | ④ 生成端侧代码 | `make codegen-app target={agg}` | `cloud/models/{entity}_dto.dart` + `cloud/services/{domain}/{domain}_repository.dart` |
 | ⑤ 更新特性树 | 自动更新 `tree.yaml` | 如涉及新 L2/L3 则创建目录 |
-| ⑥ 更新 OpenAPI | 自动生成 | `contracts/openapi/{svc}.v1.yaml` 新增 paths |
+| ⑥ 更新 API metadata | 自动生成 | `contracts/metadata/{domain}/openapi.yaml` 或 `service.yaml` 新增 paths |
 
 **开发者/Agent 手动补充：**
 - `fields.yaml` 填充具体字段定义（类型、约束、分类）
@@ -283,18 +283,18 @@ qwq new service --name=<service-name> --port=<port>
 
 | 步骤 | 操作 | 产出 |
 |------|------|------|
-| ① 创建服务目录 | 执行 `agent_ops/scaffold/new_service_fullstack.sh --name {svc} --port {port}` | `services/{svc}/cmd/api/main.go` + `internal/domain/` + `application/` + `adapters/` + `infrastructure/` + `tests/` + `configs/` + `go.mod` + `Makefile` |
-| ② 自动生成配置目录 | `new_service_fullstack.sh` 内置调用 `scripts/bootstrap_service_config_layout.sh --service {svc}` | `configs/default|alpha|beta|gamma|prod/config.yaml` + `releases/config/{svc}/README.md` |
+| ① 创建服务目录 | 执行 `quwoquan_ops/gate/scaffold/new_service_fullstack.sh --name {svc} --port {port}` | `services/{svc}/cmd/api/main.go` + `internal/domain/` + `application/` + `adapters/` + `infrastructure/` + `tests/` + `configs/` + `go.mod` + `Makefile` |
+| ② 自动生成配置目录 | `new_service_fullstack.sh` 内置调用 `scripts/bootstrap_service_config_layout.sh --service {svc}` | `configs/default|alpha|beta|gamma|prod/config.yaml` + `quwoquan_service/services/{svc}/README.md` |
 | ③ 生成 main.go | 标准启动模板 | 加载 metadata → Registry → Repository 初始化 → HTTP server |
 | ④ 注册到工程 | 更新 root Makefile | 新增 `gate-{svc}` 目标 |
-| ⑤ 创建 spec | 服务规范目录 | `quwoquan_service/specs/{svc}/spec.md` + `design.md` |
+| ⑤ 创建 spec | 根 feature-tree | `specs/feature-tree/{L1}/{L2}/{L3}/spec.md` |
 | ⑥ 注册到 errors | 新增模块枚举 | `runtime/errors/errors.go` 新增 MODULE |
 | ⑦ 注册到 observability | 新增客户端工厂 | `runtime/observability/service_client_factory.go` + `runtime/http/http.go` |
 
 **发布化配置门禁（S04 强制）**
 - 必须通过 `scripts/verify_service_config_layout.sh`
 - 生产部署清单必须声明：`APP_ENV/SERVICE_NAME/CONFIG_VERSION/IMAGE_VERSION/CONFIG_ROOT`
-- 新服务上线前必须准备至少一个版本配置快照：`releases/config/{svc}/v*.yaml`
+- 新服务上线前必须准备至少一个版本配置快照：`quwoquan_service/services/{svc}/v*.yaml`
 
 ---
 
@@ -384,7 +384,7 @@ qwq new feature --name=<feature_name> --pages=<page1,page2>
 | 步骤 | 操作 |
 |------|------|
 | ① 创建 feature 目录 | `lib/features/{name}/pages/` + `models/` + `providers/` + `widgets/` |
-| ② 创建特性树条目 | `changes/` + `acceptance.yaml` + `traceability.yaml` |
+| ② 创建特性树条目 | `specs/feature-tree/**/acceptance.yaml` + 必要的 `specs/changelog/CR-*.yaml` |
 | ③ 如涉及新 API | 触发 S05 流程 |
 | ④ 如涉及新实体 | 触发 S01/S03 流程 |
 
@@ -780,7 +780,7 @@ make gate
 | S04 新服务 | 新增 L1 或在已有 L1 下新增 L2 |
 | S05 新端点 | 在对应 L3 下更新 L4 |
 | S06 新事件 | 在对应 L4 下更新 |
-| S10 新 Feature | 新增 changes/ 目录 + acceptance.yaml + traceability.yaml |
+| S10 新 Feature | 新增 `specs/feature-tree/` 节点 + `acceptance.yaml` + 必要的 `specs/changelog/CR-*.yaml` |
 | S11-S20 扩展 | 更新对应 L4/L5 的 tasks.md |
 
 `qwq` CLI 在每个扩展操作完成后自动检查并提示是否需要更新特性树。

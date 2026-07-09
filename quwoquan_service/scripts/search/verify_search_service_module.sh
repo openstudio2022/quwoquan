@@ -16,7 +16,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 cd "$ROOT"
 
 MODULE_REL="quwoquan_service/services/search-service"
-DOCKERFILE_REL="deploy/service/search-service/Dockerfile"
+DOCKERFILE_REL="quwoquan_service/services/search-service/deploy/Dockerfile"
 WITH_TESTS=0
 for arg in "$@"; do
   case "$arg" in

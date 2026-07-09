@@ -76,8 +76,8 @@ CR-20260531-028 revision 2。原 §6 顺延项中「运行态终验」「远程�
 
 | 顺延项 | V7 终态 | 证据 |
 | --- | --- | --- |
-| 运行态终验 `make gate-full`（T3/T4） | ✅ `make gate-local-gamma`：T3 passed + T4 passed（iPhone 17 Pro gamma-patrol-matrix）+ verify passed | `artifacts/local-gamma/{t3_report,report}.json`、`artifacts/v7-evidence/RUNTIME_GATE_EVIDENCE.md` |
-| `make test-contract` | ✅ 0 失败 / 19 包 ok（testcontainers L2 无 rootless docker 优雅 skip） | `artifacts/v7-evidence/RUNTIME_GATE_EVIDENCE.md` |
+| 运行态终验 `make gate-full`（T3/T4） | ✅ `make gate-local-gamma`：T3 passed + T4 passed（iPhone 17 Pro gamma-patrol-matrix）+ verify passed | `.qwq_output/local/gamma-local/{t3_report,report}.json`、`.qwq_output/runs/v7-evidence/RUNTIME_GATE_EVIDENCE.md` |
+| `make test-contract` | ✅ 0 失败 / 19 包 ok（testcontainers L2 无 rootless docker 优雅 skip） | `.qwq_output/runs/v7-evidence/RUNTIME_GATE_EVIDENCE.md` |
 | 运行态镜像阻塞修复 | ✅ media_root 对齐 /srv/media、`LOCAL_GAMMA_USER_PORT=19210` 导出、colima user_port 隧道、compose `start_period 10s→240s` | commit `fix(local-gamma): ...` |
 | 远程分支删除 | ✅ 实删 7 分支 rc=0，终态远程仅 `dev1.0`+`main` | `v6_git_branch_cleanup_decisions.md` §V7 |
 | `fix/08` privacy cherry-pick 核对 | ✅ dev1.0 已独立更完整实现（setting_service round-trip + `TestPrivacySettings_BlockedKeywordsRoundTrip` + 迁移整合 005），判定**不** cherry-pick | `v6_git_branch_cleanup_decisions.md` §V7 |

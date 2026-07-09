@@ -16,6 +16,12 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/user/pages/my_profile_page.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
 
+/// user_001（chat mock 当前用户 id）档案昵称。
+/// 真相源：`resolveMockUserProfileWire('user_001')`。user_001 不在 contract seed
+/// 与 user_pool.creator_pool（当前体验槽位是 fixture_sub_current / 小趣体验号），
+/// 解析按顺序回退到 `_defaultProfile('user_001')` 兜底，displayName == 趣我圈用户。
+const String _profileDisplayName = '趣我圈用户';
+
 /// 返回透明 1x1 PNG，避免 NetworkImage 产生 pending timer。
 class _FakeHttpOverrides extends HttpOverrides {
   @override
@@ -273,6 +279,25 @@ class _TestAuthSessionStore implements AuthSessionStore {
   Future<void> markForegroundAuthCheckNow() async {}
 }
 
+/// 已登录会话控制器：直接返回 authenticated 态。
+///
+/// 启动认证恢复被 `startupAuthRestoreGateProvider` 门控后（默认关闭、`open()` 为空实现），
+/// 仅 override `authSessionStoreProvider` 已不足以触发 `restore()`；直接 override 控制器，
+/// 与本目录其它已登录用例（inbox / profile_tab_navigation）保持同一 canonical 模式。
+class _AuthenticatedSessionController extends AuthSessionController {
+  @override
+  AuthSessionState build() => const AuthSessionState(
+    status: AuthSessionStatus.authenticated,
+    accessToken: 'access-token',
+    refreshToken: 'refresh-token',
+    ownerId: 'user_001',
+    activeSubAccountId: 'user_001',
+    accountState: 'active',
+    identityOrigin: 'phone',
+    installId: 'install-id',
+  );
+}
+
 void main() {
   setUp(() {
     HttpOverrides.global = _FakeHttpOverrides();
@@ -291,6 +316,9 @@ void main() {
         authSessionStoreProvider.overrideWithValue(
           const _TestAuthSessionStore(authenticated: true),
         ),
+        authSessionControllerProvider.overrideWith(
+          _AuthenticatedSessionController.new,
+        ),
       ],
       child: const MaterialApp(home: MyProfilePage()),
     );
@@ -308,6 +336,9 @@ void main() {
         authSessionStoreProvider.overrideWithValue(
           const _TestAuthSessionStore(authenticated: true),
         ),
+        authSessionControllerProvider.overrideWith(
+          _AuthenticatedSessionController.new,
+        ),
         ...overrides,
       ],
       child: const MaterialApp(home: MyProfilePage()),
@@ -317,7 +348,7 @@ void main() {
   Future<void> pumpUntilLoaded(WidgetTester tester) async {
     for (var i = 0; i < 25; i++) {
       await tester.pump(const Duration(milliseconds: 100));
-      if (find.text('趣我圈用户').evaluate().isNotEmpty) break;
+      if (find.text(_profileDisplayName).evaluate().isNotEmpty) break;
     }
   }
 
@@ -369,8 +400,9 @@ void main() {
       await tester.pumpWidget(buildTestApp());
       await pumpUntilLoaded(tester);
 
+      // user_001 走 `_defaultProfile` 兜底得到的真实昵称，非占位 'me'。
       expect(find.text('me'), findsNothing);
-      expect(find.text('趣我圈用户'), findsAtLeastNWidgets(1));
+      expect(find.text(_profileDisplayName), findsAtLeastNWidgets(1));
     });
 
     testWidgets('avatar 与 background 正确展示', (tester) async {
@@ -382,7 +414,12 @@ void main() {
       await pumpUntilLoaded(tester);
 
       expect(find.byType(ProfileShell), findsOneWidget);
-      expect(find.byType(CircleAvatar), findsAtLeastNWidgets(1));
+      // 头像已从 CircleAvatar 重构为 ProfileHeader 内 AppMediaImage/AppAvatarImage，
+      // 以稳定 ValueKey 断言其渲染（真相源：profile_header.dart _buildAvatar）。
+      expect(
+        find.byKey(const ValueKey<String>('profile-header-avatar')),
+        findsOneWidget,
+      );
     });
 
     testWidgets('我的页顶栏展示全局搜索与小趣入口', (tester) async {

@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from agent_ops.deploy.lib.environment_topology import ENVIRONMENTS, load_environment_topology
+from quwoquan_ops.cli.lib.environment_topology import ENVIRONMENTS, load_environment_topology
 
 
 APP_RUNTIME_KEYS = {

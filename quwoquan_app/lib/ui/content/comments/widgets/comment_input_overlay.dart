@@ -38,9 +38,8 @@ class CommentInputOverlay {
     List<CommentMentionCandidate> mentionCandidates = _defaultMentions,
     FutureOr<void> Function(CommentComposerPayload payload)? onSubmit,
   }) async {
-    final result = await showCupertinoModalPopup<bool>(
+    final result = await showAppBottomModal<bool>(
       context: context,
-      barrierColor: AppColors.transparent,
       builder: (ctx) => _CommentInputSheet(
         postId: postId,
         config: config,
@@ -483,8 +482,7 @@ class _CommentInputSheetState extends ConsumerState<_CommentInputSheet> {
         key: TestKeys.commentInputOverlayScrim,
         behavior: HitTestBehavior.opaque,
         onTap: _dismiss,
-        child: ColoredBox(
-          color: AppColorsFunctional.getColor(isDark, ColorType.modalScrim),
+        child: SizedBox.expand(
           child: Column(
             children: [
               const Spacer(),

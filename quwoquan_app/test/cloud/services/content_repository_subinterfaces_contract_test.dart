@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
@@ -22,10 +21,7 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       // 测试环境（非 release、非 beta/gamma）默认数据源为 mock。
-      expect(
-        container.read(appDataSourceModeProvider),
-        AppDataSourceMode.mock,
-      );
+      expect(container.read(appDataSourceModeProvider), AppDataSourceMode.mock);
 
       final root = container.read(contentRepositoryProvider);
       expect(container.read(contentReadRepositoryProvider), same(root));
@@ -59,7 +55,9 @@ void main() {
     test('fromRow(null) 返回 null', () {
       expect(DiscoveryPresentationWire.fromRow(null), isNull);
       expect(
-        DiscoveryPresentationWire.fromRow(<String, dynamic>{'tagRefs': <String>[]}),
+        DiscoveryPresentationWire.fromRow(<String, dynamic>{
+          'tagRefs': <String>[],
+        }),
         isNotNull,
       );
     });

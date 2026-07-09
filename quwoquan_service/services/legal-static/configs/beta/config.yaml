@@ -1,0 +1,5 @@
+service:
+  name: legal-static
+config:
+  env: beta
+  version: "v2026.07.08.0"

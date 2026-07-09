@@ -106,10 +106,19 @@ def load_vars_schema(name: str) -> dict[str, dict[str, list[str]]]:
     return out
 
 
+def _neutralize_dynamic_delimiters(value: Any) -> str:
+    """动态 source 文本可能含网页/脚本模板 `{{...}}`，插入 prompt 前中性化。
+
+    模板本身仍由 `_render_section` 做严格占位符校验；这里仅防止抓取文本被误判成模板残留。
+    """
+
+    return str(value).replace("{{", "{ {").replace("}}", "} }")
+
+
 def _fill(text: str, values: Mapping[str, Any]) -> str:
     def _replace(match: re.Match[str]) -> str:
         key = match.group(1)
-        return str(values.get(key, ""))
+        return _neutralize_dynamic_delimiters(values.get(key, ""))
 
     return _VAR_RE.sub(_replace, text)
 
@@ -130,6 +139,11 @@ def _render_section(
     if undeclared:
         raise PromptTemplateError(
             f"{name}.{section}: template uses undeclared vars {undeclared} (declare in vars/{name}.vars.yaml)"
+        )
+    static_without_declared_placeholders = _VAR_RE.sub("", expanded)
+    if _OPEN_BRACE_RE.search(static_without_declared_placeholders) or "}}" in static_without_declared_placeholders:
+        raise PromptTemplateError(
+            f"{name}.{section}: unclosed/unknown placeholder remains after render"
         )
     # 必填变量必须由调用方提供（即使是空串也要显式给 key，避免静默漏块）。
     missing = sorted(v for v in declared["required"] if v not in values)

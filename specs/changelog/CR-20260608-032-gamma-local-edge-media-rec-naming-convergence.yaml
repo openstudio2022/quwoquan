@@ -18,18 +18,18 @@ summary: |
   本 CR 为实现增量；edge-media profile 的实际拉起健康需在具备 Docker 的机器上 `--profile edge-media` 实测，
   realtime-gateway 待实现就绪后改入 edge-media 并纳入主验证链。
 artifacts:
-  - quwoquan_service/docker-compose.gamma-local.yaml
-  - quwoquan_service/docker-compose.yaml
-  - quwoquan_service/docker-compose.rec-model.yml
+  - quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml
+  - quwoquan_ops/environments/compose/docker-compose.yaml
+  - quwoquan_ops/environments/compose/docker-compose.rec-model.yml
   - quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
   - quwoquan_service/services/content-service/configs/beta/config.yaml
   - quwoquan_service/services/content-service/configs/gamma/config.yaml
-  - deploy/shared/workload_topology_inventory.yaml
-  - quwoquan_service/scripts/deploy/verify_workload_topology_inventory.py
-  - quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py
-  - agent_ops/gate/gate_repo.sh
-  - agent_ops/deploy/stackctl.py
-  - agent_ops/deploy/prod/deploy_to_prod.sh
+  - quwoquan_ops/environments/workload_topology_inventory.yaml
+  - quwoquan_ops/environments/verify/verify_workload_topology_inventory.py
+  - quwoquan_ops/environments/verify/verify_gamma_local_prod_consistency.py
+  - quwoquan_ops/gate/gate_repo.sh
+  - quwoquan_ops/cli/stackctl.py
+  - quwoquan_ops/cli/prod/deploy_to_prod.sh
   - specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/spec.md
   - specs/feature-tree/runtime/deliver-deploy-prod-pipeline/local-gamma-mirror/acceptance.yaml
 related_cr:
@@ -50,7 +50,7 @@ dev_log:
       统一 recommendation 对外 DNS 命名；gamma-local 以 compose profiles 补齐 edge-media 名册（rtc/livekit/coturn
       就绪、realtime-gateway pending）；新增 verify_gamma_local_prod_consistency.py 并串入 gate。
     verify:
-      - python3 quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py
-      - python3 quwoquan_service/scripts/deploy/verify_workload_topology_inventory.py
-      - docker compose -f quwoquan_service/docker-compose.gamma-local.yaml --profile edge-media config
+      - python3 quwoquan_ops/environments/verify/verify_gamma_local_prod_consistency.py
+      - python3 quwoquan_ops/environments/verify/verify_workload_topology_inventory.py
+      - docker compose -f quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml --profile edge-media config
       - bash -n quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh

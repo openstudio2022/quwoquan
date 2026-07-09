@@ -1,6 +1,8 @@
 /// 应用级原型数据强类型视图（与 [PrototypeMockData] 同源，不经由 `Map` 对外暴露）。
 
 /// 圈子详情页原型「circleInfo」切片（CirclePageV2 对齐）。
+library;
+
 class CirclePagePrototypeInfo {
   const CirclePagePrototypeInfo({
     required this.name,
@@ -60,9 +62,7 @@ class CircleActivityPrototypeRow {
 
 /// 帮读摘要维度内一条事实。
 class HelperReadFactItemPrototype {
-  const HelperReadFactItemPrototype({
-    required this.raw,
-  });
+  const HelperReadFactItemPrototype({required this.raw});
 
   /// 保留原型键（actorName、titleOrDescription、likes、workId 等），避免手写第二套字段树。
   final Map<String, Object?> raw;

@@ -64,6 +64,17 @@ def test_compute_coords_rejects_empty_title_hint():
     raise AssertionError("expected ValueError for empty titleHint")
 
 
+def test_compute_coords_allows_empty_image_title_hint_and_uses_ref_for_routing():
+    brief = {"titleHint": "   ", "carrier": "image"}
+    ref = "空标题图片作品"
+    coords = co.compute_content_coords(brief, "image", ref=ref)
+    assert coords["contentType"] == "image"
+    assert coords["angle"] == "画报"
+    assert coords["title"] == ref
+    registered = co.register_from_brief(_TASK, _BATCH, ref, brief, "image")
+    assert registered["title"] == ref
+
+
 def test_register_and_resolve_object_dirs():
     brief = {"titleHint": "峨眉山·行前安排", "carrier": "article", "writingIntent": "planning_consultation"}
     ref = "地点_景区__峨眉山"
@@ -92,14 +103,26 @@ def test_register_idempotent_keeps_seq():
 
 
 def test_same_title_collision_gets_stable_seq():
-    # 罕见：同 (type,angle,title) 多 ref → 按 ref 排序稳定递增。
+    # 罕见：同 (type,angle,title) 多 ref → 新 ref 追加 seq；旧 ref 的落盘路径不能漂移。
     brief = {"titleHint": "同名·攻略", "templateId": "环线"}
     a = co.register_from_brief(_TASK, _BATCH, "ref_b", brief)
     b = co.register_from_brief(_TASK, _BATCH, "ref_a", brief)
     seqs = {"ref_a": co.content_coords(_TASK, _BATCH, "ref_a")["seq"],
             "ref_b": co.content_coords(_TASK, _BATCH, "ref_b")["seq"]}
     assert sorted(seqs.values()) == [1, 2], seqs
-    assert seqs["ref_a"] == 1 and seqs["ref_b"] == 2  # 按 ref 排序
+    assert seqs["ref_b"] == 1 and seqs["ref_a"] == 2
+
+
+def test_write_brief_same_title_does_not_orphan_existing_brief():
+    brief = {"titleHint": "同名·brief", "templateId": "环线"}
+    first = "same_title_ref_b"
+    second = "same_title_ref_a"
+    first_path = co.write_brief_object(_TASK, _BATCH, first, brief)
+    co.write_brief_object(_TASK, _BATCH, second, brief)
+
+    assert first_path.is_file()
+    assert (co.content_object_stage_dir(_TASK, _BATCH, first, "3.compose") / co.BRIEF_FILE).is_file()
+    assert (co.content_object_stage_dir(_TASK, _BATCH, second, "3.compose") / co.BRIEF_FILE).is_file()
 
 
 def test_unregistered_ref_raises():

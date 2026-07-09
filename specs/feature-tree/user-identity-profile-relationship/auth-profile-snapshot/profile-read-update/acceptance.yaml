@@ -186,7 +186,7 @@ gwt_acceptance:
     - persona api_integration 聚合桥接当前受本地 Mongo/Docker 生命周期阻断，直接 userHandle 只读服务测试已通过。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

@@ -93,7 +93,7 @@ class UserHomepageViewerContextViewData {
 /// 主页首屏聚合视图（[UserProfileRepository.getUserHomepageBundle]）。
 ///
 /// 仅承载身份域真相（profile/stats/relationship/tabCounts/viewerContext）；交集卡与
-/// 影响力 evidence 属 content 域，由端侧并发补充，bundle 不做内容事实第二真相源。
+/// 打动 evidence 属 content 域，由端侧并发补充，bundle 不做内容事实第二真相源。
 @immutable
 class UserHomepageBundleViewData {
   const UserHomepageBundleViewData({

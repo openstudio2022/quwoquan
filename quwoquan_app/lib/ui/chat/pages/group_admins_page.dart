@@ -1,13 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/components/search/search_embedded.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dart';
@@ -54,7 +50,7 @@ class _GroupAdminsPageState extends ConsumerState<GroupAdminsPage> {
         _selectedIds.remove(userId);
       } else {
         if (_selectedIds.length >= _maxAdmins) {
-          showCupertinoDialog<void>(
+          showAppCupertinoDialog<void>(
             context: context,
             builder: (_) => CupertinoAlertDialog(
               content: Text(UITextConstants.maxAdminsReached),

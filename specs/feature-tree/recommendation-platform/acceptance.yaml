@@ -41,12 +41,12 @@ domain_acceptance:
         - gamma
       supporting: []
     notes:
-    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_replay_evaluation.py'
-    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_ab_significance.py'
-    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py'
+    - '[migrated_from_planned] quwoquan_service/services/rec-model-service/scripts/tests/test_replay_evaluation.py'
+    - '[migrated_from_planned] quwoquan_service/services/rec-model-service/scripts/tests/test_ab_significance.py'
+    - '[migrated_from_planned] quwoquan_service/services/rec-model-service/scripts/tests/test_training_promotion_gate.py'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

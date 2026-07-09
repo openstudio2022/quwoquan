@@ -12,13 +12,13 @@
 执行：
 1. 先按 `docs/agent_context_contract.md` 复核 release batch / CR 的规格、三层测试、四环境、观测和回滚证据。
 2. 对照 `docs/agent_command_simulation_matrix.md` 确认部署命令的禁止事项和出口证据。
-3. 环境打包、验证、健康检查、巡检和部署统一使用 `python3 agent_ops/deploy/stackctl.py`。
+3. 环境打包、验证、健康检查、巡检和部署统一使用 `python3 quwoquan_ops/cli/stackctl.py`。
 4. 发布前至少执行或引用等价证据：
 
 ```bash
-python3 agent_ops/deploy/stackctl.py verify --env <env> --kind all --tier all
-python3 agent_ops/deploy/stackctl.py health --target <target> --scope full
-python3 agent_ops/deploy/stackctl.py inspect --target <target> --kind all
+python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope full
+python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind all
 ```
 
 5. `prod-hosted` 只通过 `stackctl deploy --target prod-hosted` 驱动 rollout stage；不存在 `prod-gray` 环境。

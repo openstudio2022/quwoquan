@@ -459,7 +459,7 @@ class _ChatPageState extends ConsumerState<ChatPage>
     BuildContext context,
     List<GreetingRequestDto> greetings,
   ) {
-    showCupertinoModalPopup<void>(
+    showAppBottomModal<void>(
       context: context,
       builder: (sheetContext) => _GreetingInboxSheet(
         greetings: greetings,
@@ -471,10 +471,19 @@ class _ChatPageState extends ConsumerState<ChatPage>
           if (!context.mounted) {
             return;
           }
-          Navigator.of(sheetContext).pop();
           final conversationId = result.conversationId.trim();
           if (conversationId.isNotEmpty) {
-            context.push(AppRoutePaths.chatDetail(id: conversationId));
+            await dismissAppModalAndRun(
+              sheetContext,
+              action: () {
+                if (!context.mounted) {
+                  return;
+                }
+                context.push(AppRoutePaths.chatDetail(id: conversationId));
+              },
+            );
+          } else if (sheetContext.mounted) {
+            Navigator.of(sheetContext).pop();
           }
         },
         onIgnore: (request) async {

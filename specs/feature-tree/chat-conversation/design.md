@@ -305,11 +305,11 @@ func main() {
 
 | 产物 | 路径 | 说明 |
 |------|------|------|
-| chat-service Dockerfile | `deploy/service/chat-service/Dockerfile` | dev 独立部署 |
-| seed-box Dockerfile | `deploy/service/seed-box/Dockerfile`（已有） | integration/prod 合并部署 |
-| k8s base | `deploy/service/chat-service/kustomize/base/` | deployment + service |
-| k8s overlays | `deploy/service/chat-service/kustomize/overlays/{dev,integration,prod}/` | 环境差异化 |
-| process_domain_mapping | `deploy/shared/process_domain_mapping.yaml`（已有） | 已包含 chat 域映射 |
+| chat-service Dockerfile | `quwoquan_service/services/chat-service/deploy/Dockerfile` | dev 独立部署 |
+| seed-box Dockerfile | `quwoquan_service/services/seed-box/deploy/Dockerfile`（已有） | integration/prod 合并部署 |
+| k8s base | `quwoquan_service/services/chat-service/deploy/kustomize/base/` | deployment + service |
+| k8s overlays | `quwoquan_service/services/chat-service/deploy/kustomize/overlays/{dev,integration,prod}/` | 环境差异化 |
+| process_domain_mapping | `quwoquan_ops/environments/process_domain_mapping.yaml`（已有） | 已包含 chat 域映射 |
 
 **灰度发布策略**：
 

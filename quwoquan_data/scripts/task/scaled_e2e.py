@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 from _common.io import read_json
@@ -17,8 +19,75 @@ DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent
 REPO_ROOT = DATA_ROOT.parent
 
 
+@contextmanager
+def _working_directory(cwd: str | None):
+    target = str(cwd or "").strip()
+    if not target:
+        yield
+        return
+    if not Path(target).is_dir():
+        # Cloud/fanout callers may pass a worker cwd hint that is meaningful to
+        # the runner process but not mounted in this local contract process.
+        yield
+        return
+    previous = os.getcwd()
+    os.chdir(target)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
+
+
+def _managed_run_namespace(
+    args: argparse.Namespace,
+    *,
+    task: str,
+    batch: str,
+    until: str | None,
+    resume: bool,
+    reset_state: bool,
+    managed: bool = True,
+) -> argparse.Namespace:
+    return argparse.Namespace(
+        mode="single",
+        task=task,
+        batch=batch,
+        plan=None,
+        strategy=None,
+        concurrency=None,
+        batch_size=None,
+        resume=resume,
+        reset_state=reset_state,
+        baseline_packet=None,
+        until=until,
+        managed=managed,
+        runtime=str(getattr(args, "runtime", "local") or "local"),
+        max_workers=int(getattr(args, "max_workers", 10) or 10),
+        agent_provider=getattr(args, "agent_provider", None),
+        model=getattr(args, "model", None),
+        startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 120.0) or 120.0),
+        force_clean_workspace_agent_state=bool(
+            getattr(args, "force_clean_workspace_agent_state", False)
+        ),
+        release_only=False,
+        agent_runner=None,
+    )
+
+
+def _source_task_target(args: argparse.Namespace) -> tuple[str | None, str | None]:
+    task_id = str(getattr(args, "source_task", "") or "").strip()
+    batch_id = str(getattr(args, "source_batch", "") or "").strip()
+    if bool(task_id) != bool(batch_id):
+        print(
+            "[task scaled-e2e] --source-task and --source-batch must be provided together",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    return (task_id or None, batch_id or None)
+
+
 def _fanout_runner_python() -> str | None:
-    module = sys.modules.get("agent_ops.runners.fanout_runner")
+    module = sys.modules.get("task.fanout_runner")
     if module is not None and not getattr(module, "__file__", None):
         return None
     from _common.python_runtime import resolve_data_agent_python
@@ -135,6 +204,13 @@ def _handle_scaled_e2e_run(args: argparse.Namespace, *, invoke=None) -> None:
                 catalog=getattr(args, "catalog", None),
                 reset_state=bool(getattr(args, "reset_state", False)),
                 max_workers=getattr(args, "max_workers", 2),
+                runtime=getattr(args, "runtime", None),
+                model=getattr(args, "model", None),
+                cwd=getattr(args, "cwd", None),
+                startup_timeout_seconds=getattr(args, "startup_timeout_seconds", 120.0),
+                force_clean_workspace_agent_state=bool(
+                    getattr(args, "force_clean_workspace_agent_state", False)
+                ),
             )
         )
     invoke(
@@ -150,42 +226,70 @@ def _handle_scaled_e2e_run(args: argparse.Namespace, *, invoke=None) -> None:
     last_exit = 1
     for cycle in range(1, cycles + 1):
         print(f"[task scaled-e2e run] cycle {cycle}/{cycles}: author-runner")
-        invoke(
-            argparse.Namespace(
-                scaled_e2e_command="author-runner",
-                plan=args.plan,
-                strategy=getattr(args, "strategy", None),
-                concurrency=getattr(args, "concurrency", None),
-                max_workers=getattr(args, "max_workers", None),
-                runtime=getattr(args, "runtime", None),
-                model=getattr(args, "model", None),
-                cwd=getattr(args, "cwd", None),
-                spend_limit=getattr(args, "spend_limit", None),
-                refs=None,
-                force_refs=None,
-                source_task=None,
-                source_batch=None,
-                skip_startup_probe=bool(getattr(args, "skip_startup_probe", False)),
-                orchestrate=True,
-                no_orchestrate=False,
+        # author-runner / finalize 的非零退出（如部分分区 orchestrator 冷启竞态
+        # Connection refused → rc=2）是「本轮未收敛」，不是致命错：吞掉 SystemExit
+        # 让 cycle 闭环重试未到位分区（幂等），否则 cycles>1 的重试语义永远不生效；
+        # 最后一轮仍失败由 verify 统一裁决退出码。
+        try:
+            invoke(
+                argparse.Namespace(
+                    scaled_e2e_command="author-runner",
+                    plan=args.plan,
+                    strategy=getattr(args, "strategy", None),
+                    concurrency=getattr(args, "concurrency", None),
+                    max_workers=getattr(args, "max_workers", None),
+                    runtime=getattr(args, "runtime", None),
+                    model=getattr(args, "model", None),
+                    cwd=getattr(args, "cwd", None),
+                    spend_limit=getattr(args, "spend_limit", None),
+                    refs=None,
+                    force_refs=None,
+                    source_task=getattr(args, "source_task", None),
+                    source_batch=getattr(args, "source_batch", None),
+                    skip_startup_probe=bool(getattr(args, "skip_startup_probe", False)),
+                    orchestrate=True,
+                    no_orchestrate=False,
+                )
             )
-        )
+        except SystemExit as exc:
+            code = int(getattr(exc, "code", 1) or 0)
+            if code != 0:
+                print(
+                    f"[task scaled-e2e run] cycle {cycle}/{cycles}: author-runner exit={code}; "
+                    "continuing to finalize/verify (unreached partitions retry next cycle)",
+                    file=sys.stderr,
+                )
         invoke(argparse.Namespace(scaled_e2e_command="rollup", plan=args.plan))
         print(f"[task scaled-e2e run] cycle {cycle}/{cycles}: finalize")
-        invoke(
-            argparse.Namespace(
-                scaled_e2e_command="finalize",
-                plan=args.plan,
-                strategy=getattr(args, "strategy", None),
-                concurrency=getattr(args, "concurrency", None),
-                max_workers=getattr(args, "max_workers", None),
-                runtime=getattr(args, "runtime", None),
-                model=getattr(args, "model", None),
-                cwd=getattr(args, "cwd", None),
-                spend_limit=getattr(args, "spend_limit", None),
-                reset_state=False,
+        try:
+            invoke(
+                argparse.Namespace(
+                    scaled_e2e_command="finalize",
+                    plan=args.plan,
+                    strategy=getattr(args, "strategy", None),
+                    concurrency=getattr(args, "concurrency", None),
+                    max_workers=getattr(args, "max_workers", None),
+                    runtime=getattr(args, "runtime", None),
+                    model=getattr(args, "model", None),
+                    cwd=getattr(args, "cwd", None),
+                    spend_limit=getattr(args, "spend_limit", None),
+                    reset_state=False,
+                    startup_timeout_seconds=getattr(args, "startup_timeout_seconds", 120.0),
+                    force_clean_workspace_agent_state=bool(
+                        getattr(args, "force_clean_workspace_agent_state", False)
+                    ),
+                    source_task=getattr(args, "source_task", None),
+                    source_batch=getattr(args, "source_batch", None),
+                )
             )
-        )
+        except SystemExit as exc:
+            code = int(getattr(exc, "code", 1) or 0)
+            if code != 0:
+                print(
+                    f"[task scaled-e2e run] cycle {cycle}/{cycles}: finalize exit={code}; "
+                    "continuing to verify (failed partitions retry next cycle)",
+                    file=sys.stderr,
+                )
         invoke(argparse.Namespace(scaled_e2e_command="rollup", plan=args.plan))
         print(f"[task scaled-e2e run] cycle {cycle}/{cycles}: verify")
         try:
@@ -195,6 +299,8 @@ def _handle_scaled_e2e_run(args: argparse.Namespace, *, invoke=None) -> None:
                     task=None,
                     batch=None,
                     plan=args.plan,
+                    source_task=getattr(args, "source_task", None),
+                    source_batch=getattr(args, "source_batch", None),
                 )
             )
         except SystemExit as exc:
@@ -221,53 +327,49 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
         from data.baseline import handle_baseline
         from explore.handler import handle_explore
 
-        spec = store.load_spec(args.task)
-        scope = spec.get("scope") or {}
-        regions = [str(x) for x in (scope.get("regions") or []) if str(x)]
-        task_region = str(scope.get("region") or "").strip()
-        if not regions and task_region:
-            regions = [task_region]
-        entity_types = [str(x) for x in (scope.get("entityTypes") or []) if str(x)]
-        handle_explore(
-            argparse.Namespace(
-                task=args.task,
-                regions=",".join(regions),
-                entity_types=",".join(entity_types),
+        with _working_directory(getattr(args, "cwd", None)):
+            spec = store.load_spec(args.task)
+            scope = spec.get("scope") or {}
+            regions = [str(x) for x in (scope.get("regions") or []) if str(x)]
+            task_region = str(scope.get("region") or "").strip()
+            if not regions and task_region:
+                regions = [task_region]
+            entity_types = [str(x) for x in (scope.get("entityTypes") or []) if str(x)]
+            handle_explore(
+                argparse.Namespace(
+                    task=args.task,
+                    regions=",".join(regions),
+                    entity_types=",".join(entity_types),
+                )
             )
-        )
-        handle_baseline(
-            argparse.Namespace(
-                task=args.task,
-                catalog=getattr(args, "catalog", None),
-                spec_doc=None,
-                design_doc=None,
-                acceptance_doc=None,
-                workflow_doc=None,
-                command_matrix_doc=None,
-                catalog_config=None,
-                naming_rules=None,
-                geo_band_rules=None,
-                schema_files=[],
-                config_files=[],
-                output=None,
+            handle_baseline(
+                argparse.Namespace(
+                    task=args.task,
+                    catalog=getattr(args, "catalog", None),
+                    spec_doc=None,
+                    design_doc=None,
+                    acceptance_doc=None,
+                    workflow_doc=None,
+                    command_matrix_doc=None,
+                    catalog_config=None,
+                    naming_rules=None,
+                    geo_band_rules=None,
+                    schema_files=[],
+                    config_files=[],
+                    output=None,
+                )
             )
-        )
-        run_mod.handle_run(
-            argparse.Namespace(
-                mode="single",
-                task=args.task,
-                batch=args.batch,
-                plan=None,
-                strategy=None,
-                concurrency=None,
-                batch_size=None,
-                resume=False,
-                reset_state=bool(getattr(args, "reset_state", False)),
-                baseline_packet=None,
-                until="produce_compose",
-                max_workers=int(getattr(args, "max_workers", 10) or 10),
+            run_mod.handle_run(
+                _managed_run_namespace(
+                    args,
+                    task=args.task,
+                    batch=args.batch,
+                    until="produce_compose",
+                    resume=False,
+                    reset_state=bool(getattr(args, "reset_state", False)),
+                    managed=False,
+                )
             )
-        )
         print(
             f"[task scaled-e2e prepare] 已到 produce_compose。"
             f"\n下一步：qwq-data task scaled-e2e fanout-author --plan {args.plan}"
@@ -291,9 +393,9 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
         )
         return
     if command == "author-runner":
-        fr = sys.modules.get("agent_ops.runners.fanout_runner")
+        fr = sys.modules.get("task.fanout_runner")
         if fr is None:
-            from agent_ops.runners import fanout_runner as fr
+            from task import fanout_runner as fr
         argv = ["--plan", args.plan]
         if getattr(args, "strategy", None):
             argv += ["--strategy", args.strategy]
@@ -326,7 +428,7 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
         runner_python = _fanout_runner_python()
         if runner_python:
             result = subprocess.run(
-                [runner_python, str(REPO_ROOT / "agent_ops" / "runners" / "fanout_runner.py"), *argv],
+                [runner_python, str(Path(__file__).resolve().parent / "fanout_runner.py"), *argv],
                 check=False,
             )
             if result.returncode != 0:
@@ -350,6 +452,71 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
         if plan is None:
             print(f"[task scaled-e2e finalize] plan not found: {args.plan}", file=sys.stderr)
             raise SystemExit(2)
+        source_task, source_batch = _source_task_target(args)
+        if source_task and source_batch:
+            failures: list[str] = []
+
+            def _resume_source_task() -> None:
+                with _working_directory(getattr(args, "cwd", None)):
+                    run_mod.handle_run(
+                        _managed_run_namespace(
+                            args,
+                            task=source_task,
+                            batch=source_batch,
+                            until=None,
+                            resume=True,
+                            reset_state=bool(getattr(args, "reset_state", False)),
+                        )
+                    )
+
+            try:
+                _resume_source_task()
+            except SystemExit as exc:
+                code = int(getattr(exc, "code", 1) or 0)
+                state = load_workflow_state(source_task, source_batch)
+                waiting = str(state.get("waitingCheckpoint") or "") if state else ""
+                if code == 10 and waiting == "produce_author":
+                    handle_scaled_e2e(
+                        argparse.Namespace(
+                            scaled_e2e_command="author-runner",
+                            plan=args.plan,
+                            strategy=getattr(args, "strategy", None),
+                            concurrency=getattr(args, "concurrency", None),
+                            max_workers=getattr(args, "max_workers", None),
+                            runtime=getattr(args, "runtime", None),
+                            model=getattr(args, "model", None),
+                            cwd=getattr(args, "cwd", None),
+                            spend_limit=getattr(args, "spend_limit", None),
+                            refs=None,
+                            force_refs=None,
+                            source_task=source_task,
+                            source_batch=source_batch,
+                            skip_startup_probe=False,
+                            orchestrate=False,
+                            no_orchestrate=True,
+                        )
+                    )
+                    try:
+                        _resume_source_task()
+                    except SystemExit as retry_exc:
+                        retry_code = int(getattr(retry_exc, "code", 1) or 0)
+                        if retry_code == 10:
+                            retry_state = load_workflow_state(source_task, source_batch)
+                            retry_waiting = str(retry_state.get("waitingCheckpoint") or "") if retry_state else ""
+                            failures.append(
+                                f"{source_task}/{source_batch}: paused_at={retry_waiting or 'unknown'}"
+                            )
+                        elif retry_code not in (0,):
+                            failures.append(f"{source_task}/{source_batch}: exit={retry_code}")
+                elif code not in (0,):
+                    failures.append(f"{source_task}/{source_batch}: exit={code}")
+            if failures:
+                print(f"[task scaled-e2e finalize] FAILED ({len(failures)} source task issue(s))", file=sys.stderr)
+                for item in failures[:100]:
+                    print(f"  - {item}", file=sys.stderr)
+                raise SystemExit(1)
+            print(f"[task scaled-e2e finalize] finalized source task {source_task}/{source_batch}")
+            return
         units = fs.expand_units(plan)
         failures: list[str] = []
         paused_for_author: list[tuple[str, str]] = []
@@ -358,21 +525,17 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
             task_id = str(unit["taskId"])
             batch_id = str(unit["batchId"])
             try:
-                run_mod.handle_run(
-                    argparse.Namespace(
-                        mode="single",
-                        task=task_id,
-                        batch=batch_id,
-                        plan=None,
-                        strategy=None,
-                        concurrency=None,
-                        batch_size=None,
-                        resume=True,
-                        reset_state=bool(getattr(args, "reset_state", False)),
-                        baseline_packet=None,
-                        until=None,
+                with _working_directory(getattr(args, "cwd", None)):
+                    run_mod.handle_run(
+                        _managed_run_namespace(
+                            args,
+                            task=task_id,
+                            batch=batch_id,
+                            until=None,
+                            resume=True,
+                            reset_state=bool(getattr(args, "reset_state", False)),
+                        )
                     )
-                )
             except FileNotFoundError:
                 # 分区 task spec 仅在 orchestrate 成功后落盘；放量时常有分区因瞬时云端窗口
                 # 尚未 orchestrate（无 task.yaml），load_spec 抛 FileNotFoundError。这类分区是
@@ -411,21 +574,17 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
             )
             for task_id, batch_id in paused_for_author:
                 try:
-                    run_mod.handle_run(
-                        argparse.Namespace(
-                            mode="single",
-                            task=task_id,
-                            batch=batch_id,
-                            plan=None,
-                            strategy=None,
-                            concurrency=None,
-                            batch_size=None,
-                            resume=True,
-                            reset_state=bool(getattr(args, "reset_state", False)),
-                            baseline_packet=None,
-                            until=None,
+                    with _working_directory(getattr(args, "cwd", None)):
+                        run_mod.handle_run(
+                            _managed_run_namespace(
+                                args,
+                                task=task_id,
+                                batch=batch_id,
+                                until=None,
+                                resume=True,
+                                reset_state=bool(getattr(args, "reset_state", False)),
+                            )
                         )
-                    )
                 except SystemExit as exc:
                     code = int(getattr(exc, "code", 1) or 0)
                     if code == 10:
@@ -461,22 +620,19 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
             if plan is None:
                 print(f"[task scaled-e2e verify] plan not found: {args.plan}", file=sys.stderr)
                 raise SystemExit(2)
-            roots: list[str] = []
-            roots_by_unit: dict[tuple[str, str], list[str]] = {}
             issues: list[str] = []
-            for unit in fs.expand_units(plan):
-                task_id = str(unit["taskId"])
-                batch_id = str(unit["batchId"])
-                unit_roots, unit_issues = gate_verify(task=task_id, batch=batch_id, scope="current")
-                roots_by_unit[(task_id, batch_id)] = [str(r) for r in unit_roots]
+            roots: list[str] = []
+            source_task, source_batch = _source_task_target(args)
+            if source_task and source_batch:
+                unit_roots, unit_issues = gate_verify(task=source_task, batch=source_batch, scope="current")
                 roots.extend([str(r) for r in unit_roots])
                 issues.extend(unit_issues)
-                write_batch_audit_summary(task_id, batch_id, roots=unit_roots, issues=unit_issues)
+                write_batch_audit_summary(source_task, source_batch, roots=unit_roots, issues=unit_issues)
                 try:
                     handle_sample_drift(
                         argparse.Namespace(
-                            task=task_id,
-                            batch=batch_id,
+                            task=source_task,
+                            batch=source_batch,
                             fraction=1.0,
                             samples_file=None,
                             baseline=None,
@@ -485,13 +641,37 @@ def handle_scaled_e2e(args: argparse.Namespace) -> None:
                     )
                 except SystemExit as exc:
                     if int(getattr(exc, "code", 1) or 0) != 0:
-                        issues.append(f"{task_id}/{batch_id}: sample-drift failed")
+                        issues.append(f"{source_task}/{source_batch}: sample-drift failed")
+            else:
+                roots_by_unit: dict[tuple[str, str], list[str]] = {}
+                for unit in fs.expand_units(plan):
+                    task_id = str(unit["taskId"])
+                    batch_id = str(unit["batchId"])
+                    unit_roots, unit_issues = gate_verify(task=task_id, batch=batch_id, scope="current")
+                    roots_by_unit[(task_id, batch_id)] = [str(r) for r in unit_roots]
+                    roots.extend([str(r) for r in unit_roots])
+                    issues.extend(unit_issues)
+                    write_batch_audit_summary(task_id, batch_id, roots=unit_roots, issues=unit_issues)
+                    try:
+                        handle_sample_drift(
+                            argparse.Namespace(
+                                task=task_id,
+                                batch=batch_id,
+                                fraction=1.0,
+                                samples_file=None,
+                                baseline=None,
+                                report_out=None,
+                            )
+                        )
+                    except SystemExit as exc:
+                        if int(getattr(exc, "code", 1) or 0) != 0:
+                            issues.append(f"{task_id}/{batch_id}: sample-drift failed")
+                issues.extend(_scaled_e2e_plan_runtime_issues(plan, roots_by_unit))
             try:
                 handle_goldenset(argparse.Namespace(baseline=None, report_out=None))
             except SystemExit as exc:
                 if int(getattr(exc, "code", 1) or 0) != 0:
                     issues.append("goldenset regression gate failed")
-            issues.extend(_scaled_e2e_plan_runtime_issues(plan, roots_by_unit))
         else:
             roots, issues = gate_verify(task=args.task, batch=args.batch, scope="current")
         if roots:

@@ -30,7 +30,326 @@ def test_react_rewind_allows_target_replacement_after_counter_limit():
     state = run_mod.load_workflow_state(task_id, batch_id)
     assert state["reactRewinds"]["download_fetch"] == 1
 
-def test_download_plan_allows_partial_shortfall_after_replacement_exhausted(monkeypatch):
+def test_build_prepare_repair_budget_isolates_homepage_without_replacement(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec["scope"]["coverageTargets"] = [
+        {"entityType": "地点/景区", "name": _EID},
+        {"entityType": "地点/景区", "name": "稳定景区乙"},
+    ]
+    spec["scope"]["reserveCoverageTargets"] = [
+        {"entityType": "地点/景区", "name": "替补景区乙"},
+    ]
+    spec["acceptance"] = {"minEntities": 2}
+    store.save_spec(spec)
+    batch_id = "build_prepare_replacement_before_partial"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "稳定景区乙"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["reactRewinds"] = {"build_prepare": run_mod.MAX_REACT_REWINDS}
+    run_mod.save_workflow_state(state)
+    monkeypatch.setattr(
+        "build.homepage.prepare_entity_pages",
+        lambda *_args, **_kwargs: (batch_root(task_id, batch_id), []),
+    )
+    def _validate(_task_id, _batch_id, active_spec):
+        names = {
+            str(target.get("name") or "")
+            for target in (active_spec.get("scope") or {}).get("coverageTargets") or []
+        }
+        return [f"地点/景区/{_EID}: homepage baseDraft.text 缺失"] if _EID in names else []
+
+    monkeypatch.setattr("build.homepage.validate_entity_page_inputs", _validate)
+
+    def _unexpected_screen(*_args, **_kwargs):
+        raise AssertionError("homepage-only shortfall must not screen entity replacements")
+
+    monkeypatch.setattr("task.run._screen_replacements_for_abandoned_entities", _unexpected_screen)
+
+    result = run_mod._run_build_prepare(ctx)
+
+    assert result.status == "done"
+    assert "稳定景区乙" in result.message
+    assert _EID not in result.message
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    homepage_abandoned = [
+        item["entityId"]
+        for item in (state.get("abandonedObjects") or [])
+        if item.get("abandonScope") == "homepage"
+    ]
+    assert homepage_abandoned == [_EID]
+    assert state.get("replacementObjects") in (None, [])
+    assert {target["name"] for target in run_mod._active_spec(ctx)["scope"]["coverageTargets"]} == {
+        _EID,
+        "稳定景区乙",
+    }
+
+
+def test_build_prepare_isolates_homepage_after_one_homepage_repair(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec["scope"]["coverageTargets"] = [
+        {"entityType": "地点/景区", "name": _EID},
+        {"entityType": "地点/景区", "name": "稳定景区乙"},
+    ]
+    spec["scope"]["reserveCoverageTargets"] = [
+        {"entityType": "地点/景区", "name": "替补景区乙"},
+    ]
+    spec["acceptance"] = {"minEntities": 2}
+    store.save_spec(spec)
+    batch_id = "build_prepare_replacement_after_one_repair"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "稳定景区乙"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["reactRewinds"] = {"build_prepare": max(0, run_mod.MAX_REACT_REWINDS - 1)}
+    run_mod.save_workflow_state(state)
+    monkeypatch.setattr(
+        "build.homepage.prepare_entity_pages",
+        lambda *_args, **_kwargs: (batch_root(task_id, batch_id), []),
+    )
+    def _validate(_task_id, _batch_id, active_spec):
+        names = {
+            str(target.get("name") or "")
+            for target in (active_spec.get("scope") or {}).get("coverageTargets") or []
+        }
+        return [f"地点/景区/{_EID}: homepage baseDraft.text 缺失"] if _EID in names else []
+
+    monkeypatch.setattr("build.homepage.validate_entity_page_inputs", _validate)
+
+    def _unexpected_screen(*_args, **_kwargs):
+        raise AssertionError("homepage-only shortfall must not screen entity replacements")
+
+    monkeypatch.setattr("task.run._screen_replacements_for_abandoned_entities", _unexpected_screen)
+
+    result = run_mod._run_build_prepare(ctx)
+
+    assert result.status == "done"
+    assert "稳定景区乙" in result.message
+    assert _EID not in result.message
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    homepage_abandoned = [
+        item["entityId"]
+        for item in (state.get("abandonedObjects") or [])
+        if item.get("abandonScope") == "homepage"
+    ]
+    assert homepage_abandoned == [_EID]
+    assert state.get("replacementObjects") in (None, [])
+
+
+def test_download_fetch_scopes_build_prepare_homepage_repair(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec["scope"]["coverageTargets"] = [
+        {"entityType": "地点/景区", "name": _EID},
+        {"entityType": "地点/景区", "name": "稳定景区乙"},
+    ]
+    store.save_spec(spec)
+    batch_id = "download_fetch_build_prepare_homepage_scope"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "稳定景区乙"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["failedObjects"] = [f"地点/景区/{_EID}: homepage baseDraft.text 缺失"]
+    run_mod.save_workflow_state(state)
+    calls = []
+
+    def _handle_download(ns):
+        calls.append(ns)
+
+    monkeypatch.setattr("download.handler.handle_download", _handle_download)
+    monkeypatch.setattr("download.gate.gate_download", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("task.run._download_stage_gate_issues", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("task.run._download_fetch_stale_entity_ids", lambda _ctx: ["稳定景区乙"])
+    monkeypatch.setattr("task.run._content_plan_source_shortfall_entity_ids", lambda _ctx: [])
+    monkeypatch.setattr("task.run._download_content_capacity_preflight", lambda _ctx: [])
+
+    result = run_mod._run_download_fetch(ctx)
+
+    assert result.status == "done"
+    assert len(calls) == 1
+    assert calls[0].entity_ids == _EID
+    assert calls[0].lane == "homepage"
+
+
+def test_download_fetch_scopes_build_prepare_retry_from_repair_report(monkeypatch):
+    from _common.stage_reports import write_repair_report
+
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec["scope"]["coverageTargets"] = [
+        {"entityType": "地点/景区", "name": _EID},
+        {"entityType": "地点/景区", "name": "稳定景区乙"},
+    ]
+    store.save_spec(spec)
+    batch_id = "download_fetch_build_prepare_repair_report_scope"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "稳定景区乙"]
+    write_repair_report(
+        task_id=task_id,
+        batch_id=batch_id,
+        command="workflow_run",
+        ref="build_prepare",
+        failed_stage="build_prepare",
+        failed_gate="build_prepare_gate",
+        issues=[f"地点/景区/{_EID}: homepage lane 无可发布图片资产"],
+        fallback_stage="download_plan",
+        rerun_chain=["download_plan", "download_fetch", "build_prepare"],
+    )
+    calls = []
+
+    def _handle_download(ns):
+        calls.append(ns)
+
+    monkeypatch.setattr("download.handler.handle_download", _handle_download)
+    monkeypatch.setattr("download.gate.gate_download", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("task.run._download_stage_gate_issues", lambda *_args, **_kwargs: [])
+    monkeypatch.setattr("task.run._download_fetch_stale_entity_ids", lambda _ctx: ["稳定景区乙"])
+    monkeypatch.setattr("task.run._content_plan_source_shortfall_entity_ids", lambda _ctx: [])
+    monkeypatch.setattr("task.run._download_content_capacity_preflight", lambda _ctx: [])
+
+    result = run_mod._run_download_fetch(ctx)
+
+    assert result.status == "done"
+    assert len(calls) == 1
+    assert calls[0].entity_ids == _EID
+    assert calls[0].lane == "homepage"
+
+
+def test_content_plan_quota_shortfall_routes_to_replacement_not_agent(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 4
+    spec["scope"]["reserveCoverageTargets"] = [
+        {"entityType": "地点/景区", "name": "替补景区乙"},
+    ]
+    store.save_spec(spec)
+    batch_id = "content_plan_quota_shortfall_replacement"
+    ctx = _ctx(task_id, batch_id)
+    monkeypatch.setattr(
+        "task.run._content_plan_done",
+        lambda _ctx: (False, ["content_plan_packet.json missing under batch _shared/"]),
+    )
+    monkeypatch.setattr(
+        "task.run._auto_content_plan",
+        lambda _ctx, _spec: [
+            f"{_EID}: entityArticlesPerTarget quota 4 but only picked 3 qualified article source(s)"
+        ],
+    )
+
+    def _replace(current_ctx, issues, *, entity_type):
+        assert current_ctx is ctx
+        assert entity_type == "地点/景区"
+        assert "entityArticlesPerTarget quota 4" in issues[0]
+        return [_EID], ["替补景区乙"], []
+
+    monkeypatch.setattr("task.run._replace_content_plan_source_shortfall_entities", _replace)
+
+    result = run_mod._checkpoint_content_plan(ctx)
+
+    assert result.status == "failed"
+    assert result.fallback_stage == "download_plan"
+    assert "content_plan source shortfall abandoned entities" in result.issues[0]
+    assert "activated replacement entities: 替补景区乙" in result.issues
+
+
+def test_download_content_capacity_preflight_does_not_treat_partial_as_quota_shortfall(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 4
+    store.save_spec(spec)
+    ctx = _ctx(task_id, "download_capacity_partial_is_not_quota_shortfall")
+
+    monkeypatch.setattr(
+        "task.run._content_capacity_gate_for_entity",
+        lambda *_args, **_kwargs: (
+            False,
+            [f"{_EID}: content capacity article base source shortfall 1<4"],
+            {"pickedArticleBaseSources": 1, "qualifiedArticleBaseSources": 1},
+        ),
+    )
+
+    issues = run_mod._download_content_capacity_preflight(ctx)
+
+    assert issues == [
+        f"{_EID}: content capacity article base source shortfall 1<4; "
+        "workflowPolicy.allowContentQuotaShortfall is not true"
+    ]
+
+
+def test_build_prepare_homepage_only_reject_does_not_trip_min_entities(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec["acceptance"] = {"minEntities": 1}
+    store.save_spec(spec)
+    batch_id = "build_prepare_partial_below_min_blocks"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["reactRewinds"] = {"build_prepare": run_mod.MAX_REACT_REWINDS}
+    run_mod.save_workflow_state(state)
+    monkeypatch.setattr(
+        "build.homepage.prepare_entity_pages",
+        lambda *_args, **_kwargs: (batch_root(task_id, batch_id) / "entities", []),
+    )
+    def _validate(_task_id, _batch_id, active_spec):
+        names = {
+            str(target.get("name") or "")
+            for target in (active_spec.get("scope") or {}).get("coverageTargets") or []
+        }
+        return [f"地点/景区/{_EID}: homepage baseDraft.text 缺失"] if _EID in names else []
+
+    monkeypatch.setattr("build.homepage.validate_entity_page_inputs", _validate)
+    monkeypatch.setattr(
+        "task.run._screen_replacements_for_abandoned_entities",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("no replacement for homepage-only reject")),
+    )
+
+    result = run_mod._run_build_prepare(ctx)
+
+    assert result.status == "done"
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    homepage_abandoned = [
+        item["entityId"]
+        for item in (state.get("abandonedObjects") or [])
+        if item.get("abandonScope") == "homepage"
+    ]
+    assert homepage_abandoned == [_EID]
+
+
+def test_build_prepare_blocks_active_shortfall_even_when_remaining_homepages_are_ready(monkeypatch):
     task_id = _make_task(
         workflow_policy={
             "allowPartialContent": True,
@@ -44,7 +363,47 @@ def test_download_plan_allows_partial_shortfall_after_replacement_exhausted(monk
     ]
     spec["acceptance"] = {"minEntities": 2}
     store.save_spec(spec)
-    batch_id = "download_plan_active_shortfall_partial_done"
+    batch_id = "build_prepare_active_shortfall_even_if_ready"
+    ctx = _ctx(task_id, batch_id)
+    ctx.entity_ids = [_EID, "稳定景区乙"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["abandonedObjects"] = [
+        {
+            "entityId": _EID,
+            "stage": "build_prepare",
+            "reason": "fixture abandoned primary",
+            "status": "abandoned",
+        }
+    ]
+    run_mod.save_workflow_state(state)
+
+    def _unexpected_prepare(*_args, **_kwargs):
+        raise AssertionError("build_prepare must stop before preparing partial active targets")
+
+    monkeypatch.setattr("build.homepage.prepare_entity_pages", _unexpected_prepare)
+
+    result = run_mod._run_build_prepare(ctx)
+
+    assert result.status == "failed"
+    assert result.fallback_stage == "download_plan"
+    assert "replacement active target shortfall 1<2" in result.issues
+
+
+def test_download_plan_blocks_min_entity_shortfall_after_replacement_exhausted(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "deliveryMode": "partial_with_replacement_report",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec["scope"]["coverageTargets"] = [
+        {"entityType": "地点/景区", "name": _EID},
+        {"entityType": "地点/景区", "name": "稳定景区乙"},
+    ]
+    spec["acceptance"] = {"minEntities": 2}
+    store.save_spec(spec)
+    batch_id = "download_plan_active_shortfall_blocks"
     ctx = _ctx(task_id, batch_id)
     ctx.entity_ids = ["稳定景区乙"]
     state = run_mod.load_workflow_state(task_id, batch_id)
@@ -66,12 +425,10 @@ def test_download_plan_allows_partial_shortfall_after_replacement_exhausted(monk
 
     result = run_mod._checkpoint_download_plan(ctx)
 
-    assert result.status == "done"
+    assert result.status == "failed"
+    assert any("replacement active target shortfall 1<2" in issue for issue in result.issues), result.issues
     state = run_mod.load_workflow_state(task_id, batch_id)
-    assert state["replacementPolicy"]["shortfallAllowed"] is True
-    assert state["replacementPolicy"]["activeTargetCount"] == 1
-    assert state["replacementPolicy"]["requiredActiveTargets"] == 2
-    assert state["partialDeliveryReports"][-1]["shortfallCount"] == 1
+    assert not state.get("replacementPolicy", {}).get("shortfallAllowed")
 
 def test_replacement_screening_uses_budget_waves_when_not_explicit(monkeypatch):
     task_id = _make_task(workflow_policy={"allowPartialContent": True})
@@ -183,6 +540,7 @@ def test_gated_replacement_invalidates_target_dependent_completed_stages(monkeyp
     )
     monkeypatch.setattr("task.run._source_plan_filled_for_entities", lambda *_args, **_kwargs: (True, []))
     monkeypatch.setattr("task.run._replacement_fetch_gate_passed", lambda *_args, **_kwargs: (True, []))
+    monkeypatch.setattr("task.run._homepage_base_draft_gate_for_entity", lambda *_args, **_kwargs: (True, []))
     monkeypatch.setattr("task.run._content_capacity_gate_for_entity", lambda *_args, **_kwargs: (True, [], {}))
 
     activated, rejected, _report = run_mod._screen_replacement_targets(
@@ -196,15 +554,14 @@ def test_gated_replacement_invalidates_target_dependent_completed_stages(monkeyp
     assert activated == ["替补景区乙"]
     assert rejected == []
     state = run_mod.load_workflow_state(task_id, batch_id)
-    assert state["completed"] == ["download_plan"]
+    assert state["completed"] == ["download_plan", "download_fetch"]
     assert state["waitingCheckpoint"] is None
     assert state["retryCounts"] == {"download_plan": 1}
-    assert state["infrastructureRetryCounts"] == {}
+    assert state["infrastructureRetryCounts"] == {"download_fetch": 1}
     assert state["reactRewinds"] == {}
-    assert state["replacementPolicy"]["rerunFromStage"] == "download_fetch"
+    assert state["replacementPolicy"]["rerunFromStage"] == "build_prepare"
     assert state["targetSetChangeEvents"][-1]["entityIds"] == ["替补景区乙"]
     assert state["targetSetChangeEvents"][-1]["invalidatedStages"] == [
-        "download_fetch",
         "build_prepare",
         "build_homepage",
         "build_validate",
@@ -259,6 +616,7 @@ def test_replacement_screening_rejects_content_capacity_shortfall(monkeypatch):
     )
     monkeypatch.setattr("task.run._source_plan_filled_for_entities", lambda *_args, **_kwargs: (True, []))
     monkeypatch.setattr("task.run._replacement_fetch_gate_passed", lambda *_args, **_kwargs: (True, []))
+    monkeypatch.setattr("task.run._homepage_base_draft_gate_for_entity", lambda *_args, **_kwargs: (True, []))
 
     activated, rejected, _report = run_mod._screen_replacement_targets(
         ctx,
@@ -275,6 +633,50 @@ def test_replacement_screening_rejects_content_capacity_shortfall(monkeypatch):
     assert row["sourceGateStatus"] == "failed"
     assert any("content capacity image source shortfall" in issue for issue in row["issues"])
     assert state["replacementContentCapacity"][-1]["status"] == "failed"
+
+def test_replacement_screening_rejects_homepage_base_draft_shortfall(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    spec = store.load_spec(task_id)
+    spec["scope"]["reserveCoverageTargets"] = [
+        {"entityType": "地点/景区", "name": "替补景区乙"},
+    ]
+    store.save_spec(spec)
+    batch_id = "replacement_homepage_base_draft_gate"
+    ctx = _ctx(task_id, batch_id)
+    monkeypatch.setattr("download.prepare.prepare_source_plan", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "task.run._run_download_auto_research",
+        lambda *_args, **_kwargs: {"sourceAvailability": {"readyTargets": ["替补景区乙"], "ineligibleTargets": []}},
+    )
+    monkeypatch.setattr("task.run._source_plan_filled_for_entities", lambda *_args, **_kwargs: (True, []))
+    monkeypatch.setattr("task.run._replacement_fetch_gate_passed", lambda *_args, **_kwargs: (True, []))
+    monkeypatch.setattr(
+        "task.run._homepage_base_draft_gate_for_entity",
+        lambda *_args, **_kwargs: (
+            False,
+            ["地点/景区/替补景区乙: replacement homepage baseDraft unavailable"],
+        ),
+    )
+
+    def _unexpected_content_capacity(*_args, **_kwargs):
+        raise AssertionError("homepage base-draft failed replacements must not reach content capacity gate")
+
+    monkeypatch.setattr("task.run._content_capacity_gate_for_entity", _unexpected_content_capacity)
+
+    activated, rejected, _report = run_mod._screen_replacement_targets(
+        ctx,
+        entity_type="地点/景区",
+        reason="keep target count after build_prepare homepage unavailable",
+        needed=1,
+        scope="replacement_homepage_gate",
+    )
+
+    assert activated == []
+    assert rejected == ["替补景区乙"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    row = next(item for item in state["replacementObjects"] if item["entityId"] == "替补景区乙")
+    assert row["status"] == "rejected"
+    assert "replacement homepage baseDraft unavailable" in row["issues"][0]
 
 def test_run_pipeline_preserves_replacement_invalidation_from_entry_state(monkeypatch):
     task_id = _make_task(
@@ -306,6 +708,7 @@ def test_run_pipeline_preserves_replacement_invalidation_from_entry_state(monkey
     monkeypatch.setattr("task.run._source_plan_filled", lambda _ctx: (True, []))
     monkeypatch.setattr("task.run._stale_source_plan_entities", lambda *_args, **_kwargs: [])
     monkeypatch.setattr("task.run._replacement_fetch_gate_passed", lambda *_args, **_kwargs: (True, []))
+    monkeypatch.setattr("task.run._homepage_base_draft_gate_for_entity", lambda *_args, **_kwargs: (True, []))
     monkeypatch.setattr(
         "task.run._content_capacity_gate_for_entity",
         lambda *_args, **_kwargs: (True, [], {"fixture": "passed"}),
@@ -315,7 +718,7 @@ def test_run_pipeline_preserves_replacement_invalidation_from_entry_state(monkey
 
     assert code == 0
     state = run_mod.load_workflow_state(task_id, batch_id)
-    assert state["completed"] == ["download_plan"]
+    assert set(state["completed"]) == {"download_plan", "download_fetch"}
     assert state["stoppedAtStage"] == "download_plan"
     active_rows = [
         item
@@ -329,7 +732,6 @@ def test_run_pipeline_preserves_replacement_invalidation_from_entry_state(monkey
         for item in state["replacementObjects"]
     }
     assert state["targetSetChangeEvents"][-1]["invalidatedStages"] == [
-        "download_fetch",
         "build_prepare",
     ]
 
@@ -611,3 +1013,31 @@ def test_agent_active_throughput_is_diagnostic_not_wall_clock_replacement():
     assert metrics["finishedAuthorJobs"] == 5
     assert metrics["infrastructureFailures"] == 1
     assert metrics["finishedAuthorJobsPerHour"] == 100.0
+
+
+def test_agent_active_throughput_falls_back_to_homepage_stage_for_homepage_only_trials():
+    metrics = run_mod._agent_active_throughput(
+        {
+            "agentRunHistory": [
+                {
+                    "stage": "build_homepage",
+                    "plannedJobCount": 4,
+                    "finishedCount": 3,
+                    "infrastructureFailures": 1,
+                    "scheduler": {
+                        "elapsedSeconds": 180,
+                        "effectiveWorkerCount": 3,
+                        "startedAt": "s1",
+                    },
+                    "finishedAt": "t1",
+                }
+            ]
+        }
+    )
+
+    assert metrics["sourceStage"] == "build_homepage"
+    assert metrics["jobKind"] == "homepage"
+    assert metrics["authorRunCount"] == 1
+    assert metrics["finishedAuthorJobs"] == 3
+    assert metrics["effectiveWorkerCount"] == 3
+    assert metrics["perWorkerObjectsPerHour"] == 20.0

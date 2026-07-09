@@ -16,26 +16,20 @@ import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 /// [method] is the HTTP verb (GET, POST, etc.), [path] is the request path,
 /// [elapsedMs] is the round-trip time in milliseconds, [statusCode] is the
 /// HTTP status code (-1 on network/timeout errors).
-typedef ApiLatencyObserver = void Function(
-  String method,
-  String path,
-  int elapsedMs,
-  int statusCode,
-);
+typedef ApiLatencyObserver =
+    void Function(String method, String path, int elapsedMs, int statusCode);
 
 class CloudHttpClient {
   CloudHttpClient({
     http.Client? client,
     CloudAuthTokenProvider? authTokenProvider,
-    Future<bool> Function()? onUnauthorizedRefresh,
+    this._onUnauthorizedRefresh,
     Duration? timeout,
-    ApiLatencyObserver? latencyObserver,
+    this._latencyObserver,
   }) : _client = client ?? RetryHttpClient(),
        _authTokenProvider =
            authTokenProvider ?? const StubCloudAuthTokenProvider(),
-       _onUnauthorizedRefresh = onUnauthorizedRefresh,
-       _timeout = timeout ?? const Duration(seconds: 12),
-       _latencyObserver = latencyObserver;
+       _timeout = timeout ?? const Duration(seconds: 12);
 
   final http.Client _client;
   final CloudAuthTokenProvider _authTokenProvider;
@@ -46,10 +40,7 @@ class CloudHttpClient {
   // ── http.Client 兼容底层 API（不自动根据状态码抛错；见 [getJson]/[postJson]）────────
 
   /// 返回原始 [http.Response]，**不会**因非 2xx 抛 [CloudException]。
-  Future<http.Response> get(
-    Uri url, {
-    Map<String, String>? headers,
-  }) async {
+  Future<http.Response> get(Uri url, {Map<String, String>? headers}) async {
     return _requestWithRefreshRetry(
       requestPath: url.path,
       method: 'GET',
@@ -139,12 +130,7 @@ class CloudHttpClient {
       shouldAttemptRefresh: true,
       run: (mergedHeaders) => _guardRequest(
         () => _client
-            .delete(
-              url,
-              headers: mergedHeaders,
-              body: body,
-              encoding: encoding,
-            )
+            .delete(url, headers: mergedHeaders, body: body, encoding: encoding)
             .timeout(_timeout),
         requestPath: url.path,
         method: 'DELETE',
@@ -179,10 +165,7 @@ class CloudHttpClient {
         sw.elapsedMilliseconds,
         -1,
       );
-      throw CloudErrorMapper.fromException(
-        e,
-        requestPath: request.url.path,
-      );
+      throw CloudErrorMapper.fromException(e, requestPath: request.url.path);
     } on SocketException catch (e) {
       sw.stop();
       _latencyObserver?.call(
@@ -191,10 +174,7 @@ class CloudHttpClient {
         sw.elapsedMilliseconds,
         -1,
       );
-      throw CloudErrorMapper.fromException(
-        e,
-        requestPath: request.url.path,
-      );
+      throw CloudErrorMapper.fromException(e, requestPath: request.url.path);
     } catch (e) {
       sw.stop();
       _latencyObserver?.call(
@@ -204,10 +184,7 @@ class CloudHttpClient {
         -1,
       );
       if (e is CloudException) rethrow;
-      throw CloudErrorMapper.fromException(
-        e,
-        requestPath: request.url.path,
-      );
+      throw CloudErrorMapper.fromException(e, requestPath: request.url.path);
     }
   }
 
@@ -422,7 +399,8 @@ class CloudHttpClient {
     required String method,
     required Map<String, String> headers,
     required bool shouldAttemptRefresh,
-    required Future<http.Response> Function(Map<String, String> mergedHeaders) run,
+    required Future<http.Response> Function(Map<String, String> mergedHeaders)
+    run,
   }) async {
     final initialHeaders = await _mergeHeaders(headers);
     final first = await run(initialHeaders);

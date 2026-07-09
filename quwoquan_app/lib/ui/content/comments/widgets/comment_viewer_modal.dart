@@ -17,9 +17,8 @@ class CommentViewer {
     VoidCallback? onClose,
     VoidCallback? onShareTap,
   }) async {
-    await showCupertinoModalPopup<void>(
+    await showAppBottomModal<void>(
       context: context,
-      barrierColor: AppColors.transparent,
       builder: (ctx) => _CommentSheet(
         postId: postId,
         entryObservedCommentCount: entryObservedCommentCount,

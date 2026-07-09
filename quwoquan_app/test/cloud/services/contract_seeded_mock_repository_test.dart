@@ -180,7 +180,7 @@ void main() {
 
   test('circle mock repository 默认优先读取 contract fixture', () async {
     final repo = MockCircleRepository();
-    final circles = await repo.listCircles();
+    final circles = await repo.listCircles(limit: 100);
     expect(circles.map((item) => item.id), contains('fixture_circle_photo'));
   });
 

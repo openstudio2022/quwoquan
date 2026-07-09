@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:math' show max;
 import 'dart:ui' show FontFeature, ImageFilter;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/scheduler.dart';
@@ -18,15 +17,20 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/work_browser_item_d
 import 'package:quwoquan_app/cloud/runtime/generated/content/work_browser_media_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:video_player/video_player.dart'
     show VideoPlayerController, VideoPlayerValue;
 import 'package:quwoquan_app/components/media/image/book/image_book_canvas.dart';
+import 'package:quwoquan_app/components/media/shared/gesture/immersive_gesture_intent_controller.dart';
+import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/immersive_comment_split_sheet.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
+import 'package:quwoquan_app/components/media/shared/toolbar/immersive_intersection_statement.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/media_viewer_toolbar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/media_caption_widgets.dart';
@@ -81,27 +85,64 @@ import 'package:quwoquan_app/ui/discovery/services/media_viewer_interaction_brid
 import 'package:quwoquan_app/ui/content/widgets/article_paged_canvas.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/models/home_feed_video_autoplay_policy.dart';
-
 part 'works_immersive_viewer_controls.dart';
 part 'works_immersive_viewer_canvas.dart';
 part 'works_immersive_viewer_engagement_actions.dart';
-
 const double _worksImmersiveVerticalCommitFraction = 0.20;
-
+double _worksContentIntersectionLineHeight(BuildContext context) {
+  return AppTypography.xxs * AppSpacing.textLineHeightFootnote;
+}
+double _worksContentIntersectionBottomClearance(BuildContext context) {
+  return ImmersiveEngagementBar.overlayClearance(
+    context,
+    gap: AppSpacing.intraGroupXs,
+  );
+}
+double _worksContentOverlayBottomClearance(
+  BuildContext context, {
+  required bool includeIntersection,
+  required double gap,
+}) {
+  if (!includeIntersection) {
+    return ImmersiveEngagementBar.overlayClearance(context, gap: gap);
+  }
+  return ImmersiveEngagementBar.reservedHeight(context) +
+      AppSpacing.intraGroupXs +
+      _worksContentIntersectionLineHeight(context) +
+      gap;
+}
 class _WorksImmersiveVerticalPagePhysics extends PageScrollPhysics {
   const _WorksImmersiveVerticalPagePhysics({
     required this.currentPage,
+    this.holdVerticalScroll,
     super.parent,
   });
-
   final int Function() currentPage;
+  final bool Function()? holdVerticalScroll;
 
   @override
   _WorksImmersiveVerticalPagePhysics applyTo(ScrollPhysics? ancestor) {
     return _WorksImmersiveVerticalPagePhysics(
       currentPage: currentPage,
+      holdVerticalScroll: holdVerticalScroll,
       parent: buildParent(ancestor),
     );
+  }
+
+  @override
+  bool shouldAcceptUserOffset(ScrollMetrics position) {
+    if (holdVerticalScroll?.call() ?? false) {
+      return false;
+    }
+    return super.shouldAcceptUserOffset(position);
+  }
+
+  @override
+  double applyPhysicsToUserOffset(ScrollMetrics position, double offset) {
+    if (holdVerticalScroll?.call() ?? false) {
+      return 0;
+    }
+    return super.applyPhysicsToUserOffset(position, offset);
   }
 
   @override
@@ -263,8 +304,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       <String, Object>{};
   final Map<String, WorkBrowserItemDto> _workItemCache =
       <String, WorkBrowserItemDto>{};
-  double _homeFeedVerticalDragDistance = 0;
-  DateTime? _lastHomeFeedVerticalHintAt;
+  final ImmersiveGestureIntentController _gestureIntentController =
+      ImmersiveGestureIntentController();
 
   // 当前可见视频作品的播放控制器（由 _WorksVideoCanvas 上报，供极简控制条消费）。
   VideoPlayerController? _activeVideoController;
@@ -277,17 +318,23 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   TabSwipeDirection? _activeEdgeDismissDirection;
   double _activeEdgeDismissDistance = 0;
 
+  void _setMountedState(VoidCallback update) {
+    if (!mounted) {
+      return;
+    }
+    setState(update);
+  }
+
   @override
   void initState() {
     super.initState();
+    _gestureIntentController.addListener(_handleGestureIntentChanged);
     _feedPerformanceObservability = ref.read(
       feedPerformanceObservabilityProvider,
     );
     final initialPage = _safeInitialPage;
     _currentPage = initialPage;
-    _pageController = PageController(
-      initialPage: _verticalRecommendationFlowDisabled ? 0 : initialPage,
-    );
+    _pageController = PageController(initialPage: initialPage);
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       if (!mounted) return;
       primeMediaViewerInteractionSnapshot(
@@ -318,6 +365,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   @override
   void dispose() {
+    AppToast.dismiss();
+    _gestureIntentController.removeListener(_handleGestureIntentChanged);
+    _gestureIntentController.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -325,22 +375,92 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   bool get _usesExternalFeed =>
       widget.externalPosts != null && widget.externalPosts!.isNotEmpty;
 
-  bool get _verticalRecommendationFlowDisabled =>
-      _usesExternalFeed && widget.source == 'home_feed';
+  void _handleGestureIntentChanged() {
+    // 边界只保留轻量回弹，不弹出沉浸打断提示。
+  }
 
-  void _handleHomeFeedVerticalPointerMove(PointerMoveEvent event) {
-    if (!_verticalRecommendationFlowDisabled) return;
-    _homeFeedVerticalDragDistance += event.delta.dy.abs();
-    if (_homeFeedVerticalDragDistance < AppSpacing.buttonHeight) return;
-    _homeFeedVerticalDragDistance = 0;
-    final now = DateTime.now();
-    final lastShownAt = _lastHomeFeedVerticalHintAt;
-    if (lastShownAt != null &&
-        now.difference(lastShownAt) < const Duration(seconds: 2)) {
+  void _handleImmersivePointerDown(PointerDownEvent event) {
+    final capabilities = _gestureCapabilitiesForCurrentPost();
+    if (capabilities == null) {
       return;
     }
-    _lastHomeFeedVerticalHintAt = now;
-    AppToast.show(context, DiscoveryFeedText.homeFeedVerticalSwitchUnavailable);
+    _gestureIntentController.begin(
+      position: event.position,
+      capabilities: capabilities,
+    );
+  }
+
+  void _handleImmersivePointerMove(PointerMoveEvent event) {
+    final capabilities = _gestureCapabilitiesForCurrentPost();
+    if (capabilities == null) {
+      return;
+    }
+    if (!_gestureIntentController.isTracking) {
+      _gestureIntentController.begin(
+        position: event.position,
+        capabilities: capabilities,
+      );
+      return;
+    }
+    _gestureIntentController.update(
+      position: event.position,
+      capabilities: capabilities,
+    );
+  }
+
+  void _handleImmersivePointerEnd() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_gestureIntentController.isTracking) {
+        return;
+      }
+      _gestureIntentController.finish();
+    });
+  }
+
+  ImmersiveGestureCapabilities? _gestureCapabilitiesForCurrentPost() {
+    final posts = _buildFeed();
+    if (posts.isEmpty) {
+      return null;
+    }
+    final post = posts[_currentPage.clamp(0, posts.length - 1).toInt()];
+    final allowVerticalSwitch = posts.length > 1;
+    if (_isImageLikePost(post)) {
+      final images = _imageUrlsForPost(post);
+      final current = (_photoInnerIndex[post.id] ?? _defaultImageIndexFor(post))
+          .clamp(0, max(0, images.length - 1))
+          .toInt();
+      return ImmersiveGestureCapabilities(
+        pageCount: images.length,
+        currentPageIndex: current,
+        canFlipForward: current < images.length - 1,
+        canFlipBack: current > 0,
+        allowVerticalSwitch: allowVerticalSwitch,
+        allowBoundaryRubberBand: true,
+      );
+    }
+    if (_isArticleLikePost(post)) {
+      final total = _articlePageCount(post);
+      final current = (_articleInnerIndex[post.id] ?? 0)
+          .clamp(0, total - 1)
+          .toInt();
+      return ImmersiveGestureCapabilities(
+        pageCount: total,
+        currentPageIndex: current,
+        canFlipForward: current < total - 1,
+        canFlipBack: current > 0,
+        allowVerticalSwitch: allowVerticalSwitch,
+        allowBoundaryRubberBand: true,
+      );
+    }
+    return ImmersiveGestureCapabilities(
+      pageCount: 1,
+      currentPageIndex: 0,
+      canFlipForward: false,
+      canFlipBack: false,
+      allowVerticalSwitch: allowVerticalSwitch,
+      allowBoundaryRubberBand: false,
+      startedInPageFlipHotzone: false,
+    );
   }
 
   bool get _enableArticlePageCurl {
@@ -949,7 +1069,13 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   bool _isVideoLikePost(PostBaseDto post) {
-    return post.isVideoLike;
+    if (post.isVideoLike) {
+      return true;
+    }
+    if (post.type.trim().toLowerCase() == 'video') {
+      return true;
+    }
+    return _videoItemsFor(post).isNotEmpty;
   }
 
   bool _isArticleLikePost(PostBaseDto post) {
@@ -988,6 +1114,17 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       TargetPlatform.macOS ||
       TargetPlatform.linux ||
       TargetPlatform.windows => direction == TabSwipeDirection.previous,
+    };
+  }
+
+  bool _edgeDismissWouldStealPageFlip(TabSwipeDirection direction) {
+    final capabilities = _gestureCapabilitiesForCurrentPost();
+    if (capabilities == null) {
+      return false;
+    }
+    return switch (direction) {
+      TabSwipeDirection.previous => capabilities.canFlipBack,
+      TabSwipeDirection.next => capabilities.canFlipForward,
     };
   }
 
@@ -1037,7 +1174,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   }
 
   Widget _buildEdgeDismissHotzone(TabSwipeDirection direction) {
-    if (!_supportsEdgeDismissDirection(direction)) {
+    if (!_supportsEdgeDismissDirection(direction) ||
+        _edgeDismissWouldStealPageFlip(direction)) {
       return const SizedBox.shrink();
     }
     return Positioned(
@@ -1296,41 +1434,16 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
     BuildContext context,
     PostBaseDto? post,
   ) {
-    if (post == null || !_isArticleLikePost(post)) {
-      return _WorksTopChromeTheme(
-        overlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: AppColors.transparent,
-          statusBarIconBrightness: Brightness.light,
-          statusBarBrightness: Brightness.dark,
-          systemNavigationBarColor: AppColors.transparent,
-          systemNavigationBarIconBrightness: Brightness.light,
-        ),
-        foregroundColor: AppColors.white,
-        mutedForegroundColor: AppColors.white.withValues(alpha: 0.72),
-      );
-    }
-    final palette = resolveArticlePaperPalette(
-      context,
-      _resolveArticlePaperTexture(post),
-    );
-    final surfaceColor = Color.alphaBlend(
-      palette.paperColor.withValues(alpha: 0.22),
-      palette.stageBackground,
-    );
-    final primaryColor = palette.textColor.withValues(alpha: 0.96);
-    final secondaryColor = palette.secondaryTextColor.withValues(alpha: 0.84);
     return _WorksTopChromeTheme(
       overlayStyle: const SystemUiOverlayStyle(
-        statusBarColor: AppColors.transparent,
+        statusBarColor: AppColors.black,
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
-        systemNavigationBarColor: AppColors.transparent,
+        systemNavigationBarColor: AppColors.black,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
-      foregroundColor: primaryColor,
-      mutedForegroundColor: secondaryColor,
-      surfaceColor: surfaceColor,
-      surfaceBorderColor: palette.paperBorderColor.withValues(alpha: 0.44),
+      foregroundColor: AppColors.white,
+      mutedForegroundColor: AppColors.white.withValues(alpha: 0.72),
     );
   }
 
@@ -1504,9 +1617,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   IntersectionReason? _primaryIntersectionReasonFor(PostBaseDto post) {
     final reasons = post.intersectionReasons ?? const <IntersectionReason>[];
     for (final reason in reasons) {
-      if (reason.primarySpans.isNotEmpty ||
-          reason.primaryText.trim().isNotEmpty) {
-        return reason;
+      final displayReason = displayReadyIntersectionReason(reason);
+      if (displayReason != null) {
+        return displayReason;
       }
     }
     return null;
@@ -1516,14 +1629,22 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   void _showIntersectionDetail(BuildContext context, PostBaseDto post) {
     final reasons = post.intersectionReasons ?? const <IntersectionReason>[];
     if (reasons.isEmpty) return;
-    showCupertinoModalPopup<void>(
+    showAppBottomModal<void>(
       context: context,
-      barrierColor: AppColors.transparent,
       builder: (sheetContext) => _WorksIntersectionDetailSheet(
         reasons: reasons,
         onAskAssistant: () {
-          Navigator.pop(sheetContext);
-          _openAssistantForIntersectionReason(context, post, reasons);
+          unawaited(
+            dismissAppModalAndRun(
+              sheetContext,
+              action: () {
+                if (!context.mounted) {
+                  return;
+                }
+                _openAssistantForIntersectionReason(context, post, reasons);
+              },
+            ),
+          );
         },
       ),
     );
@@ -1577,24 +1698,17 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
 
   void _openIntersectionSpan(
     BuildContext context,
+    PostBaseDto post,
     IntersectionReason reason,
     IntersectionTextSpan span,
   ) {
     final navigator = IntersectionTargetNavigator(
       onTrack: (target, attribution) {
-        ref
-            .read(contentBehaviorTrackerProvider)
-            .trackTagClick(
-              target.objectId,
-              referralSource: ReferralSource.organicFeed,
-              tags: attribution.tagRefs,
-              intersectionId: attribution.intersectionId,
-              intersectionDimension: attribution.dimension,
-              intersectionSourceRef: attribution.sourceRef,
-              intersectionTagRefs: attribution.tagRefs,
-              intersectionClass: attribution.intersectionClass,
-              intersectionEvidenceId: attribution.evidenceId,
-            );
+        _trackIntersectionTargetClick(
+          post: post,
+          target: target,
+          attribution: attribution,
+        );
       },
     );
     navigator.open(
@@ -1612,21 +1726,21 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
   ) {
     final navigator = IntersectionTargetNavigator(
       onTrack: (target, attribution) {
-        ref
-            .read(contentBehaviorTrackerProvider)
-            .trackTagClick(
-              target.objectId,
-              referralSource: ReferralSource.organicFeed,
-              tags: attribution.tagRefs,
-              intersectionId: attribution.intersectionId,
-              intersectionDimension: attribution.dimension,
-              intersectionSourceRef: attribution.sourceRef,
-              intersectionTagRefs: attribution.tagRefs,
-              intersectionClass: attribution.intersectionClass,
-              intersectionEvidenceId: attribution.evidenceId,
-            );
+        _trackIntersectionTargetClick(
+          post: post,
+          target: target,
+          attribution: attribution,
+        );
       },
     );
+    if (navigator.open(
+      context,
+      IntersectionTargetNavigator.targetForReason(reason),
+      sourceRef: reason.source,
+      attribution: _intersectionNavAttribution(reason),
+    )) {
+      return;
+    }
     for (final visual in reason.sampleVisuals) {
       if (navigator.open(
         context,
@@ -1652,6 +1766,38 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return;
     }
     _showIntersectionDetail(context, post);
+  }
+
+  void _trackIntersectionTargetClick({
+    required PostBaseDto post,
+    required IntersectionTarget target,
+    required IntersectionNavAttribution attribution,
+  }) {
+    final feedSession = ref.read(feedSessionProvider.notifier);
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackTagClick(
+          target.objectId,
+          contentType: target.objectKind.trim().isNotEmpty
+              ? target.objectKind
+              : post.type,
+          authorId: target.objectKind == 'user' ? target.objectId : null,
+          referralSource: ReferralSource.organicFeed,
+          tags: attribution.tagRefs,
+          feedRequestId: feedSession.currentFeedRequestId,
+          channelId: _immersiveChannelId(),
+          rankingVersion: feedSession.currentRankingVersion,
+          reasonVersion: feedSession.currentReasonVersion,
+          recallPath: post.recallPath,
+          contentVertical: post.contentVertical,
+          supplySource: post.supplySource,
+          intersectionId: attribution.intersectionId,
+          intersectionDimension: attribution.dimension,
+          intersectionSourceRef: attribution.sourceRef,
+          intersectionTagRefs: attribution.tagRefs,
+          intersectionClass: attribution.intersectionClass,
+          intersectionEvidenceId: attribution.evidenceId,
+        );
   }
 
   IntersectionNavAttribution _intersectionNavAttribution(
@@ -1933,6 +2079,33 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         );
   }
 
+  void _trackImagePageflipMotion(
+    PostBaseDto post,
+    MediaPageFlipMotionEvent event,
+  ) {
+    final feedSession = ref.read(feedSessionProvider.notifier);
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackWorksImagePageflipMotion(
+          post.id,
+          direction: event.directionName,
+          motionProfile: event.motionProfile,
+          settleMs: event.settleDuration.inMilliseconds,
+          reducedMotion: event.reducedMotion,
+          committed: event.committed,
+          contentType: post.type,
+          referralSource: ReferralSource.organicFeed,
+          feedRequestId: feedSession.currentFeedRequestId,
+          position: _currentPage,
+          channelId: _immersiveChannelId(),
+          rankingVersion: feedSession.currentRankingVersion,
+          reasonVersion: feedSession.currentReasonVersion,
+          recallPath: post.recallPath,
+          contentVertical: post.contentVertical,
+          supplySource: post.supplySource,
+        );
+  }
+
   void _trackArticlePageCurlAbort(
     PostBaseDto post,
     ArticleReaderPageCurlAbort event,
@@ -2134,6 +2307,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         ? ''
         : _overlayBodyForPost(currentPost);
     final topChromeTheme = _topChromeThemeForPost(context, currentPost);
+    final intersectionReason = currentPost == null
+        ? null
+        : _primaryIntersectionReasonFor(currentPost);
+    final showContentIntersection = intersectionReason != null;
     // caption header（内容下方、标题上方）：
     // - 图片多图：点指示器（● ● ○ ● ●，最多 6 点）
     // - 视频：极简播放控制条 + 视频集进度
@@ -2157,7 +2334,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         );
       }
     }
-    final verticalFlowDisabled = _verticalRecommendationFlowDisabled;
     // 与 welcome_screen 一致：阻断 MaterialApp 默认 TextStyle 合并带来的误装饰（黄下划线等）。
     return DefaultTextStyle.merge(
       style: const TextStyle(
@@ -2180,100 +2356,89 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 right: 0,
                 bottom: 0,
                 child: Listener(
-                  onPointerMove: verticalFlowDisabled
-                      ? _handleHomeFeedVerticalPointerMove
-                      : null,
-                  onPointerUp: verticalFlowDisabled
-                      ? (_) => _homeFeedVerticalDragDistance = 0
-                      : null,
-                  onPointerCancel: verticalFlowDisabled
-                      ? (_) => _homeFeedVerticalDragDistance = 0
-                      : null,
+                  onPointerDown: _handleImmersivePointerDown,
+                  onPointerMove: _handleImmersivePointerMove,
+                  onPointerUp: (_) {
+                    _handleImmersivePointerEnd();
+                  },
+                  onPointerCancel: (_) {
+                    _gestureIntentController.cancel();
+                  },
                   child: PageView.builder(
                     controller: _pageController,
                     scrollDirection: Axis.vertical,
                     physics: _WorksImmersiveVerticalPagePhysics(
                       currentPage: () => _currentPage,
+                      holdVerticalScroll: () =>
+                          _gestureIntentController.shouldHoldVerticalScroll,
                     ),
                     itemCount: posts.isEmpty
                         ? 1
-                        : (verticalFlowDisabled
-                              ? 1
-                              : posts.length + (showLoadMoreSentinel ? 1 : 0)),
-                    onPageChanged: verticalFlowDisabled
-                        ? null
-                        : (index) {
-                            if (_currentPage != index) {
-                              // Flush dwell time for the previous post
-                              if (posts.isNotEmpty &&
-                                  _currentPage < posts.length) {
-                                final prevPost =
-                                    posts[_currentPage.clamp(
-                                      0,
-                                      posts.length - 1,
-                                    )];
-                                _flushDwell(prevPost);
-                                // Track skip: user swiped away from prevPost
-                                final enterTime = _pageEnterTime;
-                                final skipDwell = enterTime != null
-                                    ? DateTime.now()
-                                              .difference(enterTime)
-                                              .inMilliseconds /
-                                          1000.0
-                                    : null;
-                                ref
-                                    .read(contentBehaviorTrackerProvider)
-                                    .trackSkip(
-                                      prevPost.id,
-                                      dwellSeconds: skipDwell,
-                                      contentType: prevPost.type,
-                                      referralSource:
-                                          ReferralSource.organicFeed,
-                                      feedRequestId: ref
-                                          .read(feedSessionProvider.notifier)
-                                          .currentFeedRequestId,
-                                      channelId: _immersiveChannelId(),
-                                      rankingVersion: ref
-                                          .read(feedSessionProvider.notifier)
-                                          .currentRankingVersion,
-                                      reasonVersion: ref
-                                          .read(feedSessionProvider.notifier)
-                                          .currentReasonVersion,
-                                      recallPath: prevPost.recallPath,
-                                      contentVertical: prevPost.contentVertical,
-                                      supplySource: prevPost.supplySource,
-                                    );
-                              }
+                        : posts.length + (showLoadMoreSentinel ? 1 : 0),
+                    onPageChanged: (index) {
+                      if (_currentPage != index) {
+                        // Flush dwell time for the previous post
+                        if (posts.isNotEmpty && _currentPage < posts.length) {
+                          final prevPost =
+                              posts[_currentPage.clamp(0, posts.length - 1)];
+                          _flushDwell(prevPost);
+                          // Track skip: user swiped away from prevPost
+                          final enterTime = _pageEnterTime;
+                          final skipDwell = enterTime != null
+                              ? DateTime.now()
+                                        .difference(enterTime)
+                                        .inMilliseconds /
+                                    1000.0
+                              : null;
+                          ref
+                              .read(contentBehaviorTrackerProvider)
+                              .trackSkip(
+                                prevPost.id,
+                                dwellSeconds: skipDwell,
+                                contentType: prevPost.type,
+                                referralSource: ReferralSource.organicFeed,
+                                feedRequestId: ref
+                                    .read(feedSessionProvider.notifier)
+                                    .currentFeedRequestId,
+                                channelId: _immersiveChannelId(),
+                                rankingVersion: ref
+                                    .read(feedSessionProvider.notifier)
+                                    .currentRankingVersion,
+                                reasonVersion: ref
+                                    .read(feedSessionProvider.notifier)
+                                    .currentReasonVersion,
+                                recallPath: prevPost.recallPath,
+                                contentVertical: prevPost.contentVertical,
+                                supplySource: prevPost.supplySource,
+                              );
+                        }
 
-                              final nextIsSentinel =
-                                  showLoadMoreSentinel && index >= posts.length;
-                              setState(() {
-                                _currentPage = index;
-                                _awaitingPrefetchedReveal = nextIsSentinel;
-                              });
-                              if (nextIsSentinel) {
-                                _pageEnterTime = null;
-                                _schedulePrefetch(
-                                  visibleIndex: index,
-                                  postsLength: posts.length,
-                                  force: true,
-                                );
-                                return;
-                              }
-                              widget.onPostIndexChanged?.call(index);
-                              final newPost =
-                                  posts[index.clamp(0, posts.length - 1)];
-                              _trackImpressionForPost(newPost);
-                              _pageEnterTime = DateTime.now();
-                            }
-                          },
+                        final nextIsSentinel =
+                            showLoadMoreSentinel && index >= posts.length;
+                        setState(() {
+                          _currentPage = index;
+                          _awaitingPrefetchedReveal = nextIsSentinel;
+                        });
+                        if (nextIsSentinel) {
+                          _pageEnterTime = null;
+                          _schedulePrefetch(
+                            visibleIndex: index,
+                            postsLength: posts.length,
+                            force: true,
+                          );
+                          return;
+                        }
+                        widget.onPostIndexChanged?.call(index);
+                        final newPost = posts[index.clamp(0, posts.length - 1)];
+                        _trackImpressionForPost(newPost);
+                        _pageEnterTime = DateTime.now();
+                      }
+                    },
                     itemBuilder: (context, index) {
                       if (posts.isEmpty) {
                         return Center(child: CupertinoActivityIndicator());
                       }
-                      if (!verticalFlowDisabled &&
-                          showLoadMoreSentinel &&
-                          index >= posts.length) {
+                      if (showLoadMoreSentinel && index >= posts.length) {
                         return _buildLoadMoreSentinel(
                           isLoading: isLoadingMore,
                           error: loadMoreError,
@@ -2284,10 +2449,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                           ),
                         );
                       }
-                      final effectiveIndex = verticalFlowDisabled
-                          ? _currentPage.clamp(0, posts.length - 1).toInt()
-                          : index;
-                      final post = posts[effectiveIndex];
+                      final post = posts[index];
                       return Padding(
                         padding: EdgeInsets.only(
                           top: _statusBarContentInsetFor(post),
@@ -2310,42 +2472,30 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
               _buildEdgeDismissHotzone(TabSwipeDirection.previous),
               _buildEdgeDismissHotzone(TabSwipeDirection.next),
 
+              if (currentPost != null &&
+                  _isArticleLikePost(currentPost) &&
+                  widget.topChromeSafeInset > AppSpacing.zero)
+                Positioned(
+                  key: const ValueKey<String>('works-article-status-bar-scrim'),
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: widget.topChromeSafeInset,
+                  child: const ColoredBox(color: AppColors.black),
+                ),
+
               Positioned(
                 top: 0,
                 left: 0,
                 right: 0,
-                child: DecoratedBox(
-                  decoration: topChromeTheme.hasSurfaceDecoration
-                      ? BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: <Color>[
-                              topChromeTheme.surfaceColor!,
-                              topChromeTheme.surfaceColor!.withValues(
-                                alpha: 0.94,
-                              ),
-                              topChromeTheme.surfaceColor!.withValues(alpha: 0),
-                            ],
-                            stops: const <double>[0, 0.68, 1],
-                          ),
-                          border: Border(
-                            bottom: BorderSide(
-                              color: topChromeTheme.surfaceBorderColor!,
-                              width: AppSpacing.hairline,
-                            ),
-                          ),
-                        )
-                      : const BoxDecoration(),
-                  child: Padding(
-                    padding: EdgeInsets.only(top: widget.topChromeSafeInset),
-                    child: _WorksPrimaryTopBar(
-                      layoutSpec: currentLayoutSpec,
-                      foregroundColor: topChromeTheme.foregroundColor,
-                      onTapClose: _dismissViewer,
-                      onTapMore: () => _showWorksMoreSheet(context),
-                      onHorizontalDragEnd: _handlePrimaryTabSwipeDragEnd,
-                    ),
+                child: Padding(
+                  padding: EdgeInsets.only(top: widget.topChromeSafeInset),
+                  child: _WorksPrimaryTopBar(
+                    layoutSpec: currentLayoutSpec,
+                    foregroundColor: topChromeTheme.foregroundColor,
+                    onTapClose: _dismissViewer,
+                    onTapMore: () => _showWorksMoreSheet(context),
+                    onHorizontalDragEnd: _handlePrimaryTabSwipeDragEnd,
                   ),
                 ),
               ),
@@ -2354,8 +2504,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: ImmersiveEngagementBar.overlayClearance(
+                  bottom: _worksContentOverlayBottomClearance(
                     context,
+                    includeIntersection: showContentIntersection,
                     gap: AppSpacing.containerSm,
                   ),
                   child: MediaCaptionBlock(
@@ -2374,8 +2525,9 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                 Positioned(
                   left: 0,
                   right: 0,
-                  bottom: ImmersiveEngagementBar.overlayClearance(
+                  bottom: _worksContentOverlayBottomClearance(
                     context,
+                    includeIntersection: showContentIntersection,
                     gap: AppSpacing.intraGroupSm,
                   ),
                   child: Center(
@@ -2422,6 +2574,46 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   ),
                 ),
 
+              if (currentPost != null && intersectionReason != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: _worksContentIntersectionBottomClearance(context),
+                  child: ImmersiveViewerLayout.alignToRail(
+                    context: context,
+                    layoutSpec: currentLayoutSpec,
+                    child: SizedBox(
+                      key: const ValueKey<String>(
+                        'works-caption-intersection-reason',
+                      ),
+                      width: double.infinity,
+                      child: ImmersiveIntersectionStatement(
+                        reason: intersectionReason,
+                        contextObjectName:
+                            currentPost.normalizedTitle.trim().isNotEmpty
+                            ? currentPost.normalizedTitle.trim()
+                            : currentPost.normalizedBody.trim(),
+                        contextObjectTarget: IntersectionTarget(
+                          objectId: currentPost.id,
+                          objectKind: 'content',
+                          routeId: 'workBrowser',
+                        ),
+                        onSpanTap: (span) => _openIntersectionSpan(
+                          context,
+                          currentPost,
+                          intersectionReason,
+                          span,
+                        ),
+                        onFallbackTap: () => _openIntersectionFallback(
+                          context,
+                          currentPost,
+                          intersectionReason,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
               if (currentPost != null && widget.showWorksToolbar)
                 Positioned(
                   left: 0,
@@ -2429,9 +2621,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                   bottom: 0,
                   child: Builder(
                     builder: (context) {
-                      final intersectionReason = _primaryIntersectionReasonFor(
-                        currentPost,
-                      );
                       return ImmersiveEngagementBar(
                         layoutSpec: currentEngagementLayoutSpec,
                         avatarUrl: currentPost.avatarUrl,
@@ -2458,21 +2647,6 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
                           ref,
                           currentPost.subAccountId,
                         ),
-                        intersectionReason: intersectionReason,
-                        onIntersectionSpanTap: intersectionReason == null
-                            ? null
-                            : (span) => _openIntersectionSpan(
-                                context,
-                                intersectionReason,
-                                span,
-                              ),
-                        onIntersectionFallbackTap: intersectionReason == null
-                            ? null
-                            : () => _openIntersectionFallback(
-                                context,
-                                currentPost,
-                                intersectionReason,
-                              ),
                         onUserTap: () {
                           // §7.3 旅程无断点：携该作品的最强证据组 kind 跳作者主页高亮。
                           ref
@@ -2595,8 +2769,10 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
       return ImageBookCanvas(
         imageUrls: _imageUrlsForPost(post),
         initialIndex: _photoInnerIndex[post.id] ?? _defaultImageIndexFor(post),
+        gestureIntentController: _gestureIntentController,
         onImageChanged: (index) =>
             setState(() => _photoInnerIndex[post.id] = index),
+        onPageflipMotion: (event) => _trackImagePageflipMotion(post, event),
         onOverflowPrevious: null,
         onOverflowNext: null,
       );
@@ -2629,7 +2805,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         );
       }
       final safeInitialPage = (_articleInnerIndex[post.id] ?? 0)
-          .clamp(0, article.pages.length - 1)
+          .clamp(0, _articlePageCount(post) - 1)
           .toInt();
       return _WorksArticleCanvas(
         post: post,
@@ -2642,6 +2818,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
         enablePageCurl: enableArticlePageCurl,
         initialPage: safeInitialPage,
         topChromeSafeInset: widget.topChromeSafeInset,
+        reserveContentIntersection: _primaryIntersectionReasonFor(post) != null,
         onPageChanged: (index) => _handleArticleInnerPageChanged(post, index),
         onResolvedPageCountChanged: (pageCount) =>
             _handleResolvedArticlePageCount(post.id, pageCount),
@@ -2651,6 +2828,7 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
             _trackArticlePageFlipCommit(post, event),
         onPageCurlAborted: (event) => _trackArticlePageCurlAbort(post, event),
         onEntityTap: _handleArticleInlineMentionTap,
+        gestureIntentController: _gestureIntentController,
         onOverflowPrevious: null,
         onOverflowNext: null,
       );
@@ -2663,6 +2841,8 @@ class _WorksImmersiveViewerState extends ConsumerState<WorksImmersiveViewer>
           layoutSpec: _layoutSpecForPost(post),
           title: _titleForPost(post),
           body: _bodyForPost(post),
+          reserveContentIntersection:
+              _primaryIntersectionReasonFor(post) != null,
           imageUrl: _rawPostById(
             post.id,
           )?[ArticleDetailWireKeys.coverUrl]?.toString(),

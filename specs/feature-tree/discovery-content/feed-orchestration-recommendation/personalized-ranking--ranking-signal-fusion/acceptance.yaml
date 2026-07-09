@@ -33,7 +33,7 @@ gwt_acceptance:
     - primaryText 缺失时首页/精品不渲染推荐解释占位。
     contract_refs:
     - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
-    - quwoquan_service/scripts/ml/feature_registry.yaml
+    - quwoquan_service/services/rec-model-service/scripts/feature_registry.yaml
     performance_points:
     - negative_feedback_rate <= 0.08
     - content_coverage_rate >= 0.30
@@ -69,7 +69,7 @@ gwt_acceptance:
     - api_integration/user_acceptance 仍需 gamma 数据验证 feedRequestId/rankingVersion/reasonVersion 与行为分桶。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

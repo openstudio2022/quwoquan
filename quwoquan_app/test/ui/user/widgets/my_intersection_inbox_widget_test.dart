@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -129,6 +130,23 @@ void main() {
       find.text(UITextConstants.profileIntersectionEmptyGuidance),
       findsOneWidget,
     );
+  });
+
+  testWidgets('缺少主句的 fact 条目不展示，避免空白预览行', (tester) async {
+    final repo = _StubIntersectionRepository(
+      items: <IntersectionReason>[
+        _item(id: 'ix_blank', text: '   '),
+        _item(id: 'ix_rel_1', text: '你和林清越等4位用户都关注「黄金投资圈」'),
+      ],
+    );
+
+    await tester.pumpWidget(host(repo));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text('你和林清越等4位用户都关注「黄金投资圈」'), findsOneWidget);
+    expect(find.text('   '), findsNothing);
+    expect(find.byType(InteractiveIntersectionText), findsOneWidget);
   });
 
   testWidgets('契约 seed 默认 Mock：显示查看全部，不显示展开收起', (tester) async {
@@ -317,19 +335,43 @@ IntersectionReason _item({
   String timeBucket = 'today',
   double strength = 0.8,
 }) {
+  final target = IntersectionTarget(
+    objectType: 'circle',
+    objectId: 'fixture_circle_gold_invest',
+    objectKind: 'circle',
+    routeId: 'circleDetail',
+  );
   return IntersectionReason(
     dimension: 'relationship',
     intersectionClass: 'fact',
     intersectionId: id,
     objectKind: 'circle',
     primaryText: text,
-    primarySpans: spans,
+    primarySpans: spans.isEmpty
+        ? <IntersectionTextSpan>[
+            IntersectionTextSpan(text: text, role: 'object', target: target),
+          ]
+        : spans,
     actionTargetId: 'fixture_circle_gold_invest',
     source: source,
     timeBucket: timeBucket,
     dedupeKey: 'viewer:$id',
     strength: strength,
     freshAt: DateTime.now().toUtc().toIso8601String(),
+    actorEvidenceTotalCount: 1,
+    actorEvidenceCompleteness: 'complete',
+    representativeActor: IntersectionRepresentativeActor(
+      actorId: 'u_zhang',
+      displayName: '张晓明',
+      relationLabel: '联系人',
+      privacyState: 'visible',
+      target: IntersectionTarget(
+        objectType: 'user',
+        objectId: 'u_zhang',
+        objectKind: 'person',
+        routeId: 'userProfile',
+      ),
+    ),
   );
 }
 
@@ -345,6 +387,7 @@ List<IntersectionTextSpan> _spans({
       text: anchorName,
       role: 'object',
       target: IntersectionTarget(
+        objectType: 'user',
         objectId: 'u_zhang',
         objectKind: 'person',
         routeId: 'userProfile',
@@ -355,7 +398,9 @@ List<IntersectionTextSpan> _spans({
       text: count,
       role: 'count',
       target: IntersectionTarget(
+        objectType: 'dimension',
         objectId: 'relationship',
+        objectKind: 'dimension',
         routeId: 'myIntersections',
       ),
     ),
@@ -364,7 +409,8 @@ List<IntersectionTextSpan> _spans({
       text: objectName,
       role: 'object',
       target: IntersectionTarget(
-        objectId: 'fixture_circle_photo',
+        objectType: 'circle',
+        objectId: 'fixture_circle_gold_invest',
         objectKind: 'circle',
         routeId: 'circleDetail',
       ),

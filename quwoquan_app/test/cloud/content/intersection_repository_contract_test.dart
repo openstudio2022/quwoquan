@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
@@ -144,12 +145,37 @@ void main() {
       }
     });
 
-    test('禁止 reason 级 displayText/label/sharedCount/recommendationTraceId 回归', () {
-      final map = IntersectionReason().toMap();
-      expect(map.containsKey('displayText'), isFalse);
-      expect(map.containsKey('label'), isFalse);
-      expect(map.containsKey('sharedCount'), isFalse);
-      expect(map.containsKey('recommendationTraceId'), isFalse);
+    test(
+      '禁止 reason 级 displayText/label/sharedCount/recommendationTraceId 回归',
+      () {
+        final map = IntersectionReason().toMap();
+        expect(map.containsKey('displayText'), isFalse);
+        expect(map.containsKey('label'), isFalse);
+        expect(map.containsKey('sharedCount'), isFalse);
+        expect(map.containsKey('recommendationTraceId'), isFalse);
+      },
+    );
+
+    test('Mock actionHints hydrate 行动阶梯 metadata，不退回默认 navigate', () async {
+      final repo = MockIntersectionRepository();
+      final reasons = await repo.listMyIntersections();
+      final hints = reasons
+          .expand((reason) => reason.actionHints)
+          .toList(growable: false);
+      expect(hints, isNotEmpty);
+
+      for (final hint in hints) {
+        final meta = IntersectionActionKeyMeta.of(hint.actionKey);
+        expect(meta, isNotNull, reason: hint.actionKey);
+        expect(hint.actionTier, meta!.tier, reason: hint.actionKey);
+        expect(hint.requiredGates, meta.requiredGates, reason: hint.actionKey);
+        expect(
+          hint.targetAvailability,
+          meta.targetAvailability,
+          reason: hint.actionKey,
+        );
+        expect(hint.dispatch, meta.dispatch, reason: hint.actionKey);
+      }
     });
   });
 }

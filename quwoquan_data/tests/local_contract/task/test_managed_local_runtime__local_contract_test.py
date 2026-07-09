@@ -34,6 +34,9 @@ def test_managed_lane_limits_are_configurable():
         "image": 4,
     }
 
+def test_managed_agent_default_timeout_covers_homepage_generation_long_tail():
+    assert run_mod.MANAGED_AGENT_TIMEOUT_SECONDS >= 360
+
 def test_managed_keyboard_interrupt_preserves_resumable_checkpoint_state(monkeypatch):
     task_id = _make_task()
     batch_id = "managed_keyboard_interrupt_resumable"
@@ -204,6 +207,10 @@ def test_managed_author_prompts_can_be_sliced_by_ref_limit(monkeypatch):
     assert "成稿应保留至少 60% 的相关底稿原句群/三连字符覆盖" in prompts[0]
     assert "baseDraftFidelity 55%~99.5%" in prompts[0]
     assert "baseDraftFidelityStrategy" in prompts[0]
+    assert "主实体硬合同" in prompts[0]
+    assert "「待写0」" in prompts[0]
+    assert "正文必须至少自然出现一次完整主实体名称" in prompts[0]
+    assert "去过…之后" in prompts[0]
     assert "普通网页只取事实" not in prompts[0]
 
 def test_managed_author_prompt_for_factual_reference_uses_base_draft_contract(monkeypatch):
@@ -362,6 +369,41 @@ def test_managed_no_start_infra_failures_count_from_agent_history_when_counter_s
         stage="produce_author",
     ) == 3
 
+def test_managed_no_start_infra_failures_respect_recovery_cutoff():
+    state = {
+        "managedInfraRecoveryCutoffs": {
+            "produce_author": "2026-07-01T00:02:00+00:00",
+        },
+        "agentRunHistory": [
+            {
+                "stage": "produce_author",
+                "startedCount": 0,
+                "finishedCount": 0,
+                "infrastructureFailures": 1,
+                "finishedAt": "2026-07-01T00:01:00+00:00",
+            },
+            {
+                "stage": "produce_author",
+                "startedCount": 0,
+                "finishedCount": 0,
+                "infrastructureFailures": 1,
+                "finishedAt": "2026-07-01T00:03:00+00:00",
+            },
+        ],
+        "lastAgentRun": {
+            "stage": "produce_author",
+            "startedCount": 0,
+            "finishedCount": 0,
+            "infrastructureFailures": 1,
+            "finishedAt": "2026-07-01T00:04:00+00:00",
+        },
+    }
+
+    assert run_mod._managed_consecutive_no_start_infra_failures(
+        state,
+        stage="produce_author",
+    ) == 2
+
 def test_managed_default_cursor_model_uses_single_current_default():
     ctx = run_mod.PipelineContext(task_id="t", batch_id="b", entity_ids=[], spec={})
     parser = argparse.ArgumentParser()
@@ -370,7 +412,7 @@ def test_managed_default_cursor_model_uses_single_current_default():
 
     parsed = parser.parse_args(["run"])
 
-    assert run_mod.DEFAULT_CURSOR_AGENT_MODEL != "composer-2.5"
+    assert run_mod.DEFAULT_CURSOR_AGENT_MODEL == "composer"
     assert ctx.model == run_mod.DEFAULT_CURSOR_AGENT_MODEL
     assert parsed.model is None
     assert run_mod._resolve_managed_model("cursor_sdk", parsed.model) == run_mod.DEFAULT_CURSOR_AGENT_MODEL
@@ -543,10 +585,11 @@ def test_run_download_auto_research_managed_local_pauses_after_one_wave_and_appe
         *,
         entity_type: str,
         force: bool = False,
+        lanes=None,
         max_workers: int = 1,
         progress_callback=None,
     ) -> dict:
-        del task, batch, entity_type, force, max_workers, progress_callback
+        del task, batch, entity_type, force, lanes, max_workers, progress_callback
         calls.append(list(entity_ids))
         entity_id = entity_ids[0]
         return {
@@ -774,6 +817,102 @@ def test_managed_pipeline_yields_after_author_partial_progress_failure(monkeypat
     assert recovered["failedObjects"] == ["待恢复文章"]
     assert recovered["controllerYield"]["reason"] == "managed ref slice partially completed"
     assert "finished=1" in recovered["nextAction"]
+
+def test_managed_pipeline_blocks_before_rerun_when_author_no_start_budget_exhausted(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": False})
+    batch_id = "managed_author_no_start_budget_precheck"
+    ensure_batch_layout(task_id, batch_id, "produce")
+    ctx = _ctx(task_id, batch_id)
+    ctx.managed = True
+    ref = "未启动文章"
+    content_object.register_content_object(task_id, batch_id, ref, content_type="article", angle="攻略", title=ref)
+    write_writing_pack(
+        task_id,
+        batch_id,
+        ref,
+        {
+            "carrier": "article",
+            "sourcePaths": ["_shared/source.md"],
+            "baseDraftText": _long_base_text(ref),
+        },
+    )
+    write_placeholder_draft(task_id, batch_id, ref)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["waitingCheckpoint"] = "produce_author"
+    state["agentRunHistory"] = [
+        {
+            "stage": "produce_author",
+            "plannedJobCount": 1,
+            "startedCount": 0,
+            "finishedCount": 0,
+            "infrastructureFailures": 1,
+            "finishedAt": f"2026-07-01T00:0{idx}:00+00:00",
+        }
+        for idx in range(1, run_mod.MAX_MANAGED_INFRA_RETRIES + 1)
+    ]
+    run_mod.save_workflow_state(state)
+    called = {"checkpoint": 0}
+
+    monkeypatch.setattr(run_mod, "run_pipeline", lambda _ctx: 10)
+
+    def _checkpoint(_ctx, _stage):
+        called["checkpoint"] += 1
+        return False
+
+    monkeypatch.setattr(run_mod, "_run_managed_checkpoint", _checkpoint)
+
+    assert run_mod.run_managed_pipeline(ctx) == 1
+    assert called["checkpoint"] == 0
+    recovered = run_mod.load_workflow_state(task_id, batch_id)
+    assert recovered["status"] == "manual_required"
+    assert recovered["failedObjects"] == [
+        f"produce_author:{ref}: infrastructure did not start"
+    ]
+
+def test_managed_author_infra_failure_never_abandons_partial_content_refs(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    batch_id = "managed_author_no_start_partial_still_blocks"
+    ensure_batch_layout(task_id, batch_id, "produce")
+    ctx = _ctx(task_id, batch_id)
+    ctx.managed = True
+    ref = "部分内容也不能因基础设施弃稿"
+    content_object.register_content_object(task_id, batch_id, ref, content_type="article", angle="攻略", title=ref)
+    write_writing_pack(
+        task_id,
+        batch_id,
+        ref,
+        {
+            "carrier": "article",
+            "sourcePaths": ["_shared/source.md"],
+            "baseDraftText": _long_base_text(ref),
+        },
+    )
+    write_placeholder_draft(task_id, batch_id, ref)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["waitingCheckpoint"] = "produce_author"
+    state["agentRunHistory"] = [
+        {
+            "stage": "produce_author",
+            "plannedJobCount": 1,
+            "startedCount": 0,
+            "finishedCount": 0,
+            "infrastructureFailures": 1,
+            "finishedAt": f"2026-07-01T00:0{idx}:00+00:00",
+        }
+        for idx in range(1, run_mod.MAX_MANAGED_INFRA_RETRIES + 1)
+    ]
+    run_mod.save_workflow_state(state)
+
+    monkeypatch.setattr(run_mod, "run_pipeline", lambda _ctx: 10)
+    monkeypatch.setattr(run_mod, "_run_managed_checkpoint", lambda _ctx, _stage: False)
+
+    assert run_mod.run_managed_pipeline(ctx) == 1
+    recovered = run_mod.load_workflow_state(task_id, batch_id)
+    assert recovered["status"] == "manual_required"
+    assert recovered.get("abandonedContentObjects") in (None, [])
+    assert recovered["failedObjects"] == [
+        f"produce_author:{ref}: infrastructure did not start"
+    ]
 
 def test_managed_checkpoint_continues_after_one_job_failure(monkeypatch):
     task_id = _make_task()

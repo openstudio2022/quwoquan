@@ -20,6 +20,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 import argparse
 import io
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -66,20 +67,26 @@ def _doc(top_level: bool, source_count: int = 1) -> dict:
     entries = [
         {
             "source_id": "s1",
-            "platform": "baike",
+            "platform": "维基百科",
             "url": "https://daocheng.invalid/guide",
+            "category": "encyclopedia",
+            "sourceRole": "primary",
             "body": _BODY_MARK,
         },
         {
             "source_id": "s2",
-            "platform": "mafengwo",
+            "platform": "搜狗百科",
             "url": "https://daocheng.invalid/travelogue",
+            "category": "encyclopedia",
+            "sourceRole": "supporting",
             "body": "离线兜底正文：亚丁徒步与避坑。",
         },
         {
             "source_id": "s3",
             "platform": "官网",
             "url": "https://daocheng.invalid/official",
+            "category": "official_site",
+            "sourceRole": "supporting",
             "body": "离线兜底正文：亚丁官方开放与预约信息。",
         },
     ][:source_count]
@@ -94,6 +101,8 @@ def _doc(top_level: bool, source_count: int = 1) -> dict:
                 "sourceUrl": "https://img.invalid/a.jpg",
                 "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
                 "usageScope": "app_publish",
+                "authorizationProof": "https://img.invalid/a.jpg",
+                "modelReleaseStatus": "not_required",
                 "caption": "稻城亚丁主峰",
                 "relevance": "支撑稻城亚丁主峰段落",
             },
@@ -105,6 +114,8 @@ def _doc(top_level: bool, source_count: int = 1) -> dict:
                 "sourceUrl": "https://img.invalid/b.jpg",
                 "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
                 "usageScope": "app_publish",
+                "authorizationProof": "https://img.invalid/b.jpg",
+                "modelReleaseStatus": "not_required",
                 "caption": "牛奶海",
                 "relevance": "支撑牛奶海段落",
             },
@@ -126,10 +137,10 @@ def test_source_screen_report_ref_is_entity_scoped():
 
 
 def _seed_object_plan(top_level: bool, source_count: int = 1) -> None:
-    """对象优先：source_plan 落实体对象 1.download/source_plan.json。"""
+    """对象优先：lane plan 落实体对象 1.download/homepage_source_plan.json。"""
     ensure_batch_layout(_TASK, _BATCH, "download")
     obj = resolve_entity_object_dir(_TASK, _BATCH, _EID, etype_hint="景区")
-    write_json(obj / STAGE_DOWNLOAD / "source_plan.json", _doc(top_level, source_count))
+    write_json(obj / STAGE_DOWNLOAD / "homepage_source_plan.json", _doc(top_level, source_count))
 
 
 def _source_units_by_source_id(obj: Path) -> dict[str, Path]:
@@ -259,7 +270,7 @@ def test_article_scoped_source_plan_gate_does_not_require_homepage_core_category
         selected_lanes={"homepage"},
         vertical="travel",
     )
-    assert any("homepage research needs encyclopedia or official evidence" in issue for issue in homepage_issues)
+    assert any("homepage research needs primary authority encyclopedia evidence" in issue for issue in homepage_issues)
 
     official_homepage_issues = handler_mod._source_plan_gate_issues(
         task_id=task["taskId"],
@@ -279,7 +290,7 @@ def test_article_scoped_source_plan_gate_does_not_require_homepage_core_category
         vertical="travel",
     )
     assert not any("fewer than 2" in issue for issue in official_homepage_issues)
-    assert official_homepage_issues == []
+    assert not official_homepage_issues
 
     official_site_issues = handler_mod._source_plan_gate_issues(
         task_id=task["taskId"],
@@ -298,15 +309,16 @@ def test_article_scoped_source_plan_gate_does_not_require_homepage_core_category
         selected_lanes={"homepage"},
         vertical="travel",
     )
-    assert official_site_issues == []
+    assert not official_site_issues
 
 
 def test_handle_download_produces_source_unit_from_preset_plan():
     # Source unit 物理真相源写入 batch-level sources/{sourceUnitId}/，对象只保存软引用索引。
     _seed_object_plan(top_level=True, source_count=3)
-    args = argparse.Namespace(task=_TASK, batch=_BATCH, entity_ids=_EID, entity_type="景区")
+    args = argparse.Namespace(task=_TASK, batch=_BATCH, entity_ids=_EID, entity_type="景区", lane="homepage")
     original_fetch = handler_mod.fetch_source_payload
     original_image_fetch = handler_mod.fetch_image_payload
+    original_gate_download = handler_mod.gate_download
     try:
         img_a = _real_jpeg(31)
         img_b = _real_jpeg(32)
@@ -317,9 +329,12 @@ def test_handle_download_produces_source_unit_from_preset_plan():
                 "statusCode": 200,
                 "htmlBytes": b"<html></html>",
                 "text": (
-                    f"{_EID} 景区当天开放时间会随天气调整，进山前最好先确认门票、观光车和预约规则。"
-                    f"从游客中心到核心步道之间转场时间不短，如果上午抵达，通常更适合先看主景点再安排长距离徒步。"
-                    f"雨后栈道湿滑、午后风大，带老人或孩子同行时要优先考虑体力分配、补给点位置和返程排队。"
+                    # homepage 事实门要求底稿具备事实密度（位置/海拔/面积/门票等），
+                    # 弱建议型文本会被 insufficient_homepage_facts 打回。
+                    f"{_EID}位于四川省甘孜藏族自治州稻城县，海拔2900米至6032米。\n\n"
+                    f"{_EID}景区占地约1344平方公里，核心景点包括仙乃日、央迈勇、夏诺多吉三座雪山。\n\n"
+                    f"{_EID}门票旺季146元，观光车120元，开放时间为7:00-18:00，可在官网预约购票。\n\n"
+                    f"{_EID}1997年被批准为省级自然保护区，2003年被列入世界人与生物圈保护区。"
                 ),
                 "sha256": "sha",
             }
@@ -338,26 +353,31 @@ def test_handle_download_produces_source_unit_from_preset_plan():
 
         handler_mod.fetch_source_payload = _fake_fetch
         handler_mod.fetch_image_payload = _fake_image_fetch
+        handler_mod.gate_download = lambda *_args, **_kwargs: []
         handle_download(args)
     finally:
         handler_mod.fetch_source_payload = original_fetch
         handler_mod.fetch_image_payload = original_image_fetch
+        handler_mod.gate_download = original_gate_download
     obj = resolve_entity_object_dir(_TASK, _BATCH, _EID, etype_hint="景区")
     units = iter_source_units(obj)
     assert units, f"no source unit under {obj}"
     refs = read_json(obj / STAGE_DOWNLOAD / "source_refs.json")
     rows = refs.get("sources") or []
     assert [row.get("sourceId") for row in rows[:3]] == ["s1", "s2", "s3"], rows
-    assert len(rows) == 4 and str(rows[3].get("sourceId") or "").startswith("image_"), rows
-    assert all(str(row.get("sourceRef") or "").startswith("sources/su_") for row in rows), rows
+    assert len(rows) == 3, rows
+    assert {row.get("researchLane") for row in rows} == {"homepage"}
+    # 可读命名契约（spec §3）：sources/{实体名}__{sourceKind}__{hash8}/。
+    assert all(
+        re.match(r"^sources/稻城亚丁__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", str(row.get("sourceRef") or ""))
+        for row in rows
+    ), rows
     assert all(str(row.get("sourceRef") or "").endswith("/source.md") for row in rows), rows
     assert not (obj / STAGE_DOWNLOAD / "sources").exists()
 
     by_source_id = _source_units_by_source_id(obj)
     assert {"s1", "s2", "s3"}.issubset(by_source_id), by_source_id
-    image_id = str(rows[3]["sourceId"])
-    assert by_source_id[image_id].parent.name == "sources"
-    assert (by_source_id[image_id] / "assets" / "index.json").is_file()
+    assert not any(str(source_id).startswith("image_") for source_id in by_source_id)
     src_md = by_source_id["s1"] / "source.md"
     clean_md = by_source_id["s1"] / "source.clean.md"
     assert src_md.is_file(), f"missing {src_md}"
@@ -367,10 +387,10 @@ def test_handle_download_produces_source_unit_from_preset_plan():
     clean_text = clean_md.read_text(encoding="utf-8")
     assert _BODY_MARK in source_text
     assert "manual_source_plan_note:" in source_text
-    assert "开放时间" in source_text and "门票" in source_text and "返程排队" in source_text
+    assert "开放时间" in source_text and "门票" in source_text and "世界人与生物圈" in source_text
     assert _BODY_MARK not in clean_text
     assert "manual_source_plan_note:" not in clean_text
-    assert "开放时间" in clean_text and "门票" in clean_text and "返程排队" in clean_text
+    assert "开放时间" in clean_text and "门票" in clean_text and "世界人与生物圈" in clean_text
     # 不再产生对象级散落 images/
     assert not (obj / "images").exists()
 
@@ -423,6 +443,7 @@ def test_lane_scoped_homepage_download_preserves_other_lanes():
             "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
             "authorizationProof": "https://img.invalid/lane-a.jpg#rights",
             "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
             "caption": "稻城亚丁雪山",
             "relevance": "直接呈现稻城亚丁雪山景观",
         },
@@ -435,6 +456,7 @@ def test_lane_scoped_homepage_download_preserves_other_lanes():
             "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
             "authorizationProof": "https://img.invalid/lane-b.jpg#rights",
             "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
             "caption": "稻城亚丁牛奶海",
             "relevance": "直接呈现稻城亚丁牛奶海湖泊",
         },
@@ -579,10 +601,10 @@ def test_curated_blocks_dual_scenic_location_tree_conflict():
     conflict_batch = "dual_tree_download"
     ensure_batch_layout(_TASK, conflict_batch, "download")
     scenic = resolve_entity_object_dir(_TASK, conflict_batch, _EID, etype_hint="地点/景区")
-    write_json(scenic / STAGE_DOWNLOAD / "source_plan.json", _doc(top_level=True))
+    write_json(scenic / STAGE_DOWNLOAD / "homepage_source_plan.json", _doc(top_level=True))
     spot = batch_entity_object_dir(_TASK, conflict_batch, "地点", "打卡地", _EID)
     (spot / STAGE_DOWNLOAD).mkdir(parents=True, exist_ok=True)
-    write_json(spot / STAGE_DOWNLOAD / "source_plan.json", _doc(top_level=True))
+    write_json(spot / STAGE_DOWNLOAD / "homepage_source_plan.json", _doc(top_level=True))
     try:
         curated_sources_for_entity(_TASK, conflict_batch, _EID, "景区")
     except ValueError as exc:

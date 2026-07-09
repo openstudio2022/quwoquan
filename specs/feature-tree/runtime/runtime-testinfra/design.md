@@ -29,7 +29,7 @@
 ### Data / Ops
 
 - `quwoquan_data/tests/{local_contract,api_integration,user_acceptance}` 与
-  `agent_ops/tests/local_contract`、`agent_ops/acceptance/{api_integration,user_acceptance}` 成为唯一根
+  `quwoquan_ops/tests/local_contract`、`quwoquan_ops/acceptance/{api_integration,user_acceptance}` 成为唯一根
 - Python bridge 使用 importlib wrapper，保证既有套件可被 canonical 根直接发现与执行
 
 ## Truth Sources

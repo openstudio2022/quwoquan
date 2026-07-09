@@ -210,7 +210,7 @@ MainAppShell
 | local_contract contract | `verify_lib_dart_io_budget.py`、`verify_lib_platform_check_isolation.py` 基线只减不增 |
 | local_contract widget | capability profile 驱动的入口降级契约测试（示例骨架） |
 | 静态 | `flutter analyze quwoquan_app/lib/`、`verify_dart_semantic.py` 不回退 |
-| 串联 | `bash agent_ops/gate/gate_repo.sh --scope app` |
+| 串联 | `bash quwoquan_ops/gate/gate_repo.sh --scope app` |
 
 ## 验收
 

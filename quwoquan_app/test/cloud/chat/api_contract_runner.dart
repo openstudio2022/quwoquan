@@ -161,8 +161,9 @@ void main() {
     });
 
     test('GET /v1/chat/conversations 返回 200 + items 数组', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final url = Uri.parse('$_apiBase/v1/chat/conversations?limit=5');
       final sw = Stopwatch()..start();
       final resp = await _client
@@ -202,8 +203,9 @@ void main() {
     });
 
     test('conversation 字段结构完整', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final resp = await _client
           .get(
             Uri.parse('$_apiBase/v1/chat/conversations/$convId'),
@@ -230,8 +232,9 @@ void main() {
     });
 
     test('发送消息返回 201 + seq + messageId', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final sw = Stopwatch()..start();
       final result = await _sendMessage(convId, 'l3-send-001');
       sw.stop();
@@ -248,8 +251,9 @@ void main() {
     });
 
     test('相同 clientMsgId 幂等（dedup）', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final msg1 = await _sendMessage(convId, 'l3-dedup-001');
       final msg2 = await _sendMessage(convId, 'l3-dedup-001');
 
@@ -266,8 +270,9 @@ void main() {
     });
 
     test('撤回消息返回 200 + status=recalled', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final msg = await _sendMessage(convId, 'l3-recall-001');
       final msgId = msg['messageId'] as String;
 
@@ -290,8 +295,9 @@ void main() {
     });
 
     test('消息列表包含已发送消息', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       await _sendMessage(convId, 'l3-list-001');
 
       final resp = await _client
@@ -322,8 +328,9 @@ void main() {
     test(
       '不存在的 conversationId → 404 + CHAT.USER.conversation_not_found',
       () async {
-        if (!_apiAvailable)
+        if (!_apiAvailable) {
           return markTestSkipped('$_apiContractEnv unavailable');
+        }
         final resp = await _client
             .get(
               Uri.parse(
@@ -364,8 +371,9 @@ void main() {
     });
 
     test('POST /sync 返回增量消息', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final sw = Stopwatch()..start();
       final resp = await _client
           .post(
@@ -399,8 +407,9 @@ void main() {
     });
 
     test('添加成员 → 成员列表包含新成员', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final addResp = await _client
           .post(
             Uri.parse('$_apiBase/v1/chat/conversations/$convId/members'),

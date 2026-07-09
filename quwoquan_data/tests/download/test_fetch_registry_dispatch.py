@@ -22,7 +22,7 @@ def test_extract_page_text_dispatches_by_registry_extractor():
     orig_official = fetch_mod._static_official_plaintext
     try:
         fetch_mod._wikipedia_api_plaintext = lambda url: "wiki正文"
-        fetch_mod._baike_html_plaintext = lambda url: "baike正文"
+        fetch_mod._baike_html_plaintext = lambda url, extractor="baidu_baike_html", html_bytes=b"": "baike正文"
         fetch_mod._qunar_html_plaintext = lambda html_bytes, url="": "qunar正文"
         fetch_mod._static_official_plaintext = lambda url: "official正文"
         assert fetch_mod.extract_page_text(html, "https://zh.wikipedia.org/wiki/九寨沟", extractor="wikipedia_api") == "wiki正文"
@@ -304,6 +304,12 @@ def test_wikipedia_api_payload_carries_rights_checked_image_assets():
     def fake_curl(url: str, timeout: int = 90) -> str:
         if "prop=extracts" in url:
             return '{"query":{"pages":{"1":{"extract":"九寨沟位于四川省阿坝藏族羌族自治州。"}}}}'
+        if "action=parse" in url and "prop=wikitext" in url:
+            # 统一结构化 IR：payload 同时抓 wikitext 产出 source.layout.json 真相源。
+            return (
+                '{"parse":{"wikitext":{"*":"== 概述 ==\\n九寨沟正文段落。\\n'
+                '[[File:Jiuzhaigou.jpg|thumb|五花海]]\\n"}}}'
+            )
         if "prop=pageimages%7Cimages" in url or "prop=pageimages|images" in url:
             return '{"query":{"pages":{"1":{"images":[{"title":"File:Jiuzhaigou.jpg"}]}}}}'
         if "prop=imageinfo" in url:
@@ -329,7 +335,16 @@ def test_wikipedia_api_payload_carries_rights_checked_image_assets():
         )
     finally:
         fetch_mod._curl_get_text = orig_curl
-    assert payload["text"].startswith("九寨沟位于")
+    # 结构化口径：layout ok 时 source 正文从 IR 渲染（章节 + 图片原位占位 + 仅原图注）。
+    assert "## 概述" in payload["text"]
+    assert "九寨沟正文段落。" in payload["text"]
+    assert "![五花海](asset://source-inline-001)" in payload["text"]
+    # 统一结构化 IR 随 payload 返回（wikitext 前端），供 write_source_unit 落盘。
+    layout = payload["layout"]
+    assert layout["parseStatus"] == "ok"
+    figures = [b for b in layout["blocks"] if b["type"] == "figure"]
+    assert figures and figures[0]["fileTitle"] == "Jiuzhaigou.jpg"
+    assert figures[0]["caption"] == "五花海"
     asset = payload["assets"][0]
     assert asset["license"] == "CC BY-SA 4.0"
     assert asset["credit"] == "Example Photographer"

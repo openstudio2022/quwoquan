@@ -1,14 +1,14 @@
 version: 1
 grandfathered_current_paths:
-- agent_ops/tests/test_check_device_matrix_gate.py
-- agent_ops/tests/test_detect_ci_impacted_scopes.py
-- agent_ops/tests/test_dev_up.py
-- agent_ops/tests/test_prod_deploy_contract.py
-- agent_ops/tests/test_prod_plane_access_isolation.py
-- agent_ops/tests/test_prod_plane_runtime_stack.py
-- agent_ops/tests/test_prod_plane_ssh_setup.py
-- agent_ops/tests/test_resolve_prod_release_state.py
-- agent_ops/tests/test_stackctl_up_runtime.py
+- quwoquan_ops/tests/test_check_device_matrix_gate.py
+- quwoquan_ops/tests/test_detect_ci_impacted_scopes.py
+- quwoquan_ops/tests/test_dev_up.py
+- quwoquan_ops/tests/test_prod_deploy_contract.py
+- quwoquan_ops/tests/test_prod_plane_access_isolation.py
+- quwoquan_ops/tests/test_prod_plane_runtime_stack.py
+- quwoquan_ops/tests/test_prod_plane_ssh_setup.py
+- quwoquan_ops/tests/test_resolve_prod_release_state.py
+- quwoquan_ops/tests/test_stackctl_up_runtime.py
 - quwoquan_app/test/app/app_startup_welcome_test.dart
 - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
 - quwoquan_app/test/app/navigation/native_back_navigation_policy_test.dart
@@ -107,7 +107,6 @@ grandfathered_current_paths:
 - quwoquan_app/test/cloud/services/content/comment_sort_consistency_test.dart
 - quwoquan_app/test/cloud/services/content/discovery_wire_lookup_test.dart
 - quwoquan_app/test/cloud/services/content/intersection_inbox_synthesis_test.dart
-- quwoquan_app/test/cloud/services/content/intersection_object_evidence_test.dart
 - quwoquan_app/test/cloud/services/content/mock_comment_seed_test.dart
 - quwoquan_app/test/cloud/services/content_repository_subinterfaces_contract_test.dart
 - quwoquan_app/test/cloud/services/contract_seeded_mock_repository_test.dart

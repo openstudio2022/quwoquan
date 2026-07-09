@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/components/media/shared/gesture/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
 import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
 
@@ -114,6 +116,20 @@ double _rotationZForTransform(WidgetTester tester, Key key) {
 }
 
 void main() {
+  test('图片书与文章宿主只消费父级 gesture intent 坐标源', () {
+    final mediaSource = File(
+      'lib/components/media/shared/pageflip/media_page_flip_book.dart',
+    ).readAsStringSync();
+    final articleSource = File(
+      'lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart',
+    ).readAsStringSync();
+
+    expect(mediaSource, isNot(contains('update(position:')));
+    expect(mediaSource, isNot(contains('_syncExternalGestureIntent')));
+    expect(articleSource, isNot(contains('update(position:')));
+    expect(articleSource, isNot(contains('_syncExternalGestureIntent')));
+  });
+
   testWidgets('MediaPageFlipBook 首帧只展示静态页，不在 idle 状态启动 curl/capture', (
     tester,
   ) async {
@@ -289,7 +305,13 @@ void main() {
     );
 
     await gesture.up();
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+      reason: 'release 后 80ms 内仍应可见动态翻页层，避免高速松手闪缩。',
+    );
+    await tester.pumpAndSettle();
   });
 
   testWidgets('MediaPageFlipBook 右滑后翻持有态进入同源动态翻页层', (tester) async {
@@ -384,6 +406,137 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('MediaPageFlipBook 直接纹理路径不被 ready 门禁或加载回调打断跟手', (tester) async {
+    var readinessSignature = 0;
+    StateSetter? setHarnessState;
+
+    await tester.pumpWidget(
+      _host(
+        StatefulBuilder(
+          builder: (context, setState) {
+            setHarnessState = setState;
+            return SizedBox(
+              width: 320,
+              height: 480,
+              child: MediaPageFlipBook(
+                pageCount: 2,
+                textureReadinessSignature: readinessSignature,
+                isPageTextureReady: (_) => false,
+                textureSnapshotBuilder: _solidTextureBuilder,
+                pageBuilder: (context, index) => ColoredBox(
+                  key: ValueKey<String>('media-direct-ready-gate-page-$index'),
+                  color: index.isEven
+                      ? const Color(0xFF2E5FAA)
+                      : const Color(0xFFAA6B2E),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+    for (var i = 0; i < 8; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    final gestureLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    final rect = tester.getRect(gestureLayer);
+    final gesture = await tester.startGesture(rect.center);
+    await gesture.moveBy(const Offset(-12, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+      reason: '直接 URL/page surface 材质已经有成功/失败兜底，不能再被外部 ready=false 阻塞。',
+    );
+
+    setHarnessState!(() {
+      readinessSignature += 1;
+    });
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+      reason: '图片加载回调刷新 signature 时，不得清空正在跟手翻页的动态材质。',
+    );
+
+    await gesture.up();
+    await tester.pump();
+  });
+
+  testWidgets('MediaPageFlipBook 两张图在中心小幅前翻/后翻都立即跟手', (tester) async {
+    Future<void> pumpBook({
+      required int initialPage,
+      required ImmersiveGestureIntentController intentController,
+    }) async {
+      await tester.pumpWidget(
+        _host(
+          SizedBox(
+            width: 320,
+            height: 480,
+            child: MediaPageFlipBook(
+              pageCount: 2,
+              initialPage: initialPage,
+              textureSnapshotBuilder: _solidTextureBuilder,
+              gestureIntentController: intentController,
+              pageBuilder: (context, index) => ColoredBox(
+                key: ValueKey<String>('media-two-page-center-$index'),
+                color: index.isEven
+                    ? const Color(0xFF2E5FAA)
+                    : const Color(0xFFAA6B2E),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      for (var i = 0; i < 8; i += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+    }
+
+    final forwardIntent = ImmersiveGestureIntentController();
+    await pumpBook(initialPage: 0, intentController: forwardIntent);
+    final forwardLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    final forwardRect = tester.getRect(forwardLayer);
+    final forwardGesture = await tester.startGesture(forwardRect.center);
+    await forwardGesture.moveBy(const Offset(-10, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+      reason: '两张图第一页从中心左滑时，preview 阶段也要立即出现前翻跟手层。',
+    );
+    await forwardGesture.up();
+    await tester.pumpAndSettle();
+
+    final backIntent = ImmersiveGestureIntentController();
+    await pumpBook(initialPage: 1, intentController: backIntent);
+    final backLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    final backRect = tester.getRect(backLayer);
+    final backGesture = await tester.startGesture(backRect.center);
+    await backGesture.moveBy(const Offset(10, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+      reason: '两张图第二页从中心右滑时，preview 阶段也要立即出现后翻跟手层。',
+    );
+    await backGesture.up();
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('MediaPageFlipBook 前翻绑定 current.front、next.back、next.front', (
     tester,
   ) async {
@@ -438,9 +591,39 @@ void main() {
       reason: '前翻底页必须是下一页正面。',
     );
     expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('media-pageflip-bottom-layer')),
+        matching: find.byKey(
+          const ValueKey<String>('media-pageflip-surface-1-front'),
+        ),
+      ),
+      findsOneWidget,
+      reason: '下一页正面必须停留在底页，不应替换 moving sheet。',
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+        matching: find.byKey(
+          const ValueKey<String>('media-pageflip-surface-0-front'),
+        ),
+      ),
+      findsOneWidget,
+      reason: '前翻前 120ms 内当前页正面必须仍在 moving sheet 随手指离场。',
+    );
+    expect(
       find.byKey(const ValueKey<String>('media-pageflip-surface-1-back')),
       findsOneWidget,
       reason: '前翻翻动纸张背面必须是下一页背面。',
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+        matching: find.byKey(
+          const ValueKey<String>('media-pageflip-surface-1-back'),
+        ),
+      ),
+      findsOneWidget,
+      reason: '前翻背面必须作为同一 moving sheet 的 verso 渐进出现。',
     );
 
     await gesture.up();
@@ -486,8 +669,8 @@ void main() {
 
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-backward-front-layer')),
-      findsOneWidget,
-      reason: '后翻必须先把上一页正面作为同源动态层的一面。',
+      findsNothing,
+      reason: '后翻上一页正面不得再作为独立 positioned layer 跳入画面。',
     );
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-bottom-layer')),
@@ -503,9 +686,29 @@ void main() {
       reason: '后翻上一页正面必须进入可见层。',
     );
     expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+        matching: find.byKey(
+          const ValueKey<String>('media-pageflip-surface-0-front'),
+        ),
+      ),
+      findsOneWidget,
+      reason: '后翻上一页正面必须在同一 moving sheet 内连续离场/入场。',
+    );
+    expect(
       find.byKey(const ValueKey<String>('media-pageflip-surface-0-back')),
       findsOneWidget,
       reason: '后翻翻动纸张背面必须是上一页背面。',
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+        matching: find.byKey(
+          const ValueKey<String>('media-pageflip-surface-0-back'),
+        ),
+      ),
+      findsOneWidget,
+      reason: '后翻背面必须作为同一 moving sheet 的 verso 渐进出现。',
     );
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-surface-1-front')),
@@ -515,6 +718,67 @@ void main() {
 
     await gesture.up();
     await tester.pump();
+  });
+
+  testWidgets('MediaPageFlipBook 减弱动态时只更新页态不启动 curl layer', (tester) async {
+    final motionEvents = <MediaPageFlipMotionEvent>[];
+    final changedPages = <int>[];
+
+    await tester.pumpWidget(
+      _host(
+        MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: SizedBox(
+            width: 320,
+            height: 480,
+            child: MediaPageFlipBook(
+              pageCount: 2,
+              textureSnapshotBuilder: _solidTextureBuilder,
+              onPageChanged: changedPages.add,
+              onMotionEvent: motionEvents.add,
+              pageBuilder: (context, index) => ColoredBox(
+                key: ValueKey<String>('media-reduced-motion-page-$index'),
+                color: index.isEven
+                    ? const Color(0xFF2E5FAA)
+                    : const Color(0xFFAA6B2E),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    for (var i = 0; i < 8; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    final gestureLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    final rect = tester.getRect(gestureLayer);
+    final gesture = await tester.startGesture(rect.center);
+    await gesture.moveBy(const Offset(-72, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsNothing,
+      reason: '系统 Reduce Motion 开启时图片书不得启动 3D curl 动态层。',
+    );
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-static-page-1')),
+      findsOneWidget,
+      reason: 'Reduce Motion 下仍要完成轻量页态更新。',
+    );
+
+    await gesture.up();
+    await tester.pump();
+
+    expect(changedPages, contains(1));
+    expect(motionEvents, isNotEmpty);
+    expect(motionEvents.last.reducedMotion, isTrue);
+    expect(motionEvents.last.motionProfile, 'reduced_motion');
+    expect(motionEvents.last.committed, isTrue);
   });
 
   testWidgets('MediaPageFlipBook 斜向拖拽使用 renderFrame angle 驱动翻页层旋转', (

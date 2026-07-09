@@ -1,0 +1,60 @@
+creatorProfileId: sys_photo_0064
+userId: sys_photo_0064
+subAccountId: sys_photo_0064_sub_01
+displayName: 灯塔行路
+userHandle: beacon-walkpath
+handle: beacon-walkpath
+avatarPresetId: avatar_photo_flash_meter
+coverPresetId: cover_photo_darkroom_contactsheet
+bio: 比起器材堆料，更关注怎么把光线和观看顺序处理稳；也写废片原因。
+headline: 照片为什么成立
+slogan: 街角阴影让我信：一组图要有停顿
+creatorArchetype: gear_reviewer
+verticalSegment: photography_primary
+verticalRefs:
+- photography
+interestTagRefs: &id001
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+publicProfileTagRefs:
+- Topic/摄影
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 图片_专题
+- 摄影_教程
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  entityAffinityRefs:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  circleAffinityRefs:
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- photography
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程

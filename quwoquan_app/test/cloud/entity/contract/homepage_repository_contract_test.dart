@@ -196,6 +196,10 @@ void main() {
           newOriental.map((h) => h.id),
           contains('fixture_homepage_school_neworiental'),
         );
+        final newOrientalDetail = await repo.getHomepageDetail(
+          'fixture_homepage_school_neworiental',
+        );
+        expect(newOrientalDetail.coverUrl, isNotEmpty);
 
         final photoSpot = await repo.searchHomepages(
           query: '横竖影像馆取景地',
@@ -207,6 +211,10 @@ void main() {
           photoSpot.map((h) => h.id),
           contains('fixture_homepage_photo_spot_hengshu_studio'),
         );
+        final photoSpotDetail = await repo.getHomepageDetail(
+          'fixture_homepage_photo_spot_hengshu_studio',
+        );
+        expect(photoSpotDetail.coverUrl, isNotEmpty);
       },
     );
   });

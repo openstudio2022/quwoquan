@@ -6,7 +6,7 @@
 
 ## 范围
 
-- **config_release_gray_rollout.sh**：校验 step 顺序、写 `state/release/<service>.state`
+- **config_release_gray_rollout.sh**：校验 step 顺序、写 `.qwq_output/local/release-state/<service>.state`
 - **config_release_slo_gate.sh**：输入 SLO 指标，输出 continue(0) / pause(10) / rollback(20)
 - **config_release_rollback.sh**：回滚到指定版本
 - **config_release_apply_stage.sh**：单步 = rollout + slo-gate + 可选回滚
@@ -14,7 +14,7 @@
 ## 适用范围与约束
 
 - **适用**：与 gray-release-to-prod 父节点配合；STEP ∈ {5, 25, 50, 100}
-- **约束**：依赖 releases/config、slo_thresholds.yaml
+- **约束**：依赖 quwoquan_service/services、slo_thresholds.yaml
 - **不适用**：非 config-release 流程的部署
 
 ## 与父节点关系

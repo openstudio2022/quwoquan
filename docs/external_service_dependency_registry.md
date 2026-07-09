@@ -2,7 +2,7 @@
 
 ## 1. 文档目的
 
-本文档用于统一登记 `quwoquan_app`、`quwoquan_service`、`quwoquan_data`、`agent_ops` 对外部服务的依赖，明确：
+本文档用于统一登记 `quwoquan_app`、`quwoquan_service`、`quwoquan_data`、`quwoquan_ops` 对外部服务的依赖，明确：
 
 - 哪些依赖属于必须经 `integration-service` 统一出口的业务 SaaS 能力。
 - 哪些依赖属于当前仍然由领域服务直连、需要迁移或显式豁免的现状。
@@ -71,7 +71,7 @@
 - 已经基本满足统一出口思路的能力只有地图 POI：App 通过网关访问 `integration-service`，服务端统一调 `Baidu` / `AMap`。
 - `SMS OTP`、`push delivery`、`carrier one-tap` 已经在 metadata 和 `integration-service` 路由层面预留，但生产能力仍停留在 `mock`、`planned` 或未接线状态。
 - `user-service` 的社交登录和 `assistant-service` 的 LLM / 搜索 / 天气 / 金融查询仍存在领域直连外部厂商的现状，按本规格应视为待迁移或待豁免项。
-- `quwoquan_data` 与 `agent_ops` 存在明确的离线公开源、开发工具与发布链路外部依赖，不适用统一网关，但必须登记。
+- `quwoquan_data` 与 `quwoquan_ops` 存在明确的离线公开源、开发工具与发布链路外部依赖，不适用统一网关，但必须登记。
 
 ## 4. 当前架构图
 
@@ -210,7 +210,7 @@ flowchart LR
 | `data.flickr_registry` | Flickr（目录登记） | `registry_only_source` | `未发现 API 客户端` | `data-pipeline` | `quwoquan_data` | `quwoquan_data/templates/_registry/catalogs/{source_catalog,content_source_registry}.yaml` | `registered_only` | `data_pipeline=registry_only` | `无` | `waived` | 仅目录登记 |
 | `data.getty_registry` | Getty Images（目录登记） | `registry_only_source` | `未发现 API 客户端` | `data-pipeline` | `quwoquan_data` | `quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml` | `registered_only` | `data_pipeline=registry_only` | `无` | `waived` | 仅目录登记 |
 | `data.shutterstock_registry` | Shutterstock（目录登记） | `registry_only_source` | `未发现 API 客户端` | `data-pipeline` | `quwoquan_data` | `quwoquan_data/templates/_registry/catalogs/content_source_registry.yaml` | `registered_only` | `data_pipeline=registry_only` | `无` | `waived` | 仅目录登记 |
-| `dev.cursor_sdk_api` | Cursor SDK / Cursor Cloud API | `dev_tool` | `https://api2.cursor.sh/` | `dev-tool` | `quwoquan_data`, `agent_ops` | `无` | `production` | `dev_and_ci=enabled` | `CURSOR_API_KEY` | `waived` | 仅开发/托管工作流/CI 使用，不属于业务运行时网关 |
+| `dev.cursor_sdk_api` | Cursor SDK / Cursor Cloud API | `dev_tool` | `https://api2.cursor.sh/` | `dev-tool` | `quwoquan_data`, `quwoquan_ops` | `无` | `production` | `dev_and_ci=enabled` | `CURSOR_API_KEY` | `waived` | 仅开发/托管工作流/CI 使用，不属于业务运行时网关 |
 
 ### 7.5 客户端平台能力与占位接线
 
@@ -271,7 +271,7 @@ flowchart LR
 
 - `specs/feature-tree/runtime/runtime-external-integration/spec.md`
 - `specs/feature-tree/runtime/runtime-external-integration/design.md`
-- `quwoquan_service/specs/integration-service/spec.md`
+- `quwoquan_service/contracts/metadata/integration/`
 - `quwoquan_service/contracts/metadata/integration/location/service.yaml`
 - `quwoquan_service/contracts/metadata/integration/push_delivery/service.yaml`
 - `quwoquan_service/contracts/metadata/integration/external_interaction/service.yaml`

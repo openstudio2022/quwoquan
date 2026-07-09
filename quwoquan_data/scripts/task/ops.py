@@ -73,7 +73,7 @@ def collect_rows(vertical: str | None = None) -> list[dict[str, Any]]:
 def print_list(vertical: str | None = None) -> None:
     rows = collect_rows(vertical)
     if not rows:
-        print("[task] 无任务（quwoquan_data/tasks/ 为空）")
+        print("[task] 无任务（quwoquan_data/control_plane/tasks/ 为空）")
         return
     print(f"{'taskId':<46} {'arch':<24} {'status':<8} {'cov(done/rem)':<14} lock")
     print("-" * 104)

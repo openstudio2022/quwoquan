@@ -103,7 +103,7 @@ gwt_acceptance:
     - '[migrated_from_recorded_command] python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

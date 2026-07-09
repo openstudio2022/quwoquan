@@ -66,5 +66,5 @@ dev_log:
   - date: "2026-06-06"
     change: 规格冻结；新增 Journey/Scenarios 与 UAT_EXTERNAL_ACQUISITION；新增 L2/L3 节点与 link_templates 对外引流结构；登记 tree_index 与页面横向质量矩阵。
     verify:
-      - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-      - bash agent_ops/scaffold/verify_acceptance_standard.sh
+      - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+      - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh

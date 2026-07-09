@@ -195,6 +195,24 @@ const (
 	HomepageTypeUniversity HomepageType = "university"
 
 	HomepageTypeTravelPhoto HomepageType = "travel_photo"
+
+	HomepageTypeMuseum HomepageType = "museum"
+
+	HomepageTypeHeritageSite HomepageType = "heritage_site"
+
+	HomepageTypeAncientTown HomepageType = "ancient_town"
+
+	HomepageTypeReligiousSite HomepageType = "religious_site"
+
+	HomepageTypeCheckInSpot HomepageType = "check_in_spot"
+
+	HomepageTypeNaturalLandscape HomepageType = "natural_landscape"
+
+	HomepageTypePark HomepageType = "park"
+
+	HomepageTypeHotSpring HomepageType = "hot_spring"
+
+	HomepageTypeThemePark HomepageType = "theme_park"
 )
 
 // OrganizationNodeType enumerates allowed wire values for OrganizationNodeType.

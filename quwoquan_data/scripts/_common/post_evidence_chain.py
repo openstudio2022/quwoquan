@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from _common.article_package import compute_document_sha256, sha256_file, sha256_text
-from _common.paths import DATA_ROOT, RUNTIME_ROOT, batch_root, relative_batch_ref
+from _common.paths import RUNTIME_ROOT, batch_root, relative_batch_ref
 
 SOURCE_REFS_SCHEMA = "quwoquan_data.source_refs/2"
 SOURCE_REFS_SCHEMA_LEGACY = "quwoquan_data.source_refs"
@@ -84,8 +84,6 @@ def _resolve_source_path(task_id: str, batch_id: str, raw: str) -> Path | None:
     else:
         normalized = text.lstrip("./")
         candidates.append(batch_root(task_id, batch_id) / normalized)
-        if normalized.startswith("quwoquan_data/runtime/"):
-            candidates.append(DATA_ROOT.parent / normalized)
         candidates.append(RUNTIME_ROOT / normalized)
     for path in candidates:
         try:

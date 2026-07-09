@@ -3,10 +3,7 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
-import 'package:quwoquan_app/components/media/shared/toolbar/immersive_intersection_statement.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -27,8 +24,6 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 ///
 /// **关注**：固定接在作者名槽位之后；显隐用透明度与滑入动画，不移动右侧动作组。
 ///
-/// **交集**：作者名下方第二行展示推荐解释入口（如「3 个交集 ›」），
-/// 点击触发 [onIntersectionTap] 弹出交集详情；为空时不渲染该行。
 class ImmersiveEngagementBar extends StatelessWidget {
   const ImmersiveEngagementBar({
     super.key,
@@ -43,11 +38,6 @@ class ImmersiveEngagementBar extends StatelessWidget {
     required this.onFollowTap,
     required this.onLikeTap,
     this.authorBadge = '',
-    this.intersectionSummary = '',
-    this.intersectionReason,
-    this.onIntersectionTap,
-    this.onIntersectionSpanTap,
-    this.onIntersectionFallbackTap,
     this.onCommentTap,
     this.onShareTap,
     this.onRevealSystemNav,
@@ -63,9 +53,6 @@ class ImmersiveEngagementBar extends StatelessWidget {
   /// 空字符串不渲染。端侧只判空，不本地推断认证语义。
   final String authorBadge;
 
-  /// 推荐解释摘要（如「3 个交集」）；空字符串不展示第二行。
-  final String intersectionSummary;
-  final IntersectionReason? intersectionReason;
   final int likeCount;
   final int shareCount;
   final int commentCount;
@@ -76,9 +63,6 @@ class ImmersiveEngagementBar extends StatelessWidget {
   final ImmersiveViewerStageLayoutSpec layoutSpec;
 
   final VoidCallback onUserTap;
-  final VoidCallback? onIntersectionTap;
-  final void Function(IntersectionTextSpan span)? onIntersectionSpanTap;
-  final VoidCallback? onIntersectionFallbackTap;
   final VoidCallback onFollowTap;
   final VoidCallback onLikeTap;
   final VoidCallback? onCommentTap;
@@ -101,10 +85,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
   static const Duration _kTransitionDuration = Duration(milliseconds: 260);
 
   static double _contentHeight(BuildContext context) {
-    final intersectionLineHeight =
-        AppTypography.xxs * AppSpacing.textLineHeightFootnote +
-        AppSpacing.intraGroupXs / 2;
-    return AppSpacing.bottomNavBarHeight(context) + intersectionLineHeight;
+    return AppSpacing.bottomNavBarHeight(context);
   }
 
   static double _actionCellWidth(BuildContext ctx) =>
@@ -210,13 +191,11 @@ class ImmersiveEngagementBar extends StatelessWidget {
     required double nameSlotWidth,
     required double followLaneWidth,
     required bool useTwoLines,
-    required bool shaderTrailingFade,
     required TextStyle singleLineStyle,
     required TextStyle twoLineStyle,
     required VoidCallback onUserTap,
     required VoidCallback onFollowTap,
   }) {
-    final overflow = useTwoLines ? TextOverflow.ellipsis : TextOverflow.fade;
     final nameStyle = useTwoLines
         ? twoLineStyle.copyWith(height: AppSpacing.textLineHeightDense)
         : singleLineStyle;
@@ -224,29 +203,10 @@ class ImmersiveEngagementBar extends StatelessWidget {
     Widget nameWidget = Text(
       displayText,
       maxLines: useTwoLines ? 2 : 1,
-      overflow: overflow,
+      overflow: TextOverflow.ellipsis,
       softWrap: true,
       style: nameStyle,
     );
-
-    if (shaderTrailingFade && !useTwoLines) {
-      nameWidget = ShaderMask(
-        shaderCallback: (bounds) {
-          const fadeWidth = 14.0;
-          final start = bounds.width <= fadeWidth
-              ? 0.0
-              : ((bounds.width - fadeWidth) / bounds.width).clamp(0.0, 1.0);
-          return LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            stops: [start, 1.0],
-            colors: const [AppColors.white, AppColors.transparent],
-          ).createShader(bounds);
-        },
-        blendMode: BlendMode.dstIn,
-        child: nameWidget,
-      );
-    }
 
     // V1.0：作者认证角标紧跟作者名（云侧快照，空不渲染）。
     if (authorBadge.trim().isNotEmpty) {
@@ -549,7 +509,6 @@ class ImmersiveEngagementBar extends StatelessWidget {
                         style: singleLineStyle,
                       );
                   final useTwoLines = !fitsSingle;
-                  final shaderFade = showFollowButton && !useTwoLines;
 
                   final rowContent = isSelfPost
                       ? SizedBox(
@@ -572,7 +531,6 @@ class ImmersiveEngagementBar extends StatelessWidget {
                                 nameSlotWidth: effectiveName,
                                 followLaneWidth: visibleFollowLaneWidth,
                                 useTwoLines: useTwoLines,
-                                shaderTrailingFade: shaderFade,
                                 singleLineStyle: singleLineStyle,
                                 twoLineStyle: twoLineStyle,
                                 onUserTap: onUserTap,
@@ -597,19 +555,6 @@ class ImmersiveEngagementBar extends StatelessWidget {
                             ),
                           ],
                         );
-                  final statement = _buildIntersectionStatement();
-                  final content = statement == null
-                      ? rowContent
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            rowContent,
-                            SizedBox(height: AppSpacing.intraGroupXs / 2),
-                            SizedBox(width: trackWidth, child: statement),
-                          ],
-                        );
-
                   return Padding(
                     padding: EdgeInsets.symmetric(horizontal: horizontalInset),
                     child: Align(
@@ -617,7 +562,7 @@ class ImmersiveEngagementBar extends StatelessWidget {
                       child: SizedBox(
                         key: const ValueKey('immersive-engagement-rail'),
                         width: trackWidth,
-                        child: content,
+                        child: rowContent,
                       ),
                     ),
                   );
@@ -666,37 +611,6 @@ class ImmersiveEngagementBar extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  Widget? _buildIntersectionStatement() {
-    final reason = intersectionReason;
-    if (reason != null) {
-      return ImmersiveIntersectionStatement(
-        reason: reason,
-        onSpanTap: onIntersectionSpanTap,
-        onFallbackTap: onIntersectionFallbackTap ?? onIntersectionTap,
-      );
-    }
-    final summary = intersectionSummary.trim();
-    if (summary.isEmpty) {
-      return null;
-    }
-    return GestureDetector(
-      key: const ValueKey('immersive-intersection-entry'),
-      onTap: onIntersectionTap,
-      behavior: HitTestBehavior.opaque,
-      child: Text(
-        summary,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: AppColors.worksBodyText.withValues(alpha: 0.72),
-          fontSize: AppTypography.xxs,
-          fontWeight: AppTypography.medium,
-          height: AppSpacing.textLineHeightFootnote,
-        ),
-      ),
     );
   }
 

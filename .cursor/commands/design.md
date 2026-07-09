@@ -15,7 +15,7 @@ Story 不产生 `design.md`；Story 发现设计缺口时，上收到所属业�
 
 执行：
 - 读取 `docs/agent_context_contract.md`，完成 `Pre-work Reflection`。
-- 对齐 `contracts/metadata/**`、DDD 依赖方向、环境/seed、错误码、观测和测试证据。
+- 对齐 `quwoquan_service/contracts/metadata/**`、DDD 依赖方向、环境/seed、错误码、观测和测试证据。
 - 只在 AppRoot / L1 / L2 层写设计；Story 只引用上层设计。
 
 产出：

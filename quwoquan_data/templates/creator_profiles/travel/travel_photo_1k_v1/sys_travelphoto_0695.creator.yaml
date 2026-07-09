@@ -1,0 +1,73 @@
+creatorProfileId: sys_travelphoto_0695
+userId: sys_travelphoto_0695
+subAccountId: sys_travelphoto_0695_sub_01
+displayName: 远帆构图
+userHandle: sail-compose
+handle: sail-compose
+avatarPresetId: avatar_travelphoto_heritage_observer
+coverPresetId: cover_travelphoto_rice_terrace
+bio: 偏爱有现场感的旅拍内容，会把拍摄判断、失败天气和临时改线一起写进去；路线和照片一起复盘。
+headline: 风景与现场感
+slogan: 先看天气，再等情绪，记住快门
+creatorArchetype: outdoor_hiking_photographer
+verticalSegment: travel_photography_cross
+verticalRefs:
+- travel
+- photography
+interestTagRefs: &id001
+- Topic/旅行/出行方式/高铁铁路
+- Topic/摄影/人文摄影
+- Topic/摄影/摄影教程
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/旅行摄影
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/摄影
+- Topic/旅行/出行方式/高铁铁路
+- Topic/摄影/人文摄影
+creatorClassTagRefs: []
+preferredContentTypes:
+- image
+- article
+carrierAffinity:
+  article: 0.25
+  image: 0.7
+  video: 0.05
+preferredBlueprintIds:
+- 图片_风光
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/topic/photography
+  - homepage/tag/Topic_旅行_出行方式_高铁铁路
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/topic/photography
+  - homepage/tag/Topic_旅行_出行方式_高铁铁路
+  - homepage/tag/Topic_摄影_人文摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  circleAffinityRefs:
+  - circle/topic/travel
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- photography
+- Topic/旅行/出行方式/高铁铁路
+- Topic/摄影/人文摄影
+- Topic/摄影/摄影教程
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/旅行摄影

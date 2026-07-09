@@ -194,6 +194,82 @@ def test_content_plan_accepts_off_entity_source_as_multi_tag_work():
     # 底稿中心：不得再出现任何 entity_focus_gate 阻断（弱主体/off_entity 仍可成稿，实体作多标签）。
     assert not any("entity_focus_gate" in issue for issue in issues), issues
 
+def test_content_plan_blocks_qunar_off_entity_travelogue_as_article_base():
+    batch = "qunar_off_entity_article_base_blocked"
+    entity = "剑门关"
+    root = batch_root(TASK, batch)
+    article_dir = root / "entities/地点/景区/剑门关/1.download/sources/01.article_qunar_old"
+    article_dir.mkdir(parents=True, exist_ok=True)
+    article_source = article_dir / "source.md"
+    article_source.write_text(
+        "# 咻咻游成都平乐古镇\n\n"
+        "2012/02/18\n\n"
+        "这篇游记主要讲成都、平乐古镇和个人旅途感受，文字里没有剑门关的实体锚点。"
+        * 80,
+        encoding="utf-8",
+    )
+    write_json(
+        article_dir / "meta.json",
+        {
+            "sourceId": "article_qunar_old",
+            "researchLane": "article",
+            "sourceRole": "base",
+            "sourceUseMode": "factual_reference_only",
+            "category": "travelogue",
+            "platform": "去哪儿攻略",
+            "entityFocusVerdict": "off_entity",
+            "entityFocusScore": 0.0,
+            "siteTemplate": {
+                "site": "qunar",
+                "pageType": "travelogue_detail",
+                "freshnessTier": "stale_over_3y",
+            },
+        },
+    )
+    ref = f"{entity}_qunar_old"
+    content_object.register_content_object(
+        TASK,
+        batch,
+        ref,
+        content_type="article",
+        angle="游记",
+        title=ref,
+    )
+    brief_dir = content_object.content_object_stage_dir(TASK, batch, ref, STAGE_COMPOSE)
+    write_json(brief_dir / content_object.BRIEF_FILE, {"titleHint": ref})
+    source_ref = article_source.relative_to(root).as_posix()
+    write_json(
+        batch_content_plan_packet_path(TASK, batch),
+        {
+            "schemaVersion": cp.CONTENT_PLAN_SCHEMA,
+            "items": [
+                {
+                    "ref": ref,
+                    "kind": "entity",
+                    "carrier": "article",
+                    "researchLane": "article",
+                    "title": "剑门关旧游记",
+                    "entityRefs": [f"/entity/地点/景区/{entity}"],
+                    "evidenceRefs": [source_ref],
+                    "rationale": "Qunar off_entity 旧游记不能作为当前实体 base",
+                    "baseSourceRef": source_ref,
+                    "sourceUseMode": "factual_reference_only",
+                }
+            ],
+        },
+    )
+    spec = {
+        "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": entity}]},
+        "content": {
+            "modalityContract": "separated_research",
+            "quotas": {"entityArticlesPerTarget": 1, "entityHomepagesPerTarget": 0},
+        },
+    }
+
+    issues = cp.validate_content_plan(TASK, batch, spec)
+
+    assert any("qunar_off_entity_no_anchor" in issue for issue in issues), issues
+
 def test_content_plan_quotas_required_includes_image_works():
     spec = {"content": {"modalityContract": "separated_research", "quotas": {"imageWorksPerTarget": 2}}}
     assert cp.content_plan_quotas_required(spec) is True
@@ -719,4 +795,3 @@ def test_content_plan_blocks_image_work_reusing_article_base_asset():
 
     assert any("image sha256" in issue and "reused" in issue for issue in issues), issues
     assert any("sourceCollectionId" in issue and "reused" in issue for issue in issues), issues
-

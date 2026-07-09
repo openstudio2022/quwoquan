@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from typing import Any
 
+from _common.creator_pool.constants import PHOTOGRAPHY_TOPIC_REFS, TRAVEL_TOPIC_REFS
 from template.blueprint import REQUIRED_CREATOR_FIELDS, validate_required, collect_tag_refs
 from template.registry import TemplateRegistry, tag_exists
 
@@ -16,8 +18,20 @@ VALID_EXPERIENCE_CLAIM_MODES = {
     "visual_discovery",
 }
 VALID_RISK_TIERS = {"low", "medium", "high"}
-VALID_COVERAGE_KINDS = {"nationwide", "regional", "thematic"}
+VALID_COVERAGE_KINDS = {"nationwide", "regional", "thematic", "regional_topic"}
 _CARRIER_KEYS = ("article", "image", "video")
+SYS_CREATOR_ID_RE = re.compile(r"^sys_(travel|photo|travelphoto)_[0-9]{4}$")
+PUBLISHED_INTEREST_TAGS = frozenset((*TRAVEL_TOPIC_REFS, *PHOTOGRAPHY_TOPIC_REFS))
+FORBIDDEN_SYS_CREATOR_FIELDS = (
+    "legacyAliases",
+    "archiveAliases",
+    "avatarObjectKey",
+    "backgroundObjectKey",
+    "coverObjectKey",
+    "ipLocation",
+    "provenance",
+    "operations",
+)
 
 
 def validate_creators(registry: TemplateRegistry) -> list[str]:
@@ -43,6 +57,7 @@ def validate_creators(registry: TemplateRegistry) -> list[str]:
             errors.append(f"{label}: unsupported riskTier '{creator.get('riskTier')}'")
         if creator_id.startswith(("tag:", "entity:", "Topic/", "Entity/", "Format/")):
             errors.append(f"{label}: creatorProfileId must not be a tag/entity ref")
+        errors.extend(_sys_creator_hard_gate_errors(creator, label))
 
         disclosure = creator.get("disclosure")
         if not isinstance(disclosure, dict):
@@ -123,6 +138,33 @@ def _coverage_scope_errors(scope: Any, label: str) -> list[str]:
         errors.append(f"{label}: regional coverageScope requires regionRefs")
     if kind == "thematic" and not (scope.get("topicRefs") or scope.get("regionRefs")):
         errors.append(f"{label}: thematic coverageScope requires topicRefs")
+    return errors
+
+
+def _sys_creator_hard_gate_errors(creator: dict[str, Any], label: str) -> list[str]:
+    creator_id = str(creator.get("creatorProfileId") or "")
+    if not creator_id.startswith("sys_"):
+        return []
+    errors: list[str] = []
+    if not SYS_CREATOR_ID_RE.match(creator_id):
+        errors.append(f"{label}: creatorProfileId must match sys travel/photo pattern")
+    if len(creator_id) > 32:
+        errors.append(f"{label}: creatorProfileId must be <= 32 chars")
+    sub_id = str(creator.get("subAccountId") or creator.get("authorId") or "")
+    if sub_id != f"{creator_id}_sub_01":
+        errors.append(f"{label}: subAccountId/authorId must equal {creator_id}_sub_01")
+    if len(sub_id) > 32:
+        errors.append(f"{label}: subAccountId must be <= 32 chars")
+    if re.search(r"\d", str(creator.get("displayName") or "")):
+        errors.append(f"{label}: displayName must not contain digits")
+    for field in FORBIDDEN_SYS_CREATOR_FIELDS:
+        if field in creator:
+            errors.append(f"{label}: forbidden field {field}")
+    for bucket in ("interestTagRefs", "recommendationTagRefs"):
+        for tag_ref in creator.get(bucket) or []:
+            tag = str(tag_ref)
+            if tag.startswith("Topic/") and tag not in PUBLISHED_INTEREST_TAGS:
+                errors.append(f"{label}: {bucket} contains unpublished leaf tag {tag}")
     return errors
 
 
@@ -260,6 +302,7 @@ def match_creator(
     vertical: str | None = None,
     seed: str = "",
     preferred_archetype: str | None = None,
+    selection_mode: str = "best",
 ) -> dict[str, Any]:
     """按底稿内容信号在「合适的虚拟作者」中择优，避免随意安排。
 
@@ -296,18 +339,38 @@ def match_creator(
     if len(candidates) == 1:
         return candidates[0]
 
-    return max(
-        candidates,
-        key=lambda c: _creator_match_score(
+    scored = [
+        (
+            _creator_match_score(
+                c,
+                carrier=eff_carrier,
+                tag_refs=tag_refs,
+                region=region,
+                vertical=vertical,
+                seed=seed,
+                blueprint_id=blueprint_id,
+            ),
             c,
-            carrier=eff_carrier,
-            tag_refs=tag_refs,
-            region=region,
-            vertical=vertical,
-            seed=seed,
-            blueprint_id=blueprint_id,
-        ),
-    )
+        )
+        for c in candidates
+    ]
+    if str(selection_mode or "best") != "spread":
+        return max(scored, key=lambda row: row[0])[1]
+
+    max_score = max(score for score, _ in scored)
+    viable = [
+        c
+        for score, c in scored
+        if score >= max_score - 1.25
+        and (
+            not vertical
+            or not c.get("verticalRefs")
+            or vertical in [str(v) for v in c.get("verticalRefs", [])]
+        )
+    ]
+    if not viable:
+        viable = [c for _, c in scored]
+    return max(viable, key=lambda c: _stable_jitter(str(c.get("creatorProfileId") or ""), seed))
 
 
 def choose_creator(registry: TemplateRegistry, blueprint: dict[str, Any], preferred_archetype: str | None = None) -> dict[str, Any]:

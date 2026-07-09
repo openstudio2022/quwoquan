@@ -314,6 +314,10 @@ class _WorksIntersectionDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayReasons = reasons
+        .map(displayReadyIntersectionReason)
+        .whereType<IntersectionReason>()
+        .toList(growable: false);
     return AppBottomModalSurface(
       onDismiss: () => Navigator.pop(context),
       panelKey: const ValueKey<String>('works-intersection-detail-sheet'),
@@ -339,9 +343,9 @@ class _WorksIntersectionDetailSheet extends StatelessWidget {
                 ),
               ),
             ),
-            for (var i = 0; i < reasons.length; i++) ...[
+            for (var i = 0; i < displayReasons.length; i++) ...[
               if (i > 0) SizedBox(height: AppSpacing.intraGroupSm),
-              _WorksIntersectionReasonRow(reason: reasons[i]),
+              _WorksIntersectionReasonRow(reason: displayReasons[i]),
             ],
             if (onAskAssistant != null) ...[
               SizedBox(height: AppSpacing.interGroupSm),

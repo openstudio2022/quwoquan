@@ -6,9 +6,9 @@ cd "$ROOT"
 
 echo "[verify] recommendation-service contract"
 
-DEPLOY_FILE="$ROOT/deploy/service/recommendation-service/deployment.yaml"
+DEPLOY_FILE="$ROOT/quwoquan_service/services/recommendation-service/deploy/deployment.yaml"
 if [[ ! -f "$DEPLOY_FILE" ]]; then
-  DEPLOY_FILE="$ROOT/deploy/service/recommendation-service/kustomize/base/deployment.yaml"
+  DEPLOY_FILE="$ROOT/quwoquan_service/services/recommendation-service/deploy/kustomize/base/deployment.yaml"
 fi
 RUNTIME_CONTRACT="$ROOT/quwoquan_service/services/rec-model-service/runtime_contract.py"
 

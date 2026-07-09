@@ -26,10 +26,18 @@ class _HomeImagePostCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = item.normalizedTitle;
     final body = item.normalizedBody;
+    final contextObjectName = title.isNotEmpty ? title : body;
+    final contextObjectTarget = IntersectionTarget(
+      objectId: item.id,
+      objectKind: 'content',
+      routeId: 'workBrowser',
+    );
     final media = _buildMedia(context);
     final isMomentGrid = _isMomentGridPost(item);
     final intersectionRow = _buildPostIntersectionRow(
       reason: reason,
+      contextObjectName: contextObjectName,
+      contextObjectTarget: contextObjectTarget,
       onSpanTap: onSpanTap,
       onFallbackTap: onFallbackTap,
     );
@@ -206,8 +214,16 @@ class _HomeVideoPostCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = item.normalizedTitle;
     final body = item.normalizedBody;
+    final contextObjectName = title.isNotEmpty ? title : body;
+    final contextObjectTarget = IntersectionTarget(
+      objectId: item.id,
+      objectKind: 'content',
+      routeId: 'workBrowser',
+    );
     final intersectionRow = _buildPostIntersectionRow(
       reason: reason,
+      contextObjectName: contextObjectName,
+      contextObjectTarget: contextObjectTarget,
       onSpanTap: onSpanTap,
       onFallbackTap: onFallbackTap,
     );
@@ -322,8 +338,16 @@ class _HomeArticlePostCard extends StatelessWidget {
   Widget _buildSideImageLayout(BuildContext context, String coverUrl) {
     final title = item.normalizedTitle;
     final body = item.normalizedBody;
+    final contextObjectName = title.isNotEmpty ? title : body;
+    final contextObjectTarget = IntersectionTarget(
+      objectId: item.id,
+      objectKind: 'content',
+      routeId: 'workBrowser',
+    );
     final intersectionRow = _buildPostIntersectionRow(
       reason: reason,
+      contextObjectName: contextObjectName,
+      contextObjectTarget: contextObjectTarget,
       onSpanTap: onSpanTap,
       onFallbackTap: onFallbackTap,
       key: const ValueKey('home-article-inline-intersection'),
@@ -408,8 +432,16 @@ class _ArticleTextBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = item.normalizedTitle;
     final body = item.normalizedBody;
+    final contextObjectName = title.isNotEmpty ? title : body;
+    final contextObjectTarget = IntersectionTarget(
+      objectId: item.id,
+      objectKind: 'content',
+      routeId: 'workBrowser',
+    );
     final intersectionRow = _buildPostIntersectionRow(
       reason: reason,
+      contextObjectName: contextObjectName,
+      contextObjectTarget: contextObjectTarget,
       onSpanTap: onSpanTap,
       onFallbackTap: onFallbackTap,
       key: const ValueKey('home-article-inline-intersection'),
@@ -671,7 +703,7 @@ double _momentGridAspectRatio(int total) {
 
 bool _shouldShowIntersection(IntersectionReason? reason) {
   if (reason == null) return false;
-  return reason.primaryText.trim().isNotEmpty;
+  return displayReadyIntersectionReason(reason) != null;
 }
 
 Widget _mediaPlaceholder(bool isDark) {

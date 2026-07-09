@@ -489,7 +489,7 @@ uat_acceptance:
     - '[migrated_from_recorded_command] cd quwoquan_app && flutter test test/ui/user/login_page_widget_test.dart'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-auth-policy
   - make verify-app-login-entry-loop-contract
   full_gate:

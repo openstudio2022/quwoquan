@@ -2,7 +2,7 @@
 
 ## 功能说明
 
-- **训练镜像**：scripts/ml Dockerfile（LightGBM、pymongo、redis 等），供本地或云上训练任务使用。
+- **训练镜像**：services/rec-model-service/scripts Dockerfile（LightGBM、pymongo、redis 等），供本地或云上训练任务使用。
 - **调度**：PAI-DLC、火山 ML 工作流、cron 或事件驱动；按 scenario/datasetId 提交训练任务。
 - **产出**：模型文件上传 OSS/TOS，元信息写入 rec_model_registry；推理服务（rec-model-service）从 Registry 拉取或挂载。
 

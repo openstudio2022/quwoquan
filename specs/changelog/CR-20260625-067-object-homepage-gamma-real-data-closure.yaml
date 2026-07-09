@@ -63,8 +63,8 @@ entries:
       breaking_contract: false
     verification:
       - "已执行：bash quwoquan_service/scripts/contract/verify_contract_metadata.sh；结果 pass，保留既有 search/user_profile response_entity warnings。"
-      - "已执行：docker compose -f quwoquan_service/docker-compose.gamma-local.yaml config；结果 pass。"
-      - "已执行：python3 agent_ops/deploy/stackctl.py verify --env gamma --kind all --tier all；结果 fail，gamma-local-t3 gateway health SSL EOF，user_acceptance page smoke 缺 Patrol CLI。"
+      - "已执行：docker compose -f quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml config；结果 pass。"
+      - "已执行：python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all；结果 fail，gamma-local-t3 gateway health SSL EOF，user_acceptance page smoke 缺 Patrol CLI。"
       - "待执行：feature tree index 重建、acceptance/schema gates、api_integration populated probes、user_acceptance/UAT。"
     notes:
       - 本 CR 不新增 homepage/circle 专属交集 API；优先复用 `/v1/content/intersections/object`。
@@ -101,10 +101,10 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     verification:
-      - "已执行：bash agent_ops/scaffold/verify_acceptance_standard.sh；结果 pass。"
-      - "已执行：bash agent_ops/scaffold/verify_feature_tree_refactor.sh；结果 pass。"
+      - "已执行：bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh；结果 pass。"
+      - "已执行：bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh；结果 pass。"
       - "已执行：bash quwoquan_service/scripts/contract/verify_contract_metadata.sh；结果 pass。"
-      - "已执行：docker compose -f quwoquan_service/docker-compose.gamma-local.yaml config；结果 pass。"
+      - "已执行：docker compose -f quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml config；结果 pass。"
       - "已执行：make verify-agent-context-contract；结果 pass。"
       - "已执行：scoped git diff --check 与 touched-file whitespace check；结果 pass。"
     notes:

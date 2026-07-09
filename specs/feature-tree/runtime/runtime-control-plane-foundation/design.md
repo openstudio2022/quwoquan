@@ -78,11 +78,11 @@
   - RBAC、表格、表单、schema 渲染、对象详情、时间线、审批、附件、diff、审计面板
 
 推荐工程目录：
-- `apps/ops-portal/`
-- `apps/ops-portal/src/shell/`
-- `apps/ops-portal/src/domains/platform-ops/`
-- `apps/ops-portal/src/domains/product-ops/`
-- `apps/ops-portal/src/shared/`
+- `quwoquan_ops/portal/`
+- `quwoquan_ops/portal/src/shell/`
+- `quwoquan_ops/portal/src/domains/platform-ops/`
+- `quwoquan_ops/portal/src/domains/product-ops/`
+- `quwoquan_ops/portal/src/shared/`
 
 ### 1.2 门户全局能力设计
 
@@ -412,7 +412,7 @@ planes:
 
 ### 3.5 `process_domain_mapping` 演进模型
 
-当前文件 `deploy/shared/process_domain_mapping.yaml` 仍是 `domain -> process`。为保证三类面可独立部署，设计冻结为两阶段演进：
+当前文件 `quwoquan_ops/environments/process_domain_mapping.yaml` 仍是 `domain -> process`。为保证三类面可独立部署，设计冻结为两阶段演进：
 
 阶段 1：
 - 保持现有 `domain -> process`
@@ -610,7 +610,7 @@ codegen 必须统一生成：
 
 ### 6.3 产物路径建议
 
-- Web：`apps/ops-portal/src/generated/control-plane/`
+- Web：`quwoquan_ops/portal/src/generated/control-plane/`
 - Go：`quwoquan_service/generated/control_plane/`
 - Python：`quwoquan_service/services/rec-model-service/generated/control_plane/`
 - App：`quwoquan_app/lib/cloud/runtime/generated/ops/`

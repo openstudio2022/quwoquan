@@ -12,6 +12,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/other_profile_page.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
+import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
@@ -203,6 +204,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
         ),
       ),
+      GoRoute(
+        path: AppRoutePaths.legalPermissions,
+        pageBuilder: (context, state) => CupertinoPage<void>(
+          key: state.pageKey,
+          child: LegalDocumentPage(
+            title: UITextConstants.permissionsStatement,
+            url: AuthLegalConfig.permissionsUrl,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutePaths.legalThirdPartySdkList,
+        pageBuilder: (context, state) => CupertinoPage<void>(
+          key: state.pageKey,
+          child: LegalDocumentPage(
+            title: UITextConstants.thirdPartySdkList,
+            url: AuthLegalConfig.thirdPartySdkListUrl,
+          ),
+        ),
+      ),
       ShellRoute(
         builder: (context, state, child) {
           return AppNativeBackScope(
@@ -261,6 +282,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           kind: AppRoutePageKind.fullscreenDialog,
           fullscreenDialog: true,
           child: StartGroupChatPage(
+            routeExtra: state.extra is StartGroupChatRouteExtra
+                ? state.extra! as StartGroupChatRouteExtra
+                : null,
             onBack: () {
               if (context.canPop()) {
                 context.pop();

@@ -45,84 +45,144 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
               ),
             ),
           ),
-          SizedBox(width: AppSpacing.iconButtonMinSizeSm),
+          if (widget.entryMode == MediaPickerEntryMode.image)
+            CupertinoButton(
+              padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+              minimumSize: Size(
+                AppSpacing.iconButtonMinSizeSm,
+                AppSpacing.buttonHeightSm,
+              ),
+              onPressed: _openDrafts,
+              child: Text(
+                UITextConstants.drafts,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: AppTypography.base,
+                  fontWeight: AppTypography.semiBold,
+                ),
+              ),
+            )
+          else
+            SizedBox(width: AppSpacing.iconButtonMinSizeSm),
         ],
       ),
     );
+  }
+
+  void _openDrafts() {
+    try {
+      context.push(AppRoutePaths.localDrafts);
+    } catch (_) {
+      // Widget tests may mount the picker outside the app router.
+    }
   }
 
   Widget _buildGrid(List<AssetEntity> list, bool isDark) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossCount = _gridCrossAxisCount(constraints.maxWidth);
-        final fixedTileCount = widget.entryMode == MediaPickerEntryMode.video
-            ? 2
-            : 1;
+        const fixedTileCount = 1;
         final total = list.length + fixedTileCount;
         if (total == 0) {
           return _buildGridEmptyState(isDark);
         }
+        final gridBackground = AppColorsFunctional.getColor(
+          true,
+          ColorType.backgroundPrimary,
+        );
         return ColoredBox(
-          color: AppColors.black,
+          color: gridBackground,
           child: Stack(
             children: [
               GridView.builder(
                 controller: _scrollController,
-                padding: EdgeInsets.all(AppSpacing.intraGroupXs),
+                padding: EdgeInsets.all(AppSpacing.containerXs),
                 itemCount: total,
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossCount,
-                  mainAxisSpacing: AppSpacing.intraGroupXs,
-                  crossAxisSpacing: AppSpacing.intraGroupXs,
+                  mainAxisSpacing: AppSpacing.containerXs,
+                  crossAxisSpacing: AppSpacing.containerXs,
                 ),
                 itemBuilder: (context, index) {
                   if (index == 0) {
                     return _buildCameraTile(isDark);
                   }
-                  if (widget.entryMode == MediaPickerEntryMode.video &&
-                      index == 1) {
-                    return _buildOneTapMovieTile(isDark);
-                  }
                   final entity = list[index - fixedTileCount];
+                  final selected = _selectedItems.any(
+                    (item) => item.id == entity.id,
+                  );
                   return GestureDetector(
                     key: ValueKey<String>('media-picker-asset-${entity.id}'),
                     onTap: () => _toggleAsset(entity),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Positioned.fill(
-                          child: _buildAssetThumb(entity, isDark),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.smallBorderRadius,
                         ),
-                        if (entity.type == AssetType.video)
-                          Positioned(
-                            left: AppSpacing.intraGroupSm,
-                            bottom: AppSpacing.intraGroupSm,
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: AppSpacing.intraGroupSm,
-                                vertical: AppSpacing.intraGroupXs / 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.black.withValues(alpha: 0.54),
-                                borderRadius: BorderRadius.circular(
-                                  AppSpacing.smallBorderRadius,
-                                ),
-                              ),
-                              child: Text(
-                                _formatVideoDuration(entity.duration),
-                                style: TextStyle(
-                                  color: AppColors.white,
-                                  fontSize: AppTypography.sm,
-                                ),
-                              ),
+                        border: Border.all(
+                          color: selected
+                              ? AppColors.primaryColor
+                              : AppColors.white.withValues(alpha: 0.08),
+                          width: selected
+                              ? AppSpacing.hairline * 2
+                              : AppSpacing.hairline,
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.smallBorderRadius,
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Positioned.fill(
+                              child: _buildAssetThumb(entity, isDark),
                             ),
-                          ),
-                        Positioned(
-                          top: AppSpacing.intraGroupSm,
-                          right: AppSpacing.intraGroupSm,
-                          child: _buildSelectBadge(entity.id),
+                            if (!selected)
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: AppColors.black.withValues(
+                                      alpha: 0.05,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (entity.type == AssetType.video)
+                              Positioned(
+                                left: AppSpacing.intraGroupSm,
+                                bottom: AppSpacing.intraGroupSm,
+                                child: Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.intraGroupSm,
+                                    vertical: AppSpacing.intraGroupXs / 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.black.withValues(
+                                      alpha: 0.58,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      AppSpacing.smallBorderRadius,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _formatVideoDuration(entity.duration),
+                                    style: TextStyle(
+                                      color: AppColors.white,
+                                      fontSize: AppTypography.sm,
+                                      fontWeight: AppTypography.medium,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            Positioned(
+                              top: AppSpacing.intraGroupSm,
+                              right: AppSpacing.intraGroupSm,
+                              child: _buildSelectBadge(entity.id),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   );
                 },
@@ -149,7 +209,7 @@ extension _CreateMediaPickerPageStateHelpers on _CreateMediaPickerPageState {
       ColorType.foregroundSecondary,
     );
     return ColoredBox(
-      color: AppColors.black,
+      color: AppColorsFunctional.getColor(true, ColorType.backgroundPrimary),
       child: Center(
         child: Padding(
           padding: EdgeInsets.all(AppSpacing.containerLg),

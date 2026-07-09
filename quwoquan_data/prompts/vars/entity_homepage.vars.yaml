@@ -11,3 +11,4 @@ task:
     - base_source_line
     - section_outline_block
     - available_images_block
+    - type_focus_block

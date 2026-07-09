@@ -1,10 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 import 'package:quwoquan_app/core/services/app_content_repository.dart';
@@ -323,10 +319,8 @@ class ScenarioMockAssistantRepository extends MockAssistantRepository {
         'iteration': 1,
         'skillId': scenario.skillId,
         'understandingSnapshot': <String, dynamic>{
-          'userFacingSummary':
-              'fixture：理解「${scenario.question}」的核心关注点。',
-          'retrievalDesignNarrative':
-              'fixture：说明检索方向与需要核验的外部信息。',
+          'userFacingSummary': 'fixture：理解「${scenario.question}」的核心关注点。',
+          'retrievalDesignNarrative': 'fixture：说明检索方向与需要核验的外部信息。',
         },
       },
       createdAt: createdAt,

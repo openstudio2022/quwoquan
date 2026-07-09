@@ -12,8 +12,10 @@ from collections.abc import Iterable
 from typing import Any, Mapping
 
 from _common.io import read_json
+from _common.image_rules import image_caption_quality_issue, image_known_reject_issue
 from _common.paths import batch_root, release_root
 from _common.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness
+from _common.content_source_registry import homepage_source_can_seed_base_draft
 
 
 REPORT_SCHEMA = "quwoquan_data.release_integrity"
@@ -44,20 +46,6 @@ ARTICLE_HARD_CHECKS = {
 }
 ARTICLE_COVERAGE_HARD_CHECKS = ("entityCoverage", "routeCoverage")
 ARTICLE_STRUCTURE_HARD_CHECKS = ("sectionShape", "narrativeContinuity")
-ENTITY_SOURCE_KINDS = (
-    "百科",
-    "encyclopedia",
-    "wiki",
-    "wikipedia",
-    "official",
-    "government",
-    "authoritative_reference",
-    "官网",
-    "官方",
-    "政府",
-    "文旅",
-    "政务",
-)
 AUTHOR_EXPERIENCE_SOURCE_KINDS = ("攻略", "游记", "评论", "点评", "小红书", "图虫", "摄影")
 
 
@@ -128,6 +116,11 @@ def _post_entity_name(manifest: Mapping[str, Any]) -> str:
     for ref in normalized:
         if ":" in ref:
             return ref.rsplit(":", 1)[-1]
+    title = str(manifest.get("title") or manifest.get("publishTitle") or "").strip()
+    if "·" in title:
+        prefix = title.split("·", 1)[0].strip()
+        if prefix:
+            return prefix
     return ""
 
 
@@ -273,10 +266,37 @@ def _article_asset_source_issues(
 
 def _asset_alignment_issues(post_rel: str, manifest: Mapping[str, Any], asset: Mapping[str, Any]) -> list[str]:
     issues: list[str] = []
-    if _is_image_post(manifest):
-        return issues
     caption = str(asset.get("caption") or "").strip()
     entity_name = _post_entity_name(manifest)
+    asset_label = str(asset.get("assetId") or asset.get("fileName") or "?")
+    caption_quality_issue = image_caption_quality_issue(
+        caption,
+        entity_id=entity_name,
+        asset_id=asset_label,
+    )
+    if caption_quality_issue:
+        issues.append(f"{post_rel}: {caption_quality_issue}")
+    known_reject_issue = image_known_reject_issue(
+        " ".join(
+            str(value or "")
+            for value in (
+                caption,
+                manifest.get("caption"),
+                manifest.get("title"),
+                manifest.get("publishTitle"),
+                asset.get("sourceRef"),
+                asset.get("sourceAssetRef"),
+                asset.get("collectionPageUrl"),
+                asset.get("sourceCollectionId"),
+            )
+        ),
+        entity_id=entity_name,
+        asset_id=asset_label,
+    )
+    if known_reject_issue:
+        issues.append(f"{post_rel}: {known_reject_issue}")
+    if _is_image_post(manifest):
+        return issues
     if not caption:
         issues.append(f"{post_rel}: article asset caption is empty")
     elif entity_name and caption in {entity_name, f"{entity_name}·回望"}:
@@ -310,10 +330,9 @@ def _entity_homepage_issues(root: Path, runtime_batch: Path | None) -> list[str]
             issues.append(f"{entity_rel}: entity homepage quality base draft differs from compose base draft")
         meta = _source_unit_meta(runtime_batch, base_source)
         source_kind = str(meta.get("sourceKind") or meta.get("platform") or "").strip()
-        source_kind_lower = source_kind.casefold()
-        if not any(marker.casefold() in source_kind_lower for marker in ENTITY_SOURCE_KINDS):
+        if not homepage_source_can_seed_base_draft(meta):
             issues.append(
-                f"{entity_rel}: entity homepage base draft must be encyclopedia/wiki/official/government source, got {source_kind or '<empty>'}"
+                f"{entity_rel}: entity homepage base draft must be homepage primary authority source, got {source_kind or '<empty>'}"
             )
         if any(marker in source_kind for marker in AUTHOR_EXPERIENCE_SOURCE_KINDS):
             issues.append(

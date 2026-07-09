@@ -58,8 +58,8 @@ entries:
         - cd quwoquan_app && flutter test test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
         - cd quwoquan_app && flutter test test/app/shell/main_app_shell_widget_test.dart
         - cd quwoquan_app && flutter test test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart test/local_contract/content/create/create_local_draft_page__local_contract_test.dart test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart test/ui/content/entry/draft_recovery_widget_test.dart
-        - bash agent_ops/scaffold/verify_acceptance_standard.sh
-        - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+        - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+        - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
         - make verify-app-login-entry-loop-contract
         - make verify-app-page-horizontal-quality
         - make verify-app-mock-isolation
@@ -102,8 +102,8 @@ entries:
         - cd quwoquan_app && flutter test test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart test/local_contract/content/create/photo_media_picker_commercial_flow__local_contract_test.dart test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart
         - cd quwoquan_app && flutter test test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
         - cd quwoquan_app/ios && xcodebuild -workspace Runner.xcworkspace -scheme Runner -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build
-        - bash agent_ops/scaffold/verify_acceptance_standard.sh
-        - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+        - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+        - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
         - make verify-app-page-horizontal-quality
         - make verify-app-mock-isolation
     notes:

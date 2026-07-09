@@ -2,10 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/share/forward_external_share_service.dart';
@@ -23,9 +23,8 @@ class ForwardShareSheet extends ConsumerStatefulWidget {
     BuildContext context, {
     required AppForwardPayload payload,
   }) {
-    return showCupertinoModalPopup<void>(
+    return showAppBottomModal<void>(
       context: context,
-      barrierColor: AppColors.transparent,
       builder: (sheetContext) => ForwardShareSheet(payload: payload),
     );
   }
@@ -162,10 +161,13 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
 
   Future<void> _openRecipientPicker() async {
     final rootNavigator = Navigator.of(context, rootNavigator: true);
-    Navigator.of(context).pop();
-    await rootNavigator.push<bool>(
-      CupertinoPageRoute<bool>(
-        builder: (_) => ForwardRecipientPickerRoute(payload: widget.payload),
+    final payload = widget.payload;
+    await dismissAppModalAndRun(
+      context,
+      action: () => rootNavigator.push<bool>(
+        CupertinoPageRoute<bool>(
+          builder: (_) => ForwardRecipientPickerRoute(payload: payload),
+        ),
       ),
     );
   }

@@ -1,0 +1,363 @@
+# 全国地点主清单 · 四川省南充市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 南充市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 仪陇县
+  leaves:
+  - name: 朱德故里
+    canonicalName: 朱德故里
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    aliases:
+    - 朱德故里琳琅山景区
+    - 朱德同志故居纪念馆
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 张思德纪念馆
+    canonicalName: 仪陇张思德纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 新政离堆
+    canonicalName: 新政离堆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    aliases:
+    - 鲜于氏离堆
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 南部县
+  leaves:
+  - name: 升钟湖
+    canonicalName: 升钟湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    aliases:
+    - 升钟湖景区
+    - 升钟水库
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 禹迹山
+    canonicalName: 南部禹迹山
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    aliases:
+    - 禹迹山大佛
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 醴峰观
+    canonicalName: 南部醴峰观
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 八尔湖
+    canonicalName: 八尔湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    selectionPriority: 4
+    sourceReadiness: no_primary_source
+- district: 嘉陵区
+  leaves:
+  - name: 凤垭山
+    canonicalName: 南充凤垭山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/嘉陵区
+    aliases:
+    - 凤垭山天乐谷
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 太和白鹭自然保护区
+    canonicalName: 南充太和白鹭自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/嘉陵区
+    selectionPriority: 2
+    sourceReadiness: pending
+- district: 营山县
+  leaves:
+  - name: 太蓬山
+    canonicalName: 太蓬山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 西月湖公园
+    canonicalName: 营山西月湖公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    selectionPriority: 2
+    sourceReadiness: pending
+- district: 蓬安县
+  leaves:
+  - name: 嘉陵第一桑梓
+    canonicalName: 嘉陵第一桑梓
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    aliases:
+    - 司马相如故里
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 周子古镇
+    canonicalName: 周子古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 相如故城
+    canonicalName: 相如故城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 百牛渡江
+    canonicalName: 蓬安百牛渡江
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 西充县
+  leaves:
+  - name: 张澜故里
+    canonicalName: 张澜故里
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    aliases:
+    - 张澜故居
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 青龙湖
+    canonicalName: 西充青龙湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 化凤山公园
+    canonicalName: 西充化凤山公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    aliases:
+    - 化凤山森林公园
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 阆中市
+  leaves:
+  - name: 阆中古城
+    canonicalName: 阆中古城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 张飞庙
+    canonicalName: 阆中汉桓侯祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    aliases:
+    - 汉桓侯祠
+    - 张飞庙
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 阆中贡院
+    canonicalName: 阆中贡院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    aliases:
+    - 川北道贡院
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 华光楼
+    canonicalName: 阆中华光楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 锦屏山
+    canonicalName: 阆中锦屏山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    aliases:
+    - 阆中锦屏山风景区
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 天宫院
+    canonicalName: 阆中天宫院
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 巴巴寺
+    canonicalName: 阆中巴巴寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    selectionPriority: 7
+    sourceReadiness: ready
+  - name: 滕王阁
+    canonicalName: 阆中滕王阁
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    selectionPriority: 8
+    sourceReadiness: ready
+  - name: 五龙庙文昌阁
+    canonicalName: 阆中五龙庙文昌阁
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    selectionPriority: 9
+    sourceReadiness: ready
+  - name: 构溪河国家湿地公园
+    canonicalName: 构溪河国家湿地公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/湿地公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    selectionPriority: 10
+    sourceReadiness: pending
+- district: 顺庆区
+  leaves:
+  - name: 西山
+    canonicalName: 南充西山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    aliases:
+    - 西山风景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 万卷楼
+    canonicalName: 南充万卷楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    aliases:
+    - 陈寿万卷楼
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 北湖公园
+    canonicalName: 南充北湖公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 南充市博物馆
+    canonicalName: 南充市博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 高坪区
+  leaves:
+  - name: 凌云山
+    canonicalName: 南充凌云山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/高坪区
+    aliases:
+    - 凌云山风景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 金城山
+    canonicalName: 南充金城山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/高坪区
+    aliases:
+    - 金城山森林公园
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 南充白塔
+    canonicalName: 南充白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/高坪区
+    aliases:
+    - 无量宝塔
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 六合丝博园
+    canonicalName: 南充六合丝博园
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/高坪区
+    aliases:
+    - 都京丝绸小镇
+    selectionPriority: 4
+    sourceReadiness: pending

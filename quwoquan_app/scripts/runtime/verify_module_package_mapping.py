@@ -10,9 +10,9 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-PROCESS_MAPPING = ROOT / "deploy/shared/process_domain_mapping.yaml"
-MODULE_MAPPING = ROOT / "deploy/shared/module_package_mapping.yaml"
-MODULE_CATALOG = ROOT / "deploy/shared/reliable_task_module_catalog.yaml"
+PROCESS_MAPPING = ROOT / "quwoquan_ops/environments/process_domain_mapping.yaml"
+MODULE_MAPPING = ROOT / "quwoquan_ops/environments/module_package_mapping.yaml"
+MODULE_CATALOG = ROOT / "quwoquan_ops/environments/reliable_task_module_catalog.yaml"
 
 
 def fail(message: str) -> None:

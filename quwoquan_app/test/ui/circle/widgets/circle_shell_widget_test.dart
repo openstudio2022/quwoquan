@@ -2,11 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_impact_summary.g.dart';
+import 'package:quwoquan_app/components/object_page/object_intersection_provider.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_stats_wire_dto.dart';
@@ -81,6 +83,7 @@ Widget _scopedApp({
   VoidCallback? onBack,
   String circleId = 'fixture_circle_photo',
   UiErrorAppearanceMode sourceAppearanceMode = UiErrorAppearanceMode.inherit,
+  List<Override> overrides = const <Override>[],
 }) {
   final repo = mock ?? MockCircleRepository();
   return ProviderScope(
@@ -88,6 +91,7 @@ Widget _scopedApp({
       startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
       circleRepositoryProvider.overrideWithValue(repo),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
+      ...overrides,
     ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
@@ -116,6 +120,7 @@ Future<void> _pumpShell(
   VoidCallback? onBack,
   String circleId = 'fixture_circle_photo',
   UiErrorAppearanceMode sourceAppearanceMode = UiErrorAppearanceMode.inherit,
+  List<Override> overrides = const <Override>[],
 }) async {
   // 对象主页改版后圈子壳层内容更长，默认 800x600 视口会触发 NestedScrollView
   // 的 pinned tab/吸顶层覆盖，导致动作栏命中测试失败。这里放大视口让壳层完整内联展示。
@@ -128,6 +133,7 @@ Future<void> _pumpShell(
       onBack: onBack,
       circleId: circleId,
       sourceAppearanceMode: sourceAppearanceMode,
+      overrides: overrides,
     ),
   );
   final container = ProviderScope.containerOf(
@@ -233,7 +239,10 @@ void main() {
     testWidgets('圈子影响展示云侧 displayText，最多三条且不本地拼装', (tester) async {
       await _pumpShell(tester, mock: _ImpactCircleRepository());
 
-      expect(find.text(UITextConstants.objectImpactTitle), findsOneWidget);
+      expect(
+        find.text(UITextConstants.objectImpactTitleCircle),
+        findsOneWidget,
+      );
       expect(
         find.text(UITextConstants.objectMyIntersectionsTitle),
         findsOneWidget,
@@ -243,6 +252,39 @@ void main() {
       expect(find.text('3人最近参与了这里'), findsOneWidget);
       expect(find.text('第4条不应显示'), findsNothing);
       expect(find.textContaining('条内容正在沉淀经验'), findsNothing);
+    });
+
+    testWidgets('圈子有打动事实但我的交集为空时，不提示成为第一个人', (tester) async {
+      const circleId = 'fixture_circle_photo';
+      const viewerId = 'viewer_empty_intersection';
+      const query = ObjectIntersectionQuery(
+        objectAId: viewerId,
+        objectAType: 'user',
+        objectBId: circleId,
+        objectBType: 'circle',
+      );
+      await _pumpShell(
+        tester,
+        mock: _ImpactCircleRepository(),
+        circleId: circleId,
+        overrides: <Override>[
+          currentUserIdProvider.overrideWithValue(viewerId),
+          objectSharedReasonsProvider(
+            query,
+          ).overrideWith((_) async => const []),
+        ],
+      );
+
+      expect(
+        find.text(UITextConstants.objectImpactTitleCircle),
+        findsOneWidget,
+      );
+      expect(find.text('12人在这里建立了新连接'), findsOneWidget);
+      expect(
+        find.text(UITextConstants.objectIntersectionEmptyCircle),
+        findsOneWidget,
+      );
+      expect(find.textContaining('成为第一个'), findsNothing);
     });
 
     testWidgets('圈子影响事实行可点开查看来源说明', (tester) async {
@@ -261,14 +303,14 @@ void main() {
     testWidgets('圈子影响为空时整体收起', (tester) async {
       await _pumpShell(tester, mock: _EmptyImpactCircleRepository());
 
-      expect(find.text(UITextConstants.objectImpactTitle), findsNothing);
+      expect(find.text(UITextConstants.objectImpactTitleCircle), findsNothing);
     });
 
     testWidgets('圈子影响错误时不阻塞主页并收起影响卡', (tester) async {
       await _pumpShell(tester, mock: _ImpactErrorCircleRepository());
 
       expect(find.byType(CircleShell), findsOneWidget);
-      expect(find.text(UITextConstants.objectImpactTitle), findsNothing);
+      expect(find.text(UITextConstants.objectImpactTitleCircle), findsNothing);
     });
 
     testWidgets('私密圈子游客访问时显示内容门禁', (tester) async {

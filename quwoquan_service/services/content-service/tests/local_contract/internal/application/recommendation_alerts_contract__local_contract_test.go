@@ -36,7 +36,8 @@ func TestRecommendationCommercialAlertingLocalContract(t *testing.T) {
 	)
 	alertsPath := filepath.Join(
 		repoRoot,
-		"deploy",
+		"quwoquan_ops",
+		"observability",
 		"monitoring",
 		"alerts",
 		"quwoquan_alerts.yaml",
@@ -47,11 +48,11 @@ func TestRecommendationCommercialAlertingLocalContract(t *testing.T) {
 	var alerts prometheusAlertsFile
 	mustLoadYAML(t, alertsPath, &alerts)
 
-	if got := slo.AlertsSource; got != "deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model" {
+	if got := slo.AlertsSource; got != "quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model" {
 		t.Fatalf("alerts_source=%q, want quwoquan_rec_model", got)
 	}
 	alerting := slo.Alerts["recommendation_commercial_alerting"]
-	if alerting.Source != "deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model" {
+	if alerting.Source != "quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model" {
 		t.Fatalf("recommendation_commercial_alerting source drifted: %q", alerting.Source)
 	}
 

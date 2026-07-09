@@ -68,11 +68,11 @@ routes:
   content_behaviors: /v1/content/behaviors
 
 dashboards:
-  recommendation_commercial_maturity: deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json
+  recommendation_commercial_maturity: quwoquan_ops/observability/monitoring/dashboards/l2_recommendation_commercial_maturity.json
 
 alerts:
   recommendation_commercial_alerting:
-    source: deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model
+    source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model
     rules:
       - RecommendationAttributionUnknownRateHigh
       - RecommendationAttributionNegativeFeedbackBySupplySourceHigh
@@ -376,4 +376,4 @@ ab:
     - activity_segment
     - experiment_bucket
 
-alerts_source: deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model
+alerts_source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model

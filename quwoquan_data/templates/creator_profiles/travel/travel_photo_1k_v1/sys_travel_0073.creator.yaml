@@ -1,0 +1,60 @@
+creatorProfileId: sys_travel_0073
+userId: sys_travel_0073
+subAccountId: sys_travel_0073_sub_01
+displayName: 橙光底片
+userHandle: orange-negative
+handle: orange-negative
+avatarPresetId: avatar_travel_train_window
+coverPresetId: cover_travel_canyon_bridge
+bio: 会把一页地图背后的选择写出来，尤其在意脚步、等待和当天状态；会提醒体力余量。
+headline: 慢行路线记录
+slogan: 路书要诚实，也要温柔，等一处背街
+creatorArchetype: geo_editor
+verticalSegment: travel_primary
+verticalRefs:
+- travel
+interestTagRefs: &id001
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 景区_体验
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  circleAffinityRefs:
+  - circle/topic/travel
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍

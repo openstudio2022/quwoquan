@@ -17,6 +17,7 @@ def isolated_roots(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QWQ_DATA_ROOT", str(tmp_path))
     monkeypatch.setenv("QWQ_RUNTIME_ROOT", str(tmp_path / "runtime"))
     monkeypatch.setenv("QWQ_PUBLISH_ROOT", str(tmp_path / "publish"))
+    monkeypatch.setenv("QWQ_SERVICE_CONTRACTS_METADATA_ROOT", str(tmp_path / "service_contracts"))
     return tmp_path
 
 
@@ -40,6 +41,7 @@ def _run_scale10(isolated_roots: Path) -> str:
         "validate",
         "--fixture",
         str(fixture),
+        "--dry-run",
     ]
     proc = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True)
     assert proc.returncode == 0, proc.stderr + proc.stdout

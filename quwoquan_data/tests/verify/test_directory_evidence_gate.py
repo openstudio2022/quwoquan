@@ -18,6 +18,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
@@ -26,6 +27,7 @@ os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
 from _common.batch_asset_registry import BatchAssetRegistry, allocate_post_asset_id  # noqa: E402
 from _common.batch_manifest import load_batch_manifest, write_batch_manifest  # noqa: E402
 from _common.content_object import content_object_dir, register_content_object  # noqa: E402
+from _common.entity_object import sync_entity_object_to_task_mirror, write_entity_object_index  # noqa: E402
 from _common.article_package import compute_document_sha256, sha256_text  # noqa: E402
 from _common.io import write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
@@ -38,15 +40,15 @@ from _common.paths import (  # noqa: E402
 )
 from _common.prose_style import mechanical_ending_title_issues  # noqa: E402
 from _common.source_unit import write_source_unit  # noqa: E402
-from build.homepage import validate_entity_pages  # noqa: E402
+from build.homepage import materialize_entity_pages, validate_entity_pages  # noqa: E402
 from task import ops  # noqa: E402
 from verify.verify_directory_evidence_chain import scan_batch, scan_task  # noqa: E402
 
 TASK = "旅行/地域/四川省/景区/景区全覆盖"
 
 
-def _seed_batch_manifest(batch: str) -> None:
-    write_batch_manifest(TASK, batch, command="task_run")
+def _seed_batch_manifest(batch: str, *, content_type: str = "") -> None:
+    write_batch_manifest(TASK, batch, command="task_run", content_type=content_type)
 
 
 def _seed_homepage_spec(name: str) -> dict:
@@ -55,6 +57,54 @@ def _seed_homepage_spec(name: str) -> dict:
         "taskId": TASK,
         "scope": {"coverageTargets": [{"entityType": "地点/景区", "name": name}]},
     }
+
+
+def _seed_entity_review_sidecars(
+    ent: Path,
+    *,
+    batch: str,
+    source_refs: list[str],
+    writing_pack: str = "fixture homepage writing pack",
+) -> None:
+    draft_dir = ent / "4.draft"
+    draft_dir.mkdir(parents=True, exist_ok=True)
+    draft_path = draft_dir / "page.md"
+    final_path = ent / "page.md"
+    if not draft_path.is_file() and final_path.is_file():
+        draft_path.write_text(final_path.read_text(encoding="utf-8"), encoding="utf-8")
+    review_dir = ent / "5.review"
+    review_dir.mkdir(parents=True, exist_ok=True)
+    write_json(
+        review_dir / "review.json",
+        {
+            "decision": "approved",
+            "issues": [],
+            "checks": {
+                "entityPageQuality": {"passed": True, "issues": []},
+                "sourceReadiness": {"passed": True, "issues": []},
+            },
+        },
+    )
+    write_json(
+        review_dir / "provenance.json",
+        {
+            "originalSources": [{"sourceRef": ref} for ref in source_refs],
+            "agentInput": {"writingPack": writing_pack},
+            "final": {"generator": "agent"},
+        },
+    )
+    write_json(
+        review_dir / "finalization_report.json",
+        {
+            "schemaVersion": "quwoquan_data.finalization_report",
+            "draftArticleRef": "4.draft/page.md",
+            "finalArticleRef": "page.md",
+            "draftSha256": compute_document_sha256(draft_path.read_text(encoding="utf-8")),
+            "finalSha256": compute_document_sha256(final_path.read_text(encoding="utf-8")),
+        },
+    )
+    write_entity_object_index(TASK, batch, "地点", "景区", ent.name)
+    sync_entity_object_to_task_mirror(TASK, batch, "地点", "景区", ent.name)
 
 
 def test_mechanical_title_detected_and_natural_ok():
@@ -122,8 +172,8 @@ def test_gate_passes_clean_object():
         ordinal=1,
         source_id="overview_baike",
         source_md="# 峨眉山\n\n概述",
-        platform="baike",
-        source_category="overview_baike",
+        platform="维基百科",
+        source_category="encyclopedia",
         url="https://zh.wikipedia.org/wiki/峨眉山",
         title="峨眉山（百科）",
         target_ref="/entity/地点/景区/峨眉山",
@@ -149,6 +199,7 @@ def test_gate_passes_clean_object():
             "domain": "地点",
             "type": "景区",
             "sourceTaskId": TASK,
+            "geoTagRef": "Topic/地理/行政区/中国/四川省/乐山市/峨眉山市",
         },
     )
     paragraphs = [
@@ -177,6 +228,9 @@ def test_gate_passes_clean_object():
         registry=registry,
     )
     (ent / "page.md").write_text(
+        "---\n"
+        f"coverImage: asset://{asset_id}\n"
+        "---\n"
         "# 峨眉山\n\n"
         "## 概况\n\n"
         + "\n\n".join(paragraphs[:5])
@@ -184,7 +238,7 @@ def test_gate_passes_clean_object():
         + "\n\n".join(paragraphs[5:11])
         + "\n\n## 出发前\n\n"
         + "\n\n".join(paragraphs[11:])
-        + f"\n\n{{asset://{asset_id}|wrapRight|峨眉山云海|width=45%}}\n",
+        + "\n",
         encoding="utf-8",
     )
     write_json(
@@ -208,6 +262,7 @@ def test_gate_passes_clean_object():
                     "assetId": asset_id,
                     "fileName": f"{asset_id}.jpg",
                     "role": "cover",
+                    "caption": "峨眉山云海",
                     "sourceRef": source_ref,
                     "sourceAssetRef": source_asset_ref,
                     "termsUrl": "https://zh.wikipedia.org/wiki/Wikipedia:CC",
@@ -218,6 +273,7 @@ def test_gate_passes_clean_object():
     )
     (ent / "assets").mkdir(parents=True, exist_ok=True)
     (ent / "assets" / f"{asset_id}.jpg").write_bytes(b"cover")
+    _seed_entity_review_sidecars(ent, batch=batch, source_refs=[source_ref])
     write_json(ent / "3.compose" / "entity_page_input.json", {"payload": {"name": "峨眉山"}})
     issues = validate_entity_pages(TASK, batch, _seed_homepage_spec("峨眉山"))
     assert not issues, issues
@@ -238,8 +294,8 @@ def test_gate_entity_homepage_writes_review_sidecars():
         source_id="overview_baike",
         source_md="# 都江堰\n\n概述",
         clean_md="# 都江堰\n\n概述",
-        platform="baike",
-        source_category="overview_baike",
+        platform="维基百科",
+        source_category="encyclopedia",
         url="https://example.com/djy",
         title="都江堰百科",
         target_ref="/entity/地点/景区/都江堰",
@@ -251,6 +307,7 @@ def test_gate_entity_homepage_writes_review_sidecars():
             "domain": "地点",
             "type": "景区",
             "sourceTaskId": TASK,
+            "geoTagRef": "Topic/地理/行政区/中国/四川省/成都市/都江堰市",
         },
     )
     asset_id = allocate_post_asset_id(
@@ -260,10 +317,23 @@ def test_gate_entity_homepage_writes_review_sidecars():
         global_batch_seq=global_seq,
         registry=registry,
     )
-    (ent / "page.md").write_text(
-        f"# 都江堰\n\n" + ("都" * 900) + f"\n\n{{asset://{asset_id}|wrapRight|水利工程|width=45%}}\n",
-        encoding="utf-8",
+    base_sections = [
+        "都江堰位于成都平原西部，核心看点是延续至今的古代水利工程体系。",
+        "理解这处景区，重点不只在分水鱼嘴本身，也在河道、山势与城市关系如何一起展开。",
+        "第一次到访时，适合先用步行把几处关键观察点串起来，再决定是否补充更长的停留路线。",
+        "沿着堤岸走到安澜索桥附近，可以同时看到分水、泄洪与引水三段结构如何衔接。",
+        "如果只想抓住主线，可以把注意力集中在工程逻辑、观景停顿和沿线解说的衔接上。",
+        "丰水期和枯水期的视觉感受差异明显，出发前最好先确认当天水位与步道开放信息。",
+        "离堆公园一侧的步道相对平缓，带老人和孩子同行时可以优先从这里开始游览。",
+        "把节奏放慢之后，更容易看清它为什么既是工程遗产，也是今天仍在运转的城市基础设施。",
+    ]
+    page_text = (
+        "# 都江堰\n\n## 概况\n\n"
+        + "\n\n".join(base_sections[:4])
+        + "\n\n## 现场观察\n\n"
+        + "\n\n".join(base_sections[4:])
     )
+    (ent / "page.md").write_text(page_text, encoding="utf-8")
     (ent / "assets").mkdir(parents=True, exist_ok=True)
     (ent / "assets" / f"{asset_id}.jpg").write_bytes(b"cover")
     homepage_source_manifest = write_source_unit(
@@ -272,6 +342,7 @@ def test_gate_entity_homepage_writes_review_sidecars():
         source_id="baike_overview",
         source_md="# 都江堰\n\n百科概述",
         clean_md="# 都江堰\n\n百科概述",
+        platform="百度百科",
         source_category="encyclopedia",
         research_lane="homepage",
         url="https://baike.example.com/djy",
@@ -320,10 +391,49 @@ def test_gate_entity_homepage_writes_review_sidecars():
             ]
         },
     )
-    write_json(ent / "3.compose" / "entity_page_input.json", {"payload": {"name": "都江堰"}})
+    write_json(
+        ent / "3.compose" / "entity_page_input.json",
+        {
+            "payload": {
+                "name": "都江堰",
+                # discovery_seed/2 起 geoTagRef 为物化必填，经 prepare payload 透传写入 _entity.json。
+                "geoTagRef": "Topic/地理/行政区/中国/四川省/成都市/都江堰市",
+                "baseDraft": {
+                        "text": "\n".join(
+                            base_sections
+                            + [
+                                "遇到游客高峰时，先把桥面和观景台的人流节点避开，整体体验会稳定很多。",
+                                "若想把工程原理看得更清楚，最好结合现场指示牌与河道走向一起理解。",
+                            ]
+                        ),
+                    "sourceRef": homepage_source_ref,
+                    "primaryEvidenceRef": homepage_source_ref,
+                    "sourceUseMode": "factual_reference_only",
+                    "sectionOutline": [],
+                },
+            }
+        },
+    )
+    (ent / "4.draft").mkdir(parents=True, exist_ok=True)
+    (ent / "4.draft" / "page.md").write_text(page_text, encoding="utf-8")
+    with patch(
+        "build.homepage._pick_homepage_assets",
+        return_value=[
+            {
+                "path": batch_root(TASK, batch) / homepage_source_asset_ref,
+                "sourceRef": homepage_source_ref,
+                "sourceAssetRef": homepage_source_asset_ref,
+                "termsUrl": "https://baike.example.com/license",
+                "authorizationProof": "fixture homepage asset rights",
+                "caption": "水利工程",
+                "sha256": "fixture-homepage-asset-sha",
+            }
+        ],
+    ):
+        materialize_issues = materialize_entity_pages(TASK, batch, _seed_homepage_spec("都江堰"))
+    assert not materialize_issues, materialize_issues
     issues = validate_entity_pages(TASK, batch, _seed_homepage_spec("都江堰"))
     assert not issues, issues
-    assert (ent / "4.draft" / "page.md").is_file()
     assert (ent / "5.review" / "review.json").is_file()
     assert (ent / "5.review" / "provenance.json").is_file()
     assert (ent / "5.review" / "finalization_report.json").is_file()
@@ -342,8 +452,8 @@ def test_gate_flags_missing_entity_review_sidecars():
         source_id="overview_baike",
         source_md="# 都江堰\n\n概述",
         clean_md="# 都江堰\n\n概述",
-        platform="baike",
-        source_category="overview_baike",
+        platform="维基百科",
+        source_category="encyclopedia",
         url="https://example.com/djy",
         title="都江堰百科",
         target_ref="/entity/地点/景区/都江堰",
@@ -356,6 +466,7 @@ def test_gate_flags_missing_entity_review_sidecars():
             "domain": "地点",
             "type": "景区",
             "sourceTaskId": TASK,
+            "geoTagRef": "Topic/地理/行政区/中国/四川省/成都市/都江堰市",
         },
     )
     asset_id = allocate_post_asset_id(
@@ -403,6 +514,78 @@ def test_gate_flags_stage_first_regression():
     write_json(d / "九寨沟.json", {"payload": {"generator": "agent"}})
     issues = scan_batch(TASK, batch, require_stage_tree=False)
     assert any("stage-first 回退" in i for i in issues), issues
+
+
+def test_gate_flags_legacy_hash_source_unit_dir_and_accepts_readable():
+    """命名门（spec §3）：批次 sources/ 必须用 {实体名}__{sourceKind}__{hash8}，su_ 哈希名 BLOCK。"""
+    batch = "gate_src_naming"
+    _seed_batch_manifest(batch)
+    ensure_task_layout(TASK)
+    sources_root = batch_root(TASK, batch) / "sources"
+    (sources_root / "su_eabdce24810af4b94427").mkdir(parents=True, exist_ok=True)
+    (sources_root / "黄龙风景名胜区__home_wikipedia__ab12cd34").mkdir(parents=True, exist_ok=True)
+    (sources_root / "随意目录名").mkdir(parents=True, exist_ok=True)
+    issues = scan_batch(TASK, batch, require_stage_tree=False)
+    assert any("su_eabdce24810af4b94427" in i and "已废弃" in i for i in issues), issues
+    assert any("随意目录名" in i and "可读命名" in i for i in issues), issues
+    assert not any("黄龙风景名胜区__home_wikipedia__ab12cd34" in i for i in issues), issues
+
+
+def test_gate_flags_legacy_v1_asset_names_and_accepts_v2():
+    """assets 命名门（spec §4.1）：成品图片文件名必须是 v2 assetId（含图注段）。
+
+    - v2 `实体_角色_图注_批次号_hash8` → PASS
+    - v1 `实体_角色_批次号_hash8`（无图注段）→ BLOCK
+    - 不可解析的任意文件名 → BLOCK
+    """
+    batch = "gate_asset_naming"
+    _seed_batch_manifest(batch)
+    ensure_task_layout(TASK)
+    ent = batch_entity_object_dir(TASK, batch, "地点", "景区", "黄龙")
+    assets_dir = ent / "assets"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    # 对象根判定依赖 _entity.json（iter_batch_object_dirs）。
+    write_json(ent / "_entity.json", {"label": "黄龙", "domain": "地点", "type": "景区"})
+    (assets_dir / "黄龙_cover_五彩池_42_a1b2c3d4.jpg").write_bytes(b"v2")
+    (assets_dir / "黄龙_cover_42_a1b2c3d4.jpg").write_bytes(b"v1")
+    (assets_dir / "random_name.jpg").write_bytes(b"junk")
+    issues = scan_batch(TASK, batch, require_stage_tree=False)
+    assert any("黄龙_cover_42_a1b2c3d4.jpg" in i and "缺图注段" in i for i in issues), issues
+    assert any("random_name.jpg" in i and "不可解析" in i for i in issues), issues
+    assert not any("黄龙_cover_五彩池_42_a1b2c3d4.jpg" in i for i in issues), issues
+
+
+def test_source_unit_id_readable_naming_contract():
+    """sourceUnitId 可读命名：实体语境产 {实体名}__{kind}__{hash8}；无语境回退 su_ 哈希。"""
+    import re
+
+    import _common.ops_governance as og
+
+    readable = og.source_unit_id(
+        canonical_url="https://zh.wikipedia.org/wiki/黄龙风景名胜区",
+        snapshot_hash="sha256:abc",
+        source_ref="01.home_wikipedia",
+        entity_name="黄龙风景名胜区",
+        source_kind="home_wikipedia",
+    )
+    assert re.match(r"^黄龙风景名胜区__home_wikipedia__[0-9a-f]{8}$", readable), readable
+    # 同输入稳定可复算。
+    assert readable == og.source_unit_id(
+        canonical_url="https://zh.wikipedia.org/wiki/黄龙风景名胜区",
+        snapshot_hash="sha256:abc",
+        source_ref="01.home_wikipedia",
+        entity_name="黄龙风景名胜区",
+        source_kind="home_wikipedia",
+    )
+    legacy = og.source_unit_id(source_ref="sources/x/source.md")
+    assert re.match(r"^su_[0-9a-f]{20}$", legacy), legacy
+
+
+def test_batch_source_unit_dir_preserves_chinese_entity_name():
+    from _common.paths import batch_source_unit_dir
+
+    unit = batch_source_unit_dir(TASK, "gate_src_naming2", "黄龙风景名胜区__home_wikipedia__ab12cd34")
+    assert unit.name == "黄龙风景名胜区__home_wikipedia__ab12cd34"
 
 
 def test_gate_flags_illegal_top_level_entry():
@@ -511,8 +694,8 @@ def test_gate_passes_post_evidence_chain_sidecars():
         source_id="overview_baike",
         source_md=source_md,
         clean_md=source_md,
-        platform="baike",
-        source_category="overview_baike",
+        platform="维基百科",
+        source_category="encyclopedia",
         url="https://example.com/djy",
         title="都江堰百科",
         target_ref="/entity/地点/景区/都江堰",
@@ -582,7 +765,7 @@ def test_stage_tree_completeness_default_on():
 def test_stage_tree_completeness_covers_image_work_by_manifest():
     """图片作品没有 article.md/gallery.md，成品判定改用 manifest，阶段树同样必须完整。"""
     batch = "gate_stage_tree_image"
-    _seed_batch_manifest(batch)
+    _seed_batch_manifest(batch, content_type="image")
     ensure_task_layout(TASK)
     ref = "结构化组图_画报"
     register_content_object(TASK, batch, ref, content_type="image", angle="画报", title="九寨沟组图")
@@ -615,7 +798,7 @@ def test_stage_tree_completeness_covers_image_work_by_manifest():
 def test_stage_tree_completeness_flags_image_work_missing_assets():
     """图片作品成品缺落盘资产 → 关键文件门拦截。"""
     batch = "gate_stage_tree_image_no_asset"
-    _seed_batch_manifest(batch)
+    _seed_batch_manifest(batch, content_type="image")
     ensure_task_layout(TASK)
     ref = "空资产组图_画报"
     register_content_object(TASK, batch, ref, content_type="image", angle="画报", title="无资产组图")

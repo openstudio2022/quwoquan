@@ -261,7 +261,7 @@
   - T3：gamma-hosted/ACK 关键 API、关键旅程、SLO 与告警、分享回流。
   - T4：五条用户旅程 + 双端提审前复验 + gamma-local 左移。
 - 门禁命令：
-  - `make gate` / `bash agent_ops/gate/gate_repo.sh --scope app`
+  - `make gate` / `bash quwoquan_ops/gate/gate_repo.sh --scope app`
   - `flutter test test/core/links/share_attribution_test.dart`
   - `flutter test test/ui/content/share/`
   - `flutter test test/ui/content/entry/contract/publish_payload_contract_test.dart`

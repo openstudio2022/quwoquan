@@ -12,7 +12,9 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_crea
 import 'package:quwoquan_app/cloud/runtime/generated/chat/selectable_group_conversation_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
@@ -35,6 +37,7 @@ Future<void> _pumpStartGroupChatPage(
   WidgetTester tester, {
   required ProviderContainer container,
   String? conversationId,
+  StartGroupChatRouteExtra? routeExtra,
 }) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -47,6 +50,7 @@ Future<void> _pumpStartGroupChatPage(
               path: '/chat/start-group',
               builder: (context, state) => StartGroupChatPage(
                 conversationId: conversationId,
+                routeExtra: routeExtra,
                 onBack: () {},
               ),
             ),
@@ -84,6 +88,7 @@ class _RecordingAnalyticsService extends AnalyticsService {
 ProviderContainer _buildContainer(
   MockChatRepository repository, {
   AnalyticsService? analytics,
+  OpsEventRepository? ops,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -92,6 +97,7 @@ ProviderContainer _buildContainer(
         const MockUserProfileRepository(),
       ),
       if (analytics != null) analyticsProvider.overrideWithValue(analytics),
+      if (ops != null) opsEventRepositoryProvider.overrideWithValue(ops),
     ],
   );
   addTearDown(container.dispose);
@@ -210,7 +216,8 @@ class _SelectableGroupChatRepository extends MockChatRepository {
     String? query,
     int limit = CloudApiDefaults.pageLimit,
   }) async {
-    return (membersByConversation[conversationId] ?? const <ChatContactRowDto>[])
+    return (membersByConversation[conversationId] ??
+            const <ChatContactRowDto>[])
         .take(limit)
         .toList(growable: false);
   }
@@ -311,6 +318,75 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
+  testWidgets('交集结伴入口展示上下文并将 target/source 写入 journey 事件', (tester) async {
+    _suppressImageErrors();
+
+    final ops = MockOpsEventRepository();
+    final container = _buildContainer(MockChatRepository(), ops: ops);
+    const extra = StartGroupChatRouteExtra(
+      actionKey: 'start_companion',
+      actionLabel: '发起结伴',
+      targetObjectId: 'fixture_homepage_travel_photo_west_lake',
+      targetObjectKind: 'place',
+      intersectionId: 'ix_wishlist',
+      dimension: 'location',
+      intersectionClass: 'fact',
+      sourceRef: 'coWishlistedEntity',
+      evidenceId: 'ev_wishlist_1',
+    );
+
+    await _pumpStartGroupChatPage(
+      tester,
+      container: container,
+      routeExtra: extra,
+    );
+
+    expect(
+      find.byKey(const ValueKey<String>('start-group-companion-context-card')),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.startGroupChatCompanionContextTitle),
+      findsOneWidget,
+    );
+    await tester.pumpAndSettle();
+    final enterEvents = ops.recorded
+        .where(
+          (event) =>
+              event.eventName == 'start_group_chat.companion_context_enter',
+        )
+        .toList(growable: false);
+    expect(enterEvents, isNotEmpty);
+    expect(
+      enterEvents.last.payload['targetObjectId'],
+      'fixture_homepage_travel_photo_west_lake',
+    );
+    expect(
+      enterEvents.last.payload['intersectionSourceRef'],
+      'coWishlistedEntity',
+    );
+
+    await tester.tap(find.byIcon(CupertinoIcons.circle).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(UITextConstants.startGroupChatActionCount(1)));
+    await tester.pumpAndSettle();
+
+    final createEvents = ops.recorded
+        .where((event) => event.eventName == 'start_group_chat.create_success')
+        .toList(growable: false);
+    expect(createEvents, isNotEmpty);
+    expect(
+      createEvents.last.payload['targetObjectId'],
+      'fixture_homepage_travel_photo_west_lake',
+    );
+    expect(
+      createEvents.last.payload['intersectionEvidenceId'],
+      'ev_wishlist_1',
+    );
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('发起群聊失败时观测事件携带服务端错误码（错误码到埋点同源）', (tester) async {
     _suppressImageErrors();
 
@@ -334,7 +410,10 @@ void main() {
 
     final failed = analytics.pageLifecycleEvents('submitFailure');
     expect(failed, isNotEmpty);
-    expect(failed.first.properties['sourceCode'], 'CHAT.USER.group_member_not_mutual');
+    expect(
+      failed.first.properties['sourceCode'],
+      'CHAT.USER.group_member_not_mutual',
+    );
   });
 
   testWidgets('选中联系人后可提交并跳转到新会话', (tester) async {
@@ -492,7 +571,7 @@ void main() {
     );
     expect(find.textContaining('已移除'), findsOneWidget);
 
-    // 等待 toast 自动消失计时器结束，避免遗留 pending timer。
+    // 等待 toast 自动消失计时器结束，避免 pending timer 残留。
     await tester.pump(const Duration(seconds: 3));
     await tester.pumpAndSettle();
   });
@@ -636,9 +715,7 @@ void main() {
 
     // 选中群成员（行整体可点，避免与底部「全选」圈图标混淆）。
     await tester.tap(
-      find.byKey(
-        const ValueKey<String>('start-group-candidate-row-user_002'),
-      ),
+      find.byKey(const ValueKey<String>('start-group-candidate-row-user_002')),
     );
     await tester.pumpAndSettle();
 

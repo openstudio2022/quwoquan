@@ -80,7 +80,7 @@ Tab 内容区：用户=作品/圈子/互动/看点；实体=内容/讨论/兴趣
 2. T2：三主页 widget/golden 测试断言四段式结构与统一标题；我的主页第三人称反断言。
 3. T2：影响卡三态（有数据 / 空收起 / mine 鼓励文案）。
 4. T3：beta 环境三主页真实数据渲染（连接模块与影响模块非 mock）。
-5. 页面矩阵对应行更新；`bash agent_ops/gate/gate_repo.sh --scope app` 全绿（含 Tab 标签无硬编码中文的语义检查）。
+5. 页面矩阵对应行更新；`bash quwoquan_ops/gate/gate_repo.sh --scope app` 全绿（含 Tab 标签无硬编码中文的语义检查）。
 6. 实体/圈子壳中不再有 Tab 中文字面量（codegen 常量化）。
 
 ## 6. 验收标准（GWT 样例）

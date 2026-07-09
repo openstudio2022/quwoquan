@@ -1,0 +1,380 @@
+# 全国地点主清单 · 浙江省台州市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 台州市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 三门县
+  leaves:
+  - name: 蛇蟠岛
+    canonicalName: 蛇蟠岛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/三门县
+    aliases:
+    - 蛇蟠岛景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 亭旁起义纪念地
+    canonicalName: 亭旁起义纪念地
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/三门县
+    aliases:
+    - 亭旁起义纪念馆
+    selectionPriority: 2
+    sourceReadiness: pending
+- district: 临海市
+  leaves:
+  - name: 台州府城文化旅游区
+    canonicalName: 台州府城文化旅游区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    aliases:
+    - 台州府城
+    - 临海古城
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 江南长城
+    canonicalName: 江南长城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    aliases:
+    - 临海古城墙
+    - 台州府城墙
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 紫阳古街
+    canonicalName: 紫阳古街
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 桃渚古城
+    canonicalName: 桃渚古城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    aliases:
+    - 桃渚军事古城
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 括苍山
+    canonicalName: 括苍山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    aliases:
+    - 括苍山米筛浪
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 羊岩山
+    canonicalName: 羊岩山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    aliases:
+    - 羊岩山茶文化园
+    selectionPriority: 6
+    sourceReadiness: pending
+- district: 仙居县
+  leaves:
+  - name: 神仙居
+    canonicalName: 神仙居
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    aliases:
+    - 神仙居景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 皤滩古镇
+    canonicalName: 皤滩古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 高迁古民居
+    canonicalName: 高迁古民居
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    aliases:
+    - 高迁古村
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 永安溪
+    canonicalName: 永安溪
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    aliases:
+    - 永安溪漂流
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 景星岩
+    canonicalName: 景星岩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    aliases:
+    - 景星岩景区
+    selectionPriority: 5
+    sourceReadiness: pending
+- district: 天台县
+  leaves:
+  - name: 天台山
+    canonicalName: 天台山（台州）
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    aliases:
+    - 天台山风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 国清寺
+    canonicalName: 国清寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    aliases:
+    - 国清讲寺
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 石梁飞瀑
+    canonicalName: 石梁飞瀑
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    aliases:
+    - 石梁景区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 琼台仙谷
+    canonicalName: 琼台仙谷
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 济公故居
+    canonicalName: 济公故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 赤城山
+    canonicalName: 赤城山（天台）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    aliases:
+    - 赤城栖霞
+    selectionPriority: 6
+    sourceReadiness: ready
+  - name: 华顶国家森林公园
+    canonicalName: 华顶国家森林公园
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    aliases:
+    - 华顶峰
+    selectionPriority: 7
+    sourceReadiness: pending
+- district: 椒江区
+  leaves:
+  - name: 大陈岛
+    canonicalName: 大陈岛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/椒江区
+    aliases:
+    - 上大陈岛
+    - 下大陈岛
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 海门老街
+    canonicalName: 海门老街
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/椒江区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 戚继光纪念馆
+    canonicalName: 戚继光纪念馆（椒江）
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/椒江区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 解放一江山岛烈士陵园
+    canonicalName: 解放一江山岛烈士陵园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/椒江区
+    aliases:
+    - 一江山岛登陆战纪念馆
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 温岭市
+  leaves:
+  - name: 长屿硐天
+    canonicalName: 长屿硐天
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/温岭市
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 石塘
+    canonicalName: 石塘（温岭）
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/温岭市
+    aliases:
+    - 石塘古镇
+    - 石塘渔村
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 方山
+    canonicalName: 方山（温岭）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/温岭市
+    aliases:
+    - 方山景区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 千年曙光园
+    canonicalName: 千年曙光园
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/温岭市
+    aliases:
+    - 千年曙光碑
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 洞下沙滩
+    canonicalName: 洞下沙滩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/温岭市
+    aliases:
+    - 石塘洞下沙滩
+    selectionPriority: 5
+    sourceReadiness: pending
+- district: 玉环市
+  leaves:
+  - name: 大鹿岛
+    canonicalName: 大鹿岛（玉环）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/玉环市
+    aliases:
+    - 大鹿岛景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 漩门湾国家湿地公园
+    canonicalName: 漩门湾国家湿地公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/湿地公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/玉环市
+    aliases:
+    - 漩门湾湿地
+    selectionPriority: 2
+    sourceReadiness: pending
+- district: 路桥区
+  leaves:
+  - name: 十里长街
+    canonicalName: 十里长街（路桥）
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/路桥区
+    aliases:
+    - 路桥老街
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 中央山公园
+    canonicalName: 中央山公园（路桥）
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/路桥区
+    selectionPriority: 2
+    sourceReadiness: pending
+- district: 黄岩区
+  leaves:
+  - name: 黄岩石窟
+    canonicalName: 黄岩石窟
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    aliases:
+    - 黄岩石窟艺术中心
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 九峰公园
+    canonicalName: 九峰公园（黄岩）
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 布袋山
+    canonicalName: 布袋山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    aliases:
+    - 布袋山风景区
+    selectionPriority: 3
+    sourceReadiness: pending

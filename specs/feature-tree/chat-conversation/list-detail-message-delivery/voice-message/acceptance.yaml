@@ -50,7 +50,7 @@ gwt_acceptance:
       - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
       - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
       - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
-      - file: runtime/reports/voice_message_t4_evidence.md
+      - file: .qwq_output/runs/voice_message_t4_evidence.md
       recorded:
       - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_send_provider__local_contract_test.dart
@@ -86,7 +86,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_recorded_reference] runtime/reports/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
   GWT2:
     title: 上滑取消、页面退出和并发录音不会产生幽灵录音或重复发送
     given:
@@ -140,7 +140,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_recorded_reference] runtime/reports/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
   GWT3:
     title: 权限与失败统一映射到临时或永久恢复动作
     given:
@@ -167,7 +167,7 @@ gwt_acceptance:
       - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
       - file: quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
       - file: quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
-      - file: runtime/reports/voice_message_t4_evidence.md
+      - file: .qwq_output/runs/voice_message_t4_evidence.md
       recorded:
       - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_send_provider__local_contract_test.dart
@@ -188,7 +188,7 @@ gwt_acceptance:
         - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt3_local_contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded_reference] runtime/reports/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
   GWT4:
     title: audio 消息契约与端云 media payload 一致
     given:
@@ -264,7 +264,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
       - file: quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
-      - file: runtime/reports/voice_message_t4_evidence.md
+      - file: .qwq_output/runs/voice_message_t4_evidence.md
       recorded:
       - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_message_bubble_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_player_manager__local_contract_test.dart
@@ -293,7 +293,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_recorded_reference] runtime/reports/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
   GWT6:
     title: 评论和回复入口在 ASR 未支持时不展示语音能力
     given:
@@ -349,10 +349,10 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_recorded_reference] runtime/reports/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

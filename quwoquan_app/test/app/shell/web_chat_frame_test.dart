@@ -36,6 +36,9 @@ void main() {
         find.byKey(const ValueKey<String>('web-context-tab-xiaoqu')),
         findsNothing,
       );
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 1));
     });
   });
 }

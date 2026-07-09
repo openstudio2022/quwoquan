@@ -22,15 +22,15 @@ related_cr:
 nodes_extended:
   - runtime/deliver-deploy-prod-pipeline (新增 ACK 集群部署形态与 split-ready 的 spec/design/SIT2 与 A9~A12)
 deploy_changes_planned:
-  - file: deploy/kustomization/aliyun-prod/kustomization.yaml
+  - file: quwoquan_ops/environments/kustomization/aliyun-prod/kustomization.yaml
     change: 升级为聚合 seed-box 单元 + recommendation/实时/媒体独立 workload 的 prod root。
-  - file: deploy/service/seed-box/kustomize/base/deployment.yaml
+  - file: quwoquan_service/services/seed-box/deploy/kustomize/base/deployment.yaml
     change: 清理非 prod-safe 默认值（APP_ENV=gamma、latest），固化为独立 Deployment + 标准 probe/resources。
-  - file: deploy/shared/process_domain_mapping.yaml
+  - file: quwoquan_ops/environments/process_domain_mapping.yaml
     change: 明确 seed-box 聚合域、同集群独立 workload、后续拆分单元的归属与一致性。
-  - file: deploy/shared/module_package_mapping.yaml
+  - file: quwoquan_ops/environments/module_package_mapping.yaml
     change: 对齐 Modular Monolith 发布单元与独立 workload 的模块映射。
-  - file: agent_ops/deploy/stackctl.py
+  - file: quwoquan_ops/cli/stackctl.py
     change: 支持 seed-box 单元 rollout 与拆分后独立单元 rollout、health/inspect/doctor、SLO gate、rollback。
 dev_log:
   - date: "2026-06-08"
@@ -38,5 +38,5 @@ dev_log:
       规格冻结；deliver-deploy-prod-pipeline L2 新增 ACK 集群部署形态（modular-monolith-first + 三层正交 +
       Strangler split-ready + 数据面对应关系 + 反模式禁止），补 A9~A12 与 SIT2；登记 tree_index tags。
     verify:
-      - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-      - bash agent_ops/scaffold/verify_acceptance_standard.sh
+      - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+      - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh

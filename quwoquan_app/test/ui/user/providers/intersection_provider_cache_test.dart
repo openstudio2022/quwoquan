@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
@@ -37,10 +39,7 @@ void main() {
       addTearDown(container.dispose);
 
       // 首次挂载消费方：listen 保持订阅，触发首帧 build 的 keepAlive。
-      final sub1 = container.listen(
-        myIntersectionPreviewProvider,
-        (_, _) {},
-      );
+      final sub1 = container.listen(myIntersectionPreviewProvider, (_, _) {});
       await container.read(myIntersectionPreviewProvider.notifier).load();
       expect(repo.listCalls, 1);
 
@@ -48,10 +47,7 @@ void main() {
       sub1.close();
 
       // 模拟返回主页卡片重建：新的 initState 再次触发 load。
-      final sub2 = container.listen(
-        myIntersectionPreviewProvider,
-        (_, _) {},
-      );
+      final sub2 = container.listen(myIntersectionPreviewProvider, (_, _) {});
       addTearDown(sub2.close);
       await container.read(myIntersectionPreviewProvider.notifier).load();
 
@@ -70,6 +66,23 @@ void main() {
       await notifier.load(force: true);
 
       expect(repo.listCalls, 2);
+    });
+
+    test('pending load 在 provider dispose 后完成时不写已释放 Ref', () async {
+      final repo = _PendingIntersectionRepository();
+      final container = ProviderContainer(
+        overrides: [intersectionRepositoryProvider.overrideWithValue(repo)],
+      );
+
+      final loadFuture = container
+          .read(myIntersectionPreviewProvider.notifier)
+          .load();
+      await Future<void>.delayed(Duration.zero);
+
+      container.dispose();
+      repo.completeList(const <IntersectionReason>[]);
+
+      await expectLater(loadFuture, completes);
     });
   });
 
@@ -135,6 +148,28 @@ class _CountingIntersectionRepository implements IntersectionRepository {
     required String objectType,
     int limit = 8,
   }) async => const <IntersectionReason>[];
+}
+
+class _PendingIntersectionRepository extends _CountingIntersectionRepository {
+  final Completer<List<IntersectionReason>> _listCompleter =
+      Completer<List<IntersectionReason>>();
+
+  void completeList(List<IntersectionReason> items) {
+    _listCompleter.complete(items);
+  }
+
+  @override
+  Future<List<IntersectionReason>> listMyIntersections({
+    String? dimension,
+    String? filter,
+    String? sourceRef,
+    String? timeBucket,
+    String? cursor,
+    int limit = 50,
+  }) {
+    listCalls += 1;
+    return _listCompleter.future;
+  }
 }
 
 class _CountingUserProfileRepository extends MockUserProfileRepository {

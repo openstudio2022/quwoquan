@@ -50,6 +50,7 @@ def test_download_plan_deterministic_license_failure_activates_reserve(monkeypat
 
     monkeypatch.setattr("task.run._source_plan_filled", _filled)
     monkeypatch.setattr("task.run._replacement_fetch_gate_passed", lambda *_args, **_kwargs: (True, []))
+    monkeypatch.setattr("task.run._homepage_base_draft_gate_for_entity", lambda *_args, **_kwargs: (True, []))
     monkeypatch.setattr(
         "task.run._content_capacity_gate_for_entity",
         lambda *_args, **_kwargs: (True, [], {"fixture": "passed"}),
@@ -350,7 +351,7 @@ def test_download_plan_allows_recoverable_compressed_article_source_image():
 
     assert run_mod._source_plan_filled(ctx)[0] is True
 
-def test_download_plan_allows_single_authoritative_homepage_source():
+def test_download_plan_allows_single_primary_authority_homepage_source():
     task_id = _make_task()
     batch_id = "download_plan_single_authoritative_homepage"
     _seed_source_plan(task_id, batch_id)
@@ -362,7 +363,9 @@ def test_download_plan_allows_single_authoritative_homepage_source():
     )
     plan = read_json(plan_path)
     plan["payload"]["sources"] = plan["payload"]["sources"][:1]
-    plan["payload"]["sources"][0]["category"] = "official"
+    plan["payload"]["sources"][0]["platform"] = "维基百科"
+    plan["payload"]["sources"][0]["category"] = "encyclopedia"
+    plan["payload"]["sources"][0]["sourceRole"] = "primary"
     write_json(plan_path, plan)
 
     ok, issues = run_mod._source_plan_filled(ctx)
@@ -411,6 +414,96 @@ def test_download_fast_fail_classifies_repeated_homepage_category_shortfall():
     assert list(reasons) == [_EID]
     assert "source/category shortfall survived repair" in reasons[_EID]
 
+
+def test_elastic_policy_classifies_source_category_shortfall_without_retry_loop():
+    task_id = _make_task(
+        workflow_policy={
+            "elasticOverfetch": True,
+            "allowQuotaShortfall": True,
+            "allowContentQuotaShortfall": True,
+            "allowMinEntityShortfall": True,
+            "minBatchCompletionMode": "best_effort_with_reasoned_rejects",
+        }
+    )
+    batch_id = "download_fast_fail_elastic_source_category"
+    ctx = _ctx(task_id, batch_id)
+
+    reasons = run_mod._download_fast_fail_reasons(
+        ctx,
+        [f"{_EID}: {_EID}: source categories 2 < required 3 (covered=['encyclopedia', 'travelogue'])"],
+    )
+
+    assert list(reasons) == [_EID]
+    assert "source/category shortfall survived repair" in reasons[_EID]
+
+
+def test_elastic_fast_fail_skips_replacement_when_active_targets_still_meet_min(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "elasticOverfetch": True,
+            "allowQuotaShortfall": True,
+            "allowContentQuotaShortfall": True,
+            "allowMinEntityShortfall": True,
+            "minBatchCompletionMode": "best_effort_with_reasoned_rejects",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec.setdefault("scope", {}).setdefault("coverageTargets", []).append(
+        {"entityType": "地点/景区", "name": "测试景区乙"}
+    )
+    spec.setdefault("acceptance", {})["minEntities"] = 1
+    store.save_spec(spec)
+    batch_id = "download_fast_fail_no_replacement_when_min_met"
+    ctx = _ctx(task_id, batch_id)
+
+    def _fail_screen(*_args, **_kwargs):
+        raise AssertionError("replacement screening should not run when active target count still meets minEntities")
+
+    monkeypatch.setattr(run_mod, "_screen_replacements_for_abandoned_entities", _fail_screen)
+    import download.gate as gate_mod
+
+    monkeypatch.setattr(gate_mod, "gate_download", lambda *_args, **_kwargs: [])
+
+    issues = run_mod._apply_download_fast_fail(
+        ctx,
+        [f"{_EID}: {_EID}: source categories 2 < required 3 (covered=['encyclopedia', 'travelogue'])"],
+    )
+
+    assert issues == []
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert [item["entityId"] for item in state["abandonedObjects"]] == [_EID]
+
+
+def test_homepage_lane_source_screen_empty_is_homepage_only_reject(monkeypatch):
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    batch_id = "homepage_lane_source_screen_empty"
+    ctx = _ctx(task_id, batch_id)
+
+    def _unexpected_entity_abandon(*_args, **_kwargs):
+        raise AssertionError("homepage lane sourceScreen empty must not abandon entity")
+
+    monkeypatch.setattr(run_mod, "mark_abandoned_entities", _unexpected_entity_abandon)
+
+    issues = run_mod._apply_homepage_download_fast_fail(
+        ctx,
+        [
+            f"{_EID}: sourceScreen: no retained source for entity",
+            f"{_EID}: unrelated article issue",
+        ],
+        target_entity_ids=[_EID],
+        download_lane="homepage",
+    )
+
+    assert issues == [f"{_EID}: unrelated article issue"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    homepage_abandoned = [
+        item["entityId"]
+        for item in (state.get("abandonedObjects") or [])
+        if item.get("abandonScope") == "homepage"
+    ]
+    assert homepage_abandoned == [_EID]
+
+
 def test_article_official_source_id_cannot_use_travelogue_platform():
     task_id = _make_task()
     batch_id = "download_article_official_identity"
@@ -431,6 +524,114 @@ def test_article_official_source_id_cannot_use_travelogue_platform():
 
     issues = run_mod._download_research_lane_issues(ctx, _EID, "地点/景区", "article")
     assert any("source_id implies official" in issue for issue in issues), issues
+
+
+def test_elastic_policy_does_not_loop_download_plan_for_article_quota_shortfall():
+    task_id = _make_task(
+        workflow_policy={
+            "elasticOverfetch": True,
+            "allowQuotaShortfall": True,
+            "allowContentQuotaShortfall": True,
+            "allowMinEntityShortfall": True,
+            "minBatchCompletionMode": "best_effort_with_reasoned_rejects",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 4
+    store.save_spec(spec)
+    batch_id = "download_article_quota_shortfall_reasoned"
+    _seed_source_plan(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    plan_path = (
+        resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+        / STAGE_DOWNLOAD
+        / "article_source_plan.json"
+    )
+    plan = read_json(plan_path)
+    plan["payload"]["sources"] = plan["payload"]["sources"][:1]
+    write_json(plan_path, plan)
+
+    issues = run_mod._download_research_lane_issues(ctx, _EID, "地点/景区", "article")
+
+    assert not any("article sources=" in issue for issue in issues), issues
+    assert not any("article research needs >=" in issue for issue in issues), issues
+
+
+def test_image_only_source_plan_does_not_require_article_sources():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 0
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 1
+    store.save_spec(spec)
+    batch_id = "download_image_only_article_sources_ignored"
+    _seed_source_plan(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    plan_path = (
+        resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+        / STAGE_DOWNLOAD
+        / "article_source_plan.json"
+    )
+    plan = read_json(plan_path)
+    plan["payload"]["sources"] = plan["payload"]["sources"][:1]
+    write_json(plan_path, plan)
+    image_plan_path = (
+        resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+        / STAGE_DOWNLOAD
+        / "image_source_plan.json"
+    )
+    image_plan = read_json(image_plan_path)
+    for collection in image_plan["payload"]["collections"]:
+        for image in collection.get("images") or []:
+            image["modelReleaseStatus"] = "not_required"
+    write_json(image_plan_path, image_plan)
+
+    passed, issues = run_mod._source_plan_filled(ctx)
+
+    assert passed, issues
+    assert not any("article sources=" in issue for issue in issues), issues
+
+
+def test_image_only_source_plan_gate_does_not_require_article_category_spread():
+    from download.handler_plan import _source_plan_gate_issues
+
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 0
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 1
+    store.save_spec(spec)
+
+    issues = _source_plan_gate_issues(
+        task_id=task_id,
+        batch_id="download_image_only_category_gate",
+        entity_id=_EID,
+        entity_type="地点/景区",
+        planned_sources=[
+            {
+                "source_id": "home_baike",
+                "platform": "百度百科",
+                "url": "https://example.invalid/baike",
+                "category": "encyclopedia",
+                "sourceUseMode": "factual_reference_only",
+                "researchLane": "homepage",
+                "expectedContentType": "entity",
+            },
+            {
+                "source_id": "image_commons",
+                "platform": "Wikimedia Commons",
+                "url": "https://commons.wikimedia.org/wiki/File:one.jpg",
+                "category": "open_license",
+                "sourceUseMode": "factual_reference_only",
+                "researchLane": "image",
+                "expectedContentType": "image",
+            },
+        ],
+        selected_lanes=None,
+        vertical="travel",
+    )
+
+    assert not any("source categories" in issue for issue in issues), issues
+    assert not any("missing core source categories" in issue for issue in issues), issues
+
 
 def test_article_official_source_id_allows_official_article_category():
     task_id = _make_task()
@@ -453,4 +654,3 @@ def test_article_official_source_id_allows_official_article_category():
     issues = run_mod._download_research_lane_issues(ctx, _EID, "地点/景区", "article")
 
     assert not any("source_id implies official" in issue for issue in issues), issues
-

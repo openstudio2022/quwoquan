@@ -24,12 +24,15 @@ void main() {
     });
 
     test('user/**/errors.yaml 聚合错误码均已覆盖', () {
-      expect(UserErrorCode.values.length, 61);
+      expect(UserErrorCode.values.length, 63);
       expect(
         UserErrorCode.contactDiscoveryRateLimited.code,
         'USER.CONTACT.rate_limited',
       );
-      expect(UserErrorCode.alipayAuthFailed.code, 'USER.AUTH.alipay_auth_failed');
+      expect(
+        UserErrorCode.alipayAuthFailed.code,
+        'USER.AUTH.alipay_auth_failed',
+      );
       expect(UserErrorCode.qqAuthFailed.code, 'USER.AUTH.qq_auth_failed');
       expect(
         UserErrorCode.socialProviderCancelled.code,
@@ -39,8 +42,14 @@ void main() {
         UserErrorCode.socialProviderUnavailable.code,
         'USER.AUTH.social_provider_unavailable',
       );
-      expect(UserErrorCode.tooManyContacts.code, 'USER.CONTACT.too_many_contacts');
-      expect(UserErrorCode.greetingAlreadyContact.code, 'USER.GREETING.already_contact');
+      expect(
+        UserErrorCode.tooManyContacts.code,
+        'USER.CONTACT.too_many_contacts',
+      );
+      expect(
+        UserErrorCode.greetingAlreadyContact.code,
+        'USER.GREETING.already_contact',
+      );
       expect(UserErrorCode.inviteExpired.code, 'USER.INVITE.expired');
       expect(UserErrorCode.userNotFound.code, 'USER.USER.not_found');
       expect(UserErrorCode.unauthorized.code, 'USER.USER.unauthorized');
@@ -48,12 +57,27 @@ void main() {
       expect(UserErrorCode.nicknameTaken.code, 'USER.USER.nickname_taken');
       expect(UserErrorCode.invalidArgument.code, 'USER.USER.invalid_argument');
       expect(UserErrorCode.rateLimited.code, 'USER.USER.rate_limited');
-      expect(UserErrorCode.invalidCallRingtone.code, 'USER.SETTING.invalid_call_ringtone');
+      expect(
+        UserErrorCode.invalidCallRingtone.code,
+        'USER.SETTING.invalid_call_ringtone',
+      );
       expect(UserErrorCode.otpExpired.code, 'USER.AUTH.otp_expired');
-      expect(UserErrorCode.subAccountNotFound.code, 'USER.SUB_ACCOUNT.not_found');
-      expect(UserErrorCode.retiredSubAccountGuard.code, 'USER.SUB_ACCOUNT.retired_guard');
-      expect(UserErrorCode.deleteEmptySubAccountOnly.code, 'USER.SUB_ACCOUNT.delete_empty_only');
-      expect(UserErrorCode.subAccountHandleTaken.code, 'USER.SUB_ACCOUNT.handle_taken');
+      expect(
+        UserErrorCode.subAccountNotFound.code,
+        'USER.SUB_ACCOUNT.not_found',
+      );
+      expect(
+        UserErrorCode.retiredSubAccountGuard.code,
+        'USER.SUB_ACCOUNT.retired_guard',
+      );
+      expect(
+        UserErrorCode.deleteEmptySubAccountOnly.code,
+        'USER.SUB_ACCOUNT.delete_empty_only',
+      );
+      expect(
+        UserErrorCode.subAccountHandleTaken.code,
+        'USER.SUB_ACCOUNT.handle_taken',
+      );
       expect(UserErrorCode.internalError.code, 'USER.SYSTEM.internal_error');
     });
 
@@ -123,9 +147,18 @@ void main() {
       expect(UserErrorCode.unauthorized.defaultMessage, '请先登录');
       expect(UserErrorCode.nicknameTaken.defaultMessage, contains('昵称'));
       expect(UserErrorCode.rateLimited.defaultMessage, contains('频繁'));
-      expect(UserErrorCode.retiredSubAccountGuard.defaultMessage, contains('退役'));
-      expect(UserErrorCode.deleteEmptySubAccountOnly.defaultMessage, contains('直接删除'));
-      expect(UserErrorCode.subAccountHandleTaken.defaultMessage, contains('分身号'));
+      expect(
+        UserErrorCode.retiredSubAccountGuard.defaultMessage,
+        contains('退役'),
+      );
+      expect(
+        UserErrorCode.deleteEmptySubAccountOnly.defaultMessage,
+        contains('直接删除'),
+      );
+      expect(
+        UserErrorCode.subAccountHandleTaken.defaultMessage,
+        contains('分身号'),
+      );
     });
   });
 }

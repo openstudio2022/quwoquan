@@ -83,6 +83,27 @@ type RawBehaviorEvent struct {
 	CreatedAt              time.Time `bson:"createdAt"`
 }
 
+// WishlistEventStore persists explicit want-to-go / wishlist intent facts.
+// This is the stable source consumed by coWishlistedEntity intersection facts.
+type WishlistEventStore interface {
+	UpsertWishlistEvent(ctx context.Context, event WishlistEvent) error
+}
+
+type WishlistEvent struct {
+	UserID         string
+	EntityID       string
+	ObjectType     string
+	DisplayName    string
+	Status         string
+	SourceSurface  string
+	ReferralSource string
+	FeedRequestID  string
+	SessionID      string
+	ClientEventID  string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 const (
 	DailyMetricDimensionAction       = "action"
 	DailyMetricDimensionContent      = "content"

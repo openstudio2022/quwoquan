@@ -53,11 +53,11 @@ repo verify/package
 对应约束：
 
 - workflow 可以复用 reusable workflow，但 reusable workflow 产出的 probe/evidence 必须能映射回 `stackctl` 同名能力。
-- `artifacts/stackctl/<env>/<run-id>/report.json` 与 `summary.md` 是环境证据的单一真相源。
+- `.qwq_output/runs/<env>/<run-id>/report.json` 与 `summary.md` 是环境证据的单一真相源。
 
 ### 3. profile 分层与主链轻重分离
 
-`deploy/shared/gamma_validation_suites.json` 统一定义所有 hosted / self-hosted profile：
+`quwoquan_ops/environments/gamma_validation_suites.json` 统一定义所有 hosted / self-hosted profile：
 
 | Profile | 作用 | 阻断链职责 |
 |---|---|---|
@@ -137,14 +137,14 @@ repo verify/package
 
 ### 4. 900 秒关键路径预算
 
-主链预算由 `deploy/shared/pr_gate_timing_budgets.json` 扩展承载，新增 mainline 自动 promotion gate。
+主链预算由 `quwoquan_ops/environments/pr_gate_timing_budgets.json` 扩展承载，新增 mainline 自动 promotion gate。
 
 策略：
 
 - alpha / beta 可尽量并行。
 - gamma / prod 必须严格串行。
 - 通过 artifact 复用、bundle 复用、self-hosted cache repo、Flutter 依赖缓存、skip upload、镜像预拉取来压缩关键路径。
-- `agent_ops/ci/render_ci_timing_summary.py` 继续作为统一耗时摘要渲染器。
+- `quwoquan_ops/ci/render_ci_timing_summary.py` 继续作为统一耗时摘要渲染器。
 
 ## ACK 集群部署形态设计（modular-monolith-first + split-ready）
 
@@ -241,15 +241,15 @@ repo verify/package
 ### 与现有 promotion 链 / 多云 overlay 的关系
 
 - 本形态不改 `alpha-local / beta-local / prod-hosted` 主链抽象（`gamma` 仅本地），也不新增环境名。
-- 复用 `deploy/cloud-providers/aliyun/`、`deploy/kustomization/aliyun-prod/` 与 `CLOUD_PROVIDER` 切换参数。
+- 复用 `quwoquan_ops/environments/cloud-providers/aliyun/`、`quwoquan_ops/environments/kustomization/aliyun-prod/` 与 `CLOUD_PROVIDER` 切换参数。
 - `stackctl` 仍是唯一命令面；prod rollout 仍走 `gray-initial / carry-on / full` stage，拆分后按域独立 rollout。
 
 ## 多云与 overlay 设计
 
 多云 prod overlay 方案保持不变，继续使用：
 
-- `deploy/cloud-providers/{aliyun|volcengine|huaweicloud}/`
-- `deploy/kustomization/{cloud}-{env}/`
+- `quwoquan_ops/environments/cloud-providers/{aliyun|volcengine|huaweicloud}/`
+- `quwoquan_ops/environments/kustomization/{cloud}-{env}/`
 - `CLOUD_PROVIDER` 作为 workflow / CLI 的统一切换参数
 
 本次变更只调整自动推进链与回滚闭环，不重写多云 overlay 结构。

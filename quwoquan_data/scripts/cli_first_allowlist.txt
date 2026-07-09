@@ -44,3 +44,6 @@ verify/verify_homepage_structure_and_assets.py
 # P1 提示词模板 lint 门（占位符闭合/vars 必填/行数预算/scripts 禁硬编码 prompt 正文 ratchet）：
 # 经 verify_quwoquan_data.sh 调度，__main__ 仅便于单独排障；属 gate 类（非内容生产业务入口）。
 verify/verify_prompt_templates.py
+# fan-out 执行引擎（自 quwoquan_ops/runners 迁入）：经 `qwq-data task scaled-e2e author-runner`
+# 暴露；__main__ 仅供 scaled_e2e 用独立 SDK venv 解释器 subprocess 拉起，非业务入口。
+task/fanout_runner.py

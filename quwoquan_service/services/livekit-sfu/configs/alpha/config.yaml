@@ -1,0 +1,5 @@
+service:
+  name: livekit-sfu
+config:
+  env: alpha
+  version: "v2026.07.08.0"

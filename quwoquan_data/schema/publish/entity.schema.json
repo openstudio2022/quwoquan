@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "发布态实体对象 _entity.json（publish/entities/{domain}/{etype}/{name}/_entity.json 与批次对象树同构）。此前结构校验散落 verify 脚本（收债 10），本 schema 一次定义到位。entityRef 三段冻结（裁决 2）：目录路径即 ref，省市区维度不进目录、只走 geoTagRef/geoTagRefs 字段。geoTagRef 单值主归属（分片/推荐特征/geo_bucket 等单值消费方零改动），geoTagRefs 可选全量数组承载跨省次归属（约束 geoTagRef ∈ geoTagRefs，物化时全量并进 tagRefs → ObjectTagIndex 多值反查）。homepage 物化必填集 = build/homepage.py:_REQUIRED_ENTITY_FIELDS（含 geoTagRef；geoTagRefs 可选）。",
+  "type": "object",
+  "properties": {
+    "label": { "type": "string", "description": "实体显示名（与目录第三段 name 一致）" },
+    "domain": { "type": "string", "description": "实体领域（目录第一段），如 地点" },
+    "type": { "type": "string", "description": "主类型单值（目录第二段）= Entity/{domain} 树一级节点名，按裁决 6 优先级表判定，如 景区" },
+    "sourceTaskId": { "type": "string", "description": "生产任务 id（control_plane/tasks 路径式 id）" },
+    "entityRef": { "type": "string", "description": "全路径引用 /entity/{domain}/{type}/{name}（唯一归一键，与目录路径同构）" },
+    "summary": { "type": "string", "description": "事实摘要（源自底稿，不编造）" },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "可选：别名（主清单 aliases 透传，去重与检索辅助）"
+    },
+    "tagRefs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "全量标签引用：类型标签（Entity/{domain}/**，含主类型叶子与全部次类型）+ 主题标签（Topic/**）+ 物化并入的地理标签"
+    },
+    "geoTagRef": {
+      "type": "string",
+      "description": "区县级主归属行政区标签（单值），Topic/地理/行政区/** 叶子，如 Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县"
+    },
+    "geoTagRefs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "可选：跨省/跨市全量地理归属（必须包含 geoTagRef 主归属）；非跨界实体缺省。物化时全量并进 tagRefs，index 分片与 geo_bucket 仍只消费 geoTagRef 单值"
+    },
+    "sourceRefs": { "type": "array", "items": { "type": "string" }, "description": "来源单元引用（证据链回查）" },
+    "textSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文来源单元引用" },
+    "imageSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "图片来源单元引用" },
+    "authorId": { "type": "string", "description": "虚拟作者 id（creator pool 契约）" },
+    "creatorProfileId": { "type": "string" },
+    "creatorArchetype": { "type": "string" },
+    "creatorProfileVersion": { "type": "string" },
+    "creatorDisclosure": { "type": "object", "description": "平台虚拟创作者披露（type/displayText/visible）" },
+    "experienceClaimMode": { "type": "string" },
+    "authorQualitySignals": { "type": "object" },
+    "updatedAt": { "type": "string" }
+  },
+  "required": ["label", "domain", "type", "sourceTaskId", "entityRef", "tagRefs", "geoTagRef"]
+}

@@ -47,7 +47,7 @@ class _IntersectionStatementCardState extends State<IntersectionStatementCard> {
   static const double _rowHorizontalPadding = AppSpacing.containerSm;
 
   /// 区块标题竖条宽度：与「我的交集」卡 [ProfileInsightSectionCard] 同 token
-  /// （`AppSpacing.xs / 2`），保证交集 / 影响力双模块标题竖条像素级一致。
+  /// （`AppSpacing.xs / 2`），保证交集 / 打动双模块标题竖条像素级一致。
   static const double _sectionAccentWidth = AppSpacing.xs / 2;
 
   @override

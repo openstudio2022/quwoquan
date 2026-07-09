@@ -1079,7 +1079,8 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       // V1.0：顶部不再有形态分段，仅保留返回与更多。
       expect(
@@ -1110,9 +1111,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final firstCard = find.byKey(
-        const ValueKey<String>('home-feed-card-0'),
-      );
+      final firstCard = find.byKey(const ValueKey<String>('home-feed-card-0'));
       expect(firstCard, findsOneWidget);
 
       await tester.flingFrom(

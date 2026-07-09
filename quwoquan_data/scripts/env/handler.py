@@ -9,9 +9,12 @@ import sys
 from pathlib import Path
 
 from _common.python_runtime import (
+    DEFAULT_CURSOR_STARTUP_MODEL,
+    DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS,
     cursor_startup_probe_suite,
     environment_preflight,
     prepare_data_runtime,
+    resolve_cursor_startup_timeout_seconds,
     runtime_report,
 )
 
@@ -100,6 +103,18 @@ def _cursor_startup_enabled(args: argparse.Namespace) -> bool:
     return bool(getattr(args, "cursor_startup", False))
 
 
+def _startup_timeout_seconds(args: argparse.Namespace) -> float:
+    return resolve_cursor_startup_timeout_seconds(
+        getattr(args, "startup_timeout_seconds", None)
+    )
+
+
+def _check_cursor_cloud_api(args: argparse.Namespace) -> bool:
+    # 即使 runtime=local，cursor_sdk 仍依赖账号资格；否则 403/plan_required
+    # 会在本地桥里被折叠成 InternalServerError 500，误导 H100/H1000 准入判断。
+    return not bool(getattr(args, "no_cursor_key", False))
+
+
 def handle_doctor(args: argparse.Namespace) -> None:
     report = runtime_report()
     _print_report(report, as_json=bool(getattr(args, "json", False)))
@@ -131,15 +146,17 @@ def handle_prepare(args: argparse.Namespace) -> None:
 
 
 def handle_preflight(args: argparse.Namespace) -> None:
+    runtime = str(getattr(args, "runtime", "local") or "local")
     report = environment_preflight(
         require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
         check_network=not bool(getattr(args, "no_network", False)),
+        check_cursor_cloud_api=_check_cursor_cloud_api(args),
         endpoints=getattr(args, "endpoint", None),
         timeout_seconds=float(getattr(args, "timeout_seconds", 5.0)),
         check_cursor_startup=_cursor_startup_enabled(args),
-        cursor_startup_model=str(getattr(args, "model", "composer-2") or "composer-2"),
-        cursor_startup_runtime=str(getattr(args, "runtime", "local") or "local"),
-        cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 120.0)),
+        cursor_startup_model=str(getattr(args, "model", DEFAULT_CURSOR_STARTUP_MODEL) or DEFAULT_CURSOR_STARTUP_MODEL),
+        cursor_startup_runtime=runtime,
+        cursor_startup_timeout_seconds=_startup_timeout_seconds(args),
     )
     _print_preflight(report, as_json=bool(getattr(args, "json", False)))
     if not report.get("ready"):
@@ -148,10 +165,10 @@ def handle_preflight(args: argparse.Namespace) -> None:
 
 def handle_cursor_probe(args: argparse.Namespace) -> None:
     report = cursor_startup_probe_suite(
-        model=str(getattr(args, "model", "composer-2.5") or "composer-2.5"),
+        model=str(getattr(args, "model", DEFAULT_CURSOR_STARTUP_MODEL) or DEFAULT_CURSOR_STARTUP_MODEL),
         runtime=str(getattr(args, "runtime", "local") or "local"),
         attempts=int(getattr(args, "attempts", 20) or 20),
-        timeout_seconds=float(getattr(args, "startup_timeout_seconds", 180.0)),
+        timeout_seconds=_startup_timeout_seconds(args),
         cwd=Path(str(getattr(args, "cwd", "") or ".")).expanduser().resolve()
         if getattr(args, "cwd", None)
         else None,
@@ -175,11 +192,17 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
     production runtime lacks `cursor_sdk`.
     """
     if Path(sys.executable).absolute() == python.absolute():
+        runtime = str(getattr(args, "runtime", "local") or "local")
         return environment_preflight(
             require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
             check_network=not bool(getattr(args, "no_network", False)),
+            check_cursor_cloud_api=_check_cursor_cloud_api(args),
             endpoints=getattr(args, "endpoint", None),
             timeout_seconds=float(getattr(args, "timeout_seconds", 5.0)),
+            check_cursor_startup=_cursor_startup_enabled(args),
+            cursor_startup_model=str(getattr(args, "model", DEFAULT_CURSOR_STARTUP_MODEL) or DEFAULT_CURSOR_STARTUP_MODEL),
+            cursor_startup_runtime=runtime,
+            cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 120.0)),
         )
     cmd = [
         str(python),
@@ -187,14 +210,15 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
         "env",
         "preflight",
         "--json",
-            "--timeout-seconds",
-            str(float(getattr(args, "timeout_seconds", 5.0))),
+        "--timeout-seconds",
+        str(float(getattr(args, "timeout_seconds", 5.0))),
+        "--runtime",
+        str(getattr(args, "runtime", "local") or "local"),
     ]
     if _cursor_startup_enabled(args):
         cmd.append("--cursor-startup")
-        cmd.extend(["--model", str(getattr(args, "model", "composer-2") or "composer-2")])
-        cmd.extend(["--runtime", str(getattr(args, "runtime", "local") or "local")])
-        cmd.extend(["--startup-timeout-seconds", str(float(getattr(args, "startup_timeout_seconds", 120.0)))])
+        cmd.extend(["--model", str(getattr(args, "model", "composer") or "composer")])
+        cmd.extend(["--startup-timeout-seconds", str(_startup_timeout_seconds(args))])
     if bool(getattr(args, "no_cursor_key", False)):
         cmd.append("--no-cursor-key")
     if bool(getattr(args, "no_network", False)):
@@ -234,20 +258,30 @@ def handle_ready(args: argparse.Namespace) -> None:
         else environment_preflight(
             require_cursor_key=not bool(getattr(args, "no_cursor_key", False)),
             check_network=not bool(getattr(args, "no_network", False)),
+            check_cursor_cloud_api=_check_cursor_cloud_api(args),
             endpoints=getattr(args, "endpoint", None),
             timeout_seconds=float(getattr(args, "timeout_seconds", 5.0)),
             check_cursor_startup=_cursor_startup_enabled(args),
-            cursor_startup_model=str(getattr(args, "model", "composer-2") or "composer-2"),
+            cursor_startup_model=str(getattr(args, "model", DEFAULT_CURSOR_STARTUP_MODEL) or DEFAULT_CURSOR_STARTUP_MODEL),
             cursor_startup_runtime=str(getattr(args, "runtime", "local") or "local"),
-            cursor_startup_timeout_seconds=float(getattr(args, "startup_timeout_seconds", 120.0)),
+            cursor_startup_timeout_seconds=_startup_timeout_seconds(args),
         )
     )
+    startup_timeout_seconds = _startup_timeout_seconds(args)
+    cursor_startup = (
+        dict(preflight.get("cursorStartup") or {})
+        if isinstance(preflight.get("cursorStartup"), dict)
+        else {}
+    )
+    if cursor_startup and "timeoutSeconds" not in cursor_startup:
+        cursor_startup["timeoutSeconds"] = startup_timeout_seconds
     report = {
         "schemaVersion": "quwoquan_data.env_ready",
         "prepare": prepare,
         "preflight": preflight,
         "cursorApiKey": preflight.get("cursorApiKey") or {},
-        "cursorStartup": preflight.get("cursorStartup") or {},
+        "cursorStartup": cursor_startup,
+        "startupTimeoutSeconds": startup_timeout_seconds,
         "ready": bool(prepare.get("ready")) and bool(preflight.get("ready")),
     }
     if bool(getattr(args, "json", False)):
@@ -284,21 +318,21 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     ppf.add_argument("--endpoint", action="append", help="覆盖网络探测端点，可重复")
     ppf.add_argument("--timeout-seconds", type=float, default=5.0)
     ppf.add_argument("--cursor-startup", action="store_true", help="执行真实 Cursor SDK Agent.prompt 启动探针")
-    ppf.add_argument("--model", default="composer-2", help="Cursor startup probe model")
+    ppf.add_argument("--model", default=DEFAULT_CURSOR_STARTUP_MODEL, help="Cursor startup probe model")
     ppf.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
-    ppf.add_argument("--startup-timeout-seconds", type=float, default=120.0)
+    ppf.add_argument("--startup-timeout-seconds", type=float, default=DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS)
     ppf.set_defaults(handler=handle_preflight)
 
     pcp = sub.add_parser("cursor-probe", help="重复执行真实 Cursor startup probe，并输出放量准入报告")
     pcp.add_argument("--json", action="store_true")
-    pcp.add_argument("--model", default="composer-2.5", help="Cursor startup probe model")
+    pcp.add_argument("--model", default=DEFAULT_CURSOR_STARTUP_MODEL, help="Cursor startup probe model")
     pcp.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
     pcp.add_argument("--attempts", type=int, default=20, help="探针次数；P0 正式门禁使用 20")
     pcp.add_argument(
         "--startup-timeout-seconds",
         type=float,
-        default=180.0,
-        help="单次冷启动探针超时；冷启动 + warm bridge 复用需要足够预算，默认 180s",
+        default=DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS,
+        help="单次冷启动探针超时；冷启动 + warm bridge 复用需要足够预算，默认 240s",
     )
     pcp.add_argument("--cwd", help="probe workspace cwd；默认 repo root")
     pcp.add_argument("--report-out", dest="report_out", help="写出 JSON 报告路径")
@@ -313,8 +347,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pr.add_argument("--endpoint", action="append", help="覆盖网络探测端点，可重复")
     pr.add_argument("--timeout-seconds", type=float, default=5.0)
     pr.add_argument("--no-cursor-startup", action="store_true", help="跳过真实 Cursor SDK Agent.prompt 启动探针（仅限单测/离线）")
-    pr.add_argument("--model", default="composer-2", help="Cursor startup probe model")
+    pr.add_argument("--model", default=DEFAULT_CURSOR_STARTUP_MODEL, help="Cursor startup probe model")
     pr.add_argument("--runtime", choices=["local", "cloud"], default="local", help="Cursor startup probe runtime")
-    pr.add_argument("--startup-timeout-seconds", type=float, default=120.0)
+    pr.add_argument("--startup-timeout-seconds", type=float, default=DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS)
     pr.set_defaults(cursor_startup=True)
     pr.set_defaults(handler=handle_ready)

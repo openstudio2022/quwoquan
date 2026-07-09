@@ -1,0 +1,15 @@
+# 旅行文章任务基线 preset（默认值唯一真相源；task.yaml.presetRef 指向本文件）。
+# defaults 与 task.yaml 同构：task 未显式声明的字段由此补齐，显式声明整体覆盖（list 替换语义）。
+schemaVersion: quwoquan.task.preset
+presetId: content/travel/article/base
+title: 旅行文章任务基线
+defaults:
+  content:
+    angles:
+    - 体验
+    - 美图
+    - 攻略
+    audiences:
+    - 通用
+    carriers:
+    - article

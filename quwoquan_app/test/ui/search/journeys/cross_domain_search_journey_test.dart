@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,12 +17,9 @@ import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart'
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
-import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
-import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/search/pages/global_search_page.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -121,7 +117,9 @@ Widget _buildApp({
       if (behaviorRepository != null)
         behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
     ],
-    child: MaterialApp.router(routerConfig: _buildRouter(launchContext: launchContext)),
+    child: MaterialApp.router(
+      routerConfig: _buildRouter(launchContext: launchContext),
+    ),
   );
 }
 
@@ -167,9 +165,7 @@ void main() {
     await tester.pumpWidget(widget);
   }
 
-  testWidgets('两阶段旅程：suggest 本地命中后进入云侧固定 Tab，本地对象不进 result', (
-    tester,
-  ) async {
+  testWidgets('两阶段旅程：suggest 本地命中后进入云侧固定 Tab，本地对象不进 result', (tester) async {
     await sizeAndPump(
       tester,
       _buildApp(searchRepository: _JourneySearchRepository()),
@@ -194,7 +190,8 @@ void main() {
     await tester.tap(find.text('西湖').last);
     await _pumpUntil(
       tester,
-      condition: () => find.byType(SecondaryCapsuleTabBar).evaluate().isNotEmpty,
+      condition: () =>
+          find.byType(SecondaryCapsuleTabBar).evaluate().isNotEmpty,
     );
     await _pumpUntil(
       tester,
@@ -377,7 +374,8 @@ void main() {
     await tester.tap(find.text('西湖').last);
     await _pumpUntil(
       tester,
-      condition: () => find.byType(SearchNetworkResultsPage).evaluate().isNotEmpty,
+      condition: () =>
+          find.byType(SearchNetworkResultsPage).evaluate().isNotEmpty,
     );
     await tester.pump();
 
@@ -545,7 +543,10 @@ class _ContentDomainFailingRepository implements SearchRepository {
   Future<SearchResponse> search(SearchRequest request) async {
     final normalized = request.normalized();
     if (normalized.mode == SearchMode.suggest) {
-      return SearchResponse(request: normalized, sections: const <SearchSection>[]);
+      return SearchResponse(
+        request: normalized,
+        sections: const <SearchSection>[],
+      );
     }
     if (normalized.objectTypes.contains(SearchObjectType.contentPost)) {
       throw StateError('content domain backend unavailable');

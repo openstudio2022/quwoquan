@@ -1,0 +1,254 @@
+# 全国地点主清单 · 浙江省衢州市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 衢州市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 常山县
+  leaves:
+  - name: 常山国家地质公园
+    canonicalName: 常山国家地质公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/地质公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/常山县
+    aliases:
+    - 金钉子剖面
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 三衢石林
+    canonicalName: 三衢石林
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/常山县
+    aliases:
+    - 三衢山
+    selectionPriority: 2
+    sourceReadiness: pending
+- district: 开化县
+  leaves:
+  - name: 根宫佛国
+    canonicalName: 根宫佛国
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    aliases:
+    - 根宫佛国文化旅游区
+    - 根博园
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 钱江源国家公园
+    canonicalName: 钱江源国家公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/国家公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    aliases:
+    - 钱江源
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 古田山自然保护区
+    canonicalName: 开化古田山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    aliases:
+    - 古田山国家级自然保护区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 霞山古村
+    canonicalName: 开化霞山古村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 柯城区
+  leaves:
+  - name: 孔氏南宗家庙
+    canonicalName: 孔氏南宗家庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    aliases:
+    - 衢州孔庙
+    - 南宗孔庙
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 水亭门历史文化街区
+    canonicalName: 衢州水亭门
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    aliases:
+    - 水亭门古城墙
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 衢州市博物馆
+    canonicalName: 衢州市博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 中国儒学馆
+    canonicalName: 中国儒学馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 府山公园
+    canonicalName: 衢州府山公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 信安湖
+    canonicalName: 衢州信安湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 梧桐祖殿
+    canonicalName: 梧桐祖殿
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    aliases:
+    - 九华立春祭
+    selectionPriority: 7
+    sourceReadiness: pending
+- district: 江山市
+  leaves:
+  - name: 江郎山
+    canonicalName: 江郎山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    aliases:
+    - 江郎山·廿八都旅游区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 廿八都古镇
+    canonicalName: 廿八都古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    aliases:
+    - 廿八都
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 清漾村
+    canonicalName: 江山清漾村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    aliases:
+    - 清漾毛氏祖居地
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 仙霞关
+    canonicalName: 仙霞关
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    aliases:
+    - 仙霞古道
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 戴笠故居
+    canonicalName: 戴笠故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 浮盖山
+    canonicalName: 江山浮盖山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    selectionPriority: 6
+    sourceReadiness: ready
+- district: 衢江区
+  leaves:
+  - name: 烂柯山
+    canonicalName: 衢州烂柯山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    aliases:
+    - 石室山
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 天脊龙门
+    canonicalName: 天脊龙门
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 药王山
+    canonicalName: 衢州药王山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 龙游县
+  leaves:
+  - name: 龙游石窟
+    canonicalName: 龙游石窟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 龙游民居苑
+    canonicalName: 龙游民居苑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 三门源村
+    canonicalName: 龙游三门源村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    aliases:
+    - 三门源叶氏建筑群
+    selectionPriority: 3
+    sourceReadiness: ready

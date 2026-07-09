@@ -14,10 +14,54 @@ from typing import Any, Mapping
 from urllib.parse import quote
 
 from _common.io import read_json, write_json
-from _common.paths import NOW_ISO, PUBLISH_ROOT
+from _common.paths import NOW_ISO, PUBLISH_ROOT, REPO_ROOT
 
 MEDIA_SCHEMA_VERSION = "quwoquan.media_asset_manifest.v1"
 COLLISION_LEDGER_SCHEMA_VERSION = "quwoquan.media_collision_ledger.v1"
+
+PLACEHOLDER_CDN_BASE = "https://media.quwoquan.invalid"
+ENV_TOPOLOGY_MANIFEST = REPO_ROOT / "quwoquan_ops" / "environments" / "environment_topology_manifest.yaml"
+
+
+def resolve_media_cdn_bases(
+    env: str,
+    *,
+    topology_manifest: Path | None = None,
+) -> tuple[str, str]:
+    """从 environment topology manifest 解析 (image, video) CDN base。
+
+    - env 对应 manifest `environments.{env}.publicBases` 的 mediaImage/mediaVideo；
+    - prod 解析不到有效 base（缺失或 invalid 占位）直接阻断——prod 发布不允许
+      落到 `media.quwoquan.invalid` 占位 URL；
+    - 非 prod 解析不到时返回空串，由调用方沿用占位 fallback（现状语义）。
+    """
+    manifest_path = topology_manifest or ENV_TOPOLOGY_MANIFEST
+    bases: Mapping[str, Any] = {}
+    if manifest_path.is_file():
+        try:
+            import yaml
+
+            payload = yaml.safe_load(manifest_path.read_text(encoding="utf-8")) or {}
+            env_row = ((payload.get("environments") or {}).get(env) or {})
+            candidate = env_row.get("publicBases")
+            if isinstance(candidate, Mapping):
+                bases = candidate
+        except Exception as exc:  # noqa: BLE001 - prod fail closed below
+            if env == "prod":
+                raise SystemExit(f"FAIL: cannot parse topology manifest for prod media base: {exc}")
+    image_base = str(bases.get("mediaImage") or "").strip()
+    video_base = str(bases.get("mediaVideo") or "").strip()
+    if env == "prod":
+        if not image_base or "quwoquan.invalid" in image_base:
+            raise SystemExit(
+                "FAIL: prod media CDN base unresolved from topology manifest "
+                f"({manifest_path}); refusing media.quwoquan.invalid fallback"
+            )
+        if video_base and "quwoquan.invalid" in video_base:
+            raise SystemExit(
+                f"FAIL: prod video CDN base is placeholder in topology manifest ({manifest_path})"
+            )
+    return image_base, video_base
 
 IMAGE_VARIANT_PROFILES: dict[str, dict[str, Any]] = {
     "thumbnail": {

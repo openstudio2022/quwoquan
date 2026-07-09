@@ -140,6 +140,7 @@ func evidenceContentVisual(raw ports.AuthorImpactEvidenceRaw, post *postmodel.Po
 		ImageURL:    imageURL,
 		DisplayName: displayName,
 		Target: &intersection.IntersectionTargetView{
+			ObjectType: "post",
 			ObjectID:   contentID,
 			ObjectKind: "content",
 			RouteID:    "contentDetail",

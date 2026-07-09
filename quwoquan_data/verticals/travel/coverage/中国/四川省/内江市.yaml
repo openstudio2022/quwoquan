@@ -1,0 +1,203 @@
+# 全国地点主清单 · 四川省内江市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 内江市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 东兴区
+  leaves:
+  - name: 范长江纪念馆
+    canonicalName: 范长江纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
+    aliases:
+    - 范长江故居
+    - 范长江文化旅游园区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 东兴老街
+    canonicalName: 内江东兴老街
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 大千欢乐世界
+    canonicalName: 内江大千欢乐世界
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/综合主题乐园
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/东兴区
+    selectionPriority: 3
+    sourceReadiness: ready
+- district: 威远县
+  leaves:
+  - name: 石板河旅游区
+    canonicalName: 威远石板河
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
+    aliases:
+    - 石板河旅游区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 静宁寺
+    canonicalName: 威远静宁寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 罗世文烈士史料陈列馆
+    canonicalName: 罗世文烈士史料陈列馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/威远县
+    selectionPriority: 3
+    sourceReadiness: ready
+- district: 市中区
+  leaves:
+  - name: 大千园
+    canonicalName: 内江大千园
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
+    aliases:
+    - 张大千纪念馆
+    - 张大千博物馆
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 圣水寺
+    canonicalName: 内江圣水寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 翔龙山摩崖造像
+    canonicalName: 内江翔龙山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 甜城湖
+    canonicalName: 内江甜城湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 三元塔
+    canonicalName: 内江三元塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/市中区
+    aliases:
+    - 乐贤半岛三元塔
+    selectionPriority: 5
+    sourceReadiness: ready
+- district: 资中县
+  leaves:
+  - name: 资中文庙
+    canonicalName: 资中文庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 资中武庙
+    canonicalName: 资中武庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 罗泉古镇
+    canonicalName: 罗泉古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
+    aliases:
+    - 罗泉镇
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 圣灵山
+    canonicalName: 资中圣灵山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
+    aliases:
+    - 圣灵山大溶洞
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 重龙山
+    canonicalName: 资中重龙山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
+    aliases:
+    - 重龙山风景区
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 宁国寺
+    canonicalName: 资中宁国寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/资中县
+    selectionPriority: 6
+    sourceReadiness: pending
+- district: 隆昌市
+  leaves:
+  - name: 隆昌石牌坊
+    canonicalName: 隆昌石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/隆昌市
+    aliases:
+    - 隆昌石牌坊群
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 古宇湖
+    canonicalName: 古宇湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/隆昌市
+    aliases:
+    - 古宇湖景区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 云顶寨
+    canonicalName: 隆昌云顶寨
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/四川省/内江市/隆昌市
+    aliases:
+    - 云顶古寨
+    selectionPriority: 3
+    sourceReadiness: pending

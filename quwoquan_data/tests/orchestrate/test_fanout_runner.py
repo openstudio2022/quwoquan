@@ -40,7 +40,7 @@ from task import fanout_dispatch as fd  # noqa: E402
 from task import object_queue as oq  # noqa: E402
 from task import production_contracts as pc  # noqa: E402
 from task import store  # noqa: E402
-from agent_ops.runners import fanout_runner as fr  # noqa: E402
+from task import fanout_runner as fr  # noqa: E402
 
 
 def _creator_assignment() -> dict:
@@ -187,6 +187,40 @@ def test_agent_self_completed_job_does_not_double_complete():
     sc = "旅行/地域/四川省/四川景点主页"
     summary = oq.queue_summary(sc, "fanout_r_agent_self_complete")
     assert summary["byState"].get("succeeded") == ["地点_景区__九寨沟"]
+
+
+def test_artifact_terminal_outcome_accepts_approved_agent_gate():
+    task = "旅行/地域/四川省/景区/artifact_terminal"
+    batch = "batch_artifact_terminal"
+    ref = "route_九寨沟"
+    _seed_content_ref(task, batch, ref)
+    write_agent_draft(
+        task,
+        batch,
+        ref,
+        "# route_九寨沟\n\n正文与事实：九寨沟 事实。",
+        model="runner-test",
+        cited_source_paths=[f"posts/article/攻略/{ref} 标题/1/1.download/sources/01.base/source.md"],
+        covered_facts=["九寨沟 事实"],
+    )
+    review_dir = content_object.content_object_stage_dir(task, batch, ref, "5.review")
+    review_dir.mkdir(parents=True, exist_ok=True)
+    write_json(
+        review_dir / "ref_review_gate.json",
+        {
+            "schemaVersion": "quwoquan_data.ref_review_gate",
+            "ref": ref,
+            "passed": True,
+            "reviewDecision": "approved",
+            "issues": [],
+        },
+    )
+
+    outcome = fr._artifact_terminal_outcome({"taskId": task, "batchId": batch, "ref": ref})
+
+    assert outcome is not None
+    assert outcome.started is True
+    assert outcome.passed is True
 
 
 def test_default_agent_runner_returns_when_queue_terminal_before_sdk_tail():
@@ -434,6 +468,35 @@ def test_retryable_startup_failure_retried_within_same_run():
     job = read_json(oq._job_path(sc, "fanout_r_startup_retry", oq.stable_job_id(sc, "fanout_r_startup_retry", "地点_景区__九寨沟", "author")))
     assert job["attempt"] == 2
     assert job["startupFailureCount"] == 1
+
+
+def test_internal_startup_error_retried_within_same_run():
+    plan = _frozen("r_startup_internal_retry", ["九寨沟"])
+    fd.dispatch(plan, strategy="by-leaf", concurrency=1)
+    attempts: list[int] = []
+
+    def runner(packet):
+        attempts.append(int(packet.get("attempt") or 0))
+        if len(attempts) == 1:
+            return fr.RunOutcome(started=False, error="internal error", retryable=False)
+        return fr.RunOutcome(started=True, status="finished", passed=True)
+
+    original_base = fr.STARTUP_BACKOFF_BASE
+    original_backoff = oq._backoff_seconds
+    try:
+        fr.STARTUP_BACKOFF_BASE = 0
+        oq._backoff_seconds = lambda attempt: 0.05
+        report = fr.run_fanout("r_startup_internal_retry", agent_runner=runner, strategy="by-leaf", concurrency=1)
+    finally:
+        fr.STARTUP_BACKOFF_BASE = original_base
+        oq._backoff_seconds = original_backoff
+    sc = "旅行/地域/四川省/四川景点主页"
+    summary = oq.queue_summary(sc, "fanout_r_startup_internal_retry")
+    assert attempts == [1, 2], attempts
+    assert report["completed"] == 1
+    assert report["failed"] == 0
+    assert report["startupFailures"] == 0
+    assert summary["byState"].get("succeeded") == ["地点_景区__九寨沟"]
 
 
 def test_retryable_startup_failure_stops_after_retry_budget():
@@ -797,12 +860,12 @@ def test_runtime_selects_local_cwd_vs_cloud_repos():
     sys.modules["cursor_sdk"] = fake
     try:
         local_opts = fr._build_agent_options(
-            api_key="k", model="composer-2.5", runtime=fr.RUNTIME_LOCAL, cwd="/repo", repos=None
+            api_key="k", model="composer", runtime=fr.RUNTIME_LOCAL, cwd="/repo", repos=None
         )
         assert local_opts["local"] == ("local", {"cwd": "/repo"})
         assert "cloud" not in local_opts
         cloud_opts = fr._build_agent_options(
-            api_key="k", model="composer-2.5", runtime=fr.RUNTIME_CLOUD, cwd=None,
+            api_key="k", model="composer", runtime=fr.RUNTIME_CLOUD, cwd=None,
             repos=[{"repository": "r"}],
         )
         assert cloud_opts["cloud"] == ("cloud", {"repos": [{"repository": "r"}]})
@@ -837,7 +900,7 @@ def test_cloud_runtime_derives_repo_when_omitted():
     try:
         fr._git_output = lambda args, cwd=None: "https://github.com/openstudio2022/quwoquan.git" if args[:3] == ["remote", "get-url", "origin"] else "dev1.0"
         cloud_opts = fr._build_agent_options(
-            api_key="k", model="composer-2.5", runtime=fr.RUNTIME_CLOUD, cwd="/repo", repos=None
+            api_key="k", model="composer", runtime=fr.RUNTIME_CLOUD, cwd="/repo", repos=None
         )
         assert cloud_opts["cloud"] == (
             "cloud",

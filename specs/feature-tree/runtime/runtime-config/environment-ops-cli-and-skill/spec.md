@@ -18,7 +18,7 @@
 ## 核心约束
 
 - Cursor、CLI、CI、workflow 与 project skill 必须共享同一套 `stackctl` 子命令，不得复制第二套检查/部署逻辑。
-- `stackctl` 必须输出稳定 JSON 报告，并在 `artifacts/stackctl/<env>/<run-id>/` 归档 Markdown 摘要。
+- `stackctl` 必须输出稳定 JSON 报告，并在 `.qwq_output/runs/<env>/<run-id>/` 归档 Markdown 摘要。
 - `stackctl` 必须支持 `local / ssh-hosted / workflow` 三类执行后端。
 - `inspect` 统一覆盖 `logs / network / data / metrics / config / security`。
 - `doctor` 只做聚合诊断；`repair` 只能执行白名单修复动作。

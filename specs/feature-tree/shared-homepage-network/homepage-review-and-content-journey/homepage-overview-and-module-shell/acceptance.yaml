@@ -36,7 +36,7 @@ gwt_acceptance:
       recorded:
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
     status: completed
     test_evidence:
@@ -69,7 +69,7 @@ gwt_acceptance:
     notes: []
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

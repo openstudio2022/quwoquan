@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/shell/main_app_shell.dart';
+import 'package:quwoquan_app/cloud/rtc/incoming_call_coordinator.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -37,6 +38,13 @@ class WebShellTestHarness {
         authSessionStoreProvider.overrideWithValue(
           _TestAuthSessionStore(authenticated: authenticated),
         ),
+        incomingCallCoordinatorProvider.overrideWith(
+          _NoopIncomingCallCoordinator.new,
+        ),
+        if (authenticated)
+          authSessionControllerProvider.overrideWith(
+            _AuthenticatedTestAuthSession.new,
+          ),
       ],
       child: MaterialAppRouterHost(router: effectiveRouter),
     );
@@ -48,6 +56,13 @@ class WebShellTestHarness {
       routes: [
         GoRoute(
           path: AppRoutePaths.home,
+          builder: (context, state) => MainAppShell(
+            currentLocation: state.uri.path,
+            child: const SizedBox.shrink(),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutePaths.chat,
           builder: (context, state) => MainAppShell(
             currentLocation: state.uri.path,
             child: const SizedBox.shrink(),
@@ -132,6 +147,41 @@ class _UnavailableOneTapLoginClient implements OneTapLoginClient {
   Future<OneTapLoginResult> requestLoginToken() {
     throw UnimplementedError('one tap login is unavailable in web shell tests');
   }
+}
+
+class _AuthenticatedTestAuthSession extends AuthSessionController {
+  @override
+  AuthSessionState build() {
+    return const AuthSessionState(
+      status: AuthSessionStatus.authenticated,
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      ownerId: 'user_001',
+      activeSubAccountId: 'user_001',
+      accountState: 'active',
+      identityOrigin: 'phone',
+      installId: 'install-id',
+    );
+  }
+}
+
+class _NoopIncomingCallCoordinator extends IncomingCallCoordinator {
+  _NoopIncomingCallCoordinator(Ref ref)
+    : super(
+        ref: ref,
+        readRouter: () => throw UnimplementedError(
+          'incoming call routing is disabled in web shell tests',
+        ),
+      );
+
+  @override
+  void start(String userId) {}
+
+  @override
+  void stop() {}
+
+  @override
+  void dispose() {}
 }
 
 class _TestAuthSessionStore implements AuthSessionStore {

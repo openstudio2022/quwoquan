@@ -43,8 +43,7 @@ class CommentEventNames {
 }
 
 class CommentObservability {
-  CommentObservability({required AnalyticsService analytics})
-    : _analytics = analytics;
+  CommentObservability({required this._analytics});
 
   final AnalyticsService _analytics;
 
@@ -66,9 +65,9 @@ class CommentObservability {
             'postId': postId,
             'durationMs': durationMs,
             'result': result,
-            if (commentId != null) 'commentId': commentId,
-            if (source != null) 'source': source,
-            if (itemCount != null) 'itemCount': itemCount,
+            'commentId': ?commentId,
+            'source': ?source,
+            'itemCount': ?itemCount,
           },
         ),
       ),
@@ -98,18 +97,18 @@ class CommentObservability {
           eventName: eventName,
           properties: <String, dynamic>{
             'postId': postId,
-            if (commentId != null) 'commentId': commentId,
-            if (entrySource != null) 'entrySource': entrySource,
-            if (surfaceMode != null) 'surfaceMode': surfaceMode,
-            if (sortMode != null) 'sortMode': sortMode,
-            if (replyDepth != null) 'replyDepth': replyDepth,
-            if (latencyMs != null) 'latencyMs': latencyMs,
-            if (failureKind != null) 'failureKind': failureKind,
-            if (attachmentCount != null) 'attachmentCount': attachmentCount,
-            if (mentionCount != null) 'mentionCount': mentionCount,
-            if (itemCount != null) 'itemCount': itemCount,
-            if (reaction != null) 'reaction': reaction,
-            if (result != null) 'result': result,
+            'commentId': ?commentId,
+            'entrySource': ?entrySource,
+            'surfaceMode': ?surfaceMode,
+            'sortMode': ?sortMode,
+            'replyDepth': ?replyDepth,
+            'latencyMs': ?latencyMs,
+            'failureKind': ?failureKind,
+            'attachmentCount': ?attachmentCount,
+            'mentionCount': ?mentionCount,
+            'itemCount': ?itemCount,
+            'reaction': ?reaction,
+            'result': ?result,
           },
         ),
       ),

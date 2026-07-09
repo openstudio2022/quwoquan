@@ -5,17 +5,14 @@ from __future__ import annotations
 import re
 from typing import Any
 
-# P3 三类解耦：实体主页 base draft 主源【只来自百科】。仅百科种类授予 primary 资格，
-# 官网/官方一律降为 supporting（priority 0，可补事实但不得作 primaryEvidenceRef）。
-_HOMEPAGE_PRIMARY_KIND_BONUS = (
-    ("维基百科", 120),
-    ("wikipedia", 120),
-    ("百度百科", 110),
-    ("搜狗百科", 105),
-    ("字节百科", 100),
-    ("百科", 95),
+from _common.content_source_registry import (
+    homepage_primary_authority_rank,
+    resolve_homepage_source_role,
 )
-_HOMEPAGE_SUPPORT_ONLY_MARKERS = ("政府", "文旅", "政务", "gov.cn", "景区官网", "官网", "官方", "official")
+
+# P3 三类解耦 + R-HSE06 扩源：主页主锚资格唯一由 registry 的
+# resolve_homepage_source_role 裁决（第一权威百科 + 第二权威官网/政务文旅）。
+# 本文件不再维护词元级降级第二真相源；攻略/UGC 惩罚保留（非主页语料）。
 _HOMEPAGE_GUIDE_PENALTY = ("攻略", "游记", "评论", "点评", "小红书", "图虫", "摄影")
 _HOMEPAGE_ALLOWED_LANES = ("homepage", "legacy", "")
 _HOMEPAGE_FACT_NOISE_MARKERS = (
@@ -180,17 +177,17 @@ def _homepage_source_priority(meta: dict[str, Any]) -> int:
     lowered = source_text.casefold()
     if any(marker.casefold() in lowered for marker in _HOMEPAGE_GUIDE_PENALTY):
         return -1000
-    if any(marker.casefold() in lowered for marker in _HOMEPAGE_SUPPORT_ONLY_MARKERS):
+    role = resolve_homepage_source_role(
+        source_id=str(meta.get("sourceId") or meta.get("source_id") or ""),
+        platform=str(meta.get("platform") or ""),
+        category=str(meta.get("category") or ""),
+        source_class=str(meta.get("sourceClass") or ""),
+        discovery_provider=str(meta.get("discoveryProvider") or ""),
+        url=str(meta.get("url") or ""),
+    )
+    if role != "primary":
         return 0
-    priority = 0
-    for marker, score in _HOMEPAGE_PRIMARY_KIND_BONUS:
-        if marker.casefold() in lowered:
-            priority = max(priority, score)
-    category = str(meta.get("category") or "").casefold()
-    # 只有百科类目授予 primary；official_site 不再给 primary（已在 support-only markers 归 0）。
-    if category == "encyclopedia":
-        priority = max(priority, 85)
-    return priority
+    return 100 - min(20, homepage_primary_authority_rank(str(meta.get("platform") or "")) * 5)
 
 
 def _homepage_base_source_issue_text(meta: dict[str, Any]) -> tuple[str, bool, bool]:
@@ -202,15 +199,29 @@ def _homepage_base_source_issue_text(meta: dict[str, Any]) -> tuple[str, bool, b
     return source_kind, is_primary, is_author_experience
 
 
-def homepage_base_draft_readiness(meta: dict[str, Any], text: str, *, entity_name: str) -> dict[str, Any]:
-    """Return the shared admission verdict for entity homepage base drafts."""
+def homepage_base_draft_readiness(
+    meta: dict[str, Any],
+    text: str,
+    *,
+    entity_name: str,
+    aliases: tuple[str, ...] | list[str] = (),
+    unit_dir: Any = None,
+) -> dict[str, Any]:
+    """Return the shared admission verdict for entity homepage base drafts.
+
+    在 registry 权威 + 事实密度之上叠加 homepage_source_judge 语义准入：
+    标题精确命中实体 → 直接通过；门户首页/父级行政区替代页 → 确定性拒绝；
+    灰区来源 fail-closed，等待 Agent 写回 ``source.judge.json``（结构化 verdict）。
+    """
+    from _common.homepage_source_judge import ADMISSION_PRIMARY, source_judge_admission
+
     priority = _homepage_source_priority(meta)
     if priority <= 0:
         return {
             "ready": False,
             "priority": priority,
             "factCount": 0,
-            "issue": "not encyclopedia/wiki/official homepage source",
+            "issue": "not homepage primary authority source",
         }
     source_text = str(text or "").strip()
     if not source_text:
@@ -220,12 +231,28 @@ def homepage_base_draft_readiness(meta: dict[str, Any], text: str, *, entity_nam
             "factCount": 0,
             "issue": "empty source text",
         }
+    admission = source_judge_admission(
+        entity_name=entity_name,
+        aliases=tuple(aliases or ()),
+        meta=meta,
+        source_text=source_text,
+        unit_dir=unit_dir,
+    )
+    if str(admission.get("decision") or "") != ADMISSION_PRIMARY:
+        return {
+            "ready": False,
+            "priority": priority,
+            "factCount": 0,
+            "issue": str(admission.get("issue") or "homepage source judge rejected"),
+            "judge": admission,
+        }
     fact_count = len(_split_fact_sentences(source_text[:4000], entity_name=entity_name))
     return {
         "ready": fact_count >= 4,
         "priority": priority,
         "factCount": fact_count,
         "issue": "" if fact_count >= 4 else f"usable facts {fact_count}<4",
+        "judge": admission,
     }
 
 

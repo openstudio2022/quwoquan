@@ -25,6 +25,10 @@
 - **`IntersectionInstance` 统一对象**：交集实例（subject/target/evidence/affinity/moment/actionHints/safetyGate/feedback）作为所有触点共享的产品与契约心智；事实交集与亲和力必须分层展示，行动必须与交集证据绑定。
 - **后端能力延后（GATE_BLOCK）**：`附近同趣 / 结伴同行 / 线下局` 的真实聚合（trip/meetup aggregate、附近 LBS、双向同意风控）仍 `deferred`，落地前不得用端侧行内 Mock 包装成正式能力；`找同趣` launcher 只承接「发现 + 导流到既有真实面」，不渲染伪造的人/圈/地结果列表。
 - **行动落点复用**：打招呼走 `GreetingRequest` 请求箱，建群/同行/局走既有建群页，不新增第二套请求状态机。
+- **产品主轴（v3，2026-07-01）**：别人帮你刷内容，我们帮你遇到对的人（真相源 `intersection-definition-and-application.md` §24 与 `00_GLOBAL_TERMINOLOGY.md` §3）。本文行动阶梯与全部 IA 均服务于「把内容消费与出行意图转化为可证、安全、可沉淀的同趣关系」；北极星为「可行动交集完成 / 关系形成」，非 DAU。
+- **商用滩头**：旅行 + 摄影「同趣搭子」先行，架构横向通用、商用先落单垂类 + 单城密度。
+- **C0 差异化必做切片**：v3 先用已有 `coWishlistedEntity`（共同想去）+ 关注 + 交集证据落地「共同想去 → 约伴」最薄闭环，唯一新开放重行动 `start_companion`，不依赖新 LBS / 实时定位；`附近同趣 / 结伴同行 / 线下局` 的真实聚合仍 deferred（与上「后端能力延后」一致）。C0 只做最薄闭环，不等于真实结伴同行聚合，二者边界不得混淆。
+- **概念收敛（2026-07-01）**：前台用户维度收敛为「交集」与「打动」两词；发现/配对入口统一「交集配对」（旧「兴趣配对 / 找同趣 / 同趣」前台退场，机器标识 `interest_match` 保留），交集收件箱统一「今日交集 / 我的交集」，辐射他人前台统一「打动」（替代「影响 / 影响力」，`impact` 机器名保留）。详见 `00_GLOBAL_TERMINOLOGY.md` §18.7。
 
 ---
 
@@ -103,7 +107,7 @@ graph LR
 
 | actionKey | 用户可见文案 | 阶梯 | 备注 |
 |---|---|---|---|
-| `join_topic_room` | 进同趣群 | L3 | 进同趣话题群 |
+| `join_topic_room` | 进话题群 | L3 | 进同趣话题群 |
 | `start_voice_room` | 进语音房 | L3 | 进同趣语音房 |
 | `start_companion` | 发起结伴 | L4 | 背包就走 |
 | `join_trip` | 加入同行 | L4 | 加入他人行程 |
@@ -111,7 +115,10 @@ graph LR
 | `meet_nearby` | 附近碰头 | L5 | 默认模糊位置 + 双向同意 |
 | `express_interest` | 打个招呼 | L6 | 心动打招呼 = 带意图的 `greet_person` 变体，复用 GreetingRequest，**不新增关系等级** |
 
-> 客户端用 `IntersectionActionKeys.isHeavySocialAction(actionKey)` 标识 L4-L6 重社交行动，用于差异化二次确认 / 实名门槛 / 能力位关闭。
+> 客户端判定一律读 codegen `IntersectionActionKeyMeta.dispatch`（M0.7 行动路由类别一等化），不再手写枚举：
+> `dispatch==companion`（L4-L5 同行/线下约伴）唯一驱动「有人同行」徽标与约伴专属落点；
+> `isSocialConnect`（`message`/`companion`/`connect`）标识 L4-L6 重社交连接，用于差异化破冰流程；
+> 二次确认 / 能力位由 `tier==heavy` 判定，实名 / 青少年 / 频控等门由 `requiredGates`（⊆ `gateKeys`）真相源承接（拦截语义走 `errors.yaml`）。
 
 ### 4.2 新增交集 kind
 
@@ -138,7 +145,7 @@ graph LR
 |---|---|---|---|
 | **content** | 同看/同赞内容 → 关注/打招呼 | — | 共同想去实体 `coWishlistedEntity` → 发起结伴 |
 | **location** | 去过同地 `coVisitedEntity` → 打招呼/进圈 | 此刻同地 `coPresentHere`、附近同趣 `nearbyAffinity` → 附近碰头 | 计划同期出行 `coPlannedTrip` → 加入同行 |
-| **interest** | 同兴趣标签 → 进同趣群 | — | — |
+| **interest** | 同兴趣标签 → 进话题群 | — | — |
 | **relationship** | 共同趣友/关注的人去过 `followeeVisited` → 我也去 | 关注的人正在看 `followeeViewing` → 我也看 | — |
 | **intent** | — | 想认识同趣 `wantToMeetSameInterest` → 心动打招呼 | — |
 
@@ -275,7 +282,7 @@ graph TD
 | 趣友 | 派生称谓（L3） | 互关 + 交集强度达阈值的系统派生称谓，只读不门禁 |
 | 密友 | 派生称谓（L3） | 互关 + 高互动频率 或 用户星标，只读不门禁 |
 | 联系人标签 | L4 用户私有标签 | 预定义系统标签集 + 自定义，私有不可见、不解锁权限 |
-| 进同趣群 | `join_topic_room` | 进同趣话题群 |
+| 进话题群 | `join_topic_room` | 进同趣话题群 |
 | 发起结伴 | `start_companion` | 背包就走，发起结伴 |
 | 加入同行 | `join_trip` | 加入他人行程（`trip` 对象） |
 | 报名 | `join_meetup` | 报名开放线下局（`meetup` 对象） |

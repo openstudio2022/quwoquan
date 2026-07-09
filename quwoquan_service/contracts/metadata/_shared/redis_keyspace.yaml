@@ -158,6 +158,20 @@ key_patterns:
       下发前 ZRANGEBYSCORE (now, +inf) 视为冷却中并排除，过期成员自然解禁。
       TTL 30 天为兜底上限，避免无限增长（与会话级 rec:exposed 区分）。
 
+  - pattern: "rec:ineg:{<userId>}"
+    redis_scene: rec
+    ttl_seconds: 5184000
+    type: sorted_set
+    hash_tag: userId
+    description: |
+      交集负反馈冷却集（intersection negative-feedback cooldown，F 推荐与交集配对差异化）。
+      member = 交集主体对象 id（subjectId），score = 冷却过期 unix 秒。
+      用户对交集条目显式负反馈（feedbackKind ∈ registry.feedbackKinds：notInterested /
+      dismiss / rejectGreeting / leaveCircle）即 ZADD（默认 30 天，policy.yaml
+      intersection.negativeFeedbackCooldownDays 可配）。
+      与 rec:icool 分离：曝光冷却 seen 仅降权保留，负反馈冷却在下发前 ZRANGEBYSCORE (now, +inf)
+      命中即「过滤不再推荐」（更强、语义正确、可观测）。TTL 60 天为兜底上限。
+
   # ─── general 场景 ────────────────────────────────────────────────
   - pattern: "cache:{entity}:{id}"
     redis_scene: general

@@ -84,7 +84,7 @@
 
 ```bash
 # 1. 起 Mongo（replSet）
-docker compose -f quwoquan_service/docker-compose.yaml up -d mongodb mongo-init
+docker compose -f quwoquan_ops/environments/compose/docker-compose.yaml up -d mongodb mongo-init
 
 # 2. 灌库（复用 Phase 2 已验证的 Path A importer 与 P1 真实 publish）
 go run ./services/content-service/cmd/import \

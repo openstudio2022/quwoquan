@@ -17,11 +17,11 @@
 ///   1) 推荐频道 feedQuery = {category: micro, identity: moment}（content-service 走
 ///      identity=moment 的 repository 分页 ListPublished 按 createdAt DESC 扫描，绕过
 ///      引擎）。已按 env-seed-first 向 gamma quwoquan_content 注入 24 条多形态 moment
-///      （applier=quwoquan_service/scripts/seed/apply_content_moment_channel_seed.py，
+///      （applier=quwoquan_service/services/seed-box/scripts/apply_content_moment_channel_seed.py，
 ///      fixture=contracts/metadata/_shared/test_fixtures/
 ///      content_recommendation_moment_channel.gamma_seed.json；全新非抑制作者 +
 ///      全新 id t4hrec_moment_* + 既有 archived-* 媒体 object key，createdAt 递减唯一
-///      且置顶）。故「多形态卡片 + 连续下拉曝光不重复」现可在推荐频道 App 内真演示
+///      且由应用器运行时按当前 UTC 分钟置顶）。故「多形态卡片 + 连续下拉曝光不重复」现可在推荐频道 App 内真演示
 ///      （用例 home_rec_multiform_feed_paginates_without_repeat）；page1/page2 无重叠的
 ///      契约级证据见同目录 moment_feed_pagination_guest.json / _viewer.json。
 ///      现网 alpha_moment_* 作者已被 gamma-local 真实 HTTP 验证链路的负反馈加入
@@ -177,7 +177,8 @@ void main() {
       expect(
         forms.contains('moment-grid') && forms.contains('video'),
         isTrue,
-        reason: '推荐频道首刷应渲染多形态（至少同时出现 moment 九宫格与视频卡）；'
+        reason:
+            '推荐频道首刷应渲染多形态（至少同时出现 moment 九宫格与视频卡）；'
             'forms=$forms',
       );
 
@@ -206,13 +207,15 @@ void main() {
       expect(
         seenVideoIds.length >= 2,
         isTrue,
-        reason: '连续下拉应曝光≥2 个不同视频形态 item（多形态 + 不重复）；'
+        reason:
+            '连续下拉应曝光≥2 个不同视频形态 item（多形态 + 不重复）；'
             'seenVideoIds=$seenVideoIds',
       );
       expect(
         maxFeedCardIndex >= 8,
         isTrue,
-        reason: '连续下拉应滚过多屏多卡（feed-card index 单调增长，证明持续分页）；'
+        reason:
+            '连续下拉应滚过多屏多卡（feed-card index 单调增长，证明持续分页）；'
             'maxFeedCardIndex=$maxFeedCardIndex',
       );
 
@@ -249,25 +252,17 @@ void main() {
         () => !$(_kHomeSearchChrome).visible,
         timeout: const Duration(seconds: 15),
       );
-      expect(
-        entered,
-        isTrue,
-        reason: '点击内容卡应进入沉浸消费（首页 chrome 被全屏沉浸路由覆盖）',
-      );
+      expect(entered, isTrue, reason: '点击内容卡应进入沉浸消费（首页 chrome 被全屏沉浸路由覆盖）');
 
       // 返回：原生返回键应回到推荐 feed。
-      await $.native.pressBack();
+      await $.platform.android.pressBack();
       await $.pump(const Duration(milliseconds: 400));
       await $.pump(const Duration(seconds: 1));
       final returned = await _waitUntil(
         () => $(_kHomeSearchChrome).visible,
         timeout: const Duration(seconds: 15),
       );
-      expect(
-        returned,
-        isTrue,
-        reason: '从沉浸消费返回后应回到推荐 feed',
-      );
+      expect(returned, isTrue, reason: '从沉浸消费返回后应回到推荐 feed');
     },
   );
 
@@ -294,11 +289,7 @@ void main() {
         _kProfileKeys,
         timeout: const Duration(seconds: 15),
       );
-      expect(
-        reachedProfile,
-        isTrue,
-        reason: '点击 feed 卡片作者应跳转到用户主页（对象跳转链路可达）',
-      );
+      expect(reachedProfile, isTrue, reason: '点击 feed 卡片作者应跳转到用户主页（对象跳转链路可达）');
 
       // 可关注：主页/卡片提供「关注/已关注」语义入口。
       expect(
@@ -308,7 +299,7 @@ void main() {
         reason: '主页/卡片应提供「关注/已关注」入口（可关注）',
       );
 
-      await $.native.pressBack();
+      await $.platform.android.pressBack();
       await $.pump(const Duration(seconds: 1));
     },
   );
@@ -394,7 +385,7 @@ Future<void> _recoverToHomeFeed(PatrolIntegrationTester $) async {
     if (!_existsInTree($, find.byKey(_kHomeSearchChrome))) {
       break;
     }
-    await $.native.pressBack();
+    await $.platform.android.pressBack();
     await $.pump(const Duration(milliseconds: 600));
   }
 

@@ -17,6 +17,7 @@ def isolated_roots(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("QWQ_DATA_ROOT", str(tmp_path))
     monkeypatch.setenv("QWQ_RUNTIME_ROOT", str(tmp_path / "runtime"))
     monkeypatch.setenv("QWQ_PUBLISH_ROOT", str(tmp_path / "publish"))
+    monkeypatch.setenv("QWQ_SERVICE_CONTRACTS_METADATA_ROOT", str(tmp_path / "service_contracts"))
     return tmp_path
 
 

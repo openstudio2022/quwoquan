@@ -491,7 +491,7 @@ void main() {
       expect(find.text('你的皮炎有点辣'), findsOneWidget);
     });
 
-    testWidgets('旅程 E4：交集与影响力模块从 Repository 加载', (tester) async {
+    testWidgets('旅程 E4：交集与打动模块从 Repository 加载', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -545,7 +545,7 @@ void main() {
     });
   });
 
-  group('旅程 交集端到端（我的主页→我的连接→列表→对象主页）', () {
+  group('旅程 交集端到端（我的主页→我的交集→列表→对象主页）', () {
     testWidgets('旅程 E5：维度简报下钻分组列表，再进对象主页', (tester) async {
       final behaviorRepo = MockBehaviorRepository();
       final tracker = ContentBehaviorTracker(

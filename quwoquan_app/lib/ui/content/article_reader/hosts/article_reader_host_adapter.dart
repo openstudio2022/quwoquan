@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/components/pageflip/controller.dart';
+import 'package:quwoquan_app/components/media/shared/gesture/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart';
 
 @immutable
@@ -29,6 +30,7 @@ class ArticleReaderHostConfig {
     this.onSceneChanged,
     this.onDebugStateChanged,
     this.onEntityTap,
+    this.gestureIntentController,
     this.debugPageSurfaceBuilder,
     this.debugBackPageSurfaceBuilder,
   });
@@ -55,6 +57,7 @@ class ArticleReaderHostConfig {
   final ValueChanged<StPageFlipScene>? onSceneChanged;
   final ValueChanged<ArticleReadOnlyBookDebugState>? onDebugStateChanged;
   final ValueChanged<ArticleInlineSpan>? onEntityTap;
+  final ImmersiveGestureIntentController? gestureIntentController;
   final Widget Function(BuildContext context, int pageIndex, Size pageSize)?
   debugPageSurfaceBuilder;
   final Widget Function(BuildContext context, int pageIndex, Size pageSize)?

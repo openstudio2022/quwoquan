@@ -42,7 +42,7 @@ def test_build_prepare_blocks_missing_homepage_base_draft():
     assert result.fallback_stage == "download_plan"
     assert any("baseDraft.sourceRef is empty" in issue for issue in result.issues), result.issues
 
-def test_build_prepare_abandons_unrepairable_homepage_after_react_budget():
+def test_build_prepare_isolates_unrepairable_homepage_after_react_budget():
     task_id = _make_task(workflow_policy={"allowPartialContent": True})
     good = "可用主页景区"
     spec = store.load_spec(task_id)
@@ -71,14 +71,69 @@ def test_build_prepare_abandons_unrepairable_homepage_after_react_budget():
         url="https://example.test/wiki",
         title=f"{good} - Wikipedia",
         target_ref=f"/entity/地点/景区/{good}",
+        images=[
+            {
+                "fileName": "good_homepage.jpg",
+                "bytes": b"fake-homepage-image",
+                "ext": ".jpg",
+                "license": "CC BY-SA 4.0",
+                "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                "authorizationProof": "fixture homepage image rights",
+                "caption": "可用主页景区配图",
+            }
+        ],
     )
 
     result = run_mod._run_build_prepare(ctx)
 
     assert result.status == "done", result.issues
     state = run_mod.load_workflow_state(task_id, batch_id)
-    assert [row["entityId"] for row in state["abandonedObjects"]] == [_EID]
+    homepage_abandoned = [
+        row["entityId"]
+        for row in (state.get("abandonedObjects") or [])
+        if row.get("abandonScope") == "homepage"
+    ]
+    assert homepage_abandoned == [_EID]
+    assert {target["name"] for target in (run_mod._active_spec(ctx)["scope"]["coverageTargets"])} == {
+        _EID,
+        good,
+    }
+    from build.homepage import homepage_runtime_spec
+
+    assert {
+        target["name"]
+        for target in (
+            homepage_runtime_spec(task_id, batch_id, run_mod._active_spec(ctx))["scope"]["coverageTargets"]
+        )
+    } == {good}
     good_input = batch_entity_page_input_path(task_id, batch_id, "地点", "景区", good)
     bad_input = batch_entity_page_input_path(task_id, batch_id, "地点", "景区", _EID)
     assert good_input.is_file()
     assert not bad_input.exists()
+
+
+def test_retry_stage_reactivates_legacy_build_prepare_homepage_entity_abandon():
+    task_id = _make_task(workflow_policy={"allowPartialContent": True})
+    batch_id = "build_prepare_legacy_homepage_abandon_retry"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["abandonedObjects"] = [
+        {
+            "entityId": _EID,
+            "stage": "build_prepare",
+            "reason": "homepage input unavailable after build_prepare repair budget",
+            "status": "abandoned",
+        }
+    ]
+    run_mod.save_workflow_state(state)
+
+    report = run_mod.reset_stage_retries(
+        task_id,
+        batch_id,
+        stage="build_prepare",
+        reason="homepage admission became object-scoped",
+        reset_react_rewinds=True,
+    )
+
+    assert report["reactivatedEntities"] == [_EID]
+    assert run_mod._active_spec(ctx)["scope"]["coverageTargets"][0]["name"] == _EID

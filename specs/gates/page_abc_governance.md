@@ -102,10 +102,10 @@ python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --enforce-a -
 
 ```bash
 export GATE_PAGE_ABC_ENFORCE=a
-bash agent_ops/gate/gate_repo.sh --scope app
+bash quwoquan_ops/gate/gate_repo.sh --scope app
 
 export GATE_PAGE_ABC_ENFORCE=abc
-bash agent_ops/gate/gate_repo.sh --scope app
+bash quwoquan_ops/gate/gate_repo.sh --scope app
 ```
 
 **注意**：当前仓库在 **C** 维度上多有页面未清零，**勿**在全员 gate 上默认 `GATE_PAGE_ABC_ENFORCE=c` 或 `abc`，除非已清债或已填白名单。

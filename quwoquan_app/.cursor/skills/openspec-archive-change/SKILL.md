@@ -89,7 +89,7 @@ Archive a completed change in the experimental workflow.
    - Schema that was used
    - Archive location
    - Whether specs were synced (if applicable)
-   - Note about any warnings (incomplete artifacts/tasks)
+   - Note about any warnings (incomplete .qwq_output/runs/tasks)
 
 **Output On Success**
 

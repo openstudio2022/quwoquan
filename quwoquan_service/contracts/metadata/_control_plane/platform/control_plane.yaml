@@ -327,7 +327,7 @@ object_types:
         danger_level: high
         approval_mode: dual
 
-  # 访问隔离映射的控制面投影（只读快照）：仅投影 deploy/shared/prod_plane_access_isolation.yaml
+  # 访问隔离映射的控制面投影（只读快照）：仅投影 quwoquan_ops/environments/prod_plane_access_isolation.yaml
   # 的平面->账号->固定路径->凭据 secret 名->rollout stage 引用，便于审计；不存凭据明文，
   # 仅用 dependency.read 拓扑读权限，不引入任何 config scope（不污染现有配置面）。
   - object_type: prod_plane_access_isolation

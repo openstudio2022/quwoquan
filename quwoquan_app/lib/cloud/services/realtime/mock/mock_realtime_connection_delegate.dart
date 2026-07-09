@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:riverpod/misc.dart' show ProviderListenable;
 import 'package:quwoquan_app/cloud/services/realtime/mock/mock_realtime_event_catalog.dart';
-import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.dart';
 
@@ -10,11 +9,11 @@ import 'package:quwoquan_app/cloud/services/realtime/realtime_message_handler.da
 class MockRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   MockRealtimeConnectionDelegate({
     required this.read,
+    ChatProviderInvalidate? invalidate,
     this.onStateChanged,
     this.eventPushDelay = const Duration(milliseconds: 300),
   }) {
-    _handler = RealtimeMessageHandler(read);
-    _config = RealtimeConfig.fromGateway();
+    _handler = RealtimeMessageHandler(read, invalidate: invalidate);
   }
 
   final T Function<T>(ProviderListenable<T> provider) read;
@@ -22,7 +21,6 @@ class MockRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   final Duration eventPushDelay;
 
   late final RealtimeMessageHandler _handler;
-  late final RealtimeConfig _config;
 
   TransportState _state = TransportState.disconnected;
   Timer? _idleTimer;
@@ -74,7 +72,9 @@ class MockRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   }
 
   void _scheduleCatalogEvents(String conversationId) {
-    final events = MockRealtimeEventCatalog.eventsForConversation(conversationId);
+    final events = MockRealtimeEventCatalog.eventsForConversation(
+      conversationId,
+    );
     if (events.isEmpty) {
       return;
     }

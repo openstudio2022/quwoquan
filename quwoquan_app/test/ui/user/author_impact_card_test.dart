@@ -80,7 +80,7 @@ TextSpan _spanByText(WidgetTester tester, String text) {
 
 void main() {
   group('AuthorImpactCard', () {
-    testWidgets('mine 空摘要展示「我的影响力」鼓励发布空态，无事实行', (tester) async {
+    testWidgets('mine 空摘要展示「我打动的人」鼓励发布空态，无事实行', (tester) async {
       await tester.pumpWidget(
         _host(AuthorImpactSummary(authorId: 'u1'), isMine: true),
       );
@@ -103,7 +103,7 @@ void main() {
       );
     });
 
-    testWidgets('other 非空摘要展示「TA的影响」，主页只直出云侧 primaryText', (tester) async {
+    testWidgets('other 非空摘要展示「TA打动的人」，主页只直出云侧 primaryText', (tester) async {
       final summary = AuthorImpactSummary(
         authorId: 'u2',
         total: 35,

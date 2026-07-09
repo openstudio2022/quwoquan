@@ -208,7 +208,8 @@ def _ensure_partition_baseline(task_id: str, unit: Mapping[str, Any]) -> None:
                 "canonical_name": name,
                 "region": region,
                 "source_count": 1,
-                "geo_tag_ref": f"/tag/地域/{region}" if region else "",
+                # 收债 7：geo ref 只用行政区树路径制（主清单 leaf.geoTagRef），无则留空。
+                "geo_tag_ref": str(leaf.get("geoTagRef") or "").strip(),
                 "source_kind": "coverageTarget",
                 "status": "candidate",
                 "taskId": task_id,
@@ -254,13 +255,20 @@ def _ensure_partition_baseline(task_id: str, unit: Mapping[str, Any]) -> None:
 
 def ensure_partition_task(plan: Mapping[str, Any], unit: Mapping[str, Any]) -> dict[str, Any]:
     """为一个叶子分区建 committed task（幂等：已存在则不覆盖）。返回 {taskId, created}。"""
+    from _common.fanout_plan import apply_leaf_contract_fields
+
     defaults = plan.get("defaults") or {}
     source_spec = _source_task_spec(plan)
     region = _partition_region(unit, source_spec)
     partition_path = tuple(unit.get("partitionPath") or [])
     scope: dict[str, Any] = {
+        # 主清单契约字段（geoTagRef/geoTagRefs/typeTagRefs/aliases）随叶子透传：
+        # geoTagRef 是 homepage 物化必填，丢失会让分区在 build_validate 硬阻断（WP5）。
         "coverageTargets": [
-            {"entityType": l.get("entityType"), "name": l.get("name")} for l in unit.get("leaves") or []
+            apply_leaf_contract_fields(
+                {"entityType": l.get("entityType"), "name": l.get("name")}, l
+            )
+            for l in unit.get("leaves") or []
         ],
     }
     if unit.get("entityTypes"):
@@ -279,11 +287,13 @@ def ensure_partition_task(plan: Mapping[str, Any], unit: Mapping[str, Any]) -> d
     # 导致来源不足的实体在分区层硬失败/卡 checkpoint，而非按源任务策略诚实弃稿。
     inherited_acceptance: dict[str, Any] | None = None
     inherited_workflow_policy: dict[str, Any] | None = None
+    inherited_preset_ref: str | None = None
     if source_spec:
         if isinstance(source_spec.get("acceptance"), Mapping):
             inherited_acceptance = dict(source_spec.get("acceptance") or {})
         if isinstance(source_spec.get("workflowPolicy"), Mapping):
             inherited_workflow_policy = dict(source_spec.get("workflowPolicy") or {})
+        inherited_preset_ref = store.spec_preset_ref(source_spec) or None
 
     spec = store.scaffold_spec(
         vertical=str(plan.get("vertical") or "travel"),
@@ -291,6 +301,7 @@ def ensure_partition_task(plan: Mapping[str, Any], unit: Mapping[str, Any]) -> d
         key=str(unit.get("taskKey")),
         name=str(unit.get("taskName")),
         category=(str(unit.get("category")) if unit.get("category") else None),
+        preset_ref=inherited_preset_ref,
         scope=scope,
         content=content,
         acceptance=inherited_acceptance,
@@ -298,6 +309,16 @@ def ensure_partition_task(plan: Mapping[str, Any], unit: Mapping[str, Any]) -> d
     )
     if inherited_workflow_policy:
         spec["workflowPolicy"] = inherited_workflow_policy
+    # 分区 task 是已 active 源任务圈选投影的执行分片，继承 active 生命周期：
+    # scaffold 默认 draft 会让 finalize 的 managed preflight 硬阻断
+    # （task status must be active for --managed），分区永远无法收口（WP5 实测）。
+    spec["status"] = "active"
+    # 跨批去重账本维度继承：promote 按 spec.sourceTaskId 写 dedup_ledger（全国常量维度）。
+    # 分区 task 不继承会让账本退化为按分区 taskId 记账，跨批/跨省防重复失效（WP5 修复）。
+    if source_spec:
+        inherited_dedup_dimension = str(source_spec.get("sourceTaskId") or "").strip()
+        if inherited_dedup_dimension:
+            spec["sourceTaskId"] = inherited_dedup_dimension
     task_id = spec["taskId"]
     if task_id != unit.get("taskId"):
         # 不一致说明寻址漂移（strategies 与 scaffold 不同源），直接暴露而非静默。
@@ -470,6 +491,10 @@ def sync_content_author_jobs(
             )
             if resolved:
                 creator_assignment = resolved
+        if not creator_assignment:
+            continue
+        if creator_assignment_issues(creator_assignment, carrier=carrier_for_check):
+            continue
         for field in CREATOR_ASSIGNMENT_FIELDS:
             value = creator_assignment.get(field)
             if value not in (None, "", {}) and effective_pack.get(field) in (None, "", {}):

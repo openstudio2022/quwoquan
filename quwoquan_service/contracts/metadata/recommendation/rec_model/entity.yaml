@@ -5,4 +5,4 @@ entity: ModelScoreRequest
 
 description: |
   推荐模型服务（rec-model-service）为推荐平台下推理服务，Python 独立部署，仅暴露 POST /v1/score 与 GET /health；训练由 rec-model-training 负责。
-  本目录无独立存储与领域事件；request/response 契约见 fields.yaml 与 contracts/openapi/rec-model-service.v1.yaml。
+  本目录无独立存储与领域事件；request/response 契约见 fields.yaml 与 contracts/metadata/recommendation/rec_model/service.yaml。

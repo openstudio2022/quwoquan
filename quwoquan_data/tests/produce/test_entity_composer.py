@@ -19,6 +19,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -402,7 +403,8 @@ def test_compose_brief_persists_reassigned_base_source_ref():
     )
     persisted = read_brief_object(TASK, BATCH, REF)
     assert persisted is not None
-    assert persisted["baseSourceRef"].startswith("sources/su_"), persisted["baseSourceRef"]
+    # 可读命名契约（spec §3）：sources/{实体名}__{sourceKind}__{hash8}/。
+    assert re.match(r"^sources/[^/]+__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", persisted["baseSourceRef"]), persisted["baseSourceRef"]
     persisted_meta = read_json(_source_unit_for_ref(persisted["baseSourceRef"]) / "meta.json")
     assert persisted_meta["sourceId"] == "museum_story"
 

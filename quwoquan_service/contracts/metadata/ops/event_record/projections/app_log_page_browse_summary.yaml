@@ -2,7 +2,7 @@ version: 1
 read_model: AppLogPageBrowseSummaryPayload
 
 description: |
-  browse 事件 summaryPayload（截断策略下写入 JSONL 的精简字段）。
+  browse 事件 summaryPayload（截断策略下写入本地诊断记录的精简字段）。
 
 source_entities: []
 

@@ -9,11 +9,12 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
+from _common.article_commercial_policy import article_commercial_closure_enabled
 from _common.base_draft import ARTICLE_MIN_BASE_DRAFT_CHARS, base_draft_readiness, load_base_draft_text
 from _common import ops_governance as og
 from _common.content_object import BRIEF_FILE, content_object_stage_dir, load_index
 from _common.creator_assignment import creator_assignment_issues, creator_assignment_required
-from _common.image_asset_strategy import image_count_is_hard_quota
+from _common.image_rules import image_caption_quality_issue
 from _common.io import read_json
 from _common.image_safety import assess_image_publish_prefilter
 from _common.paths import (
@@ -24,6 +25,7 @@ from _common.paths import (
     relative_batch_ref,
 )
 from _common.quality_gates import WRITING_INTENTS, writing_intent_issues
+from _common.qunar_template import qunar_article_base_block_reason
 
 CONTENT_PLAN_SCHEMA = "quwoquan_data.content_plan_packet"
 ARTICLE_BASE_SOURCE_ROLES = {"base"}
@@ -170,15 +172,25 @@ def allow_partial_content(spec: Mapping[str, Any]) -> bool:
     objects do not block unrelated production.
     """
     policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
-    return bool(policy.get("allowPartialContent") is True)
+    completion_mode = str(policy.get("minBatchCompletionMode") or "").strip()
+    return bool(
+        policy.get("allowPartialContent") is True
+        or policy.get("allowQuotaShortfall") is True
+        or policy.get("elasticOverfetch") is True
+        or completion_mode == "best_effort_with_reasoned_rejects"
+    )
 
 
 def allow_content_quota_shortfall(spec: Mapping[str, Any]) -> bool:
     """Whether successful content objects may ship when per-target quotas shortfall."""
     policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
+    completion_mode = str(policy.get("minBatchCompletionMode") or "").strip()
     return bool(
         policy.get("allowContentQuotaShortfall") is True
+        or policy.get("allowQuotaShortfall") is True
+        or policy.get("elasticOverfetch") is True
         or policy.get("allowPartialContent") is True
+        or completion_mode == "best_effort_with_reasoned_rejects"
     )
 
 
@@ -253,12 +265,12 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
     quotas = content.get("quotas") if isinstance(content.get("quotas"), Mapping) else {}
     acceptance = spec.get("acceptance") if isinstance(spec.get("acceptance"), Mapping) else {}
     separated_research = str(content.get("modalityContract") or "") == "separated_research"
+    commercial_closure = article_commercial_closure_enabled(spec)
     want_entity = int(quotas.get("entityArticles") or 0)
     want_route = int(quotas.get("routeArticles") or 0)
     want_gallery = 0 if separated_research else int(quotas.get("galleryPosts") or 0)
     per_target_articles = int(quotas.get("entityArticlesPerTarget") or 0)
     per_target_galleries = int(quotas.get("imageWorksPerTarget") or 0)
-    image_quota_hard = (not separated_research) or image_count_is_hard_quota(spec)
     if separated_research and (
         int(quotas.get("galleryPosts") or 0)
         or int(quotas.get("galleryPostsPerTarget") or 0)
@@ -285,12 +297,11 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
             targets = dynamic_targets
         else:
             issues.append("siteSupplyDynamicContentPlan requires entityRefs in site_supply content_plan_packet")
-    # 底稿中心 1:1（separated_research）：entityArticlesPerTarget / imageWorksPerTarget 降级为
-    # "载体车道开关"——枚举合格 source unit 逐一成稿，不再换算成每实体硬配额（既无地板也无天花板）。
-    # 仅遗留的非 separated_research 模式仍按"每实体硬配额"换算。
-    if per_target_articles and not separated_research:
+    # 底稿中心：每个内容对象仍必须绑定单一 source unit；per-target 配额是放量对象数合同，
+    # 不得在 separated_research 下退化为"枚举全部合格 source unit"的开关。
+    if per_target_articles and not commercial_closure:
         want_entity = per_target_articles * len(targets)
-    if per_target_galleries and image_quota_hard and not separated_research:
+    if per_target_galleries and not commercial_closure:
         want_gallery = per_target_galleries * len(targets)
     required_angles = [
         str(angle).strip()
@@ -339,13 +350,23 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
         abandoned_image_n = sum(1 for ref in abandoned_refs if _is_image_ref(ref))
         effective_want_entity = max(0, want_entity - abandoned_article_n)
         effective_want_gallery = max(0, want_gallery - abandoned_image_n)
-        if want_entity and entity_article_n != effective_want_entity:
+        if want_entity and commercial_closure and entity_article_n > want_entity:
+            issues.append(
+                f"entityArticles ceiling {want_entity} "
+                f"but packet has {entity_article_n}"
+            )
+        elif want_entity and entity_article_n != effective_want_entity:
             issues.append(
                 f"entityArticles quota {want_entity} "
                 f"(minus abandoned {abandoned_article_n} => {effective_want_entity}) "
                 f"but packet has {entity_article_n}"
             )
-        if want_gallery and image_quota_hard and gallery_n != effective_want_gallery:
+        if want_gallery and commercial_closure and gallery_n > want_gallery:
+            issues.append(
+                f"imageWorks ceiling {want_gallery} "
+                f"but packet has {gallery_n}"
+            )
+        elif want_gallery and gallery_n != effective_want_gallery:
             issues.append(
                 f"imageWorks quota {want_gallery} "
                 f"(minus abandoned {abandoned_image_n} => {effective_want_gallery}) "
@@ -477,6 +498,18 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                 issues.append(f"item[{ref}]: image title exceeds 80 characters")
             if len(str(item.get("caption") or "")) > 300:
                 issues.append(f"item[{ref}]: image caption exceeds 300 characters")
+            entity_tags = item.get("entityTags") if isinstance(item.get("entityTags"), list) else []
+            image_entity = (
+                str(item.get("targetEntity") or item.get("entityName") or "").strip()
+                or (str(entity_tags[0]).strip() if entity_tags else "")
+            )
+            caption_issue = image_caption_quality_issue(
+                str(item.get("caption") or title),
+                entity_id=image_entity,
+                asset_id=ref,
+            )
+            if caption_issue:
+                issues.append(f"item[{ref}]: {caption_issue}")
             if str(item.get("researchLane") or "") != "image":
                 issues.append(f"item[{ref}]: image work must use researchLane=image")
             collection_id = str(item.get("sourceCollectionId") or "").strip()
@@ -637,16 +670,26 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
                         f"item[{ref}]: article baseSourceRef category {category!r} "
                         "is not an approved article base category"
                     )
-            readiness = base_draft_readiness(
-                load_base_draft_text(task_id, batch_id, base_source_ref),
-                publish_media_mode=str(item.get("publishMediaMode") or source_meta.get("publishMediaMode") or ""),
+            qunar_block = qunar_article_base_block_reason(
+                source_meta,
+                str(source_meta.get("entityFocusVerdict") or ""),
             )
-            if strict_rights_mode and not readiness["ready"]:
+            if strict_rights_mode and qunar_block:
                 issues.append(
-                    f"item[{ref}]: baseSourceRef usable text too short "
-                    f"({readiness['effectiveChars']} < {ARTICLE_MIN_BASE_DRAFT_CHARS}; "
-                    f"figures={readiness['inlineFigureCount']} captions={readiness['captionChars']})"
+                    f"item[{ref}]: Qunar source {source_id or unit_name!r} "
+                    f"cannot be used as article baseSourceRef: {qunar_block}"
                 )
+            if strict_rights_mode:
+                readiness = base_draft_readiness(
+                    load_base_draft_text(task_id, batch_id, base_source_ref),
+                    publish_media_mode=str(item.get("publishMediaMode") or source_meta.get("publishMediaMode") or ""),
+                )
+                if not readiness["ready"]:
+                    issues.append(
+                        f"item[{ref}]: baseSourceRef usable text too short "
+                        f"({readiness['effectiveChars']} < {ARTICLE_MIN_BASE_DRAFT_CHARS}; "
+                        f"figures={readiness['inlineFigureCount']} captions={readiness['captionChars']})"
+                    )
             reuse_policy = str(item.get("baseSourceReusePolicy") or "").strip()
             if reuse_policy:
                 # 底稿中心 1:1：一源只能一篇——彻底取消 baseSourceReusePolicy /
@@ -750,37 +793,45 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
         )
         effective_target_articles = max(0, per_target_articles - len(target_abandoned_articles))
         effective_target_galleries = max(0, per_target_galleries - len(target_abandoned_galleries))
-        # 底稿中心 1:1（separated_research）：不再按每实体配额校验文章/图片篇数，也不再要求
-        # writingIntent 角度覆盖——每个合格 source unit 各成一篇，角度由底稿派生、可重复、可缺。
-        if not separated_research:
-            if per_target_articles and len(articles) != effective_target_articles:
+        if per_target_articles and commercial_closure and len(articles) > per_target_articles:
+            issues.append(
+                f"{target}: entityArticlesPerTarget ceiling {per_target_articles} "
+                f"but packet has {len(articles)}"
+            )
+        elif per_target_articles and (not commercial_closure) and len(articles) != effective_target_articles:
+            issues.append(
+                f"{target}: entityArticlesPerTarget quota {per_target_articles} "
+                f"(minus abandoned {len(target_abandoned_articles)} => {effective_target_articles}) "
+                f"but packet has {len(articles)}"
+            )
+        if per_target_galleries and commercial_closure and len(galleries) > per_target_galleries:
+            issues.append(
+                f"{target}: imageWorksPerTarget ceiling {per_target_galleries} "
+                f"but packet has {len(galleries)}"
+            )
+        elif per_target_galleries and (not commercial_closure) and len(galleries) != effective_target_galleries:
+            issues.append(
+                f"{target}: imageWorksPerTarget quota {per_target_galleries} "
+                f"(minus abandoned {len(target_abandoned_galleries)} => {effective_target_galleries}) "
+                f"but packet has {len(galleries)}"
+            )
+        if (
+            (not separated_research)
+            and (not commercial_closure)
+            and required_article_intents
+            and per_target_articles == len(required_article_intents)
+        ):
+            intents = sorted(str(item.get("writingIntent") or "") for item in articles)
+            abandoned_intents = _abandoned_intents_for_target(abandoned_refs, target)
+            expected = sorted(
+                intent for intent in required_article_intents if intent not in abandoned_intents
+            )
+            if intents != expected:
                 issues.append(
-                    f"{target}: entityArticlesPerTarget quota {per_target_articles} "
-                    f"(minus abandoned {len(target_abandoned_articles)} => {effective_target_articles}) "
-                    f"but packet has {len(articles)}"
+                    f"{target}: entity articles must match acceptance.requiredAngles "
+                    f"{expected}, got {intents}"
                 )
-            if per_target_galleries and image_quota_hard and len(galleries) != effective_target_galleries:
-                issues.append(
-                    f"{target}: imageWorksPerTarget quota {per_target_galleries} "
-                    f"(minus abandoned {len(target_abandoned_galleries)} => {effective_target_galleries}) "
-                    f"but packet has {len(galleries)}"
-                )
-            if required_article_intents and per_target_articles == len(required_article_intents):
-                intents = sorted(str(item.get("writingIntent") or "") for item in articles)
-                abandoned_intents = _abandoned_intents_for_target(abandoned_refs, target)
-                expected = sorted(
-                    intent for intent in required_article_intents if intent not in abandoned_intents
-                )
-                if intents != expected:
-                    issues.append(
-                        f"{target}: entity articles must match acceptance.requiredAngles "
-                        f"{expected}, got {intents}"
-                    )
         if len(galleries) > 1:
-            titles = [str(item.get("title") or "").strip() for item in galleries]
-            non_empty_titles = [title for title in titles if title]
-            if len(set(non_empty_titles)) != len(non_empty_titles):
-                issues.append(f"{target}: titled image works must use distinct visual themes")
             collection_asset_sets: dict[str, set[str]] = {}
             for image_work in galleries:
                 collection = str(image_work.get("sourceCollectionId") or "")
@@ -796,6 +847,14 @@ def validate_content_plan(task_id: str, batch_id: str, spec: Mapping[str, Any]) 
 
 
 def content_plan_quotas_required(spec: Mapping[str, Any]) -> bool:
+    """content_plan packet 只承载 article/image/route 篇目合同。
+
+    实体主页（entityHomepagesPerTarget）不是篇目：主页三件套的唯一真相源在
+    build_homepage/build_validate 车道（`_homepages_done` + review sidecars），
+    发布走 entities 实体面。把主页配额算进"需要 packet"会制造
+    clean→auto-skip→等 Agent 的确定性死循环（agent 写的 packet 每轮被
+    `_clean_content_plan_outputs` 删除），因此这里刻意不计入主页配额。
+    """
     if site_supply_dynamic_content_plan(spec):
         return True
     content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
@@ -805,7 +864,6 @@ def content_plan_quotas_required(spec: Mapping[str, Any]) -> bool:
         or int(quotas.get("routeArticles") or 0)
         or int(quotas.get("entityArticlesPerTarget") or 0)
         or int(quotas.get("imageWorksPerTarget") or 0)
-        or int(quotas.get("entityHomepagesPerTarget") or 0)
         or (
             str(content.get("modalityContract") or "") != "separated_research"
             and (

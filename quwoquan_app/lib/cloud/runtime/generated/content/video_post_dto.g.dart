@@ -14,27 +14,27 @@ class VideoPostDto extends PostBaseDto {
   @override final String displayName;
   @override final String avatarUrl;
   @override final String? authorBackgroundUrl;
-  final String authorRoleLabel;
-  final List<String> authorIdentityTags;
-  final bool authorVerified;
-  final String? body;
-  final String videoUrl;
+  @override final String authorRoleLabel;
+  @override final List<String> authorIdentityTags;
+  @override final bool authorVerified;
+  @override final String? body;
+  @override final String videoUrl;
   final String thumbnailUrl;
   final String coverUrl;
   final String? coverStrategy;
   final int? coverFrameTimeMs;
   final int? width;
   final int? height;
-  final int? durationMs;
+  @override final int? durationMs;
   @override final int likeCount;
   @override final int commentCount;
   @override final int shareCount;
   @override final DateTime createdAt;
   @override final DateTime? updatedAt;
   @override final DateTime? publishedAt;
-  final String? contentVertical;
-  final String? recallPath;
-  final String? supplySource;
+  @override final String? contentVertical;
+  @override final String? recallPath;
+  @override final String? supplySource;
   @override final List<IntersectionReason>? intersectionReasons;
 
   const VideoPostDto({

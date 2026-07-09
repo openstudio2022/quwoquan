@@ -41,6 +41,10 @@ func samplePosts() []PostDoc {
 	return []PostDoc{
 		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
 			EntityRefs: []string{"地点/景区/甲居藏寨"}, NormalizedEntityRefs: []string{"entity:景区:甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
+			IntersectionHints: []IntersectionHintDoc{
+				{Dimension: "content", Source: "entityRef", ActionType: "view_object", ActionTargetID: "entity:景区:甲居藏寨"},
+				{Dimension: "interest", Source: "tagRef", TagRefs: []string{"Topic/旅行"}, ActionType: "join", ActionTargetID: "Topic/旅行"},
+			},
 			AuthorID: "builtin_travel_blogger", CreatorProfileID: "qwq_creator_travel_blogger_001", CreatorArchetype: "travel_blogger",
 			CreatorProfileVersion: "1.0.0", CreatorDisclosure: map[string]any{"type": "platform_virtual_creator", "displayText": "平台虚拟创作者", "visible": true},
 			ExperienceClaimMode: "editorial_synthesis", AuthorQualitySignals: map[string]any{"qualityScore": 0.85, "fatigueScore": 0.2, "riskTier": "low"},
@@ -121,6 +125,7 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 		Angle                string                   `bson:"angle"`
 		EntityRefs           []string                 `bson:"entityRefs"`
 		TagRefs              []string                 `bson:"tagRefs"`
+		IntersectionHints    []IntersectionHintDoc    `bson:"intersectionHints"`
 		Body                 string                   `bson:"body"`
 		Summary              string                   `bson:"summary"`
 		ArticleMarkdown      string                   `bson:"articleMarkdown"`
@@ -154,6 +159,9 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	}
 	if len(got.TagRefs) != 1 || got.TagRefs[0] != "Topic/旅行" {
 		t.Fatalf("tagRefs wrong: %+v", got.TagRefs)
+	}
+	if len(got.IntersectionHints) != 2 || got.IntersectionHints[0].ActionTargetID != "entity:景区:甲居藏寨" {
+		t.Fatalf("intersectionHints not persisted: %+v", got.IntersectionHints)
 	}
 	if got.Body != got.ArticleMarkdown || got.Body == "" {
 		t.Fatalf("body must mirror articleMarkdown for online read/search: %+v", got)
@@ -491,21 +499,26 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 		t.Fatalf("want 2 feed items, got %d", n)
 	}
 	var item struct {
-		PostId            string         `bson:"postId"`
-		PostRef           string         `bson:"postRef"`
-		Status            string         `bson:"status"`
-		Visibility        string         `bson:"visibility"`
-		TagRefs           []string       `bson:"tagRefs"`
-		SourceTaskId      string         `bson:"sourceTaskId"`
-		CreatorProfileID  string         `bson:"creatorProfileId"`
-		CreatorArchetype  string         `bson:"creatorArchetype"`
-		ConditionProfile  map[string]any `bson:"conditionProfile"`
-		RecScore          float64        `bson:"recScore"`
-		QualityScore      float64        `bson:"qualityScore"`
-		ContentVertical   string         `bson:"contentVertical"`
-		SupplySource      string         `bson:"supplySource"`
-		SemanticCoverage  float64        `bson:"semanticMentionCoverage"`
-		MediaCompleteness float64        `bson:"mediaCompleteness"`
+		PostId                   string                `bson:"postId"`
+		PostRef                  string                `bson:"postRef"`
+		Status                   string                `bson:"status"`
+		Visibility               string                `bson:"visibility"`
+		TagRefs                  []string              `bson:"tagRefs"`
+		IntersectionHints        []IntersectionHintDoc `bson:"intersectionHints"`
+		SourceTaskId             string                `bson:"sourceTaskId"`
+		CreatorProfileID         string                `bson:"creatorProfileId"`
+		CreatorArchetype         string                `bson:"creatorArchetype"`
+		ConditionProfile         map[string]any        `bson:"conditionProfile"`
+		RecScore                 float64               `bson:"recScore"`
+		QualityScore             float64               `bson:"qualityScore"`
+		ContentVertical          string                `bson:"contentVertical"`
+		SupplySource             string                `bson:"supplySource"`
+		IntersectionFactStrength float64               `bson:"intersectionFactStrength"`
+		IntersectionFreshness    float64               `bson:"intersectionFreshness"`
+		IntersectionClass        string                `bson:"intersectionClass"`
+		IntersectionSourceRefTop string                `bson:"intersectionSourceRefTop"`
+		SemanticCoverage         float64               `bson:"semanticMentionCoverage"`
+		MediaCompleteness        float64               `bson:"mediaCompleteness"`
 	}
 	if err := feed.FindOne(ctx, bson.M{"postId": RuntimePostID("posts/article/体验/甲居藏寨体验/1")}).Decode(&item); err != nil {
 		t.Fatal(err)
@@ -515,6 +528,9 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	}
 	if item.Status != "published" || item.Visibility != "public" {
 		t.Fatalf("feed item must be discoverable (published/public): %+v", item)
+	}
+	if len(item.IntersectionHints) != 2 || item.IntersectionHints[1].ActionTargetID != "Topic/旅行" {
+		t.Fatalf("feed intersectionHints missing: %+v", item.IntersectionHints)
 	}
 	if item.SourceTaskId != "旅行/环线/川西环线/川西大环线自驾" {
 		t.Fatalf("feed sourceTaskId missing: %+v", item)
@@ -527,6 +543,12 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	}
 	if item.QualityScore <= 0 || item.RecScore != item.QualityScore {
 		t.Fatalf("feed qualityScore/recScore not projected: %+v", item)
+	}
+	if item.IntersectionFactStrength != 2 || item.IntersectionFreshness != 1 || item.IntersectionClass != "fact" {
+		t.Fatalf("feed intersection ranking projection missing: %+v", item)
+	}
+	if item.IntersectionSourceRefTop != "entity:景区:甲居藏寨" {
+		t.Fatalf("feed intersectionSourceRefTop wrong: %+v", item)
 	}
 	if item.ContentVertical != "travel_photography" || item.SupplySource != "data_engineering" {
 		t.Fatalf("feed vertical/source projection mismatch: %+v", item)

@@ -30,6 +30,8 @@ from PIL import Image  # noqa: E402
 
 from _common.image_rules import (  # noqa: E402
     MIN_ENTITY_IMAGES,
+    image_caption_quality_issue,
+    image_known_reject_issue,
     is_generic_relevance,
     min_count_issue,
     pixel_size_issue,
@@ -67,6 +69,32 @@ def test_relevance_generic_and_template_blocked():
         entity_id="墨石公园",
         asset_id="003",
     ) is not None
+
+
+def test_low_quality_image_caption_blocks_garbled_platform_template():
+    assert image_caption_quality_issue(
+        "500px provided description: ???????????????????????? [#?? ,#??]",
+        entity_id="光雾山",
+        asset_id="光雾山#1",
+    ) is not None
+    assert image_caption_quality_issue(
+        "光雾山云雾山脊与森林景观",
+        entity_id="光雾山",
+        asset_id="光雾山#2",
+    ) is None
+
+
+def test_known_wrong_place_image_caption_blocks_same_name_collision():
+    assert image_known_reject_issue(
+        "20120430杭州临安浙西大峡谷剑门关水库",
+        entity_id="剑门关",
+        asset_id="剑门关#wrong",
+    ) is not None
+    assert image_known_reject_issue(
+        "剑门关关楼与蜀道峡谷景观",
+        entity_id="剑门关",
+        asset_id="剑门关#ok",
+    ) is None
 
 
 # ── Gate 2: 每实体最少图片数 ────────────────────────────────────────

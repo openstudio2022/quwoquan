@@ -11,8 +11,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "agent_ops").is_dir())
-HOOKS = REPO_ROOT / "agent_ops" / "hooks"
+REPO_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "quwoquan_ops").is_dir())
+HOOKS = REPO_ROOT / "quwoquan_ops" / "hooks"
 
 
 def _run(script: str, payload: dict) -> dict:

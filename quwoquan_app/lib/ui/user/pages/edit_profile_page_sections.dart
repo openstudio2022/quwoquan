@@ -105,7 +105,7 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       _doClose();
       return;
     }
-    final discard = await showCupertinoDialog<bool>(
+    final discard = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(

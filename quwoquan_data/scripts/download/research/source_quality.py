@@ -10,9 +10,16 @@ from typing import Any, Mapping
 
 import yaml
 
-from _common.source_catalog import platform_category
+from _common.content_source_registry import (
+    homepage_primary_authority_rank,
+    homepage_source_can_seed_base_draft,
+    resolve_homepage_source_role,
+)
+from _common.source_catalog import known_category_ids, platform_category
+from _common.qunar_template import QUNAR_PAGE_SEARCH_RESULT, qunar_page_type
 from vertical.license import validate_image_rights
 
+from _common.image_rules import image_caption_quality_issue
 from download.research.text_match import (
     _dedupe_terms,
     _entity_name_variants,
@@ -244,6 +251,16 @@ def _homepage_fact_signal_count(text: str, entity_id: str) -> int:
             count += 1
     return count
 
+def homepage_text_quality_issue(
+    text: str,
+    entity_id: str,
+    *,
+    require_fact_ready: bool = True,
+) -> str:
+    """公开入口：homepage 底稿文本质量门（download fetch 阶段与 plan 阶段共用）。"""
+    return _homepage_text_quality_issue(text, entity_id, require_fact_ready=require_fact_ready)
+
+
 def _homepage_text_quality_issue(
     text: str,
     entity_id: str,
@@ -455,6 +472,8 @@ def _license_allows_app_publish(license_name: str, license_url: str = "") -> boo
     value = f"{license_name} {license_url}".lower()
     if not value.strip():
         return False
+    if "attribution_no_watermark" in value or "attribution no watermark" in value:
+        return True
     if any(token in value for token in ("nc", "noncommercial", "nd", "noderivatives", "igo")):
         return False
     if any(token in value for token in ("cc0", "publicdomain", "public domain")):
@@ -473,9 +492,14 @@ def _evidence_reason(entity_id: str, lane: str, provider: str, category: str) ->
     return f"{provider} 发现的 {entity_id} {lane_label}候选来源；类别={category or 'unknown'}"
 
 def _source_category(platform: str, fallback: str = "") -> str:
-    if fallback in _ARTICLE_BASE_CATEGORIES:
-        return fallback
-    return platform_category(platform) or fallback
+    normalized_fallback = str(fallback or "").strip()
+    # 显式传入的 registry/category 真相源优先，避免像「维基导游 + encyclopedia」
+    # 这样的 homepage authority 被平台别名回写成 travelogue。
+    if normalized_fallback in known_category_ids():
+        return normalized_fallback
+    if normalized_fallback in _ARTICLE_BASE_CATEGORIES:
+        return normalized_fallback
+    return platform_category(platform) or normalized_fallback
 
 def _homepage_plan_sort_key(source: Mapping[str, Any]) -> tuple[int, int, str]:
     text = " ".join(
@@ -484,44 +508,35 @@ def _homepage_plan_sort_key(source: Mapping[str, Any]) -> tuple[int, int, str]:
     ).casefold()
     category = str(source.get("category") or "").casefold()
     platform = str(source.get("platform") or "")
-    if category == "encyclopedia" or any(marker in text for marker in ("wikipedia", "维基百科", "百度百科", "搜狗百科", "头条百科", "字节百科", "britannica")):
-        bucket = 0
+    role = resolve_homepage_source_role(
+        source_id=str(source.get("source_id") or source.get("sourceId") or source.get("id") or ""),
+        platform=platform,
+        category=category,
+        discovery_provider=str(source.get("discoveryProvider") or ""),
+        url=str(source.get("url") or ""),
+    )
+    if role == "primary":
+        bucket = homepage_primary_authority_rank(platform)
+    elif role == "reference_only":
+        bucket = 10
     elif "wikidata" in text or "knowledge graph" in text:
-        bucket = 1
-    elif any(marker in text for marker in ("官网", "official", "官方网站")):
-        bucket = 2
-    elif any(marker in text for marker in ("政府", "文旅", "政务", "gov.cn")):
-        bucket = 4
+        bucket = 20
+    elif role == "supporting":
+        bucket = 30
     else:
-        bucket = 3
+        bucket = 40 if any(marker in text for marker in ("政府", "文旅", "政务", "gov.cn")) else 50
     confidence = int(float(source.get("matchConfidence") or 0) * -1000)
     return (bucket, confidence, platform)
 
 def _homepage_core_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Homepage core evidence: encyclopedia/knowledge/official first, capped."""
+    """Homepage core evidence: registry-defined authority first, capped."""
     return sorted(sources, key=_homepage_plan_sort_key)[:_HOMEPAGE_CORE_SOURCE_LIMIT]
 
-# P3 三类解耦：可作实体主页 base draft 的主源【只限百科】。官网/官方降为 supporting。
-_HOMEPAGE_PRIMARY_SOURCE_MARKERS = (
-    "维基百科",
-    "wikipedia",
-    "百度百科",
-    "搜狗百科",
-    "字节百科",
-    "百科",
-)
-
+# R-HSE06 扩源后官网/政务文旅是第二权威主源，不再按词元降级；
+# 权威媒体仍只 supporting（registry supportingOnlySourceClasses 同口径）。
 _HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS = (
-    "政府",
-    "文旅",
-    "政务",
-    "gov.cn",
     "权威媒体",
     "媒体",
-    "景区官网",
-    "官网",
-    "官方",
-    "official",
 )
 
 _HOMEPAGE_NON_HOMEPAGE_SOURCE_MARKERS = ("攻略", "游记", "评论", "点评", "小红书", "摄影")
@@ -541,11 +556,7 @@ def _homepage_can_seed_base_draft(source: Mapping[str, Any]) -> bool:
         return False
     if any(marker.casefold() in lowered for marker in _HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS):
         return False
-    category = str(source.get("category") or "").casefold()
-    # 只有百科类目可作主页 base draft 主源；official_site 已在 support-only markers 归为补充源。
-    if category == "encyclopedia":
-        return True
-    return any(marker.casefold() in lowered for marker in _HOMEPAGE_PRIMARY_SOURCE_MARKERS)
+    return homepage_source_can_seed_base_draft(source)
 
 def _homepage_requires_text_snapshot(url: str) -> bool:
     host = (urllib.parse.urlparse(url).hostname or "").lower()
@@ -627,6 +638,10 @@ def _candidate_gate(
         if category in _SUPPORTING_ONLY_CATEGORIES:
             issues.append(f"{category} can only be supportingEvidence for article lane")
     if lane == "article":
+        if qunar_page_type(url) == QUNAR_PAGE_SEARCH_RESULT:
+            issues.append(
+                "Qunar search result directory must enter discovery frontier, not article source plan"
+            )
         # RC4 红线：文章配图必须同源（来自文章底稿自身图片）。same_authorized_collection
         # 表示用"另一授权图集"的图当文章配图＝跨源替代，是九寨沟问题的根因之一，显式拒绝。
         # （图片作品 image lane 的图库一源一作品才允许 same_authorized_collection。）
@@ -702,6 +717,7 @@ def _candidate_gate(
 def _collection_image_spec(collection: Mapping[str, Any], image: Mapping[str, Any]) -> dict[str, Any]:
     spec: dict[str, Any] = {}
     for field in (
+        "authorizationBasis",
         "sourceCollectionId",
         "creator",
         "credit",
@@ -713,6 +729,17 @@ def _collection_image_spec(collection: Mapping[str, Any], image: Mapping[str, An
         "authorizationProof",
         "usageScope",
         "sourceUrl",
+        "modelReleaseRequired",
+        "modelReleaseStatus",
+        "propertyReleaseStatus",
+        "pinUrl",
+        "discoveryUrl",
+        "originalAssetUrl",
+        "sourceAuthor",
+        "repostAttribution",
+        "watermarkScan",
+        "ocrScan",
+        "collectedAt",
     ):
         value = image.get(field) or collection.get(field)
         if value not in ("", None):
@@ -840,6 +867,13 @@ def _collection_gate(
         pixel_issue = _image_pixel_issue(spec)
         if pixel_issue:
             issues.append(f"image[{index}]: {pixel_issue}")
+        caption_issue = image_caption_quality_issue(
+            str(spec.get("caption") or spec.get("relevance") or ""),
+            entity_id=entity_id,
+            asset_id=f"{collection_id or '?'}#{index}",
+        )
+        if caption_issue:
+            issues.append(f"image[{index}]: {caption_issue}")
         if (
             entity_id
             and not verified_collection_entity_match

@@ -91,12 +91,17 @@ def build_site_quality_distribution_report(
     commercial_blockers: list[str] = []
     if validation_only:
         commercial_blockers.append("controlledTrial.validationOnly=true")
-    if not bool(profile.get("fetchable")):
+    if admission_mode != ADMISSION_LICENSED_ASSET_INGEST and not bool(profile.get("fetchable")):
         commercial_blockers.append("fetchable=false")
-    if not bool(profile.get("crawlAllowed")):
+    if admission_mode != ADMISSION_LICENSED_ASSET_INGEST and not bool(profile.get("crawlAllowed")):
         commercial_blockers.append("crawlAllowed=false")
     if not publishable_assets_allowed:
         commercial_blockers.append("publishableAssetsAllowed=false")
+    if admission_mode == ADMISSION_LICENSED_ASSET_INGEST and str(profile.get("rightsPolicy") or "") not in {
+        "licensed_asset_required",
+        "commercial_license_required",
+    }:
+        commercial_blockers.append("licensed_asset_ingest requires authorized asset rights policy")
 
     candidates = _read_packet_rows(root, "candidates", "site_candidate_packet.json")
     scores = _read_packet_rows(root, "scores", "site_score_packet.json")
@@ -184,6 +189,7 @@ def build_site_quality_distribution_report(
         "workspaceRoot": str(root),
         "frontier": {
             "admissionMode": admission_mode,
+            "articleCommercialAdmission": str(profile.get("articleCommercialAdmission") or ""),
             "validationOnly": validation_only,
             "publishableAssetsAllowed": publishable_assets_allowed,
             "fetchable": bool(profile.get("fetchable")),

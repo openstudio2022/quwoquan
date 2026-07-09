@@ -40,7 +40,7 @@
 - **S4**：Tab 根可依托 `MainAppShell` pageAccess；独立路由页按统一观测方案补齐或标 **○** 并指向后续 Story。  
 - **S9**：  
   - 全表扫描 **○**：须变为 **✓** 或 **—**，或在矩阵「备注」/ 兄弟 L3 中登记 **技术债 ID**；  
-  - 执行 `make verify-app-page-horizontal-quality`（快检）与 `bash agent_ops/gate/gate_repo.sh --scope app`（或完整 `make gate`，视 PR 范围）；  
+  - 执行 `make verify-app-page-horizontal-quality`（快检）与 `bash quwoquan_ops/gate/gate_repo.sh --scope app`（或完整 `make gate`，视 PR 范围）；  
   - **治理落盘**：Cursor 规则 `.cursor/rules/09-page-horizontal-quality.mdc`、`01-arch-constraints.mdc` §2.4、`page_horizontal_quality_pr_checklist.md` §S9；  
   - 更新 `specs/changelog/CR-*.yaml` 或在本 L3 `树内任务文档` 勾选完成。
 
@@ -92,7 +92,7 @@
 python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
 python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
 python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
-bash agent_ops/gate/gate_repo.sh --scope app
+bash quwoquan_ops/gate/gate_repo.sh --scope app
 ```
 
 ### B3 矩阵 P3 与波次 B 的关系
@@ -129,7 +129,7 @@ bash agent_ops/gate/gate_repo.sh --scope app
       - quwoquan_app/lib/core/data_source/
     tests:
       - python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
-      - bash agent_ops/gate/gate_repo.sh --scope app
+      - bash quwoquan_ops/gate/gate_repo.sh --scope app
     dev_status: specified
 ```
 

@@ -10,7 +10,7 @@ affected_nodes:
   - quwoquan_service/contracts/metadata/content/post/tests/contract.yaml
   - quwoquan_service/contracts/metadata/content/post/tests/e2e.yaml
   - quwoquan_service/contracts/metadata/_shared/request_context.yaml
-  - quwoquan_service/specs/content-service/spec.md
+  - specs/feature-tree/discovery-content/content-service-contract-foundation/spec.md
   - specs/feature-tree/discovery-content/feed-orchestration-recommendation
 
 entries:
@@ -71,7 +71,7 @@ entries:
       - path: quwoquan_service/contracts/metadata/content/post/tests/e2e.yaml
         sections:
           - discovery_feed_load_and_render 增服务端权威 feedRequestId 断言
-      - path: quwoquan_service/specs/content-service/spec.md
+      - path: specs/feature-tree/discovery-content/content-service-contract-foundation/spec.md
         sections:
           - 内容推荐能力改为内部编排，对外唯一入口 GET /v1/content/feed?sort=recommend
           - 新增「服务端权威下发 feedRequestId」场景

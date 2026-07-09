@@ -216,15 +216,15 @@ dev_log:
     verify:
       - python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --skip-flutter-contracts
       - python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py
-      - python3 agent_ops/deploy/stackctl.py verify --env gamma --kind all --tier all
-      - python3 agent_ops/deploy/stackctl.py health --target gamma-hosted --scope full
-      - python3 agent_ops/deploy/stackctl.py inspect --target gamma-hosted --kind all
-      - python3 agent_ops/deploy/stackctl.py doctor --target gamma-hosted
-      - python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart --stage pre
+      - python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
+      - python3 quwoquan_ops/cli/stackctl.py health --target gamma-hosted --scope full
+      - python3 quwoquan_ops/cli/stackctl.py inspect --target gamma-hosted --kind all
+      - python3 quwoquan_ops/cli/stackctl.py doctor --target gamma-hosted
+      - python3 quwoquan_ops/cli/stackctl.py roll --target gamma-hosted --mode restart --stage pre
       - gh run list --limit 5 --json databaseId,name,status,conclusion,createdAt,headBranch,event
     notes:
-      - 本地 gamma `stackctl verify` 通过，报告 `artifacts/stackctl/gamma/20260612T162426Z-verify-gamma-local`。
-      - hosted gamma 仍 BLOCK：`health --scope full` 为 1/7 healthy，gateway/product-ops/media/chat probes 失败，核心 healthz 显示 Mongo `ReplicaSetNoPrimary`；报告 `artifacts/stackctl/gamma/20260612T161458Z-health-gamma-hosted`。
-      - hosted doctor 仍 BLOCK：`health checks are failing`，报告 `artifacts/stackctl/gamma/20260612T162504Z-doctor-gamma-hosted`。
-      - hosted restart 仍 BLOCK：`roll --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`；报告 `artifacts/stackctl/gamma/20260612T163152Z-roll-gamma-hosted`。
+      - 本地 gamma `stackctl verify` 通过，报告 `.qwq_output/runs/gamma/20260612T162426Z-verify-gamma-local`。
+      - hosted gamma 仍 BLOCK：`health --scope full` 为 1/7 healthy，gateway/product-ops/media/chat probes 失败，核心 healthz 显示 Mongo `ReplicaSetNoPrimary`；报告 `.qwq_output/runs/gamma/20260612T161458Z-health-gamma-hosted`。
+      - hosted doctor 仍 BLOCK：`health checks are failing`，报告 `.qwq_output/runs/gamma/20260612T162504Z-doctor-gamma-hosted`。
+      - hosted restart 仍 BLOCK：`roll --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`；报告 `.qwq_output/runs/gamma/20260612T163152Z-roll-gamma-hosted`。
       - 最近 5 个 GHA run 均 failure；真实 hosted T3/T4 与 CR status=implemented 需等待 hosted gamma 恢复后执行。

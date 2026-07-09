@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_page.dart';
 import 'package:quwoquan_app/components/media/picker/create_media_picker_presentation.dart';
-import 'package:quwoquan_app/components/media/picker/one_tap_movie_composer.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
@@ -54,7 +54,7 @@ void main() {
       expect(actions.single.label, isNot(UITextConstants.mediaPickerEditImage));
     });
 
-    testWidgets('视频选择器以宫格展示拍视频、一键成片与全部视频，并过滤图片', (tester) async {
+    testWidgets('视频选择器以宫格展示拍视频与全部视频，并过滤图片', (tester) async {
       final service = _FakeMediaPickerService(
         albums: <AssetPathEntity>[_album('recent', '最近项目')],
         assetsByAlbumId: <String, List<AssetEntity>>{
@@ -82,15 +82,24 @@ void main() {
         find.byKey(const ValueKey<String>('media-picker-camera-tile')),
         findsOneWidget,
       );
+      final cameraTile = tester.widget<Container>(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('media-picker-camera-tile')),
+          matching: find.byType(Container),
+        ),
+      );
+      final cameraDecoration = cameraTile.decoration! as BoxDecoration;
+      expect(cameraDecoration.color, isNot(AppColors.black));
+      expect(cameraDecoration.border, isNotNull);
       expect(
         find.text(UITextConstants.mediaPickerVideoCameraEntry),
         findsOneWidget,
       );
       expect(
         find.byKey(const ValueKey<String>('media-picker-one-tap-movie-tile')),
-        findsOneWidget,
+        findsNothing,
       );
-      expect(find.text(UITextConstants.mediaPickerOneTapMovie), findsOneWidget);
+      expect(find.text(UITextConstants.mediaPickerOneTapMovie), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('media-picker-asset-v1')),
         findsOneWidget,
@@ -103,93 +112,11 @@ void main() {
       final cameraTopLeft = tester.getTopLeft(
         find.byKey(const ValueKey<String>('media-picker-camera-tile')),
       );
-      final movieTopLeft = tester.getTopLeft(
-        find.byKey(const ValueKey<String>('media-picker-one-tap-movie-tile')),
-      );
       final videoTopLeft = tester.getTopLeft(
         find.byKey(const ValueKey<String>('media-picker-asset-v1')),
       );
-      expect(cameraTopLeft.dx, lessThan(movieTopLeft.dx));
-      expect(movieTopLeft.dx, lessThan(videoTopLeft.dx));
+      expect(cameraTopLeft.dx, lessThan(videoTopLeft.dx));
       expect(cameraTopLeft.dy, videoTopLeft.dy);
-    });
-
-    testWidgets('一键成片选择图片后返回生成视频结果且不回停选择器', (tester) async {
-      CreateMediaPickerResult? picked;
-      final composer = _FakeOneTapMovieComposer();
-      final service = _FakeMediaPickerService(
-        albums: <AssetPathEntity>[_album('recent', '最近项目')],
-        assetsByAlbumId: <String, List<AssetEntity>>{
-          'recent': <AssetEntity>[_video('v1'), _image('i1')],
-        },
-      );
-
-      await tester.pumpWidget(
-        CupertinoApp(
-          home: Builder(
-            builder: (context) => CupertinoButton(
-              child: const Text('open'),
-              onPressed: () async {
-                picked = await Navigator.of(context)
-                    .push<CreateMediaPickerResult>(
-                      CupertinoPageRoute<CreateMediaPickerResult>(
-                        builder: (_) => CreateMediaPickerPage(
-                          entryMode: MediaPickerEntryMode.video,
-                          maxSelection: 1,
-                          mediaPickerService: service,
-                          oneTapMovieComposer: composer,
-                        ),
-                      ),
-                    );
-              },
-            ),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('open'));
-      await _pumpMediaPickerFrame(tester);
-      await tester.tap(
-        find.byKey(const ValueKey<String>('media-picker-one-tap-movie-tile')),
-      );
-      await _pumpMediaPickerFrame(tester);
-
-      expect(find.text(UITextConstants.mediaPickerPhotoTitle), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey<String>('media-picker-asset-i1')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const ValueKey<String>('media-picker-asset-v1')),
-        findsNothing,
-      );
-
-      await tester.tap(
-        find.byKey(const ValueKey<String>('media-picker-asset-i1')),
-      );
-      await _pumpMediaPickerFrame(tester);
-      await tester.tap(
-        find.text(
-          mediaPickerCompletionLabel(
-            mode: MediaPickerEntryMode.image,
-            selectionCount: 1,
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text(UITextConstants.mediaPickerNextStep), findsOneWidget);
-      await tester.tap(find.text(UITextConstants.mediaPickerNextStep));
-      await tester.pumpAndSettle();
-
-      expect(composer.images.map((item) => item.id), <String>['i1']);
-      expect(picked, isNotNull);
-      expect(picked!.openOneTapMovie, isTrue);
-      expect(picked!.items, hasLength(1));
-      expect(picked!.items.single.type, CreateMediaType.video);
-      expect(picked!.items.single.source, CreateMediaSource.generated);
-      expect(picked!.items.single.path, '/tmp/one_tap_movie.mp4');
-      expect(picked!.items.single.durationMs, 3000);
     });
   });
 }
@@ -302,22 +229,6 @@ class _FakeMediaPickerService extends MediaPickerService {
       source: source,
       width: type == CreateMediaType.video ? 1080 : 1200,
       height: type == CreateMediaType.video ? 1920 : 1600,
-    );
-  }
-}
-
-class _FakeOneTapMovieComposer implements OneTapMovieComposer {
-  List<CreateMediaItem> images = const <CreateMediaItem>[];
-
-  @override
-  Future<OneTapMovieComposeResult> compose({
-    required List<CreateMediaItem> images,
-  }) async {
-    this.images = List<CreateMediaItem>.of(images);
-    return OneTapMovieComposeResult(
-      videoPath: '/tmp/one_tap_movie.mp4',
-      durationMs: images.length * 3000,
-      coverPath: '/tmp/one_tap_movie_cover.jpg',
     );
   }
 }

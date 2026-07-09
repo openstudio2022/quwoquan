@@ -1,23 +1,33 @@
 """Merge creator pool seed into user_pool overlay and scenarios."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from _common.creator_pool.io import repo_seed_fixture_dir
 from _common.creator_pool.media_assets import materialize_batch_media
 from _common.io import read_json, write_json
 from _common.paths import SERVICE_CONTRACTS_METADATA_ROOT, now_iso
+from governance.creator_pool.seed import (
+    _planned_target,
+    _seed_users_from_runtime,
+    _seed_users_from_templates,
+    seed_fixture_name,
+)
+
+LEGACY_CREATOR_SCENARIO_TOKENS = (
+    "travel_batch_100_v1",
+    "travel_scale10",
+    "creator_travel_batch100",
+    "creator_travel_scale10",
+    "qwq_creator_",
+)
 
 
 def run_merge_user_fixtures(*, vertical: str, batch_id: str, dry_run: bool = False) -> dict[str, Any]:
-    seed_name = _seed_fixture_name(vertical, batch_id)
+    seed_name = seed_fixture_name(vertical, batch_id)
     seed_path = repo_seed_fixture_dir() / seed_name
-    if not seed_path.is_file():
-        raise FileNotFoundError(f"missing seed fixture: {seed_path}")
-    seed = read_json(seed_path)
-    users = seed.get("users") if isinstance(seed, dict) else None
-    if not isinstance(users, list):
-        raise ValueError("seed users missing")
+    users = _load_seed_users(vertical=vertical, batch_id=batch_id, seed_path=seed_path, dry_run=dry_run)
     overlay_users: list[dict[str, Any]] = []
     for user in users:
         if not isinstance(user, dict):
@@ -34,13 +44,24 @@ def run_merge_user_fixtures(*, vertical: str, batch_id: str, dry_run: bool = Fal
                 "avatarMedia": _media_meta(avatar_key),
                 "backgroundMedia": _media_meta(cover_key, width=1600, height=900),
                 "bio": user.get("bio"),
+                "headline": user.get("headline"),
+                "slogan": user.get("slogan"),
                 "subAccountRefs": [user.get("subAccountId")],
-                "tags": ["author", "creator_pool", vertical],
+                "tags": _profile_tags(user, vertical=vertical),
                 "primaryTheme": vertical,
-                "secondaryThemes": [vertical],
-                "themeTags": [vertical],
+                "secondaryThemes": user.get("verticalRefs") or [vertical],
+                "themeTags": user.get("verticalRefs") or [vertical],
                 "primaryRole": "secondaryAuthor",
                 "creatorArchetype": user.get("creatorArchetype"),
+                "verticalSegment": user.get("verticalSegment"),
+                "verticalRefs": user.get("verticalRefs") or [vertical],
+                "interestTagRefs": user.get("interestTagRefs") or [],
+                "publicProfileTagRefs": user.get("publicProfileTagRefs") or [],
+                "creatorClassTagRefs": user.get("creatorClassTagRefs") or [],
+                "coverageScope": user.get("coverageScope") or {},
+                "carrierAffinity": user.get("carrierAffinity") or {},
+                "preferredBlueprintIds": user.get("preferredBlueprintIds") or [],
+                "relations": user.get("relations") or {},
                 "cohortId": batch_id,
             }
         )
@@ -63,8 +84,39 @@ def run_merge_user_fixtures(*, vertical: str, batch_id: str, dry_run: bool = Fal
     return {"mergedUsers": len(overlay_users), "overlayPath": str(overlay_path), "dryRun": dry_run}
 
 
+def _load_seed_users(*, vertical: str, batch_id: str, seed_path, dry_run: bool) -> list[dict[str, Any]]:
+    if seed_path.is_file():
+        seed = read_json(seed_path)
+        users = seed.get("users") if isinstance(seed, dict) else None
+        if not isinstance(users, list):
+            raise ValueError("seed users missing")
+        return users
+    if not dry_run:
+        raise FileNotFoundError(f"missing seed fixture: {seed_path}")
+    planned_target = _planned_target(vertical=vertical, batch_id=batch_id)
+    users = _seed_users_from_templates(vertical=vertical, batch_id=batch_id, expected_count=planned_target)
+    if not users:
+        users = _seed_users_from_runtime(vertical=vertical, batch_id=batch_id)
+    if not users:
+        raise FileNotFoundError(f"missing seed fixture/runtime users: {seed_path}")
+    return users
+
+
 def _seed_fixture_name(vertical: str, batch_id: str) -> str:
-    return f"creator_{vertical}_batch100.seed.json"
+    return seed_fixture_name(vertical, batch_id)
+
+
+def _profile_tags(user: dict[str, Any], *, vertical: str) -> list[str]:
+    tags = ["author", "creator_pool", vertical]
+    tags.extend(str(ref) for ref in user.get("verticalRefs") or [])
+    tags.extend(str(ref) for ref in user.get("publicProfileTagRefs") or [])
+    seen: set[str] = set()
+    out: list[str] = []
+    for tag in tags:
+        if tag and tag not in seen:
+            seen.add(tag)
+            out.append(tag)
+    return out
 
 
 def _media_meta(object_key: str, *, width: int = 512, height: int = 512) -> dict[str, Any]:
@@ -88,6 +140,12 @@ def _merge_scenario(path, *, batch_id: str, vertical: str, user_ids: list[str]) 
     if not isinstance(seed_sets, dict):
         seed_sets = {}
         data["seedSets"] = seed_sets
+    seed_sets = {
+        key: value
+        for key, value in seed_sets.items()
+        if key == scenario_id or not any(token in str(key) for token in LEGACY_CREATOR_SCENARIO_TOKENS)
+    }
+    data["seedSets"] = seed_sets
     seed_sets[scenario_id] = {
         "description": f"Creator pool {batch_id} curated pilot subset",
         "profiles": [{"userId": uid} for uid in user_ids[:20]],
@@ -98,7 +156,13 @@ def _merge_scenario(path, *, batch_id: str, vertical: str, user_ids: list[str]) 
     filtered = [
         s
         for s in scenarios
-        if isinstance(s, dict) and s.get("id") != scenario_id and s.get("scenarioId") != scenario_id
+        if isinstance(s, dict)
+        and s.get("id") != scenario_id
+        and s.get("scenarioId") != scenario_id
+        and not any(
+            token in json.dumps(s, ensure_ascii=False)
+            for token in LEGACY_CREATOR_SCENARIO_TOKENS
+        )
     ]
     filtered.append(
         {

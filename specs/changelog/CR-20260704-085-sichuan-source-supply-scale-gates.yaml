@@ -1,0 +1,46 @@
+id: CR-20260704-085-sichuan-source-supply-scale-gates
+title: 四川景区百级到千级内容供给源站分层与源头预检查
+date: 2026-07-04
+area: Data
+domain: content-supply
+type: additive
+summary: >
+  扩展四川景区内容供给候选源站，将今日头条、微博、Pinterest、图虫社区和图虫创意纳入
+  发现/受控验证/授权升级视野；新增百级放量 sourcePrecheck 审计信号，并强化逐资产授权字段硬门。
+motivation:
+  - 上轮 controlled trial 的成功率受源站质量、实体主页锚点、同源可发布图片和授权字段不完整影响。
+  - 百级再到千级放量必须扩大高质量源头数量，但不能绕过主页闭环、source unit 溯源和逐资产授权。
+changes:
+  - travel source registry 新增 toutiao_article_reference、weibo_travel_reference、pinterest_travel_reference、tuchong_community_reference、tuchong_stock_authorized。
+  - source catalog 新增 platform_article 与 community_post，并补齐 Toutiao/微博/图虫创意别名归类。
+  - site frontier controlled trial 阻断 publishableAssetsAllowed=true，保持 validation-only 与 rawFetchAllowed=false。
+  - travel source registry matcher 改为按域名/pattern 具体度择优，避免 stock.tuchong.com 被 tuchong.com 社区源误匹配。
+  - audit_managed_batch 增加 sourcePrecheck：百级/放量配置下检查主页 baseDraft、文章底稿源数量、图片来源集合、来源类别覆盖和 off_entity_no_anchor。
+  - travel/photography 图片授权策略将 authorizationProof 与 modelReleaseStatus 提为必填字段；自动研究输出为开放许可图片显式补 modelReleaseStatus=not_required。
+policy:
+  - Pinterest、微博、今日头条、马蜂窝等默认只用于发现、参考或受控验证，不抓原文，不发布平台图片/视频。
+  - 图虫创意/OpenAPI 只作为授权升级候选；站点注册不等于可发布，release 仍以逐资产授权字段为准。
+  - 视频只保留 trial lane 能力，不计入千级正式发布 KPI，直到视频研究/producer/权利安全门关闭。
+evidence:
+  local_contract:
+    - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/vertical/source_registry.py quwoquan_data/scripts/site_supply/core.py quwoquan_data/scripts/task/target_selection.py quwoquan_data/scripts/vertical/license.py
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/template/test_source_catalog.py quwoquan_data/tests/vertical/test_travel_source_registry.py quwoquan_data/tests/vertical/test_image_rights_asset_level.py -q
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/site_supply/test_frontier_rollup__local_contract_test.py quwoquan_data/tests/task/test_target_selection.py -q
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/download/test_source_quality_gate__local_contract_test.py quwoquan_data/tests/local_contract/download/test_auto_research_article_homepage__local_contract_test.py quwoquan_data/tests/local_contract/download/test_auto_research_image_lane__local_contract_test.py -q
+  api_integration:
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/verify/test_site_scale_readiness.py -q
+  runtime_e2e:
+    - 待下一轮 100 object controlled trial 写入 trial_review.json、managed_batch_audit.json、scale100_elastic_report.json 后补录。
+rollout:
+  hundredObjectTrial:
+    target: 15 四川景区实体 * 1 homepage + 4 article + 2 image
+    gate: release integrity passed, released posts >=100 or reasonable rejects >=70%, homepage success entities >=12, article/image released lane counts present
+  hundredEntityTrial:
+    target: 100 entity * 1 homepage + 4 article + 2 image
+    gate: reliabletask, TokenLedger, isolated release, site-scale-readiness commercial mode, release/import/search/recommendation evidence
+  thousandEntityTrial:
+    target: 1000 entity * 1 homepage + 4 article + 2 image
+    gate: fanout run_matrix, external/cloud Cursor workers, site raw capacity report, released lane counts, downstream feedback
+risks:
+  - 外部平台 terms/robots/OpenAPI 条款会变；每轮落地前必须刷新官方页面和 robots/开放平台文档。
+  - controlled trial 可接受合理 reject；commercial/readiness 只能用 releasedPostLaneCounts 与授权证据计入成功率。

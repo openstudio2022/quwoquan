@@ -17,7 +17,14 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from _common.io import read_json, write_json
-from _common.paths import batch_manifest_path, batch_source_catalog_path, task_manifest
+from _common.paths import (
+    batch_content_type,
+    batch_manifest_path,
+    batch_phase,
+    batch_source_catalog_path,
+    batch_supply_mode,
+    task_manifest,
+)
 from _common.global_batch_seq import allocate_global_batch_seq
 from _common.source_catalog import load_source_catalog
 
@@ -63,11 +70,16 @@ def write_batch_manifest(
     *,
     coverage_targets: Sequence[Mapping[str, Any]] | None = None,
     command: str = "",
+    content_type: str = "",
+    supply_mode: str = "",
+    source_key: str = "",
 ) -> Path:
     """写/刷新批次定义快照（幂等）。
 
-    首次创建固化 env/salt/params/coverageTargets；后续调用只追加命令链、刷新时间，
-    并在首次缺失 coverageTargets 时补齐（download 独跑无 spec → 由 task run 补）。
+    首次创建固化 env/salt/params/coverageTargets 与目录规范三级主键
+    （phase/contentType/supplyMode + sourceKey 字段）；后续调用只追加命令链、
+    刷新时间，并在首次缺失 coverageTargets 时补齐（download 独跑无 spec → 由 task run 补）。
+    显式入参（如 site-supply 桥接声明 site_primary + siteId）优先于 env 声明。
     """
     path = batch_manifest_path(task_id, batch_id)
     now = _now_iso()
@@ -78,6 +90,12 @@ def write_batch_manifest(
             "taskId": task_id,
             "batchId": batch_id,
             "layout": "object-first",
+            # 目录规范三级主键（批次唯一声明，写入后不可变；目录层级与字段同源）。
+            "phase": batch_phase(),
+            "contentType": content_type or batch_content_type(),
+            "supplyMode": supply_mode or batch_supply_mode(),
+            # sourceKey 降级为 manifest 字段（site_primary 记 siteId，search_supplement 记检索键）。
+            "sourceKey": source_key or os.environ.get("QWQ_BATCH_SOURCE_KEY", ""),
             "env": os.environ.get("QWQ_RUNTIME_ENV", "alpha"),
             "salt": os.environ.get("QWQ_BATCH_SALT", ""),
             "params": {},
@@ -92,6 +110,15 @@ def write_batch_manifest(
             manifest["globalBatchSeq"] = seq
         else:
             manifest["globalBatchSeq"] = allocate_global_batch_seq()
+        # 三级主键写入后不可变：仅在缺失（legacy manifest）时补齐，不覆盖既有声明。
+        if not manifest.get("phase"):
+            manifest["phase"] = batch_phase()
+        if not manifest.get("contentType"):
+            manifest["contentType"] = content_type or batch_content_type()
+        if not manifest.get("supplyMode"):
+            manifest["supplyMode"] = supply_mode or batch_supply_mode()
+        if not manifest.get("sourceKey") and (source_key or os.environ.get("QWQ_BATCH_SOURCE_KEY")):
+            manifest["sourceKey"] = source_key or os.environ.get("QWQ_BATCH_SOURCE_KEY", "")
     if coverage_targets and not manifest.get("coverageTargets"):
         manifest["coverageTargets"] = _coverage(coverage_targets)
     if command:

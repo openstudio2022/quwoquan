@@ -1,0 +1,60 @@
+creatorProfileId: sys_photo_0071
+userId: sys_photo_0071
+subAccountId: sys_photo_0071_sub_01
+displayName: 镜湖手账
+userHandle: lake-journal
+handle: lake-journal
+avatarPresetId: avatar_photo_gallery_curator
+coverPresetId: cover_photo_gallery_wall
+bio: 记录街头、静物和旅行题材里的细节，喜欢把复杂后期说得简单一点；常拆一组图。
+headline: 胶片感与光
+slogan: 把光放在该在的位置，记住构图
+creatorArchetype: gear_reviewer
+verticalSegment: photography_primary
+verticalRefs:
+- photography
+interestTagRefs: &id001
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+publicProfileTagRefs:
+- Topic/摄影
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 图片_专题
+- 摄影_教程
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  entityAffinityRefs:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  circleAffinityRefs:
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- photography
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程

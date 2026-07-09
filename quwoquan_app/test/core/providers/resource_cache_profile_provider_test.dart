@@ -29,6 +29,8 @@ void main() {
         expect(resourceProfile.maxMediaDownloadCacheSizeMb, 96);
         expect(resourceProfile.maxConcurrentMediaDownloads, 2);
         expect(resourceProfile.maxPostObjectCacheEntries, 120);
+        expect(resourceProfile.usesCompactScrollMediaPolicy, isTrue);
+        expect(resourceProfile.feedCacheExtentForViewport(800), 400);
       }
     });
 
@@ -55,6 +57,12 @@ void main() {
             .maxConcurrentMediaDownloads,
         3,
       );
+      expect(
+        container
+            .read(appResourceCacheProfileProvider)
+            .feedCacheExtentForViewport(800),
+        800,
+      );
 
       container
           .read(responsiveProvider.notifier)
@@ -68,6 +76,12 @@ void main() {
             .read(appResourceCacheProfileProvider)
             .maxMediaDownloadCacheSizeMb,
         384,
+      );
+      expect(
+        container
+            .read(appResourceCacheProfileProvider)
+            .feedCacheExtentForViewport(800),
+        800,
       );
     });
   });

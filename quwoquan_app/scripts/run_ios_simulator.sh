@@ -94,7 +94,7 @@ if [ "$DEVICE_STATE" != "Booted" ]; then
 fi
 
 echo "正在运行 alpha HTTPS mock stack..."
-bash "$ROOT_DIR/agent_ops/deploy/alpha/start_alpha_mock_stack.sh" up
+bash "$ROOT_DIR/quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh" up
 
 echo "正在通过 env-package-backed alpha 入口启动 Flutter 应用..."
 exec bash "$APP_DIR/run.sh" -d "$DEVICE_ID"

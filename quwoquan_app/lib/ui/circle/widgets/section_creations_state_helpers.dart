@@ -1,3 +1,5 @@
+// ignore_for_file: invalid_use_of_protected_member
+
 part of 'section_creations.dart';
 
 extension _SectionCreationsStateHelpers on _SectionCreationsState {
@@ -115,11 +117,37 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
           availableWidth: constraints.maxWidth,
         );
         // 双列瀑布：与用户主页记录流同一范式，卡片高度随内容自适应。
+        if (widget.inlineScroll) {
+          return GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            primary: false,
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.postPreviewGridSpacing,
+              AppSpacing.postPreviewGridSpacing,
+              AppSpacing.postPreviewGridSpacing,
+              AppSpacing.postPreviewSectionPadding,
+            ),
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: columns,
+              mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+              crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
+              mainAxisExtent: _inlineGridMainAxisExtent(columns),
+            ),
+            itemCount: filtered.length,
+            itemBuilder: (context, index) {
+              final entry = filtered[index];
+              return _buildGridItem(
+                entry,
+                fgSecondary,
+                onTap: () => _openMediaViewer(context, entry, filtered),
+              );
+            },
+          );
+        }
         return MasonryGridView.count(
-          physics: widget.inlineScroll
-              ? const NeverScrollableScrollPhysics()
-              : const BouncingScrollPhysics(),
-          shrinkWrap: widget.inlineScroll,
+          physics: const BouncingScrollPhysics(),
+          shrinkWrap: false,
           primary: false,
           padding: EdgeInsets.fromLTRB(
             AppSpacing.postPreviewGridSpacing,
@@ -142,6 +170,13 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
         );
       },
     );
+  }
+
+  double _inlineGridMainAxisExtent(int columns) {
+    if (columns <= 1) {
+      return AppSpacing.threeHundredTwenty + AppSpacing.twoHundredTwenty;
+    }
+    return AppSpacing.threeHundredTwenty + AppSpacing.buttonHeight * 2;
   }
 
   Widget _rawArticleTemplateBadge(Map<String, dynamic> item) {

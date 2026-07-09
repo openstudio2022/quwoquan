@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,12 +61,17 @@ Widget _buildApp() {
             builder: (_, state) {
               final launchContext = state.extra is SearchLaunchContext
                   ? state.extra! as SearchLaunchContext
-                  : const SearchLaunchContext(entrySurfaceId: AppRoutePaths.chat);
+                  : const SearchLaunchContext(
+                      entrySurfaceId: AppRoutePaths.chat,
+                    );
               return GlobalSearchPage(launchContext: launchContext);
             },
           ),
           GoRoute(
-            path: AppRoutePaths.chatDetailPathTemplate.replaceAll('{id}', ':id'),
+            path: AppRoutePaths.chatDetailPathTemplate.replaceAll(
+              '{id}',
+              ':id',
+            ),
             builder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
               return ChatDetailPage(

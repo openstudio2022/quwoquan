@@ -12,10 +12,10 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
         sys.path.insert(0, str(_path))
 
 import shutil
-import os
 from pathlib import Path
 from typing import Any
 
+from _common import paths
 from _common.io import write_json
 from homepage_assets.repair import scan_homepages
 from verify.verify_content_quality import asset_closure_issues, forbidden_phrase_hits
@@ -31,15 +31,17 @@ _DIRTY_ENTITY_TOKENS = (
 
 
 def _data_root() -> Path:
-    return Path(os.environ.get("QWQ_DATA_ROOT", Path(__file__).resolve().parents[2]))
+    return paths.DATA_ROOT
 
 
 def _runtime_root() -> Path:
-    return Path(os.environ.get("QWQ_RUNTIME_ROOT", _data_root() / "runtime"))
+    # 路径唯一真相源 _common.paths：runtime 批次树在 QWQ_OUTPUT_ROOT（仓外），
+    # 禁止再以 DATA_ROOT/runtime 第二套推导扫仓内 legacy 残留。
+    return paths.RUNTIME_ROOT
 
 
 def _publish_root() -> Path:
-    return Path(os.environ.get("QWQ_PUBLISH_ROOT", _data_root() / "publish"))
+    return paths.PUBLISH_ROOT
 
 
 def _repo_rel(path: Path) -> str:

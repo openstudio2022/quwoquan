@@ -298,6 +298,11 @@ abAdmission:
 intersection:
   # 跨会话推荐冷却窗口天数：窗口内已曝光交集降权 / 抑制，避免反复打扰。
   cooldownDays: 14
+  # 交集负反馈冷却窗口天数（F 推荐差异化）：用户对交集条目显式负反馈（feedbackKinds：
+  # notInterested / dismiss / rejectGreeting / leaveCircle）后，窗口内对该 subject
+  # 「过滤不再推荐」（比曝光冷却更强）。默认 30 天 > 曝光 14 天；唯一 key 真相源
+  # _shared/redis_keyspace.yaml: rec:ineg（TTL 60 天兜底）。
+  negativeFeedbackCooldownDays: 30
   # 单次请求交集候选最大窗口：截断到该窗口再做稳定排序与 limit。
   maxCandidateWindow: 20
   # 分维度事实交集保鲜 TTL（天）：超过后需重算 / 降权，避免陈旧事实长期占位。

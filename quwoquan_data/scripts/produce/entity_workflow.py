@@ -22,6 +22,7 @@ from _common.draft_io import (
     read_draft_article,
     read_draft_meta,
     read_writing_pack,
+    repair_creative_meta,
     write_image_evidence_draft,
     write_placeholder_draft,
     write_prompt,
@@ -44,6 +45,7 @@ from produce.route_workflow import (
     _check_carrier_consistency,
     _check_cross_article_similarity,
     _check_evidence_quality,
+    _check_image_fidelity,
     _check_image_gate,
     _check_prose_style,
     _check_provenance_rewrite,
@@ -234,7 +236,7 @@ def _compose_payload_from_pack(
     template = (brief.get("render") or {}).get("articleTemplate") or "journal"
     meta = draft_meta or {}
     is_image = carrier in ("image", "gallery")
-    title_hint = require_title_hint(brief, ref=ref)
+    public_title_hint = str(brief.get("titleHint") or "").strip() if is_image else require_title_hint(brief, ref=ref)
     assets = list(pack.get("assets") or [])
     image_source_paths = _image_source_paths_from_assets(assets) if is_image else []
     image_source_urls = _image_source_urls_from_assets(assets) if is_image else []
@@ -243,7 +245,7 @@ def _compose_payload_from_pack(
     creator_assignment = creator_from_payload(pack) or creator_from_payload(brief)
     payload = {
         "topicId": ref,
-        "title": title_hint,
+        "title": public_title_hint,
         "summary": _build_summary(article),
         "articleMarkdown": article,
         "carrier": carrier,
@@ -257,9 +259,9 @@ def _compose_payload_from_pack(
         "publishLayout": "image" if carrier in ("image", "gallery") else "entity",
         "publishAngle": _publish_angle(brief),
         "publishTitle": (
-            _compact_public_text(title_hint, 80)
+            _compact_public_text(meta.get("title") or public_title_hint, 80)
             if carrier in ("image", "gallery")
-            else title_hint
+            else public_title_hint
         ),
         "publishSeq": 1,
         "composeBriefRef": ref,
@@ -281,8 +283,8 @@ def _compose_payload_from_pack(
         **creator_assignment,
     }
     if carrier in ("image", "gallery"):
-        caption = _image_caption_from_brief(brief, pack, article)
-        payload["title"] = _compact_public_text(title_hint, 80)
+        caption = _image_caption_from_brief(brief, pack, meta, article)
+        payload["title"] = _compact_public_text(meta.get("title") or public_title_hint, 80)
         payload["summary"] = caption
         payload["articleMarkdown"] = ""
         payload["caption"] = caption
@@ -440,7 +442,9 @@ def review_entity_draft(
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
     pack = read_writing_pack(task_id, batch_id, ref) or {}
     article = read_draft_article(task_id, batch_id, ref)
-    draft_meta = read_draft_meta(task_id, batch_id, ref)
+    # 创作后校验补全（fix A）：creativePlan/selfCritique 结构化字段按 creativeBrief 预置补全，
+    # 让正文已达标的稿件有可靠成稿路径，不再被 creativeGovernance 硬拦。仅补元数据，不动正文。
+    draft_meta = repair_creative_meta(task_id, batch_id, ref) or read_draft_meta(task_id, batch_id, ref)
     carrier_hint = str(pack.get("carrier") or brief.get("carrier") or "article")
     is_image_carrier = carrier_hint in ("image", "gallery")
 
@@ -654,6 +658,7 @@ def _entity_review_checks(
         return {
             "carrierConsistency": _check_carrier_consistency(compose_payload),
             "imageGate": _check_image_gate(compose_payload),
+            "imageFidelity": _check_image_fidelity(compose_payload),
             "imageSourceScope": _check_image_source_scope(compose_payload),
         }
     checks = {
@@ -730,6 +735,8 @@ def _entity_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     image_gate = checks.get("imageGate", {"passed": True})
     if not image_gate["passed"]:
         return "agent_compose"
+    if not checks.get("imageFidelity", {"passed": True})["passed"]:
+        return "compose_brief"
     if not checks.get("carrierConsistency", {"passed": True})["passed"]:
         return "agent_compose"
     return "review"

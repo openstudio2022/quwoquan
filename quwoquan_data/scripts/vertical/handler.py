@@ -51,6 +51,33 @@ def handle_coverage(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+def _provinces_arg(args: argparse.Namespace) -> list[str]:
+    return [p.strip() for p in str(getattr(args, "provinces", "") or "").split(",") if p.strip()]
+
+
+def handle_master_list_stats(args: argparse.Namespace) -> None:
+    from _common.coverage_master_list import master_list_stats
+
+    stats = master_list_stats(provinces=_provinces_arg(args) or None)
+    print(json.dumps(stats, ensure_ascii=False, indent=2))
+
+
+def handle_master_list_probe(args: argparse.Namespace) -> None:
+    from vertical.master_list_probe import probe_master_list_sources
+
+    provinces = _provinces_arg(args)
+    if not provinces:
+        print("[vertical master-list-probe] ERROR: 需要 --provinces 省份列表（逗号分隔）")
+        raise SystemExit(2)
+    report = probe_master_list_sources(
+        provinces=provinces,
+        limit=int(getattr(args, "limit", 0) or 0),
+        sleep_seconds=float(getattr(args, "sleep_seconds", 0.5) or 0.0),
+        recheck=bool(getattr(args, "recheck", False)),
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
 def handle_governance(args: argparse.Namespace) -> None:
     issues = verify_vertical_script_governance()
     if issues:
@@ -119,6 +146,20 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pc.add_argument("--json", action="store_true")
     pc.add_argument("--strict", action="store_true", help="存在 gap 时失败")
     pc.set_defaults(handler=handle_coverage)
+
+    pms = sub.add_parser("master-list-stats", help="全国地点主清单统计（规模/类型/源就绪/跨省）")
+    pms.add_argument("--provinces", help="省份列表（逗号分隔）；缺省=全部")
+    pms.set_defaults(handler=handle_master_list_stats)
+
+    pmp = sub.add_parser(
+        "master-list-probe-sources",
+        help="源可用性预筛：轻量探测百科主源有无并回填 sourceReadiness（节流+断点续跑）",
+    )
+    pmp.add_argument("--provinces", required=True, help="省份列表（逗号分隔，如 四川省,浙江省）")
+    pmp.add_argument("--limit", type=int, default=0, help="本次最多探测叶子数（0=不限，配合断点续跑）")
+    pmp.add_argument("--sleep-seconds", dest="sleep_seconds", type=float, default=0.5, help="请求间节流秒数")
+    pmp.add_argument("--recheck", action="store_true", help="重探已 ready/no_primary_source 的叶子")
+    pmp.set_defaults(handler=handle_master_list_probe)
 
     pg = sub.add_parser("governance", help="校验垂类/任务脚本未在公共 scripts 平铺")
     pg.set_defaults(handler=handle_governance)

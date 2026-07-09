@@ -1,0 +1,333 @@
+# 全国地点主清单 · 四川省雅安市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 雅安市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 雨城区
+  leaves:
+  - name: 碧峰峡
+    canonicalName: 雅安碧峰峡
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    aliases:
+    - 碧峰峡旅游景区
+    - 碧峰峡野生动物园
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 上里古镇
+    canonicalName: 雅安上里古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 周公山
+    canonicalName: 雅安周公山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    aliases:
+    - 周公山森林公园
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 金凤山景区
+    canonicalName: 雅安金凤山景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    aliases:
+    - 金凤寺
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 名山区
+  leaves:
+  - name: 蒙顶山
+    canonicalName: 蒙顶山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    aliases:
+    - 蒙顶山旅游景区
+    - 蒙山
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 牛碾坪景区
+    canonicalName: 名山牛碾坪景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    aliases:
+    - 牛碾坪万亩观光茶园
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 月亮湖景区
+    canonicalName: 名山月亮湖景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 荥经县
+  leaves:
+  - name: 龙苍沟叠翠溪景区
+    canonicalName: 荥经龙苍沟叠翠溪景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    aliases:
+    - 龙苍沟国家森林公园
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 云峰山景区
+    canonicalName: 荥经云峰山景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    aliases:
+    - 云峰寺
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 严道古城旅游景区
+    canonicalName: 荥经严道古城旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    aliases:
+    - 严道古城遗址
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 荥经黑砂馆
+    canonicalName: 荥经黑砂馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    aliases:
+    - 荥经砂器博物馆
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 汉源县
+  leaves:
+  - name: 花海果乡旅游景区
+    canonicalName: 汉源花海果乡旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/汉源县
+    aliases:
+    - 九襄花海果乡
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 汉源湖
+    canonicalName: 汉源湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/汉源县
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 轿顶山
+    canonicalName: 汉源轿顶山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/汉源县
+    aliases:
+    - 轿顶山大天缺
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 石棉县
+  leaves:
+  - name: 安顺场
+    canonicalName: 石棉安顺场
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/石棉县
+    aliases:
+    - 安顺场景区
+    - 中国工农红军强渡大渡河纪念地
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 王岗坪景区
+    canonicalName: 石棉王岗坪景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/石棉县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 蟹螺堡子
+    canonicalName: 石棉蟹螺堡子
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/石棉县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 栗子坪自然保护区
+    canonicalName: 栗子坪国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/石棉县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 天全县
+  leaves:
+  - name: 二郎山喇叭河景区
+    canonicalName: 二郎山喇叭河景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/天全县
+    aliases:
+    - 喇叭河风景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 紫石关村
+    canonicalName: 天全紫石关村
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/天全县
+    aliases:
+    - 紫石关村旅游景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 红军村
+    canonicalName: 天全红军村
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/天全县
+    aliases:
+    - 仁义镇红军村
+    selectionPriority: 3
+    sourceReadiness: ready
+- district: 芦山县
+  leaves:
+  - name: 龙门古镇
+    canonicalName: 芦山龙门古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    aliases:
+    - 龙门古镇旅游景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 汉姜古城
+    canonicalName: 芦山汉姜古城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    aliases:
+    - 汉姜古城旅游景区
+    - 姜维城
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 飞仙关
+    canonicalName: 芦山飞仙关
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    aliases:
+    - 飞仙关旅游景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 大川河旅游景区
+    canonicalName: 芦山大川河旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 宝兴县
+  leaves:
+  - name: 熊猫古城
+    canonicalName: 宝兴熊猫古城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/宝兴县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 东拉山大峡谷
+    canonicalName: 东拉山大峡谷
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/宝兴县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 硗碛藏寨·神木垒景区
+    canonicalName: 硗碛藏寨神木垒景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/宝兴县
+    aliases:
+    - 神木垒
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 蜂桶寨邓池沟景区
+    canonicalName: 蜂桶寨邓池沟景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/景区/自然保护区
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/宝兴县
+    aliases:
+    - 蜂桶寨国家级自然保护区
+    - 大熊猫发现地
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 灵关石城旅游景区
+    canonicalName: 宝兴灵关石城旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/宝兴县
+    selectionPriority: 3
+    sourceReadiness: pending

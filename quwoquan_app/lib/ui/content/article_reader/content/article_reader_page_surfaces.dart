@@ -193,6 +193,14 @@ class ArticlePageShell extends StatelessWidget {
       return Padding(padding: resolvedOuterPadding, child: paper);
     }
 
+    if (variant == ArticlePageShellVariant.immersiveEdgeToEdge) {
+      return buildFlatPaper(
+        showShadow: false,
+        borderAlpha: 0.18,
+        showJournalMarginLine: true,
+      );
+    }
+
     if (variant == ArticlePageShellVariant.plainEdit ||
         variant == ArticlePageShellVariant.readerSheet) {
       final paper = buildFlatPaper(
@@ -1227,4 +1235,3 @@ class _JournalStickerDecoration extends StatelessWidget {
     );
   }
 }
-

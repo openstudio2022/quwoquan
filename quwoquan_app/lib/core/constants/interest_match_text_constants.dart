@@ -1,4 +1,4 @@
-/// 「找同趣 / 兴趣配对」页固定文案集中地。
+/// 「交集配对」页固定文案集中地。
 ///
 /// 守 `verify_dart_semantic`：UI 层禁止硬编码中文字面量，固定 UI 文案统一在此。
 /// 本页是**发现启动器（launcher）**，不渲染业务候选列表，因此不含昵称 / 结论句 /
@@ -12,13 +12,13 @@ class InterestMatchTextConstants {
   /// 顶部利益表达副说明。
   static const String leadSubtitle = '按兴趣锚点出发，遇见同趣的人、圈子与想去的地方。';
 
-  // ==================== 今日同趣机会 ====================
-  static const String todayTitle = '今日同趣机会';
-  static const String todaySubtitle = '基于你的交集与最近浏览生成，进入「我的交集」逐条行动。';
+  // ==================== 我的交集 ====================
+  static const String todayTitle = '我的交集';
+  static const String todaySubtitle = '按你的活跃节奏整理，查看今日新增或上次登录以来的交集。';
   static const String todayCta = '查看我的交集';
 
-  // ==================== 兴趣配对 · 发现入口 ====================
-  static const String matchTitle = '兴趣配对';
+  // ==================== 发现方式 · 交集配对入口区块 ====================
+  static const String matchTitle = '发现方式';
   static const String matchSubtitle = '选择一种发现方式，找到可以行动的同趣对象。';
 
   static const String findPeopleTitle = '找同趣的人';
@@ -34,5 +34,6 @@ class InterestMatchTextConstants {
   static const String searchCta = '按兴趣搜索同趣';
 
   // ==================== 安全与风控提示 ====================
-  static const String safetyNote = '附近默认模糊位置；打招呼、同行、线下局等重行动前会校验登录 / 实名 / 青少年模式 / 双向同意。';
+  static const String safetyNote =
+      '附近默认模糊位置；打招呼、同行、线下局等重行动前会校验登录 / 实名 / 青少年模式 / 双向同意。';
 }

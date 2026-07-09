@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
+import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 
 void main() {
   group(
@@ -108,6 +111,14 @@ void main() {
             builder: (_, state) =>
                 Text('USER:${state.pathParameters['username']}'),
           ),
+          GoRoute(
+            path: '/chat/start-group',
+            builder: (_, _) => const Text('START_GROUP_CHAT'),
+          ),
+          GoRoute(
+            path: '/chat/:id',
+            builder: (_, state) => Text('CHAT:${state.pathParameters['id']}'),
+          ),
         ],
       );
       return MaterialApp.router(routerConfig: router);
@@ -206,6 +217,317 @@ void main() {
       expect(ok, isFalse);
       expect(find.text('PLAIN'), findsOneWidget);
       expect(tracked, 0);
+    });
+  });
+
+  group('IntersectionTargetNavigator.openActionHint（dispatch 分发 · 门交承接页）', () {
+    Widget hostWith(
+      void Function(BuildContext) capture, {
+      void Function(Object? extra)? onStartGroupExtra,
+    }) {
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: <RouteBase>[
+          GoRoute(
+            path: '/',
+            builder: (context, _) {
+              capture(context);
+              return const Text('HOME');
+            },
+          ),
+          GoRoute(
+            path: '/user/:username',
+            builder: (_, state) =>
+                Text('USER:${state.pathParameters['username']}'),
+          ),
+          GoRoute(
+            path: '/chat/start-group',
+            builder: (_, state) {
+              onStartGroupExtra?.call(state.extra);
+              return const Text('START_GROUP_CHAT');
+            },
+          ),
+          GoRoute(
+            path: '/chat/:id',
+            builder: (_, state) => Text('CHAT:${state.pathParameters['id']}'),
+          ),
+        ],
+      );
+      return MaterialApp.router(routerConfig: router);
+    }
+
+    testWidgets('assistant dispatch → 打开小艺会话真实路由', (tester) async {
+      late BuildContext homeContext;
+      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      await tester.pumpAndSettle();
+
+      final result = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        IntersectionActionHint(
+          actionKey: 'ask_assistant',
+          dispatch: 'assistant',
+          targetAvailability: 'available',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(result.didOpen, isTrue);
+      expect(
+        find.text('CHAT:${AppConceptConstants.assistantConversationId}'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('navigate dispatch + 无 gates → 按 target 真实导航并上报', (
+      tester,
+    ) async {
+      IntersectionTarget? trackedTarget;
+      IntersectionNavAttribution? trackedAttr;
+      final navigator = IntersectionTargetNavigator(
+        onTrack: (target, attribution) {
+          trackedTarget = target;
+          trackedAttr = attribution;
+        },
+      );
+      late BuildContext homeContext;
+      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      await tester.pumpAndSettle();
+
+      final result = navigator.openActionHint(
+        homeContext,
+        IntersectionActionHint(
+          actionKey: 'open_object',
+          dispatch: 'navigate',
+          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+          targetAvailability: 'available',
+        ),
+        attribution: const IntersectionNavAttribution(
+          intersectionId: 'ix1',
+          dimension: 'relationship',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(result.didOpen, isTrue);
+      expect(find.text('USER:u_lin'), findsOneWidget);
+      expect(trackedTarget?.objectId, 'u_lin');
+      expect(trackedAttr?.intersectionId, 'ix1');
+    });
+
+    testWidgets('deferred action → 不执行、不伪造成对象导航', (tester) async {
+      late BuildContext homeContext;
+      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      await tester.pumpAndSettle();
+
+      final result = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        IntersectionActionHint(
+          actionKey: 'join_trip',
+          dispatch: 'companion',
+          targetAvailability: 'deferred',
+          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(result.status, IntersectionActionDispatchStatus.deferred);
+      expect(find.text('HOME'), findsOneWidget);
+      expect(find.text('USER:u_lin'), findsNothing);
+    });
+
+    testWidgets(
+      'navigate + login 门 → 导航到承接页（门交承接页 + AuthContinuation 续接，不在本层隐藏）',
+      (tester) async {
+        late BuildContext homeContext;
+        await tester.pumpWidget(hostWith((c) => homeContext = c));
+        await tester.pumpAndSettle();
+
+        // 关注等轻行动带 login 门，但 dispatch=navigate。登录门不在交集组件拦截：
+        // 导航到 userProfile 承接页，由承接页复用既有 gate + AuthContinuation 续接完成
+        // 关注（§15 无死循环）。若在本层因 login 隐藏/拦截，已登录用户也会失去入口。
+        final result = const IntersectionTargetNavigator().openActionHint(
+          homeContext,
+          IntersectionActionHint(
+            actionKey: 'follow_person',
+            dispatch: 'navigate',
+            requiredGates: <String>['login'],
+            targetAvailability: 'available',
+            target: IntersectionTarget(
+              objectId: 'u_lin',
+              objectKind: 'person',
+              routeId: 'userProfile',
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(result.status, IntersectionActionDispatchStatus.opened);
+        expect(find.text('USER:u_lin'), findsOneWidget);
+      },
+    );
+
+    testWidgets('companion dispatch → 进入发起群聊承接页并保留结构化上下文', (tester) async {
+      IntersectionTarget? trackedTarget;
+      IntersectionNavAttribution? trackedAttr;
+      Object? startGroupExtra;
+      final navigator = IntersectionTargetNavigator(
+        onTrack: (target, attribution) {
+          trackedTarget = target;
+          trackedAttr = attribution;
+        },
+      );
+      late BuildContext homeContext;
+      await tester.pumpWidget(
+        hostWith(
+          (c) => homeContext = c,
+          onStartGroupExtra: (extra) => startGroupExtra = extra,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final result = navigator.openActionHint(
+        homeContext,
+        IntersectionActionHint(
+          actionKey: 'start_companion',
+          dispatch: 'companion',
+          // start_companion 是「公开约伴邀约」，发起环节安全门不含 mutualConsent
+          // （双向同意属响应/建联阶段，由群聊自身 gate 承接）；与 registry.actionKeyMeta 对齐。
+          requiredGates: const <String>[
+            'login',
+            'realName',
+            'minorMode',
+            'blocked',
+            'rateLimit',
+          ],
+          targetAvailability: 'available',
+          target: IntersectionTarget(
+            objectId: 'fixture_homepage_travel_photo_west_lake',
+            objectKind: 'place',
+          ),
+        ),
+        attribution: const IntersectionNavAttribution(
+          intersectionId: 'ix_wishlist',
+          dimension: 'location',
+          intersectionClass: 'fact',
+          sourceRef: 'coWishlistedEntity',
+          evidenceId: 'ev_wishlist_1',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(result.status, IntersectionActionDispatchStatus.opened);
+      expect(find.text('START_GROUP_CHAT'), findsOneWidget);
+      expect(
+        trackedTarget?.objectId,
+        'fixture_homepage_travel_photo_west_lake',
+      );
+      expect(trackedAttr?.sourceRef, 'coWishlistedEntity');
+      expect(startGroupExtra, isA<StartGroupChatRouteExtra>());
+      final extra = startGroupExtra! as StartGroupChatRouteExtra;
+      expect(extra.actionKey, 'start_companion');
+      expect(extra.targetObjectId, 'fixture_homepage_travel_photo_west_lake');
+      expect(extra.targetObjectKind, 'place');
+      expect(extra.intersectionId, 'ix_wishlist');
+      expect(extra.dimension, 'location');
+      expect(extra.sourceRef, 'coWishlistedEntity');
+      expect(extra.evidenceId, 'ev_wishlist_1');
+    });
+
+    testWidgets('companion dispatch + 无 target → 不进入普通建群', (tester) async {
+      late BuildContext homeContext;
+      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      await tester.pumpAndSettle();
+
+      final result = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        IntersectionActionHint(
+          actionKey: 'start_companion',
+          dispatch: 'companion',
+          targetAvailability: 'available',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(result.status, IntersectionActionDispatchStatus.missingTarget);
+      expect(find.text('HOME'), findsOneWidget);
+      expect(find.text('START_GROUP_CHAT'), findsNothing);
+    });
+
+    testWidgets('commerce dispatch 默认 feature flag 关闭 → 明确不可执行', (
+      tester,
+    ) async {
+      late BuildContext homeContext;
+      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      await tester.pumpAndSettle();
+
+      final result = const IntersectionTargetNavigator().openActionHint(
+        homeContext,
+        IntersectionActionHint(
+          actionKey: 'view_official_deals',
+          dispatch: 'commerce',
+          targetAvailability: 'available',
+          target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(result.status, IntersectionActionDispatchStatus.featureDisabled);
+      expect(find.text('HOME'), findsOneWidget);
+      expect(find.text('USER:u_lin'), findsNothing);
+    });
+
+    testWidgets('commerce dispatch 显式启用 + target 可路由 → 按真实 target 导航', (
+      tester,
+    ) async {
+      late BuildContext homeContext;
+      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      await tester.pumpAndSettle();
+
+      final result =
+          const IntersectionTargetNavigator(
+            commerceActionsEnabled: true,
+          ).openActionHint(
+            homeContext,
+            IntersectionActionHint(
+              actionKey: 'view_official_deals',
+              dispatch: 'commerce',
+              targetAvailability: 'available',
+              target: IntersectionTarget(
+                objectId: 'u_lin',
+                objectKind: 'person',
+              ),
+            ),
+          );
+      await tester.pumpAndSettle();
+
+      expect(result.status, IntersectionActionDispatchStatus.opened);
+      expect(find.text('USER:u_lin'), findsOneWidget);
+    });
+
+    testWidgets('message/connect 无专属真实 handler → 不伪装成 target 导航', (
+      tester,
+    ) async {
+      late BuildContext homeContext;
+      await tester.pumpWidget(hostWith((c) => homeContext = c));
+      await tester.pumpAndSettle();
+
+      for (final dispatch in <String>['message', 'connect']) {
+        final result = const IntersectionTargetNavigator().openActionHint(
+          homeContext,
+          IntersectionActionHint(
+            actionKey: '${dispatch}_example',
+            dispatch: dispatch,
+            requiredGates: const <String>['login'],
+            targetAvailability: 'available',
+            target: IntersectionTarget(objectId: 'u_lin', objectKind: 'person'),
+          ),
+        );
+        expect(result.status, IntersectionActionDispatchStatus.unsupported);
+      }
+      await tester.pumpAndSettle();
+
+      expect(find.text('HOME'), findsOneWidget);
+      expect(find.text('USER:u_lin'), findsNothing);
     });
   });
 }

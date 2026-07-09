@@ -102,7 +102,7 @@ sit_acceptance:
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/recommendation/ucb_explore_test.go'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

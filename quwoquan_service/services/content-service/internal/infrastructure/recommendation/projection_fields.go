@@ -3,6 +3,7 @@ package recommendation
 import (
 	"fmt"
 	"math"
+	"reflect"
 	"strings"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -23,7 +24,7 @@ func BuildRecommendationProjectionFields(payload map[string]any) bson.M {
 	semanticCoverage := semanticMentionCoverage(payload)
 	mediaCompleteness := mediaCompleteness(payload)
 	qualityScore := projectedQualityScore(payload, semanticCoverage, mediaCompleteness)
-	return bson.M{
+	fields := bson.M{
 		"qualityScore":            qualityScore,
 		"recScore":                qualityScore,
 		"contentVertical":         ResolveContentVertical(payload),
@@ -31,6 +32,15 @@ func BuildRecommendationProjectionFields(payload map[string]any) bson.M {
 		"semanticMentionCoverage": semanticCoverage,
 		"mediaCompleteness":       mediaCompleteness,
 	}
+	if hintCount := collectionLen(payload["intersectionHints"]); hintCount > 0 {
+		fields["intersectionFactStrength"] = float64(hintCount)
+		fields["intersectionFreshness"] = 1.0
+		fields["intersectionClass"] = "fact"
+		if sourceRef := firstIntersectionHintTarget(payload["intersectionHints"]); sourceRef != "" {
+			fields["intersectionSourceRefTop"] = sourceRef
+		}
+	}
+	return fields
 }
 
 func ResolveContentVertical(payload map[string]any) string {
@@ -169,8 +179,56 @@ func collectionLen(raw any) int {
 	case []map[string]any:
 		return len(v)
 	default:
+		rv := reflect.ValueOf(raw)
+		if rv.IsValid() && (rv.Kind() == reflect.Slice || rv.Kind() == reflect.Array) {
+			return rv.Len()
+		}
 		return 0
 	}
+}
+
+func firstIntersectionHintTarget(raw any) string {
+	switch hints := raw.(type) {
+	case []any:
+		for _, hint := range hints {
+			if target := firstIntersectionHintTarget(hint); target != "" {
+				return target
+			}
+		}
+	case []map[string]any:
+		for _, hint := range hints {
+			if target := strings.TrimSpace(projectionString(hint["actionTargetId"])); target != "" {
+				return target
+			}
+		}
+	case map[string]any:
+		return strings.TrimSpace(projectionString(hints["actionTargetId"]))
+	default:
+		rv := reflect.ValueOf(raw)
+		if !rv.IsValid() {
+			return ""
+		}
+		if rv.Kind() == reflect.Pointer {
+			if rv.IsNil() {
+				return ""
+			}
+			rv = rv.Elem()
+		}
+		switch rv.Kind() {
+		case reflect.Slice, reflect.Array:
+			for i := 0; i < rv.Len(); i++ {
+				if target := firstIntersectionHintTarget(rv.Index(i).Interface()); target != "" {
+					return target
+				}
+			}
+		case reflect.Struct:
+			field := rv.FieldByName("ActionTargetID")
+			if field.IsValid() && field.Kind() == reflect.String {
+				return strings.TrimSpace(field.String())
+			}
+		}
+	}
+	return ""
 }
 
 func normalizeProjectedVertical(raw string) string {

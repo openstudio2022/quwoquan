@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/shared/toolbar/immersive_engagement_bar.dart';
 import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
@@ -624,28 +620,10 @@ void main() {
     }
   });
 
-  testWidgets('交集具象化句子位于底部 rail 且对象片段点击由宿主接管', (tester) async {
-    final tapped = <String>[];
-    final reason = IntersectionReason(
-      primaryText: '你和 Alpha 长文都在卧室美学圈',
-      primarySpans: <IntersectionTextSpan>[
-        IntersectionTextSpan(text: '你和 ', role: 'plain'),
-        IntersectionTextSpan(
-          text: 'Alpha 长文',
-          role: 'object',
-          target: IntersectionTarget(
-            objectId: 'alpha',
-            objectKind: 'user',
-            routeId: 'userProfile',
-          ),
-        ),
-        IntersectionTextSpan(text: ' 都在卧室美学圈', role: 'plain'),
-      ],
-    );
-
+  testWidgets('底栏只承载作者与互动动作，不再渲染内容区交集句', (tester) async {
     await tester.pumpWidget(
       _wrap(
-        ImmersiveEngagementBar(
+        const ImmersiveEngagementBar(
           avatarUrl: '',
           displayName: 'Alpha 长',
           likeCount: 720,
@@ -653,8 +631,6 @@ void main() {
           commentCount: 0,
           isLiked: false,
           isFollowing: false,
-          intersectionReason: reason,
-          onIntersectionSpanTap: (span) => tapped.add(span.text),
           onUserTap: _noop,
           onFollowTap: _noop,
           onLikeTap: _noop,
@@ -663,24 +639,42 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final statement = find.byKey(
-      const ValueKey('immersive-intersection-statement'),
+    expect(
+      find.byKey(const ValueKey('immersive-intersection-statement')),
+      findsNothing,
     );
-    expect(statement, findsOneWidget);
     expect(find.textContaining('个交集'), findsNothing);
+  });
 
-    final statementRect = tester.getRect(statement);
-    final railRect = tester.getRect(
-      find.byKey(const ValueKey('immersive-engagement-rail')),
+  testWidgets('单行作者名不使用透明渐隐遮罩避免局部阴影', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const ImmersiveEngagementBar(
+          avatarUrl: '',
+          displayName: 'Alpha 长',
+          likeCount: 720,
+          shareCount: 16,
+          commentCount: 0,
+          isLiked: false,
+          isFollowing: false,
+          showFollowButton: true,
+          onUserTap: _noop,
+          onFollowTap: _noop,
+          onLikeTap: _noop,
+        ),
+        width: 390,
+      ),
     );
-    final actionRect = tester.getRect(
-      find.byKey(const ValueKey('immersive-actions-group')),
-    );
-    expect(statementRect.left, moreOrLessEquals(railRect.left, epsilon: 1));
-    expect(statementRect.top, greaterThan(actionRect.top));
+    await tester.pumpAndSettle();
 
-    await _tapRichTextSubstring(tester, 'Alpha 长文');
-    expect(tapped, <String>['Alpha 长文']);
+    final authorName = find.text('Alpha 长');
+    expect(authorName, findsOneWidget);
+    expect(
+      find.ancestor(of: authorName, matching: find.byType(ShaderMask)),
+      findsNothing,
+    );
+    final textWidget = tester.widget<Text>(authorName);
+    expect(textWidget.overflow, isNot(TextOverflow.fade));
   });
 
   testWidgets('无头像时底栏头像仍显示兜底人像图标', (tester) async {
@@ -708,25 +702,3 @@ void main() {
 }
 
 void _noop() {}
-
-Future<void> _tapRichTextSubstring(
-  WidgetTester tester,
-  String substring,
-) async {
-  final finder = find.byWidgetPredicate(
-    (widget) =>
-        widget is RichText && widget.text.toPlainText().contains(substring),
-  );
-  expect(finder, findsOneWidget);
-  final render = tester.renderObject<RenderParagraph>(finder);
-  final plainText = render.text.toPlainText();
-  final start = plainText.indexOf(substring);
-  expect(start, greaterThanOrEqualTo(0));
-  final boxes = render.getBoxesForSelection(
-    TextSelection(baseOffset: start, extentOffset: start + substring.length),
-  );
-  expect(boxes, isNotEmpty);
-  final target = render.localToGlobal(boxes.first.toRect().center);
-  await tester.tapAt(target);
-  await tester.pumpAndSettle();
-}

@@ -6,6 +6,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant.dart';
 
 /// In-app floating PiP window for active calls.
@@ -37,9 +38,7 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
     final maxX = constraints.maxWidth - _width - _edgePadding;
     final maxY = constraints.maxHeight - _height - _edgePadding;
     final centerX = _position.dx + _width / 2;
-    final snapX = centerX < constraints.maxWidth / 2
-        ? _edgePadding
-        : maxX;
+    final snapX = centerX < constraints.maxWidth / 2 ? _edgePadding : maxX;
     final clampedY = _position.dy.clamp(_edgePadding, maxY);
 
     setState(() {
@@ -86,8 +85,9 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
                   height: _height,
                   decoration: BoxDecoration(
                     color: AppColors.overlayDark,
-                    borderRadius:
-                        BorderRadius.circular(AppSpacing.borderRadius),
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.borderRadius,
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.overlayLight,
@@ -191,7 +191,7 @@ class _PipCallOverlayState extends ConsumerState<PipCallOverlay> {
   }
 
   void _confirmHangup(BuildContext context) {
-    showCupertinoDialog<void>(
+    showAppCupertinoDialog<void>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text(UITextConstants.callHangupConfirmTitle),

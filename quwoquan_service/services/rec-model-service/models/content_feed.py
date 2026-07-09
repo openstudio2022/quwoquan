@@ -150,8 +150,7 @@ def _load_model_from_registry() -> Any:
         artifact_uri = doc.get("artifactUri", "")
         if artifact_uri:
             try:
-                sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ml"))
-                sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "ml"))
+                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
                 import artifact_store
                 local_path = artifact_store.download(artifact_uri)
                 return lgb.Booster(model_file=local_path)

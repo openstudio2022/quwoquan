@@ -140,9 +140,11 @@ def _build_entity(
         asset_id = allocate_post_asset_id(
             entity_name=name,
             role=asset_role,
-            ref=f"entity/{name}",
+            ref=f"entity/{name}#{cand['sourceAssetRef']}",
             global_batch_seq=global_batch_seq,
             registry=asset_registry,
+            caption=str(cand.get("caption") or ""),
+            ordinal=i,
         )
         ext = cand["path"].suffix.lower()
         dest = assets_dir / f"{asset_id}{ext}"
@@ -236,14 +238,16 @@ def _build_post(task: str, batch: str, *, global_batch_seq: int, asset_registry)
     roles = [("cover", "fullWidth"), ("detail_1", "gallery"), ("closing", "fullWidth")]
     assets = []
     figures = []
-    for (role, layout), cand in zip(roles, cands):
+    for idx, ((role, layout), cand) in enumerate(zip(roles, cands), start=1):
         asset_role = "detail" if role.startswith("detail") else role
         asset_id = allocate_post_asset_id(
             entity_name=name,
             role=asset_role,
-            ref=ref,
+            ref=f"{ref}#{cand['sourceAssetRef']}",
             global_batch_seq=global_batch_seq,
             registry=asset_registry,
+            caption=str(cand.get("caption") or ""),
+            ordinal=idx,
         )
         ext = cand["path"].suffix.lower()
         dest = assets_dir / f"{asset_id}{ext}"

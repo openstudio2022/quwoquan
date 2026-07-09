@@ -16,7 +16,7 @@
 
 跨域协作方式：
 - 同步：通过 OpenAPI / gRPC 契约调用（经 Gateway/Orchestrator）
-- 异步：通过 MQ（遵从 `contracts/messages/envelope.schema.json`）
+- 异步：通过 MQ（遵从 `contracts/metadata/_shared/envelope.schema.json`）
 - **禁止**：跨服务直接读写对方数据库、共享同一张业务表
 
 ### 1.2 领域对象的分类（DDD 概念）
@@ -109,8 +109,8 @@ quwoquan_app/lib/
 1. 先改 contracts（OpenAPI/Schema）→ 2. 补 specs 场景 → 3. 写契约测试与验收标准 → 4. 实现（server+client）→ 5. 自动化门禁通过 → 6. 部署与观测接入
 
 契约一致性要求：
-- 列表响应统一 `items/nextCursor`（`contracts/openapi/common.yaml`）
-- 错误统一 `ErrorResponse`（`contracts/error_codes.md`）
+- 列表响应统一 `items/nextCursor`（`contracts/metadata/_shared/request_context.yaml`）
+- 错误统一 `ErrorResponse`（`contracts/runtime_errors/errors/runtime_failure_codes.yaml`）
 - endpoint 名归因（`contracts/endpoint_catalog.md`）
 
 ---

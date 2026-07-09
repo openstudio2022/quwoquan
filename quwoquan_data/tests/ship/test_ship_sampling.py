@@ -52,6 +52,7 @@ class _PatchedPublishRoot:
             lookup.ENTITY_INDEX_ROOT,
             lookup.POST_INDEX_ROOT,
             lookup.LINK_TARGET_ROOT,
+            lookup.COVERAGE_INDEX_ROOT,
         )
         paths.PUBLISH_ROOT = self.root
         sampler.PUBLISH_ROOT = self.root
@@ -62,6 +63,7 @@ class _PatchedPublishRoot:
         lookup.ENTITY_INDEX_ROOT = lookup.INDEX_ROOT / "entities"
         lookup.POST_INDEX_ROOT = lookup.INDEX_ROOT / "posts"
         lookup.LINK_TARGET_ROOT = lookup.INDEX_ROOT / "link_targets"
+        lookup.COVERAGE_INDEX_ROOT = lookup.INDEX_ROOT / "coverage"
         return self
 
     def __exit__(self, *exc):
@@ -76,6 +78,7 @@ class _PatchedPublishRoot:
             lookup.ENTITY_INDEX_ROOT,
             lookup.POST_INDEX_ROOT,
             lookup.LINK_TARGET_ROOT,
+            lookup.COVERAGE_INDEX_ROOT,
         ) = self._saved
         return False
 
@@ -251,6 +254,47 @@ def test_ship_writes_source_batch_ship_and_import_evidence():
     assert import_report["sourceReportPath"].endswith("import-alpha.json")
 
 
+def test_ship_importer_uses_code_anchored_service_root_for_isolated_publish():
+    tmp_publish = Path(tempfile.mkdtemp(prefix="ship_import_isolated_pub_"))
+    bundle = tmp_publish / "sample_bundles" / "gamma.json"
+    write_json(bundle, {"environment": "gamma", "postRefs": [], "entityRefs": []})
+
+    import ship.handler as handler
+
+    calls = []
+    saved_run = handler.subprocess.run
+    try:
+        def fake_run(cmd, *, cwd, check):
+            calls.append({"cmd": cmd, "cwd": Path(cwd), "check": check})
+
+        handler.subprocess.run = fake_run
+        with _PatchedPublishRoot(tmp_publish):
+            reports = handler._run_importer(
+                "mongodb://example.invalid",
+                [bundle],
+                release_id="test_release",
+                mode="sync",
+                delete_policy="tombstone",
+                source_owner="test",
+                dry_run=True,
+            )
+    finally:
+        handler.subprocess.run = saved_run
+
+    assert reports == [
+        tmp_publish / "env_releases" / "test_release" / "import-gamma.json",
+        tmp_publish / "env_releases" / "test_release" / "import-homepage-gamma.json",
+    ]
+    # 同一 --import 通道两段式：content importer + homepage 投影 importer。
+    assert len(calls) == 2 and all(c["check"] is True for c in calls)
+    assert calls[0]["cwd"] == handler.REPO_ROOT / "quwoquan_service"
+    assert "--publish-root" in calls[0]["cmd"]
+    assert str(tmp_publish) in calls[0]["cmd"]
+    assert calls[1]["cwd"] == handler.REPO_ROOT / "quwoquan_service" / "services" / "entity-service"
+    assert "./cmd/homepage-import" in calls[1]["cmd"]
+    assert "--sample-bundle" in calls[1]["cmd"]
+
+
 def test_ship_can_force_current_batch_into_sample_bundle():
     tmp_publish = Path(tempfile.mkdtemp(prefix="ship_force_batch_pub_"))
     tmp_shared = Path(tempfile.mkdtemp(prefix="ship_force_batch_shared_"))
@@ -268,6 +312,11 @@ def test_ship_can_force_current_batch_into_sample_bundle():
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     with open(ent_dir / "地点__景区__四川省.ndjson", "w", encoding="utf-8") as f:
         f.write(json.dumps({"entityRef": forced_entity, "domain": "地点", "etype": "景区"}, ensure_ascii=False) + "\n")
+    (tmp_publish / "entities" / "地点" / "景区" / "forced-entity").mkdir(parents=True, exist_ok=True)
+    (tmp_publish / "entities" / "地点" / "景区" / "forced-entity" / "page.md").write_text(
+        "# forced-entity\n\nforced-entity fixture homepage.",
+        encoding="utf-8",
+    )
     for row in rows:
         post_ref = row["postRef"]
         rel = Path(post_ref).relative_to("posts")
@@ -433,6 +482,74 @@ def test_ship_can_force_explicit_post_refs_into_sample_bundle():
     assert forced_ref in bundle["forcedPosts"]
 
 
+def test_ship_can_force_explicit_entity_refs_into_sample_bundle():
+    tmp_publish = Path(tempfile.mkdtemp(prefix="ship_force_entity_refs_pub_"))
+    posts_dir = tmp_publish / "index" / "posts"
+    ent_dir = tmp_publish / "index" / "entities"
+    posts_dir.mkdir(parents=True, exist_ok=True)
+    ent_dir.mkdir(parents=True, exist_ok=True)
+    import json
+    forced_entity = "地点/古镇/强制古镇"
+    rows = _entities(20) + [{"entityRef": forced_entity, "domain": "地点", "etype": "古镇"}]
+    with open(ent_dir / "地点__混合__测试.ndjson", "w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    (tmp_publish / "entities" / "地点" / "古镇" / "强制古镇").mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+    (tmp_publish / "entities" / "地点" / "古镇" / "强制古镇" / "page.md").write_text(
+        "# 强制古镇\n\n强制实体采样测试主页。",
+        encoding="utf-8",
+    )
+
+    from ship.handler import handle_ship
+
+    args = argparse.Namespace(
+        release_id=None, task=None, batch=None, copy_entities=False,
+        env="alpha", skip_promote=True, skip_index=True,
+        import_to_db=False, mongo_uri=None,
+        data_release_id="test_force_entity_refs_release", mode="upsert", delete_policy="none",
+        source_owner="qwq_data", approved_by=None, dry_run=False, confirm_prod_apply=False,
+        force_current_batch_sample=False, force_post_refs=None,
+        force_post_refs_file=None, force_entity_refs=forced_entity,
+        isolate_forced_sample=True,
+    )
+    with _PatchedPublishRoot(tmp_publish):
+        handle_ship(args)
+        bundle = read_json(tmp_publish / "sample_bundles" / "alpha.json")
+
+    assert bundle["entities"] == [forced_entity]
+    assert bundle["forcedEntities"] == [forced_entity]
+
+
+def test_ship_blocks_forced_entity_refs_missing_from_publish_index():
+    tmp_publish = Path(tempfile.mkdtemp(prefix="ship_force_entity_missing_pub_"))
+    (tmp_publish / "index" / "posts").mkdir(parents=True, exist_ok=True)
+    (tmp_publish / "index" / "entities").mkdir(parents=True, exist_ok=True)
+
+    from ship.handler import handle_ship
+
+    args = argparse.Namespace(
+        release_id=None, task=None, batch=None, copy_entities=False,
+        env="alpha", skip_promote=True, skip_index=True,
+        import_to_db=False, mongo_uri=None,
+        data_release_id="test_force_entity_missing_release", mode="upsert", delete_policy="none",
+        source_owner="qwq_data", approved_by=None, dry_run=False, confirm_prod_apply=False,
+        force_current_batch_sample=False, force_post_refs=None,
+        force_post_refs_file=None, force_entity_refs="地点/景区/不存在实体",
+        isolate_forced_sample=True,
+    )
+    with _PatchedPublishRoot(tmp_publish):
+        try:
+            handle_ship(args)
+        except SystemExit as exc:
+            assert exc.code != 0
+            assert "forced entity refs missing from publish index" in str(exc)
+        else:
+            raise AssertionError("missing forced entity ref must block ship")
+
+
 def test_ship_force_post_refs_file_preserves_comma_refs_and_can_isolate():
     tmp_publish = Path(tempfile.mkdtemp(prefix="ship_force_refs_file_pub_"))
     posts_dir = tmp_publish / "index" / "posts"
@@ -518,6 +635,49 @@ def test_promote_release_preserves_image_post_packages_in_publish_index():
     assert counts["posts"] == 1
     assert index_file.is_file()
     assert "posts/image/攻略/九寨沟图集/1" in index_file.read_text(encoding="utf-8")
+
+
+def test_promote_release_copies_entities_before_filtering_posts():
+    tmp_publish = Path(tempfile.mkdtemp(prefix="ship_release_entity_pub_"))
+    release_dir = Path(tempfile.mkdtemp(prefix="ship_release_entity_release_"))
+    entity_dir = release_dir / "entities" / "地点" / "景区" / "九寨沟"
+    post_dir = release_dir / "posts" / "article" / "攻略" / "九寨沟攻略" / "1"
+    entity_dir.mkdir(parents=True, exist_ok=True)
+    post_dir.mkdir(parents=True, exist_ok=True)
+    (entity_dir / "page.md").write_text("# 九寨沟\n\n九寨沟主页。", encoding="utf-8")
+    write_json(entity_dir / "_entity.json", {"entityRef": "/entity/地点/景区/九寨沟", "label": "九寨沟"})
+    write_json(entity_dir / "manifest.json", {"entityRef": "/entity/地点/景区/九寨沟"})
+    (post_dir / "article.md").write_text("# 九寨沟攻略\n\n正文。", encoding="utf-8")
+    write_json(
+        post_dir / "manifest.json",
+        {
+            "contentType": "article",
+            "publishAngle": "攻略",
+            "publishTitle": "九寨沟攻略",
+            "publishSeq": 1,
+            "reviewDecision": "approved",
+            "entityRefs": ["/entity/地点/景区/九寨沟"],
+            "tagRefs": ["Format/内容角度/攻略"],
+            "assets": [],
+        },
+    )
+
+    from publish_ops import promote_to_publish as promote_mod
+
+    original_release_root = promote_mod.release_root
+    promote_mod.release_root = lambda _release_id: release_dir
+    try:
+        with _PatchedPublishRoot(tmp_publish):
+            count, skipped, entity_count = promote_mod.promote_release("rel_entity_closure", dry_run=False)
+            promoted_manifest = read_json(
+                tmp_publish / "posts" / "article" / "攻略" / "九寨沟攻略" / "1" / "manifest.json"
+            )
+    finally:
+        promote_mod.release_root = original_release_root
+
+    assert (count, skipped, entity_count) == (1, 0, 1)
+    assert (tmp_publish / "entities" / "地点" / "景区" / "九寨沟" / "page.md").is_file()
+    assert promoted_manifest["entityRefs"] == ["/entity/地点/景区/九寨沟"]
 
 
 def test_ship_blocks_prod_apply_without_explicit_confirmation():

@@ -38,7 +38,7 @@ entries:
       `beta/gamma` 的 `api_integration` 与 `alpha/local` 的 `local_contract`。本次收口包含：
 
       - 目录与 bridge：新增 `generate_canonical_test_bridges.py`，为 App 377、Service 183、
-        Data 101、agent_ops 9 个 legacy suite 生成 canonical bridge，并自动生成 28 个页面级
+        Data 101、quwoquan_ops 9 个 legacy suite 生成 canonical bridge，并自动生成 28 个页面级
         `user_acceptance/pages/<owner>/<surface_id>/...` wrapper。
       - inventory：`specs/gates/test_directory_inventory.yaml` 升级为 version 2，记录
         `current_path -> target_path -> classification_basis -> migration_status`；`pending_count`
@@ -48,9 +48,9 @@ entries:
         `ui_surfaces` / `app_routes` 为唯一页面清单；`page-horizontal-quality` acceptance 建立
         `user_acceptance.page.*` 页面矩阵，不再为 0。
       - 证据与 acceptance：新增 `normalize_acceptance_recorded_paths.py`，回写 66 份 acceptance，
-        `tests.recorded` 只允许 canonical 三层路径或真实 `artifacts/tests/**/report.json`。
+        `tests.recorded` 只允许 canonical 三层路径或真实 `.qwq_output/runs/tests/**/report.json`。
       - 门禁：`verify-test-no-fake` 与 `verify-test-coverage-map` 从别名升级为独立脚本，并串入
-        `Makefile` 与 `agent_ops/gate/gate_repo.sh`；`make gate` / `make gate-full` 收敛到新口径。
+        `Makefile` 与 `quwoquan_ops/gate/gate_repo.sh`；`make gate` / `make gate-full` 收敛到新口径。
       - 二轮收口：新增 `specs/gates/test_legacy_source_allowlist.yaml` 作为存量 legacy 源 ratchet，
         `verify-test-directory-layout` 阻断任何“新增 legacy + 补 bridge”的回潮；`verify-test-no-fake`
         进一步下钻到 bridge 背后的 legacy 源文件，并把 bench-only / grandfathered skip 例外显式化。
@@ -135,7 +135,7 @@ entries:
           - R-TST05
           - R-TST06
           - R-TST07
-      - path: agent_ops/scaffold/verify_test_coverage_map.py
+      - path: quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
         sections:
           - STRICT_TRACEABILITY_PATHS
           - STRICT_TRACEABILITY_ITEMS
@@ -174,12 +174,12 @@ entries:
       rollout_impact: high
       breaking_contract: false
     verification:
-      - "python3 agent_ops/scaffold/generate_canonical_test_bridges.py"
-      - "python3 agent_ops/scaffold/generate_test_directory_inventory.py"
-      - "python3 agent_ops/scaffold/verify_test_specs.py"
-      - "python3 agent_ops/scaffold/verify_test_directory_inventory.py"
-      - "python3 agent_ops/scaffold/verify_test_no_fake.py"
-      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+      - "python3 quwoquan_ops/gate/scaffold/generate_canonical_test_bridges.py"
+      - "python3 quwoquan_ops/gate/scaffold/generate_test_directory_inventory.py"
+      - "python3 quwoquan_ops/gate/scaffold/verify_test_specs.py"
+      - "python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py"
+      - "python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py"
+      - "python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py"
       - "make verify-test-specs"
       - "make verify-test-directory-layout"
       - "make verify-test-no-fake"
@@ -219,7 +219,7 @@ entries:
       - tooling
       - docs
     changed_documents:
-      - path: agent_ops/scaffold/verify_test_coverage_map.py
+      - path: quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
         sections:
           - STRICT_TRACEABILITY_PATHS
       - path: docs/outstanding_risks_backlog.md
@@ -284,7 +284,7 @@ entries:
       - "make verify-test-specs"
       - "make verify-test-directory-layout"
       - "make verify-test-no-fake"
-      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+      - "python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py"
     notes:
       - 本轮没有捏造新的 api_integration / local_contract 文件；只回填仓库中已存在的 canonical 测试证据。
       - 剩余 6 份 acceptance / 8 个 layer 缺口已集中收敛为真实缺桥/缺测试问题，详见 backlog `R-TST06`。
@@ -320,7 +320,7 @@ entries:
       - path: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/acceptance.yaml
         sections:
           - gwt_acceptance.GWT12
-      - path: agent_ops/scaffold/verify_test_coverage_map.py
+      - path: quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
         sections:
           - STRICT_TRACEABILITY_ITEMS
       - path: quwoquan_service/services/content-service/tests/local_contract/internal/application/video_cover_contract__local_contract_test.go
@@ -344,7 +344,7 @@ entries:
       - "make verify-test-specs"
       - "make verify-test-directory-layout"
       - "make verify-test-no-fake"
-      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+      - "python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py"
     notes:
       - 本轮新增的是 canonical 测试文件，不是 legacy bridge；未扩 `allowlist`，也未回退 strict 门禁。
       - 剩余 5 份 acceptance / 7 个 layer 缺口已全部收敛到真实缺桥/缺测试问题，详见 backlog `R-TST06`。
@@ -378,7 +378,7 @@ entries:
       - path: specs/feature-tree/global-search-experience/cross-domain-search-journey/xiaoqu-entry-handoff/acceptance.yaml
         sections:
           - gwt_acceptance.GWT1
-      - path: agent_ops/scaffold/verify_test_coverage_map.py
+      - path: quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
         sections:
           - STRICT_TRACEABILITY_PATHS
       - path: docs/outstanding_risks_backlog.md
@@ -398,7 +398,7 @@ entries:
       - "make verify-test-specs"
       - "make verify-test-directory-layout"
       - "make verify-test-no-fake"
-      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+      - "python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py"
     notes:
       - 本轮新增的是 direct canonical api_integration，不是 legacy bridge，也没有新增 inventory / allowlist 债。
       - 剩余 4 份 acceptance / 6 个 layer 缺口均保留为真实缺桥/缺测试问题，详见 backlog `R-TST06`。
@@ -429,7 +429,7 @@ entries:
         sections:
           - gwt_acceptance.GWT1
           - gwt_acceptance.GWT3
-      - path: agent_ops/scaffold/verify_test_coverage_map.py
+      - path: quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
         sections:
           - STRICT_TRACEABILITY_PATHS
       - path: docs/outstanding_risks_backlog.md
@@ -448,7 +448,7 @@ entries:
       - "make verify-test-specs"
       - "make verify-test-directory-layout"
       - "make verify-test-no-fake"
-      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+      - "python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py"
     notes:
       - 本轮没有新增任何测试实现，只回挂已存在的 canonical `api_integration` 文件。
       - 剩余 2 份 acceptance / 3 个 layer 缺口都是真实缺桥/缺测试问题，详见 backlog `R-TST06`。
@@ -489,7 +489,7 @@ entries:
       - path: specs/feature-tree/platform-ops-governance/config-and-reliability-governance/acceptance.yaml
         sections:
           - sit_acceptance.SIT1
-      - path: agent_ops/scaffold/verify_test_coverage_map.py
+      - path: quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
         sections:
           - STRICT_TRACEABILITY_PATHS
       - path: docs/outstanding_risks_backlog.md
@@ -510,7 +510,7 @@ entries:
       - "make verify-test-specs"
       - "make verify-test-directory-layout"
       - "make verify-test-no-fake"
-      - "python3 agent_ops/scaffold/verify_test_coverage_map.py"
+      - "python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py"
     notes:
       - `exposure-observability-capacity` 使用的是 direct canonical `local_contract`，不新增 legacy source / allowlist。
       - `config-and-reliability-governance` 使用的是 canonical `api_integration` 入口承接既有控制面 HTTP 测试，不新增第二套实现或 shim。

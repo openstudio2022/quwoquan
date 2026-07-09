@@ -21,6 +21,7 @@ from _common.draft_io import (
     read_draft_article,
     read_draft_meta,
     read_writing_pack,
+    repair_creative_meta,
 )
 from _common.entity_extract import build_entities_sidecar
 from _common.image_safety import assess_asset_sources
@@ -81,7 +82,9 @@ def review_route_draft(
     evidence_bundle = quality_payload.get("evidenceBundle") or {}
     pack = read_writing_pack(task_id, batch_id, ref) or {}
     article = read_draft_article(task_id, batch_id, ref)
-    draft_meta = read_draft_meta(task_id, batch_id, ref)
+    # 创作后校验补全（fix A）：creativePlan/selfCritique 结构化字段按 creativeBrief 预置补全，
+    # 让正文已达标的稿件有可靠成稿路径，不再被 creativeGovernance 硬拦。仅补元数据，不动正文。
+    draft_meta = repair_creative_meta(task_id, batch_id, ref) or read_draft_meta(task_id, batch_id, ref)
     carrier_hint = str(pack.get("carrier") or brief.get("carrier") or "article")
     is_image_carrier = carrier_hint in ("image", "gallery")
 
@@ -387,6 +390,7 @@ def _route_review_checks(
         return {
             "carrierConsistency": _check_carrier_consistency(compose_payload),
             "imageGate": _check_image_gate(compose_payload),
+            "imageFidelity": _check_image_fidelity(compose_payload),
             "galleryCaption": _check_gallery_caption(article, brief, quality_payload),
             "imageSourceScope": _check_image_source_scope(compose_payload),
         }
@@ -558,6 +562,82 @@ def _check_image_source_scope(compose_payload: Mapping[str, Any]) -> dict[str, A
         "passed": not issues,
         "issues": issues,
         "suggestions": ["图片作品只保留所选图片集合的 source unit，不得混入 homepage/article 来源。"] if issues else [],
+    }
+
+
+def _image_fact(asset: Mapping[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = str(asset.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _check_image_fidelity(compose_payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Image lane 只允许单源轻润色，不允许多作者拼接或脱离源图重写。"""
+    carrier = str(compose_payload.get("carrier") or "article")
+    if carrier not in ("image", "gallery"):
+        return {"passed": True, "issues": [], "suggestions": []}
+    assets = [asset for asset in (compose_payload.get("assets") or []) if isinstance(asset, Mapping)]
+    issues: list[str] = []
+    creators = {
+        _image_fact(asset, "creator", "credit", "sourceAuthor")
+        for asset in assets
+        if _image_fact(asset, "creator", "credit", "sourceAuthor")
+    }
+    if len(creators) > 1:
+        issues.append(f"image carrier must use one creator/sourceAuthor, got {sorted(creators)}")
+    missing_labels: list[str] = []
+    for asset in assets:
+        label = str(asset.get("assetId") or asset.get("fileName") or "asset")
+        missing: list[str] = []
+        if not _image_fact(asset, "sourceCollectionId"):
+            missing.append("sourceCollectionId")
+        if not _image_fact(asset, "collectionPageUrl", "sourceUrl", "pinUrl"):
+            missing.append("collectionPageUrl/sourceUrl/pinUrl")
+        if not _image_fact(asset, "license"):
+            missing.append("license")
+        if not (_image_fact(asset, "termsUrl") or _image_fact(asset, "authorizationProof")):
+            missing.append("termsUrl|authorizationProof")
+        if not _image_fact(asset, "creator", "credit", "sourceAuthor"):
+            missing.append("creator|credit|sourceAuthor")
+        if missing:
+            missing_labels.append(f"{label}:{','.join(missing)}")
+    if missing_labels:
+        issues.append(f"image provenance fields incomplete: {missing_labels[:5]}")
+
+    title_text = str(compose_payload.get("title") or "").strip()
+    caption_text = str(
+        compose_payload.get("caption")
+        or compose_payload.get("summary")
+        or _image_visible_caption(str(compose_payload.get("articleMarkdown") or ""))
+    ).strip()
+    story_spine = compose_payload.get("storySpine") if isinstance(compose_payload.get("storySpine"), Mapping) else {}
+    source_phrases = _unique_strings(
+        [
+            str(story_spine.get("primaryEntity") or ""),
+            str(story_spine.get("sourceCollectionId") or ""),
+            *[str(beat or "") for beat in (story_spine.get("beats") or [])],
+            *[
+                _image_fact(asset, "title", "caption", "sourceCollectionTitle", "creator", "sourceAuthor")
+                for asset in assets
+            ],
+        ]
+    )
+    visible_text = "\n".join([text for text in (title_text, caption_text) if text]).strip()
+    source_text = "\n".join(source_phrases).strip()
+    if visible_text and source_text and _jaccard(visible_text, source_text) < 0.08:
+        issues.append(
+            "image title/caption drift too far from source evidence; image lane only allows light polishing, not rewriting"
+        )
+    return {
+        "passed": not issues,
+        "issues": issues,
+        "suggestions": [
+            "标题/配文只做轻润色，继续复用源图标题/图注/实体名；并确保所有资产共享同一作者与 provenance 事实。"
+        ]
+        if issues
+        else [],
     }
 
 
@@ -855,6 +935,8 @@ def _review_fallback_stage(checks: Mapping[str, Mapping[str, Any]]) -> str:
     image_gate = checks.get("imageGate", {"passed": True})
     if not image_gate["passed"]:
         return "agent_compose"
+    if not checks.get("imageFidelity", {"passed": True})["passed"]:
+        return "compose_brief"
     if not checks.get("carrierConsistency", {"passed": True})["passed"]:
         return "agent_compose"
     return "review"

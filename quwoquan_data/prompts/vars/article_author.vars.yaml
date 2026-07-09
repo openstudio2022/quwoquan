@@ -17,6 +17,7 @@ task:
     - assets_block
   optional:
     - creator_lock_line
+    - primary_entity_contract_line
     - creative_brief_block
     - persona_block
     - writing_intent_line

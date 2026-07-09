@@ -17,8 +17,12 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 
 import re
 
+import yaml
+
 from _common.article_package import (  # noqa: E402
     MARKDOWN_VERSION,
+    build_markdown_frontmatter,
+    compute_document_sha256,
     post_asset_id,
 )
 
@@ -106,3 +110,33 @@ def test_article_markdown_keeps_cover_title_and_body_in_same_document_flow():
 
     assert title_index < body_index < cover_index
     assert "coverImage: asset://" in markdown
+
+
+def test_frontmatter_builder_quotes_titles_with_embedded_quotes():
+    title = '"安逸四川 雅安之夜"启幕雅安文旅消费季'
+    block = build_markdown_frontmatter(
+        {
+            "title": title,
+            "template": "journal",
+            "articleMarkdownVersion": MARKDOWN_VERSION,
+        }
+    )
+
+    parsed = yaml.safe_load(block.split("\n---\n", 1)[0][4:])
+
+    assert parsed["title"] == title
+    assert "articleMarkdownVersion: qwq-rich-md/1" in block
+
+
+def test_document_digest_does_not_abort_on_legacy_malformed_frontmatter():
+    markdown = (
+        "---\n"
+        'title: "安逸四川 雅安之夜"启幕雅安文旅消费季\n'
+        "template: journal\n"
+        "---\n\n"
+        "# 碧峰峡\n\n正文。\n"
+    )
+
+    digest = compute_document_sha256(markdown)
+
+    assert digest.startswith("sha256:")

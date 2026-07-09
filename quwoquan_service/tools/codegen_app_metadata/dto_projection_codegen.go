@@ -404,7 +404,14 @@ var postBaseDtoFields = map[string]bool{
 	"displayName":         true,
 	"avatarUrl":           true,
 	"authorBackgroundUrl": true,
+	"authorRoleLabel":     true,
+	"authorIdentityTags":  true,
+	"authorVerified":      true,
 	"assistantUsePolicy":  true,
+	"body":                true,
+	"imageUrls":           true,
+	"videoUrl":            true,
+	"durationMs":          true,
 	"likeCount":           true,
 	"commentCount":        true,
 	"favoriteCount":       true,
@@ -412,11 +419,16 @@ var postBaseDtoFields = map[string]bool{
 	"createdAt":           true,
 	"updatedAt":           true,
 	"publishedAt":         true,
+	"contentVertical":     true,
+	"recallPath":          true,
+	"supplySource":        true,
 	"intersectionReasons": true,
 }
 
 var postBaseDtoComputedGetters = map[string]bool{
 	"displayFormat": true,
+	"hasImages":     true,
+	"hasVideo":      true,
 }
 
 func shouldAnnotateOverrideForComputedGetter(baseClass, getterName string) bool {

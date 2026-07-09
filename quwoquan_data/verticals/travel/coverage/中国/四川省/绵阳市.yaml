@@ -1,0 +1,388 @@
+# 全国地点主清单 · 四川省绵阳市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 绵阳市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 涪城区
+  leaves:
+  - name: 越王楼
+    canonicalName: 绵阳越王楼
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/涪城区
+    aliases:
+    - 越王楼·三江半岛
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 绵阳科技馆
+    canonicalName: 绵阳科技馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/涪城区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 西山公园
+    canonicalName: 绵阳西山公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/涪城区
+    aliases:
+    - 子云亭
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 人民公园
+    canonicalName: 绵阳人民公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/涪城区
+    selectionPriority: 4
+    sourceReadiness: ready
+- district: 游仙区
+  leaves:
+  - name: 富乐山公园
+    canonicalName: 绵阳富乐山公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/游仙区
+    aliases:
+    - 富乐山景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 汉平阳府君阙
+    canonicalName: 汉平阳府君阙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/游仙区
+    aliases:
+    - 平阳府君阙
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 李杜祠
+    canonicalName: 绵阳李杜祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/游仙区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 绵阳市博物馆
+    canonicalName: 绵阳市博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/游仙区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 绵阳方特东方神画
+    canonicalName: 绵阳方特东方神画
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/综合主题乐园
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/游仙区
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 仙海湖
+    canonicalName: 绵阳仙海湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/游仙区
+    aliases:
+    - 仙海水利风景区
+    selectionPriority: 6
+    sourceReadiness: ready
+- district: 江油市
+  leaves:
+  - name: 李白故里
+    canonicalName: 江油李白故里
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/江油市
+    aliases:
+    - 青莲李白故里
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 窦圌山
+    canonicalName: 窦圌山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/江油市
+    aliases:
+    - 窦团山
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 李白纪念馆
+    canonicalName: 江油李白纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/江油市
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 佛爷洞
+    canonicalName: 江油佛爷洞
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/江油市
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 青林口古镇
+    canonicalName: 江油青林口古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/江油市
+    aliases:
+    - 青林口古村
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 乾元山
+    canonicalName: 江油乾元山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/江油市
+    aliases:
+    - 乾元山金光洞
+    selectionPriority: 6
+    sourceReadiness: ready
+- district: 北川羌族自治县
+  leaves:
+  - name: 北川羌城旅游区
+    canonicalName: 北川羌城旅游区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/北川羌族自治县
+    aliases:
+    - 巴拿恰
+    - 北川地震遗址
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 九皇山
+    canonicalName: 北川九皇山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/北川羌族自治县
+    aliases:
+    - 西羌九皇山猿王洞
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 药王谷
+    canonicalName: 北川药王谷
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/北川羌族自治县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 小寨子沟
+    canonicalName: 北川小寨子沟
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/北川羌族自治县
+    aliases:
+    - 小寨子沟国家级自然保护区
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 安州区
+  leaves:
+  - name: 寻龙山
+    canonicalName: 安州寻龙山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/安州区
+    aliases:
+    - 寻龙山景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 罗浮山
+    canonicalName: 安州罗浮山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    - Entity/地点/温泉
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/安州区
+    aliases:
+    - 罗浮山温泉
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 千佛山
+    canonicalName: 绵阳千佛山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/安州区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 白水湖
+    canonicalName: 安州白水湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/安州区
+    selectionPriority: 4
+    sourceReadiness: ready
+- district: 平武县
+  leaves:
+  - name: 报恩寺
+    canonicalName: 平武报恩寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/平武县
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 王朗国家级自然保护区
+    canonicalName: 王朗国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/平武县
+    aliases:
+    - 王朗自然保护区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 虎牙大峡谷
+    canonicalName: 平武虎牙大峡谷
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/平武县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 白马藏寨
+    canonicalName: 平武白马藏寨
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/平武县
+    aliases:
+    - 白马藏族乡
+    - 扒昔加古寨
+    selectionPriority: 4
+    sourceReadiness: ready
+- district: 三台县
+  leaves:
+  - name: 郪江古镇
+    canonicalName: 郪江古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/三台县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 郪江崖墓群
+    canonicalName: 郪江崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/三台县
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 云台观
+    canonicalName: 三台云台观
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/三台县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 梓州杜甫草堂
+    canonicalName: 三台梓州杜甫草堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/三台县
+    aliases:
+    - 三台杜甫草堂
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 鲁班湖
+    canonicalName: 三台鲁班湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/三台县
+    aliases:
+    - 鲁班水库
+    selectionPriority: 5
+    sourceReadiness: ready
+- district: 盐亭县
+  leaves:
+  - name: 嫘祖陵
+    canonicalName: 盐亭嫘祖陵
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/盐亭县
+    aliases:
+    - 嫘祖故里
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 凤灵寺
+    canonicalName: 盐亭凤灵寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/盐亭县
+    selectionPriority: 2
+    sourceReadiness: pending
+- district: 梓潼县
+  leaves:
+  - name: 七曲山大庙
+    canonicalName: 七曲山大庙
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/梓潼县
+    aliases:
+    - 文昌祖庭
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 中国两弹城
+    canonicalName: 中国两弹城
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/梓潼县
+    aliases:
+    - 两弹城
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 卧龙山千佛岩
+    canonicalName: 梓潼卧龙山千佛岩
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/四川省/绵阳市/梓潼县
+    aliases:
+    - 卧龙山千佛岩石窟
+    selectionPriority: 3
+    sourceReadiness: ready

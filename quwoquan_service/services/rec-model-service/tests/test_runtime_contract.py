@@ -40,7 +40,7 @@ runtime:
 """.strip(),
     )
     _write_yaml(
-        tmp_path / "releases" / "config" / service / f"{version}.yaml",
+        tmp_path / "quwoquan_service" / "services" / service / "configs" / "releases" / f"{version}.yaml",
         """
 config:
   version: "v2026.02.28.0"
@@ -127,7 +127,7 @@ runtime:
 """.strip(),
     )
     _write_yaml(
-        tmp_path / "releases" / "config" / service / f"{version}.yaml",
+        tmp_path / "quwoquan_service" / "services" / service / "configs" / "releases" / f"{version}.yaml",
         """
 config:
   version: "v2026.02.28.0"

@@ -1,7 +1,7 @@
 // Package userprofile implements the assistant ProactiveInterestReader port by
 // calling user-service's GET /v1/users/{userId}/interest-profile. It is the only
 // assistant egress to the user domain (assistant and user are always separate
-// processes, per deploy/shared/process_domain_mapping.yaml), so reads must go
+// processes, per quwoquan_ops/environments/process_domain_mapping.yaml), so reads must go
 // over HTTP rather than in-process.
 package userprofile
 

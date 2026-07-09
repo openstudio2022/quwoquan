@@ -1,0 +1,77 @@
+creatorProfileId: sys_travelphoto_0004
+userId: sys_travelphoto_0004
+subAccountId: sys_travelphoto_0004_sub_01
+displayName: 小径手账
+userHandle: path-journal
+handle: path-journal
+avatarPresetId: avatar_travelphoto_food_visualist
+coverPresetId: cover_travelphoto_citywalk_neon
+bio: 关注湖边蓝调、取景点和成片节奏，希望看完能知道怎么走，也知道怎么拍；把风声留在照片旁边。
+headline: 目的地取景观察
+slogan: 一张照片也要知道来路
+creatorArchetype: city_walk_photographer
+verticalSegment: travel_photography_cross
+verticalRefs:
+- travel
+- photography
+interestTagRefs: &id001
+- Topic/旅行/旅行主题/高原秘境
+- Topic/摄影/美食摄影
+- Topic/摄影/摄影教程
+- Topic/旅行/旅行主题/城市漫步
+- Topic/摄影/街头摄影
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/旅行摄影
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/摄影
+- Topic/旅行/旅行主题/高原秘境
+- Topic/摄影/美食摄影
+creatorClassTagRefs: []
+preferredContentTypes:
+- image
+- article
+carrierAffinity:
+  article: 0.25
+  image: 0.7
+  video: 0.05
+preferredBlueprintIds:
+- 图片_风光
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/topic/photography
+  - homepage/tag/Topic_旅行_旅行主题_高原秘境
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/topic/photography
+  - homepage/tag/Topic_旅行_旅行主题_高原秘境
+  - homepage/tag/Topic_摄影_美食摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  circleAffinityRefs:
+  - circle/topic/travel
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- photography
+- Topic/旅行/旅行主题/高原秘境
+- Topic/摄影/美食摄影
+- Topic/摄影/摄影教程
+- Topic/旅行/旅行主题/城市漫步
+- Topic/摄影/街头摄影
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/旅行摄影

@@ -2,11 +2,34 @@
 package api_integration
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestProfileCrudContractApiIntegrationTest(t *testing.T) {
+	exists := func(path string) bool {
+		info, err := os.Stat(path)
+		return err == nil && info.IsDir()
+	}
+	repoRoot := func() string {
+		_, filename, _, ok := runtime.Caller(0)
+		if !ok {
+			t.Fatal("cannot resolve bridge file path")
+		}
+		for dir := filepath.Dir(filename); ; dir = filepath.Dir(dir) {
+			if exists(filepath.Join(dir, "quwoquan_service")) && exists(filepath.Join(dir, "quwoquan_ops")) {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				t.Fatal("cannot locate quwoquan repo root")
+			}
+		}
+		return ""
+	}
 	cmd := exec.Command(
 		"go",
 		"test",
@@ -15,6 +38,7 @@ func TestProfileCrudContractApiIntegrationTest(t *testing.T) {
 		"^(TestGetProfileEditSnapshot_ReturnsCommercialFields|TestGetProfileQRCard_IssuesOpaqueResolvableToken|TestGetProfile_CacheHit|TestGetProfile_NotFound|TestGetProfile_Success|TestResolveProfileQRToken_InvalidToken|TestUpdateProfile_DuplicateNicknameAllowed|TestUpdateProfile_InvalidRegionTagRefReturnsInvalidRegion|TestUpdateProfile_RegionTagRefUpdatesDerivedDisplay|TestUpdateProfile_RejectsBareBackgroundURL|TestUpdateProfile_RejectsClientRegionDisplayWithoutTagRef|TestUpdateProfile_Success)$",
 		"-count=1",
 	)
+	cmd.Env = append(os.Environ(), "QWQ_OUTPUT_ROOT="+filepath.Join(repoRoot(), ".qwq_output"))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("source bridge failed for quwoquan_service/services/user-service/tests/profile_crud_contract_test.go: %v\n%s", err, output)

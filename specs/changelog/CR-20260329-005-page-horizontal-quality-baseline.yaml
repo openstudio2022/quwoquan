@@ -17,5 +17,5 @@ artifacts:
   - specs/gates/page_horizontal_quality_pr_checklist.md
   - quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py
   - quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py
-  - agent_ops/gate/gate_repo.sh
+  - quwoquan_ops/gate/gate_repo.sh
   - specs/feature-tree/tree_index.yaml

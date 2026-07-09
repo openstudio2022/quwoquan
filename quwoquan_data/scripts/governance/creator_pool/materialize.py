@@ -66,7 +66,7 @@ def run_materialize(*, vertical: str, batch_id: str, dry_run: bool = False) -> d
             archetype=str(persona.get("archetype") or parts[2]),
             region_bucket=str(persona.get("regionBucket") or parts[3]),
             carrier_bucket=carrier,
-            platform_bucket=["xiaohongshu_style", "weibo_style", "rss_blog", "youtube_style"][seq % 4],
+            platform_bucket=str(sel.get("platformBucket") or "rss_blog"),
             display_name=str(persona.get("displayName") or f"旅人{seq:03d}"),
             user_handle=str(persona.get("userHandle") or f"travel_{seq:03d}"),
             headline=str(persona.get("headline") or "旅行创作者"),
@@ -77,6 +77,21 @@ def run_materialize(*, vertical: str, batch_id: str, dry_run: bool = False) -> d
             output_tier=output_tier,
             fixture_mode=fixture_mode and not live_mode,
             cited_source_paths=list(enrich_meta.get("citedSourcePaths") or []),
+            vertical_segment=str(sel.get("verticalSegment") or persona.get("verticalSegment") or "travel_primary"),
+            vertical_refs=[str(ref) for ref in (sel.get("verticalRefs") or persona.get("verticalRefs") or [vertical])],
+            topic_refs=[str(ref) for ref in (sel.get("topicRefs") or persona.get("topicRefs") or [])],
+            source_kind=str(sel.get("sourceKind") or "open_web_profile"),
+            source_url=str(sel.get("sourceUrl") or ""),
+            source_site_id=str(sel.get("sourceSiteId") or ""),
+            source_domain=str(sel.get("sourceDomain") or ""),
+            source_profile_key=str(sel.get("sourceProfileKey") or persona.get("sourceProfileKey") or ""),
+            source_region_class=str(sel.get("sourceRegionClass") or ""),
+            china_analog_label=str(sel.get("chinaAnalogLabel") or ""),
+            candidate_role=str(sel.get("candidateRole") or ""),
+            crawl_allowed=bool(sel.get("crawlAllowed")),
+            validation_only=bool(sel.get("validationOnly")),
+            rights_policy=str(sel.get("rightsPolicy") or ""),
+            model_release_status=str(persona.get("modelReleaseStatus") or ""),
         )
         stage_dir = creator_pool_stage_dir(vertical, batch_id, creator_ref, "4.materialize")
         stage_dir.mkdir(parents=True, exist_ok=True)
@@ -87,9 +102,9 @@ def run_materialize(*, vertical: str, batch_id: str, dry_run: bool = False) -> d
         assets.mkdir(exist_ok=True)
         avatar_key = str((bundle.get("profile") or {}).get("avatarObjectKey") or "")
         cover_key = str((bundle.get("profile") or {}).get("backgroundObjectKey") or "")
-        if avatar_key:
+        if avatar_key and not dry_run:
             ensure_creator_media(avatar_key)
-        if cover_key:
+        if cover_key and not dry_run:
             ensure_creator_media(cover_key)
         (assets / "avatar.jpg").write_bytes(_MIN_JPEG)
         (assets / "cover.jpg").write_bytes(_MIN_JPEG)

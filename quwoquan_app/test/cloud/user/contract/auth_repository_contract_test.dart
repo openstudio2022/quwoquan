@@ -10,8 +10,7 @@ const String _defaultNicknameSample = '新同学_260622_6698692';
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
 class _StubCloudHttpClient extends CloudHttpClient {
-  _StubCloudHttpClient({this.onPostJson, this.onDeleteJson})
-    : super(client: http.Client());
+  _StubCloudHttpClient({this.onPostJson}) : super(client: http.Client());
 
   final Future<CloudHttpDecodedJson> Function(
     Uri uri,
@@ -24,7 +23,7 @@ class _StubCloudHttpClient extends CloudHttpClient {
     Uri uri,
     Map<String, String> headers,
   )?
-  onDeleteJson;
+  onDeleteJson = null;
 
   @override
   Future<CloudHttpDecodedJson> postJson(
@@ -67,8 +66,8 @@ void main() {
           expect(body['deviceId'], 'install-id-1');
           expect(body['platform'], 'ios');
           expect(body['appVersion'], '1.2.3');
-          expect(body['agreementVersion'], '2026-06');
-          expect(body['privacyVersion'], '2026-06');
+          expect(body['agreementVersion'], '2026-07');
+          expect(body['privacyVersion'], '2026-07');
           expect(body['credentialType'], isNull);
           expect(body['credentialKey'], isNull);
           return <String, dynamic>{
@@ -95,8 +94,8 @@ void main() {
         deviceId: 'install-id-1',
         platform: 'ios',
         appVersion: '1.2.3',
-        agreementVersion: '2026-06',
-        privacyVersion: '2026-06',
+        agreementVersion: '2026-07',
+        privacyVersion: '2026-07',
       );
 
       expect(result.ownerId, 'owner-1');
@@ -202,8 +201,8 @@ void main() {
           expect(body['deviceId'], 'install-id-login');
           expect(body['platform'], 'android');
           expect(body['appVersion'], '1.2.3');
-          expect(body['agreementVersion'], '2026-06');
-          expect(body['privacyVersion'], '2026-06');
+          expect(body['agreementVersion'], '2026-07');
+          expect(body['privacyVersion'], '2026-07');
           return <String, dynamic>{
             'accessToken': 'token-one-tap',
             'refreshToken': 'refresh-one-tap',
@@ -230,8 +229,8 @@ void main() {
         deviceId: 'install-id-login',
         platform: 'android',
         appVersion: '1.2.3',
-        agreementVersion: '2026-06',
-        privacyVersion: '2026-06',
+        agreementVersion: '2026-07',
+        privacyVersion: '2026-07',
       );
 
       expect(result.ownerId, 'owner-one-tap');

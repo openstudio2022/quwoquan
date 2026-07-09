@@ -154,6 +154,11 @@ def test_inline_candidate_flows_through_gates_with_placeholder():
         setattr(hi, name, value)
 
     try:
+        # handler_bridge 优先取 download.handler facade 原函数，会绕过下面的 hi.* patch
+        # （套件内其它测试 import facade 后触发真实网络抓取）；强制无 facade 走 fallback。
+        patch_bridge_facade = hi.handler_bridge._facade
+        saved["__bridge_facade"] = patch_bridge_facade
+        hi.handler_bridge._facade = lambda: None
         patch("validate_image_rights", lambda spec, vertical: [])
         patch("_cached_source_image_payload", lambda *a, **k: None)
         patch(
@@ -203,6 +208,9 @@ def test_inline_candidate_flows_through_gates_with_placeholder():
             ),
         )
     finally:
+        bridge_facade = saved.pop("__bridge_facade", None)
+        if bridge_facade is not None:
+            hi.handler_bridge._facade = bridge_facade
         for key, value in saved.items():
             setattr(hi, key, value)
 

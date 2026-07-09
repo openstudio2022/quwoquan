@@ -52,13 +52,11 @@ class MediaUploadManager {
   MediaUploadManager({
     CloudHttpClient? httpClient,
     http.Client? rawClient,
-    int maxConcurrent = 3,
-    int maxRetries = 3,
-  })  : _httpClient =
-            httpClient ?? CloudHttpClient(client: rawClient ?? http.Client()),
-        _rawClient = rawClient ?? http.Client(),
-        _maxConcurrent = maxConcurrent,
-        _maxRetries = maxRetries;
+    this._maxConcurrent = 3,
+    this._maxRetries = 3,
+  }) : _httpClient =
+           httpClient ?? CloudHttpClient(client: rawClient ?? http.Client()),
+       _rawClient = rawClient ?? http.Client();
 
   final CloudHttpClient _httpClient;
   final http.Client _rawClient;
@@ -152,7 +150,10 @@ class MediaUploadManager {
       },
     );
     return ContentMediaInitUploadResponseDto.fromMap(
-      CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.initChatUpload),
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ChatRequestPageIds.initChatUpload,
+      ),
     );
   }
 
@@ -189,19 +190,23 @@ class MediaUploadManager {
     };
     final decoded = await _httpClient.postJson(
       uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.completeChatUpload),
+      headers: CloudRequestHeaders.forPage(
+        ChatRequestPageIds.completeChatUpload,
+      ),
       body: body,
     );
     return ContentMediaCompleteUploadResponseDto.fromMap(
-      CloudResponseDecoder.asObject(decoded, context: ChatRequestPageIds.completeChatUpload),
+      CloudResponseDecoder.asObject(
+        decoded,
+        context: ChatRequestPageIds.completeChatUpload,
+      ),
     );
   }
 
   /// Starts listening for network changes to retry failed uploads.
   void startOfflineMonitor() {
     _connectivitySub ??= Connectivity().onConnectivityChanged.listen((results) {
-      final hasConnection =
-          results.any((r) => r != ConnectivityResult.none);
+      final hasConnection = results.any((r) => r != ConnectivityResult.none);
       if (hasConnection) {
         _retryFailedTasks();
       }
@@ -209,7 +214,9 @@ class MediaUploadManager {
   }
 
   void _retryFailedTasks() {
-    final failed = _queue.where((t) => t.status == UploadStatus.failed).toList();
+    final failed = _queue
+        .where((t) => t.status == UploadStatus.failed)
+        .toList();
     for (final task in failed) {
       if (task.retryCount <= _maxRetries) {
         task

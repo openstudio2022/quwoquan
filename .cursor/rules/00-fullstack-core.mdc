@@ -12,7 +12,7 @@ alwaysApply: true
 - 正式文档：应用根/领域/能力用 `spec.md + design.md + acceptance.yaml`；Story 只用 `spec.md + acceptance.yaml`。
 - 测试语言：验收意图为 UAT/SIT/GWT/contract，测试工程层只用 `local_contract`、`api_integration`、`user_acceptance`。
 - DDD 依赖方向固定：`domain <- application <- adapters <- infrastructure`。
-- `contracts/metadata/**` 是字段、错误码、path、operation、surface、route、decoder context 的唯一真相源。
+- `quwoquan_service/contracts/metadata/**` 是字段、错误码、path、operation、surface、route、decoder context 的唯一真相源。
 - codegen 文件禁止手改；改行为先改 metadata，再 verify/codegen。
 - UI、Repository、Router、埋点和文档不得维护第二套 IA、path、surface、operation 或 decoder 规则表。
 - Mock 数据必须隔离；生产包默认 Remote，无 Mock/Remote 切换入口。

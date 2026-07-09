@@ -25,6 +25,9 @@
         "intersection_core",
         "home_showcase_core"
       ],
+      "verificationScopes": [
+        "object-homepage-gamma-real-data-closure"
+      ],
       "resetScope": "fixture_content_*",
       "targetStore": "content-service:gamma_test_namespace",
       "verifiedEndpoints": [
@@ -43,6 +46,9 @@
       "refs": [
         "circle_core",
         "circle_group_chat_link_core"
+      ],
+      "verificationScopes": [
+        "object-homepage-gamma-real-data-closure"
       ],
       "resetScope": "fixture_circle_*",
       "targetStore": "circle-service:gamma_test_namespace",
@@ -75,6 +81,9 @@
         "profile_feed_core",
         "relationship_core"
       ],
+      "verificationScopes": [
+        "object-homepage-gamma-real-data-closure"
+      ],
       "resetScope": "fixture_user_*",
       "targetStore": "user-service:gamma_test_namespace",
       "verifiedEndpoints": [
@@ -86,8 +95,8 @@
       "domain": "creator_pool",
       "fixturePath": "_shared/test_fixtures/creator_pool/creator_pool_scenarios.json",
       "refs": [
-        "creator_travel_batch100",
-        "creator_travel_travel_batch_100_v1_core"
+        "creator_travel_photo_1k_v1",
+        "creator_travel_photo_1k_v1_core"
       ],
       "resetScope": "fixture_creator_pool_*",
       "targetStore": "user-service:gamma_test_namespace",
@@ -103,6 +112,9 @@
         "entity_homepage_core",
         "entity_claim_core",
         "entity_picker_core"
+      ],
+      "verificationScopes": [
+        "object-homepage-gamma-real-data-closure"
       ],
       "resetScope": "fixture_entity_*",
       "targetStore": "entity-service:gamma_test_namespace",
@@ -149,6 +161,79 @@
       ]
     }
   ],
+  "verificationScopes": {
+    "object-homepage-gamma-real-data-closure": {
+      "description": "只严格检查交集四主页/对象页商用闭环所需的 content + entity + circle + user 端点与 typed probes。",
+      "domains": [
+        "content",
+        "entity",
+        "circle",
+        "user"
+      ],
+      "runtimeRefs": {
+        "{viewerId}": "fixture_user_current",
+        "{homepageId}": "homepage_sight_west_lake",
+        "{circleId}": "fixture_circle_photo"
+      },
+      "strictEndpoints": [
+        {
+          "domain": "entity",
+          "path": "/v1/homepages/{homepageId}/object-page-bundle",
+          "assertion": "entity_homepage_bundle"
+        },
+        {
+          "domain": "entity",
+          "path": "/v1/homepages/{seededHomepageId}/introduction",
+          "assertion": "homepage_introduction"
+        },
+        {
+          "domain": "entity",
+          "path": "/v1/homepages/{homepageId}/review-summary",
+          "assertion": "homepage_review_summary"
+        },
+        {
+          "domain": "entity",
+          "path": "/v1/homepages/{homepageId}/related-groups",
+          "assertion": "homepage_related_groups"
+        },
+        {
+          "domain": "entity",
+          "path": "/v1/homepages/{homepageId}/impact",
+          "assertion": "entity_impact_summary"
+        },
+        {
+          "domain": "circle",
+          "path": "/v1/circles/{circleId}",
+          "assertion": "circle_detail"
+        },
+        {
+          "domain": "circle",
+          "path": "/v1/circles/{circleId}/impact",
+          "assertion": "circle_impact_summary"
+        },
+        {
+          "domain": "circle",
+          "path": "/v1/circles/{circleId}/members",
+          "assertion": "circle_members_page"
+        },
+        {
+          "domain": "circle",
+          "path": "/v1/circles/{circleId}/feed",
+          "assertion": "circle_feed_page"
+        },
+        {
+          "domain": "content",
+          "path": "/v1/content/intersections/object?objectType=homepage&objectId={homepageId}",
+          "assertion": "object_intersections_homepage"
+        },
+        {
+          "domain": "content",
+          "path": "/v1/content/intersections/object?objectType=circle&objectId={circleId}",
+          "assertion": "object_intersections_circle"
+        }
+      ]
+    }
+  },
   "appAssets": {
     "alphaOnlyFixtureAllowlist": []
   },

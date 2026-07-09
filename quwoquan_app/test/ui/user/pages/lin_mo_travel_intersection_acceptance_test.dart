@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_fact_items.dart';
@@ -40,7 +41,9 @@ void main() {
           .map((e) => e.cast<String, dynamic>())
           .toList(growable: false);
       linMoReasons = inbox
-          .where((r) => (r['intersectionId'] ?? '').toString().startsWith('ix_lm_'))
+          .where(
+            (r) => (r['intersectionId'] ?? '').toString().startsWith('ix_lm_'),
+          )
           .toList(growable: false);
     });
 
@@ -71,26 +74,29 @@ void main() {
       }
     });
 
-    test('生命周期多态：new/strengthened/stable/weakened/reactivated/archived/expired 全覆盖', () {
-      final lifecycles = linMoReasons
-          .map((r) => (r['lifecycleState'] ?? '').toString())
-          .toSet();
-      for (final state in <String>[
-        'new',
-        'strengthened',
-        'stable',
-        'weakened',
-        'reactivated',
-        'archived',
-        'expired',
-      ]) {
-        expect(
-          lifecycles.contains(state),
-          isTrue,
-          reason: 'lifecycleState=$state 应有代表样本',
-        );
-      }
-    });
+    test(
+      '生命周期多态：new/strengthened/stable/weakened/reactivated/archived/expired 全覆盖',
+      () {
+        final lifecycles = linMoReasons
+            .map((r) => (r['lifecycleState'] ?? '').toString())
+            .toSet();
+        for (final state in <String>[
+          'new',
+          'strengthened',
+          'stable',
+          'weakened',
+          'reactivated',
+          'archived',
+          'expired',
+        ]) {
+          expect(
+            lifecycles.contains(state),
+            isTrue,
+            reason: 'lifecycleState=$state 应有代表样本',
+          );
+        }
+      },
+    );
 
     test('route/photo_spot/gear 落点：object 片段 routeId=homepageDetail', () {
       final objectReasons = linMoReasons.where(
@@ -129,32 +135,30 @@ void main() {
     test('实名代表人锚点：命名代表人以 object 片段进入对象页（隐私红线）', () {
       // 至少一条携带实名代表人（object 片段含 person 落点）。
       final withNamedActor = linMoReasons.where((r) {
-        final spans = (r['primarySpans'] as List? ?? const [])
-            .whereType<Map>();
+        final spans = (r['primarySpans'] as List? ?? const []).whereType<Map>();
         return spans.any(
           (s) =>
               s['role'] == 'object' &&
               ((s['target'] as Map?)?['objectKind'] == 'person'),
         );
       });
-      expect(
-        withNamedActor,
-        isNotEmpty,
-        reason: '林墨交集应有实名代表人样本（person 落点蓝字）',
-      );
+      expect(withNamedActor, isNotEmpty, reason: '林墨交集应有实名代表人样本（person 落点蓝字）');
     });
 
     test('影响力实例：fixture_user_travel_curator 多类 helpType + 实名代表人 + 生命周期', () {
-      final impactByAuthor =
-          (intersectionCore['authorImpact'] as Map).cast<String, dynamic>();
-      final linMo =
-          (impactByAuthor['fixture_user_travel_curator'] as Map)
-              .cast<String, dynamic>();
+      final impactByAuthor = (intersectionCore['authorImpact'] as Map)
+          .cast<String, dynamic>();
+      final linMo = (impactByAuthor['fixture_user_travel_curator'] as Map)
+          .cast<String, dynamic>();
       final items = (linMo['items'] as List)
           .whereType<Map>()
           .map((e) => e.cast<String, dynamic>())
           .toList(growable: false);
-      expect(items.length, greaterThanOrEqualTo(5), reason: '影响力应覆盖多类 helpType');
+      expect(
+        items.length,
+        greaterThanOrEqualTo(5),
+        reason: '影响力应覆盖多类 helpType',
+      );
 
       // 维度跨多类（community/decision/spread/relationship/knowledge → dimension 投影）。
       final dimensions = items
@@ -212,59 +216,74 @@ void main() {
       ];
       final out = filterDefaultInboxLifecycle(input);
       final ids = out.map((r) => r.intersectionId).toSet();
-      expect(ids, containsAll(<String>['keep_new', 'keep_stable', 'keep_weakened']));
+      expect(
+        ids,
+        containsAll(<String>['keep_new', 'keep_stable', 'keep_weakened']),
+      );
       expect(ids.contains('drop_archived'), isFalse);
       expect(ids.contains('drop_expired'), isFalse);
     });
 
     test('隐藏闭集 == {expired, archived}', () {
-      expect(defaultInboxHiddenLifecycleStates, <String>{'expired', 'archived'});
+      expect(defaultInboxHiddenLifecycleStates, <String>{
+        'expired',
+        'archived',
+      });
     });
   });
 
   group('WS-ACC · 我的交集 inbox 三元组渲染契约', () {
-    testWidgets('route/photo_spot/gear 三元组：类型角标 + 实名代表人蓝字 + lifecycle 弱标；archived/expired 不渲染', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            authSessionControllerProvider.overrideWith(_AuthedSession.new),
-            intersectionRepositoryProvider.overrideWithValue(
-              _LinMoTravelRepository(),
-            ),
-          ],
-          child: CupertinoApp.router(routerConfig: _router()),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
+    testWidgets(
+      'route/photo_spot/gear 三元组：类型角标 + 实名代表人蓝字 + lifecycle 弱标；archived/expired 不渲染',
+      (tester) async {
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              authSessionControllerProvider.overrideWith(_AuthedSession.new),
+              intersectionRepositoryProvider.overrideWithValue(
+                _LinMoTravelRepository(),
+              ),
+            ],
+            child: CupertinoApp.router(routerConfig: _router()),
+          ),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
 
-      // 三元组结论句渲染（route / photo_spot / gear）。
-      expect(find.textContaining('洱海环线'), findsWidgets);
-      expect(find.textContaining('玉龙雪山机位'), findsWidgets);
-      expect(find.textContaining('富士 X-T5'), findsWidgets);
+        // 三元组结论句渲染（route / photo_spot / gear）。
+        expect(find.textContaining('洱海环线'), findsWidgets);
+        expect(find.textContaining('玉龙雪山机位'), findsWidgets);
+        expect(find.textContaining('富士 X-T5'), findsWidgets);
 
-      // 实名代表人为句内纯文本蓝字（无网络头像 Image）。
-      expect(find.textContaining('陈屿'), findsWidgets);
-      expect(find.textContaining('苏野'), findsWidgets);
-      expect(find.byType(Image), findsNothing);
+        // 实名代表人为句内纯文本蓝字（无网络头像 Image）。
+        expect(find.textContaining('陈屿'), findsWidgets);
+        expect(find.textContaining('苏野'), findsWidgets);
+        expect(find.byType(Image), findsNothing);
 
-      // lifecycle 弱标：new→新 / strengthened→增强 / reactivated→重新活跃。
-      expect(find.text(DiscoveryFeedText.intersectionLifecycleNew), findsWidgets);
-      expect(find.textContaining(DiscoveryFeedText.intersectionLifecycleStrengthened), findsWidgets);
-      expect(
-        find.text(DiscoveryFeedText.intersectionLifecycleReactivated),
-        findsOneWidget,
-      );
+        // lifecycle 弱标：new→新 / strengthened→增强 / reactivated→重新活跃。
+        expect(
+          find.text(DiscoveryFeedText.intersectionLifecycleNew),
+          findsWidgets,
+        );
+        expect(
+          find.textContaining(
+            DiscoveryFeedText.intersectionLifecycleStrengthened,
+          ),
+          findsWidgets,
+        );
+        expect(
+          find.text(DiscoveryFeedText.intersectionLifecycleReactivated),
+          findsOneWidget,
+        );
 
-      // 类型角标（槽①）每行一枚。
-      expect(find.byType(IntersectionTypeIcon), findsAtLeastNWidgets(3));
+        // 类型角标（槽①）每行一枚。
+        expect(find.byType(IntersectionTypeIcon), findsAtLeastNWidgets(3));
 
-      // archived/expired 被端侧过滤，主列表不渲染其结论句。
-      expect(find.textContaining('老君山观景台'), findsNothing);
-      expect(find.textContaining('临时市集'), findsNothing);
-    });
+        // archived/expired 被端侧过滤，主列表不渲染其结论句。
+        expect(find.textContaining('老君山观景台'), findsNothing);
+        expect(find.textContaining('临时市集'), findsNothing);
+      },
+    );
   });
 }
 
@@ -371,8 +390,8 @@ class _LinMoTravelRepository implements IntersectionRepository {
         repName: '',
         repId: '',
         lifecycleState: 'new',
-        primaryText: '你和8人都拍过玉龙雪山机位',
-        leadPlain: '你和8人都拍过',
+        primaryText: '你拍过玉龙雪山机位',
+        leadPlain: '你拍过',
         midPlain: '',
       ),
       _travelReason(
@@ -449,6 +468,7 @@ IntersectionReason _travelReason({
         text: repName,
         role: 'object',
         target: IntersectionTarget(
+          objectType: 'user',
           objectId: repId,
           objectKind: 'person',
           routeId: 'userProfile',
@@ -460,6 +480,7 @@ IntersectionReason _travelReason({
       text: objectName,
       role: 'object',
       target: IntersectionTarget(
+        objectType: 'homepage',
         objectId: objectId,
         objectKind: objectKind,
         routeId: 'homepageDetail',
@@ -482,5 +503,21 @@ IntersectionReason _travelReason({
     strengthDelta: strengthDelta,
     timeBucket: 'today',
     freshAt: DateTime.now().toUtc().toIso8601String(),
+    actorEvidenceTotalCount: 1,
+    actorEvidenceCompleteness: 'complete',
+    representativeActor: repName.isEmpty
+        ? null
+        : IntersectionRepresentativeActor(
+            actorId: repId,
+            displayName: repName,
+            relationLabel: '联系人',
+            privacyState: 'visible',
+            target: IntersectionTarget(
+              objectType: 'user',
+              objectId: repId,
+              objectKind: 'person',
+              routeId: 'userProfile',
+            ),
+          ),
   );
 }

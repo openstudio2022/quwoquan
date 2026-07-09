@@ -147,3 +147,26 @@ func TestListFeed_PremiumStreamRoutesToSimilarPresetSurface(t *testing.T) {
 		t.Fatalf("premium feed item missing: %+v", resp.Items)
 	}
 }
+
+func TestListFeed_PremiumStreamDoesNotUseRepositoryFallback(t *testing.T) {
+	ctx := context.Background()
+	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
+	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
+	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
+		{ContentID: "p_premium_eligible", ContentType: "image", RecallPath: "premium_pool", PublishedAt: time.Now()},
+	}}
+	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source})
+	reader := fallbackFeedReader{posts: []postmodel.Post{
+		{ID: "p_premium_eligible", ContentType: "image", AuthorId: "author_p", Status: "published", Visibility: "public"},
+		{ID: "p_ordinary_published", ContentType: "image", AuthorId: "author_o", Status: "published", Visibility: "public"},
+	}}
+	svc := NewFeedService(engine, reader)
+
+	resp, err := svc.ListFeed(ctx, ListFeedRequest{UserID: "u_premium_no_fallback", SessionID: "s_premium_no_fallback", Type: "premium", Limit: 10})
+	if err != nil {
+		t.Fatalf("ListFeed: %v", err)
+	}
+	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_premium_eligible" {
+		t.Fatalf("premium stream must not fill from repository fallback, got %+v", resp.Items)
+	}
+}

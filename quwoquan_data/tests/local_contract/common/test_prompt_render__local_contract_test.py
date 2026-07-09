@@ -66,13 +66,26 @@ def test_undeclared_var_in_template_raises():
     assert "undeclared vars" in str(exc.value)
 
 
-def test_unclosed_placeholder_after_render_raises():
-    # 声明变量但其值里又带 {{ ，渲染后仍有未闭合占位符 -> 报错（防注入式漏块）。
+def test_dynamic_source_delimiters_are_neutralized():
+    # 真实网页/脚本片段可能含 `{{...}}`，动态数据应中性化而不是误判为模板残留。
+    out = pr._render_section(
+        "value: {{x}}",
+        declared={"required": ["x"], "optional": []},
+        values={"x": "leftover {{y}}"},
+        section="task",
+        name="probe",
+    )
+    assert "{{" not in out and "}}" not in out
+    assert "leftover { {y} }" in out
+
+
+def test_unclosed_static_placeholder_after_render_raises():
+    # 模板自身的非法占位符仍然是契约错误。
     with pytest.raises(pr.PromptTemplateError) as exc:
         pr._render_section(
-            "value: {{x}}",
+            "value: {{x}} {{not-allowed}}",
             declared={"required": ["x"], "optional": []},
-            values={"x": "leftover {{y}}"},
+            values={"x": "ok"},
             section="task",
             name="probe",
         )

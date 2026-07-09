@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_layout_mode.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
@@ -166,8 +167,7 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   }
 
   Widget _buildOverlayControls(CallSessionState session) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final topFadeBase = AppColorsFunctional.getColor(
       isDark,
       ColorType.createMediaOverlayBase,
@@ -286,12 +286,12 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   }
 
   Widget _buildLayoutToggle() {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final glass =
-        AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final glass = AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
     return GestureDetector(
       onTap: () {
         setState(() => _layoutMode = _layoutMode.toggle());
@@ -316,26 +316,34 @@ class _VideoCallPageState extends ConsumerState<VideoCallPage> {
   }
 
   Widget _buildParticipantListButton(CallSessionState session) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final glass =
-        AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final glass = AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
     return GestureDetector(
       onTap: () {
-        showCupertinoModalPopup<void>(
+        showAppBottomModal<void>(
           context: context,
-          barrierColor: AppColors.transparent,
-          builder: (_) => ParticipantListSheet(
+          builder: (sheetContext) => ParticipantListSheet(
             maxParticipants: session.session?.maxParticipants ?? 32,
             onInviteMore: () {
-              Navigator.of(context).pop();
-              context.push(
-                AppRoutePaths.rtcPickParticipants,
-                extra: CallParticipantPickerRouteExtra(
-                  callId: widget.callId,
-                  maxParticipants: session.session?.maxParticipants ?? 32,
+              unawaited(
+                dismissAppModalAndRun(
+                  sheetContext,
+                  action: () {
+                    if (!context.mounted) {
+                      return;
+                    }
+                    context.push(
+                      AppRoutePaths.rtcPickParticipants,
+                      extra: CallParticipantPickerRouteExtra(
+                        callId: widget.callId,
+                        maxParticipants: session.session?.maxParticipants ?? 32,
+                      ),
+                    );
+                  },
                 ),
               );
             },

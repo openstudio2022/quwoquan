@@ -145,8 +145,8 @@ user input
 | `quwoquan_app/**` | `quwoquan_app/AGENTS.md`、Dart/Mock/runtime error/page quality rules | 设计系统、Provider、Mock/Remote、错误体验、页面矩阵、四环境数据源 |
 | `quwoquan_service/**` | `quwoquan_service/AGENTS.md`、metadata README、架构/runtime error rules | metadata-first、DDD、RuntimeErrorResponse、`api_integration` 真实存储、metrics/trace/SLO |
 | `quwoquan_data/**` | `quwoquan_data/AGENTS.md`、`quwoquan-data-content` skill | CLI-first、Agent-only 正文、事实/权利/图片/账本、ship/importer、七角色准出 |
-| `agent_ops/**`、环境、部署、门禁 | `agent_ops/AGENTS.md`、`environment-ops` skill | stackctl、四环境、repair 白名单、prod rollout、gate 证据 |
-| `apps/ops-portal/**` | `apps/ops-portal/AGENTS.md` | NodeNext imports、runtime errors、观测页面、test/build |
+| `quwoquan_ops/**`、环境、部署、门禁 | `quwoquan_ops/AGENTS.md`、`environment-ops` skill | stackctl、四环境、repair 白名单、prod rollout、gate 证据 |
+| `quwoquan_ops/portal/**` | `quwoquan_ops/portal/AGENTS.md` | NodeNext imports、runtime errors、观测页面、test/build |
 | 跨多个区域 | 本文 E2E 模式 | 不得局部完成，必须补端到端证据 |
 
 ## 2. 正向规格理解

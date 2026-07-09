@@ -93,7 +93,7 @@ void main() {
       tester,
       itemCount: 3,
       layout: MediaReorderableLayout.strip,
-      onReorder: (_, __) {},
+      onReorder: (_, _) {},
     );
 
     final stripRect = tester.getRect(find.byType(MediaReorderableView));

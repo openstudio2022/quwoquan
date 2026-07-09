@@ -14,6 +14,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
+# 统一输出根：app seed-matrix 辅助报告属于本地工具状态；正式 stackctl 证据写入 .qwq_output/runs/<env>/<runId>。
+OUTPUT_ROOT = Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
+APP_ARTIFACTS_ROOT = Path(os.environ.get("QWQ_APP_ARTIFACTS_ROOT", OUTPUT_ROOT / "local" / "app-seed-matrix"))
 APP = ROOT / "quwoquan_app"
 USER_POOL = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "user_pool.json"
 ALPHA_MANIFEST = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "app_alpha_seed_manifest.json"
@@ -53,7 +56,7 @@ def beta_gateway_smoke(port: int) -> dict[str, object]:
     proc = subprocess.Popen(
         [
             sys.executable,
-            "agent_ops/assistant/dev_assistant_beta_gateway.py",
+            "quwoquan_service/services/assistant-service/tests/ops/smoke/dev_assistant_beta_gateway.py",
             "--listen-host",
             "127.0.0.1",
             "--listen-port",
@@ -114,7 +117,10 @@ def load_alpha_delivery_channels() -> dict[str, list[str]]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--report", default="artifacts/app_alpha_beta_seed_matrix.json")
+    parser.add_argument(
+        "--report",
+        default=str(APP_ARTIFACTS_ROOT / "seed-matrix" / "app_alpha_beta_seed_matrix.json"),
+    )
     parser.add_argument("--gateway-port", type=int, default=18090)
     args = parser.parse_args()
 
@@ -126,7 +132,7 @@ def main() -> int:
     }
     try:
         run([sys.executable, "quwoquan_app/scripts/env/verify_app_seed_manifests.py"])
-        run([sys.executable, "agent_ops/avatar/verify_avatar_user_pool_consistency.py"])
+        run([sys.executable, "quwoquan_service/services/chat-service/tests/ops/gate/verify_avatar_user_pool_consistency.py"])
         run(["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", "alpha"])
         run(
             ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", "beta"],
@@ -151,7 +157,7 @@ def main() -> int:
         report["beta"] = {
             "dataSource": "remote",
             **beta_gateway_smoke(args.gateway_port),
-            "gatewayProbe": run([sys.executable, "agent_ops/avatar/probe_avatar_user_pool_gateway.py"])[-1000:],
+            "gatewayProbe": run([sys.executable, "quwoquan_service/services/chat-service/tests/ops/smoke/probe_avatar_user_pool_gateway.py"])[-1000:],
         }
     except Exception as exc:  # noqa: BLE001
         report["status"] = "failed"
@@ -161,7 +167,7 @@ def main() -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    report_path = ROOT / args.report
+    report_path = Path(args.report) if Path(args.report).is_absolute() else ROOT / args.report
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"app alpha/beta seed matrix report written: {report_path}")

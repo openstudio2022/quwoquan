@@ -10,6 +10,7 @@
 - 地理与内容三元组。
 - 规范实体归一。
 - 面向对象主页网络的关系边、实体引用和 seed manifest。
+- article/homepage shared commercial pool、唯一文章商业执行分支与 H100/H1000 商业证据闭环。
 
 ## 范围
 
@@ -31,6 +32,13 @@
 - 实体归一产物必须能映射到运行时 `canonicalEntityId`。
 - seed manifest 必须区分 alpha、beta、gamma、prod 数据策略。
 - 新增数据发布物必须有 local_contract 校验脚本或 contract fixture。
+- 输出目录规范（真相源 `quwoquan_data/docs/pipeline_directory_layout_spec.md` §0.5 + `_common/paths.py`）：
+  仓内只保留输入契约（task.yaml/defaults/schema/templates）与发布主线 `publish/**`；
+  runtime/artifacts/release 等运行期输出统一落仓外 `QWQ_OUTPUT_ROOT`（默认 `<repo>/.qwq_output/`）。
+- 批次三轴唯一：每个 e2e/operations 批次只允许一个 `contentType`（homepage/article/image/video）
+  与一个 `supplyMode`（site_primary/search_supplement），体现在目录一级并固化进 batch_manifest；
+  搜索补全只允许小流量独立批次。
+- 单元/合约测试只写 tempfile 临时根，pytest 不得向仓内根或 `QWQ_OUTPUT_ROOT` 落盘（conftest 落盘隔离门）。
 
 ## 验收重点
 

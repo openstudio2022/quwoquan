@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from typing import Any, Mapping
 
+from _common.article_commercial_policy import article_commercial_closure_enabled
 from _common.base_draft import load_base_draft_text
 from _common.draft_io import is_placeholder
 from _common.download_diagnostics import download_diagnostics
@@ -21,8 +22,8 @@ from _common.image_asset_strategy import (
     image_strategy_requires_publishable_images,
 )
 from _common.io import read_json, write_json
-from _common.paths import batch_root, release_root
-from _common.release_integrity import scan_runtime_batch_integrity
+from _common.paths import RUNTIME_ROOT, batch_root, release_root
+from _common.release_integrity import scan_release_integrity, scan_runtime_batch_integrity
 from _common.source_unit import iter_source_units
 from verify.scale_readiness_capacity import (
     creator_load_report as _creator_load_report,
@@ -86,9 +87,35 @@ def _partial_content_allowed(spec: Mapping[str, Any]) -> bool:
     return bool(policy.get("allowPartialContent", True) is not False)
 
 
+def _commercial_target_object_count(spec: Mapping[str, Any]) -> int:
+    policy = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
+    return _safe_int(policy.get("targetObjectCount") if isinstance(policy, Mapping) else 0)
+
+
 def _expected_objects(spec: Mapping[str, Any], audit: Mapping[str, Any]) -> dict[str, int]:
     count = _target_count(spec, audit)
     quotas = _quotas(spec)
+    if article_commercial_closure_enabled(spec):
+        target_object_count = _commercial_target_object_count(spec)
+        if target_object_count > 0:
+            article_ratio = max(0, quotas["article"])
+            image_ratio = max(0, quotas["image"])
+            total_ratio = article_ratio + image_ratio
+            if total_ratio > 0:
+                article_expected = int(round(target_object_count * (article_ratio / total_ratio)))
+                article_expected = max(0, min(target_object_count, article_expected))
+                image_expected = max(0, target_object_count - article_expected)
+            else:
+                article_expected = 0
+                image_expected = 0
+            homepage_expected = count * quotas["homepage"]
+            return {
+                "homepage": homepage_expected,
+                "article": article_expected,
+                "image": image_expected,
+                "routeArticle": quotas["routeArticle"],
+                "total": homepage_expected + target_object_count + quotas["routeArticle"],
+            }
     return {
         "homepage": count * quotas["homepage"],
         "article": count * quotas["article"],
@@ -96,6 +123,33 @@ def _expected_objects(spec: Mapping[str, Any], audit: Mapping[str, Any]) -> dict
         "routeArticle": quotas["routeArticle"],
         "total": count * (quotas["homepage"] + quotas["article"] + quotas["image"]) + quotas["routeArticle"],
     }
+
+
+def _active_scale_spec(task_id: str, batch_id: str, spec: Mapping[str, Any]) -> Mapping[str, Any]:
+    try:
+        from task.run import _active_spec
+        from task.run_context import PipelineContext
+
+        scope = spec.get("scope") if isinstance(spec.get("scope"), Mapping) else {}
+        entity_ids = [
+            str(target.get("name") or "").strip()
+            for target in (scope.get("coverageTargets") or [])
+            if isinstance(target, Mapping) and str(target.get("name") or "").strip()
+        ]
+        active = _active_spec(
+            PipelineContext(
+                task_id=task_id,
+                batch_id=batch_id,
+                entity_ids=entity_ids,
+                spec=dict(spec),
+            )
+        )
+        active_targets = ((active.get("scope") or {}).get("coverageTargets") or [])
+        if isinstance(active_targets, list) and active_targets:
+            return active
+    except Exception:  # noqa: BLE001 - scale gate must still report other blockers.
+        return spec
+    return spec
 
 
 def _content_plan_item_count(root: Path) -> dict[str, int]:
@@ -184,6 +238,75 @@ def _source_unit_lane(meta: Mapping[str, Any], source_dir: Path) -> str:
     return "article"
 
 
+def _source_ref_relative_to_root(source_path: Path, root: Path) -> str:
+    try:
+        return source_path.resolve().relative_to(root.resolve()).as_posix()
+    except (OSError, ValueError):
+        try:
+            return source_path.relative_to(root).as_posix()
+        except ValueError:
+            return ""
+
+
+def _site_supply_dynamic_image_capacity(
+    spec: Mapping[str, Any],
+    root: Path,
+) -> dict[str, int] | None:
+    workflow = spec.get("workflowPolicy") if isinstance(spec.get("workflowPolicy"), Mapping) else {}
+    quotas = _quotas(spec)
+    targets = (spec.get("scope") or {}).get("coverageTargets") or []
+    if workflow.get("siteSupplyDynamicContentPlan") is not True:
+        return None
+    if len(targets) != 1:
+        return None
+    if quotas["homepage"] > 0 or quotas["article"] > 0 or quotas["image"] <= 0:
+        return None
+    plan = _load_json_if_exists(root / "_shared" / "site_supply_content_plan_report.json")
+    if not plan:
+        return None
+    selected_count = _safe_int(plan.get("selectedCount") or plan.get("itemCount"))
+    vertical = str(plan.get("vertical") or "").strip()
+    site_id = str(plan.get("siteId") or "").strip()
+    site_batch_id = str(plan.get("batchId") or "").strip()
+    if not vertical or not site_id or not site_batch_id:
+        return {"selectedCount": selected_count, "qualifiedImageWorks": selected_count}
+    ingest = _load_json_if_exists(
+        RUNTIME_ROOT
+        / "site_supply"
+        / vertical
+        / site_id
+        / site_batch_id
+        / "_shared"
+        / "attributed_asset_ingest_report.json"
+    )
+    qualified = _safe_int(((ingest.get("funnel") or {}).get("qualifiedImageWorks")))
+    return {
+        "selectedCount": selected_count,
+        "qualifiedImageWorks": max(selected_count, qualified),
+    }
+
+
+def _normalized_source_kind(meta: Mapping[str, Any]) -> str:
+    """归一化源站类别（sourceMixBreakdown 用）：优先 sourceKind，退回 platform/url。"""
+    kind = str(meta.get("sourceKind") or "").strip().lower()
+    if kind:
+        return kind
+    platform = str(meta.get("platform") or "").strip()
+    url = str(meta.get("url") or meta.get("canonicalUrl") or "").lower()
+    haystack = f"{platform.lower()} {url}"
+    if "wikipedia" in haystack or "维基" in platform:
+        return "wikipedia"
+    if "baike.baidu" in haystack or "百度百科" in platform:
+        return "baidu_baike"
+    if "baike.sogou" in haystack or "搜狗百科" in platform:
+        return "sogou_baike"
+    if "toutiao" in haystack or "头条百科" in platform:
+        return "toutiao_baike"
+    if "官网" in platform or "official" in haystack:
+        return "official"
+    return platform.lower() or "unknown"
+
+
 def _source_admission_report(
     task_id: str,
     batch_id: str,
@@ -196,9 +319,12 @@ def _source_admission_report(
         for target in ((spec.get("scope") or {}).get("coverageTargets") or [])
         if isinstance(target, Mapping) and str(target.get("name") or "").strip()
     ]
+    dynamic_image_capacity = _site_supply_dynamic_image_capacity(spec, root)
     per_entity: list[dict[str, Any]] = []
     ready_capacity = 0
     source_ready_entities = 0
+    # H100/H1000 准出证据：homepage 主源源站组合分布（wikipedia/baidu_baike/...）。
+    source_mix: dict[str, int] = {}
     for name in targets:
         entity_dirs = [
             refs_path.parent.parent
@@ -214,7 +340,11 @@ def _source_admission_report(
                     focus_blocked += 1
                     continue
                 lane = _source_unit_lane(meta, source_dir)
-                source_ref = (source_dir / "source.md").relative_to(root).as_posix() if (source_dir / "source.md").is_file() else ""
+                if lane == "homepage":
+                    kind = _normalized_source_kind(meta)
+                    source_mix[kind] = source_mix.get(kind, 0) + 1
+                source_path = source_dir / "source.md"
+                source_ref = _source_ref_relative_to_root(source_path, root) if source_path.is_file() else ""
                 if lane == "article":
                     # RC6：文章可发布性计数走形态自适应唯一真相源 base_draft_readiness
                     # （长文≥600 或 图文混排正文≥200+足量内联图/图注），不再裸 `>= 600`。
@@ -234,6 +364,11 @@ def _source_admission_report(
                         counts["homepage"] += 1
                 elif lane == "video":
                     counts["video"] += 1
+        if dynamic_image_capacity and len(targets) == 1:
+            counts["image"] = max(
+                counts["image"],
+                _safe_int(dynamic_image_capacity.get("qualifiedImageWorks")),
+            )
         needed = {
             "homepage": max(0, quotas["homepage"]),
             "article": max(0, quotas["article"]),
@@ -242,11 +377,7 @@ def _source_admission_report(
         source_ready = all(counts[lane] >= needed[lane] for lane in needed if needed[lane] > 0)
         if source_ready:
             source_ready_entities += 1
-        capacity = (
-            min(counts["homepage"], needed["homepage"])
-            + min(counts["article"], needed["article"])
-            + min(counts["image"], needed["image"])
-        )
+        capacity = sum(counts[lane] for lane in needed if needed[lane] > 0)
         ready_capacity += capacity
         per_entity.append(
             {
@@ -268,6 +399,7 @@ def _source_admission_report(
             "article": quotas["article"],
             "image": quotas["image"],
         },
+        "sourceMixBreakdown": dict(sorted(source_mix.items(), key=lambda kv: kv[1], reverse=True)),
         "perEntity": per_entity,
     }
 
@@ -385,9 +517,9 @@ def _abandoned_content_by_type(task_id: str, batch_id: str, audit: Mapping[str, 
         if not ref:
             continue
         coords = content_object.content_coords(task_id, batch_id, ref) or {}
-        content_type = str(coords.get("contentType") or "")
+        content_type = str(row.get("carrier") or row.get("contentType") or coords.get("contentType") or "")
         if not content_type:
-            content_type = "image" if ref.endswith("_image") else "article"
+            content_type = "image" if ref.endswith("_image") or "_image_" in ref else "article"
         counts[content_type] = counts.get(content_type, 0) + 1
     return counts
 
@@ -446,6 +578,33 @@ def _release_exists(release_id: str | None) -> bool:
     return (release_root(release_id) / "release_manifest.json").is_file()
 
 
+def _release_text_only_article_refs(release_id: str | None, runtime_root: Path) -> list[str]:
+    if not release_id:
+        return []
+    root = release_root(release_id)
+    posts_root = root / "posts"
+    if not posts_root.is_dir():
+        return []
+    refs: list[str] = []
+    for manifest_path in sorted(posts_root.rglob("manifest.json")):
+        manifest = _load_json_if_exists(manifest_path)
+        carrier = str(manifest.get("contentType") or manifest.get("carrier") or "")
+        if carrier in {"image", "gallery", "video"}:
+            continue
+        rel = manifest_path.parent.relative_to(root)
+        publish_media_mode = str(manifest.get("publishMediaMode") or "").strip()
+        if not publish_media_mode and runtime_root.is_dir():
+            pack = _load_json_if_exists(runtime_root / rel / "3.compose" / "writing_pack.json")
+            publish_media_mode = str(pack.get("publishMediaMode") or "").strip()
+        if publish_media_mode != "text_only":
+            continue
+        refs.append(
+            str(manifest.get("topicId") or manifest.get("ref") or rel.as_posix()).strip()
+            or rel.as_posix()
+        )
+    return refs[:50]
+
+
 def _import_evidence_paths(root: Path) -> list[str]:
     candidates = []
     for path in [
@@ -461,6 +620,113 @@ def _import_evidence_paths(root: Path) -> list[str]:
 def _ship_evidence_paths(root: Path) -> list[str]:
     path = root / "_shared" / "ship_report.json"
     return [str(path)] if path.is_file() else []
+
+
+def _review_failed_refs_from_text(text: str) -> set[str]:
+    refs: set[str] = set()
+    body = str(text or "").strip()
+    if not body:
+        return refs
+    if "release missing planned post ref" in body and ":" in body:
+        tail = body.split(":", 1)[1]
+        for token in re.split(r"[,，\s]+", tail):
+            ref = token.strip(" \t\r\n,，;；.。")
+            if "__" in ref:
+                refs.add(ref)
+    match = re.match(r"^([^:：\s,，]+__[^:：\s,，]+)[:：]\s*review_gate failed", body)
+    if match:
+        refs.add(match.group(1).strip())
+    return refs
+
+
+def _produce_review_repair_failed_refs(root: Path) -> set[str]:
+    report = _load_json_if_exists(root / "task_workflow" / "results" / "repair_report" / "produce_review.json")
+    payload = report.get("payload") if isinstance(report.get("payload"), Mapping) else report
+    if not isinstance(payload, Mapping):
+        return set()
+    refs: set[str] = set()
+    failed_refs = payload.get("failedRefs")
+    if isinstance(failed_refs, list):
+        refs.update(str(ref).strip() for ref in failed_refs if str(ref).strip())
+    issue_map = payload.get("issueMap")
+    if isinstance(issue_map, Mapping):
+        refs.update(str(ref).strip() for ref in issue_map.keys() if str(ref).strip())
+    issues = payload.get("issues")
+    if isinstance(issues, list):
+        for issue in issues:
+            refs.update(_review_failed_refs_from_text(str(issue or "")))
+    return {ref for ref in refs if "__" in ref}
+
+
+def _state_retry_history_failed_refs(state: Mapping[str, Any]) -> set[str]:
+    refs: set[str] = set()
+    history = state.get("produceReviewRetryHistory")
+    if not isinstance(history, list):
+        return refs
+    for row in history:
+        if not isinstance(row, Mapping):
+            continue
+        failed_refs = row.get("failedRefs")
+        if isinstance(failed_refs, list):
+            refs.update(str(ref).strip() for ref in failed_refs if str(ref).strip())
+        issue_map = row.get("issueMap")
+        if isinstance(issue_map, Mapping):
+            refs.update(str(ref).strip() for ref in issue_map.keys() if str(ref).strip())
+    return {ref for ref in refs if "__" in ref}
+
+
+def _first_pass_evidence(root: Path, state: Mapping[str, Any], reviewed_default: int) -> dict[str, Any]:
+    quality = state.get("quality") if isinstance(state.get("quality"), Mapping) else {}
+    reviewed_refs = _safe_int(quality.get("reviewedRefs") if isinstance(quality, Mapping) else None)
+    if reviewed_refs <= 0:
+        reviewed_refs = max(0, reviewed_default)
+    homepage_reviewed_refs = _safe_int(
+        quality.get("homepageReviewedRefs") if isinstance(quality, Mapping) else None
+    )
+    homepage_repaired_refs = _safe_int(
+        quality.get("homepageRepairedRefs") if isinstance(quality, Mapping) else None
+    )
+
+    history_refs = _state_retry_history_failed_refs(state)
+    repair_refs = _produce_review_repair_failed_refs(root)
+    failed_refs = history_refs or repair_refs
+    if failed_refs and reviewed_refs > 0:
+        content_reviewed_refs = max(0, reviewed_refs - homepage_reviewed_refs)
+        repaired = min(len(failed_refs), content_reviewed_refs) + homepage_repaired_refs
+        repaired = min(repaired, reviewed_refs)
+        return {
+            "firstPassRate": round((reviewed_refs - repaired) / reviewed_refs, 4),
+            "reviewedRefs": reviewed_refs,
+            "repairedRefs": repaired,
+            "homepageReviewedRefs": homepage_reviewed_refs,
+            "homepageRepairedRefs": homepage_repaired_refs,
+            "source": (
+                "produceReviewRetryHistory_plus_homepage_history"
+                if history_refs and homepage_reviewed_refs
+                else "produce_review_repair_report_plus_homepage_history"
+                if homepage_reviewed_refs
+                else "produceReviewRetryHistory"
+                if history_refs
+                else "produce_review_repair_report"
+            ),
+            "failedRefs": sorted(failed_refs)[:50],
+        }
+
+    rate = None
+    if isinstance(quality, Mapping) and "firstPassRate" in quality:
+        try:
+            rate = float(quality.get("firstPassRate"))
+        except (TypeError, ValueError):
+            rate = None
+    return {
+        "firstPassRate": rate,
+        "reviewedRefs": reviewed_refs,
+        "repairedRefs": _safe_int(quality.get("repairedRefs") if isinstance(quality, Mapping) else None),
+        "homepageReviewedRefs": homepage_reviewed_refs,
+        "homepageRepairedRefs": homepage_repaired_refs,
+        "source": "workflow_state_quality" if rate is not None else "missing",
+        "failedRefs": [],
+    }
 
 
 def _infer_release_id(
@@ -590,6 +856,8 @@ def build_scale_readiness_report(
     release_id: str | None = None,
     require_import: bool = True,
     mode: str = "commercial",
+    accept_estimated_token_ledger: bool = False,
+    accept_text_only_articles: bool = False,
 ) -> dict[str, Any]:
     from task import store
     from task.target_selection import audit_managed_batch
@@ -597,12 +865,20 @@ def build_scale_readiness_report(
     spec = store.load_spec(task_id)
     root = batch_root(task_id, batch_id)
     audit = audit_managed_batch(task_id, batch_id)
+    active_spec = _active_scale_spec(task_id, batch_id, spec)
+    commercial_closure = article_commercial_closure_enabled(active_spec)
+    commercial_target_object_goal = (
+        _commercial_target_object_count(active_spec)
+        if commercial_closure
+        else 0
+    )
     state = _load_json_if_exists(root / "_shared" / "task_workflow_state.json")
     env_report = _load_json_if_exists(root / "_shared" / "env_ready_report.json")
     release_id = _infer_release_id(release_id, state=state, root=root)
     mode = "trial" if str(mode or "").strip() == "trial" else "commercial"
-    expected = _expected_objects(spec, audit)
-    targets = _target_count(spec, audit)
+    strict_commercial_article_gate = commercial_closure and mode == "commercial"
+    expected = _expected_objects(active_spec, audit)
+    targets = _target_count(active_spec, audit)
     target_goal_value = int(target_goal or 0)
     if target_goal_value < 0:
         target_goal_value = 0
@@ -611,6 +887,11 @@ def build_scale_readiness_report(
         min_pass_rate_value = 0.0
     if min_pass_rate_value > 1:
         min_pass_rate_value = min_pass_rate_value / 100.0
+    targeted_object_goal = (
+        target_goal_value
+        or commercial_target_object_goal
+        or expected["total"]
+    )
     scope = spec.get("scope") or {}
     base_targets = scope.get("coverageTargets") if isinstance(scope.get("coverageTargets"), list) else []
     base_target_count = len(base_targets)
@@ -624,14 +905,27 @@ def build_scale_readiness_report(
     replacement_closed = targets >= required_active_targets
     runtime_integrity = scan_runtime_batch_integrity(task_id, batch_id)
     runtime_stats = runtime_integrity.get("stats") if isinstance(runtime_integrity, Mapping) else {}
+    release_integrity = (
+        scan_release_integrity(release_id)
+        if release_id and _release_exists(release_id)
+        else {}
+    )
     planned_counts = _content_plan_item_count(root)
     authored_counts = _authored_object_count(root)
     homepage_passed = _homepage_passed_count(root)
-    source_admission = _source_admission_report(task_id, batch_id, spec, root)
+    release_text_only_articles = (
+        _release_text_only_article_refs(release_id, root)
+        if commercial_closure
+        else []
+    )
+    source_admission = _source_admission_report(task_id, batch_id, active_spec, root)
     quality_target = _quality_target_report(root)
     quality_coverage = _content_quality_coverage(root)
     creator_load = _creator_load_report(root, spec, target_goal=target_goal_value)
     token_ledgers = _token_ledger_paths(root)
+    shared_token_ledger_path = root / "_shared" / "token_ledger.json"
+    shared_token_ledger = _load_json_if_exists(shared_token_ledger_path)
+    shared_token_measurement_mode = str(shared_token_ledger.get("measurementMode") or "")
     import_paths = _import_evidence_paths(root)
     ship_paths = _ship_evidence_paths(root)
     download_report = download_diagnostics(root)
@@ -659,16 +953,31 @@ def build_scale_readiness_report(
         nested = preflight.get("cursorStartup") if isinstance(preflight.get("cursorStartup"), Mapping) else {}
         if nested:
             cursor_startup = nested
-    if target_goal_value and not bool(cursor_startup.get("ready")):
-        blockers.append("Cursor SDK startup probe missing or failed;百级不得进入 author-runner")
+    if target_goal_value and not cursor_startup:
+        blockers.append("Cursor SDK startup probe missing;百级不得进入 author-runner")
+    elif target_goal_value and not bool(cursor_startup.get("checked")):
+        blockers.append("Cursor SDK startup probe not checked in batch env_ready_report;百级不得进入 author-runner")
+    elif target_goal_value and not bool(cursor_startup.get("ready")):
+        blockers.append("Cursor SDK startup probe failed in batch env_ready_report;百级不得进入 author-runner")
     status = str(state.get("status") or "")
-    if status != "succeeded":
+    reasoned_reject_trial_complete = (
+        mode == "trial"
+        and allow_partial
+        and target_goal_value > 0
+        and status == "completed_with_reasoned_rejects"
+    )
+    if status != "succeeded" and not reasoned_reject_trial_complete:
         blockers.append(f"workflow status must be succeeded for scale; got {status or 'missing'}")
+    elif reasoned_reject_trial_complete:
+        warnings.append(
+            "workflow completed_with_reasoned_rejects accepted for trial; "
+            "all abandoned refs must stay excluded from release/import and quality target must be met"
+        )
     waiting = str(state.get("waitingCheckpoint") or "")
     if waiting:
         blockers.append(f"workflow still waits at checkpoint: {waiting}")
     failed_count = _safe_int(audit.get("failedLaneCount"))
-    if failed_count and not allow_partial:
+    if failed_count and (strict_commercial_article_gate or not allow_partial):
         blockers.append(f"managed batch audit has failedLaneCount={failed_count}")
     elif failed_count:
         warnings.append(
@@ -687,11 +996,11 @@ def build_scale_readiness_report(
             f"replacement={replacement_count} activeTargets={targets} closed={replacement_closed}"
         )
     abandoned_content_ratio = (
-        abandoned_content_count / expected["total"]
-        if expected["total"]
+        abandoned_content_count / targeted_object_goal
+        if targeted_object_goal
         else 0.0
     )
-    if abandoned_content_count and mode == "commercial" and not allow_partial:
+    if abandoned_content_count and mode == "commercial" and (strict_commercial_article_gate or not allow_partial):
         blockers.append(f"scale readiness requires zero abandoned content objects; got {abandoned_content_count}")
     elif abandoned_content_count:
         if abandoned_content_ratio > MAX_TRIAL_ABANDONED_CONTENT_RATIO and not allow_partial:
@@ -741,7 +1050,10 @@ def build_scale_readiness_report(
     actual_videos = _safe_int((runtime_stats or {}).get("videoCount"))
     actual_posts = _safe_int((runtime_stats or {}).get("postCount"))
     published_total = actual_posts + homepage_passed
-    target_passed = _safe_int(quality_target.get("qualityPassedObjectCount"), published_total)
+    target_passed = _safe_int(
+        quality_target.get("qualityPassedObjectCount"),
+        actual_posts if commercial_closure else published_total,
+    )
     target_rate = round(target_passed / target_goal_value, 4) if target_goal_value else 0.0
     if target_goal_value and target_rate < min_pass_rate_value:
         blockers.append(
@@ -749,8 +1061,13 @@ def build_scale_readiness_report(
             f"({target_passed}/{target_goal_value})"
         )
     computed_source_ready_goal = source_ready_goal
-    if computed_source_ready_goal is None and target_goal_value:
-        computed_source_ready_goal = int(round(target_goal_value * DEFAULT_SCALE_SOURCE_READY_MULTIPLIER))
+    if computed_source_ready_goal is None:
+        if target_goal_value:
+            computed_source_ready_goal = int(round(target_goal_value * DEFAULT_SCALE_SOURCE_READY_MULTIPLIER))
+        elif commercial_closure and commercial_target_object_goal:
+            computed_source_ready_goal = int(
+                round(commercial_target_object_goal * DEFAULT_SCALE_SOURCE_READY_MULTIPLIER)
+            )
     if computed_source_ready_goal and _safe_int(source_admission.get("sourceReadyObjectCapacity")) < int(computed_source_ready_goal):
         blockers.append(
             "source-ready object capacity "
@@ -764,24 +1081,69 @@ def build_scale_readiness_report(
         mode == "trial"
         and actual_images + _safe_int(abandoned_content_by_type.get("image")) >= expected["image"]
     )
-    if expected["article"] and actual_articles < expected["article"] and not article_shortfall_closed and not allow_partial:
-        blockers.append(f"materialized article count {actual_articles} < expected {expected['article']}")
-    elif expected["article"] and actual_articles < expected["article"]:
-        warnings.append(
-            f"partial article delivery accepted: "
-            f"actual={actual_articles} abandoned={_safe_int(abandoned_content_by_type.get('article'))} "
-            f"expected={expected['article']}"
+    if commercial_closure:
+        if _quotas(active_spec)["article"] > 0 and actual_articles <= 0:
+            blockers.append("article commercial closure requires materialized article posts")
+        if expected["article"] and actual_articles < expected["article"]:
+            warnings.append(
+                f"shared article pool below desired mix: actual={actual_articles} "
+                f"expectedMix={expected['article']}"
+            )
+        if expected["image"] and actual_images < expected["image"]:
+            warnings.append(
+                f"shared image pool below desired mix: actual={actual_images} "
+                f"expectedMix={expected['image']}"
+            )
+    else:
+        if expected["article"] and actual_articles < expected["article"] and not article_shortfall_closed and not allow_partial:
+            blockers.append(f"materialized article count {actual_articles} < expected {expected['article']}")
+        elif expected["article"] and actual_articles < expected["article"]:
+            warnings.append(
+                f"partial article delivery accepted: "
+                f"actual={actual_articles} abandoned={_safe_int(abandoned_content_by_type.get('article'))} "
+                f"expected={expected['article']}"
+            )
+        if expected["image"] and actual_images < expected["image"] and not image_shortfall_closed and not allow_partial:
+            blockers.append(f"materialized image count {actual_images} < expected {expected['image']}")
+        elif expected["image"] and actual_images < expected["image"]:
+            warnings.append(
+                f"partial image delivery accepted: "
+                f"actual={actual_images} abandoned={_safe_int(abandoned_content_by_type.get('image'))} "
+                f"expected={expected['image']}"
+            )
+    if targeted_object_goal and (actual_posts if commercial_closure else published_total) <= 0:
+        blockers.append("materialized publishable object count is zero")
+    runtime_integrity_issues = list(runtime_integrity.get("issues") or []) if isinstance(runtime_integrity, Mapping) else []
+    if commercial_closure and (runtime_integrity_issues or not bool(runtime_integrity.get("passed"))):
+        runtime_integrity_summary = "; ".join(str(issue) for issue in runtime_integrity_issues[:8]) or "unknown issue"
+        blockers.append(
+            "runtime batch integrity failed: "
+            + runtime_integrity_summary
+            + (" ..." if len(runtime_integrity_issues) > 8 else "")
         )
-    if expected["image"] and actual_images < expected["image"] and not image_shortfall_closed and not allow_partial:
-        blockers.append(f"materialized image count {actual_images} < expected {expected['image']}")
-    elif expected["image"] and actual_images < expected["image"]:
-        warnings.append(
-            f"partial image delivery accepted: "
-            f"actual={actual_images} abandoned={_safe_int(abandoned_content_by_type.get('image'))} "
-            f"expected={expected['image']}"
+    release_integrity_issues = list(release_integrity.get("issues") or []) if isinstance(release_integrity, Mapping) else []
+    if commercial_closure and release_integrity and (release_integrity_issues or not bool(release_integrity.get("passed"))):
+        release_integrity_summary = "; ".join(str(issue) for issue in release_integrity_issues[:8]) or "unknown issue"
+        blockers.append(
+            "release integrity failed: "
+            + release_integrity_summary
+            + (" ..." if len(release_integrity_issues) > 8 else "")
         )
-    if expected["total"] and actual_posts <= 0:
-        blockers.append("materialized publishable post count is zero")
+    if commercial_closure and release_text_only_articles:
+        text_only_message = (
+            "release contains text_only article(s): "
+            + ", ".join(release_text_only_articles[:8])
+            + (" ..." if len(release_text_only_articles) > 8 else "")
+        )
+        if accept_text_only_articles:
+            # 显式接受口径（acceptance GWT3 / R-CS10 收口裁定）：text_only 文章准出，
+            # 图文同源列为后续升级；必须由调用方显式传参，禁止静默放宽。
+            warnings.append(
+                "text_only articles explicitly accepted via --accept-text-only-articles: "
+                + text_only_message
+            )
+        else:
+            blockers.append("commercial mixed-layout gate failed: " + text_only_message)
     # 作品判定纯净性：随记/弃稿不得进入发布（不受 partial 放行影响）。
     if quality_coverage["nonWorkMaterializedCount"]:
         blockers.append(
@@ -807,7 +1169,22 @@ def build_scale_readiness_report(
         blockers.append("daily target >=10000 requires queueBackend=reliabletask")
     if daily_target >= 10_000 and max_concurrency < 10:
         blockers.append("daily target >=10000 requires measured maxConcurrency >=10 for trial admission")
-    if not token_ledgers:
+    if not shared_token_ledger:
+        blockers.append("authoritative TokenLedger missing at _shared/token_ledger.json")
+    elif not shared_token_measurement_mode:
+        blockers.append("TokenLedger measurementMode missing; cannot prove authoritative accounting")
+    elif shared_token_measurement_mode == "estimated_from_artifacts":
+        if accept_estimated_token_ledger:
+            # 显式接受口径（acceptance GWT2 / 2026-07-06 用户裁定）：本地 cursor_sdk bridge
+            # 不回传 usage，H100 允许 estimated 账本准出；authoritative 为后续升级项。
+            warnings.append(
+                "TokenLedger measurementMode=estimated_from_artifacts explicitly accepted "
+                "via --accept-estimated-token-ledger; authoritative usage ledger remains a "
+                "follow-up upgrade (backlog R-CS03)"
+            )
+        else:
+            blockers.append("TokenLedger measurementMode must not be estimated_from_artifacts")
+    elif not token_ledgers:
         blockers.append("TokenLedger evidence missing; cannot project unit token/cost or cache hit rate")
     if not release_id or not _release_exists(release_id):
         blockers.append("isolated release evidence missing; release verify cannot be proven")
@@ -855,7 +1232,7 @@ def build_scale_readiness_report(
                 f"not by trial wall-clock throughput ({measured_objects_per_hour:.2f} obj/h); "
                 "linear scaling across the committed reliabletask fleet is an explicit unproven assumption"
             )
-    if expected["total"] <= 0:
+    if targeted_object_goal <= 0:
         blockers.append("expected content object count is zero")
     if creator_load["required"] and creator_load["assignmentIssueCount"]:
         blockers.append(
@@ -864,24 +1241,30 @@ def build_scale_readiness_report(
             f"samples={creator_load['assignmentIssues'][:5]}"
         )
     if target_goal_value >= 100 and creator_load["overloadedCreatorProfileIds"]:
-        blockers.append(
+        creator_overload_message = (
             "creator load exceeds publishCadence.maxDailyPosts=1 for scale: "
             + ", ".join(creator_load["overloadedCreatorProfileIds"][:10])
         )
-    if expected["total"] and daily_target / max(expected["total"], 1) > 1000:
+        if mode == "trial":
+            warnings.append(
+                "trial " + creator_overload_message
+                + "; commercial promotion must expand creator assignment or spread publish cadence first"
+            )
+        else:
+            blockers.append(creator_overload_message)
+    if targeted_object_goal and daily_target / max(targeted_object_goal, 1) > 1000:
         warnings.append("trial sample is too small to extrapolate linearly to requested daily target")
 
-    # When workflow is successful, first-pass rate should come from review/import
-    # counters.  Without it, keep scale blocked above via throughput/token/release
-    # and record the missing value explicitly.
-    first_pass_rate = None
-    quality = state.get("quality") if isinstance(state.get("quality"), Mapping) else {}
-    if isinstance(quality, Mapping) and "firstPassRate" in quality:
-        try:
-            first_pass_rate = float(quality.get("firstPassRate"))
-        except (TypeError, ValueError):
-            first_pass_rate = None
-    if first_pass_rate is not None and first_pass_rate < MIN_FIRST_PASS_RATE:
+    # When workflow is successful, first-pass rate must still preserve repaired
+    # review refs.  Older runs may have cleared workflow quality back to 1.0
+    # after repair; the repair report/history keeps the honest first-pass signal.
+    first_pass = _first_pass_evidence(root, state, actual_posts)
+    first_pass_rate = first_pass["firstPassRate"]
+    first_pass_threshold = max(
+        MIN_FIRST_PASS_RATE,
+        float(min_pass_rate_value) if target_goal_value else MIN_FIRST_PASS_RATE,
+    )
+    if first_pass_rate is not None and first_pass_rate < first_pass_threshold:
         trial_target_met = (
             mode == "trial"
             and target_goal_value
@@ -889,11 +1272,11 @@ def build_scale_readiness_report(
         )
         if trial_target_met:
             warnings.append(
-                f"trial firstPassRate {first_pass_rate:.2%} < {MIN_FIRST_PASS_RATE:.0%}; "
+                f"trial firstPassRate {first_pass_rate:.2%} < {first_pass_threshold:.0%}; "
                 "quality target already satisfied with honest partial delivery"
             )
         else:
-            blockers.append(f"firstPassRate {first_pass_rate:.2%} < {MIN_FIRST_PASS_RATE:.0%}")
+            blockers.append(f"firstPassRate {first_pass_rate:.2%} < {first_pass_threshold:.0%}")
     elif first_pass_rate is None:
         blockers.append("firstPassRate evidence missing")
 
@@ -915,7 +1298,7 @@ def build_scale_readiness_report(
             "sourceReadyMultiplier": DEFAULT_SCALE_SOURCE_READY_MULTIPLIER,
         },
         "funnel": {
-            "targeted": target_goal_value or expected["total"],
+            "targeted": targeted_object_goal,
             "sourceReady": _safe_int(source_admission.get("sourceReadyObjectCapacity")),
             "homepagePassed": homepage_passed,
             "contentPlanned": planned_counts["total"],
@@ -953,7 +1336,9 @@ def build_scale_readiness_report(
             "abandonedContentRatio": round(abandoned_content_ratio, 4),
             "maxTrialAbandonedContentRatio": MAX_TRIAL_ABANDONED_CONTENT_RATIO,
             "delivered": {
+                "objects": published_total,
                 "posts": actual_posts,
+                "homepages": homepage_passed,
                 "articles": actual_articles,
                 "images": actual_images,
                 "videos": actual_videos,
@@ -974,6 +1359,14 @@ def build_scale_readiness_report(
         "runtimeIntegrity": {
             "passed": bool(runtime_integrity.get("passed")),
             "stats": runtime_stats or {},
+            "issues": runtime_integrity_issues[:20],
+        },
+        "releaseIntegrity": {
+            "passed": bool(release_integrity.get("passed")) if release_integrity else False,
+            "stats": (release_integrity.get("stats") or {}) if isinstance(release_integrity, Mapping) else {},
+            "issues": release_integrity_issues[:20],
+            "textOnlyArticles": release_text_only_articles,
+            "textOnlyArticlesAccepted": bool(accept_text_only_articles),
         },
         "contentQualityCoverage": quality_coverage,
         "creatorLoad": creator_load,
@@ -987,6 +1380,17 @@ def build_scale_readiness_report(
             "maxConcurrency": max_concurrency,
             "tokenLedgerCount": len(token_ledgers),
             "tokenLedgerPaths": token_ledgers[:20],
+            "authoritativeTokenLedgerPath": str(shared_token_ledger_path) if shared_token_ledger else "",
+            "authoritativeTokenLedgerMeasurementMode": shared_token_measurement_mode,
+            "authoritativeTokenLedgerReady": bool(
+                shared_token_ledger
+                and shared_token_measurement_mode
+                and shared_token_measurement_mode != "estimated_from_artifacts"
+            ),
+            "estimatedTokenLedgerAccepted": bool(
+                accept_estimated_token_ledger
+                and shared_token_measurement_mode == "estimated_from_artifacts"
+            ),
             "releaseId": release_id or "",
             "releaseManifestExists": _release_exists(release_id),
             "shipEvidencePaths": ship_paths,
@@ -996,6 +1400,8 @@ def build_scale_readiness_report(
             "measuredThroughput": measured_throughput,
             "throughputProjection": throughput_projection,
             "firstPassRate": first_pass_rate,
+            "firstPassThreshold": first_pass_threshold,
+            "firstPassEvidence": first_pass,
         },
         "envReady": {
             "ready": bool(env_report.get("ready")),

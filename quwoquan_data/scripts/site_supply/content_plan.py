@@ -47,7 +47,8 @@ def _download_candidate_images(candidate: Mapping[str, Any], *, limit: int) -> t
             "credit": str(asset.get("credit") or ""),
             "usageScope": str(asset.get("usageScope") or ""),
             "sourceCollectionId": str(asset.get("sourceCollectionId") or _stable_ref("collection", url)),
-            "caption": str(asset.get("caption") or asset.get("fileTitle") or candidate.get("title") or ""),
+            "title": str(asset.get("title") or asset.get("fileTitle") or candidate.get("title") or ""),
+            "caption": str(asset.get("caption") or ""),
             "relevance": str(candidate.get("title") or ""),
         }
         missing = [field for field in REQUIRED_ASSET_RIGHTS_FIELDS if not str(image.get(field) or "").strip()]
@@ -62,6 +63,130 @@ def _content_plan_title(candidate: Mapping[str, Any], entity_name: str, intent_l
     if raw_title and raw_title != entity_name:
         return f"{entity_name}·{intent_label}：{raw_title[:40]}"
     return f"{entity_name}·{intent_label}"
+
+
+def _min_assets_per_image_work() -> int:
+    try:
+        from _common.works_classifier import load_works_classification_config
+
+        config = load_works_classification_config()
+        rules = config.get("carrierRules") if isinstance(config.get("carrierRules"), Mapping) else {}
+        return max(1, int(rules.get("minImagesForImageWork") or 4))
+    except Exception:
+        return 4
+
+
+def _effective_min_assets_per_image_work(candidate: Mapping[str, Any]) -> int:
+    source = candidate.get("source") if isinstance(candidate.get("source"), Mapping) else {}
+    rights_policy = str(source.get("rightsPolicy") or "").strip()
+    admission_mode = str(source.get("admissionMode") or "").strip()
+    if rights_policy == "attribution_no_watermark" or admission_mode == ADMISSION_ATTRIBUTION_PUBLISH_INGEST:
+        return 1
+    for asset in [row for row in (candidate.get("assets") or []) if isinstance(row, Mapping)]:
+        if str(asset.get("authorizationBasis") or "").strip() == "attribution_no_watermark":
+            return 1
+    return _min_assets_per_image_work()
+
+
+def _authorized_candidate_images(candidate: Mapping[str, Any], *, min_count: int) -> tuple[list[dict[str, Any]], list[str]]:
+    images: list[dict[str, Any]] = []
+    issues: list[str] = []
+    for asset in [a for a in (candidate.get("assets") or []) if isinstance(a, Mapping)]:
+        asset_id = str(asset.get("assetId") or asset.get("sourceUrl") or "asset")
+        source_path = str(asset.get("sourcePath") or asset.get("localPath") or "").strip()
+        if not source_path:
+            issues.append(f"{asset_id}: authorized image work requires sourcePath/localPath from ingest")
+            continue
+        path = Path(source_path)
+        if not path.is_file():
+            issues.append(f"{asset_id}: authorized sourcePath missing: {path}")
+            continue
+        images.append(
+            {
+                **dict(asset),
+                "sourcePath": str(path),
+                "url": str(asset.get("downloadUrl") or asset.get("sourceUrl") or ""),
+                "requestedUrl": str(asset.get("downloadUrl") or asset.get("sourceUrl") or ""),
+                "sourceUrl": str(asset.get("sourceUrl") or ""),
+                "contentType": str(asset.get("mimeType") or asset.get("contentType") or ""),
+                "ext": path.suffix or ".jpg",
+                "caption": str(asset.get("caption") or ""),
+                "relevance": str(asset.get("relevance") or asset.get("title") or candidate.get("title") or ""),
+            }
+        )
+    if len(images) < int(min_count):
+        issues.append(f"image work requires at least {int(min_count)} authorized local assets; got {len(images)}")
+    return images, issues
+
+
+def _compact_text(value: Any, limit: int) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= int(limit):
+        return text
+    return text[: int(limit)].rstrip()
+
+
+def _image_source_markdown(candidate: Mapping[str, Any], images: list[Mapping[str, Any]]) -> str:
+    first = images[0] if images else {}
+    heading = str(candidate.get("title") or first.get("title") or "").strip()
+    lines = [
+        f"# {heading}" if heading else "# 图片来源记录",
+        "",
+        f"sourceCollectionId: {str(first.get('sourceCollectionId') or '').strip()}",
+        f"creator: {str(first.get('creator') or '').strip()}",
+        f"credit: {str(first.get('credit') or '').strip()}",
+        f"collectionPageUrl: {str(first.get('collectionPageUrl') or '').strip()}",
+        f"license: {str(first.get('license') or '').strip()}",
+        f"termsUrl: {str(first.get('termsUrl') or '').strip()}",
+        f"authorizationProof: {str(first.get('authorizationProof') or '').strip()}",
+        f"authorizationBasis: {str(first.get('authorizationBasis') or '').strip()}",
+        f"pinUrl: {str(first.get('pinUrl') or '').strip()}",
+        f"discoveryUrl: {str(first.get('discoveryUrl') or '').strip()}",
+        f"originalAssetUrl: {str(first.get('originalAssetUrl') or '').strip()}",
+        f"sourceAuthor: {str(first.get('sourceAuthor') or '').strip()}",
+        f"repostAttribution: {str(first.get('repostAttribution') or '').strip()}",
+        f"watermarkScan: {str(first.get('watermarkScan') or '').strip()}",
+        f"ocrScan: {str(first.get('ocrScan') or '').strip()}",
+        f"collectedAt: {str(first.get('collectedAt') or '').strip()}",
+        "",
+        "## Assets",
+    ]
+    for asset in images:
+        lines.append(
+            "- "
+            f"{asset.get('assetId')}: {asset.get('title') or asset.get('caption') or ''} "
+            f"({asset.get('width') or 0}x{asset.get('height') or 0})"
+        )
+    return "\n".join(lines).strip() + "\n"
+
+
+def _source_unit_asset_refs(
+    *,
+    task_id: str,
+    batch_id: str,
+    source_ref: str,
+    batch_root_path: Path,
+    relative_batch_ref_fn: Any,
+) -> list[str]:
+    source_path = batch_root_path / source_ref
+    index_path = source_path.parent / "assets" / "index.json"
+    if not index_path.is_file():
+        return []
+    try:
+        rows = read_json(index_path).get("assets") or []
+    except (OSError, ValueError, TypeError):
+        return []
+    refs: list[str] = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        file_name = str(row.get("fileName") or "").strip()
+        if not file_name:
+            continue
+        asset_file = source_path.parent / "assets" / file_name
+        if asset_file.is_file():
+            refs.append(relative_batch_ref_fn(asset_file, task_id, batch_id))
+    return refs
 
 def build_site_content_plan(
     *,
@@ -141,7 +266,26 @@ def build_site_content_plan(
         return report
     ensure_batch_layout(task_id, target_batch, "download")
     ensure_batch_layout(task_id, target_batch, "produce")
-    write_batch_manifest(task_id, target_batch, command="site-supply:content-plan")
+    # 一批次一内容类型：批次 contentType 由首个可用候选的 lane 定调（article/image），
+    # 后续不同 lane 的候选必须另起批次（循环内 skipped 拦截）。
+    batch_lane = ""
+    for _ref in scan_refs:
+        _candidate_file = _candidate_path(source_root, _ref)
+        if not _candidate_file.is_file():
+            continue
+        _lane = str((read_json(_candidate_file) or {}).get("lane") or "")
+        if _lane in {"article", "image"}:
+            batch_lane = _lane
+            break
+    # 站点主线 handoff 固化：supplyMode=site_primary、sourceKey=siteId（目录规范单一供给门）。
+    write_batch_manifest(
+        task_id,
+        target_batch,
+        command="site-supply:content-plan",
+        content_type=batch_lane,
+        supply_mode="site_primary",
+        source_key=site_id,
+    )
     registry = TemplateRegistry.load()
     etype_parts = [p for p in str(entity_type).strip("/").split("/") if p]
     entity_domain = etype_parts[0] if len(etype_parts) >= 2 else "地点"
@@ -174,8 +318,13 @@ def build_site_content_plan(
             ref_issues.append("site_score not productionEligible; repair at site_score")
         if not _packet_gate_passed(mapped) or not ((mapped.get("contentPlanHandoff") or {}).get("eligible")):
             ref_issues.append("site_map handoff not eligible; repair at site_map")
-        if str(candidate.get("lane") or "") != "article":
-            ref_issues.append("content-plan v1 only supports article lane")
+        lane = str(candidate.get("lane") or "")
+        if lane not in {"article", "image"}:
+            ref_issues.append(f"content-plan bridge only supports article/image lane; got {lane!r}")
+        elif batch_lane and lane != batch_lane:
+            ref_issues.append(
+                f"batch contentType is {batch_lane!r}; lane {lane!r} candidate must go to a separate batch"
+            )
         mentions = candidate.get("semanticMentions") if isinstance(candidate.get("semanticMentions"), Mapping) else {}
         expected_entity_type = f"{entity_domain}/{entity_leaf_type}"
         raw_entity_values = [str(x).strip() for x in (mentions.get("entities") or []) if str(x).strip()]
@@ -213,6 +362,117 @@ def build_site_content_plan(
             ref_issues.append("candidate has no entity mention/title; repair at site_map")
         text = str(candidate.get("text") or "").strip()
         source_id = f"{site_id}_{_site_candidate_ref_slug(ref)}"
+        if lane == "image":
+            min_assets_per_work = _effective_min_assets_per_image_work(candidate)
+            images, image_issues = _authorized_candidate_images(candidate, min_count=min_assets_per_work)
+            if image_issues:
+                ref_issues.extend(image_issues)
+            if ref_issues:
+                skipped[ref] = ref_issues
+                continue
+            entity_ref = f"/entity/{entity_domain}/{entity_leaf_type}/{entity_name}"
+            object_dir = resolve_entity_object_dir(task_id, target_batch, entity_ref)
+            source_ordinal = len(items) + 1
+            source_md = _image_source_markdown(candidate, images)
+            manifest = write_source_unit(
+                object_dir,
+                ordinal=source_ordinal,
+                source_id=source_id,
+                source_md=source_md,
+                clean_md=source_md,
+                html_bytes=None,
+                quality={
+                    "sourceId": source_id,
+                    "quality": "A-image",
+                    "score": max(7, min(10, int(float((score.get("scores") or {}).get("overall") or 0.8) * 10))),
+                    "reasons": ["site_supply_handoff", site_id, "licensed_asset_ingest", "image_work"],
+                    "excerpt": source_md[:180],
+                    "url": str(candidate.get("canonicalUrl") or ""),
+                },
+                platform=str((candidate.get("source") or {}).get("platform") or site_id),
+                source_category=source_category,
+                source_use_mode="licensed_publish_asset",
+                source_role="image",
+                image_evidence_mode="source_unit_assets",
+                research_lane="image",
+                license_value=str((candidate.get("source") or {}).get("rightsPolicy") or "licensed_asset_required"),
+                url=str(candidate.get("canonicalUrl") or ""),
+                title=str(candidate.get("title") or entity_name),
+                target_ref=entity_ref,
+                relevance=f"{entity_name} 摄影图片作品授权来源集合",
+                images=images,
+                task_id=task_id,
+                batch_id=target_batch,
+                build_variants=False,
+            )
+            source_ref = str(manifest.get("sourceRef") or "")
+            asset_refs = _source_unit_asset_refs(
+                task_id=task_id,
+                batch_id=target_batch,
+                source_ref=source_ref,
+                batch_root_path=batch_root(task_id, target_batch),
+                relative_batch_ref_fn=relative_batch_ref,
+            )
+            if len(asset_refs) < min_assets_per_work:
+                skipped[ref] = [
+                    f"image work source unit materialized {len(asset_refs)} assets < required {min_assets_per_work}"
+                ]
+                continue
+            first_image = images[0]
+            collection_id = str(first_image.get("sourceCollectionId") or "").strip()
+            validation_target_key = (f"{entity_domain}/{entity_leaf_type}", entity_name)
+            caption = _compact_text(
+                str(first_image.get("caption") or candidate.get("caption") or "").strip(),
+                300,
+            )
+            title = _compact_text(
+                str(candidate.get("title") or first_image.get("title") or "").strip(),
+                80,
+            )
+            brief = {
+                "titleHint": title,
+                "carrier": "image",
+                "entityRefs": [entity_ref],
+                "entityTags": [entity_name],
+                "mustIncludeFacts": [
+                    f"{entity_name} 摄影图片作品",
+                    "图片来自同一授权来源集合（单一 source unit），禁止跨作者/页面/底稿混图",
+                ],
+                "templateId": "travel.entity.gallery",
+                "sourceCollectionId": collection_id,
+                "baseSourceRef": source_ref,
+                "assetRefs": asset_refs,
+                "caption": caption,
+            }
+            write_brief_object(task_id, target_batch, ref, brief, content_type="image")
+            items.append(
+                {
+                    "ref": ref,
+                    "kind": "entity",
+                    "carrier": "image",
+                    "researchLane": "image",
+                    "title": title,
+                    "caption": caption,
+                    "entityRefs": [entity_ref],
+                    "entityTags": [entity_name],
+                    "evidenceRefs": [source_ref],
+                    "rationale": "site_map eligible licensed image candidate converted to one-source-one-work image plan",
+                    "mustIncludeFacts": brief["mustIncludeFacts"],
+                    "baseSourceRef": source_ref,
+                    "assetRefs": asset_refs,
+                    "sourceCandidateRef": ref,
+                    "sourceUrl": str(candidate.get("canonicalUrl") or ""),
+                    "sourceCollectionId": collection_id,
+                }
+            )
+            if validation_target_key not in validation_target_keys:
+                validation_target_keys.add(validation_target_key)
+                validation_targets.append({"entityType": validation_target_key[0], "name": validation_target_key[1]})
+            outputs.append(str(batch_root(task_id, target_batch) / source_ref))
+            source_unit_ref = str(manifest.get("sourceUnitRef") or "").strip()
+            if source_unit_ref:
+                outputs.append(str(batch_root(task_id, target_batch) / source_unit_ref / "meta.json"))
+            continue
         base_draft_text = extract_base_draft_body(text)
         effective_text_len = len(re.sub(r"\s+", "", base_draft_text))
         if effective_text_len < MIN_ARTICLE_BASE_DRAFT_CHARS:
@@ -374,6 +634,8 @@ def build_site_content_plan(
             target_batch,
             coverage_targets=validation_targets,
             command="site-supply:content-plan",
+            supply_mode="site_primary",
+            source_key=site_id,
         )
         write_json(
             batch_content_plan_packet_path(task_id, target_batch),
@@ -417,7 +679,7 @@ def handle_content_plan(args: argparse.Namespace) -> None:
         max_images_per_candidate=args.max_images_per_candidate,
         allow_partial=args.allow_partial,
     )
-    _print(report)
+    print(json.dumps(report, ensure_ascii=False, indent=2))
     if not (report.get("gate") or {}).get("passed"):
         raise SystemExit(1)
 

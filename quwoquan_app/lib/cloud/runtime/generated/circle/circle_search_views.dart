@@ -3,6 +3,8 @@
 /// 字段对齐：contracts/metadata/social/circle/fields.yaml
 /// `CircleSearchItemView` / `CircleFacetBucketView` / `CircleSearchResultView`。
 
+library;
+
 class CircleSearchItemView {
   const CircleSearchItemView({
     required this.circleId,

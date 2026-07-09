@@ -13,7 +13,7 @@ affected_nodes:
   - specs/feature-tree/recommendation-platform/rec-model-service/inference-capacity-elasticity
   - specs/feature-tree/runtime/runtime-recommendation
   - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
-  - deploy/monitoring/alerts/quwoquan_alerts.yaml
+  - quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
 
 entries:
   - timestamp: "2026-06-17T00:40:00+08:00"
@@ -82,7 +82,7 @@ entries:
           - metrics
           - slis
           - commercial_maturity
-      - path: deploy/monitoring/alerts/quwoquan_alerts.yaml
+      - path: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
         sections:
           - quwoquan_rec_model
       - path: docs/recommendation-commercial-maturity-plan.md

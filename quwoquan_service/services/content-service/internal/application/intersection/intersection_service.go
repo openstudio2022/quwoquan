@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	rterr "quwoquan_service/runtime/errors"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/content-service/internal/application/ports"
 	"quwoquan_service/services/content-service/internal/generated"
@@ -64,6 +65,12 @@ const (
 	defaultIntersectionMaxCandidateWindow = 20
 	intersectionCooldownTTL               = 30 * 24 * time.Hour
 	watermarkCacheTTL                     = 90 * 24 * time.Hour
+	// defaultIntersectionNegativeFeedbackCooldownDays 交集负反馈冷却默认天数（F 推荐差异化）。
+	// 比曝光冷却更长，语义为「过滤不再推荐」；唯一 key/TTL 真相源登记在
+	// contracts/metadata/_shared/redis_keyspace.yaml: rec:ineg，policy.yaml
+	// intersection.negativeFeedbackCooldownDays 可配。
+	defaultIntersectionNegativeFeedbackCooldownDays = 30
+	intersectionNegativeFeedbackTTL                 = 60 * 24 * time.Hour
 )
 
 var intersectionDimensionLabels = map[string]string{
@@ -77,14 +84,15 @@ var intersectionDimensionLabels = map[string]string{
 // IntersectionService 承载交集统一体验的服务端核心机制：
 // 事实/概率合并排序、跨会话冷却窗口、保鲜过滤、per-dimension 已读水位。
 type IntersectionService struct {
-	source             IntersectionSource
-	redis              intersectionRedis
-	watermarkStore     ports.WatermarkStore
-	cooldownDays       int
-	maxCandidateWindow int
-	now                func() time.Time
-	metrics            IntersectionMetricsRecorder
-	logger             *slog.Logger
+	source               IntersectionSource
+	redis                intersectionRedis
+	watermarkStore       ports.WatermarkStore
+	cooldownDays         int
+	negativeFeedbackDays int
+	maxCandidateWindow   int
+	now                  func() time.Time
+	metrics              IntersectionMetricsRecorder
+	logger               *slog.Logger
 }
 
 // IntersectionServiceOption 配置项。
@@ -104,6 +112,15 @@ func WithIntersectionCooldownDays(days int) IntersectionServiceOption {
 	return func(svc *IntersectionService) {
 		if days > 0 {
 			svc.cooldownDays = days
+		}
+	}
+}
+
+// WithIntersectionNegativeFeedbackCooldownDays 覆盖交集负反馈冷却天数（policy 可配，F 推荐差异化）。
+func WithIntersectionNegativeFeedbackCooldownDays(days int) IntersectionServiceOption {
+	return func(svc *IntersectionService) {
+		if days > 0 {
+			svc.negativeFeedbackDays = days
 		}
 	}
 }
@@ -148,13 +165,14 @@ func WithIntersectionLogger(l *slog.Logger) IntersectionServiceOption {
 // NewIntersectionService 构造交集服务。router 为 nil 时退化为无冷却/无水位（仅排序）。
 func NewIntersectionService(router intersectionRedis, opts ...IntersectionServiceOption) *IntersectionService {
 	svc := &IntersectionService{
-		source:             emptyIntersectionSource{},
-		redis:              router,
-		cooldownDays:       defaultIntersectionCooldownDays,
-		maxCandidateWindow: defaultIntersectionMaxCandidateWindow,
-		now:                time.Now,
-		metrics:            noopIntersectionMetrics{},
-		logger:             slog.Default(),
+		source:               emptyIntersectionSource{},
+		redis:                router,
+		cooldownDays:         defaultIntersectionCooldownDays,
+		negativeFeedbackDays: defaultIntersectionNegativeFeedbackCooldownDays,
+		maxCandidateWindow:   defaultIntersectionMaxCandidateWindow,
+		now:                  time.Now,
+		metrics:              noopIntersectionMetrics{},
+		logger:               slog.Default(),
 	}
 	for _, opt := range opts {
 		opt(svc)
@@ -163,6 +181,10 @@ func NewIntersectionService(router intersectionRedis, opts ...IntersectionServic
 }
 
 func cooldownKey(userID string) string { return "rec:icool:{" + userID + "}" }
+
+// negFeedbackKey 是交集负反馈冷却集（F 推荐差异化）。唯一 key/TTL 真相源登记在
+// contracts/metadata/_shared/redis_keyspace.yaml: rec:ineg（sorted_set，hash_tag userId）。
+func negFeedbackKey(userID string) string { return "rec:ineg:{" + userID + "}" }
 
 // watermarkKey 是「我的交集」收件箱 per-dimension 已读水位 hash（D1 修复后独立于读模型
 // 聚合快照）。唯一类型/TTL 真相源登记在 contracts/metadata/_shared/redis_keyspace.yaml:
@@ -225,6 +247,68 @@ func (s *IntersectionService) seenKeys(ctx context.Context, userID string) map[s
 		out[m] = struct{}{}
 	}
 	return out
+}
+
+// ReportNegativeFeedback 记录用户对某交集主体（subject）的显式负反馈，写入交集负反馈冷却集
+// （rec:ineg，F 推荐差异化）。窗口内 Feed 对该 subject「过滤不再推荐」（比曝光冷却 seen 降权更强）。
+//
+// feedbackKind 必须 ∈ registry.feedbackKinds 闭集（防御式二次校验，服务边界，behavior 边界已先校验）；
+// 非法 kind / 空 subject 结构化拒绝（runtime/errors，不静默吞）。Redis 不可用时降级——
+// 记录降级指标 + 结构化告警，返回 nil 不阻断上游批处理（最坏本次未冷却，不影响主链路）。
+func (s *IntersectionService) ReportNegativeFeedback(ctx context.Context, userID, subjectID, feedbackKind string) error {
+	userID = strings.TrimSpace(userID)
+	subjectID = strings.TrimSpace(subjectID)
+	feedbackKind = strings.TrimSpace(feedbackKind)
+	if userID == "" || subjectID == "" {
+		return rterr.NewInvalidArgument(rterr.ModuleContent, "userId/subjectId 必填", "intersection negative feedback requires userId and subjectId")
+	}
+	if !negativeFeedbackKindSupported(feedbackKind) {
+		return rterr.NewInvalidArgument(rterr.ModuleContent, "feedbackKind 非法", "intersection negative feedback requires feedbackKind in registry.feedbackKinds")
+	}
+	if s.redis == nil {
+		return nil
+	}
+	key := negFeedbackKey(userID)
+	client := s.redis.ForKey(key)
+	expireScore := float64(s.now().Add(time.Duration(s.negativeFeedbackDays) * 24 * time.Hour).Unix())
+	if err := client.ZAdd(ctx, key, expireScore, subjectID); err != nil {
+		s.degradeRedis("negative_feedback_write", err, "userId", userID)
+		return nil
+	}
+	s.metrics.ObserveNegativeFeedbackReported(1)
+	if err := client.Expire(ctx, key, intersectionNegativeFeedbackTTL); err != nil {
+		s.degradeRedis("negative_feedback_write", err, "userId", userID)
+	}
+	return nil
+}
+
+// negativeFeedbackKeys 返回仍在负反馈冷却窗口内的 subject 集合（score = 过期时刻 > now）。
+func (s *IntersectionService) negativeFeedbackKeys(ctx context.Context, userID string) map[string]struct{} {
+	out := map[string]struct{}{}
+	if s.redis == nil || strings.TrimSpace(userID) == "" {
+		return out
+	}
+	key := negFeedbackKey(userID)
+	nowUnix := float64(s.now().Unix())
+	members, err := s.redis.ForKey(key).ZRangeByScore(ctx, key, nowUnix, float64(1<<62), 0)
+	if err != nil {
+		return out
+	}
+	for _, m := range members {
+		out[m] = struct{}{}
+	}
+	return out
+}
+
+// negativeFeedbackKindSupported 校验 feedbackKind ∈ registry.feedbackKinds 闭集
+// （codegen 单一真相源 generated.IntersectionFeedbackKinds），端上报与云侧消费同源。
+func negativeFeedbackKindSupported(kind string) bool {
+	for _, k := range generated.IntersectionFeedbackKinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
 }
 
 // MarkVisited 推进已读水位并清零未读。dimension 为空表示全部维度。
@@ -643,6 +727,7 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 		return nil, err
 	}
 	seen := s.seenKeys(ctx, userID)
+	negative := s.negativeFeedbackKeys(ctx, userID)
 	now := s.now().UTC().Format(time.RFC3339)
 	metricChannel := channel
 	if strings.TrimSpace(metricChannel) == "" {
@@ -650,6 +735,12 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 	}
 	merged := make([]IntersectionReasonView, 0, len(facts)+len(affinities))
 	for _, r := range append(facts, affinities...) {
+		// 负反馈冷却优先级最高（用户显式说「不感兴趣/忽略/拒绝/退出」）：命中即过滤，不再推荐，
+		// 区别于曝光冷却 seen（仅降权保留）。F 推荐差异化「过冷却不再重复推荐」。
+		if _, ok := negative[r.coolKey()]; ok {
+			s.metrics.ObserveFeedFiltered(metricChannel, "negative")
+			continue
+		}
 		if !s.isFresh(r) {
 			s.metrics.ObserveFeedFiltered(metricChannel, "stale")
 			continue
@@ -701,17 +792,10 @@ func (s *IntersectionService) Feed(ctx context.Context, userID, channel string, 
 	return merged, nil
 }
 
-// isSpotlightDisplayComplete 候选窗完备性（WP1·T3）：primaryText 非空，
-// 且人级 reason（objectKind==person）必须带 avatarUrl；非人对象的头图由
-// 端侧对象卡承载，不在 reason 上强制。
+// isSpotlightDisplayComplete 候选窗完备性（WP1·T3）：复用交集 v3 展示合同，
+// 只有完整 SVO、span 可拼回且对象可导航的 reason 才进入可见候选窗。
 func isSpotlightDisplayComplete(r IntersectionReasonView) bool {
-	if strings.TrimSpace(r.PrimaryText) == "" {
-		return false
-	}
-	if r.ObjectKind == "person" && strings.TrimSpace(r.AvatarURL) == "" {
-		return false
-	}
-	return true
+	return ValidateDisplayStatement(r)
 }
 
 // evidenceKindRank 证据组 kind 的挖掘强度（§9.8）：值越小越靠前；

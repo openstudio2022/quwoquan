@@ -1,7 +1,7 @@
 # 04 PR 轻量门禁占位：hosted gamma 预检已退役，远端验证统一收敛到 07 prod gray-initial。
 # 仅保留 profile 解析与门禁汇总，便于后续按需扩展非 gamma 的 PR 预检。
 # 触发：pull_request(main) + workflow_dispatch
-# 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
+# 端到端闭环见 quwoquan_ops/environments/ci_cd_end_to_end_design.md
 name: 04. Pre-Release Gate
 
 on:
@@ -55,7 +55,7 @@ jobs:
         env:
           PROFILE: ${{ needs.resolve_profile.outputs.profile }}
         run: |
-          python3 agent_ops/ci/render_ci_timing_summary.py \
+          python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 04.pre_release_gate_pr \
             --title "04. Pre-Release Gate (pr_light)" \
             --critical-path-seconds 0 \

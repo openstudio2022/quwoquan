@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import functools
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -90,6 +91,7 @@ class TemplateRegistry:
     article_recommendations: dict[str, list[str]]
 
     @classmethod
+    @functools.lru_cache(maxsize=1)
     def load(cls) -> "TemplateRegistry":
         catalogs = {
             path.stem: load_yaml(path)
@@ -133,6 +135,10 @@ class TemplateRegistry:
             creator_paths=creator_paths,
             article_recommendations=load_template_recommendations(),
         )
+
+    @classmethod
+    def clear_cache(cls) -> None:
+        cls.load.__func__.cache_clear()
 
     def creators_by_archetype(self, archetype: str) -> list[dict[str, Any]]:
         return [c for c in self.creators.values() if c.get("creatorArchetype") == archetype]

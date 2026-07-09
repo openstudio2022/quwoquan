@@ -11,8 +11,198 @@ const List<String> intersectionLifecycleStateKeys = <String>["new", "strengthene
 /// 垂类闭集（registry.verticals，§23.4 三元组正交标注）。
 const List<String> intersectionVerticalKeys = <String>["general", "travel_photography", "campus"];
 
+/// 意图时态闭集（registry.moments，§24 M0.2；retrospective|current|prospective，与 lifecycleState 正交）。
+const List<String> intersectionMomentKeys = <String>["retrospective", "current", "prospective"];
+
+/// 安全门闭集（registry.gateKeys，§24 M0.1；重行动 requiredGates 取值域）。
+const List<String> intersectionGateKeys = <String>["login", "realName", "minorMode", "blocked", "greetPreference", "mutualConsent", "fuzzyLocation", "rateLimit"];
+
+/// 负反馈闭集（registry.feedbackKinds，§24 M0.4；端上报与云侧降权/冷却同源）。
+const List<String> intersectionFeedbackKinds = <String>["notInterested", "dismiss", "rejectGreeting", "leaveCircle"];
+
+/// 负反馈 kind 命名常量（registry.feedbackKinds 单条；端 UI 触发点读此常量，禁止字面量）。
+const String intersectionFeedbackKindNotInterested = "notInterested";
+const String intersectionFeedbackKindDismiss = "dismiss";
+const String intersectionFeedbackKindRejectGreeting = "rejectGreeting";
+const String intersectionFeedbackKindLeaveCircle = "leaveCircle";
+
+/// 行动路由类别闭集（registry.actionDispatch，§24 M0.7；assistant|navigate|message|companion|connect|commerce）。
+/// 端交互 handler 路由维度，与 tier 权限成本正交；端 navigator/徽标/助手分发读 actionKeyMeta.dispatch。
+const List<String> intersectionActionDispatchKeys = <String>["assistant", "navigate", "message", "companion", "connect", "commerce"];
+
 /// 行动建议 actionKey 闭集（registry.actionHintLegend，端只读分发，不按 kind 猜测）。
-const List<String> intersectionActionKeys = <String>["ask_assistant", "create_followup", "express_interest", "follow_object", "follow_person", "greet_person", "join_circle", "join_meetup", "join_topic_room", "join_trip", "meet_nearby", "message_person", "open_content", "open_discussion", "open_object", "open_route", "start_companion", "start_voice_room", "view_shared_people"];
+const List<String> intersectionActionKeys = <String>["ask_assistant", "book_hotel", "book_ticket", "create_followup", "express_interest", "follow_object", "follow_person", "greet_person", "join_circle", "join_meetup", "join_topic_room", "join_trip", "meet_nearby", "message_person", "open_content", "open_discussion", "open_object", "open_route", "start_companion", "start_voice_room", "view_official_deals", "view_shared_people"];
+
+/// 单个 actionKey 的行动阶梯元数据（registry.actionKeyMeta，§24 M0.1/M0.3/M0.7）。
+/// 端据 requiredGates 判断「可执行 / 优雅降级」；tier 区分轻查看/重社交；
+/// targetAvailability=deferred 表示承接页/数据源未就绪，端不得伪造成行（§24.10 诚实红线）；
+/// dispatch 表示端交互 handler 路由类别（assistant|navigate|message|companion|connect|commerce），
+/// 端 navigator/徽标/助手分发读本字段，禁止端手写「哪些 actionKey 属助手/约伴」第二份枚举（M0.7）。
+class IntersectionActionKeyMeta {
+  const IntersectionActionKeyMeta({
+    required this.tier,
+    required this.requiredGates,
+    required this.targetAvailability,
+    required this.dispatch,
+  });
+
+  final String tier;
+  final List<String> requiredGates;
+  final String targetAvailability;
+  final String dispatch;
+
+  bool get isHeavy => tier == 'heavy';
+  bool get isDeferred => targetAvailability == 'deferred';
+  /// 助手类：点击打开小艺解释/追问/续写，而非导航到对象页。
+  bool get isAssistant => dispatch == 'assistant';
+  /// 同行/线下约伴类：唯一驱动「有人同行」徽标与约伴专属落点。
+  bool get isCompanion => dispatch == 'companion';
+  /// 重社交连接类（私信/约伴/房间/心动，需破冰阶梯/请求/建群），非简单对象下钻。
+  bool get isSocialConnect =>
+      dispatch == 'message' || dispatch == 'companion' || dispatch == 'connect';
+
+  /// 由 actionKey 查行动阶梯元数据；未知 key 返回 null（端据此安全降级）。
+  static IntersectionActionKeyMeta? of(String? actionKey) {
+    if (actionKey == null) return null;
+    return intersectionActionKeyMeta[actionKey.trim()];
+  }
+}
+
+/// actionKey → 行动阶梯元数据表（单一真相源 registry.actionKeyMeta 下发）。
+const Map<String, IntersectionActionKeyMeta> intersectionActionKeyMeta = <String, IntersectionActionKeyMeta>{
+  "ask_assistant": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>[],
+    targetAvailability: "available",
+    dispatch: "assistant",
+  ),
+  "book_hotel": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login"],
+    targetAvailability: "deferred",
+    dispatch: "commerce",
+  ),
+  "book_ticket": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login"],
+    targetAvailability: "deferred",
+    dispatch: "commerce",
+  ),
+  "create_followup": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login", "realName"],
+    targetAvailability: "available",
+    dispatch: "assistant",
+  ),
+  "express_interest": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login", "greetPreference", "blocked", "rateLimit"],
+    targetAvailability: "available",
+    dispatch: "connect",
+  ),
+  "follow_object": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>["login"],
+    targetAvailability: "available",
+    dispatch: "navigate",
+  ),
+  "follow_person": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>["login"],
+    targetAvailability: "available",
+    dispatch: "navigate",
+  ),
+  "greet_person": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>["login", "greetPreference", "blocked"],
+    targetAvailability: "available",
+    dispatch: "navigate",
+  ),
+  "join_circle": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>["login"],
+    targetAvailability: "available",
+    dispatch: "navigate",
+  ),
+  "join_meetup": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login", "realName", "minorMode"],
+    targetAvailability: "deferred",
+    dispatch: "companion",
+  ),
+  "join_topic_room": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login", "minorMode"],
+    targetAvailability: "available",
+    dispatch: "connect",
+  ),
+  "join_trip": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login", "realName", "minorMode"],
+    targetAvailability: "deferred",
+    dispatch: "companion",
+  ),
+  "meet_nearby": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login", "realName", "minorMode", "mutualConsent", "fuzzyLocation", "rateLimit"],
+    targetAvailability: "deferred",
+    dispatch: "companion",
+  ),
+  "message_person": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login", "mutualConsent", "blocked", "rateLimit"],
+    targetAvailability: "available",
+    dispatch: "message",
+  ),
+  "open_content": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>[],
+    targetAvailability: "available",
+    dispatch: "navigate",
+  ),
+  "open_discussion": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>["login"],
+    targetAvailability: "available",
+    dispatch: "navigate",
+  ),
+  "open_object": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>[],
+    targetAvailability: "available",
+    dispatch: "navigate",
+  ),
+  "open_route": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>[],
+    targetAvailability: "available",
+    dispatch: "navigate",
+  ),
+  "start_companion": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login", "realName", "minorMode", "blocked", "rateLimit"],
+    targetAvailability: "available",
+    dispatch: "companion",
+  ),
+  "start_voice_room": IntersectionActionKeyMeta(
+    tier: "heavy",
+    requiredGates: <String>["login", "realName", "minorMode"],
+    targetAvailability: "deferred",
+    dispatch: "connect",
+  ),
+  "view_official_deals": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>[],
+    targetAvailability: "deferred",
+    dispatch: "commerce",
+  ),
+  "view_shared_people": IntersectionActionKeyMeta(
+    tier: "light",
+    requiredGates: <String>["login"],
+    targetAvailability: "available",
+    dispatch: "navigate",
+  ),
+};
 
 /// iconKey → 低饱和语义 tone（registry.visualToneByIconKey）。
 const Map<String, String> intersectionVisualToneByIconKey = <String, String>{
@@ -52,6 +242,7 @@ enum UnifiedObjectKind {
   route("route", "homepageDetail", "coverImage"),
   photoSpot("photo_spot", "homepageDetail", "coverImage"),
   gear("gear", "homepageDetail", "coverImage"),
+  content("content", "workBrowser", "coverImage"),
   trip("trip", "tripDetail", "coverImage"),
   meetup("meetup", "meetupDetail", "coverImage");
 
@@ -83,6 +274,8 @@ enum UnifiedObjectKind {
         return UnifiedObjectKind.photoSpot;
       case "gear":
         return UnifiedObjectKind.gear;
+      case "content":
+        return UnifiedObjectKind.content;
       case "trip":
         return UnifiedObjectKind.trip;
       case "meetup":
@@ -113,6 +306,8 @@ String intersectionRouteIdForObjectKind(String objectKind) {
       return "homepageDetail";
     case "gear":
       return "homepageDetail";
+    case "content":
+      return "workBrowser";
     case "entity":
       return "homepageDetail";
     case "trip":
@@ -137,6 +332,7 @@ class IntersectionKindMetadata {
     required this.tone,
     required this.lifecycleApplicable,
     required this.vertical,
+    required this.moment,
   });
 
   final String kind;
@@ -148,6 +344,8 @@ class IntersectionKindMetadata {
   final String tone;
   final bool lifecycleApplicable;
   final String vertical;
+  /// §24 M0.2 意图时态（retrospective|current|prospective，缺省 current；与 lifecycleState 正交）。
+  final String moment;
 
   /// 主维度（dimensions 首项；用于 tone/label 归一）。
   String get primaryDimension => dimensions.isEmpty ? '' : dimensions.first;
@@ -174,6 +372,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "sage",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "commonFollower": IntersectionKindMetadata(
     kind: "commonFollower",
@@ -185,6 +384,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "sage",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "commonContact": IntersectionKindMetadata(
     kind: "commonContact",
@@ -196,6 +396,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "sage",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "sameSchool": IntersectionKindMetadata(
     kind: "sameSchool",
@@ -207,6 +408,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "sameDepartment": IntersectionKindMetadata(
     kind: "sameDepartment",
@@ -218,6 +420,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "sameMajor": IntersectionKindMetadata(
     kind: "sameMajor",
@@ -229,6 +432,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "sameCohort": IntersectionKindMetadata(
     kind: "sameCohort",
@@ -240,6 +444,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "alumni": IntersectionKindMetadata(
     kind: "alumni",
@@ -251,6 +456,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "sameCompany": IntersectionKindMetadata(
     kind: "sameCompany",
@@ -262,6 +468,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "sameTeam": IntersectionKindMetadata(
     kind: "sameTeam",
@@ -273,6 +480,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "sameIndustry": IntersectionKindMetadata(
     kind: "sameIndustry",
@@ -284,6 +492,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "sharedCircle": IntersectionKindMetadata(
     kind: "sharedCircle",
@@ -295,6 +504,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "sage",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "sharedDiscussion": IntersectionKindMetadata(
     kind: "sharedDiscussion",
@@ -306,6 +516,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "clay",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "coMemberCircle": IntersectionKindMetadata(
     kind: "coMemberCircle",
@@ -317,6 +528,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "sage",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "coCommented": IntersectionKindMetadata(
     kind: "coCommented",
@@ -328,6 +540,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "clay",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "retrospective",
   ),
   "coSharedContent": IntersectionKindMetadata(
     kind: "coSharedContent",
@@ -339,6 +552,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "clay",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "retrospective",
   ),
   "coCreatedContent": IntersectionKindMetadata(
     kind: "coCreatedContent",
@@ -350,6 +564,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "retrospective",
   ),
   "coLiked": IntersectionKindMetadata(
     kind: "coLiked",
@@ -361,6 +576,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "clay",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "retrospective",
   ),
   "coVisitedEntity": IntersectionKindMetadata(
     kind: "coVisitedEntity",
@@ -372,6 +588,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "tea",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "retrospective",
   ),
   "sharedEntityAttention": IntersectionKindMetadata(
     kind: "sharedEntityAttention",
@@ -383,6 +600,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "stone",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "coWishlistedEntity": IntersectionKindMetadata(
     kind: "coWishlistedEntity",
@@ -390,10 +608,11 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     objectKind: "place",
     countObjectKind: "place",
     dimensions: <String>["location"],
-    actionHints: <String>["start_companion", "open_route", "follow_object"],
+    actionHints: <String>["start_companion", "view_official_deals", "open_route", "follow_object"],
     tone: "tea",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "prospective",
   ),
   "sharedTagSample": IntersectionKindMetadata(
     kind: "sharedTagSample",
@@ -405,6 +624,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "stone",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "followeeInObject": IntersectionKindMetadata(
     kind: "followeeInObject",
@@ -416,6 +636,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "sage",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "followeeVisited": IntersectionKindMetadata(
     kind: "followeeVisited",
@@ -427,6 +648,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "tea",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "retrospective",
   ),
   "followeeViewing": IntersectionKindMetadata(
     kind: "followeeViewing",
@@ -438,6 +660,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "sage",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "alumniHere": IntersectionKindMetadata(
     kind: "alumniHere",
@@ -449,6 +672,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "colleagueHere": IntersectionKindMetadata(
     kind: "colleagueHere",
@@ -460,6 +684,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "mist",
     lifecycleApplicable: false,
     vertical: "general",
+    moment: "current",
   ),
   "followeeDiscussedThis": IntersectionKindMetadata(
     kind: "followeeDiscussedThis",
@@ -471,6 +696,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "clay",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "retrospective",
   ),
   "coPresentHere": IntersectionKindMetadata(
     kind: "coPresentHere",
@@ -482,6 +708,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "tea",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "nearbyAffinity": IntersectionKindMetadata(
     kind: "nearbyAffinity",
@@ -493,6 +720,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "tea",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "current",
   ),
   "coPlannedTrip": IntersectionKindMetadata(
     kind: "coPlannedTrip",
@@ -504,6 +732,7 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "tea",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "prospective",
   ),
   "wantToMeetSameInterest": IntersectionKindMetadata(
     kind: "wantToMeetSameInterest",
@@ -515,5 +744,6 @@ const Map<String, IntersectionKindMetadata> intersectionKindMetadata = <String, 
     tone: "stone",
     lifecycleApplicable: true,
     vertical: "general",
+    moment: "prospective",
   ),
 };

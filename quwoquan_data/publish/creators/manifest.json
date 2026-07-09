@@ -1,0 +1,40 @@
+{
+  "batchId": "travel_photo_1k_v1",
+  "totalCreators": 1200,
+  "segmentCounts": {
+    "photography_primary": 200,
+    "travel_primary": 200,
+    "travel_photography_cross": 800
+  },
+  "uniqueCreatorCount": 1200,
+  "viewCounts": {
+    "travel": 1000,
+    "photography": 1000,
+    "overlap": 800,
+    "overlapRate": 0.8
+  },
+  "identityPolicy": {
+    "systemCreatorPrefix": "sys_",
+    "userIdPattern": "sys_{topic}_{seq4}",
+    "subAccountIdPattern": "{userId}_sub_{seq2}",
+    "ordinaryUserSysPrefixAllowed": false,
+    "thirdIdentityAllowed": false
+  },
+  "mediaPolicy": "system_profile_preset_id_only",
+  "mediaPresetSetId": "profile_presets_travel_photo_v1",
+  "publishFiles": [
+    "manifest.json",
+    "creators.jsonl"
+  ],
+  "qualityGates": {
+    "displayNameNoDigits": 1.0,
+    "presetIdCoverage": 1.0,
+    "crossDualTagCoverage": 1.0,
+    "bioUniqueMinCount": 600,
+    "leafTagCoverage": 1.0,
+    "publishFileCount": 2,
+    "sloganSimilarityGte070RatioMax": 0.01,
+    "sloganSimilarityGte088PairMax": 0
+  },
+  "generatedAt": "2026-07-05T13:26:19.502489+00:00"
+}

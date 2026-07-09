@@ -53,6 +53,7 @@ def test_photography_image_rights_are_asset_level_not_platform_name_level():
             "sourceUrl": "https://example.com/original",
             "termsUrl": "https://unsplash.com/license",
             "usageScope": "app_publish",
+            "authorizationProof": "https://example.com/original",
             "modelReleaseStatus": "not_required",
         },
         vertical="photography",
@@ -70,6 +71,7 @@ def test_photography_image_rights_accepts_authorized_payload():
             "sourceUrl": "https://example.com/a",
             "termsUrl": "https://unsplash.com/license",
             "usageScope": "app_publish",
+            "authorizationProof": "https://example.com/a",
             "modelReleaseStatus": "not_required",
         },
         vertical="photography",
@@ -98,6 +100,7 @@ def test_travel_image_rights_are_asset_level_and_accept_authorized_payload():
             "sourceUrl": "https://official.example/image",
             "termsUrl": "https://official.example/terms",
             "usageScope": "app_publish",
+            "authorizationProof": "https://official.example/authorization",
             "modelReleaseStatus": "not_required",
         },
         vertical="travel",
@@ -113,6 +116,7 @@ def test_travel_image_rights_accepts_versioned_commons_cc_licenses():
         "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
         "termsUrl": "https://creativecommons.org/licenses/by-sa/3.0/",
         "usageScope": "app_publish",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
         "modelReleaseStatus": "not_required",
     }
     for license_value in (
@@ -138,6 +142,7 @@ def test_travel_image_rights_requires_generated_asset_provenance():
         "sourceUrl": "file:///workspace/generated.png",
         "termsUrl": "file:///workspace/provenance.json",
         "usageScope": "app_publish",
+        "authorizationProof": "file:///workspace/provenance.json",
         "modelReleaseStatus": "not_required",
     }
     missing = validate_image_rights(base, vertical="travel")

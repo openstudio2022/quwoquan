@@ -6,8 +6,10 @@ import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_search_field.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/share/forward_share_models.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_confirm_sheet.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_recipient_widgets.dart';
@@ -92,9 +94,13 @@ class _ForwardRecipientPickerRouteState
                 }
                 if (snapshot.hasError) {
                   return _ForwardPickerErrorState(
-                    message: runtimeErrorDisplayMessage(
-                      snapshot.error ??
-                          StateError(UITextConstants.forwardSendFailed),
+                    semantic: runtimeErrorSemantic(
+                      context,
+                      error:
+                          snapshot.error ??
+                          StateError(UITextConstants.forwardCardUnavailable),
+                      category: UiErrorCategory.sectionLoad,
+                      scope: UiErrorScope.section,
                     ),
                     onRetry: () => setState(() => _future = _load()),
                   );
@@ -240,11 +246,11 @@ class _ForwardPickerEmptyState extends StatelessWidget {
 
 class _ForwardPickerErrorState extends StatelessWidget {
   const _ForwardPickerErrorState({
-    required this.message,
+    required this.semantic,
     required this.onRetry,
   });
 
-  final String message;
+  final UiErrorSemantic semantic;
   final VoidCallback onRetry;
 
   @override
@@ -252,26 +258,14 @@ class _ForwardPickerErrorState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: EdgeInsets.all(AppSpacing.containerXl),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: AppTypography.iosBody,
-                color:
-                    SettingsSemanticConstants.conversationSheetSecondaryLabelColor(
-                      CupertinoTheme.of(context).brightness == Brightness.dark,
-                    ),
-              ),
-            ),
-            SizedBox(height: AppSpacing.containerMd),
-            CupertinoButton.filled(
-              onPressed: onRetry,
-              child: Text(UITextConstants.retry),
-            ),
-          ],
+        child: AppSectionErrorCard(
+          semantic: semantic,
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              onRetry();
+            }
+          },
         ),
       ),
     );

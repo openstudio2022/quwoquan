@@ -1,0 +1,331 @@
+id: CR-20260702-084-works-immersive-gesture-release-smoothing
+title: 视频书前后翻方向仲裁与释放速度收敛
+slug: works-immersive-gesture-release-smoothing
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer
+  - quwoquan_app/lib/components/media/shared/gesture
+  - quwoquan_app/lib/components/media/shared/pageflip
+  - quwoquan_app/lib/components/pageflip
+  - quwoquan_app/lib/ui/content/article_reader/pageflip/host
+
+entries:
+  - timestamp: "2026-07-02T00:00:00+08:00"
+    summary: |
+      收敛视频书图片与文章沉浸翻页的手势仲裁：前/后翻方向以累计 `dx` 为唯一真相源，
+      左滑前翻、右滑后翻；起手左右半区不再决定翻页方向。preview 阶段释放父级竖向
+      PageView，让斜向纵拖能及时跟手；只有锁定横向翻页或横向边界回弹后才冻结竖向切作品。
+      图片书与文章宿主统一使用 pageflip release policy，并将 settle 时长限制为 `260ms..520ms`，
+      避免高速释放闪缩。
+    reason: |
+      用户反馈前后翻曾被错误设计为左右半区判向，且可翻页时上下切作品跟手性差、释放动画过快。
+      根因是手势 preview 阶段过早 hold 父级竖向滚动，以及文章宿主仍在 panStart 时使用
+      `directionForGlobalPoint` 由起手位置决定方向。本次只修手势入口与释放策略，不改 pageflip
+      几何、三面纹理、BACK 主线或云 API。
+    change_type:
+      - bugfix
+      - product
+      - test
+      - governance
+    changed_documents:
+      - path: quwoquan_app/lib/components/media/shared/gesture/immersive_gesture_intent_controller.dart
+        sections:
+          - "preview 阶段不再冻结父级竖向滚动；locked pageflip/boundary 后才 hold vertical"
+          - "保持 `dx < 0` 前翻、`dx > 0` 后翻、纵向优势切作品的统一仲裁"
+      - path: quwoquan_app/lib/components/pageflip/release_policy.dart
+        sections:
+          - "settle duration clamp 调整为 260ms..520ms，避免高速释放闪缩"
+      - path: quwoquan_app/lib/components/pageflip/controller.dart
+        sections:
+          - "为 animation plan 增加 duration override helper，不改变帧序列和几何"
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_book.dart
+        sections:
+          - "图片书 release 改用共享 pageflip release policy"
+      - path: quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart
+        sections:
+          - "沉浸文章拖动方向改为优先由手势 intent / drag dx 决定，起手位置仅决定上下角"
+          - "文章 release 改用共享 pageflip release policy"
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
+        sections:
+          - "GWT3 增补 dx 判向、preview 不冻结竖向、release 速度限幅验收"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/gesture/immersive_gesture_intent_controller__local_contract_test.dart test/components/pageflip/release_policy_test.dart（13 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（9 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（55 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/content/article_reader（3 过）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos <touched dart files>（0 error，2 existing infos）"
+        - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "make verify-app-pageflip-back-mainline（68 过 / 3 跳）"
+        - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
+        - "make verify-app-page-horizontal-quality（OK）"
+    notes:
+      - "本 CR 不改三面纹理、背面亮度、内容区尺寸、视频帧物理折页或云 API。"
+      - "若后续要调整文章 tap/corner hover 行为，应另起专项，避免与本轮 drag 仲裁混在一起。"
+  - timestamp: "2026-07-02T00:00:00+08:00"
+    summary: |
+      修复两张图场景下图片书第一页前翻、第二页后翻在画面中心慢拖不跟手的问题：媒体书页宿主
+      从 `GestureDetector.onHorizontalDrag*` 改为 pointer 级追踪，并允许当前方向可翻时在 preview
+      阶段先启动动态 curl；如果后续仲裁锁定纵向切作品，则立即取消子级翻页。边界横滑只保留
+      轻量回弹，不再弹出“到边界”类提示语。
+    reason: |
+      Flutter 横向拖拽识别本身要等待手势竞技场判定，再叠加沉浸仲裁的 preview 距离，会让两张图
+      首尾可翻方向在中心慢拖时出现前半段无反馈。边界提示语会打断视频书沉浸浏览，应由视觉回弹
+      表达边界，而不是 toast 文案解释。
+    change_type:
+      - bugfix
+      - product
+      - test
+    changed_documents:
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_book.dart
+        sections:
+          - "图片书手势层改为 pointer 级追踪；preview 匹配可翻方向时即可进入动态翻页层"
+          - "若仲裁转为 verticalWorkSwitch，则取消当前子级 pageflip interaction"
+      - path: quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
+        sections:
+          - "移除 boundaryRubberBand 触发的 AppToast 边界提示"
+      - path: quwoquan_app/lib/core/constants/discovery_feed_text_constants.dart
+        sections:
+          - "删除沉浸翻页边界提示文案常量"
+      - path: quwoquan_app/test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
+        sections:
+          - "新增两张图中心小幅前翻/后翻立即出现动态层契约"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: low
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（10 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（55 过）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos lib/components/media/shared/pageflip/media_page_flip_book.dart lib/ui/discovery/widgets/works_immersive_viewer.dart lib/core/constants/discovery_feed_text_constants.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（No issues found）"
+        - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
+        - "make verify-app-page-horizontal-quality（OK）"
+    notes:
+      - "本次仍不改 pageflip 几何、三面纹理、背面亮度或 release policy。"
+  - timestamp: "2026-07-03T00:00:00+08:00"
+    summary: |
+      将图片书与文章浏览器的拖动入口收敛到同一个 `ImmersivePointerGestureLayer`：公共层只负责
+      单指 pointer 追踪、delta、totalDelta、水平 velocity 与 start/update/end/cancel 事件采样；
+      图片书和文章宿主继续各自处理 pageflip intent、边界回弹、纹理和文章 tap/hover 语义。
+    reason: |
+      前序修复让图片书先进入 pointer 级采样，而文章主舞台仍使用 `GestureDetector.onPan*`，
+      虽然共用 intent controller，但采样时机和速度来源仍分叉。为了避免后续图片和文章手势体验再次
+      漂移，需要把手势层逻辑共享，业务行为留在各自宿主。
+    change_type:
+      - architecture
+      - refactor
+      - test
+      - governance
+    changed_documents:
+      - path: quwoquan_app/lib/components/media/shared/gesture/immersive_pointer_gesture_layer.dart
+        sections:
+          - "新增沉浸媒体共享 pointer 手势采样层"
+          - "统一单指追踪、delta、totalDelta、velocityDx 与 start/update/end/cancel 回调"
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_book.dart
+        sections:
+          - "图片书改用共享 pointer 手势层接收拖动采样"
+      - path: quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart
+        sections:
+          - "文章主交互舞台改用共享 pointer 手势层；tap/hover 与文章 pageflip 宿主语义保留"
+      - path: quwoquan_app/test/local_contract/components/media/shared/gesture/immersive_pointer_gesture_layer__local_contract_test.dart
+        sections:
+          - "新增共享手势层 local_contract，覆盖 start/update/end、delta 与 velocityDx"
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
+        sections:
+          - "GWT3 增补图片/文章必须共享 pointer 级手势采样层"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: low
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/gesture/immersive_pointer_gesture_layer__local_contract_test.dart test/local_contract/components/media/shared/gesture/immersive_gesture_intent_controller__local_contract_test.dart（10 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（10 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（55 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/content/article_reader（3 过）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos <touched gesture/pageflip/article files>（No issues found）"
+        - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
+        - "make verify-app-page-horizontal-quality（OK）"
+    notes:
+      - "共享的是 pointer 采样层，不共享图片/文章的材质、排版、tap/corner hover 或 page surface 语义。"
+  - timestamp: "2026-07-03T00:00:00+08:00"
+    summary: |
+      修复图片书第一页中心左滑前翻不跟手的材质门禁漂移：直接 page surface 纹理生成器存在时，
+      翻页框架将其视为 active curl 材质真相源，不再受外部 `isPageTextureReady` / precache 状态阻塞；
+      图片加载回调刷新 `textureReadinessSignature` 时，如当前正在拖动或释放动画中，则延后刷新材质缓存，
+      避免真实设备上动态层被中途清空。
+    reason: |
+      文章可稳定前/后翻，是因为文章翻页启动时已有排版 page surface；图片书虽然已接入同一 pointer
+      手势层和 pageflip controller，但仍保留网络图片 ready 门禁与拖动中清快照的刷新策略，真实图片加载
+      时会把“可生成失败/占位双面 surface”的直接纹理路径误当成未就绪，造成第一页前翻无反馈或闪断。
+    change_type:
+      - bugfix
+      - product
+      - test
+      - governance
+    changed_documents:
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_book.dart
+        sections:
+          - "直接纹理生成器存在时 `_isPageTextureReady` 恒为 true，ready predicate 仅服务截图捕获路径"
+          - "拖动/释放动画期间延后 direct texture refresh，避免加载回调清空 held curl 材质"
+      - path: quwoquan_app/test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
+        sections:
+          - "新增直接纹理路径不被 ready=false 或加载回调打断跟手的 local_contract"
+      - path: quwoquan_app/test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart
+        sections:
+          - "新增 ImageBookCanvas 第一页中心左滑立即进入公共翻书跟手层契约"
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
+        sections:
+          - "GWT3 增补 direct page surface 材质路径不得被 ready/precache 状态阻塞"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: low
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（16 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart test/ui/content/article_reader（58 过）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos lib/components/media/shared/pageflip/media_page_flip_book.dart lib/components/media/image/book/image_book_canvas.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（No issues found）"
+        - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
+        - "make verify-app-page-horizontal-quality（OK）"
+        - "make verify-test-coverage-map（OK）"
+    notes:
+      - "本次不改 pageflip 几何、三面纹理、文章排版、视频帧物理折页或云 API。"
+  - timestamp: "2026-07-03T00:00:00+08:00"
+    summary: |
+      修复 Work Browser 父级 Listener 与图片书/文章子级手势层同时更新同一手势仲裁器的问题：
+      父级作为唯一 intent 坐标源，负责用 Work Browser 坐标更新 `ImmersiveGestureIntentController`；
+      图片书和文章宿主只读取 locked/preview intent，并继续用自身局部坐标驱动 pageflip fold。
+    reason: |
+      前序测试覆盖了子组件 held curl 和大幅横拖，但没有覆盖“父级 Listener + 子级 pageflip layer”
+      组合下的小幅中心慢拖。真实设备上父子两层会把不同坐标系的 `localPosition` 交替写入同一个
+      controller，导致第一页图片左滑前翻的累计 dx/intent 被扰乱；文章因宿主初始化路径不同不易暴露，
+      但同样需要遵守唯一坐标源规则。
+    change_type:
+      - bugfix
+      - architecture
+      - test
+    changed_documents:
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_book.dart
+        sections:
+          - "外部 gestureIntentController 由父级唯一更新；图片书只消费 intent，不再用子级 localPosition 二次 update"
+      - path: quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart
+        sections:
+          - "文章宿主同步改为消费父级 intent，不再二次 begin/update 外部 controller"
+      - path: quwoquan_app/test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+        sections:
+          - "Work Browser 图片首图中心小幅左滑必须立即出现翻页层"
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
+        sections:
+          - "GWT3 明确父级是沉浸手势仲裁器唯一坐标源"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: low
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart --plain-name '图片作品使用公共翻书组件，首图左滑翻到下一张且不触发退出'（1 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/content/article_reader（19 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（55 过）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos <touched files>（No issues found）"
+        - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
+        - "make verify-app-page-horizontal-quality（OK）"
+    notes:
+      - "本次仍不改 pageflip 几何、三面纹理、背面亮度、内容区尺寸或云 API。"
+  - timestamp: "2026-07-06T00:00:00+08:00"
+    summary: |
+      收口视频书图片翻页连续浏览舒适度：默认仍保留原生翻书，但将图片书 active moving sheet
+      改为同层 `recto/verso` 渐进呈现，前翻时当前页正面随手指离场、后翻时上一页正面在同一
+      moving sheet 内可见，避免进入 curl 后整张动层突然替换为背面。图片书运动 profile 改为
+      `dragTravelFactor=1.0`，前 `24px` 只做浅 edge lift；release 改为 ease-out 连续采样，
+      并把提交/回弹时长分别收敛为 `320ms..520ms` / `220ms..360ms`。
+    reason: |
+      前序修复已解决“能跟手、不会闪”，但用户连续翻图片时仍感到跳跃和视觉不适。根因不再是单纯
+      速度过快，而是 active sheet 纹理离散替换、背面镜像对比过强、释放帧线性 round 跳变，
+      以及缺少 Reduce Motion 替代路径。本次补正式舒适度契约，不把普通 PageView 作为默认主体验。
+    change_type:
+      - bugfix
+      - product
+      - accessibility
+      - observability
+      - test
+      - governance
+    changed_documents:
+      - path: quwoquan_app/lib/components/media/shared/pageflip/media_page_flip_book.dart
+        sections:
+          - "图片书子级只消费父级 intent；moving sheet 内同层呈现 recto/verso；舒适 drag profile、ease-out 采样、Reduce Motion 轻量页态更新与 motion event"
+      - path: quwoquan_app/lib/components/pageflip/release_policy.dart
+        sections:
+          - "commit settle clamp 320ms..520ms，cancel settle clamp 220ms..360ms"
+      - path: quwoquan_app/lib/components/media/image/book/image_book_page_surface.dart
+        sections:
+          - "图片背面改为低饱和、低对比、纸张 wash 的 photo backface"
+      - path: quwoquan_app/lib/components/media/image/book/image_book_canvas.dart
+        sections:
+          - "透传图片书 pageflip motion event"
+      - path: quwoquan_app/lib/ui/discovery/widgets/works_immersive_viewer.dart
+        sections:
+          - "通过 ContentBehaviorTracker 记录 works_image_pageflip_motion，不新增云 API"
+      - path: quwoquan_app/lib/app/providers/accessibility_provider.dart
+        sections:
+          - "接入 MediaQueryData.disableAnimations 到 app accessibility state"
+      - path: quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart
+        sections:
+          - "文章宿主同步移除对子级外部 intent controller 的二次 update"
+      - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
+        sections:
+          - "GWT3 新增连续翻页舒适度、Reduce Motion、低刺激背面、motion 观测验收条款"
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - "cd quwoquan_app && flutter test --no-pub test/components/pageflip/release_policy_test.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/cloud/content/content_behavior_tracker_test.dart test/core/design_system/providers/appearance_runtime_test.dart（60 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart --plain-name '图片作品使用公共翻书组件，首图左滑翻到下一张且不触发退出'（1 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/content/article_reader（3 过）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos <touched dart files>（0 error；2 个既有 prefer_initializing_formals info）"
+        - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
+        - "make verify-app-pageflip-back-mainline（68 过 / 3 跳）"
+        - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
+        - "make verify-app-page-horizontal-quality（OK）"
+      failed_unrelated:
+        - "make verify-test-coverage-map 失败于 runtime-data-engineering/object-homepage-network 既有 acceptance 证据漂移与 retired command，未指向本轮 works-immersive/pageflip 文件。"
+        - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart --plain-name '视频书视频可铺入状态栏' 单跑失败：期望 canvas top 贴近 0，实际 20；不经过本轮图片 pageflip/motion 路径。"
+    notes:
+      - "本次不改云 API、metadata route、推荐策略、数据生产链路或文章 BACK 几何主线。"

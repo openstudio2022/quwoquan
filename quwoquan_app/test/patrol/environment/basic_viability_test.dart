@@ -12,7 +12,8 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/testing/patrol_test_support.dart';
 
 const _otherUserId = 'fixture_user_friend';
-const _videoWorkId = 'v1';
+// local gamma mirror 稳定落地的远端视频种子；避免继续依赖早期 mock `v1`。
+const _videoWorkId = 'fixture_video_001';
 
 const _feedCardProbeKeys = <ValueKey<String>>[
   ValueKey<String>('home-feed-card-0'),

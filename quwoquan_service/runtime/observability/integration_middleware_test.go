@@ -13,20 +13,84 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 )
 
-func parseJSONLines(raw string) ([]map[string]any, error) {
+func parseDelimitedLogs(raw string) ([]map[string]any, error) {
 	lines := strings.Split(strings.TrimSpace(raw), "\n")
 	results := make([]map[string]any, 0, len(lines))
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		obj := map[string]any{}
-		if err := json.Unmarshal([]byte(line), &obj); err != nil {
-			return nil, err
+		if strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t") {
+			if len(results) > 0 {
+				msg, _ := results[len(results)-1]["msg"].(string)
+				results[len(results)-1]["msg"] = msg + "\n" + strings.TrimSpace(line)
+			}
+			continue
 		}
+		obj := parseDelimitedLogLine(line)
 		results = append(results, obj)
 	}
 	return results, nil
+}
+
+func parseDelimitedLogLine(line string) map[string]any {
+	third := thirdDelimitedField(line)
+	if isAccessMethod(third) {
+		values := splitDelimited(line, 9)
+		return map[string]any{
+			"ts": values[0], "level": values[1], "method": values[2], "route": values[3],
+			"status": values[4], "durMs": values[5], "req": values[6], "trace": values[7],
+			"msg": values[8],
+		}
+	}
+	if strings.Contains(third, ".") {
+		values := splitDelimited(line, 6)
+		return map[string]any{
+			"ts": values[0], "level": values[1], "err": values[2],
+			"req": values[3], "trace": values[4], "msg": values[5],
+		}
+	}
+	if values := splitDelimited(line, 7); len(values) == 7 {
+		return map[string]any{
+			"ts": values[0], "level": values[1], "event": values[2],
+			"result": values[3], "req": values[4], "trace": values[5],
+			"msg": values[6],
+		}
+	}
+	return map[string]any{"msg": line}
+}
+
+func thirdDelimitedField(line string) string {
+	values := splitDelimited(line, 4)
+	if len(values) < 4 {
+		return ""
+	}
+	return values[2]
+}
+
+func isAccessMethod(value string) bool {
+	switch value {
+	case "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "HTTP", "GRPC", "MQ", "IO", "LLM", "SEARCH":
+		return true
+	default:
+		return false
+	}
+}
+
+func splitDelimited(line string, count int) []string {
+	values := make([]string, 0, count)
+	start := 0
+	for i := 0; i < count-1; i++ {
+		idx := strings.Index(line[start:], ",")
+		if idx < 0 {
+			return nil
+		}
+		idx += start
+		values = append(values, line[start:idx])
+		start = idx + 1
+	}
+	values = append(values, line[start:])
+	return values
 }
 
 func TestHTTPServerMiddleware_EmitIOProcessException(t *testing.T) {
@@ -77,7 +141,7 @@ func TestHTTPServerMiddleware_EmitIOProcessException(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	standardLogs, err := parseJSONLines(standard.String())
+	standardLogs, err := parseDelimitedLogs(standard.String())
 	if err != nil {
 		t.Fatalf("parse standard logs failed: %v", err)
 	}
@@ -87,7 +151,7 @@ func TestHTTPServerMiddleware_EmitIOProcessException(t *testing.T) {
 
 	foundIO := false
 	for _, obj := range standardLogs {
-		if obj["endpoint"] == "chat.message.create" {
+		if obj["route"] == "chat.message.create" {
 			if obj["status"] == "failed" {
 				foundIO = true
 				break
@@ -98,21 +162,24 @@ func TestHTTPServerMiddleware_EmitIOProcessException(t *testing.T) {
 		t.Fatalf("expected failed io access log in standard sink")
 	}
 
-	errorLogs, err := parseJSONLines(errorBuf.String())
+	errorLogs, err := parseDelimitedLogs(errorBuf.String())
 	if err != nil {
 		t.Fatalf("parse error logs failed: %v", err)
 	}
 	if len(errorLogs) == 0 {
 		t.Fatalf("expected exception log in error sink")
 	}
-	if errorLogs[0]["errorCode"] == "" {
-		t.Fatalf("expected errorCode in exception log")
+	if errorLogs[0]["err"] == "" {
+		t.Fatalf("expected err in exception log")
 	}
-	if errorLogs[0]["errorCode"] != "CHAT.SYSTEM.message_persist_failed" {
-		t.Fatalf("expected real error code, got=%v", errorLogs[0]["errorCode"])
+	if errorLogs[0]["err"] != "CHAT.SYSTEM.message_persist_failed" {
+		t.Fatalf("expected real error code, got=%v", errorLogs[0]["err"])
 	}
-	if errorLogs[0]["businessObject"] != "cloud_request" || errorLogs[0]["functionModule"] != "runtime_errors" {
-		t.Fatalf("expected runtime location fields, got=%+v", errorLogs[0])
+	msg, _ := errorLogs[0]["msg"].(string)
+	if !strings.Contains(msg, `"module":"CHAT"`) ||
+		!strings.Contains(msg, `"kind":"SYSTEM"`) ||
+		!strings.Contains(msg, `"reason":"message_persist_failed"`) {
+		t.Fatalf("expected compact runtime attributes in msg, got=%+v", errorLogs[0])
 	}
 }
 
@@ -220,11 +287,11 @@ func TestMQMiddleware_EmitIntegratedLogs(t *testing.T) {
 		Payload: []byte("hello"),
 	})
 
-	standardLogs, err := parseJSONLines(standard.String())
+	standardLogs, err := parseDelimitedLogs(standard.String())
 	if err != nil {
 		t.Fatalf("parse standard logs failed: %v", err)
 	}
-	errorLogs, err := parseJSONLines(errorBuf.String())
+	errorLogs, err := parseDelimitedLogs(errorBuf.String())
 	if err != nil {
 		t.Fatalf("parse error logs failed: %v", err)
 	}
@@ -273,20 +340,26 @@ func TestUAT_CorrelationAcrossThreeLogs(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	standardLogs, _ := parseJSONLines(standard.String())
-	errorLogs, _ := parseJSONLines(errorBuf.String())
+	standardLogs, _ := parseDelimitedLogs(standard.String())
+	errorLogs, _ := parseDelimitedLogs(errorBuf.String())
 	if len(standardLogs) == 0 || len(errorLogs) == 0 {
 		t.Fatalf("expected both standard and error logs")
 	}
 
 	for _, obj := range standardLogs {
-		if obj["traceId"] != traceID || obj["requestId"] != requestID || obj["sessionId"] != sessionID {
+		if obj["trace"] != traceID || obj["req"] != requestID {
 			t.Fatalf("standard log correlation mismatch: %+v", obj)
+		}
+		if _, ok := obj["sessionId"]; ok {
+			t.Fatalf("standard log should not repeat sessionId: %+v", obj)
 		}
 	}
 	for _, obj := range errorLogs {
-		if obj["traceId"] != traceID || obj["requestId"] != requestID || obj["sessionId"] != sessionID {
+		if obj["trace"] != traceID || obj["req"] != requestID {
 			t.Fatalf("error log correlation mismatch: %+v", obj)
+		}
+		if _, ok := obj["sessionId"]; ok {
+			t.Fatalf("error log should not repeat sessionId: %+v", obj)
 		}
 	}
 }

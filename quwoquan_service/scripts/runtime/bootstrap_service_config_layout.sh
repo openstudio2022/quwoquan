@@ -21,7 +21,7 @@ Behavior:
       quwoquan_service/services/<service>/configs/gamma/config.yaml
       quwoquan_service/services/<service>/configs/prod/config.yaml
   - Creates versioned config release directory:
-      releases/config/<service>/
+      quwoquan_service/services/<service>/
   - Does NOT overwrite existing files unless --force is passed.
 EOF
 }
@@ -192,7 +192,7 @@ write_file "$beta_cfg" "$BETA_CONTENT"
 write_file "$gamma_cfg" "$GAMMA_CONTENT"
 write_file "$prod_cfg" "$PROD_CONTENT"
 
-release_dir="$ROOT/releases/config/$SERVICE_NAME"
+release_dir="$ROOT/quwoquan_service/services/$SERVICE_NAME"
 mkdir -p "$release_dir"
 if [[ ! -f "$release_dir/README.md" || "$FORCE" -eq 1 ]]; then
   cat > "$release_dir/README.md" <<'EOF'

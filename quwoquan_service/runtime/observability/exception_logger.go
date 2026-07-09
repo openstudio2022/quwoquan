@@ -1,9 +1,6 @@
 package runtimeobservability
 
-import (
-	"encoding/json"
-	"io"
-)
+import "io"
 
 type ExceptionLogger struct {
 	router   *SinkRouter
@@ -40,10 +37,6 @@ func (l *ExceptionLogger) Write(entry ExceptionLog, model string, operation stri
 	if err := entry.Validate(); err != nil {
 		return err
 	}
-	payload, err := json.Marshal(entry)
-	if err != nil {
-		return err
-	}
-	return l.router.WriteError(append(payload, '\n'))
+	payload := formatDelimitedLog("exception", compactExceptionLog(entry))
+	return l.router.WriteError([]byte(payload + "\n"))
 }
-

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
@@ -22,18 +23,56 @@ Widget _wrap(Widget child) {
   );
 }
 
+const String _validPrimaryText = '联系人林清越等2人赞过《川西雪山和校园摄影路线》';
+
+IntersectionTarget _actorTarget() => IntersectionTarget(
+  objectType: 'user',
+  objectId: 'u_lin',
+  objectKind: 'person',
+  routeId: 'userProfile',
+);
+
+IntersectionTarget _objectTarget() => IntersectionTarget(
+  objectType: 'post',
+  objectId: 'post_snow_route',
+  objectKind: 'content',
+  routeId: 'workBrowser',
+);
+
+List<IntersectionTextSpan> _validPrimarySpans() => <IntersectionTextSpan>[
+  IntersectionTextSpan(text: '联系人', role: 'plain'),
+  IntersectionTextSpan(text: '林清越', role: 'object', target: _actorTarget()),
+  IntersectionTextSpan(text: '等', role: 'plain'),
+  IntersectionTextSpan(
+    text: '2',
+    role: 'count',
+    target: IntersectionTarget(
+      objectType: 'dimension',
+      objectId: 'content',
+      objectKind: 'dimension',
+      routeId: 'myIntersections',
+    ),
+  ),
+  IntersectionTextSpan(text: '人赞过', role: 'plain'),
+  IntersectionTextSpan(
+    text: '《川西雪山和校园摄影路线》',
+    role: 'object',
+    target: _objectTarget(),
+  ),
+];
+
 IntersectionReason _reason({
-  String primaryText = '',
+  String primaryText = _validPrimaryText,
   String connectionSummary = '',
   String weightTier = '',
-  List<IntersectionTextSpan> primarySpans = const <IntersectionTextSpan>[],
+  List<IntersectionTextSpan>? primarySpans,
   String iconKey = '',
-  String source = 'relationship',
-  String dimension = 'relationship',
-  String intersectionId = '',
+  String source = 'coCommented',
+  String dimension = 'content',
+  String intersectionId = 'ix_chip',
   String intersectionClass = 'fact',
-  String actionTargetId = '',
-  String objectKind = '',
+  String actionTargetId = 'post_snow_route',
+  String objectKind = 'content',
 }) {
   return IntersectionReason(
     dimension: dimension,
@@ -42,11 +81,20 @@ IntersectionReason _reason({
     primaryText: primaryText,
     connectionSummary: connectionSummary,
     weightTier: weightTier,
-    primarySpans: primarySpans,
+    primarySpans: primarySpans ?? _validPrimarySpans(),
     intersectionId: intersectionId,
     intersectionClass: intersectionClass,
     actionTargetId: actionTargetId,
     objectKind: objectKind,
+    actorEvidenceTotalCount: 2,
+    actorEvidenceCompleteness: 'complete',
+    representativeActor: IntersectionRepresentativeActor(
+      actorId: 'u_lin',
+      displayName: '林清越',
+      relationLabel: '联系人',
+      privacyState: 'visible',
+      target: _actorTarget(),
+    ),
   );
 }
 
@@ -94,27 +142,29 @@ Widget _routedChip(Widget chip, {required ContentBehaviorTracker tracker}) {
 
 void main() {
   group('IntersectionReasonChip.primaryText 唯一口径（云侧主结论句直出）', () {
-    test('取首条理由的 primaryText（4位共同好友）', () {
+    test('取首条完整 SVO 理由的 primaryText', () {
       expect(
-        IntersectionReasonChip.primaryText(<IntersectionReason>[
-          _reason(primaryText: '4位共同好友'),
-        ]),
-        '4位共同好友',
+        IntersectionReasonChip.primaryText(<IntersectionReason>[_reason()]),
+        _validPrimaryText,
       );
     });
 
     test('primaryText 缺省 → null，不用 connectionSummary 兜底', () {
       expect(
         IntersectionReasonChip.primaryText(<IntersectionReason>[
-          _reason(connectionSummary: '你和 TA 都来自同一校园'),
+          _reason(
+            primaryText: '',
+            primarySpans: const <IntersectionTextSpan>[],
+            connectionSummary: '你和 TA 都来自同一校园',
+          ),
         ]),
         isNull,
       );
     });
 
-    test('零内部词：不出现「个交集点」', () {
+    test('零内部词：合格主句不出现「个交集点」', () {
       final text = IntersectionReasonChip.primaryText(<IntersectionReason>[
-        _reason(primaryText: '8人和你共看黄金内容'),
+        _reason(),
       ]);
       expect(text, isNotNull);
       expect(text!.contains('个交集点'), isFalse);
@@ -141,11 +191,11 @@ void main() {
   group('IntersectionReasonChip.fromReasons 构造口径', () {
     testWidgets('有主结论句 → 渲染云侧 primaryText', (tester) async {
       final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
-        _reason(primaryText: '4位共同好友'),
+        _reason(),
       ], isDark: false);
       expect(widget, isNotNull);
       await tester.pumpWidget(_wrap(widget!));
-      expect(find.text('4位共同好友'), findsOneWidget);
+      expect(find.text(_validPrimaryText), findsOneWidget);
     });
 
     test('无来源 → 返回 null（调用方不插入，保证四口径一致）', () {
@@ -159,7 +209,7 @@ void main() {
       tester,
     ) async {
       final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
-        _reason(primaryText: '共同关注的人', source: 'sharedFollowees'),
+        _reason(source: 'sharedFollowees'),
       ], isDark: false);
 
       await tester.pumpWidget(_wrap(widget!));
@@ -179,7 +229,7 @@ void main() {
 
     testWidgets('heavy 展示完整蓝色理由行', (tester) async {
       final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
-        _reason(primaryText: '共同关注的人', weightTier: 'heavy'),
+        _reason(weightTier: 'heavy'),
       ], isDark: false);
 
       await tester.pumpWidget(_wrap(widget!));
@@ -187,14 +237,14 @@ void main() {
       final style = await baseStyleOf(tester);
       expect(
         style?.color,
-        AppColors.iosAccent(tester.element(find.text('共同关注的人'))),
+        AppColors.iosAccent(tester.element(find.text(_validPrimaryText))),
       );
       expect(style?.fontWeight, AppTypography.medium);
     });
 
     testWidgets('空 weightTier 按 heavy 兜底', (tester) async {
       final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
-        _reason(primaryText: '共同圈子'),
+        _reason(),
       ], isDark: false);
 
       await tester.pumpWidget(_wrap(widget!));
@@ -202,14 +252,14 @@ void main() {
       final style = await baseStyleOf(tester);
       expect(
         style?.color,
-        AppColors.iosAccent(tester.element(find.text('共同圈子'))),
+        AppColors.iosAccent(tester.element(find.text(_validPrimaryText))),
       );
       expect(style?.fontWeight, AppTypography.medium);
     });
 
     testWidgets('未知 weightTier 按 heavy 兜底', (tester) async {
       final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
-        _reason(primaryText: '共同讨论', weightTier: 'future-tier'),
+        _reason(weightTier: 'future-tier'),
       ], isDark: false);
 
       await tester.pumpWidget(_wrap(widget!));
@@ -217,14 +267,14 @@ void main() {
       final style = await baseStyleOf(tester);
       expect(
         style?.color,
-        AppColors.iosAccent(tester.element(find.text('共同讨论'))),
+        AppColors.iosAccent(tester.element(find.text(_validPrimaryText))),
       );
       expect(style?.fontWeight, AppTypography.medium);
     });
 
     testWidgets('light 展示灰色弱化形态', (tester) async {
       final widget = IntersectionReasonChip.fromReasons(<IntersectionReason>[
-        _reason(primaryText: '共同地点', weightTier: 'light'),
+        _reason(weightTier: 'light'),
       ], isDark: false);
 
       await tester.pumpWidget(_wrap(widget!));
@@ -232,7 +282,9 @@ void main() {
       final style = await baseStyleOf(tester);
       expect(
         style?.color,
-        AppColors.iosSecondaryLabel(tester.element(find.text('共同地点'))),
+        AppColors.iosSecondaryLabel(
+          tester.element(find.text(_validPrimaryText)),
+        ),
       );
       expect(style?.fontWeight, AppTypography.regular);
     });
@@ -250,27 +302,7 @@ void main() {
       addTearDown(tracker.dispose);
       final widget = IntersectionReasonChip.fromReasons(
         <IntersectionReason>[
-          _reason(
-            primaryText: '你和林清越都关注了 X',
-            source: 'sharedFollowees',
-            intersectionId: 'ix_chip',
-            intersectionClass: 'fact',
-            actionTargetId: 'u_lin',
-            objectKind: 'person',
-            primarySpans: <IntersectionTextSpan>[
-              IntersectionTextSpan(text: '你和 ', role: 'plain'),
-              IntersectionTextSpan(
-                text: '林清越',
-                role: 'object',
-                target: IntersectionTarget(
-                  objectId: 'u_lin',
-                  objectKind: 'person',
-                  routeId: 'userProfile',
-                ),
-              ),
-              IntersectionTextSpan(text: ' 都关注了 X', role: 'plain'),
-            ],
-          ),
+          _reason(intersectionId: 'ix_chip', intersectionClass: 'fact'),
         ],
         isDark: false,
         referralSource: ReferralSource.authorProfile,
@@ -303,8 +335,8 @@ void main() {
       expect(event.contentId, 'u_lin');
       expect(event.referralSource, ReferralSource.authorProfile);
       expect(event.intersectionId, 'ix_chip');
-      expect(event.intersectionDimension, 'relationship');
-      expect(event.intersectionSourceRef, 'sharedFollowees');
+      expect(event.intersectionDimension, 'content');
+      expect(event.intersectionSourceRef, 'coCommented');
       expect(event.intersectionClass, 'fact');
     });
   });
@@ -312,10 +344,16 @@ void main() {
   testWidgets('双主题均渲染只读文案', (tester) async {
     for (final isDark in const <bool>[false, true]) {
       await tester.pumpWidget(
-        _wrap(IntersectionReasonChip(text: '4位共同好友', isDark: isDark)),
+        _wrap(
+          IntersectionReasonChip(
+            text: _validPrimaryText,
+            isDark: isDark,
+            reason: _reason(),
+          ),
+        ),
       );
       expect(tester.takeException(), isNull);
-      expect(find.text('4位共同好友'), findsOneWidget);
+      expect(find.text(_validPrimaryText), findsOneWidget);
     }
   });
 

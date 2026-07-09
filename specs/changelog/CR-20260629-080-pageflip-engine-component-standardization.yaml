@@ -96,7 +96,7 @@ entries:
         - "迁移后：flutter test --no-pub test/components/pageflip test/common/pageflip test/local_contract/components/pageflip test/ui/content/article_reader test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（300 过 / 6 跳）"
         - "迁移后：flutter analyze --no-fatal-warnings --no-fatal-infos lib/components/pageflip lib/ui/content/article_reader/pageflip test/support/pageflip test/components/pageflip test/common/pageflip tool/pageflip_diagnostics_main.dart tool/pageflip_widget_diagnostics_main.dart（0 error，仅既有 warning/info）"
         - "迁移后：python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
-        - "四环境 packaging 低层验证：python3 agent_ops/deploy/stackctl.py verify --env alpha|beta|gamma|prod --kind packaging --tier t1 --report-dir /tmp/qwq-pageflip-stackctl-<env>-t1（全部 PASS）"
+        - "四环境 packaging 低层验证：python3 quwoquan_ops/cli/stackctl.py verify --env alpha|beta|gamma|prod --kind packaging --tier t1 --report-dir /tmp/qwq-pageflip-stackctl-<env>-t1（全部 PASS）"
     notes:
       - "本 CR 无外部 route、页面入口、用户可见文案或 reader 行为变更；仅物理目录迁移、import 重定向、测试/门禁路径同步。"
       - "components/pageflip 为通用 engine，必须保持零 ui/** import；article_reader/pageflip 是文章阅读宿主 adapter，不沉淀到 components。"

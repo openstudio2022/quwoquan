@@ -538,7 +538,7 @@ runtime (L1)
 **交付物：**
 - `docker-compose.yaml` — MongoDB 7 + PostgreSQL 16 + Redis 7
 - `scripts/run_migration.sh` — 执行 codegen 生成的 DDL
-- `scripts/seed_testdata.sh` — 插入示例数据
+- `services/seed-box/scripts_testdata.sh` — 插入示例数据
 - Makefile 更新（`make dev-up`, `make dev-down`, `make migrate`, `make seed`）
 
 **验收标准：**

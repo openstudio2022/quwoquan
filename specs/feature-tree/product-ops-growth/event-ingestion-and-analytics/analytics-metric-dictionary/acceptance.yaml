@@ -27,7 +27,7 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_service/services/product-ops-service/cmd/api/main_test.go
-      - file: apps/ops-portal/src/shared/api/controlPlane.test.mjs
+      - file: quwoquan_ops/portal/src/shared/api/controlPlane.test.mjs
       recorded:
       - file: quwoquan_service/services/product-ops-service/tests/local_contract/cmd/api/main__local_contract_test.go
     status: implemented
@@ -46,10 +46,10 @@ gwt_acceptance:
         envs: *id001
       supporting: []
     notes:
-    - '[migrated_from_recorded_reference] apps/ops-portal/src/shared/api/controlPlane.test.mjs'
+    - '[migrated_from_recorded_reference] quwoquan_ops/portal/src/shared/api/controlPlane.test.mjs'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

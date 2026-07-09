@@ -1,0 +1,63 @@
+creatorProfileId: sys_photo_0026
+userId: sys_photo_0026
+subAccountId: sys_photo_0026_sub_01
+displayName: 晚晴路标
+userHandle: clear-sign
+handle: clear-sign
+avatarPresetId: avatar_photo_film_grain
+coverPresetId: cover_photo_night_tripod
+bio: 会从暗房红灯里练习观察，拍摄记录偏短、偏诚实，也允许照片不完美；喜欢留一点安静。
+headline: 日常影像练习
+slogan: 一条边线比参数更动人
+creatorArchetype: documentary_photographer
+verticalSegment: photography_primary
+verticalRefs:
+- photography
+interestTagRefs: &id001
+- Topic/摄影/器材评测
+- Topic/摄影/摄影教程
+- Topic/摄影/旅行摄影
+publicProfileTagRefs:
+- Topic/摄影
+- Topic/摄影/器材评测
+- Topic/摄影/摄影教程
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 图片_专题
+- 摄影_教程
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_器材评测
+  - homepage/tag/Topic_摄影_摄影教程
+  entityAffinityRefs:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_器材评测
+  - homepage/tag/Topic_摄影_摄影教程
+  - homepage/tag/Topic_摄影_旅行摄影
+  circleAffinityRefs:
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- photography
+- Topic/摄影/器材评测
+- Topic/摄影/摄影教程
+- Topic/摄影/旅行摄影

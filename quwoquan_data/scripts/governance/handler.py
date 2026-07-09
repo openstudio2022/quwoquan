@@ -14,6 +14,11 @@ def handle_governance(args: argparse.Namespace) -> None:
 
         handle_creator_pool(args)
         return
+    if cmd == "user-pool":
+        from governance.user_pool.handler import handle_user_pool
+
+        handle_user_pool(args)
+        return
     if cmd == "review-candidates":
         argv: list[str] = []
         if getattr(args, "root", None):
@@ -33,8 +38,10 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub = p.add_subparsers(dest="governance_command")
 
     from governance.creator_pool.handler import register_creator_pool_parser
+    from governance.user_pool.handler import register_user_pool_parser
 
     register_creator_pool_parser(sub)
+    register_user_pool_parser(sub)
 
     review = sub.add_parser("review-candidates", help="Apply or list isolated governance candidate reviews")
     review.add_argument("--root")

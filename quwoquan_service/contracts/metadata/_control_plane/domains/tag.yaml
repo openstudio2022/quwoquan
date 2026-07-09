@@ -5,38 +5,45 @@ template_role: replica_ready
 rollout_group: wave_1_copy
 acceptance_status: integration_pass
 metadata_paths:
-  - tag
+- tag
 service_names:
-  - tag-service
+- seed-box
 control_planes:
   platform:
     enabled: true
-    object_types: [service_catalog_entry, plane_binding, gate_rule]
-    config_prefixes: [sys.tag.]
+    object_types:
+    - service_catalog_entry
+    - plane_binding
+    - gate_rule
+    config_prefixes:
+    - sys.tag.
   product:
     enabled: false
     object_types: []
     config_prefixes: []
 minimum_package:
   metadata_files:
-    - contracts/metadata/tag/service.yaml
-  codegen_targets: [go_runtime, python_runtime, ops_portal]
+  - contracts/metadata/tag/service.yaml
+  codegen_targets:
+  - go_runtime
+  - python_runtime
+  - ops_portal
   test_evidence:
     t1:
-      - contracts/metadata/tag/service.yaml
+    - contracts/metadata/tag/service.yaml
     t2:
-      - services/tag-service/internal/application/tag_service_test.go
+    - services/tag-service/internal/application/tag_service_test.go
     t3:
-      - services/tag-service/tests/tag_contract_test.go
+    - services/tag-service/tests/tag_contract_test.go
     t4: []
 deployment:
   plane_binding_domain: tag
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: entity
   next_copy_targets: []
   copy_notes:
-    - 只读标签服务；复用 codegen_storage manifest 模式生成 domain/store/migrator。
-    - 标签真相源为数据工程 publish/tags，tag-service 只读消费导入产物，不写不产事件。
+  - 只读标签服务；复用 codegen_storage manifest 模式生成 domain/store/migrator。
+  - 标签真相源为数据工程 publish/tags，tag-service 只读消费导入产物，不写不产事件。
 blocking_gaps: []

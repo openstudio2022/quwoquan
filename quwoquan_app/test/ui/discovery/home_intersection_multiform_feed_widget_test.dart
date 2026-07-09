@@ -7,7 +7,10 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_actor_evidence.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
@@ -17,11 +20,13 @@ import 'package:quwoquan_app/components/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/components/media/video/player/video_player_widget.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/spacing/discovery_feed_spacing.dart';
+import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
@@ -46,32 +51,101 @@ int _fontWeightValue(TextSpan span) =>
 
 IntersectionReason _reason({String intersectionClass = 'fact'}) {
   final target = IntersectionTarget(
+    objectType: 'user',
     objectId: 'fixture_user_lin',
     objectKind: 'person',
     routeId: 'userProfile',
   );
+  final objectTarget = IntersectionTarget(
+    objectType: 'post',
+    objectId: 'post_intersection_demo',
+    objectKind: 'content',
+    routeId: 'workBrowser',
+  );
   return IntersectionReason(
-    dimension: 'relationship',
+    dimension: 'content',
     intersectionId: 'ix_post_lin',
     intersectionClass: intersectionClass,
     objectKind: 'person',
-    source: 'sharedFollowees',
+    source: 'coCommented',
+    actionTargetId: 'post_intersection_demo',
     pointSummarySnapshotId: 'snap_lin',
-    primaryText: '你与林清越等 3 位都来这里互动过',
+    actorEvidenceTotalCount: 3,
+    actorEvidenceCompleteness: 'complete',
+    representativeActor: IntersectionRepresentativeActor(
+      actorId: 'fixture_user_lin',
+      displayName: '林清越',
+      relationLabel: '联系人',
+      privacyState: 'visible',
+      target: target,
+      evidenceRank: 5,
+      snapshotVersion: 'snap_lin',
+    ),
+    actorEvidence: <IntersectionActorEvidence>[
+      IntersectionActorEvidence(
+        actorId: 'fixture_user_lin',
+        displayName: '林清越',
+        relationLabel: '联系人',
+        relationSourceRef: 'contact',
+        sourcePointId: 'ix_post_lin_actor_1',
+        sourceRef: 'commonContact',
+        actionSummaryText: '点赞了这条记录',
+        likeCount: 1,
+        target: target,
+        evidenceRank: 5,
+        snapshotVersion: 'snap_lin',
+        sortKey: 1,
+      ),
+      IntersectionActorEvidence(
+        actorId: 'fixture_user_zhou',
+        displayName: '周屿',
+        relationLabel: '你关注的人',
+        relationSourceRef: 'followee',
+        sourcePointId: 'ix_post_lin_actor_2',
+        sourceRef: 'sharedFollowees',
+        actionSummaryText: '点赞了这条记录',
+        likeCount: 1,
+        evidenceRank: 10,
+        snapshotVersion: 'snap_lin',
+        sortKey: 2,
+      ),
+      IntersectionActorEvidence(
+        actorId: 'fixture_user_gunan',
+        displayName: '顾南',
+        relationLabel: '城市漫游圈圈友',
+        relationSourceRef: 'sharedCircle',
+        relationObjectId: 'fixture_circle_city_walk',
+        relationObjectName: '城市漫游圈',
+        sourcePointId: 'ix_post_lin_actor_3',
+        sourceRef: 'sharedCircle',
+        actionSummaryText: '评论了这条记录',
+        commentCount: 1,
+        evidenceRank: 20,
+        snapshotVersion: 'snap_lin',
+        sortKey: 3,
+      ),
+    ],
+    primaryText: '联系人林清越等3人赞过和评论过《川西雪山和校园摄影路线》',
     primarySpans: <IntersectionTextSpan>[
-      IntersectionTextSpan(text: '你与', role: 'plain'),
+      IntersectionTextSpan(text: '联系人', role: 'plain'),
       IntersectionTextSpan(text: '林清越', role: 'object', target: target),
-      IntersectionTextSpan(text: '等 ', role: 'plain'),
+      IntersectionTextSpan(text: '等', role: 'plain'),
       IntersectionTextSpan(
         text: '3',
         role: 'count',
         target: IntersectionTarget(
-          objectId: 'relationship',
-          objectKind: 'tag',
+          objectType: 'dimension',
+          objectId: 'content',
+          objectKind: 'dimension',
           routeId: 'myIntersections',
         ),
       ),
-      IntersectionTextSpan(text: ' 位都来这里互动过', role: 'plain'),
+      IntersectionTextSpan(text: '人赞过和评论过', role: 'plain'),
+      IntersectionTextSpan(
+        text: '《川西雪山和校园摄影路线》',
+        role: 'object',
+        target: objectTarget,
+      ),
     ],
     sampleVisuals: <IntersectionVisual>[
       IntersectionVisual(
@@ -85,6 +159,18 @@ IntersectionReason _reason({String intersectionClass = 'fact'}) {
 }
 
 IntersectionReason _photoSpotReason() {
+  final actorTarget = IntersectionTarget(
+    objectType: 'user',
+    objectId: 'sys_travel_9018_sub_01',
+    objectKind: 'person',
+    routeId: 'userProfile',
+  );
+  final objectTarget = IntersectionTarget(
+    objectType: 'homepage',
+    objectId: 'fixture_homepage_photo_spot_hengshu_studio',
+    objectKind: 'photo_spot',
+    routeId: 'homepageDetail',
+  );
   return IntersectionReason(
     dimension: 'photo_work',
     intersectionId: 'ix_post_photo_spot',
@@ -93,37 +179,37 @@ IntersectionReason _photoSpotReason() {
     source: 'alpha_showcase',
     actionTargetId: 'fixture_homepage_photo_spot_hengshu_studio',
     pointSummarySnapshotId: 'snap_photo_spot',
-    primaryText: '你与山川手账等 7 位都关注「横竖影像馆取景地」',
+    actorEvidenceTotalCount: 7,
+    actorEvidenceCompleteness: 'complete',
+    representativeActor: IntersectionRepresentativeActor(
+      actorId: 'sys_travel_9018_sub_01',
+      displayName: '山川手账',
+      relationLabel: '你关注的人',
+      privacyState: 'visible',
+      target: actorTarget,
+      evidenceRank: 10,
+      snapshotVersion: 'snap_photo_spot',
+    ),
+    primaryText: '你关注的人山川手账等7人也关注了「横竖影像馆取景地」',
     primarySpans: <IntersectionTextSpan>[
-      IntersectionTextSpan(text: '你与', role: 'plain'),
-      IntersectionTextSpan(
-        text: '山川手账',
-        role: 'object',
-        target: IntersectionTarget(
-          objectId: 'fixture_user_shanchuan',
-          objectKind: 'person',
-          routeId: 'userProfile',
-        ),
-      ),
-      IntersectionTextSpan(text: '等 ', role: 'plain'),
+      IntersectionTextSpan(text: '你关注的人', role: 'plain'),
+      IntersectionTextSpan(text: '山川手账', role: 'object', target: actorTarget),
+      IntersectionTextSpan(text: '等', role: 'plain'),
       IntersectionTextSpan(
         text: '7',
         role: 'count',
         target: IntersectionTarget(
+          objectType: 'dimension',
           objectId: 'photo_work',
-          objectKind: 'tag',
+          objectKind: 'dimension',
           routeId: 'myIntersections',
         ),
       ),
-      IntersectionTextSpan(text: ' 位都关注「', role: 'plain'),
+      IntersectionTextSpan(text: '人也关注了「', role: 'plain'),
       IntersectionTextSpan(
         text: '横竖影像馆取景地',
         role: 'object',
-        target: IntersectionTarget(
-          objectId: 'fixture_homepage_photo_spot_hengshu_studio',
-          objectKind: 'photo_spot',
-          routeId: 'homepageDetail',
-        ),
+        target: objectTarget,
       ),
       IntersectionTextSpan(text: '」', role: 'plain'),
     ],
@@ -134,6 +220,7 @@ MicroPostDto _microPost({
   List<String> imageUrls = const <String>[
     'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
   ],
+  String? videoUrl,
   IntersectionReason? reason,
   String avatarUrl = '',
 }) {
@@ -158,7 +245,7 @@ MicroPostDto _microPost({
     publishedAt: null,
     body: '川西雪山和校园摄影路线',
     imageUrls: imageUrls,
-    videoUrl: null,
+    videoUrl: videoUrl,
     durationMs: null,
     intersectionReasons: <IntersectionReason>[effectiveReason],
   );
@@ -405,7 +492,7 @@ void main() {
         matching: find.byType(RichText),
       ),
     );
-    expect(richText.text.toPlainText(), '你与林清越等 3 位都来这里互动过');
+    expect(richText.text.toPlainText(), '联系人林清越等3人赞过和评论过《川西雪山和校园摄影路线》');
     final textContext = tester.element(
       find.byType(InteractiveIntersectionText),
     );
@@ -414,19 +501,27 @@ void main() {
     final accentColor = isDark
         ? AppColors.profileSloganAccentDark
         : AppColors.profileSloganAccentLight;
-    expect(_spanByText(richText, '你与').style?.color, plainColor);
-    expect(_spanByText(richText, '等 ').style?.color, plainColor);
-    expect(_spanByText(richText, ' 位都来这里互动过').style?.color, plainColor);
+    expect(_spanByText(richText, '联系人').style?.color, plainColor);
+    expect(_spanByText(richText, '等').style?.color, plainColor);
+    expect(_spanByText(richText, '人赞过和评论过').style?.color, plainColor);
     expect(plainColor, isNot(AppColors.iosSecondaryLabel(textContext)));
     expect(_spanByText(richText, '林清越').style?.color, accentColor);
     expect(_spanByText(richText, '3').style?.color, accentColor);
+    expect(_spanByText(richText, '《川西雪山和校园摄影路线》').style?.color, accentColor);
     expect(
       _fontWeightValue(_spanByText(richText, '林清越')),
-      greaterThan(_fontWeightValue(_spanByText(richText, '你与'))),
+      greaterThan(_fontWeightValue(_spanByText(richText, '联系人'))),
     );
     expect(
       _fontWeightValue(_spanByText(richText, '3')),
-      greaterThan(_fontWeightValue(_spanByText(richText, '等 '))),
+      greaterThan(_fontWeightValue(_spanByText(richText, '等'))),
+    );
+    final widget = tester.widget<InteractiveIntersectionText>(
+      find.byType(InteractiveIntersectionText),
+    );
+    expect(
+      widget.baseStyle?.fontSize,
+      AppTypography.feedBodyResponsive(textContext),
     );
     expect(
       find.byKey(const ValueKey('home-relation-card-actions')),
@@ -460,15 +555,17 @@ void main() {
         .where((widget) => widget.cdnPreset == CdnImagePreset.avatar)
         .toList(growable: false);
     expect(avatarImages, hasLength(1));
+    final avatarCandidates =
+        avatarImages.single.imageUrlCandidates ?? const <String>[];
     expect(
-      avatarImages.single.imageUrlCandidates,
+      avatarCandidates,
       containsAll(<String>[
         'https://localhost:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
         'https://127.0.0.1:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
-        'https://10.0.2.2:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
         'https://alpha-avatar.quwoquan-env.test:17100/media/avatar/s/archived-avatar/circle/fixture_circle_city/v1/avatar.png',
       ]),
     );
+    expect(avatarCandidates.join('\n'), isNot(contains('https://10.0.2.2')));
 
     final contentImages = tester
         .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
@@ -492,14 +589,48 @@ void main() {
     final player = tester.widget<VideoPlayerWidget>(
       find.byType(VideoPlayerWidget),
     );
+    final videoCandidates = player.videoUrlCandidates ?? const <String>[];
     expect(
-      player.videoUrlCandidates,
+      videoCandidates,
       containsAll(<String>[
         'https://localhost:17100/media/video/s/archived-video/beta-sample.mp4',
         'https://127.0.0.1:17100/media/video/s/archived-video/beta-sample.mp4',
-        'https://10.0.2.2:17100/media/video/s/archived-video/beta-sample.mp4',
         'https://alpha-video.quwoquan-env.test:17100/media/video/s/archived-video/beta-sample.mp4',
       ]),
+    );
+    expect(videoCandidates.join('\n'), isNot(contains('https://10.0.2.2')));
+  });
+
+  testWidgets('首页推荐瀑布流不会把图片 cover 当成视频源初始化', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    const coverObjectKey =
+        'media/image/s/archived-image/post/fixture_photo_002/v1/cover.png';
+    await tester.pumpWidget(
+      _buildFeed(
+        _microPost(
+          imageUrls: const <String>[coverObjectKey],
+          videoUrl: coverObjectKey,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(VideoPlayerWidget), findsNothing);
+    final contentImages = tester
+        .widgetList<AppCachedNetworkImage>(find.byType(AppCachedNetworkImage))
+        .where((widget) => widget.cdnPreset != CdnImagePreset.avatar)
+        .toList(growable: false);
+    expect(
+      contentImages.any(
+        (widget) =>
+            widget.imageUrlCandidates?.contains(
+              'https://localhost:17100/$coverObjectKey',
+            ) ??
+            false,
+      ),
+      isTrue,
     );
   });
 
@@ -650,7 +781,15 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(_buildFeed(_alphaShowcaseHomePost()));
+    final showcasePost = _alphaShowcaseHomePost();
+    final reason = showcasePost.intersectionReasons!.first;
+    expect(reason.actorEvidenceTotalCount, 3);
+    expect(reason.actorEvidenceCompleteness, 'complete');
+    expect(reason.actorEvidence, hasLength(3));
+    expect(reason.actorEvidence.first.relationLabel, '联系人');
+    expect(reason.actorEvidence.first.actionSummaryText, '点赞了这条记录');
+
+    await tester.pumpWidget(_buildFeed(showcasePost));
     await tester.pump();
 
     final richText = tester.widget<RichText>(
@@ -673,7 +812,7 @@ void main() {
     expect(countSpan.style?.color, accentColor);
     expect(
       _fontWeightValue(nameSpan),
-      greaterThan(_fontWeightValue(_spanByText(richText, '你与'))),
+      greaterThan(_fontWeightValue(_spanByText(richText, '联系人'))),
     );
     expect(nameSpan.recognizer, isA<TapGestureRecognizer>());
     expect(countSpan.recognizer, isA<TapGestureRecognizer>());
@@ -700,11 +839,54 @@ void main() {
         matching: find.byType(RichText),
       ),
     );
-    expect(richText.text.toPlainText(), '你与山川手账等 7 位都关注「横竖影像馆取景地」');
+    expect(richText.text.toPlainText(), '你关注的人山川手账等7人也关注了「横竖影像馆取景地」');
     expect(
       _spanByText(richText, '横竖影像馆取景地').recognizer,
       isA<TapGestureRecognizer>(),
     );
+  });
+
+  testWidgets('约伴徽标只由云侧重社交 actionHint 驱动（有 start_companion 展示有人同行）', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final reason = IntersectionReason(
+      dimension: 'interest',
+      intersectionId: 'ix_companion_demo',
+      objectKind: 'person',
+      source: 'coWishlistedEntity',
+      actionHints: <IntersectionActionHint>[
+        IntersectionActionHint(
+          actionKey: 'start_companion',
+          label: '发起结伴',
+          actionTier: 'heavy',
+        ),
+      ],
+    );
+    await tester.pumpWidget(_buildFeed(_microPost(reason: reason)));
+    await tester.pump();
+
+    expect(find.text(AppConceptConstants.feedBadgeCompanion), findsOneWidget);
+  });
+
+  testWidgets('内容含地名但无 actionHint 不伪造约伴徽标（防地名启发式回归）', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    // _microPost 的 body 含「川西」：旧实现按 travelHints 地名字符串误判展示约伴徽标，
+    // 修复后端只读云侧 actionHint（守元数据驱动 + §24.10 诚实红线），不再按内容猜测行动。
+    final reason = IntersectionReason(
+      dimension: 'content',
+      intersectionId: 'ix_plain_demo',
+      objectKind: 'content',
+      source: 'coCommented',
+    );
+    await tester.pumpWidget(_buildFeed(_microPost(reason: reason)));
+    await tester.pump();
+
+    expect(find.text(AppConceptConstants.feedBadgeCompanion), findsNothing);
   });
 
   testWidgets('个人记录图片按 1-9+ 图规则展示并在末格聚合剩余张数', (tester) async {
@@ -1169,7 +1351,7 @@ void main() {
     expect(bodyRect.right, lessThan(thumbRect.left + 1));
     expect(intersectionRect.top, greaterThan(thumbRect.bottom - 1));
     expect(intersectionRect.right, greaterThanOrEqualTo(bodyRect.right - 1));
-    expect(intersectionRect.right, lessThan(thumbRect.left + 1));
+    expect(intersectionRect.right, greaterThanOrEqualTo(thumbRect.right - 1));
 
     await tester.pumpWidget(
       _buildFeed(
@@ -1298,10 +1480,10 @@ void main() {
       expect(clicks, hasLength(1));
       final click = clicks.single;
       // 关键回归：sourceRef / evidenceId 由 attribution 真正转发到埋点（此前被丢）。
-      expect(click.intersectionSourceRef, equals('sharedFollowees'));
+      expect(click.intersectionSourceRef, equals('coCommented'));
       expect(click.intersectionEvidenceId, equals('snap_lin'));
       expect(click.intersectionId, equals('ix_post_lin'));
-      expect(click.intersectionDimension, equals('relationship'));
+      expect(click.intersectionDimension, equals('content'));
       expect(click.intersectionTagRefs, isNotNull);
     },
   );

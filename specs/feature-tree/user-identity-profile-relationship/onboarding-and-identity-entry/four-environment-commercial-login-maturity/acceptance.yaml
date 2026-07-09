@@ -343,7 +343,7 @@ uat_acceptance:
     - '[migrated_from_planned] manual four-env login smoke evidence'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
   - make verify-app-login-entry-loop-contract
   full_gate:

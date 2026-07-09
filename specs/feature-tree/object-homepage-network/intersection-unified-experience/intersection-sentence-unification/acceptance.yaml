@@ -12,6 +12,9 @@ scope:
   - 端侧统一交集句组件收敛（IntersectionReasonChip 单句主谓宾、蓝色、单行省略）。
   - 两类 surface 句式层次（紧凑严格单句；列表入口结论句 + 至多一条辅助说明）。
   - 事实通道概念合规（无朋友/好友/收藏/同趣），affinity 明确标注推荐。
+  - 云侧交集主句实例化：关系限定代表人 + 人数、真实动作、可点击 typed object、primarySpans join invariant。
+  - App 展示合同 fail-closed：不合格交集句不展示，禁止端侧补主句或修坏句。
+  - actorEvidence 数字下钻与 actionHints 同源：人数可点必须 complete，start_companion 必须来自 coWishlistedEntity。
   out_of_scope:
   - 云侧排序 / 语义压缩 / 埋点回流。
   - 端侧本地拼接交集文案。
@@ -57,13 +60,14 @@ gwt_acceptance:
   GWT2:
     title: 事实通道文案合规 GWT
     given:
-    - alpha mock 交集句 fixture。
+    - alpha/beta/gamma seed 与真实服务返回的 IntersectionReason。
     when:
     - 校验事实交集通道展示文案。
     then:
     - 不出现朋友 / 好友 / 收藏 / 同趣等违禁词；affinity 明确标注推荐。
+    - 不出现 raw stats 或泛化主句：2赞 1评、同读者、相近主题的长文、TA的内容、相关圈子、我的连接、我的影响力。
     done_when:
-    - mock 与展示口径与 intersection-definition §17 一致。
+    - seed、服务响应与展示口径均与 intersection-definition §17 及本 Story Display Contract 一致。
     edge_cases: []
     contract_refs:
     - content/test_fixtures/scenarios/content_scenarios.json
@@ -72,7 +76,7 @@ gwt_acceptance:
       planned:
       - file: quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart
       recorded: []
-    status: pending
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -89,9 +93,71 @@ gwt_acceptance:
     notes:
     - '[migrated_from_recorded] local_contract quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart（事实交集句无朋友/好友/收藏/同趣违禁词，affinity
       明确标注推荐，口径对齐 §17，2026-06-16 green）'
+    - '2026-07-06: 旧 green 仅证明概念禁词，未覆盖 raw stats、代表人、typed object、actorEvidence、actionHints
+      同源；当前准出必须改用 GWT3 和 strict gamma 语义断言。'
+  GWT3:
+    title: 云侧 SVO 实例化与端侧 fail-closed GWT
+    given:
+    - 云侧返回 IntersectionReason.primaryText、primarySpans、representativeActor、actorEvidence、actionHints。
+    when:
+    - 首页内容卡、视频书、搜索/长文、我的主页、用户/实体/圈子主页渲染交集或打动句。
+    then:
+    - primaryText 是完整 SVO：关系限定代表人 + 人数、真实动作、可点击 typed object。
+    - join(primarySpans.text) == primaryText；代表人 span 指向 user；宾语 span 指向 user/circle/homepage/post/task。
+    - 人数 span 只有 actorEvidenceCompleteness=complete 时可点，routeId=myIntersections。
+    - App 只复核并 fail-closed，不调用本地主句 synthesizer 补全坏句。
+    - start_companion 只在 coWishlistedEntity 且 target 可承接时出现。
+    done_when:
+    - Service 坏预置 primaryText 被重算或清空；证据不足的句子不进入展示层。
+    - App 所有交集展示入口共用 display-contract gate，坏句不占位。
+    - gamma strict semantic probe 逐条断言 raw stats、泛词、target、actorEvidence、actionHints。
+    edge_cases:
+    - 无代表人、无宾语 target、spans join 失败、人数证据不完整、C0 无真实候选时均不展示。
+    contract_refs:
+    - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/rec_model/projections/intersection_actor_evidence.yaml
+    - recommendation/rec_model/projections/intersection_target.yaml
+    - recommendation/rec_model/intersection_kind_registry.yaml
+    performance_points: []
+    tests:
+      planned:
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_service__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/components/content/intersection_reason_chip_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/services/content/intersection_inbox_synthesis__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - command: python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure
+      recorded:
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_service__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/components/content/intersection_reason_chip_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/services/content/intersection_inbox_synthesis__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: service_display_statement_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.service_svo_contract
+        envs: *id001
+      - layer: local_contract
+        suite: app_display_statement_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.app_fail_closed_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gamma_t3_intersection_statement_semantics
+        cases:
+        - api_integration.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.gamma_semantic_probe
+        envs:
+        - gamma
+      supporting: []
+    notes:
+    - '2026-07-06: local_contract 已覆盖 Service/App 语义合同；strict gamma 语义断言已补强但尚未在本轮跑远端 stackctl/beta/gamma remote smoke，故保持 partial。'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

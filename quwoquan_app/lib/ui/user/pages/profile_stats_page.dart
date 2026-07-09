@@ -9,6 +9,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
+import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/search/embedded/embedded_member_search_bar_plain.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
@@ -497,7 +499,12 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
         payload: <String, dynamic>{
           'tab': tab.routeValue,
           'surfaceId': 'profile_stats',
-          'error': runtimeErrorDisplayMessage(error),
+          'error': runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.listAppend,
+            scope: UiErrorScope.section,
+          ).message,
         },
       );
     }
@@ -940,7 +947,7 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
       title: '',
-      middle: _buildSegmentedControl(context),
+      middle: _buildPrimaryTabBar(context),
       onBack: () => context.pop(),
       body: body,
     );

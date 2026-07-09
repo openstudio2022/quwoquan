@@ -23,8 +23,7 @@ const homeSearchChromeKey = ValueKey<String>('home-search-chrome');
 /// （证明 HomePage 已构建，避免冷启动期误触发返回键把 App 退出），再仅在「存在但被
 /// 全屏页/动作面板遮挡」时用原生返回键消解，最后等待其可见。
 Future<void> waitForHomeShell(PatrolIntegrationTester $) async {
-  bool existsInTree() =>
-      find.byKey(homeSearchChromeKey).evaluate().isNotEmpty;
+  bool existsInTree() => find.byKey(homeSearchChromeKey).evaluate().isNotEmpty;
   bool hittable() =>
       find.byKey(homeSearchChromeKey).hitTestable().evaluate().isNotEmpty;
 
@@ -42,7 +41,7 @@ Future<void> waitForHomeShell(PatrolIntegrationTester $) async {
     if (!existsInTree()) {
       break;
     }
-    await $.native.pressBack();
+    await $.platform.android.pressBack();
     await $.pump(const Duration(milliseconds: 600));
   }
 

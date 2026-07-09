@@ -144,7 +144,7 @@ def _compose_payload_from_pack(
     template = (brief.get("render") or {}).get("articleTemplate") or "journal"
     meta = draft_meta or {}
     is_image = carrier in ("image", "gallery")
-    title_hint = require_title_hint(brief, ref=ref)
+    public_title_hint = str(brief.get("titleHint") or "").strip() if is_image else require_title_hint(brief, ref=ref)
     assets = list(pack.get("assets") or [])
     image_source_paths = _image_source_paths_from_assets(assets) if is_image else []
     image_source_urls = _image_source_urls_from_assets(assets) if is_image else []
@@ -153,7 +153,7 @@ def _compose_payload_from_pack(
     creator_assignment = creator_from_payload(pack) or creator_from_payload(brief)
     payload = {
         "topicId": ref,
-        "title": title_hint,
+        "title": public_title_hint,
         "summary": _build_summary(article),
         "articleMarkdown": article,
         "carrier": carrier,
@@ -167,9 +167,9 @@ def _compose_payload_from_pack(
         "publishLayout": "image" if carrier in ("image", "gallery") else "travel",
         "publishAngle": _publish_angle(brief),
         "publishTitle": (
-            _compact_public_text(title_hint, 80)
+            _compact_public_text(meta.get("title") or public_title_hint, 80)
             if carrier in ("image", "gallery")
-            else title_hint
+            else public_title_hint
         ),
         "publishSeq": 1,
         "composeBriefRef": ref,
@@ -191,8 +191,8 @@ def _compose_payload_from_pack(
         **creator_assignment,
     }
     if carrier in ("image", "gallery"):
-        caption = _image_caption_from_brief(brief, pack, article)
-        payload["title"] = _compact_public_text(title_hint, 80)
+        caption = _image_caption_from_brief(brief, pack, meta, article)
+        payload["title"] = _compact_public_text(meta.get("title") or public_title_hint, 80)
         payload["summary"] = caption
         payload["articleMarkdown"] = ""
         payload["caption"] = caption

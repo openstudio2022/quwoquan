@@ -4,8 +4,14 @@ from __future__ import annotations
 import re
 import urllib.parse
 
+from _common.localization import fold_to_simplified
+
 def _normalized_title(value: str) -> str:
-    return re.sub(r"[\s_（）()《》〈〉·•,，。:：;；-]+", "", str(value or "")).lower()
+    return re.sub(
+        r"[\s_（）()《》〈〉·•,，。:：;；-]+",
+        "",
+        fold_to_simplified(str(value or "")),
+    ).lower()
 
 def _dedupe_terms(values: list[str] | tuple[str, ...], *, limit: int = 12) -> list[str]:
     out: list[str] = []

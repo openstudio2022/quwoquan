@@ -27,16 +27,18 @@ gwt_acceptance:
     when:
     - 归因丢失、负反馈异常、召回路径 CTR 下滑、旅行/精品消费断崖或供给来源失衡持续发生。
     then:
-    - Prometheus 告警在 quwoquan_rec_model 组内触发，并能从标签定位 channel、vertical、supply_source 或 recall_path。
+    - Prometheus 告警在 quwoquan_rec_model 组内触发，并能从标签定位 channel、vertical、supply_source
+      或 recall_path。
     done_when:
-    - recommendation_slo.yaml、quwoquan_alerts.yaml、acceptance.yaml 与 local_contract 同步锁定。
+    - recommendation_slo.yaml、quwoquan_alerts.yaml、acceptance.yaml 与 local_contract
+      同步锁定。
     - 告警不引用 objective_only 指标冒充已观测能力。
     edge_cases:
     - 低流量分桶只作为告警排查入口，不作为策略晋升或 AB 显著性结论。
     - unknown attribution 告警必须单独暴露，避免端云字段丢失被总量指标掩盖。
     contract_refs:
     - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
-    - deploy/monitoring/alerts/quwoquan_alerts.yaml
+    - quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     performance_points:
     - recommendation_attribution_bucket_coverage >= 0.95
     - attribution_negative_feedback_rate <= 0.08
@@ -44,7 +46,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - quwoquan_service/services/content-service/tests/local_contract/internal/application/recommendation_alerts_contract__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/recommendation_alerts_contract__local_contract_test.go
     status: implemented
     test_evidence:
       primary:
@@ -66,7 +68,7 @@ gwt_acceptance:
     - 本 Story 只告警 P0+ 已真实 emit 的归因指标；离线 replay、在线 AB、训练晋升和精品池运营入口仍是独立后续任务。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

@@ -9,10 +9,10 @@
 
 ## 1. 必须遵从的 contracts（引用）
 
-- 错误码：`contracts/error_codes.md`
-- 可观测性字段/指标：`contracts/log_fields.md`、`contracts/metrics.md`
-- Headers 与分页：`contracts/openapi/common.yaml`
-- 异步 envelope：`contracts/messages/envelope.schema.json`
+- 错误码：`contracts/runtime_errors/errors/runtime_failure_codes.yaml`
+- 可观测性字段/指标：`contracts/observability/`、`contracts/metrics.md`
+- Headers 与分页：`contracts/metadata/_shared/request_context.yaml`
+- 异步 envelope：`contracts/metadata/_shared/envelope.schema.json`
 - 配置分层：`contracts/configuration.md`
 - 体验指标与 SLO：`contracts/feedback_and_learning.md`
 
@@ -43,7 +43,7 @@
 
 ### 2.4 幂等与一致性（必须）
 
-- create/ingest 类接口 MUST 支持 `Idempotency-Key`（见 `contracts/openapi/common.yaml`）。
+- create/ingest 类接口 MUST 支持 `Idempotency-Key`（见 `contracts/metadata/_shared/request_context.yaml`）。
 - 异步消费 MUST 支持幂等（至少“可重复消费不产生重复副作用”）。
 - 最终一致性场景 MUST 明确：写入、事件发布、读模型更新的时序与可接受延迟。
 
@@ -68,7 +68,7 @@
 
 ## 4. 统一配置要求（必须）
 
-- 配置来源分层（env/secrets/config-center/file/默认值）遵从 `platform/config/README.md`。
+- 配置来源分层（env/secrets/config-center/file/默认值）遵从 `contracts/configuration.md`。
 - 配置命名遵从 `contracts/configuration.md`（`sys.*` vs `ops.*`）。
 - 高风险配置变更 MUST 审计、灰度、回滚，并能在日志中标注生效版本或变更号。
 
@@ -79,8 +79,8 @@
 ## 5. 统一安全与隐私（必须）
 
 - 日志/事件/指标不得泄露敏感信息（token、密码、验证码、隐私字段）。
-- debugMessage 必须脱敏（见 `contracts/error_codes.md`）。
-- Authorization 与身份上下文必须由网关统一注入与透传（见各服务 OpenAPI/common headers）。
+- debugMessage 必须脱敏（见 `contracts/runtime_errors/errors/runtime_failure_codes.yaml`）。
+- Authorization 与身份上下文必须由网关统一注入与透传（见 `contracts/metadata/_shared/request_context.yaml`）。
 
 ---
 
@@ -124,4 +124,3 @@
 
 - 哪些字段允许进入日志/埋点/体验事件（脱敏规则）
 - PII 的最小采集与访问控制策略（尤其是体验指标与行为事件）
-

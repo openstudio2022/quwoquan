@@ -17,6 +17,7 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 
 import argparse
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -78,6 +79,7 @@ def _write_lane_plans(batch: str, sources: list[dict], images: list[dict]) -> No
                         "licenseSnapshot": image.get("licenseSnapshot") or "test fixture",
                         "authorizationProof": image.get("authorizationProof") or "test fixture authorization",
                         "usageScope": image.get("usageScope") or "app_publish",
+                        "modelReleaseStatus": image.get("modelReleaseStatus") or "not_required",
                         "images": [image],
                     }
                     for index, image in enumerate(images, start=1)
@@ -133,7 +135,7 @@ def test_curated_images_merges_and_dedups():
             {"source_id": "s1", "url": "https://x.example/g", "imageUrls": ["https://img.example/c.jpg"]},
         ],
     }
-    write_json(inputs_dir / "source_plan.json", doc)
+    write_json(inputs_dir / "image_source_plan.json", {"payload": doc})
     specs = curated_images_for_entity(_TASK, "b_img_curate", _EID, "景区")
     urls = [s["url"] for s in specs]
     assert urls == [
@@ -401,7 +403,7 @@ def test_handle_download_fetches_images_into_source_unit():
     _write_lane_plans(
         batch,
         [
-            {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/g", "body": "正文兜底"},
+            {"source_id": "s1", "platform": "百度百科", "url": "https://baike.baidu.com/item/稻城亚丁", "body": "正文兜底"},
             {"source_id": "s2", "platform": "mafengwo", "url": "https://x.invalid/h", "body": "游记兜底"},
             {"source_id": "s3", "platform": "官网", "url": "https://x.invalid/i", "body": "官方兜底"},
         ],
@@ -451,7 +453,11 @@ def test_handle_download_fetches_images_into_source_unit():
     refs = read_json(obj / STAGE_DOWNLOAD / "source_refs.json")
     rows = refs.get("sources") or []
     assert [row.get("sourceId") for row in rows[:3]] == ["s1", "s2", "s3"], rows
-    assert all(str(row.get("sourceRef") or "").startswith("sources/su_") for row in rows), rows
+    # 可读命名契约（spec §3）：sources/{实体名}__{sourceKind}__{hash8}/，禁止回归 su_ 哈希名。
+    assert all(
+        re.match(r"^sources/稻城亚丁__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", str(row.get("sourceRef") or ""))
+        for row in rows
+    ), rows
     assert all(str(row.get("sourceRef") or "").endswith("/source.md") for row in rows), rows
     assert not (obj / STAGE_DOWNLOAD / "sources").exists()
     asset_units = [unit for unit in units if (unit / "assets" / "index.json").is_file()]
@@ -488,7 +494,7 @@ def test_repeated_image_lane_fetch_reuses_cached_assets_when_network_fails():
     img_a = _real_jpeg(41)
     img_b = _real_jpeg(42)
     sources = [
-        {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/g", "body": "正文兜底"},
+        {"source_id": "s1", "platform": "百度百科", "url": "https://baike.baidu.com/item/稻城亚丁", "body": "正文兜底"},
         {"source_id": "s2", "platform": "mafengwo", "url": "https://x.invalid/h", "body": "游记兜底"},
         {"source_id": "s3", "platform": "官网", "url": "https://x.invalid/i", "body": "官方兜底"},
     ]
@@ -581,7 +587,7 @@ def test_failed_image_lane_repair_preserves_previous_image_source_units():
     img_a = _real_jpeg(51)
     img_b = _real_jpeg(52)
     sources = [
-        {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/g", "body": "正文兜底"},
+        {"source_id": "s1", "platform": "百度百科", "url": "https://baike.baidu.com/item/稻城亚丁", "body": "正文兜底"},
         {"source_id": "s2", "platform": "mafengwo", "url": "https://x.invalid/h", "body": "游记兜底"},
         {"source_id": "s3", "platform": "官网", "url": "https://x.invalid/i", "body": "官方兜底"},
     ]
@@ -698,7 +704,7 @@ def test_handle_download_isolates_rejected_sources_when_retained_bundle_is_suffi
     _write_lane_plans(
         batch,
         [
-            {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/good1", "body": "正文兜底"},
+            {"source_id": "s1", "platform": "百度百科", "url": "https://baike.baidu.com/item/稻城亚丁/good1", "body": "正文兜底"},
             {"source_id": "s2", "platform": "mafengwo", "url": "https://x.invalid/good2", "body": "游记兜底"},
             {"source_id": "s3", "platform": "官网", "url": "https://x.invalid/good3", "body": "官方兜底"},
             {"source_id": "s_bad", "platform": "sogou", "url": "https://x.invalid/bad", "body": ""},
@@ -790,7 +796,7 @@ def test_handle_download_blocks_unsafe_images_before_persist():
     _write_lane_plans(
         batch,
         [
-            {"source_id": "s1", "platform": "baike", "url": "https://x.invalid/g", "body": "正文兜底"},
+            {"source_id": "s1", "platform": "百度百科", "url": "https://baike.baidu.com/item/稻城亚丁", "body": "正文兜底"},
             {"source_id": "s2", "platform": "官网", "url": "https://x.invalid/h", "body": "官方兜底"},
         ],
         [

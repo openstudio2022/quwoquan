@@ -2,11 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_asset.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_timeline_item.g.dart';
+import 'package:quwoquan_app/components/media/app_media_image.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/entity/pages/homepage_introduction_page.dart';
 
 class _IntroRepository implements HomepageIntroductionRepository {
@@ -84,6 +85,79 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.textContaining('fixture:west_lake'), findsOneWidget);
+  });
+
+  testWidgets('三段结构：正文块级内嵌图与页尾相关图片按 role 渲染', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        HomepageIntroduction(
+          homepageId: 'homepage_sight_dujiangyan',
+          displayName: '都江堰',
+          homepageType: 'sight',
+          coverUrl: 'https://cdn.example.com/cover.jpg',
+          summary: '战国修建的大型水利工程',
+          sections: <HomepageIntroductionSection>[
+            HomepageIntroductionSection(
+              kind: 'body',
+              title: '历史沿革',
+              bodyMarkdown:
+                  '李冰父子主持修建。\n\n'
+                  ':::figure id="fig_01" layout="fullWidth" caption="鱼嘴分水堤"\n'
+                  'asset://inline_asset_1\n'
+                  ':::\n\n'
+                  '两千余年持续灌溉成都平原。',
+              assets: <HomepageIntroductionAsset>[
+                HomepageIntroductionAsset(
+                  assetId: 'inline_asset_1',
+                  url: 'https://cdn.example.com/inline1.jpg',
+                  caption: '鱼嘴分水堤',
+                  role: 'inline',
+                ),
+              ],
+            ),
+            HomepageIntroductionSection(
+              kind: 'relatedImages',
+              title: '相关图片',
+              assets: <HomepageIntroductionAsset>[
+                HomepageIntroductionAsset(
+                  assetId: 'related_asset_1',
+                  url: 'https://cdn.example.com/rel1.jpg',
+                  role: 'related',
+                ),
+                HomepageIntroductionAsset(
+                  assetId: 'related_asset_2',
+                  url: 'https://cdn.example.com/rel2.jpg',
+                  role: 'related',
+                ),
+              ],
+            ),
+          ],
+          sourceRefs: const <String>['fixture:dujiangyan'],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 正文章节：figure 指令不得以原文文本泄漏，必须渲染成块级图 + 单行图注。
+    expect(find.textContaining(':::figure'), findsNothing);
+    expect(find.textContaining('asset://'), findsNothing);
+    expect(find.textContaining('主持修建'), findsOneWidget);
+    expect(find.textContaining('灌溉成都平原'), findsOneWidget);
+    expect(find.text('鱼嘴分水堤'), findsOneWidget);
+
+    // 页尾相关图片小节标题可见。
+    await tester.scrollUntilVisible(
+      find.text('相关图片'),
+      AppSpacing.twoHundredTwenty,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('相关图片'), findsOneWidget);
+
+    // 封面 hero + 正文 1 张内嵌图 + 相关图片 2 张 = 至少 4 个媒体图。
+    expect(
+      find.byType(AppMediaImage, skipOffstage: false),
+      findsAtLeastNWidgets(4),
+    );
   });
 
   testWidgets('介绍为空时展示空态', (tester) async {

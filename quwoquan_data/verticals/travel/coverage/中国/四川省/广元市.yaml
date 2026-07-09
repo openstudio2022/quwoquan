@@ -1,0 +1,355 @@
+# 全国地点主清单 · 四川省广元市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 广元市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 利州区
+  leaves:
+  - name: 皇泽寺
+    canonicalName: 皇泽寺
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/文化遗产
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/利州区
+    aliases:
+    - 广元皇泽寺博物馆
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 千佛崖
+    canonicalName: 广元千佛崖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/利州区
+    aliases:
+    - 千佛崖石刻艺术博物馆
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 天曌山
+    canonicalName: 天曌山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/利州区
+    aliases:
+    - 天曌山国家森林公园
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 芳香南山
+    canonicalName: 芳香南山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/利州区
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 剑阁县
+  leaves:
+  - name: 剑门关
+    canonicalName: 剑门关
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    aliases:
+    - 剑门蜀道剑门关旅游景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 翠云廊
+    canonicalName: 翠云廊
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    aliases:
+    - 翠云廊古柏群
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 鹤鸣山
+    canonicalName: 剑阁鹤鸣山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 五指山
+    canonicalName: 剑阁五指山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    aliases:
+    - 五子山
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 化林大寨
+    canonicalName: 化林大寨
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    selectionPriority: 5
+    sourceReadiness: pending
+- district: 旺苍县
+  leaves:
+  - name: 鼓城山—七里峡
+    canonicalName: 鼓城山—七里峡
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 米仓山大峡谷
+    canonicalName: 米仓山大峡谷
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    aliases:
+    - 潜龙十八潭
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 中国红军城
+    canonicalName: 中国红军城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    aliases:
+    - 旺苍红军城
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 木门景区
+    canonicalName: 旺苍木门景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    aliases:
+    - 木门军事会议会址
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 米仓山自然保护区
+    canonicalName: 米仓山国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    selectionPriority: 5
+    sourceReadiness: pending
+- district: 昭化区
+  leaves:
+  - name: 昭化古城
+    canonicalName: 昭化古城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    aliases:
+    - 葭萌古城
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 平乐旅游区
+    canonicalName: 昭化平乐旅游区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    aliases:
+    - 平乐寺
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 柏林古镇
+    canonicalName: 昭化柏林古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    aliases:
+    - 柏林沟古镇
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 太公红军山
+    canonicalName: 太公红军山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 栖凤峡
+    canonicalName: 昭化栖凤峡
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    selectionPriority: 5
+    sourceReadiness: pending
+- district: 朝天区
+  leaves:
+  - name: 明月峡
+    canonicalName: 广元明月峡
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    aliases:
+    - 朝天峡
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 曾家山
+    canonicalName: 曾家山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 龙门阁
+    canonicalName: 广元龙门阁
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    aliases:
+    - 雪溪洞
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 水磨沟
+    canonicalName: 朝天水磨沟
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    selectionPriority: 4
+    sourceReadiness: ready
+- district: 苍溪县
+  leaves:
+  - name: 红军渡·西武当山
+    canonicalName: 苍溪红军渡·西武当山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    aliases:
+    - 红军渡
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 苍溪梨文化博览园
+    canonicalName: 苍溪梨文化博览园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 黄猫垭
+    canonicalName: 苍溪黄猫垭
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    aliases:
+    - 黄猫垭旅游景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 寻乐书岩
+    canonicalName: 寻乐书岩
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    aliases:
+    - 贾家洞
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 青川县
+  leaves:
+  - name: 唐家河
+    canonicalName: 唐家河国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/景区/自然保护区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/青川县
+    aliases:
+    - 唐家河自然保护区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 青溪古城
+    canonicalName: 青川青溪古城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/青川县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 东河口地震遗址公园
+    canonicalName: 青川东河口地震遗址公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/青川县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 战国木牍文化生态园
+    canonicalName: 青川战国木牍文化生态园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/考古遗址
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/青川县
+    aliases:
+    - 郝家坪战国墓葬群
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 白龙湖
+    canonicalName: 广元白龙湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/青川县
+    aliases:
+    - 白龙湖风景名胜区
+    selectionPriority: 5
+    sourceReadiness: ready

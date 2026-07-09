@@ -38,6 +38,45 @@ def _as_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def _as_string_set(value: Any) -> set[str]:
+    return {
+        str(item).strip().casefold()
+        for item in _as_list(value)
+        if str(item).strip()
+    }
+
+
+def _matches_policy_token(text: str, tokens: set[str]) -> bool:
+    lowered = str(text or "").casefold()
+    if not lowered:
+        return False
+    return any(token and token in lowered for token in tokens)
+
+
+def _homepage_lane_policy(data: Mapping[str, Any]) -> Mapping[str, Any]:
+    lane_policies = data.get("lanePolicies") if isinstance(data.get("lanePolicies"), dict) else {}
+    policy = lane_policies.get("homepage")
+    return policy if isinstance(policy, Mapping) else {}
+
+
+def homepage_primary_authority_rank(platform: str, *, data: Mapping[str, Any] | None = None) -> int:
+    registry = data if data is not None else load_content_source_registry()
+    policy = _homepage_lane_policy(registry)
+    ordered = [
+        str(item).strip()
+        for item in _as_list(policy.get("primaryAuthorityDisplayPlatforms"))
+        if str(item).strip()
+    ]
+    lowered = str(platform or "").strip().casefold()
+    if not lowered:
+        return len(ordered) + 10
+    for index, name in enumerate(ordered):
+        name_lc = name.casefold()
+        if name_lc and (name_lc in lowered or lowered in name_lc):
+            return index
+    return len(ordered) + 10
+
+
 def resolve_source_tier(source_class: str, *, data: Mapping[str, Any] | None = None) -> dict[str, str]:
     """按 sourceClass 解析来源专业度先验（baseTier + worksAffinity）；缺失走 default。
 
@@ -113,6 +152,102 @@ def _registry_sources(data: Mapping[str, Any]) -> list[tuple[str, dict[str, Any]
     return rows
 
 
+def resolve_homepage_source_role(
+    *,
+    source_id: str = "",
+    platform: str = "",
+    category: str = "",
+    source_class: str = "",
+    discovery_provider: str = "",
+    url: str = "",
+    data: Mapping[str, Any] | None = None,
+) -> str:
+    """Resolve homepage authority role from the registry.
+
+    Roles:
+    - primary: may become homepage primaryEvidenceRef（第一权威百科 + R-HSE06 第二权威官网/政务文旅；
+      两级间的排序由 homepage_primary_authority_rank 承担，百科恒在前）
+    - reference_only: may supplement facts but must never become primaryEvidenceRef
+    - supporting: may supplement facts / cross-check
+    - other: unknown / non-authority
+    """
+    registry = data if data is not None else load_content_source_registry()
+    policy = _homepage_lane_policy(registry)
+    text = " ".join(
+        str(item or "")
+        for item in (source_id, platform, category, source_class, discovery_provider, url)
+    ).strip()
+    primary_tokens = _as_string_set(policy.get("primaryAuthorityMatchTokens"))
+    reference_tokens = _as_string_set(policy.get("referenceOnlyMatchTokens"))
+    resolved_class = (
+        str(source_class or "").strip().casefold()
+        or resolve_source_class(source_id=source_id, platform=platform, data=registry).casefold()
+    )
+    # reference_only 优先裁决：头条百科等既含百科 token 又被显式降级的来源不得漏成 primary。
+    if _matches_policy_token(text, reference_tokens):
+        return "reference_only"
+    if _matches_policy_token(text, primary_tokens):
+        return "primary"
+    supporting_classes = _as_string_set(policy.get("supportingOnlySourceClasses"))
+    if resolved_class in supporting_classes:
+        return "supporting"
+    secondary_classes = _as_string_set(policy.get("secondaryAuthoritySourceClasses"))
+    secondary_tokens = _as_string_set(policy.get("secondaryAuthorityMatchTokens"))
+    if resolved_class in secondary_classes or _matches_policy_token(text, secondary_tokens):
+        return "primary"
+    if resolved_class == "encyclopedia":
+        return "supporting"
+    return "other"
+
+
+def homepage_source_can_seed_base_draft(
+    source: Mapping[str, Any],
+    *,
+    data: Mapping[str, Any] | None = None,
+) -> bool:
+    return (
+        resolve_homepage_source_role(
+            source_id=str(source.get("source_id") or source.get("sourceId") or source.get("id") or ""),
+            platform=str(source.get("platform") or ""),
+            category=str(source.get("category") or ""),
+            source_class=str(source.get("sourceClass") or ""),
+            discovery_provider=str(source.get("discoveryProvider") or ""),
+            url=str(source.get("url") or ""),
+            data=data,
+        )
+        == "primary"
+    )
+
+
+def homepage_source_is_secondary_authority(
+    source: Mapping[str, Any],
+    *,
+    data: Mapping[str, Any] | None = None,
+) -> bool:
+    """R-HSE06 第二权威源判定（官网/政务文旅）：正文非开放版权，必须走事实化压缩。
+
+    唯一真相源 = lanePolicies.homepage.secondaryAuthoritySourceClasses / secondaryAuthorityMatchTokens；
+    第一权威百科（primaryAuthorityMatchTokens 命中）不算第二权威。
+    """
+    registry = data if data is not None else load_content_source_registry()
+    policy = _homepage_lane_policy(registry)
+    source_id = str(source.get("source_id") or source.get("sourceId") or source.get("id") or "")
+    platform = str(source.get("platform") or "")
+    text = " ".join(
+        str(source.get(field) or "")
+        for field in ("source_id", "sourceId", "platform", "category", "sourceClass", "discoveryProvider", "url")
+    ).strip()
+    if _matches_policy_token(text, _as_string_set(policy.get("primaryAuthorityMatchTokens"))):
+        return False
+    resolved_class = (
+        str(source.get("sourceClass") or "").strip().casefold()
+        or resolve_source_class(source_id=source_id, platform=platform, data=registry).casefold()
+    )
+    if resolved_class in _as_string_set(policy.get("secondaryAuthoritySourceClasses")):
+        return True
+    return _matches_policy_token(text, _as_string_set(policy.get("secondaryAuthorityMatchTokens")))
+
+
 def verify_content_source_registry() -> list[str]:
     try:
         data = load_content_source_registry()
@@ -168,6 +303,37 @@ def verify_content_source_registry() -> list[str]:
     for lane in ("homepage", "article", "image", "video"):
         if lane not in lane_policies:
             issues.append(f"lanePolicies.{lane}: missing")
+    homepage_policy = _homepage_lane_policy(data)
+    primary_displays = [
+        str(item).strip() for item in _as_list(homepage_policy.get("primaryAuthorityDisplayPlatforms"))
+        if str(item).strip()
+    ]
+    if not primary_displays:
+        issues.append("lanePolicies.homepage.primaryAuthorityDisplayPlatforms: missing")
+    primary_tokens = _as_string_set(homepage_policy.get("primaryAuthorityMatchTokens"))
+    if not primary_tokens:
+        issues.append("lanePolicies.homepage.primaryAuthorityMatchTokens: missing")
+    reference_tokens = _as_string_set(homepage_policy.get("referenceOnlyMatchTokens"))
+    if primary_tokens & reference_tokens:
+        issues.append(
+            "lanePolicies.homepage primaryAuthorityMatchTokens/referenceOnlyMatchTokens overlap"
+        )
+    # R-HSE06 第二权威源策略：类/词元必须声明，且与第一权威、reference_only 词元互斥。
+    secondary_classes = _as_string_set(homepage_policy.get("secondaryAuthoritySourceClasses"))
+    if not secondary_classes:
+        issues.append("lanePolicies.homepage.secondaryAuthoritySourceClasses: missing")
+    secondary_tokens = _as_string_set(homepage_policy.get("secondaryAuthorityMatchTokens"))
+    if not secondary_tokens:
+        issues.append("lanePolicies.homepage.secondaryAuthorityMatchTokens: missing")
+    if secondary_tokens & (primary_tokens | reference_tokens):
+        issues.append(
+            "lanePolicies.homepage secondaryAuthorityMatchTokens 与 primary/referenceOnly 词元重叠"
+        )
+    supporting_classes = _as_string_set(homepage_policy.get("supportingOnlySourceClasses"))
+    if secondary_classes & supporting_classes:
+        issues.append(
+            "lanePolicies.homepage secondaryAuthoritySourceClasses 与 supportingOnlySourceClasses 重叠"
+        )
 
     signals = data.get("sourceTierSignals") if isinstance(data.get("sourceTierSignals"), dict) else {}
     if not signals:
@@ -247,6 +413,16 @@ def build_content_source_guidance(vertical: str = "travel") -> dict[str, Any]:
                     "sourceId": str(row.get("sourceId") or ""),
                     "platform": str(row.get("platform") or ""),
                     "sourceClass": str(row.get("sourceClass") or ""),
+                    "homepageAuthorityRole": (
+                        resolve_homepage_source_role(
+                            source_id=str(row.get("sourceId") or ""),
+                            platform=str(row.get("platform") or ""),
+                            source_class=str(row.get("sourceClass") or ""),
+                            data=data,
+                        )
+                        if lane == "homepage"
+                        else ""
+                    ),
                     "defaultRole": str(row.get("defaultRole") or ""),
                     "fetchMode": str(row.get("fetchMode") or ""),
                     "rightsPolicy": str(row.get("rightsPolicy") or ""),
@@ -276,17 +452,32 @@ def render_lane_source_prompt(
     lines: list[str] = []
     if lane == "homepage":
         primary = [
-            str(row.get("platform") or "")
-            for row in rows
-            if str(row.get("sourceClass") or "") in set(policy.get("primarySourceClasses") or [])
+            str(item).strip()
+            for item in _as_list(policy.get("primaryAuthorityDisplayPlatforms"))
+            if str(item).strip()
         ]
-        support = [
-            str(row.get("platform") or "")
-            for row in rows
-            if str(row.get("sourceClass") or "") in set(policy.get("supportingOnlySourceClasses") or [])
-        ]
+        support: list[str] = []
+        for row in rows:
+            name = str(row.get("platform") or "").strip()
+            if not name:
+                continue
+            role = resolve_homepage_source_role(
+                source_id=str(row.get("sourceId") or ""),
+                platform=name,
+                source_class=str(row.get("sourceClass") or ""),
+                data=data,
+            )
+            if role in {"supporting", "reference_only"} and name not in support:
+                support.append(name)
+        for name in [
+            str(item).strip()
+            for item in _as_list(policy.get("referenceOnlyDisplayPlatforms"))
+            if str(item).strip()
+        ]:
+            if name not in support:
+                support.append(name)
         lines.append(
-            f"只做实体主页检索。核心主源从配置中的通用权威源选择：{', '.join(primary[:12])}；"
+            f"只做实体主页检索。核心主源从配置中的主权威百科选择：{', '.join(primary[:12])}；"
             f"最多保留 {int(policy.get('maxCoreSources') or 5)} 个核心来源，填写 primaryEvidenceRef。"
         )
         if support:
@@ -328,7 +519,8 @@ def render_lane_source_prompt(
         )
         lines.append(
             f"至少形成 {int(per_target_image_works or 1)} 个图片作品容量；"
-            "Pinterest、小红书、微博、抖音、B站等可做发现，但未形成逐图授权链不得进入 collections。"
+            "Pinterest、小红书、微博、抖音、B站等可做发现；其中 Pinterest 只有在 "
+            "attribution_no_watermark 证据链完整时才可进入 collections，其他来源未形成逐图授权链不得进入 collections。"
         )
     elif lane == "video":
         lines.append(

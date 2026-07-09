@@ -34,7 +34,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/offline_replay_evaluation__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/offline_replay_evaluation__local_contract_test.go
     status: implemented
     test_evidence:
       primary:
@@ -51,11 +51,13 @@ gwt_acceptance:
         envs: *id001
       supporting: []
     notes:
-    - P1b 已实现 runtime/recommendation replay dataset/report 纯函数；正式 recorded 证据仅登记 canonical local_contract，批量 ETL/调度仍不在本轮。
-    - P1d-2 PremiumPoolSource 启用前，replay dataset/report 必须能按 `recallPath=premium_pool`、`supplySource` 和 `intersectionClass` 分桶输出指标；低流量分桶仅诊断，不单独作为晋级依据。
+    - P1b 已实现 runtime/recommendation replay dataset/report 纯函数；正式 recorded 证据仅登记 canonical
+      local_contract，批量 ETL/调度仍不在本轮。
+    - P1d-2 PremiumPoolSource 启用前，replay dataset/report 必须能按 `recallPath=premium_pool`、`supplySource`
+      和 `intersectionClass` 分桶输出指标；低流量分桶仅诊断，不单独作为晋级依据。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

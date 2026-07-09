@@ -177,10 +177,15 @@ type IntersectionMixing struct {
 // in content-service IntersectionService. The cooldown TTL is co-registered in
 // _shared/redis_keyspace.yaml: rec:icool.
 type IntersectionConfig struct {
-	CooldownDays                int                `yaml:"cooldownDays" json:"cooldownDays"`
-	MaxCandidateWindow          int                `yaml:"maxCandidateWindow" json:"maxCandidateWindow"`
-	FreshnessTTLDaysByDimension map[string]int     `yaml:"freshnessTtlDaysByDimension" json:"freshnessTtlDaysByDimension"`
-	Mixing                      IntersectionMixing `yaml:"mixing" json:"mixing"`
+	CooldownDays int `yaml:"cooldownDays" json:"cooldownDays"`
+	// NegativeFeedbackCooldownDays is the cross-session cooldown window applied to a
+	// subject after an explicit intersection negative feedback (feedbackKinds). Unlike
+	// the exposure cooldown (seen → demote), this window means "filter out, do not
+	// recommend" and is co-registered in _shared/redis_keyspace.yaml: rec:ineg.
+	NegativeFeedbackCooldownDays int                `yaml:"negativeFeedbackCooldownDays" json:"negativeFeedbackCooldownDays"`
+	MaxCandidateWindow           int                `yaml:"maxCandidateWindow" json:"maxCandidateWindow"`
+	FreshnessTTLDaysByDimension  map[string]int     `yaml:"freshnessTtlDaysByDimension" json:"freshnessTtlDaysByDimension"`
+	Mixing                       IntersectionMixing `yaml:"mixing" json:"mixing"`
 }
 
 // ExposureVisibilityConfig controls client-side visible/impressed/dwell thresholds.
@@ -470,6 +475,9 @@ func (p *RecPolicy) Validate() error {
 	}
 	if p.Intersection.CooldownDays < 0 {
 		return errors.New("recpolicy: intersection.cooldownDays must be >= 0")
+	}
+	if p.Intersection.NegativeFeedbackCooldownDays < 0 {
+		return errors.New("recpolicy: intersection.negativeFeedbackCooldownDays must be >= 0")
 	}
 	if p.Intersection.MaxCandidateWindow < 0 {
 		return errors.New("recpolicy: intersection.maxCandidateWindow must be >= 0")

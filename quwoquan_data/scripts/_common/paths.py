@@ -33,38 +33,110 @@ SERVICE_CONTRACTS_METADATA_ROOT = Path(
     )
 )
 DATA_ROOT = Path(os.environ.get("QWQ_DATA_ROOT", _REPO_DATA_ROOT))
-RUNTIME_ROOT = Path(os.environ.get("QWQ_RUNTIME_ROOT", DATA_ROOT / "runtime"))
+
+# ─── 统一输出根（版本控制之外、工程目录之内）────────────────────────
+# 目录规范裁定（数据输出规范计划）：
+# - 仓内（版本控制）只保留两类长期真相源：输入契约（tasks/schema/templates/scripts）
+#   与发布主线 publish/**；
+# - 其余一切运行期输出（local/data-runtime 批次树 / release 过程 / runs 摘要索引 / app 验证证据）
+#   统一落到 QWQ_OUTPUT_ROOT，默认 `<repo>/.qwq_output/`（gitignore 隔离，工程内可统一管理）；
+# - 禁止默认写到 /tmp、~/qwq_* 等工程外路径（只允许显式 env 覆盖用于隔离实验）。
+# - release 按工程域分组；data 发布包默认只写 `.qwq_output/release/data/<releaseId>`。
+# 当 QWQ_DATA_ROOT 被显式覆盖（测试隔离根）时，输出根跟随 DATA_ROOT
+# （local/data-runtime/publish/release 同根隔离）。
+_DEFAULT_OUTPUT_ROOT = REPO_ROOT / ".qwq_output"
+if os.environ.get("QWQ_OUTPUT_ROOT"):
+    OUTPUT_ROOT = Path(os.environ["QWQ_OUTPUT_ROOT"])
+elif os.environ.get("QWQ_DATA_ROOT"):
+    OUTPUT_ROOT = DATA_ROOT
+else:
+    OUTPUT_ROOT = _DEFAULT_OUTPUT_ROOT
+
+RUNTIME_ROOT = Path(os.environ.get("QWQ_RUNTIME_ROOT", OUTPUT_ROOT / "local" / "data-runtime"))
+
+
+def current_runtime_root() -> Path:
+    runtime_root = os.environ.get("QWQ_RUNTIME_ROOT")
+    if runtime_root:
+        return Path(runtime_root)
+    output_root = os.environ.get("QWQ_OUTPUT_ROOT")
+    if output_root:
+        return Path(output_root) / "local" / "data-runtime"
+    data_root = os.environ.get("QWQ_DATA_ROOT")
+    if data_root:
+        return Path(data_root) / "local" / "data-runtime"
+    return RUNTIME_ROOT
+
+
+# publish 是唯一发布主线生成输出：物理不出仓（默认 quwoquan_data/publish，不随
+# OUTPUT_ROOT 漂移），但仅契约子树受版本控制（tags/creators/user_media；其余
+# entities/posts/index 等由根 .gitignore `quwoquan_data/publish/**` 排除）；
+# 隔离根（QWQ_DATA_ROOT/QWQ_PUBLISH_ROOT）覆盖时才漂移。
 PUBLISH_ROOT = Path(os.environ.get("QWQ_PUBLISH_ROOT", DATA_ROOT / "publish"))
-RELEASE_ROOT = Path(os.environ.get("QWQ_RELEASE_ROOT", DATA_ROOT / "release"))
+RELEASE_ROOT = Path(os.environ.get("QWQ_RELEASE_ROOT", OUTPUT_ROOT / "release" / "data"))
 SCHEMA_ROOT = Path(os.environ.get("QWQ_SCHEMA_ROOT", _REPO_DATA_ROOT / "schema"))
 SOP_ROOT = DATA_ROOT / "sop"
+# 输出侧摘要索引根（只回指、不承载权威证据）：.qwq_output/runs/data/**。
+OUTPUT_ARTIFACTS_ROOT = Path(
+    os.environ.get("QWQ_OUTPUT_ARTIFACTS_ROOT", OUTPUT_ROOT / "runs" / "data")
+)
 
-# 项目内 gitignored sandbox 根（无人托管 / 放量 e2e 的默认 scratch 数据根）的单一真相源。
-# 历史上 runner 脚本把 QWQ_DATA_ROOT 默认到用户 HOME 的 ~/qwq_scale_verify，导致：
-#   1) 真实产物漂移到仓库外、不可清理、跨任务互相污染；
-#   2) 与 gate 的默认 release 根（quwoquan_data/release）位置不清晰。
-# 现统一默认到仓库内 `.qwq_sandbox/`（已 gitignore）。注意：这是“沙箱默认根”的位置定义，
-# 不改变 DATA_ROOT 的默认值——gate/测试仍用仓库 quwoquan_data 数据根，
-# 保证 `verify --scope current` 扫描的 release 根与沙箱 release 物理隔离、互不污染；
-# schema / contracts 仍跟代码走（_REPO_DATA_ROOT / REPO_ROOT），不随沙箱根漂移。
-DEFAULT_SANDBOX_ROOT = REPO_ROOT / ".qwq_sandbox"
+DEFAULT_SANDBOX_ROOT = _DEFAULT_OUTPUT_ROOT
 
 
-def default_sandbox_root() -> Path:
-    """Canonical in-project gitignored sandbox data root for unattended/scaled e2e.
+def default_output_root() -> Path:
+    """Canonical in-project gitignored output root for all runtime-phase output.
 
-    Runner scripts and scaled-e2e default ``QWQ_DATA_ROOT`` to this path instead of
-    ``~/qwq_scale_verify``. Pointing ``QWQ_DATA_ROOT`` here keeps runtime/publish/release
-    under the gitignored sandbox while schema/contracts keep following the repo, and the
-    gate's default release root (``quwoquan_data/release``) stays isolated from sandbox
-    releases so ``verify --scope current`` is never polluted by experiment output.
+    Runner scripts and scaled/e2e/operations runs default their output here. Keeping
+    the root inside the repo (gitignored) keeps everything manageable in one place
+    while schema/contracts and ``publish/`` stay version-controlled and physically
+    isolated from run output.
     """
-    return DEFAULT_SANDBOX_ROOT
+    return _DEFAULT_OUTPUT_ROOT
 
 TASKS_ROOT = RUNTIME_ROOT / "tasks"
-# committed 任务规格根（受版本控制；与 runtime/tasks 同 taskId 对应）
-COMMITTED_TASKS_ROOT = Path(os.environ.get("QWQ_COMMITTED_TASKS_ROOT", DATA_ROOT / "tasks"))
+
+# ─── 统一数据任务控制面（control_plane/：任务输入契约唯一真相源）────────
+# 结构（docs/pipeline_directory_layout_spec.md 仓内层规范）：
+#   control_plane/tasks/<taskId>/task.yaml      任务实例注册表（task.yaml 入库，进度本地）
+#   control_plane/families/<家族路径>/*.preset.yaml|*.recipe.yaml|*.repair.yaml|*.instructions.md
+#                                                家族包：同族模板/配方/指令/修补策略同目录扁平共存
+#   control_plane/_shared/*.runtime.yaml         跨家族共享运行环境 profile
+# 默认机制唯一真相源 = task.yaml.presetRef → families/<ref>.preset.yaml；
+# 旧 `_defaults.yaml` 路径继承链已退役，禁止回归。
+# tasks 注册表随 DATA_ROOT（测试隔离根可整体覆盖）；families/_shared 是版本控制
+# 契约，跟代码走、不随运行时数据根漂移（QWQ_FAMILIES_ROOT 仅供测试注入）。
+CONTROL_PLANE_ROOT = DATA_ROOT / "control_plane"
+COMMITTED_TASKS_ROOT = Path(
+    os.environ.get("QWQ_COMMITTED_TASKS_ROOT", CONTROL_PLANE_ROOT / "tasks")
+)
+FAMILIES_ROOT = Path(
+    os.environ.get("QWQ_FAMILIES_ROOT", _REPO_DATA_ROOT / "control_plane" / "families")
+)
+CONTROL_PLANE_SHARED_ROOT = _REPO_DATA_ROOT / "control_plane" / "_shared"
 COMMANDS = ("explore", "build", "download", "produce", "publish")
+
+
+def normalize_family_ref(ref: str) -> str:
+    """preset/recipe 引用即家族包内相对路径（不含类型后缀），如 content/travel/homepage/base。"""
+    return str(ref or "").strip().strip("/")
+
+
+def preset_path(preset_ref: str) -> Path:
+    """presetRef → control_plane/families/<ref>.preset.yaml（任务默认值唯一真相源）。"""
+    return FAMILIES_ROOT / f"{normalize_family_ref(preset_ref)}.preset.yaml"
+
+
+def recipe_path(recipe_ref: str) -> Path:
+    """recipeRef → control_plane/families/<ref>.recipe.yaml（命名运行配方真相源）。"""
+    return FAMILIES_ROOT / f"{normalize_family_ref(recipe_ref)}.recipe.yaml"
+
+
+def iter_family_files(suffix: str) -> list[Path]:
+    """扫描家族包内某类型后缀的全部文件（lint/registry 消费，不建第二索引）。"""
+    if not FAMILIES_ROOT.is_dir():
+        return []
+    return sorted(p for p in FAMILIES_ROOT.rglob(f"*{suffix}") if p.is_file())
 
 
 def now_iso() -> str:
@@ -91,6 +163,89 @@ TASK_ROOT_LEGACY_COMPAT_ENTRIES = frozenset({
     "changeset",
 })
 
+# ─── 证据面瘦身（数据输出规范）：local/data-runtime/tasks 与 batch/_shared 只保留
+#     不可重算真相源；调试/过程态降级为可清理层。 ────────────────────
+# task/_shared 最小证据面：跨批次账本 + explore/baseline 阶段的不可重算决策包。
+TASK_SHARED_ALLOWED_ENTRIES = frozenset({
+    *TASK_SHARED_LEDGER_FILENAMES,
+    "baseline_freeze_packet.json",
+    "baseline_report.json",
+    "explore_packet.json",
+    "discovery_adopt",
+})
+
+# batch/_shared 权威证据（不可重算真相源）：readiness / monitoring / ship /
+# release 消费方只认这些 canonical 条目；新增证据必须先登记再写入。
+BATCH_SHARED_AUTHORITATIVE_ENTRIES = frozenset({
+    # 批次权威证据清单（目录规范冻结的十项）
+    "content_plan_packet.json",
+    "content_object_index.json",
+    "env_ready_report.json",
+    "task_workflow_state.json",
+    "token_ledger.json",
+    "managed_batch_audit.json",
+    "sdk_monitoring_report.json",
+    "scale_readiness.json",
+    "ship_report.json",
+    "failure_ledger.jsonl",
+    # 既有批次级真相源（人工决策记录 / 放弃归因 / 账本，均不可重算）
+    "source_catalog.json",
+    "asset_id_registry.json",
+    "audit_summary.json",
+    "audit_summary.md",
+    "run_journal.md",
+    "base_draft_ledger.json",
+    "batch_reducer_gate.json",
+    "content_plan_source_diagnostics.json",
+    "source_unavailable_targets.json",
+    "reasoned_rejects.json",
+    "inactive_entity_artifacts.json",
+    "abandoned_homepage_artifacts.json",
+    "quality_target_report.json",
+    "download_repair.json",
+    "import_report.json",
+    "staging_import_report.json",
+    "gamma_import_report.json",
+    "trial_review.json",
+    "review",
+})
+
+# batch/_shared 可清理调试/过程层：跑完即可删、重跑可重建；不得被
+# readiness/审计当作真相源引用（摘要须先沉淀进上面的权威条目）。
+BATCH_SHARED_RECLAIMABLE_ENTRIES = frozenset({
+    "assistant_tasks",
+    "workflow_packets",
+    "object_queue",
+    "image_safety_cache",
+    "download_source_screen",
+    "download_events.jsonl",
+    "download_progress.json",
+    "auto_research_plan.json",
+    "auto_research_progress.json",
+    "source_research_guidance.json",
+    "agent_result_envelopes",
+    "envelopes",
+    "controller_lease.json",
+    "controller_lease.lock",
+})
+
+
+def batch_shared_entry_role(name: str) -> str:
+    """batch/_shared 条目角色：authoritative / reclaimable / unknown。
+
+    `tmp_` 前缀一律视作可清理过程层；unknown 条目由目录证据链门 BLOCK。
+    """
+    if name in BATCH_SHARED_AUTHORITATIVE_ENTRIES:
+        return "authoritative"
+    # ship 按环境回写导入审计副本：{env}_import_report.json 与
+    # homepage-{env}_import_report.json（WP4 homepage importer 通道），
+    # 环境名开放集合，用后缀规则而非逐环境枚举。
+    if name.endswith("_import_report.json"):
+        return "authoritative"
+    if name in BATCH_SHARED_RECLAIMABLE_ENTRIES or name.startswith("tmp_"):
+        return "reclaimable"
+    return "unknown"
+
 WORKSPACE_ROOT_BY_COMMAND = {
     "build": "task_build",
     "download": "task_download",
@@ -105,7 +260,7 @@ WORKSPACE_ROOT_BY_COMMAND = {
 
 # ─── taskId ↔ 目录 互转 ────────────────────────────────────────────
 # taskId 即斜杠路径：<vertical>/<organizeBy>/<key>[/<category>]/<name>
-# committed: tasks/<taskId>/   runtime: runtime/tasks/<taskId>/（task_root 已支持嵌套）
+# committed: tasks/<taskId>/   runtime: local/data-runtime/tasks/<taskId>/（task_root 已支持嵌套）
 def normalize_task_id(task_id: str) -> str:
     return task_id.strip().strip("/")
 
@@ -249,19 +404,9 @@ def _task_shared_path(task_id: str, filename: str) -> Path:
     return task_shared_dir(task_id) / filename
 
 
-def _task_legacy_root_path(task_id: str, filename: str) -> Path:
-    return task_root(task_id) / filename
-
-
 def resolve_existing_task_shared_path(task_id: str, filename: str) -> Path:
-    """读取兼容：优先 `_shared/`，若历史根路径仍存在则回退读取旧位。"""
-    canonical = _task_shared_path(task_id, filename)
-    if canonical.exists():
-        return canonical
-    legacy = _task_legacy_root_path(task_id, filename)
-    if legacy.exists():
-        return legacy
-    return canonical
+    """读取 canonical task `_shared/` 路径；旧 task 根镜像位不再参与 fallback。"""
+    return _task_shared_path(task_id, filename)
 
 
 def iter_existing_task_legacy_entries(task_id: str) -> list[Path]:
@@ -354,12 +499,50 @@ def task_tags(task_id: str) -> Path:
 
 
 # ─── batch 级路径 ─────────────────────────────────────────────────
-# 批次工作区上提到顶层 `runtime/batches/{intentLabel}-{taskHash}__{batch}/`（不再挂任务根）。
+# 目录规范（数据输出规范计划）：批次树按「阶段 × 内容类型 × 供给模式」三级主键分层：
+#   local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/
+# - phase ∈ {e2e, operations}：端到端试跑验证 vs 自动化运营正式跑批（单元测试走 tempfile 根，无批次概念）。
+# - contentType ∈ {homepage, article, image, video}：一批次只跑一种内容类型，禁止混批。
+# - supplyMode ∈ {site_primary, search_supplement}：站点主线 vs 搜索小流量补全，必须分批分路径。
+# - sourceKey/siteId 记入 batch_manifest.json 字段，不作目录层级（控制目录深度）。
+# 叶目录命名沿用 `{intentLabel}-{taskHash}__{batch}`：
 # - intentLabel = ≤16 字人类可读任务意图标签（committed task.yaml.intentLabel，缺省回退 taskId 末段）。
 # - taskHash = 归一 taskId 的稳定短哈希（8 hex），消歧「同名不同分区任务共用 batchId」碰撞
 #   （fanout 各分区叶任务名相同且共享 fanout_<plan> 批次，旧的 tasks/<taskId>/batches 由 taskId 路径天然区分，
 #    上提到顶层后必须由 taskHash 重新提供任务唯一性）。
 # - batch→task 反查唯一依据仍是 batch_manifest.json.taskId；taskHash 只保证目录唯一与候选过滤精确。
+BATCH_PHASES = ("e2e", "operations")
+BATCH_CONTENT_TYPES = ("homepage", "article", "image", "video")
+BATCH_SUPPLY_MODES = ("site_primary", "search_supplement")
+DEFAULT_BATCH_PHASE = "e2e"
+DEFAULT_BATCH_CONTENT_TYPE = "article"
+DEFAULT_BATCH_SUPPLY_MODE = "site_primary"
+
+
+def _batch_axis(env_key: str, allowed: tuple[str, ...], default: str) -> str:
+    value = str(os.environ.get(env_key, "") or "").strip()
+    if not value:
+        return default
+    if value not in allowed:
+        raise ValueError(
+            f"{env_key}={value!r} 不在允许值 {allowed} 内；一批次必须唯一声明该维度"
+        )
+    return value
+
+
+def batch_phase() -> str:
+    """当前批次阶段声明（env `QWQ_BATCH_PHASE`，默认 e2e）。"""
+    return _batch_axis("QWQ_BATCH_PHASE", BATCH_PHASES, DEFAULT_BATCH_PHASE)
+
+
+def batch_content_type() -> str:
+    """当前批次内容类型声明（env `QWQ_BATCH_CONTENT_TYPE`，默认 article）。"""
+    return _batch_axis("QWQ_BATCH_CONTENT_TYPE", BATCH_CONTENT_TYPES, DEFAULT_BATCH_CONTENT_TYPE)
+
+
+def batch_supply_mode() -> str:
+    """当前批次供给模式声明（env `QWQ_BATCH_SUPPLY_MODE`，默认 site_primary）。"""
+    return _batch_axis("QWQ_BATCH_SUPPLY_MODE", BATCH_SUPPLY_MODES, DEFAULT_BATCH_SUPPLY_MODE)
 _LABEL_STRIP_RE = re.compile(r"[\s/\\:]+")
 _INTENT_LABEL_MAX = 16
 _TASK_HASH_LEN = 8
@@ -416,8 +599,34 @@ def clear_intent_label_cache() -> None:
 
 
 def batches_root() -> Path:
-    """顶层批次工作区根（跨任务扁平）：runtime/batches/。"""
-    return RUNTIME_ROOT / "batches"
+    """当前批次落位根：local/data-runtime/{phase}/{contentType}/{supplyMode}/。
+
+    三级主键由 env 声明（`QWQ_BATCH_PHASE` / `QWQ_BATCH_CONTENT_TYPE` /
+    `QWQ_BATCH_SUPPLY_MODE`），一批次运行期内唯一且不可变。
+    """
+    return phase_batches_root(batch_phase(), batch_content_type(), batch_supply_mode())
+
+
+def phase_batches_root(phase: str, content_type: str, supply_mode: str) -> Path:
+    if phase not in BATCH_PHASES:
+        raise ValueError(f"phase={phase!r} 不在 {BATCH_PHASES} 内")
+    if content_type not in BATCH_CONTENT_TYPES:
+        raise ValueError(f"contentType={content_type!r} 不在 {BATCH_CONTENT_TYPES} 内")
+    if supply_mode not in BATCH_SUPPLY_MODES:
+        raise ValueError(f"supplyMode={supply_mode!r} 不在 {BATCH_SUPPLY_MODES} 内")
+    return RUNTIME_ROOT / phase / content_type / supply_mode
+
+
+def iter_batches_roots() -> list[Path]:
+    """全部 canonical 批次根，只返回已存在目录。"""
+    roots: list[Path] = []
+    for phase in BATCH_PHASES:
+        for content_type in BATCH_CONTENT_TYPES:
+            for supply_mode in BATCH_SUPPLY_MODES:
+                root = RUNTIME_ROOT / phase / content_type / supply_mode
+                if root.is_dir():
+                    roots.append(root)
+    return roots
 
 
 def task_dir_prefix(task_id: str) -> str:
@@ -433,7 +642,13 @@ def batch_dir_name(task_id: str, batch_id: str) -> str:
 
 
 def batch_root(task_id: str, batch_id: str) -> Path:
-    return batches_root() / batch_dir_name(task_id, batch_id)
+    """批次根解析：只扫描 canonical 分层树；不存在则按当前声明落位。"""
+    name = batch_dir_name(task_id, batch_id)
+    for root in iter_batches_roots():
+        candidate = root / name
+        if candidate.is_dir():
+            return candidate
+    return batches_root() / name
 
 
 def iter_task_batch_dirs(task_id: str) -> list[Path]:
@@ -443,25 +658,23 @@ def iter_task_batch_dirs(task_id: str) -> list[Path]:
     仍读 `batch_manifest.json.taskId` 做归属确认（manifest 为反查唯一真相源，
     建目录中途 manifest 尚未写时按前缀归属为候选）。
     """
-    root = batches_root()
-    if not root.is_dir():
-        return []
     norm = normalize_task_id(task_id)
     prefix = task_dir_prefix(task_id)
     out: list[Path] = []
-    for d in sorted(root.iterdir()):
-        if not d.is_dir() or not d.name.startswith(prefix):
-            continue
-        manifest = d / "batch_manifest.json"
-        if manifest.is_file():
-            try:
-                data = json.loads(manifest.read_text(encoding="utf-8"))
-            except Exception:
-                data = {}
-            mtid = normalize_task_id(str((data or {}).get("taskId") or "")) if isinstance(data, dict) else ""
-            if mtid and mtid != norm:
+    for root in iter_batches_roots():
+        for d in sorted(root.iterdir()):
+            if not d.is_dir() or not d.name.startswith(prefix):
                 continue
-        out.append(d)
+            manifest = d / "batch_manifest.json"
+            if manifest.is_file():
+                try:
+                    data = json.loads(manifest.read_text(encoding="utf-8"))
+                except Exception:
+                    data = {}
+                mtid = normalize_task_id(str((data or {}).get("taskId") or "")) if isinstance(data, dict) else ""
+                if mtid and mtid != norm:
+                    continue
+            out.append(d)
     return out
 
 
@@ -472,11 +685,11 @@ def iter_task_batch_ids(task_id: str) -> list[str]:
 
 
 def iter_all_batch_dirs() -> list[Path]:
-    """跨任务列出全部批次目录（verify/scan/dirty/审计消费）。"""
-    root = batches_root()
-    if not root.is_dir():
-        return []
-    return sorted(d for d in root.iterdir() if d.is_dir())
+    """跨任务列出全部 canonical 批次目录（verify/scan/dirty/审计消费）。"""
+    out: list[Path] = []
+    for root in iter_batches_roots():
+        out.extend(d for d in root.iterdir() if d.is_dir())
+    return sorted(out)
 
 
 def batch_task_id(batch_dir: Path) -> str:
@@ -609,7 +822,8 @@ def batch_sources_root(task_id: str, batch_id: str) -> Path:
 
 
 def batch_source_unit_dir(task_id: str, batch_id: str, source_unit_id: str) -> Path:
-    unit_id = re.sub(r"[^a-zA-Z0-9_.-]+", "_", str(source_unit_id or "").strip()).strip("_")
+    # 可读命名契约：目录名保留中文实体名（\w 含 unicode），仅替换路径危险字符。
+    unit_id = re.sub(r"[^\w.\-]+", "_", str(source_unit_id or "").strip()).strip("_")
     if not unit_id:
         unit_id = "source_unit"
     return batch_sources_root(task_id, batch_id) / unit_id
@@ -738,6 +952,12 @@ def ensure_batch_layout(task_id: str, batch_id: str, command: str) -> Path:
 
 
 CREATOR_POOLS_ROOT = RUNTIME_ROOT / "creator_pools"
+# user-pool 生成过程根（一次性过程层）；成品经 export 进入 service fixtures / publish。
+USER_POOLS_ROOT = RUNTIME_ROOT / "user_pools"
+
+
+def user_pool_batch_root(batch_id: str) -> Path:
+    return USER_POOLS_ROOT / batch_id
 
 
 def creator_pool_batch_root(vertical: str, batch_id: str) -> Path:

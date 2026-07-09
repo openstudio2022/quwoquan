@@ -89,7 +89,7 @@ sit_acceptance:
     - P0 已补 FeedItem qualityScore/contentVertical/supplySource 与 FeedService travel/premium channel 路由；behavior ingest drop、repeat exposure、coverage 等仍需 gamma 指标验收。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

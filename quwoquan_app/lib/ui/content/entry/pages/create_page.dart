@@ -65,6 +65,29 @@ typedef CreateCameraPageBuilder =
       required int selectedCountBeforeCapture,
     });
 
+class CreateVideoPreparationResult {
+  const CreateVideoPreparationResult({
+    required this.durationMs,
+    this.thumbnailPath = '',
+    this.width = 0,
+    this.height = 0,
+  });
+
+  final int durationMs;
+  final String thumbnailPath;
+  final int width;
+  final int height;
+}
+
+typedef CreateVideoPreparationProbe =
+    Future<CreateVideoPreparationResult> Function(String path);
+
+typedef CreateVideoEditorLauncher =
+    Future<VideoEditorResult?> Function(
+      BuildContext context, {
+      required CreateEditorState state,
+    });
+
 class CreatePage extends ConsumerStatefulWidget {
   const CreatePage({
     super.key,
@@ -76,6 +99,8 @@ class CreatePage extends ConsumerStatefulWidget {
     this.initialDraftId,
     this.mediaPickerLauncher,
     this.cameraPageBuilder,
+    this.videoPreparationProbe,
+    this.videoEditorLauncher,
   });
 
   final EditorStartAction? initialAction;
@@ -88,6 +113,8 @@ class CreatePage extends ConsumerStatefulWidget {
   final String? initialDraftId;
   final CreateMediaPickerLauncher? mediaPickerLauncher;
   final CreateCameraPageBuilder? cameraPageBuilder;
+  final CreateVideoPreparationProbe? videoPreparationProbe;
+  final CreateVideoEditorLauncher? videoEditorLauncher;
 
   @override
   ConsumerState<CreatePage> createState() => _CreatePageState();

@@ -90,7 +90,7 @@ Go 侧禁止 `interface{}`（或 `any`）作为业务数据的参数、返回值
 
 ### R06 — 路径、错误码、字段必须从 metadata 生成
 
-所有以下标识符的唯一真相源是 `contracts/metadata/` 下的 YAML 文件：
+所有以下标识符的唯一真相源是 `quwoquan_service/contracts/metadata/` 下的 YAML 文件：
 
 - API path（`service.yaml`）
 - 错误码和用户文案（`errors.yaml`）

@@ -40,7 +40,7 @@ fi
 cfg_root="quwoquan_service/services/${service}/configs"
 default_cfg="${cfg_root}/default/config.yaml"
 env_cfg="${cfg_root}/${env_name}/config.yaml"
-topology_manifest="deploy/shared/environment_topology_manifest.yaml"
+topology_manifest="quwoquan_ops/environments/environment_topology_manifest.yaml"
 if [[ ! -f "$default_cfg" ]]; then
   echo "FAIL: default service config not found: $default_cfg" >&2
   exit 1
@@ -123,7 +123,7 @@ if service == "chat-service":
             raise SystemExit("prod chat-service group avatar CDN must not use local/test host")
 PY
 
-out_dir="artifacts/service-env-packages/${service}/${env_name}"
+out_dir=".qwq_output/release/service/${service}/${env_name}"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 cp "$default_cfg" "$out_dir/default_config.yaml"
@@ -142,9 +142,9 @@ except ModuleNotFoundError:
 
 service, env_name, topology_path, report_path = sys.argv[1:5]
 root = Path.cwd()
-module_mapping_path = root / "deploy/shared/module_package_mapping.yaml"
-catalog_path = root / "deploy/shared/reliable_task_module_catalog.yaml"
-retention_path = root / "deploy/shared/reliable_task_retention_policy.yaml"
+module_mapping_path = root / "quwoquan_ops/environments/module_package_mapping.yaml"
+catalog_path = root / "quwoquan_ops/environments/reliable_task_module_catalog.yaml"
+retention_path = root / "quwoquan_ops/environments/reliable_task_retention_policy.yaml"
 topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
 env_topology = ((topology.get("environments") or {}).get(env_name) or {})
 artifact_policy = ((env_topology.get("artifactPolicy") or {}).get("service") or {})

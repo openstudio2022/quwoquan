@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -9,7 +8,6 @@ import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_se
 import 'package:quwoquan_app/components/media/image/editor/panels/hsl/image_editor_hsl_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_pro_tool_entries.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_tool_constants.dart';
-
 class ImageEditorOperationPanel extends StatelessWidget {
   const ImageEditorOperationPanel({
     super.key,
@@ -102,7 +100,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
     required this.onCopyLocalAnchor,
     required this.onDeleteLocalAnchor,
   });
-
   final Color backgroundColor;
   final Color foregroundColor;
   final Color foregroundSecondary;
@@ -114,7 +111,8 @@ class ImageEditorOperationPanel extends StatelessWidget {
   final ScrollController proToolScrollController;
   final ValueChanged<int> onSelectProTool;
   final ValueChanged<int> onSelectProCategory;
-  final void Function(double viewportWidth, double itemWidth) onProToolScrollSync;
+  final void Function(double viewportWidth, double itemWidth)
+  onProToolScrollSync;
   final VoidCallback onExitProPanel;
   final VoidCallback onConfirmProPanel;
   final VoidCallback onCancelProTool;
@@ -191,7 +189,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
   final VoidCallback onToggleLocalRangeVisible;
   final VoidCallback onCopyLocalAnchor;
   final VoidCallback onDeleteLocalAnchor;
-
   @override
   Widget build(BuildContext context) {
     final borderColor = AppColorsFunctional.getColor(
@@ -218,7 +215,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
             ),
     );
   }
-
   Widget _buildEntryIcon(
     ImageEditorProToolEntry entry,
     Color color, {
@@ -231,32 +227,25 @@ class ImageEditorOperationPanel extends StatelessWidget {
         color: color,
       );
     }
-    return Icon(
-      entry.icon,
-      color: color,
-      size: iconSize,
-    );
+    return Icon(entry.icon, color: color, size: iconSize);
   }
-
   Widget _buildProToolsPanel(BuildContext context) {
     final isOverall = selectedProCategory == kImageEditorProCategoryOverall;
     final isLocal = selectedProCategory == kImageEditorProCategoryLocal;
     final isHsl = selectedProCategory == kImageEditorProCategoryHsl;
     final isBwLevels = selectedProCategory == kImageEditorProCategoryBwLevels;
-    final placeholder = proPlaceholderTitle ??
+    final placeholder =
+        proPlaceholderTitle ??
         (selectedProCategory == kImageEditorProCategoryCurve
             ? UITextConstants.imageEditorProCurve
             : selectedProCategory == kImageEditorProCategoryWhiteBalance
-                ? UITextConstants.imageEditorProWhiteBalance
-                : UITextConstants.imageEditorProPerspective);
+            ? UITextConstants.imageEditorProWhiteBalance
+            : UITextConstants.imageEditorProPerspective);
     if (isOverall || isLocal) {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _buildProAdjustPanelContent(
-            context,
-            showLocalControls: isLocal,
-          ),
+          _buildProAdjustPanelContent(context, showLocalControls: isLocal),
           _buildProPanelExitBar(),
         ],
       );
@@ -267,13 +256,12 @@ class ImageEditorOperationPanel extends StatelessWidget {
         isHsl
             ? _buildProHslPanelContent()
             : isBwLevels
-                ? _buildProBwLevelsPanelContent()
+            ? _buildProBwLevelsPanelContent()
             : _buildProPlaceholderPanel(placeholder),
         _buildProPanelExitBar(),
       ],
     );
   }
-
   Widget _buildProBwLevelsPanelContent() {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
@@ -304,7 +292,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildProAdjustPanelContent(
     BuildContext context, {
     required bool showLocalControls,
@@ -324,7 +311,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildProPlaceholderPanel(String title) {
     return Center(
       child: Text(
@@ -336,7 +322,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildLocalControlButtonsRow() {
     final items = <_LocalControlButtonItem>[
       _LocalControlButtonItem(
@@ -346,7 +331,9 @@ class ImageEditorOperationPanel extends StatelessWidget {
         onTap: onToggleLocalAddMode,
       ),
       _LocalControlButtonItem(
-        icon: localShowAllAnchors ? Icons.visibility_outlined : Icons.visibility,
+        icon: localShowAllAnchors
+            ? Icons.visibility_outlined
+            : Icons.visibility,
         selected: !localShowAllAnchors,
         label: localShowAllAnchors
             ? UITextConstants.imageEditorProAnchorHide
@@ -366,48 +353,52 @@ class ImageEditorOperationPanel extends StatelessWidget {
       height: AppSpacing.bottomNavHeight,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: items.asMap().entries.map((entry) {
-          final index = entry.key;
-          final item = entry.value;
-          final color = item.selected
-              ? (index == 0 ? AppColors.primaryColor : foregroundColor)
-              : foregroundSecondary.withValues(alpha: 0.8);
-          return CupertinoButton(
-            padding: EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.xs,
-            ),
-            minimumSize: Size.zero,
-            onPressed: item.onTap,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  item.icon,
-                  color: color,
-                  size: AppSpacing.toolPanelItemIconSize,
+        children: items
+            .asMap()
+            .entries
+            .map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              final color = item.selected
+                  ? (index == 0 ? AppColors.primaryColor : foregroundColor)
+                  : foregroundSecondary.withValues(alpha: 0.8);
+              return CupertinoButton(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
                 ),
-                SizedBox(width: AppSpacing.toolPanelItemIconLabelGap),
-                Text(
-                  item.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: AppTypography.toolPanelItemLabel,
-                    fontWeight: FontWeight.normal,
-                  ),
+                minimumSize: Size.zero,
+                onPressed: item.onTap,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      item.icon,
+                      color: color,
+                      size: AppSpacing.toolPanelItemIconSize,
+                    ),
+                    SizedBox(width: AppSpacing.toolPanelItemIconLabelGap),
+                    Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: color,
+                        fontSize: AppTypography.toolPanelItemLabel,
+                        fontWeight: FontWeight.normal,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        }).toList(growable: false),
+              );
+            })
+            .toList(growable: false),
       ),
     );
   }
-
   Widget _buildProHslPanelContent() {
-    final channelValues = hslValues[hslSelectedChannel] ?? const <String, double>{};
+    final channelValues =
+        hslValues[hslSelectedChannel] ?? const <String, double>{};
     final hue = channelValues[kHslAxisHue] ?? 0;
     final saturation = channelValues[kHslAxisSaturation] ?? 0;
     final luminance = channelValues[kHslAxisLuminance] ?? 0;
@@ -442,16 +433,20 @@ class ImageEditorOperationPanel extends StatelessWidget {
           _buildHslAxisRow(
             UITextConstants.imageEditorProSaturation,
             saturation,
-            gradient:
-                _buildHslAxisGradient(selectedChannel.color, kHslAxisSaturation),
+            gradient: _buildHslAxisGradient(
+              selectedChannel.color,
+              kHslAxisSaturation,
+            ),
             onChanged: (v) => onHslValueChanged(kHslAxisSaturation, v),
           ),
           SizedBox(height: AppSpacing.xs),
           _buildHslAxisRow(
             UITextConstants.imageEditorProLuminance,
             luminance,
-            gradient:
-                _buildHslAxisGradient(selectedChannel.color, kHslAxisLuminance),
+            gradient: _buildHslAxisGradient(
+              selectedChannel.color,
+              kHslAxisLuminance,
+            ),
             onChanged: (v) => onHslValueChanged(kHslAxisLuminance, v),
           ),
           SizedBox(height: AppSpacing.xs),
@@ -459,7 +454,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildHslChannelItem(ImageEditorHslChannel channel) {
     final selected = hslSelectedChannel == channel.key;
     return GestureDetector(
@@ -514,14 +508,21 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   List<Color> _buildHslAxisGradient(Color selectedColor, String axis) {
     final hsv = HSVColor.fromColor(selectedColor);
     if (axis == kHslAxisHue) {
       return <Color>[
-        hsv.withHue((hsv.hue - 60 + 360) % 360).withSaturation(1).withValue(1).toColor(),
+        hsv
+            .withHue((hsv.hue - 60 + 360) % 360)
+            .withSaturation(1)
+            .withValue(1)
+            .toColor(),
         hsv.withSaturation(1).withValue(1).toColor(),
-        hsv.withHue((hsv.hue + 60) % 360).withSaturation(1).withValue(1).toColor(),
+        hsv
+            .withHue((hsv.hue + 60) % 360)
+            .withSaturation(1)
+            .withValue(1)
+            .toColor(),
       ];
     }
     if (axis == kHslAxisSaturation) {
@@ -537,7 +538,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       AppColors.white,
     ];
   }
-
   Widget _buildHslAxisRow(
     String label,
     double value, {
@@ -582,7 +582,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ],
     );
   }
-
   Widget _buildProBasePanelContent(BuildContext context) {
     final gap = AppSpacing.intraGroupSm;
     final itemWidth = AppSpacing.buttonHeight * 1.4;
@@ -648,7 +647,9 @@ class ImageEditorOperationPanel extends StatelessWidget {
                           : foregroundSecondary.withValues(alpha: 0.75),
                       fontSize: itemLabelFontSize,
                       height: itemLabelLineHeight / itemLabelFontSize,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: selected
+                          ? FontWeight.w600
+                          : FontWeight.normal,
                     ),
                   ),
                   SizedBox(height: itemIconLabelGap),
@@ -671,26 +672,30 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildProPanelExitBar() {
-    final isAdjustPanel = selectedProCategory == kImageEditorProCategoryOverall ||
+    final isAdjustPanel =
+        selectedProCategory == kImageEditorProCategoryOverall ||
         selectedProCategory == kImageEditorProCategoryLocal;
     final centerTitle = selectedProCategory == kImageEditorProCategoryHsl
         ? UITextConstants.imageEditorProTabHsl
         : selectedProCategory == kImageEditorProCategoryBwLevels
-            ? UITextConstants.imageEditorProTabBwLevels
+        ? UITextConstants.imageEditorProTabBwLevels
         : selectedProCategory == kImageEditorProCategoryLocal
-            ? UITextConstants.imageEditorProTabLocal
+        ? UITextConstants.imageEditorProTabLocal
         : selectedProCategory == kImageEditorProCategoryCurve
-            ? UITextConstants.imageEditorProCurve
-            : selectedProCategory == kImageEditorProCategoryWhiteBalance
-                ? UITextConstants.imageEditorProWhiteBalance
-                : selectedProCategory == kImageEditorProCategoryPerspective
-                    ? (proPlaceholderTitle ?? UITextConstants.imageEditorProPerspective)
-                    : UITextConstants.imageEditorProAdjustImage;
-    final safeIndex = proBaseSelectedIndex.clamp(0, kImageEditorProBaseEntries.length - 1);
+        ? UITextConstants.imageEditorProCurve
+        : selectedProCategory == kImageEditorProCategoryWhiteBalance
+        ? UITextConstants.imageEditorProWhiteBalance
+        : selectedProCategory == kImageEditorProCategoryPerspective
+        ? (proPlaceholderTitle ?? UITextConstants.imageEditorProPerspective)
+        : UITextConstants.imageEditorProAdjustImage;
+    final safeIndex = proBaseSelectedIndex.clamp(
+      0,
+      kImageEditorProBaseEntries.length - 1,
+    );
     final selectedEntry = kImageEditorProBaseEntries[safeIndex];
-    final currentValue = selectedProCategory == kImageEditorProCategoryLocal &&
+    final currentValue =
+        selectedProCategory == kImageEditorProCategoryLocal &&
             hasSelectedLocalAnchor
         ? (localValues[selectedEntry.type] ?? 0)
         : (proBaseValues[selectedEntry.type] ?? 0);
@@ -714,12 +719,15 @@ class ImageEditorOperationPanel extends StatelessWidget {
           if (isAdjustPanel)
             Expanded(
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerSm,
+                ),
                 child: _ProAdjustmentLine(
                   value: currentValue,
                   min: -100,
                   max: 100,
-                  onChanged: (v) => onProBaseValueChanged(selectedEntry.type, v),
+                  onChanged: (v) =>
+                      onProBaseValueChanged(selectedEntry.type, v),
                 ),
               ),
             )
@@ -750,7 +758,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildPanelTopContent() {
     if (toolIndex == kImageEditorToolCrop) {
       return const SizedBox.shrink();
@@ -768,7 +775,9 @@ class ImageEditorOperationPanel extends StatelessWidget {
             _buildFilterRemoveChip(),
             ...List.generate(filterCategories.length, (i) {
               return Padding(
-                padding: EdgeInsets.only(left: AppSpacing.filterCategoryChipGap),
+                padding: EdgeInsets.only(
+                  left: AppSpacing.filterCategoryChipGap,
+                ),
                 child: _buildFilterCategoryChip(i),
               );
             }),
@@ -778,7 +787,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
     }
     return SizedBox(height: AppSpacing.subTabNavigationHeight);
   }
-
   Widget _buildPanelMiddleContent() {
     if (toolIndex == kImageEditorToolCrop) {
       return Align(
@@ -796,8 +804,9 @@ class ImageEditorOperationPanel extends StatelessWidget {
       // 旋转工具：四个功能项等间距居中对齐（向左90°/向右90°/水平翻转/垂直翻转）
       return Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: AppSpacing.semantic[DesignSemanticConstants.container]
-                  ?[DesignSemanticConstants.sm] ??
+          horizontal:
+              AppSpacing.semantic[DesignSemanticConstants
+                  .container]?[DesignSemanticConstants.sm] ??
               AppSpacing.containerSm,
           vertical: AppSpacing.xs,
         ),
@@ -834,8 +843,10 @@ class ImageEditorOperationPanel extends StatelessWidget {
       final previewSide = AppSpacing.filterTemplatePreviewSize;
       final labelBarHeight = AppSpacing.filterTemplateLabelBarHeight;
       final listVerticalPadding = AppSpacing.xs;
-      final maxCardBorderInset = AppSpacing.toolPanelItemBorderWidthSelected * 2;
-      final filterCardHeight = previewSide + labelBarHeight + maxCardBorderInset;
+      final maxCardBorderInset =
+          AppSpacing.toolPanelItemBorderWidthSelected * 2;
+      final filterCardHeight =
+          previewSide + labelBarHeight + maxCardBorderInset;
       final filterRowHeight =
           filterCardHeight + listVerticalPadding * 2 + AppSpacing.intraGroupXs;
       return LayoutBuilder(
@@ -856,19 +867,22 @@ class ImageEditorOperationPanel extends StatelessWidget {
                 controller: filterTemplateScrollController,
                 scrollDirection: Axis.horizontal,
                 padding: EdgeInsets.symmetric(
-                    horizontal: AppSpacing.containerSm,
-                    vertical: listVerticalPadding),
+                  horizontal: AppSpacing.containerSm,
+                  vertical: listVerticalPadding,
+                ),
                 itemCount: filterPresets.length,
                 itemBuilder: (context, i) {
                   final preset = filterPresets[i];
                   final selected = filterTemplateIndex == i;
-                  final isCategoryStart = i > 0 && filterCategoryAnchors.contains(i);
+                  final isCategoryStart =
+                      i > 0 && filterCategoryAnchors.contains(i);
                   final borderWidth = selected
                       ? AppSpacing.toolPanelItemBorderWidthSelected
                       : AppSpacing.toolPanelItemBorderWidthUnselected;
                   final preview = filterTemplatePreviewBytes[i];
-                  final loading =
-                      filterTemplatePreviewLoadingIndices.contains(i);
+                  final loading = filterTemplatePreviewLoadingIndices.contains(
+                    i,
+                  );
                   final labelBarColor = _resolveFilterLabelBarColor(
                     preset,
                     selected: selected,
@@ -888,8 +902,9 @@ class ImageEditorOperationPanel extends StatelessWidget {
                           width: previewSide,
                           height: filterCardHeight,
                           decoration: BoxDecoration(
-                            borderRadius:
-                                BorderRadius.circular(AppSpacing.smallBorderRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.smallBorderRadius,
+                            ),
                             border: Border.all(
                               color: selected
                                   ? foregroundColor
@@ -899,8 +914,9 @@ class ImageEditorOperationPanel extends StatelessWidget {
                             color: AppColors.white.withValues(alpha: 0.04),
                           ),
                           child: ClipRRect(
-                            borderRadius:
-                                BorderRadius.circular(AppSpacing.smallBorderRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.smallBorderRadius,
+                            ),
                             child: Column(
                               mainAxisSize: MainAxisSize.max,
                               children: [
@@ -927,8 +943,12 @@ class ImageEditorOperationPanel extends StatelessWidget {
                                       style: TextStyle(
                                         fontSize: AppTypography.xs,
                                         color: selected
-                                            ? AppColors.white.withValues(alpha: 0.96)
-                                            : AppColors.white.withValues(alpha: 0.72),
+                                            ? AppColors.white.withValues(
+                                                alpha: 0.96,
+                                              )
+                                            : AppColors.white.withValues(
+                                                alpha: 0.72,
+                                              ),
                                         fontWeight: selected
                                             ? FontWeight.w600
                                             : FontWeight.w500,
@@ -958,7 +978,10 @@ class ImageEditorOperationPanel extends StatelessWidget {
           children: [
             Text(
               UITextConstants.imageEditorTextPlaceholder,
-              style: TextStyle(color: foregroundSecondary, fontSize: AppTypography.sm),
+              style: TextStyle(
+                color: foregroundSecondary,
+                fontSize: AppTypography.sm,
+              ),
             ),
             SizedBox(height: AppSpacing.sm),
             Row(
@@ -1002,7 +1025,10 @@ class ImageEditorOperationPanel extends StatelessWidget {
           SizedBox(height: AppSpacing.sm),
           Text(
             UITextConstants.imageEditorMosaicSize,
-            style: TextStyle(color: foregroundSecondary, fontSize: AppTypography.sm),
+            style: TextStyle(
+              color: foregroundSecondary,
+              fontSize: AppTypography.sm,
+            ),
           ),
           Slider(
             value: mosaicBrushSize,
@@ -1026,59 +1052,101 @@ class ImageEditorOperationPanel extends StatelessWidget {
     }
     return const SizedBox.shrink();
   }
-
   Widget _buildTemplateList(
     List<String> labels, {
     required int selectedIndex,
     required ValueChanged<int> onTap,
     double? itemHeight,
   }) {
-    final size = itemHeight ?? AppSpacing.bottomNavHeight;
-    return ListView.builder(
-      scrollDirection: Axis.horizontal,
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.intraGroupSm,
-      ),
-      itemCount: labels.length,
-      itemBuilder: (context, i) {
-        final selected = selectedIndex == i;
-        return Padding(
-          padding: EdgeInsets.only(right: AppSpacing.sm),
-          child: GestureDetector(
-            onTap: () => onTap(i),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: size,
-                  height: size,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-                    border: Border.all(
-                      color: selected
-                          ? AppColors.primaryColor
-                          : foregroundSecondary.withValues(alpha: 0.3),
-                      width: selected ? AppSpacing.xs / 2 : AppSpacing.xs / 4,
+    final requestedPreviewSize = itemHeight ?? AppSpacing.bottomNavHeight;
+    final listHeight = AppSpacing.bottomNavHeight + AppSpacing.sm * 2;
+    final verticalPadding = AppSpacing.intraGroupSm;
+    final labelFontSize = AppTypography.sm;
+    final labelHeight = AppSpacing.toolPanelItemLabelLineHeight;
+    final itemGap = AppSpacing.intraGroupXs;
+    final itemWidth = math.max(AppSpacing.buttonHeight, requestedPreviewSize);
+    return SizedBox(
+      height: listHeight,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final contentHeight = (constraints.maxHeight - verticalPadding * 2)
+              .clamp(0.0, constraints.maxHeight);
+          final previewSize = math
+              .min(
+                requestedPreviewSize,
+                math.max(0.0, contentHeight - labelHeight - itemGap),
+              )
+              .toDouble();
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: EdgeInsets.symmetric(
+              horizontal: AppSpacing.containerSm,
+              vertical: verticalPadding,
+            ),
+            itemCount: labels.length,
+            itemBuilder: (context, i) {
+              final selected = selectedIndex == i;
+              return Padding(
+                padding: EdgeInsets.only(right: AppSpacing.sm),
+                child: SizedBox(
+                  width: itemWidth,
+                  height: contentHeight,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onTap(i),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.max,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: previewSize,
+                          height: previewSize,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(
+                              AppSpacing.borderRadius,
+                            ),
+                            border: Border.all(
+                              color: selected
+                                  ? AppColors.primaryColor
+                                  : foregroundSecondary.withValues(alpha: 0.3),
+                              width: selected
+                                  ? AppSpacing.xs / 2
+                                  : AppSpacing.xs / 4,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: itemGap),
+                        SizedBox(
+                          height: labelHeight,
+                          width: double.infinity,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              labels[i],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: labelFontSize,
+                                height: labelHeight / labelFontSize,
+                                color: selected
+                                    ? AppColors.primaryColor
+                                    : foregroundSecondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                SizedBox(height: AppSpacing.xs),
-                Text(
-                  labels[i],
-                  style: TextStyle(
-                    fontSize: AppTypography.sm,
-                    color: selected ? AppColors.primaryColor : foregroundSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
-
   Widget _buildFilterRemoveChip() {
     return CupertinoButton(
       padding: EdgeInsets.zero,
@@ -1091,7 +1159,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildFilterCategoryChip(int categoryIndex) {
     final selected = filterCategoryIndex == categoryIndex;
     final chip = _panelChip(
@@ -1116,7 +1183,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       },
     );
   }
-
   void _onTapFilterCategory(int categoryIndex) {
     onFilterCategoryChanged(categoryIndex);
     if (!filterTemplateScrollController.hasClients ||
@@ -1125,18 +1191,19 @@ class ImageEditorOperationPanel extends StatelessWidget {
       return;
     }
     final itemExtent = AppSpacing.filterTemplateItemExtent;
-    final targetIndex = filterCategoryAnchors[categoryIndex].clamp(
-      0,
-      math.max(0, filterPresets.length - 1),
-    ).toInt();
+    final targetIndex = filterCategoryAnchors[categoryIndex]
+        .clamp(0, math.max(0, filterPresets.length - 1))
+        .toInt();
     final target = _offsetForTemplateIndex(targetIndex, itemExtent);
     filterTemplateScrollController.animateTo(
-      target.clamp(0.0, filterTemplateScrollController.position.maxScrollExtent),
+      target.clamp(
+        0.0,
+        filterTemplateScrollController.position.maxScrollExtent,
+      ),
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
     );
   }
-
   void _notifyFilterVisibleRange(double viewportWidth, double itemWidth) {
     if (itemWidth <= 0 || filterPresets.isEmpty) return;
     final offset = filterTemplateScrollController.hasClients
@@ -1147,7 +1214,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
     final end = (start + visibleCount).clamp(0, filterPresets.length - 1);
     onFilterVisibleRangeChanged(start, end);
   }
-
   void _syncFilterCategoryWithScroll(double itemWidth) {
     if (!filterTemplateScrollController.hasClients ||
         filterCategoryAnchors.isEmpty ||
@@ -1155,7 +1221,10 @@ class ImageEditorOperationPanel extends StatelessWidget {
         itemWidth <= 0) {
       return;
     }
-    final index = _indexForOffset(filterTemplateScrollController.offset, itemWidth);
+    final index = _indexForOffset(
+      filterTemplateScrollController.offset,
+      itemWidth,
+    );
     var category = 0;
     for (var i = 0; i < filterCategoryAnchors.length; i++) {
       final anchor = filterCategoryAnchors[i];
@@ -1169,7 +1238,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       onFilterCategoryChanged(category);
     }
   }
-
   double _offsetForTemplateIndex(int index, double itemWidth) {
     final safeIndex = index.clamp(0, math.max(0, filterPresets.length - 1));
     var extra = 0.0;
@@ -1180,7 +1248,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
     }
     return safeIndex * itemWidth + extra;
   }
-
   int _indexForOffset(double offset, double itemWidth) {
     if (filterPresets.isEmpty) return 0;
     var best = 0;
@@ -1195,7 +1262,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
     }
     return best.clamp(0, filterPresets.length - 1);
   }
-
   Widget _buildFilterPreviewContent({
     required Uint8List? preview,
     required bool loading,
@@ -1224,7 +1290,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Color _resolveFilterLabelBarColor(
     ImageEditorFilterPreset preset, {
     required bool selected,
@@ -1241,7 +1306,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
     final lightSense = (params['lightSense'] ?? 0).clamp(-100, 100);
     final highlight = (params['highlight'] ?? 0).clamp(-100, 100);
     final shadow = (params['shadow'] ?? 0).clamp(-100, 100);
-
     final calibrated = _filterPresetHslOverrides[preset.id];
     if (calibrated != null) {
       return HSLColor.fromAHSL(
@@ -1251,23 +1315,22 @@ class ImageEditorOperationPanel extends StatelessWidget {
         calibrated[2],
       ).toColor();
     }
-
     if (preset.categoryId == 'bw_art') {
-      final bwLightness = (0.40 +
-              contrast / 320 +
-              brightness / 320 +
-              highlight / 420 +
-              shadow / 520)
-          .clamp(0.28, 0.64);
+      final bwLightness =
+          (0.40 +
+                  contrast / 320 +
+                  brightness / 320 +
+                  highlight / 420 +
+                  shadow / 520)
+              .clamp(0.28, 0.64);
       return HSLColor.fromAHSL(alpha, 0, 0, bwLightness).toColor();
     }
-
-    final profile = _filterCategoryHslProfiles[preset.categoryId] ??
+    final profile =
+        _filterCategoryHslProfiles[preset.categoryId] ??
         const <double>[214, 0.54, 0.46];
     var hue = profile[0];
     var saturation = profile[1];
     var lightness = profile[2];
-
     // 参数驱动：温度偏暖 -> 偏橙；偏冷 -> 偏蓝（摄影常见色温方向）
     if (temperature > 0) {
       hue = _blendHue(hue, 34, (temperature / 100) * 0.55);
@@ -1280,7 +1343,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
     } else if (tint < 0) {
       hue = _blendHue(hue, 170, (-tint / 100) * 0.42);
     }
-
     // 名称语义覆盖：保证视觉与命名一致（奶油/冷霜/粉雾等）
     if (_containsAny(name, const ['奶油', '暖', '琥珀', '金', '日落'])) {
       hue = _blendHue(hue, 34, 0.70);
@@ -1298,125 +1360,105 @@ class ImageEditorOperationPanel extends StatelessWidget {
       hue = _blendHue(hue, 145, 0.62);
       saturation += 0.02;
     }
-
     // 摄影审校模式：禁用扰动，保证色块值稳定可复核
-
-    saturation = (saturation +
-            saturationValue / 220 +
-            (contrast > 0 ? contrast / 520 : 0) -
-            (fade > 0 ? fade / 620 : 0))
-        .clamp(0.34, 0.76);
-    lightness = (lightness +
-            brightness / 240 +
-            lightSense / 560 +
-            highlight / 520 +
-            shadow / 760 +
-            fade / 280 -
-            (contrast > 0 ? contrast / 560 : 0))
-        .clamp(0.30, 0.66);
+    saturation =
+        (saturation +
+                saturationValue / 220 +
+                (contrast > 0 ? contrast / 520 : 0) -
+                (fade > 0 ? fade / 620 : 0))
+            .clamp(0.34, 0.76);
+    lightness =
+        (lightness +
+                brightness / 240 +
+                lightSense / 560 +
+                highlight / 520 +
+                shadow / 760 +
+                fade / 280 -
+                (contrast > 0 ? contrast / 560 : 0))
+            .clamp(0.30, 0.66);
     return HSLColor.fromAHSL(alpha, hue, saturation, lightness).toColor();
   }
-
   static const Map<String, List<double>> _filterCategoryHslProfiles =
       <String, List<double>>{
-    'texture': <double>[170, 0.48, 0.43],
-    'portrait': <double>[336, 0.45, 0.53],
-    'fresh_natural': <double>[138, 0.46, 0.50],
-    'landscape_travel': <double>[196, 0.54, 0.48],
-    'food': <double>[28, 0.60, 0.48],
-    'film_retro': <double>[30, 0.42, 0.42],
-    'movie_dream': <double>[290, 0.50, 0.50],
-    'bw_art': <double>[0, 0.00, 0.44],
-    'seasons': <double>[36, 0.58, 0.52],
-  };
-
+        'texture': <double>[170, 0.48, 0.43],
+        'portrait': <double>[336, 0.45, 0.53],
+        'fresh_natural': <double>[138, 0.46, 0.50],
+        'landscape_travel': <double>[196, 0.54, 0.48],
+        'food': <double>[28, 0.60, 0.48],
+        'film_retro': <double>[30, 0.42, 0.42],
+        'movie_dream': <double>[290, 0.50, 0.50],
+        'bw_art': <double>[0, 0.00, 0.44],
+        'seasons': <double>[36, 0.58, 0.52],
+      };
   // 摄影师视角精调：关键滤镜使用精准 HSL 标定，优先级最高
   static const Map<String, List<double>> _filterPresetHslOverrides =
       <String, List<double>>{
-    // texture
-    'texture_clear': <double>[178, 0.40, 0.44],
-    'texture_soft': <double>[26, 0.22, 0.60],
-    'texture_depth': <double>[176, 0.34, 0.38],
-    // beauty
-    'beauty_softskin': <double>[20, 0.38, 0.62],
-    'beauty_clean': <double>[28, 0.32, 0.60],
-    'beauty_milky': <double>[38, 0.42, 0.64],
-    // portrait
-    'portrait_softlight': <double>[344, 0.42, 0.60],
-    'portrait_cool': <double>[210, 0.42, 0.54],
-    'portrait_movie': <double>[200, 0.34, 0.42],
-    // blue
-    'blue_light': <double>[202, 0.66, 0.54],
-    'blue_deep': <double>[210, 0.60, 0.36],
-    'blue_ice': <double>[196, 0.52, 0.56],
-    // food
-    'food_fresh': <double>[24, 0.70, 0.52],
-    'food_warm': <double>[30, 0.64, 0.50],
-    'food_dessert': <double>[22, 0.68, 0.56],
-    // retro
-    'retro_oldtime': <double>[30, 0.36, 0.42],
-    'retro_hk': <double>[346, 0.42, 0.42],
-    'retro_brown': <double>[26, 0.46, 0.38],
-    // film
-    'film_n': <double>[30, 0.34, 0.42],
-    'film_warm': <double>[34, 0.42, 0.45],
-    'film_green': <double>[146, 0.34, 0.40],
-    // natural
-    'natural_origin': <double>[122, 0.32, 0.44],
-    'natural_air': <double>[126, 0.28, 0.52],
-    'natural_balance': <double>[124, 0.30, 0.46],
-    // landscape
-    'landscape_mountain': <double>[136, 0.48, 0.40],
-    'landscape_coast': <double>[192, 0.54, 0.44],
-    'landscape_sunset': <double>[26, 0.66, 0.50],
-    // dream
-    'dream_haze': <double>[318, 0.34, 0.62],
-    'dream_pink': <double>[334, 0.58, 0.62],
-    'dream_focus': <double>[328, 0.42, 0.64],
-    // oil
-    'oil_canvas': <double>[34, 0.50, 0.44],
-    'oil_thick': <double>[30, 0.56, 0.40],
-    'oil_vintage': <double>[34, 0.42, 0.48],
-    // movie
-    'movie_teal_orange': <double>[188, 0.56, 0.40],
-    'movie_lowsat': <double>[196, 0.22, 0.40],
-    'movie_dark': <double>[224, 0.34, 0.32],
-    // fresh
-    'fresh_mint': <double>[146, 0.56, 0.52],
-    'fresh_morning': <double>[148, 0.42, 0.54],
-    'fresh_white': <double>[150, 0.30, 0.60],
-    // bw
-    'bw_classic': <double>[0, 0.00, 0.42],
-    'bw_silver': <double>[0, 0.00, 0.48],
-    'bw_matte': <double>[0, 0.00, 0.40],
-    // seasons
-    'seasons_spring_blossom': <double>[334, 0.58, 0.62],
-    'seasons_spring_green': <double>[94, 0.56, 0.52],
-    'seasons_spring_sunny': <double>[46, 0.68, 0.56],
-    'seasons_summer_breeze': <double>[202, 0.62, 0.50],
-    'seasons_summer_soda': <double>[198, 0.62, 0.56],
-    'seasons_summer_sun': <double>[190, 0.56, 0.50],
-    'seasons_autumn_gold': <double>[34, 0.64, 0.52],
-    'seasons_autumn_amber': <double>[24, 0.58, 0.46],
-    'seasons_autumn_mist': <double>[30, 0.40, 0.50],
-    'seasons_winter_frost': <double>[210, 0.52, 0.44],
-    'seasons_winter_snow': <double>[202, 0.34, 0.60],
-    'seasons_winter_morning': <double>[208, 0.44, 0.46],
-  };
-
+        'texture_clear': <double>[178, 0.40, 0.44],
+        'texture_soft': <double>[26, 0.22, 0.60],
+        'texture_depth': <double>[176, 0.34, 0.38],
+        'beauty_softskin': <double>[20, 0.38, 0.62],
+        'beauty_clean': <double>[28, 0.32, 0.60],
+        'beauty_milky': <double>[38, 0.42, 0.64],
+        'portrait_softlight': <double>[344, 0.42, 0.60],
+        'portrait_cool': <double>[210, 0.42, 0.54],
+        'portrait_movie': <double>[200, 0.34, 0.42],
+        'blue_light': <double>[202, 0.66, 0.54],
+        'blue_deep': <double>[210, 0.60, 0.36],
+        'blue_ice': <double>[196, 0.52, 0.56],
+        'food_fresh': <double>[24, 0.70, 0.52],
+        'food_warm': <double>[30, 0.64, 0.50],
+        'food_dessert': <double>[22, 0.68, 0.56],
+        'retro_oldtime': <double>[30, 0.36, 0.42],
+        'retro_hk': <double>[346, 0.42, 0.42],
+        'retro_brown': <double>[26, 0.46, 0.38],
+        'film_n': <double>[30, 0.34, 0.42],
+        'film_warm': <double>[34, 0.42, 0.45],
+        'film_green': <double>[146, 0.34, 0.40],
+        'natural_origin': <double>[122, 0.32, 0.44],
+        'natural_air': <double>[126, 0.28, 0.52],
+        'natural_balance': <double>[124, 0.30, 0.46],
+        'landscape_mountain': <double>[136, 0.48, 0.40],
+        'landscape_coast': <double>[192, 0.54, 0.44],
+        'landscape_sunset': <double>[26, 0.66, 0.50],
+        'dream_haze': <double>[318, 0.34, 0.62],
+        'dream_pink': <double>[334, 0.58, 0.62],
+        'dream_focus': <double>[328, 0.42, 0.64],
+        'oil_canvas': <double>[34, 0.50, 0.44],
+        'oil_thick': <double>[30, 0.56, 0.40],
+        'oil_vintage': <double>[34, 0.42, 0.48],
+        'movie_teal_orange': <double>[188, 0.56, 0.40],
+        'movie_lowsat': <double>[196, 0.22, 0.40],
+        'movie_dark': <double>[224, 0.34, 0.32],
+        'fresh_mint': <double>[146, 0.56, 0.52],
+        'fresh_morning': <double>[148, 0.42, 0.54],
+        'fresh_white': <double>[150, 0.30, 0.60],
+        'bw_classic': <double>[0, 0.00, 0.42],
+        'bw_silver': <double>[0, 0.00, 0.48],
+        'bw_matte': <double>[0, 0.00, 0.40],
+        'seasons_spring_blossom': <double>[334, 0.58, 0.62],
+        'seasons_spring_green': <double>[94, 0.56, 0.52],
+        'seasons_spring_sunny': <double>[46, 0.68, 0.56],
+        'seasons_summer_breeze': <double>[202, 0.62, 0.50],
+        'seasons_summer_soda': <double>[198, 0.62, 0.56],
+        'seasons_summer_sun': <double>[190, 0.56, 0.50],
+        'seasons_autumn_gold': <double>[34, 0.64, 0.52],
+        'seasons_autumn_amber': <double>[24, 0.58, 0.46],
+        'seasons_autumn_mist': <double>[30, 0.40, 0.50],
+        'seasons_winter_frost': <double>[210, 0.52, 0.44],
+        'seasons_winter_snow': <double>[202, 0.34, 0.60],
+        'seasons_winter_morning': <double>[208, 0.44, 0.46],
+      };
   bool _containsAny(String text, List<String> patterns) {
     for (final pattern in patterns) {
       if (text.contains(pattern)) return true;
     }
     return false;
   }
-
   double _normalizeHue(double hue) {
     var value = hue % 360;
     if (value < 0) value += 360;
     return value;
   }
-
   double _blendHue(double from, double to, double amount) {
     final a = _normalizeHue(from);
     final b = _normalizeHue(to);
@@ -1427,7 +1469,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
     }
     return _normalizeHue(a + delta * t);
   }
-
   Widget _buildPanelBottomBar(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     if (toolIndex == kImageEditorToolCrop) {
@@ -1625,7 +1666,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   /// 与专业工具、裁剪比例一致：统一使用工具面板功能项语义（图标、字号、间距、默认色）
   Widget _buildRotateActionItem({
     required IconData icon,
@@ -1665,7 +1705,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildCropRatioSelector() {
     final items = [
       _CropRatioEntry(
@@ -1728,10 +1767,7 @@ class ImageEditorOperationPanel extends StatelessWidget {
         return ListView.separated(
           controller: cropRatioScrollController,
           scrollDirection: Axis.horizontal,
-          padding: EdgeInsets.symmetric(
-            horizontal: sidePadding,
-            vertical: gap,
-          ),
+          padding: EdgeInsets.symmetric(horizontal: sidePadding, vertical: gap),
           itemBuilder: (context, index) {
             final entry = items[index];
             final selected = cropRatio == entry.value;
@@ -1746,7 +1782,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       },
     );
   }
-
   Widget _buildCropRatioItem(_CropRatioEntry entry, bool selected) {
     final borderColor = selected
         ? foregroundColor
@@ -1795,7 +1830,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildCropPreview(
     _CropRatioEntry entry,
     double previewSize,
@@ -1825,7 +1859,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
       ),
     );
   }
-
   Widget _panelChip(
     String label,
     bool selected, {
@@ -1867,7 +1900,6 @@ class ImageEditorOperationPanel extends StatelessWidget {
     );
   }
 }
-
 class _ProAdjustmentLine extends StatefulWidget {
   const _ProAdjustmentLine({
     required this.value,
@@ -1877,29 +1909,27 @@ class _ProAdjustmentLine extends StatefulWidget {
     this.trackHeight,
     this.trackGradient,
   });
-
   final double value;
   final double min;
   final double max;
   final ValueChanged<double> onChanged;
   final double? trackHeight;
   final Gradient? trackGradient;
-
   @override
   State<_ProAdjustmentLine> createState() => _ProAdjustmentLineState();
 }
-
 class _ProAdjustmentLineState extends State<_ProAdjustmentLine> {
   bool _dragging = false;
   double _dragValue = 0;
-
   @override
   Widget build(BuildContext context) {
     final range = (widget.max - widget.min).abs();
     final normalized = range == 0
         ? 0.5
-        : ((widget.value - widget.min) / (widget.max - widget.min))
-            .clamp(0.0, 1.0);
+        : ((widget.value - widget.min) / (widget.max - widget.min)).clamp(
+            0.0,
+            1.0,
+          );
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
@@ -1927,38 +1957,44 @@ class _ProAdjustmentLineState extends State<_ProAdjustmentLine> {
             height: AppSpacing.buttonHeight + AppSpacing.xs * 2,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: AppColors.white.withValues(alpha: _dragging ? 0.10 : 0.06),
-                borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
+                color: AppColors.white.withValues(
+                  alpha: _dragging ? 0.10 : 0.06,
+                ),
+                borderRadius: BorderRadius.circular(
+                  AppSpacing.largeBorderRadius,
+                ),
               ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                Container(
-                  height: widget.trackHeight ?? AppSpacing.xs / 2,
-                  decoration: BoxDecoration(
-                    color: widget.trackGradient == null
-                        ? AppColors.white.withValues(alpha: 0.25)
-                        : null,
-                    gradient: widget.trackGradient,
-                    borderRadius: BorderRadius.circular(AppSpacing.xs),
+                  Container(
+                    height: widget.trackHeight ?? AppSpacing.xs / 2,
+                    decoration: BoxDecoration(
+                      color: widget.trackGradient == null
+                          ? AppColors.white.withValues(alpha: 0.25)
+                          : null,
+                      gradient: widget.trackGradient,
+                      borderRadius: BorderRadius.circular(AppSpacing.xs),
+                    ),
                   ),
-                ),
                   Positioned(
                     left: math.min(centerX, knobX),
                     right: width - math.max(centerX, knobX),
                     child: Container(
-                    height: widget.trackHeight ?? AppSpacing.xs / 2,
+                      height: widget.trackHeight ?? AppSpacing.xs / 2,
                       decoration: BoxDecoration(
-                      color: AppColors.white.withValues(
-                        alpha: widget.trackGradient == null ? 0.85 : 0.45,
-                      ),
+                        color: AppColors.white.withValues(
+                          alpha: widget.trackGradient == null ? 0.85 : 0.45,
+                        ),
                         borderRadius: BorderRadius.circular(AppSpacing.xs),
                       ),
                     ),
                   ),
                   Positioned(
-                    left: (centerX - AppSpacing.xs / 4)
-                        .clamp(0.0, math.max(0.0, width - AppSpacing.xs / 2)),
+                    left: (centerX - AppSpacing.xs / 4).clamp(
+                      0.0,
+                      math.max(0.0, width - AppSpacing.xs / 2),
+                    ),
                     child: Container(
                       width: AppSpacing.xs / 2,
                       height: AppSpacing.sm,
@@ -1969,8 +2005,10 @@ class _ProAdjustmentLineState extends State<_ProAdjustmentLine> {
                     ),
                   ),
                   Positioned(
-                    left: (knobX - AppSpacing.xs)
-                        .clamp(0.0, math.max(0.0, width - AppSpacing.xs * 2)),
+                    left: (knobX - AppSpacing.xs).clamp(
+                      0.0,
+                      math.max(0.0, width - AppSpacing.xs * 2),
+                    ),
                     child: Container(
                       width: AppSpacing.xs * 2,
                       height: AppSpacing.sm + AppSpacing.xs,
@@ -1989,7 +2027,6 @@ class _ProAdjustmentLineState extends State<_ProAdjustmentLine> {
     );
   }
 }
-
 class _LocalControlButtonItem {
   const _LocalControlButtonItem({
     required this.icon,
@@ -1997,20 +2034,17 @@ class _LocalControlButtonItem {
     required this.label,
     required this.onTap,
   });
-
   final IconData icon;
   final bool selected;
   final String label;
   final VoidCallback onTap;
 }
-
 class _CropRatioEntry {
   const _CropRatioEntry({
     required this.label,
     required this.value,
     this.previewRatio,
   });
-
   final String label;
   final String value;
   final double? previewRatio;

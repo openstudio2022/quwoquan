@@ -85,12 +85,16 @@ def _make_asset(
 ) -> dict[str, Any]:
     path = candidate["path"]
     # 成品资产文件名即 assetId（可由 article.md 的 asset:// 直查文件，无需翻 manifest）。
+    # owner ref 必须精确到单张源图：同一 post 内同实体同角色多图（gallery）
+    # 若共享 owner key 会复用同一 assetId 导致文件互相覆盖。
     asset_id = allocate_post_asset_id(
         entity_name=entity_name,
         role=role,
-        ref=ref,
+        ref=f"{ref}#{candidate.get('sourceAssetRef') or path.name}",
         global_batch_seq=global_batch_seq,
         registry=asset_registry,
+        caption=caption,
+        ordinal=1,
     )
     ext = path.suffix.lower() or ".jpg"
     asset = {

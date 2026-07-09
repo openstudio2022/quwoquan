@@ -224,30 +224,18 @@ def test_latest_post_outputs_points_to_runtime_article():
     assert outputs[0]["sourceBatchId"] == "b1", outputs[0]
 
 
-def _write_defaults(rel_dir: str, content: dict) -> None:
-    """在 committed tasks 路径前缀写 _defaults.yaml（rel_dir 如 '旅行' 或 '旅行/地域/四川省'）。"""
-    path = COMMITTED_TASKS_ROOT
-    for seg in rel_dir.split("/"):
-        path = path / seg
-    store.write_yaml(path / store.DEFAULTS_FILENAME,
-                     {"schemaVersion": store.DEFAULTS_VERSION, "content": content})
-
-
-# 与真实任务一致的垂类菜单（供继承解析用例）
-_TRAVEL_DEFAULTS = {"angles": ["体验", "美图", "攻略"], "audiences": ["通用"], "carriers": ["article"]}
-
-
-def test_inheritance_resolve_fills_effective():
-    """瘦身 task（不写 angles）经继承解析后 effective 含垂类 angles，task 特化保留。"""
-    _write_defaults("旅行", _TRAVEL_DEFAULTS)
+def test_preset_resolve_fills_effective():
+    """瘦身 task（不写 angles）经 presetRef 解析后 effective 含家族 angles，task 特化保留。"""
     spec = store.scaffold_spec(
         vertical="travel", organize_by="地域", key="四川省", category="景区", name="景区继承",
         scope={"region": "四川省", "entityTypes": ["地点/景区"],
                "coverageTargets": [{"entityType": "地点/景区", "name": "稻城亚丁"}]},
         content={"emphasis": ["自然风光"]},
     )
+    # 垂类默认 preset 由 scaffold 自动写入（家族包 content/travel/article/base）。
+    assert spec["presetRef"] == "content/travel/article/base"
     store.save_spec(spec)
-    # 原始 spec 不内联 angles（靠继承）
+    # 原始 spec 不内联 angles（靠 preset 补齐）
     raw_content = spec.get("content") or {}
     assert "angles" not in raw_content
     eff = store.load_spec(spec["taskId"])["content"]
@@ -266,8 +254,7 @@ def test_lint_blocks_history_source_tasks():
 
 
 def test_lint_warns_redundant_content():
-    """task content.angles 与继承默认完全相同 → PR_WARN 建议删除（不阻断）。"""
-    _write_defaults("旅行", _TRAVEL_DEFAULTS)
+    """task content.angles 与 preset 默认完全相同 → PR_WARN 建议删除（不阻断）。"""
     spec = store.scaffold_spec(
         vertical="travel", organize_by="地域", key="重庆市", category="古镇", name="古镇冗余",
         scope={"region": "重庆市", "entityTypes": ["地点/景区"],

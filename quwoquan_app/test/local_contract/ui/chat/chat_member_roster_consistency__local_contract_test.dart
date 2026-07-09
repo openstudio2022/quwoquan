@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -9,6 +8,8 @@ import 'package:quwoquan_app/ui/chat/providers/conversation_members_provider.dar
 import 'package:quwoquan_app/ui/chat/providers/group_home_provider.dart';
 
 const _conversationId = 'conv_002';
+const _conv003Id = 'conv_003';
+const _convGrid12Id = 'conv_grid_12';
 const _newMemberId = 'user_roster_contract_new';
 
 void main() {
@@ -85,7 +86,9 @@ void main() {
       expect(afterAdd.length, before + 1);
       expect(afterAdd.any((m) => m.userId == _newMemberId), isTrue);
 
-      final repoMembers = await repo.listMembers(conversationId: _conversationId);
+      final repoMembers = await repo.listMembers(
+        conversationId: _conversationId,
+      );
       expect(repoMembers.length, afterAdd.length);
 
       final conversation = await repo.getConversation(_conversationId);
@@ -125,14 +128,46 @@ void main() {
           .read(conversationMembersProvider(_conversationId))
           .members
           .length;
-      final repoCount = (await repo.listMembers(conversationId: _conversationId))
-          .length;
+      final repoCount = (await repo.listMembers(
+        conversationId: _conversationId,
+      )).length;
       expect(providerCount, repoCount);
 
       await repo.removeMember(
         conversationId: _conversationId,
         userId: 'user_roster_invalidate',
       );
+    });
+
+    test(
+      'conv_003 与 conv_grid_12 memberCount / listMembers / getGroupHome 一致',
+      () async {
+        final repo = MockChatRepository();
+        for (final conversationId in [_conv003Id, _convGrid12Id]) {
+          final members = await repo.listMembers(
+            conversationId: conversationId,
+            limit: 200,
+          );
+          final conversation = await repo.getConversation(conversationId);
+          final groupHome = await repo.getGroupHome(conversationId);
+
+          expect(
+            conversation.memberCount,
+            members.length,
+            reason: conversationId,
+          );
+          expect(groupHome.memberCount, members.length, reason: conversationId);
+        }
+      },
+    );
+
+    test('addMembers 后 conv_003 groupAvatarVersion 递增', () async {
+      final repo = MockChatRepository();
+      final before = await repo.getConversation(_conv003Id);
+      await repo.addMembers(conversationId: _conv003Id, userIds: ['user_004']);
+      final after = await repo.getConversation(_conv003Id);
+      expect(after.memberCount, before.memberCount + 1);
+      expect(after.groupAvatarVersion, greaterThan(before.groupAvatarVersion));
     });
   });
 }

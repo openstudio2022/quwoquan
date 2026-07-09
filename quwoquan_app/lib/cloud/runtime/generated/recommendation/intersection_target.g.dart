@@ -2,11 +2,13 @@
 // ignore_for_file: prefer_const_constructors, unnecessary_null_in_if_null_operators
 
 class IntersectionTarget {
+  final String objectType;
   final String objectId;
   final String objectKind;
   final String routeId;
 
   IntersectionTarget({
+    this.objectType = '',
     this.objectId = '',
     this.objectKind = '',
     this.routeId = '',
@@ -14,6 +16,7 @@ class IntersectionTarget {
 
   factory IntersectionTarget.fromMap(Map<String, dynamic> m) {
     return IntersectionTarget(
+      objectType: m['objectType']?.toString() ?? '',
       objectId: m['objectId']?.toString() ?? '',
       objectKind: m['objectKind']?.toString() ?? '',
       routeId: m['routeId']?.toString() ?? '',
@@ -22,6 +25,7 @@ class IntersectionTarget {
 
   Map<String, dynamic> toMap() {
     return <String, dynamic>{
+      'objectType': objectType,
       'objectId': objectId,
       'objectKind': objectKind,
       'routeId': routeId,
@@ -29,11 +33,13 @@ class IntersectionTarget {
   }
 
   IntersectionTarget copyWith({
+    String? objectType,
     String? objectId,
     String? objectKind,
     String? routeId,
   }) {
     return IntersectionTarget(
+      objectType: objectType ?? this.objectType,
       objectId: objectId ?? this.objectId,
       objectKind: objectKind ?? this.objectKind,
       routeId: routeId ?? this.routeId,

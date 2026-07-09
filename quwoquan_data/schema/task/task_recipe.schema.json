@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "任务运行配方 — quwoquan_data/control_plane/families/<recipeId>.recipe.yaml。命名运行编排唯一真相源：任务生成/契约门/执行主体/放量验收一体声明；batch/plan 是运行实例标识，由 CLI 注入不进配方。recipeId 必须等于 families/ 下去 `.recipe.yaml` 后缀的相对路径。",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": "quwoquan.task.recipe" },
+    "recipeId": { "type": "string", "description": "家族包内引用路径，如 content/travel/homepage/h100" },
+    "title": { "type": "string" },
+    "presetRef": { "type": "string", "description": "本配方任务必须绑定的 preset（契约校验 + generate 写入）" },
+    "batchAxes": {
+      "type": "object",
+      "description": "批次三级主键声明（QWQ_BATCH_* 真相源）",
+      "properties": {
+        "phase": { "type": "string", "enum": ["e2e", "operations"] },
+        "contentType": { "type": "string", "enum": ["homepage", "article", "image", "video"] },
+        "supplyMode": { "type": "string", "enum": ["site_primary", "search_supplement"] }
+      },
+      "required": ["phase", "contentType", "supplyMode"],
+      "additionalProperties": false
+    },
+    "runtimeProfile": { "type": "string", "description": "control_plane/_shared/<id>.runtime.yaml 运行环境 profile" },
+    "task": {
+      "type": "object",
+      "description": "任务来源：已存在 taskId，或 generate 声明（task select-targets 参数化）",
+      "properties": {
+        "taskId": { "type": "string" },
+        "generate": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "title": { "type": "string" },
+            "intentLabel": { "type": "string" },
+            "discovery": { "type": "string", "description": "repo 相对 discovery 路径（JSON、主清单目录或市州级主清单 YAML 单文件）" },
+            "region": { "type": "string" },
+            "category": { "type": "string" },
+            "limit": { "type": "integer", "minimum": 1 },
+            "reserveRatio": { "type": "number", "minimum": 0 },
+            "entityArticlesPerTarget": { "type": "integer", "minimum": 0 },
+            "entityHomepagesPerTarget": { "type": "integer", "minimum": 0 },
+            "imageWorksPerTarget": { "type": "integer", "minimum": 0 },
+            "mandatory": { "type": "string", "description": "必保实体逗号分隔；显式空串=空 mandatory（覆盖 select-targets 缺省）" },
+            "sourceTask": { "type": "string", "description": "跨批去重账本维度 taskId；缺省全国常量" },
+            "sourceReadiness": { "type": "string", "description": "按主清单 leaf.sourceReadiness 圈选（逗号分隔，如 ready）；缺省不过滤" },
+            "allowQuotaShortfall": { "type": "boolean" },
+            "minBatchCompletionMode": { "type": "string" }
+          },
+          "required": ["name", "discovery", "limit"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "contract": {
+      "type": "object",
+      "description": "运行前契约门（不满足即 BLOCK，不静默降级）",
+      "properties": {
+        "requireActiveStatus": { "type": "boolean" },
+        "executionBranch": { "type": "string" },
+        "targetObjectCount": { "type": "integer", "minimum": 1 },
+        "allowSelectionShortfall": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "execution": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string", "enum": ["scaled_e2e", "resume_loop", "fanout_partition"] },
+        "strategy": { "type": "string", "enum": ["by-partition", "flat-pool", "by-leaf", "by-batch"], "description": "fanout_partition 分发策略；缺省 by-partition" },
+        "concurrency": { "type": "integer", "minimum": 1 },
+        "maxWorkers": { "type": "integer", "minimum": 1 },
+        "cycles": { "type": "integer", "minimum": 1 },
+        "runtime": { "type": "string", "enum": ["local", "cloud"] },
+        "model": { "type": "string" },
+        "startupTimeoutSeconds": { "type": "number", "minimum": 1 },
+        "maxAuthorRounds": { "type": "integer", "minimum": 1 },
+        "resumeBudgetSeconds": { "type": "number", "minimum": 0 },
+        "networkRetryLimit": { "type": "integer", "minimum": 1 },
+        "networkRetryDelaySeconds": { "type": "number", "minimum": 1 },
+        "forceCleanWorkspaceAgentState": { "type": "boolean" }
+      },
+      "required": ["mode"],
+      "additionalProperties": false
+    },
+    "readiness": {
+      "type": "object",
+      "description": "运行后放量验收（audit-batch + sdk-monitoring + scale-readiness）",
+      "properties": {
+        "dailyTarget": { "type": "integer", "minimum": 1 },
+        "target": { "type": "integer", "minimum": 1 },
+        "minPassRate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mode": { "type": "string" },
+        "failOnNoGo": { "type": "boolean" },
+        "acceptEstimatedTokenLedger": { "type": "boolean", "description": "显式接受 estimated_from_artifacts 账本（本地 bridge 不回传 usage，2026-07-06 裁定）" }
+      },
+      "additionalProperties": false
+    },
+    "env": {
+      "type": "object",
+      "description": "附加环境变量（覆盖 runtimeProfile；值必须字符串）",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "required": ["schemaVersion", "recipeId", "title", "presetRef", "batchAxes", "task", "execution"],
+  "additionalProperties": false
+}

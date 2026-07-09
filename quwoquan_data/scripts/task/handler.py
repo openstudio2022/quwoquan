@@ -33,6 +33,7 @@ import os
 import sys
 
 from _common.io import read_json
+from _common.python_runtime import DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS
 from task import lint as lint_mod
 from task import ops
 from task import queue
@@ -41,6 +42,7 @@ from task import store
 from task.cleanup_generated import build_cleanup_manifest, execute_cleanup, write_manifest
 from task.decompose import register_decompose_parser
 from task.content_supply import register_content_supply_parsers
+from task.recipe import register_recipe_parser
 from task.image_scale_proof import handle_open_license_proof
 from task.run import register_run_parser
 from task import scaled_e2e as scaled_e2e_mod
@@ -89,7 +91,7 @@ def handle_new(args: argparse.Namespace) -> None:
     if targets:
         scope["coverageTargets"] = targets
 
-    # 只写特化 override；未给的字段沿 _defaults.yaml 继承（carriers/audiences 默认不写）。
+    # 只写特化 override；未给的字段由 presetRef 指向的家族 preset 补齐（carriers/audiences 默认不写）。
     content: dict = {}
     if _split(args.angles):
         content["angles"] = _split(args.angles)
@@ -124,6 +126,7 @@ def handle_new(args: argparse.Namespace) -> None:
         title=args.title,
         intent_label=getattr(args, "intent_label", None),
         parent_task_id=args.parent,
+        preset_ref=getattr(args, "preset", None),
         scope=scope,
         content=content,
         created_by=args.owner or "task new",
@@ -426,6 +429,27 @@ def handle_abandon_targets(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
+def handle_throughput_plan(args: argparse.Namespace) -> None:
+    from _common.throughput_plan import ThroughputConfig, compute_throughput_plan
+
+    config = ThroughputConfig(
+        daily_target=int(args.daily_target),
+        channels=int(args.channels),
+        runtime=str(args.runtime),
+        local_bridge_cap_per_machine=int(args.local_bridge_cap),
+        warm_seconds_per_article=float(args.warm_seconds),
+        cold_seconds_per_article=float(args.cold_seconds),
+        active_hours_per_day=float(args.active_hours),
+        first_pass_rate=float(args.first_pass_rate),
+        utilization=float(args.utilization),
+    )
+    plan = compute_throughput_plan(config)
+    report = plan.to_report()
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    if getattr(args, "require_feasible", False) and not plan.meets_target:
+        raise SystemExit(1)
+
+
 def handle_retry_stage(args: argparse.Namespace) -> None:
     from task.run import reset_stage_retries
 
@@ -456,6 +480,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pn.add_argument("--title", help="人读标题")
     pn.add_argument("--intent-label", dest="intent_label",
                     help="≤16字人类可读任务意图标签（顶层批次目录前缀 runtime/batches/<标签>__<批次>/；缺省取任务名清洗截断）")
+    pn.add_argument("--preset",
+                    help="presetRef（families/ 相对路径去 .preset.yaml 后缀）；缺省按垂类解析 content/<vertical>/article/base")
     pn.add_argument("--parent", help="父任务 id（_省域总览）")
     pn.add_argument("--region", help="scope.region")
     pn.add_argument("--regions", help="scope.regions 逗号分隔")
@@ -598,14 +624,46 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "select-targets",
         help="从 discovery 分区确定性选择多模态 coverageTargets，支持按历史不可行对象排除",
     )
-    pstg.add_argument("--source-task", dest="source_task", default="旅行/地域/四川省/景区/景区精选")
-    pstg.add_argument("--discovery", help="discovery JSON 路径；默认取 source task 的 discovery_sichuan_100e.json")
+    # 缺省 None → target_selection.DEFAULT_SOURCE_TASK_ID（全国维度常量，单一真相源）。
+    pstg.add_argument("--source-task", dest="source_task", help="跨批去重账本维度 taskId；默认全国常量")
+    pstg.add_argument("--discovery", help="discovery 输入：主清单目录或 JSON 文件；默认全国主清单 verticals/travel/coverage/中国/")
     pstg.add_argument("--limit", type=int, default=50)
     pstg.add_argument(
         "--reserve-ratio",
         type=float,
         default=0.2,
         help="额外选择备用 coverageTargets 比例；默认 0.2，用于 partial replacement",
+    )
+    pstg.add_argument(
+        "--elastic-overfetch",
+        action="store_true",
+        help="启用弹性超采：--limit 保留为目标实体数，实际按 overfetch multiplier 选择更多候选",
+    )
+    pstg.add_argument(
+        "--overfetch-multiplier",
+        type=float,
+        default=2.0,
+        help="弹性超采倍率；默认 2.0（目标 20 → 候选 40）",
+    )
+    pstg.add_argument(
+        "--allow-quota-shortfall",
+        action="store_true",
+        help="允许内容配额短缺以 reasoned reject 隔离，不阻断已达标对象",
+    )
+    pstg.add_argument(
+        "--allow-over-production",
+        action="store_true",
+        help="允许达标候选超过目标口径时继续产出，并在报告中区分目标/实际口径",
+    )
+    pstg.add_argument(
+        "--min-batch-completion-mode",
+        default="",
+        help="批次完成口径；弹性超采默认 best_effort_with_reasoned_rejects",
+    )
+    pstg.add_argument(
+        "--source-readiness",
+        dest="source_readiness",
+        help="按主清单 leaf.sourceReadiness 过滤候选（逗号分隔，如 ready）；缺省不过滤",
     )
     pstg.add_argument("--mandatory", help="必须保留实体，逗号分隔；默认川西五景")
     pstg.add_argument("--exclude", help="显式排除实体，逗号分隔")
@@ -623,11 +681,19 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pstg.add_argument("--title", help="新任务标题；默认同 name")
     pstg.add_argument("--intent-label", dest="intent_label",
                       help="≤16字人类可读任务意图标签（顶层批次目录前缀；缺省取任务名清洗截断）")
+    pstg.add_argument("--preset",
+                      help="presetRef；缺省 homepage-only 形态绑定 content/travel/homepage/base，否则按垂类默认")
     pstg.add_argument(
         "--entity-articles-per-target",
         type=int,
         default=4,
         help="每个实体的文章配额；默认 4",
+    )
+    pstg.add_argument(
+        "--entity-homepages-per-target",
+        type=int,
+        default=1,
+        help="每个实体的主页配额；默认 1，图片作品-only 批次可设为 0",
     )
     pstg.add_argument(
         "--image-works-per-target",
@@ -694,6 +760,16 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psep.add_argument("--catalog", help="可选 baseline catalog path")
     psep.add_argument("--reset-state", dest="reset_state", action="store_true")
     psep.add_argument("--max-workers", dest="max_workers", type=int, default=10)
+    psep.add_argument("--runtime", choices=["local", "cloud"], default="local")
+    psep.add_argument("--model", default="composer")
+    psep.add_argument("--cwd", default=os.getcwd())
+    psep.add_argument(
+        "--startup-timeout-seconds",
+        dest="startup_timeout_seconds",
+        type=float,
+        default=DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS,
+    )
+    psep.add_argument("--force-clean-workspace-agent-state", action="store_true")
     psep.set_defaults(handler=handle_scaled_e2e)
 
     psef = sesub.add_parser("fanout-author", help="复用 task run --mode fanout 调度 author 子任务")
@@ -710,7 +786,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pserun.add_argument("--concurrency", type=int)
     pserun.add_argument("--max-workers", dest="max_workers", type=int)
     pserun.add_argument("--runtime", choices=["local", "cloud"], default="cloud")
-    pserun.add_argument("--model", default="composer-2.5")
+    pserun.add_argument("--model", default="composer")
     pserun.add_argument("--cwd", default=os.getcwd())
     pserun.add_argument("--spend-limit-usd", dest="spend_limit", type=float)
     pserun.add_argument("--refs", help="仅运行逗号分隔的 ref 列表（content-mode 为内容对象 ref）")
@@ -732,16 +808,27 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psef2.add_argument("--concurrency", type=int)
     psef2.add_argument("--max-workers", dest="max_workers", type=int)
     psef2.add_argument("--runtime", choices=["local", "cloud"], default="cloud")
-    psef2.add_argument("--model", default="composer-2.5")
+    psef2.add_argument("--model", default="composer")
     psef2.add_argument("--cwd", default=os.getcwd())
     psef2.add_argument("--spend-limit-usd", dest="spend_limit", type=float)
     psef2.add_argument("--reset-state", dest="reset_state", action="store_true")
+    psef2.add_argument(
+        "--startup-timeout-seconds",
+        dest="startup_timeout_seconds",
+        type=float,
+        default=DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS,
+    )
+    psef2.add_argument("--force-clean-workspace-agent-state", action="store_true")
+    psef2.add_argument("--source-task", dest="source_task", help="sourceTask content author 直接消费的 taskId")
+    psef2.add_argument("--source-batch", dest="source_batch", help="sourceTask content author 直接消费的 batchId")
     psef2.set_defaults(handler=handle_scaled_e2e)
 
     psev = sesub.add_parser("verify", help="显式校验某 runtime task/batch")
     psev.add_argument("--task")
     psev.add_argument("--batch")
     psev.add_argument("--plan", help="若提供，则聚合校验 plan 下全部分区 task/batch")
+    psev.add_argument("--source-task", dest="source_task", help="sourceTask content author 直接消费的 taskId")
+    psev.add_argument("--source-batch", dest="source_batch", help="sourceTask content author 直接消费的 batchId")
     psev.set_defaults(handler=handle_scaled_e2e)
 
     pseq = sesub.add_parser("run", help="无人托管一键执行 prepare→author→finalize→verify")
@@ -753,16 +840,51 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pseq.add_argument("--concurrency", type=int, default=2)
     pseq.add_argument("--max-workers", dest="max_workers", type=int, default=2)
     pseq.add_argument("--runtime", choices=["local", "cloud"], default="local")
-    pseq.add_argument("--model", default="composer-2.5")
+    pseq.add_argument("--model", default="composer")
     pseq.add_argument("--cwd", default=os.getcwd())
     pseq.add_argument("--spend-limit-usd", dest="spend_limit", type=float)
     pseq.add_argument("--cycles", type=int, default=3, help="author/finalize/verify 最大闭环轮数")
     pseq.add_argument("--reset-state", dest="reset_state", action="store_true")
     pseq.add_argument("--skip-prepare", action="store_true", help="已有 prepare 证据时跳过 prepare 阶段")
     pseq.add_argument("--skip-startup-probe", action="store_true", help="跳过 author-runner 前置 Cursor startup probe")
+    pseq.add_argument(
+        "--startup-timeout-seconds",
+        dest="startup_timeout_seconds",
+        type=float,
+        default=DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS,
+    )
+    pseq.add_argument("--force-clean-workspace-agent-state", action="store_true")
+    pseq.add_argument("--source-task", dest="source_task", help="sourceTask content author 直接消费的 taskId")
+    pseq.add_argument("--source-batch", dest="source_batch", help="sourceTask content author 直接消费的 batchId")
     pseq.set_defaults(handler=handle_scaled_e2e)
 
+    ptp = sub.add_parser(
+        "throughput-plan",
+        help="确定性容量推算：单篇耗时 × 可行并行通道 → 可达日产 + 目标所需通道/机器 + 代码可解 vs 外部约束分层",
+    )
+    ptp.add_argument("--daily-target", dest="daily_target", type=int, default=100_000,
+                     help="目标日产成稿数（默认十万）")
+    ptp.add_argument("--channels", type=int, default=1, help="当前可用并行创作通道数")
+    ptp.add_argument("--runtime", choices=["local", "cloud"], default="cloud",
+                     help="local=单机共享 bridge（受冷启上限）；cloud=独立 agent（受平台配额）")
+    ptp.add_argument("--local-bridge-cap", dest="local_bridge_cap", type=int, default=3,
+                     help="单机本地 bridge 冷启安全并发上限（P6 cold-start cap，默认 3）")
+    ptp.add_argument("--warm-seconds", dest="warm_seconds", type=float, default=32.0,
+                     help="暖 bridge 单篇耗时（实测默认 32s）")
+    ptp.add_argument("--cold-seconds", dest="cold_seconds", type=float, default=62.0,
+                     help="冷启 bridge 单篇耗时（实测默认 62s）")
+    ptp.add_argument("--active-hours", dest="active_hours", type=float, default=24.0,
+                     help="每日有效生产小时数（无人值守默认 24）")
+    ptp.add_argument("--first-pass-rate", dest="first_pass_rate", type=float, default=0.85,
+                     help="首轮通过率（0-1，折算重试损耗）")
+    ptp.add_argument("--utilization", type=float, default=0.80,
+                     help="墙钟利用率（0-1，折算编排/审核/空窗）")
+    ptp.add_argument("--require-feasible", dest="require_feasible", action="store_true",
+                     help="当前配置达不到目标日产时返回非零退出码")
+    ptp.set_defaults(handler=handle_throughput_plan)
+
     register_run_parser(sub)
+    register_recipe_parser(sub)
     register_decompose_parser(sub)
     register_content_supply_parsers(sub)
     queue.register_queue_parser(sub)

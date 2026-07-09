@@ -68,7 +68,7 @@
 1. T2：chip 双口径 widget 测试 + 双列卡/首页多形态 feed/spotlight 结构断言测试全绿（含「理由不在封面 Stack 内」反断言）。
 2. T2：weightTier heavy/light/空 三态渲染测试。
 3. 曝光/点击埋点回归测试绿（reportExposure / trackImpression / 归因透传）。
-4. `dart analyze` 0 error；`bash agent_ops/gate/gate_repo.sh --scope app` 全绿（含 `verify_dart_semantic.py` 颜色语义化）。
+4. `dart analyze` 0 error；`bash quwoquan_ops/gate/gate_repo.sh --scope app` 全绿（含 `verify_dart_semantic.py` 颜色语义化）。
 5. 页面矩阵无漂移（本包不新增页面，若改动触发矩阵行为列则同步更新）。
 
 ## 6. 验收标准（GWT 样例）

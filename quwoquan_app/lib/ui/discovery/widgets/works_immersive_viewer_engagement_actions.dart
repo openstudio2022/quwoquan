@@ -2,7 +2,7 @@ part of 'works_immersive_viewer.dart';
 
 extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
   void _openCommentFor(String postId) {
-    setState(() => _commentSplitPostId = postId);
+    _setMountedState(() => _commentSplitPostId = postId);
   }
 
   Widget _buildCommentSplitContent(PostBaseDto post) {

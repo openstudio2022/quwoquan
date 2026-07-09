@@ -10,6 +10,7 @@
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -43,6 +44,7 @@ from _common.paths import (  # noqa: E402
     ensure_task_layout,
     task_shared_dir,
 )
+from _common.qunar_template import source_author_ref  # noqa: E402
 from _common.source_unit import iter_source_units, object_image_candidates, write_source_unit  # noqa: E402
 from produce.route_workflow import _build_route_assets  # noqa: E402
 from verify.verify_directory_evidence_chain import scan_task  # noqa: E402
@@ -97,7 +99,7 @@ def test_source_unit_layout_no_loose_images():
     units = iter_source_units(obj)
     assert len(units) == 1, units
     unit = units[0]
-    assert unit.resolve().relative_to(batch_root(TASK, BATCH).resolve()).as_posix().startswith("sources/su_"), unit
+    assert re.match(r"^sources/海螺沟__[A-Za-z0-9_\-]+__[0-9a-f]{8}$", unit.resolve().relative_to(batch_root(TASK, BATCH).resolve()).as_posix()), unit
     assert (unit / "meta.json").is_file()
     assert (unit / "assets" / "index.json").is_file()
     assert (unit / "assets").is_dir()
@@ -114,8 +116,8 @@ def test_object_image_candidates_carry_relative_refs():
     cands = object_image_candidates(obj, TASK, BATCH)
     assert len(cands) == 2, cands
     for c in cands:
-        assert c["sourceRef"].startswith("sources/su_"), c
-        assert c["sourceAssetRef"].startswith("sources/su_"), c
+        assert re.match(r"^sources/海螺沟__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", c["sourceRef"]), c
+        assert re.match(r"^sources/海螺沟__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", c["sourceAssetRef"]), c
         assert not c["sourceAssetRef"].startswith("/")
         assert "/Users/" not in c["sourceAssetRef"]
 
@@ -139,7 +141,7 @@ def test_route_assets_to_post_assets_traceable():
         assert a["fileName"] == f"{a['assetId']}{Path(a['fileName']).suffix}", a
         assert a["entityName"] in a["assetId"], a
         assert not a["assetId"].startswith("data_asset_"), a
-        assert a["sourceAssetRef"].startswith("sources/su_"), a
+        assert re.match(r"^sources/海螺沟__[A-Za-z0-9_\-]+__[0-9a-f]{8}/", a["sourceAssetRef"]), a
         assert not a["sourceAssetRef"].startswith("/"), a
     # copy 到 post assets/，文件名即 assetId
     post_assets = batch_root(TASK, BATCH) / "posts" / "article" / "环线" / "海螺沟环线" / "1" / "assets"
@@ -231,6 +233,46 @@ def test_inline_image_placeholders_bind_to_source_asset_ids():
         str(a.get("inlinePlaceholderId") or "") for a in index_payload["assets"]
     )
     assert placeholders == ["source-inline-001", "source-inline-002"]
+
+
+def test_qunar_source_unit_records_author_identity_from_source_row():
+    ensure_task_layout(TASK)
+    ensure_batch_layout(TASK, BATCH, "download")
+    write_batch_manifest(TASK, BATCH, command="download")
+    obj = batch_entity_object_dir(TASK, BATCH, "地点", "景区", "剑门关")
+    manifest = write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="article_qunar_author_base",
+        source_md=(
+            "---\nurl: https://touch.travel.qunar.com/youji/7869929\n---\n\n"
+            "2025/09/29出发\n剑门关栈道、交通、门票和观光车信息都写清楚。"
+        ),
+        quality={"sourceId": "article_qunar_author_base", "quality": "Good", "score": 4},
+        platform="qunar",
+        source_category="travelogue",
+        research_lane="article",
+        url="https://touch.travel.qunar.com/youji/7869929",
+        title="剑门关一日游",
+        target_ref="/entity/地点/景区/剑门关",
+        relevance="剑门关图文游记底稿",
+        source={
+            "userName": "灵光旅行",
+            "userId": "3367372@qunar",
+            "userBooksUrl": "https://touch.travel.qunar.com/3367372@qunar/books",
+        },
+        task_id=TASK,
+        batch_id=BATCH,
+        build_variants=False,
+    )
+
+    assert manifest["sourceAuthorRef"] == source_author_ref("3367372@qunar")
+    assert manifest["siteTemplate"]["authorName"] == "灵光旅行"
+    assert manifest["siteTemplate"]["authorId"] == "3367372@qunar"
+    assert manifest["siteTemplate"]["authorBooksUrl"] == "https://touch.travel.qunar.com/3367372@qunar/books"
+    unit = batch_source_unit_dir(TASK, BATCH, str(manifest["sourceUnitId"]))
+    persisted = read_json(unit / "meta.json")
+    assert persisted["sourceAuthorRef"] == manifest["sourceAuthorRef"]
 
 
 def test_task_shared_allows_baseline_report():

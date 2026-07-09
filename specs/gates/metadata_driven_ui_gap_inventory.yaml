@@ -72,7 +72,7 @@ policy:
   assistant_search_weak_typing_ratchet:
     governance: specs/gates/assistant_search_weak_typing_governance.md
     baseline: specs/gates/assistant_search_weak_typing_baseline.json
-    script: agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py
+    script: quwoquan_service/services/assistant-service/tests/ops/gate/verify_assistant_search_weak_typing_ratchet.py
     make_target: verify-app-assistant-search-weak-typing-ratchet
     buckets:
       - assistant_handwritten

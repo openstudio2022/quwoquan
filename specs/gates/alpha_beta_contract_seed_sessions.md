@@ -6,7 +6,7 @@
 
 - `specs/gates/assistant_alpha_beta_real_chain_spec.md`
 - `quwoquan_service/contracts/metadata/assistant/test_fixtures/scenarios/assistant_scenarios.json`
-- `scripts/verify_assistant_beta_real_chain_report.py`
+- `quwoquan_service/services/assistant-service/tests/ops/smoke/run_assistant_runtime_smoke.py`
 
 完成口径：
 
@@ -14,7 +14,7 @@
 - 云侧 alpha reset+seed 到 assistant-service 自身 store/cache 后测真实 service/handler。
 - 端侧 beta remote 调本地 assistant-service。
 - 云侧 beta 必须真实访问模型与搜索 provider。
-- 最终报告通过 `python3 scripts/verify_assistant_beta_real_chain_report.py <report> --log <assistant-log>`。
+- 最终报告归入 `.qwq_output/runs/**`，由 assistant runtime smoke 和 stackctl 证据聚合；不再保留独立 report verifier 脚本。
 
 ## 会话二：业务对象 DB Seed
 

@@ -1,7 +1,7 @@
-"""P4 图库合规契约：图虫/Pinterest 受限如实标注 + 授权完整性硬门 + 非中文译简体门。
+"""P4 图库合规契约：图虫受限如实标注 + Pinterest 归因发布 + 授权完整性硬门 + 非中文译简体门。
 
-- P4a 图库分级：registry rightsPolicy 为唯一真相源；图虫=逐图创作者授权、Pinterest=仅参考，
-  均如实标注 restricted + bypassAttempted=false + 替代路径=开放许可图池；Commons/Openverse 可发布。
+- P4a 图库分级：registry rightsPolicy 为唯一真相源；图虫=逐图创作者授权、Pinterest=归因无水印发布，
+  受限来源如实标注 restricted + bypassAttempted=false；Pinterest 必须逐图归因与扫描证据完整；Commons/Openverse 可发布。
 - P4b 授权完整性硬门：集合/页级授权必须传播到每张图；缺逐图 authorizationProof 一律不进发布面。
 - P4c 非中文图片元数据门：英文/拉丁主导 caption / 标题须先译简体中文，否则阻断发布。
 
@@ -37,7 +37,7 @@ from _common.localization import simplified_chinese_publish_issues  # noqa: E402
 
 # ---------------------------------------------------------------- P4a 分级 + 受限如实标注
 
-def test_p4a_tuchong_pinterest_restricted_with_alternative_path():
+def test_p4a_tuchong_restricted_pinterest_attribution_publishable():
     # 图虫：逐图创作者授权后才可发布；如实标注受限，不抓取绕过。
     tuchong = classify_image_provider(source_id="tuchong")
     assert tuchong["accessMode"] == "restricted_creator_authorization"
@@ -51,17 +51,12 @@ def test_p4a_tuchong_pinterest_restricted_with_alternative_path():
     assert "authorizationProof" in tuchong_rec["requiresProof"]
     assert tuchong_rec["alternativePath"]["strategy"] == "open_license_pools"
 
-    # Pinterest：ToS 仅参考，永不直接发布；如实标注受限，不绕过 ToS/登录墙。
+    # Pinterest：走 attribution_no_watermark 正式权利模型后，可在逐图证据完整时进入发布候选。
     pinterest = classify_image_provider(platform="Pinterest")
-    assert pinterest["accessMode"] == "restricted_reference_only"
-    assert pinterest["restricted"] is True
-    assert pinterest["publishable"] is False
-
-    pin_rec = image_provider_restriction(source_id="pinterest")
-    assert pin_rec is not None
-    assert pin_rec["bypassAttempted"] is False
-    assert pin_rec["restrictionKind"] == "platform_reference_only"
-    assert pin_rec["alternativePath"]["providers"], "替代路径必须给出开放许可图库"
+    assert pinterest["accessMode"] == "attribution_publishable"
+    assert pinterest["restricted"] is False
+    assert pinterest["publishable"] is True
+    assert image_provider_restriction(source_id="pinterest") is None
 
 
 def test_p4a_open_license_providers_publishable():
@@ -82,7 +77,9 @@ def test_p4a_compliance_summary_is_auditable_and_honest():
     assert summary["policy"] == "registry_rights_policy_single_source"
     assert summary["bypassAttempted"] is False
     restricted_ids = {rec["sourceId"] for rec in summary["restrictedProviders"]}
-    assert {"tuchong", "pinterest"} <= restricted_ids
+    assert "tuchong" in restricted_ids
+    assert "pinterest" not in restricted_ids
+    assert "pinterest" in set(summary["publishableProviders"])
     # 商业图库（如 Getty）同样受限。
     assert "getty_images" in restricted_ids
     # 替代路径稳定指向开放许可图池。
@@ -107,6 +104,7 @@ def _tuchong_collection() -> dict:
                 "termsUrl": "https://creativecommons.org/licenses/by/4.0/",
                 "authorizationProof": "https://tuchong.com/123/九寨沟/license",
                 "usageScope": "app_publish",
+                "modelReleaseStatus": "not_required",
             }
         ],
     }

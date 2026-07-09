@@ -13,7 +13,7 @@
 - 本地 seed/reset：只消费 `app_gamma_seed_manifest.json` 与 metadata fixtures，不在脚本中临时造业务数据。
 - 本地 `api_integration`：真实 HTTP API、真实存储副作用、错误码、响应 schema、RemoteRepository 解码。
 - 本地 `user_acceptance`：模拟器/真机 Patrol 核心旅程，覆盖 IME、权限、媒体、弱网、横竖屏等设备能力路径。
-- 提交前报告：`artifacts/local-gamma/report.json` 记录 commit、镜像、配置、设备、DNS/TLS 与 `local_contract -> user_acceptance` 结果，并指向共享的 `deploy/shared/gamma_validation_suites.json`。
+- 提交前报告：`artifacts/local-gamma/report.json` 记录 commit、镜像、配置、设备、DNS/TLS 与 `local_contract -> user_acceptance` 结果，并指向共享的 `quwoquan_ops/environments/gamma_validation_suites.json`。
 
 ## Out of Scope
 

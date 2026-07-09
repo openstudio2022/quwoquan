@@ -57,7 +57,7 @@ void main() {
         overrides: [chatRepositoryProvider.overrideWithValue(repo)],
       );
       addTearDown(container.dispose);
-      final sub = container.listen(chatInboxListProvider, (_, __) {});
+      final sub = container.listen(chatInboxListProvider, (_, _) {});
       addTearDown(sub.close);
 
       await container.read(chatInboxListProvider.notifier).refresh();
@@ -72,7 +72,9 @@ void main() {
     test('markConversationRead clears unread and mention counts', () async {
       final container = ProviderContainer(
         overrides: [
-          chatRepositoryProvider.overrideWithValue(_UnreadMentionChatRepository()),
+          chatRepositoryProvider.overrideWithValue(
+            _UnreadMentionChatRepository(),
+          ),
         ],
       );
       addTearDown(container.dispose);

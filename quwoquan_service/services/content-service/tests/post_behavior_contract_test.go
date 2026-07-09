@@ -118,6 +118,56 @@ func TestBehaviorBatchReport(t *testing.T) {
 	}
 }
 
+func TestGetMyFootprintContract(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	const userID = "footprint_user_001"
+	created := createPost(t, `{"contentType":"image","title":"Footprint target","mediaUrls":["https://example.com/img.jpg"]}`)
+	postID := asTestString(created["_id"])
+	if postID == "" {
+		postID = asTestString(created["id"])
+	}
+	if postID == "" {
+		t.Fatalf("missing post id: %+v", created)
+	}
+
+	payload := fmt.Sprintf(`{
+		"userId": %q,
+		"events": [
+			{"clientEventId": "evt-footprint-001", "contentId": %q, "contentType": "image", "action": "click", "userId": %q}
+		]
+	}`, userID, postID, userID)
+	reportReq := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	reportReq.Header.Set("Content-Type", "application/json")
+	reportRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(reportRec, reportReq)
+	if reportRec.Code != http.StatusNoContent {
+		t.Fatalf("report behavior: expected 204, got %d: %s", reportRec.Code, reportRec.Body.String())
+	}
+
+	footprintReq := httptest.NewRequest(http.MethodGet, "/v1/content/footprint?type=viewed&limit=10", nil)
+	footprintReq.Header.Set("X-Client-User-Id", userID)
+	footprintRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(footprintRec, footprintReq)
+	if footprintRec.Code != http.StatusOK {
+		t.Fatalf("get footprint: expected 200, got %d: %s", footprintRec.Code, footprintRec.Body.String())
+	}
+	var resp map[string]any
+	if err := json.Unmarshal(footprintRec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode footprint response: %v", err)
+	}
+	items, _ := resp["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected one footprint item, got %d: %#v", len(items), resp)
+	}
+	item, _ := items[0].(map[string]any)
+	if item["postId"] != postID || item["action"] != "click" {
+		t.Fatalf("unexpected footprint item: %#v", item)
+	}
+	if _, ok := item["post"].(map[string]any); !ok {
+		t.Fatalf("footprint item must hydrate post projection: %#v", item)
+	}
+}
+
 // TestBehaviorBatchEmpty verifies POST /v1/content/behaviors with an empty events
 // array returns 400 with CONTENT.USER.invalid_argument.
 // contract.yaml: behavior_batch_empty
@@ -289,6 +339,57 @@ func TestBehaviorBatchAssistantInterestAllowsEmptyContentID(t *testing.T) {
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("expected 204 for assistant_interest without contentId, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBehaviorBatchWishlistProjectsEntityWishlistEvent(t *testing.T) {
+	ctx := context.Background()
+	coll := mongoDB.Collection("entity_wishlist_events")
+	if _, err := coll.DeleteMany(ctx, bson.M{"userId": "user_wishlist_http_001"}); err != nil {
+		t.Fatalf("clean wishlist events: %v", err)
+	}
+	payload := `{
+		"userId":"user_wishlist_http_001",
+		"sessionId":"sess_wishlist_http_001",
+		"events":[
+			{
+				"clientEventId":"evt_wishlist_http_001",
+				"action":"wishlist_add",
+				"objectId":"homepage_west_lake",
+				"objectKind":"homepage",
+				"displayName":"西湖日落机位",
+				"sourceSurface":"object_homepage",
+				"referralSource":"entity_page",
+				"feedRequestId":"frq_wishlist_http_001"
+			}
+		]
+	}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	testHandler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 for wishlist_add, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var got struct {
+		UserID         string `bson:"userId"`
+		EntityID       string `bson:"entityId"`
+		ObjectType     string `bson:"objectType"`
+		DisplayName    string `bson:"displayName"`
+		Status         string `bson:"status"`
+		SourceSurface  string `bson:"sourceSurface"`
+		ReferralSource string `bson:"referralSource"`
+		FeedRequestID  string `bson:"feedRequestId"`
+	}
+	if err := coll.FindOne(ctx, bson.M{"userId": "user_wishlist_http_001", "entityId": "homepage_west_lake"}).Decode(&got); err != nil {
+		t.Fatalf("find projected wishlist event: %v", err)
+	}
+	if got.Status != "active" || got.ObjectType != "homepage" || got.DisplayName != "西湖日落机位" {
+		t.Fatalf("unexpected wishlist projection: %+v", got)
+	}
+	if got.SourceSurface != "object_homepage" || got.ReferralSource != "entity_page" || got.FeedRequestID != "frq_wishlist_http_001" {
+		t.Fatalf("unexpected wishlist attribution: %+v", got)
 	}
 }
 

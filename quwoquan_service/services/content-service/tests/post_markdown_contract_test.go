@@ -146,3 +146,59 @@ func TestBindMediaAssetsToPostContract(t *testing.T) {
 		t.Fatalf("expected boundCount=1, got %d", got)
 	}
 }
+
+func TestRequestOriginalImageAccessContract(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	eventSpy.Reset()
+
+	initReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/content/media/uploads:init",
+		strings.NewReader(`{"mediaType":"image","assetScope":"draft","sourceKind":"user_upload"}`),
+	)
+	initReq.Header.Set("Content-Type", "application/json")
+	initReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	initRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(initRec, initReq)
+	if initRec.Code != http.StatusOK {
+		t.Fatalf("init upload failed: %d %s", initRec.Code, initRec.Body.String())
+	}
+	var initResp map[string]any
+	if err := json.Unmarshal(initRec.Body.Bytes(), &initResp); err != nil {
+		t.Fatalf("decode init response: %v", err)
+	}
+	sessionID := asTestString(initResp["sessionId"])
+	mediaID := asTestString(initResp["mediaId"])
+	if sessionID == "" || mediaID == "" {
+		t.Fatalf("missing media session or id: %#v", initResp)
+	}
+
+	completeReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete", nil)
+	completeRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(completeRec, completeReq)
+	if completeRec.Code != http.StatusOK {
+		t.Fatalf("complete upload failed: %d %s", completeRec.Code, completeRec.Body.String())
+	}
+
+	accessReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view","sessionId":"sess_original_001"}`))
+	accessReq.Header.Set("Content-Type", "application/json")
+	accessReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	accessRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(accessRec, accessReq)
+	if accessRec.Code != http.StatusOK {
+		t.Fatalf("request original access failed: %d %s", accessRec.Code, accessRec.Body.String())
+	}
+	var accessResp map[string]any
+	if err := json.Unmarshal(accessRec.Body.Bytes(), &accessResp); err != nil {
+		t.Fatalf("decode access response: %v", err)
+	}
+	if accessResp["mediaId"] != mediaID || accessResp["status"] != "granted" {
+		t.Fatalf("unexpected access response: %#v", accessResp)
+	}
+	if !strings.Contains(asTestString(accessResp["originalUrl"]), "x-original="+mediaID) {
+		t.Fatalf("originalUrl must be signed for media id %q: %#v", mediaID, accessResp)
+	}
+	if len(eventSpy.EventsOfType("MediaOriginalAccessGranted")) != 1 {
+		t.Fatalf("expected MediaOriginalAccessGranted audit event, got %#v", eventSpy.Events())
+	}
+}

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/app/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction_section.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
@@ -64,11 +65,12 @@ void main() {
       find.text(UITextConstants.objectMyIntersectionsTitle),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.objectImpactTitle), findsOneWidget);
+    expect(find.text(UITextConstants.objectImpactTitleEntity), findsOneWidget);
     expect(find.text('认领主页'), findsNothing);
     expect(find.text(UITextConstants.follow), findsWidgets);
     expect(find.text(UITextConstants.entityActionPublishRecord), findsWidgets);
     expect(find.text(UITextConstants.profileDirectMessage), findsNothing);
+    expect(find.byType(BottomNavigationWidget), findsNothing);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -520));
     await tester.pumpAndSettle();
     expect(
@@ -105,6 +107,115 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('认领主页'), findsWidgets);
+  });
+
+  testWidgets('实体主页首屏卡片与内容区共用同一横向几何', (tester) async {
+    tester.view.physicalSize = const Size(485, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          currentUserIdProvider.overrideWithValue('viewer_demo'),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageIntersectionRepository(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: HomepageDetailPage(
+            homepageId: 'fixture_homepage_school_neworiental',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('homepage-background-media')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('homepage-identity-media')),
+      findsOneWidget,
+    );
+
+    final identity = tester.getRect(
+      find.byKey(const ValueKey<String>('homepage-summary-identity-card')),
+    );
+    final identityMedia = tester.getRect(
+      find.byKey(const ValueKey<String>('homepage-identity-media')),
+    );
+    final intersection = tester.getRect(
+      find.byKey(const ValueKey<String>('homepage-my-intersection-card')),
+    );
+    final impact = tester.getRect(
+      find.byKey(const ValueKey<String>('homepage-impact-card')),
+    );
+    final tabSurface = tester.getRect(
+      find.byKey(const ValueKey<String>('homepage-shell-tab-surface')),
+    );
+    for (final rect in <Rect>[intersection, impact, tabSurface]) {
+      expect(rect.left, closeTo(identity.left, 0.5));
+      expect(rect.right, closeTo(identity.right, 0.5));
+    }
+    expect(identity.left, closeTo(0, 0.5));
+    expect(identity.right, closeTo(485, 0.5));
+    expect(identityMedia.top, lessThan(identity.top));
+    expect(identityMedia.bottom, greaterThan(identity.top));
+  });
+
+  testWidgets('实体主页头像划过工具栏后才显示吸顶小头像', (tester) async {
+    tester.view.physicalSize = const Size(485, 1024);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          currentUserIdProvider.overrideWithValue('viewer_demo'),
+          intersectionRepositoryProvider.overrideWithValue(
+            _HomepageIntersectionRepository(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: HomepageDetailPage(
+            homepageId: 'fixture_homepage_school_neworiental',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = find.byType(Scrollable).first;
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-compact-avatar')),
+      findsNothing,
+    );
+
+    await tester.timedDrag(
+      scrollable,
+      const Offset(0, -120),
+      const Duration(milliseconds: 500),
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-compact-avatar')),
+      findsNothing,
+    );
+
+    await tester.timedDrag(
+      scrollable,
+      const Offset(0, -340),
+      const Duration(milliseconds: 500),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-compact-avatar')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('选择模式显示 attach 按钮', (tester) async {
@@ -284,6 +395,68 @@ void main() {
     );
   });
 
+  // WP3 统一打标：实体主页消费 ObjectPageBundle.tagRefs（publish/tags 契约树
+  // 全路径），展示叶子名胶囊；Format/** 内容载体标签滤除、全路径不外漏。
+  testWidgets('实体主页展示 bundle tagRefs 叶子名标签并滤除 Format 载体标签', (tester) async {
+    final repository = _TaggedHomepageRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          homepageRepositoryProvider.overrideWithValue(repository),
+          homepageIntroductionRepositoryProvider.overrideWithValue(
+            _RecordingHomepageIntroductionRepository(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: HomepageDetailPage(homepageId: 'hp-tagged'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('homepage-tag-refs-wrap')),
+      findsOneWidget,
+    );
+    expect(find.text('5A景区'), findsOneWidget);
+    expect(find.text('都江堰市'), findsOneWidget);
+    expect(find.text('观光游览'), findsOneWidget);
+    // Format/** 是内容载体标签，对地点主页无展示价值。
+    expect(find.text('攻略'), findsNothing);
+    // 展示叶子名，契约全路径不得外漏。
+    expect(find.textContaining('Entity/地点'), findsNothing);
+    expect(find.textContaining('Topic/地理'), findsNothing);
+  });
+
+  testWidgets('bundle 无 tagRefs 且 detail 无 categoryTags 时不渲染标签行', (
+    tester,
+  ) async {
+    final repository = _TaggedHomepageRepository(
+      tagRefs: const <String>[],
+      categoryTags: const <String>[],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          homepageRepositoryProvider.overrideWithValue(repository),
+          homepageIntroductionRepositoryProvider.overrideWithValue(
+            _RecordingHomepageIntroductionRepository(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: HomepageDetailPage(homepageId: 'hp-untagged'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 不编造：数据工程/云侧都没打标时，不渲染标签行、不出占位胶囊。
+    expect(
+      find.byKey(const ValueKey<String>('homepage-tag-refs-wrap')),
+      findsNothing,
+    );
+  });
+
   testWidgets('认识摘要卡使用 introduction summary 并跳转介绍页', (tester) async {
     final router = GoRouter(
       routes: <RouteBase>[
@@ -439,6 +612,80 @@ class _RecordingHomepageRepository extends MockHomepageRepository {
         cohort: rolloutCohort,
         experimentBucket: experimentBucket,
         objectType: 'university',
+      ),
+    );
+  }
+}
+
+/// WP3 打标形态仓库：bundle.tagRefs / detail.categoryTags 可注入
+/// publish/tags 契约树全路径（Entity 类型 + Topic 地理/主题 + Format 载体）。
+class _TaggedHomepageRepository extends MockHomepageRepository {
+  _TaggedHomepageRepository({
+    this.tagRefs = const <String>[
+      'Entity/地点/景区/5A景区',
+      'Topic/地理/行政区/四川省/成都市/都江堰市',
+      'Topic/旅行/玩法/观光游览',
+      'Format/内容角度/攻略',
+    ],
+    this.categoryTags = const <String>[],
+  });
+
+  final List<String> tagRefs;
+  final List<String> categoryTags;
+
+  @override
+  Future<HomepageDetail> getHomepageDetail(String homepageId) async {
+    final now = DateTime.now().toUtc();
+    return HomepageDetail(
+      id: homepageId,
+      title: '打标主页',
+      homepageType: 'sight',
+      status: 'published',
+      sourceType: 'official_seed',
+      claimStatus: 'unclaimed',
+      categoryTags: categoryTags,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+
+  @override
+  Future<HomepageShellData> getHomepageShell(String homepageId) async {
+    final detail = await getHomepageDetail(homepageId);
+    return HomepageShellData(homepage: detail);
+  }
+
+  @override
+  Future<ObjectPageBundle> getObjectPageBundle(
+    String homepageId, {
+    String referralSource = '',
+    String feedRequestId = '',
+    String recommendationTraceId = '',
+    String experimentBucket = '',
+    String rolloutCohort = '',
+  }) async {
+    return ObjectPageBundle(
+      objectType: 'homepage',
+      objectId: homepageId,
+      canonicalEntityId: 'entity:$homepageId',
+      title: '打标主页',
+      objectPageTemplate: 'travel_photo',
+      tagRefs: tagRefs,
+      assistantContext: ObjectPageContext(
+        objectType: 'homepage',
+        objectId: homepageId,
+        canonicalEntityId: 'entity:$homepageId',
+        referralSource: referralSource,
+        feedRequestId: feedRequestId,
+        recommendationTraceId: recommendationTraceId,
+        experimentBucket: experimentBucket,
+        rolloutCohort: rolloutCohort,
+      ),
+      rolloutContext: ObjectPageRolloutContext(
+        enabled: true,
+        cohort: rolloutCohort,
+        experimentBucket: experimentBucket,
+        objectType: 'sight',
       ),
     );
   }

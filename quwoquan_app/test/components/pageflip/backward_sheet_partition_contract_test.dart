@@ -86,18 +86,20 @@ void main() {
         );
         expect(frontBounds, isNotNull);
         expect(backBounds, isNotNull);
+        final frontBoundsValue = frontBounds!;
+        final backBoundsValue = backBounds!;
         expect(
-          frontBounds!.width,
+          frontBoundsValue.width,
           greaterThan(pageSize.width * 0.25),
           reason: 'zero-angle BACK must keep previous-front recto visible.',
         );
         expect(
-          backBounds!.width,
+          backBoundsValue.width,
           lessThan(pageSize.width * 0.75),
           reason: 'zero-angle BACK must not treat the whole sheet as verso.',
         );
         expect(
-          backBounds!.width,
+          backBoundsValue.width,
           lessThan(pageSize.width * 0.88),
           reason: 'canonical BACK verso must not own the whole sheet.',
         );
@@ -193,21 +195,24 @@ void main() {
       expect(frontBounds, isNotNull);
       expect(backBounds, isNotNull);
       expect(sheetBounds, isNotNull);
+      final frontBoundsValue = frontBounds!;
+      final backBoundsValue = backBounds!;
+      final sheetBoundsValue = sheetBounds!;
       expect(
-        backBounds!.width,
-        lessThan(sheetBounds!.width * 0.92),
+        backBoundsValue.width,
+        lessThan(sheetBoundsValue.width * 0.92),
         reason:
             'low-angle verso/back must stay complementary to recto/front, not '
             'fall back to the whole sheet.',
       );
       expect(
-        frontBounds!.width,
-        greaterThan(sheetBounds!.width * 0.18),
+        frontBoundsValue.width,
+        greaterThan(sheetBoundsValue.width * 0.18),
         reason: 'previous-front recto must remain visible in low-angle BACK.',
       );
       expect(
-        backBounds.width,
-        lessThan(sheetBounds.width * 0.88),
+        backBoundsValue.width,
+        lessThan(sheetBoundsValue.width * 0.88),
         reason: 'previous-back verso must not equal the full moving sheet.',
       );
     });

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,10 +13,20 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_REPORT = ROOT / "artifacts/local-gamma/report.json"
-DEFAULT_STACK_REPORT = ROOT / "state/local/gamma/stack_state.json"
+# 统一输出根：local-gamma 辅助报告属于本地环境状态，正式运行证据由 stackctl 写入 .qwq_output/runs/<env>/<runId>。
+LOCAL_GAMMA_ARTIFACT_ROOT = Path(
+    os.environ.get(
+        "LOCAL_GAMMA_ARTIFACT_ROOT",
+        Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
+        / "local"
+        / "gamma-local"
+        / "app-artifacts",
+    )
+)
+DEFAULT_REPORT = LOCAL_GAMMA_ARTIFACT_ROOT / "report.json"
+DEFAULT_STACK_REPORT = ROOT / ".qwq_output/local/gamma-local/stack_status.json"
 START_SCRIPT = ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
-README = ROOT / "deploy/local-gamma/README.md"
+README = ROOT / "quwoquan_ops/environments/local-gamma/README.md"
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -61,8 +72,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
     parser.add_argument("--stack-report", default=str(DEFAULT_STACK_REPORT))
-    parser.add_argument("--t3-report", default=str(ROOT / "artifacts/local-gamma/t3_report.json"))
-    parser.add_argument("--t4-report", default=str(ROOT / "artifacts/local-gamma/t4_report.json"))
+    parser.add_argument("--t3-report", default=str(LOCAL_GAMMA_ARTIFACT_ROOT / "t3_report.json"))
+    parser.add_argument("--t4-report", default=str(LOCAL_GAMMA_ARTIFACT_ROOT / "t4_report.json"))
     parser.add_argument("--config-version", default="local-gamma-v1")
     parser.add_argument("--image-version", default="0.0.1")
     parser.add_argument("--dry-run", action="store_true")
@@ -79,7 +90,7 @@ def main() -> int:
             "dryRun": True,
             "commitSha": git_sha(),
             "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
+            "gammaValidationSuiteRegistry": "quwoquan_ops/environments/gamma_validation_suites.json",
             "serviceMode": "single-stack",
             "restartedFromPrevious": False,
             "tests": {
@@ -113,7 +124,7 @@ def main() -> int:
             "configVersion": args.config_version,
             "imageVersion": args.image_version,
             "generatedAt": datetime.now(timezone.utc).isoformat(),
-            "gammaValidationSuiteRegistry": "deploy/shared/gamma_validation_suites.json",
+            "gammaValidationSuiteRegistry": "quwoquan_ops/environments/gamma_validation_suites.json",
             "serviceMode": str(stack.get("serviceMode") or "single-stack"),
             "restartedFromPrevious": bool(stack.get("restartedFromPrevious")),
             "stack": stack,

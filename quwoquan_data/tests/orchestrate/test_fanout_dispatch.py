@@ -136,6 +136,19 @@ def test_dispatch_creates_partition_baseline_and_inherits_region():
     assert rows and rows[0]["region"] == "四川省", rows
 
 
+def test_dispatch_partition_task_status_active_for_managed_finalize():
+    """WP5 契约：分区 task 必须继承 active 生命周期。
+
+    scaffold 默认 draft 会让 finalize 的 managed preflight 硬阻断
+    （task status must be active for --managed），分区永远无法收口。
+    """
+    plan = _frozen_plan("p_dispatch_status_active")
+    report = fd.dispatch(plan)
+    for row in report["perPartition"]:
+        spec = store.load_spec(str(row["taskId"]))
+        assert str(spec.get("status")) == "active", spec.get("status")
+
+
 def test_dispatch_distributes_source_task_quotas_by_partition_leaf_weight():
     plan = _frozen_plan("p_dispatch_quota_split")
     report = fd.dispatch(plan)

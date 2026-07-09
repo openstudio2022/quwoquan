@@ -89,6 +89,9 @@ void main() {
         'join_circle',
         'add_contact',
         'assistant_interest',
+        'intersection_feedback',
+        'wishlist_add',
+        'wishlist_remove',
       ];
       final actualWireValues = BehaviorAction.values
           .map((a) => a.wireValue)
@@ -229,6 +232,30 @@ void main() {
       ).toJson();
       expect(hideTypeJson['action'], 'hide_content_type');
       expect(hideTypeJson['contentType'], 'video');
+    });
+
+    test('wishlist_add 透传 objectId/objectKind/displayName/sourceSurface', () {
+      final json = BehaviorEvent(
+        contentId: 'homepage_west_lake',
+        action: BehaviorAction.wishlistAdd,
+        objectId: 'homepage_west_lake',
+        objectKind: 'homepage',
+        displayName: '西湖日落机位',
+        sourceSurface: 'object_homepage',
+        entityRefs: const <String>['homepage_west_lake'],
+        feedRequestId: 'frq_wish_1',
+        referralSource: ReferralSource.entityPage,
+      ).toJson();
+
+      expect(json['action'], 'wishlist_add');
+      expect(json['contentId'], 'homepage_west_lake');
+      expect(json['objectId'], 'homepage_west_lake');
+      expect(json['objectKind'], 'homepage');
+      expect(json['displayName'], '西湖日落机位');
+      expect(json['sourceSurface'], 'object_homepage');
+      expect(json['entityRefs'], <String>['homepage_west_lake']);
+      expect(json['feedRequestId'], 'frq_wish_1');
+      expect(json['referralSource'], 'entity_page');
     });
   });
 }

@@ -1,0 +1,63 @@
+creatorProfileId: sys_photo_0074
+userId: sys_photo_0074
+subAccountId: sys_photo_0074_sub_01
+displayName: 北窗远山
+userHandle: window-farhill
+handle: window-farhill
+avatarPresetId: avatar_photo_film_grain
+coverPresetId: cover_photo_night_tripod
+bio: 会从旧楼楼梯里练习观察，拍摄记录偏短、偏诚实，也允许照片不完美；给画面留呼吸。
+headline: 日常影像练习
+slogan: 我给日常留一束光，别漏掉一处反光
+creatorArchetype: gear_reviewer
+verticalSegment: photography_primary
+verticalRefs:
+- photography
+interestTagRefs: &id001
+- Topic/摄影/器材评测
+- Topic/摄影/摄影教程
+- Topic/摄影/旅行摄影
+publicProfileTagRefs:
+- Topic/摄影
+- Topic/摄影/器材评测
+- Topic/摄影/摄影教程
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 图片_专题
+- 摄影_教程
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_器材评测
+  - homepage/tag/Topic_摄影_摄影教程
+  entityAffinityRefs:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_器材评测
+  - homepage/tag/Topic_摄影_摄影教程
+  - homepage/tag/Topic_摄影_旅行摄影
+  circleAffinityRefs:
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- photography
+- Topic/摄影/器材评测
+- Topic/摄影/摄影教程
+- Topic/摄影/旅行摄影

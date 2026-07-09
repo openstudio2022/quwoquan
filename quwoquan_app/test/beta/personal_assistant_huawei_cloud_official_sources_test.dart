@@ -71,17 +71,14 @@ class _AuthorityPromptCase {
     required this.name,
     required this.prompt,
     required this.expectedKeywords,
-    this.minimumReferenceCount = 2,
-    this.minimumDistinctHosts = 1,
-    this.requireKnowledgeSourcesSection = true,
   });
 
   final String name;
   final String prompt;
   final List<String> expectedKeywords;
-  final int minimumReferenceCount;
-  final int minimumDistinctHosts;
-  final bool requireKnowledgeSourcesSection;
+  final int minimumReferenceCount = 2;
+  final int minimumDistinctHosts = 1;
+  final bool requireKnowledgeSourcesSection = true;
 }
 
 const _authorityPromptCases = <_AuthorityPromptCase>[

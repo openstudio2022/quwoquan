@@ -6,8 +6,8 @@ status: active
 
 affected_nodes:
   - quwoquan_service/scripts/gate.sh
-  - agent_ops/scaffold/verify_specs_l1_hierarchy.sh
-  - quwoquan_service/scripts/deploy/verify_ff_config_contract.sh
+  - quwoquan_ops/gate/scaffold/verify_specs_l1_hierarchy.sh
+  - quwoquan_ops/environments/verify/verify_ff_config_contract.sh
   - specs/l1_index.yaml
   - specs/feature-tree
 
@@ -42,13 +42,13 @@ entries:
           - "§5.2 acceptance node.id/node.level"
           - "§5.3/5.4 archived 触发 + tests.recorded 校验"
           - "§5.5④ cancelled/deprecated pending 判据"
-      - path: agent_ops/scaffold/verify_specs_l1_hierarchy.sh
+      - path: quwoquan_ops/gate/scaffold/verify_specs_l1_hierarchy.sh
         sections:
           - "domain_services(v2) 校验"
       - path: specs/feature-tree/recommendation-platform/README.md
         sections:
           - "新增 L1 README"
-      - path: quwoquan_service/scripts/deploy/verify_ff_config_contract.sh
+      - path: quwoquan_ops/environments/verify/verify_ff_config_contract.sh
         sections:
           - "门禁矩阵真相源由 tasks.md 改 spec.md"
       - path: specs/feature-tree/runtime/runtime-config/config-provider-layering/spec.md
@@ -71,4 +71,4 @@ entries:
       - 仅对齐门禁脚本与文档结构，不改任何业务契约/字段/错误码/路由；端云代码零改动。
       - feature-tree 约定迁移本体（删 408 tasks.md、acceptance node 化、l1_index v2）由本会话早前工作落地；本 CR 记录其门禁脚本对齐收口。
       - 同时清理本会话规格文档引入的退役术语命中（见 verify_retired_terms_zero 词表）：准入门清单、CR-022、unified-presentation-model acceptance、gate.sh 注释、verify_auth_policy_contract.py 变量名；verify_retired_terms_zero 绿。
-      - 全量门禁验证命令：bash agent_ops/gate/gate_repo.sh（scope=all）；make gate-full 额外 gamma T3/T4 镜像属 /deploy 前置。
+      - 全量门禁验证命令：bash quwoquan_ops/gate/gate_repo.sh（scope=all）；make gate-full 额外 gamma T3/T4 镜像属 /deploy 前置。

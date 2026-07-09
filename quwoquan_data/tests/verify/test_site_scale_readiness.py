@@ -14,6 +14,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
+from site_supply import core as site_core  # noqa: E402
 from site_supply import handler as ss  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from verify.site_scale_readiness import build_site_scale_readiness_report  # noqa: E402
@@ -30,6 +31,21 @@ ARTICLE_TEXT = (
     "如果遇到降雨或局部封闭，文本建议保留替代节点，并把补给、返程交通和休息点写入计划。"
     "这些信息足够支持内容计划生成，不依赖裸题扩写，也不把平台口吻带入发布稿。"
 )
+
+
+def test_site_supply_source_registry_follows_repo_when_runtime_root_is_sandboxed():
+    old = os.environ.get("QWQ_DATA_ROOT")
+    os.environ["QWQ_DATA_ROOT"] = str(_TMP / "sandbox_without_verticals")
+    try:
+        path = site_core._site_registry_path("travel")
+    finally:
+        if old is None:
+            os.environ.pop("QWQ_DATA_ROOT", None)
+        else:
+            os.environ["QWQ_DATA_ROOT"] = old
+
+    assert path == DATA_ROOT / "verticals" / "travel" / "sources" / "source_registry.yaml"
+    assert path.is_file()
 
 
 def _make_site_batch(
@@ -157,6 +173,7 @@ def test_site_scale_readiness_passes_with_complete_evidence_within_registered_ca
     assert report["aggregate"]["measuredThroughputObjectsPerHour"] == 5000
     assert report["aggregate"]["registeredMaxPagesPerDay"] == 5000
     assert report["requiredThroughputPerHour"] == 208.3333
+    assert report["sites"][0]["articleCommercialAdmission"] == "commercial_release"
 
 
 def test_site_scale_readiness_aggregates_explicit_batches_across_sites():

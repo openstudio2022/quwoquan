@@ -10,6 +10,7 @@ import 'package:quwoquan_app/components/navigation/tab_swipe_switch_region.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_member_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/message_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
@@ -578,6 +579,21 @@ void main() {
       expect(repo.memberRequestCount, 0);
     });
 
+    testWidgets('conv_grid_12 使用云侧预合成 avatarUrl 且不拉成员', (tester) async {
+      _suppressImageErrors();
+      final repo = _ConvGrid12GroupAvatarChatRepository();
+      await tester.pumpWidget(_scopedApp(mock: repo));
+      await tester.pumpAndSettle();
+
+      expect(find.text('12人测试群'), findsOneWidget);
+      final avatar = tester.widget<RoundedSquareAvatar>(
+        find.byType(RoundedSquareAvatar).first,
+      );
+      expect(avatar.imageUrl, isNotNull);
+      expect(avatar.imageUrl, contains('conv_grid_12'));
+      expect(repo.memberRequestCount, 0);
+    });
+
     testWidgets('主列表会话头像使用共享边长 token', (tester) async {
       _suppressImageErrors();
       await tester.pumpWidget(
@@ -723,24 +739,31 @@ class _NavigationChatRepository extends MockChatRepository {
 
 class _StarredContactsChatRepository extends MockChatRepository {
   @override
-  Future<List<ChatContactRowDto>> listContacts({
+  Future<List<ContactHomeRowDto>> listContactHome({
+    String filter = 'all',
     String? cursor,
     int limit = 20,
   }) async {
-    return <ChatContactRowDto>[
-      ChatContactRowDto(
+    return <ContactHomeRowDto>[
+      ContactHomeRowDto(
+        id: 'user_starred_contact',
+        kind: 'user',
+        objectId: 'user_starred_contact',
         userId: 'user_starred_contact',
-        displayName: 'Ada Starred',
+        title: 'Ada Starred',
         avatarUrl: 'https://example.com/starred_contact.jpg',
-        bio: 'Starred contact',
+        subtitle: 'Starred contact',
         relationState: 'mutual',
         isStarred: true,
       ),
-      ChatContactRowDto(
+      ContactHomeRowDto(
+        id: 'user_regular_contact',
+        kind: 'user',
+        objectId: 'user_regular_contact',
         userId: 'user_regular_contact',
-        displayName: 'Ben Regular',
+        title: 'Ben Regular',
         avatarUrl: 'https://example.com/regular_contact.jpg',
-        bio: 'Regular contact',
+        subtitle: 'Regular contact',
         relationState: 'mutual',
       ),
     ];
@@ -961,6 +984,44 @@ class _RenderedGroupAvatarChatRepository extends MockChatRepository {
     int limit = 20,
   }) async {
     return listInbox(cursor: cursor, limit: limit);
+  }
+}
+
+class _ConvGrid12GroupAvatarChatRepository extends MockChatRepository {
+  int memberRequestCount = 0;
+
+  @override
+  Future<List<ChatInboxDto>> listInbox({String? cursor, int limit = 20}) async {
+    return <ChatInboxDto>[
+      ChatInboxDto(
+        id: 'conv_grid_12',
+        type: 'group',
+        title: '12人测试群',
+        avatarUrl:
+            'media/avatar/s/archived-avatar/conversation/conv_grid_12/v1/mock.png',
+        groupAvatarVersion: 1,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<ChatInboxDto>> listConversations({
+    String? cursor,
+    int limit = 20,
+  }) async {
+    return listInbox(cursor: cursor, limit: limit);
+  }
+
+  @override
+  Future<List<ChatConversationMemberDto>> listMembers({
+    required String conversationId,
+    String? cursor,
+    int limit = 20,
+    String? role,
+    String? sort,
+  }) async {
+    memberRequestCount += 1;
+    return const <ChatConversationMemberDto>[];
   }
 }
 

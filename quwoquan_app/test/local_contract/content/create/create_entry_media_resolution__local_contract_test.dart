@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
+import 'package:quwoquan_app/ui/content/entry/pages/video_editor_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -81,6 +82,131 @@ void main() {
     expect(state.imagePaths, <String>['/tmp/image_a', '/tmp/image_b']);
     expect(state.videoPath, isEmpty);
   });
+
+  testWidgets(
+    'one tap original result enters locked image media state without native movie',
+    (tester) async {
+      await tester.pumpWidget(
+        _buildHarness(
+          initialAction: EditorStartAction.gallery,
+          mediaPickerLauncher:
+              (
+                context, {
+                required mode,
+                required maxSelection,
+                List<String> initialPaths = const <String>[],
+              }) async {
+                return CreateMediaPickerResult(
+                  openOneTapMovie: true,
+                  lockedSingleMedia: true,
+                  oneTapMovieEffectId: 'original',
+                  items: <CreateMediaItem>[
+                    _item('image_a', CreateMediaType.image),
+                    _item('image_b', CreateMediaType.image),
+                  ],
+                );
+              },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(CreatePage)),
+      );
+      final state = container.read(createEditorProvider);
+
+      expect(state.editorKind, CreateEditorKind.media);
+      expect(state.draftFlowKind, CreateDraftFlowKind.image);
+      expect(state.mediaKind, CreateMediaKind.images);
+      expect(state.imagePaths, <String>['/tmp/image_a']);
+      expect(state.isOneTapMovie, isTrue);
+      expect(state.oneTapMoviePath, isEmpty);
+      expect(state.oneTapMovieEffectId, 'original');
+      expect(state.videoPath, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'video entry video result enters video editor then video media state',
+    (tester) async {
+      final requestedModes = <MediaPickerEntryMode>[];
+      final preparedPaths = <String>[];
+      var videoEditorCalls = 0;
+
+      await tester.pumpWidget(
+        _buildHarness(
+          initialAction: EditorStartAction.video,
+          mediaPickerLauncher:
+              (
+                context, {
+                required mode,
+                required maxSelection,
+                List<String> initialPaths = const <String>[],
+              }) async {
+                requestedModes.add(mode);
+                return CreateMediaPickerResult(
+                  items: <CreateMediaItem>[
+                    _item('video_a', CreateMediaType.video),
+                  ],
+                );
+              },
+          videoPreparationProbe: (path) async {
+            preparedPaths.add(path);
+            return const CreateVideoPreparationResult(
+              durationMs: 9000,
+              thumbnailPath: '/tmp/video_cover.jpg',
+              width: 1080,
+              height: 1920,
+            );
+          },
+          videoEditorLauncher: (context, {required state}) async {
+            videoEditorCalls += 1;
+            expect(state.draftFlowKind, CreateDraftFlowKind.video);
+            expect(state.mediaKind, CreateMediaKind.video);
+            expect(state.videoPath, '/tmp/video_a');
+            expect(state.imagePaths, isEmpty);
+            return const VideoEditorResult(
+              videoPath: '/tmp/video_edited.mp4',
+              originalVideoPath: '/tmp/video_a',
+              thumbnailPath: '/tmp/video_cover_edited.jpg',
+              durationMs: 8000,
+              trimStartMs: 500,
+              trimEndMs: 8500,
+              coverTimeMs: 1500,
+              coverStrategy: 'manual',
+              width: 1080,
+              height: 1920,
+              muted: true,
+            );
+          },
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(CreatePage)),
+      );
+      final state = container.read(createEditorProvider);
+
+      expect(requestedModes, <MediaPickerEntryMode>[
+        MediaPickerEntryMode.video,
+      ]);
+      expect(preparedPaths, <String>['/tmp/video_a']);
+      expect(videoEditorCalls, 1);
+      expect(state.editorKind, CreateEditorKind.media);
+      expect(state.draftFlowKind, CreateDraftFlowKind.video);
+      expect(state.mediaKind, CreateMediaKind.video);
+      expect(state.videoPath, '/tmp/video_edited.mp4');
+      expect(state.originalVideoPath, '/tmp/video_a');
+      expect(state.videoThumbnail, '/tmp/video_cover_edited.jpg');
+      expect(state.videoDurationMs, 8000);
+      expect(state.videoTrimStartMs, 500);
+      expect(state.videoTrimEndMs, 8500);
+      expect(state.videoCoverTimeMs, 1500);
+      expect(state.videoMuted, isTrue);
+      expect(state.imagePaths, isEmpty);
+    },
+  );
 }
 
 CreateMediaItem _item(String id, CreateMediaType type) {
@@ -95,6 +221,8 @@ CreateMediaItem _item(String id, CreateMediaType type) {
 Widget _buildHarness({
   EditorStartAction? initialAction,
   CreateMediaPickerLauncher? mediaPickerLauncher,
+  CreateVideoPreparationProbe? videoPreparationProbe,
+  CreateVideoEditorLauncher? videoEditorLauncher,
 }) {
   return ProviderScope(
     overrides: [
@@ -115,6 +243,8 @@ Widget _buildHarness({
         home: CreatePage(
           initialAction: initialAction,
           mediaPickerLauncher: mediaPickerLauncher,
+          videoPreparationProbe: videoPreparationProbe,
+          videoEditorLauncher: videoEditorLauncher,
         ),
       ),
     ),

@@ -6,7 +6,11 @@ Agent 驱动的语义数据加工管线，从地理实体发现到内容生产�
 
 - **Agent 语义闭环**：所有语义处理由 Cursor Agent 在命令会话中完成，脚本只负责 IO 准备和输出校验。
 - **标准三段式**：每个步骤遵循 `[CLI prepare]` → `[Agent semantic]` → `[CLI validate + gate]`。
-- **任务/批次隔离**：运行时数据按 `runtime/tasks/{task_id}/batches/{batch_id}/{command}/` 组织，支持并行。
+- **任务控制面单一真相源**：任务实例、家族 preset/recipe、共享运行 profile 统一在
+  `control_plane/`（`tasks/` + `families/` + `_shared/`）；默认值只由 `task.yaml.presetRef` 决定，
+  运行编排只走 `qwq-data task run-recipe`（详见 [`docs/pipeline_directory_layout_spec.md`](docs/pipeline_directory_layout_spec.md) §0.5）。
+- **任务/批次隔离**：运行期输出统一落 `QWQ_OUTPUT_ROOT`（默认 `.qwq_output/`），按批次三轴
+  `local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/` 组织，支持并行。
 - **中文优先**：所有标签、实体、文章的 ID 和目录名使用中文，英文作为扩展字段。
 - **轻量 schema**：标签本体只含稳定语义字段，动态规则外置到 `tag_policy.yaml` 和 `tag_runtime/`。
 
@@ -38,7 +42,7 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 > `annotate` 下人判定；`promote`/`ship` 据账本过滤（discard 图剔除、无主页实体过滤、fix 项跳过）。详见
 > [`docs/content_pipeline_spec.md`](docs/content_pipeline_spec.md)。
 > 目录与资产证据链唯一真相源见 [`docs/pipeline_directory_layout_spec.md`](docs/pipeline_directory_layout_spec.md)。
-> **一键发布到运行库**：`publish/` 单一主线（prod 全量），`ship` 按 `deploy/shared/content_sampling_manifest.yaml`
+> **一键发布到运行库**：`publish/` 单一主线（prod 全量），`ship` 按 `quwoquan_ops/environments/content_sampling_manifest.yaml`
 > 确定性采样出 `publish/sample_bundles/{env}.json`；服务侧
 > `quwoquan_service/services/content-service/cmd/import` 消费它把 posts/entities 幂等灌入 mongo。
 
@@ -435,7 +439,7 @@ python3 verticals/campus/verify/verify_campus_taxonomy.py
 
 ### 场景2-4：内容创作/推荐搜索/关系图谱
 
-通过 Tag Service API 支持，详见 `contracts/metadata/tag/service.yaml`。
+通过 Tag Service API 支持，详见 `quwoquan_service/contracts/metadata/tag/service.yaml`。
 
 平台级内容供给的 Agent 组织模型、AI 自主创作边界、角色职责、交接契约和质量门，见 `docs/agent_content_supply_operating_model.md`。
 
@@ -490,7 +494,7 @@ Entity/机构/学校/          (L3)
   └── 办学性质: 公办/民办 (2)
 ```
 
-### 数据源（`runtime/seed/school_catalog/`）
+### 数据源（`.qwq_output/local/data-runtime/seed/school_catalog/`）
 
 | 数据文件 | 来源 | 行数 |
 |---------|------|------|

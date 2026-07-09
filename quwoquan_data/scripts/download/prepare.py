@@ -24,6 +24,63 @@ RESEARCH_PLAN_FILES = {
 }
 
 
+def canonical_coverage_entity_types(task_id: str) -> dict[str, str]:
+    """task spec scope.coverageTargets 的 name/alias -> canonical entityType 映射。"""
+    try:
+        from task import store
+
+        spec = store.load_spec(task_id)
+    except Exception:  # noqa: BLE001
+        return {}
+    out: dict[str, str] = {}
+    scope = spec.get("scope") if isinstance(spec.get("scope"), dict) else {}
+    for target in scope.get("coverageTargets") or []:
+        if not isinstance(target, dict):
+            continue
+        etype = str(target.get("entityType") or "").strip()
+        if not etype:
+            continue
+        name = str(target.get("name") or "").strip()
+        if name and name not in out:
+            out[name] = etype
+        for alias in target.get("aliases") or []:
+            alias_name = str(alias or "").strip()
+            if alias_name and alias_name not in out:
+                out[alias_name] = etype
+    return out
+
+
+def resolve_research_entity_types(
+    task_id: str,
+    entity_ids: list[str],
+    *,
+    fallback_type: str = "",
+) -> dict[str, str]:
+    """按实体解析 research 目录类型：coverageTargets canonical 优先，缺失即 fail-fast。
+
+    WP5 实测产线 bug：`download research-plan` 旁路允许空/单值 --entity-type 应用到
+    全部实体，空串在 resolve_entity_object_dir 静默回退 DEFAULT_DOMAIN_ETYPE
+    （地点/打卡地），错值则整批套错类型，在契约外类型目录批量制造漂移产物。
+    此处以 task spec 为唯一真相源校正；两边都无类型时抛错而非默认。
+    """
+    canonical = canonical_coverage_entity_types(task_id)
+    fallback = str(fallback_type or "").strip()
+    resolved: dict[str, str] = {}
+    for raw_id in entity_ids:
+        entity_id = str(raw_id or "").strip()
+        if not entity_id:
+            continue
+        etype = canonical.get(entity_id) or fallback
+        if not etype:
+            raise ValueError(
+                f"entityType missing for research entity {entity_id!r}: "
+                "task scope.coverageTargets has no canonical type and no explicit "
+                "--entity-type was given; refusing default-type directory drift"
+            )
+        resolved[entity_id] = etype
+    return resolved
+
+
 def _lane_payload(
     lane: str,
     *,
@@ -58,6 +115,7 @@ def _lane_payload(
             "licenseSnapshot",
             "authorizationProof",
             "usageScope",
+            "modelReleaseStatus",
             "width",
             "height",
             "relevance",
@@ -98,6 +156,8 @@ def _lane_payload(
                 "license",
                 "termsUrl",
                 "authorizationProof",
+                "usageScope",
+                "modelReleaseStatus",
             ],
             "discoveryPolicy": (
                 "平台不按来源名硬阻断；Pinterest/小红书/微博/抖音/B站等可做发现或参考，"
@@ -113,9 +173,9 @@ def _lane_payload(
 def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Path:
     """Prepare three independent research plans for every entity.
 
-    Legacy ``source_plan.json`` is still readable, but new managed batches use
-    homepage/article/image plans so one research agent cannot silently supply
-    evidence for another modality.
+    New managed batches use homepage/article/image plans only. Legacy mixed
+    ``source_plan.json`` is intentionally non-consumable so one research agent
+    cannot silently supply evidence for another modality.
     """
     guidance = source_plan_guidance(vertical_from_task_id(task_id))
     vertical = vertical_from_task_id(task_id)
@@ -143,10 +203,22 @@ def prepare_source_plan(task_id: str, batch_id: str, entities: list[dict]) -> Pa
         },
     )
     guidance_ref = str(guidance_path.relative_to(batch_root(task_id, batch_id)))
+    # 类型校正单一真相源：coverageTargets canonical 覆盖调用方 hint；
+    # 两边都缺类型直接抛错，禁止静默落 DEFAULT_DOMAIN_ETYPE 制造契约外类型目录。
+    canonical_types = canonical_coverage_entity_types(task_id)
     refs_by_lane: dict[str, list[str]] = {lane: [] for lane in RESEARCH_PLAN_FILES}
     for ent in entities:
         ref = ent.get("entityId", ent.get("id"))
-        etype = ent.get("entityType", "")
+        hinted = str(ent.get("entityType") or "").strip()
+        etype = canonical_types.get(str(ref or "").strip()) or hinted
+        if not etype:
+            raise ValueError(
+                f"entityType missing for research entity {ref!r}: "
+                "task scope.coverageTargets has no canonical type and caller "
+                "provided none; refusing default-type directory drift"
+            )
+        if etype != hinted:
+            ent = {**ent, "entityType": etype}
         obj = resolve_entity_object_dir(task_id, batch_id, ref, etype_hint=etype)
         for lane, filename in RESEARCH_PLAN_FILES.items():
             plan_path = obj / STAGE_DOWNLOAD / filename

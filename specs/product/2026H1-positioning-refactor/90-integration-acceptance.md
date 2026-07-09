@@ -5,10 +5,10 @@
 
 ## 1. 门禁全量
 
-> **前置项（已达成，基线修正 + 前置会话）**：12 个预存测试失败已清零（realtime×2 / 建群 / 圈子×4 / 交集导航 / 搜索 / runtime config×3），`bash agent_ops/gate/gate_repo.sh --scope app` 在 WP 并行启动前已全绿；各 WP 准出 gate 以该绿基线为准，新引入失败按包定责。
+> **前置项（已达成，基线修正 + 前置会话）**：12 个预存测试失败已清零（realtime×2 / 建群 / 圈子×4 / 交集导航 / 搜索 / runtime config×3），`bash quwoquan_ops/gate/gate_repo.sh --scope app` 在 WP 并行启动前已全绿；各 WP 准出 gate 以该绿基线为准，新引入失败按包定责。
 
 - [ ] `make verify-metadata` 绿
-- [ ] `bash agent_ops/gate/gate_repo.sh --scope all` 全绿（service / data / app / portal）
+- [ ] `bash quwoquan_ops/gate/gate_repo.sh --scope all` 全绿（service / data / app / portal）
 - [x] 新增门禁就位且绿：`verify-app-concept-naming`（WP5 术语门禁）
 - [ ] codegen hash 比对绿（无手改产物）
 - [ ] `dart analyze` 0 error / 0 新 warning
@@ -80,8 +80,8 @@
 
 ## 6. C5 环境留证（2026-06-12）
 
-- [x] 本地 gamma T3/T4-dry-run 门禁：`python3 agent_ops/deploy/stackctl.py verify --env gamma --kind all --tier all` 通过，报告 `artifacts/stackctl/gamma/20260612T162426Z-verify-gamma-local`。
-- [ ] hosted gamma full health：仍 BLOCK，`stackctl health --target gamma-hosted --scope full` 仅 `1/7 healthy`，报告 `artifacts/stackctl/gamma/20260612T161458Z-health-gamma-hosted`。
-- [ ] hosted gamma doctor：仍 BLOCK，`stackctl doctor --target gamma-hosted` 报 `health checks are failing`，报告 `artifacts/stackctl/gamma/20260612T162504Z-doctor-gamma-hosted`。
-- [ ] hosted gamma restart：仍 BLOCK，`stackctl roll --target gamma-hosted --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`，报告 `artifacts/stackctl/gamma/20260612T163152Z-roll-gamma-hosted`。
+- [x] 本地 gamma T3/T4-dry-run 门禁：`python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 通过，报告 `.qwq_output/runs/gamma/20260612T162426Z-verify-gamma-local`。
+- [ ] hosted gamma full health：仍 BLOCK，`stackctl health --target gamma-hosted --scope full` 仅 `1/7 healthy`，报告 `.qwq_output/runs/gamma/20260612T161458Z-health-gamma-hosted`。
+- [ ] hosted gamma doctor：仍 BLOCK，`stackctl doctor --target gamma-hosted` 报 `health checks are failing`，报告 `.qwq_output/runs/gamma/20260612T162504Z-doctor-gamma-hosted`。
+- [ ] hosted gamma restart：仍 BLOCK，`stackctl roll --target gamma-hosted --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`，报告 `.qwq_output/runs/gamma/20260612T163152Z-roll-gamma-hosted`。
 - [ ] GHA 恢复：最近 5 个 GitHub Actions run 仍为 failure，需环境恢复后重跑并留证。

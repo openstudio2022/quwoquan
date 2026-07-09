@@ -9,17 +9,17 @@ extension AppLogTypeName on AppLogType {
   String get value {
     switch (this) {
       case AppLogType.pageAccess:
-        return 'business';
+        return 'event';
       case AppLogType.agentRun:
-        return 'runtime';
+        return 'event';
       case AppLogType.llm:
-        return 'api';
+        return 'access';
       case AppLogType.search:
-        return 'api';
+        return 'access';
       case AppLogType.cloudApi:
-        return 'api';
+        return 'access';
       case AppLogType.perf:
-        return 'metric';
+        return 'event';
       case AppLogType.error:
         return 'exception';
     }
@@ -44,66 +44,93 @@ extension AppLogLevelName on AppLogLevel {
 class AppLogEnvelope {
   const AppLogEnvelope({
     required this.ts,
-    required this.env,
-    required this.logType,
     required this.level,
-    required this.payload,
-    this.appVersion = '',
-    this.platform = '',
-    this.sessionId = '',
-    this.pageVisitId = '',
-    this.runId = '',
-    this.traceId = '',
-    this.requestId = '',
-    this.turnId = '',
-    this.sourceDomain = '',
-    this.sourceService = '',
-    this.component = '',
-    this.target = '',
-    this.action = '',
+    required this.msg,
+    this.event = '',
+    this.result = '',
+    this.method = '',
+    this.route = '',
+    this.status,
+    this.durMs,
+    this.req = '',
+    this.trace = '',
+    this.span = '',
+    this.err = '',
+    this.attrs = const <String, dynamic>{},
   });
 
   final String ts;
-  final String env;
-  final AppLogType logType;
   final AppLogLevel level;
-  final String appVersion;
-  final String platform;
-  final String sessionId;
-  final String pageVisitId;
-  final String runId;
-  final String traceId;
-  final String requestId;
-  final String turnId;
-  final String sourceDomain;
-  final String sourceService;
-  final String component;
-  final String target;
-  final String action;
-  final Map<String, dynamic> payload;
+  final String msg;
+  final String event;
+  final String result;
+  final String method;
+  final String route;
+  final int? status;
+  final int? durMs;
+  final String req;
+  final String trace;
+  final String span;
+  final String err;
+  final Map<String, dynamic> attrs;
 
-  Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      'ts': ts,
-      'env': env,
-      'appVersion': appVersion,
-      'platform': platform,
-      'logType': logType.value,
-      'level': level.value,
-      'sourceDomain': sourceDomain,
-      'sourceService': sourceService,
-      'component': component,
-      'target': target,
-      'action': action,
-      'sessionId': sessionId,
-      'pageVisitId': pageVisitId,
-      'runId': runId,
-      'traceId': traceId,
-      'requestId': requestId,
-      'turnId': turnId,
-      'payload': payload,
+  String toLogLine(String kind) {
+    final fields = switch (kind) {
+      'access' => <String>[
+        ts,
+        level.value,
+        method,
+        route,
+        status?.toString() ?? '',
+        durMs?.toString() ?? '',
+        req,
+        trace,
+        _messageWithAttrs(),
+      ],
+      'exception' => <String>[
+        ts,
+        level.value,
+        err,
+        req,
+        trace,
+        _messageWithAttrs(),
+      ],
+      'event' => <String>[
+        ts,
+        level.value,
+        event,
+        result,
+        req,
+        trace,
+        _messageWithAttrs(),
+      ],
+      _ => <String>[ts, level.value, _messageWithAttrs()],
     };
+    return _joinDelimited(fields);
   }
 
-  String toJsonLine() => jsonEncode(toJson());
+  String _messageWithAttrs() {
+    if (attrs.isEmpty) return msg;
+    final encoded = jsonEncode(attrs);
+    if (msg.trim().isEmpty) return 'attrs=$encoded';
+    return '$msg attrs=$encoded';
+  }
+
+  String _joinDelimited(List<String> fields) {
+    final message = fields.last.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    final lines = message.split('\n');
+    final prefix = fields.take(fields.length - 1).map(_prefixField).toList();
+    final buffer = StringBuffer([...prefix, lines.first].join(','));
+    for (final line in lines.skip(1)) {
+      buffer.write('\n\t$line');
+    }
+    return buffer.toString();
+  }
+
+  String _prefixField(String value) {
+    return value
+        .replaceAll('\r\n', ' ')
+        .replaceAll('\n', ' ')
+        .replaceAll(',', '%2C');
+  }
 }

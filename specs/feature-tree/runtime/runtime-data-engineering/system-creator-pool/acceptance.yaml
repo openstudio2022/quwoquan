@@ -7,11 +7,17 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-data-engineering
 scope:
-  summary: 旅行垂类批量 AI 创作者生成、Scale-10 稳态与 Scale-100 首批百人验证。
+  summary: 旅行/摄影/旅行摄影交叉批量 AI 创作者生成、Scale-10 稳态、Scale-120 dual-view shard 与 canonical
+    1200 unique / 双 1k view 用户池验证。
   in_scope:
   - CreatorBundle 五段对象树与批次 workflow
   - creator-scale-readiness 放量门禁
-  - user seed 与 creator_relations 增量
+  - user seed、creator_relations、content-bind 与 prod dry-run 增量
+  - creator profile 元数据：短系统 ID、头像/封面 preset、名字、slogan、标签、内容偏好、实体/圈子关系、四环境导入资格；发布面不含地域/IP、来源、operations
+    或版本字段
+  - creator source registry 与 live candidate pool 真实站点扩展
+  - 20 travel_primary / 20 photography_primary / 80 travel_photography_cross 每 shard（120
+    unique）配额，并导出 travel/photo 各 100 view
   out_of_scope:
   - 万级 admin import metadata
   - 生产环境外站爬虫调度
@@ -20,8 +26,9 @@ gwt_acceptance:
     title: Scale-10 稳态验证
     done_when:
     - 10 个 creatorRef 完整走完 1.acquire..5.validate
-    - artifacts/creator_scale10_readiness.json decision=go
-    - creator_travel_scale10.seed.json 可 seed alpha
+    - .qwq_output/artifacts/pools/creator/creator_scale10_readiness.json decision=go
+    - scale10 仅作为 quwoquan_data/tests/fixtures 私有算法 fixture；service active seed 不保留
+      creator_travel_scale10.seed.json
     integration_points:
     - quwoquan_data/scripts/governance/creator_pool
     - quwoquan_data/templates/creator_profiles/travel
@@ -37,23 +44,11 @@ gwt_acceptance:
       - file: quwoquan_data/scripts/verify/verify_creator_pool_contract.py
       recorded:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_bundle_schema__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_pool_workflow_contract__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_scale10_fixtures__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_readiness_gate__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_content_bind_smoke__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_registry_bridge__local_contract_test.py
-        env: local
-        result: passed
     status: completed
     test_evidence:
       primary:
@@ -61,31 +56,29 @@ gwt_acceptance:
         suite: creator_pool_contract
         cases:
         - local_contract.runtime.system_creator_pool.scale10.contract
-        envs: [local]
+        envs:
+        - local
       supporting:
       - layer: api_integration
         suite: creator_profile_seed
         cases:
         - api_integration.runtime.system_creator_pool.scale10.profile_api
-        envs: [beta]
+        envs:
+        - beta
     notes: []
   GWT2:
-    title: Scale-100 首批百人
+    title: Scale-120 首个 dual-view shard
     done_when:
     - Scale-10 readiness go 为硬前置
-    - 100 creator.yaml + diversity_report 熵 >= 0.85
-    - artifacts/creator_batch100_readiness.json decision=go
+    - 120 creator.yaml + diversity_report 熵 >= 0.85
+    - 单 shard diversity_report 满足 travelView=100、photographyView=100、overlap=80
     tests:
       planned:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_readiness_gate__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_commercial_readiness__local_contract_test.py
       recorded:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_readiness_gate__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_commercial_readiness__local_contract_test.py
-        env: local
-        result: passed
     status: completed
     test_evidence:
       primary:
@@ -93,16 +86,22 @@ gwt_acceptance:
         suite: creator_pool_batch100
         cases:
         - local_contract.runtime.system_creator_pool.batch100.contract
-        envs: [local]
+        envs:
+        - local
+    notes: []
   GWT3:
-    title: 商用 E2E 四支柱闭环 + persona↔内容语义配对 + 100 人灌库/媒体/关系
+    title: 商用 E2E 四支柱闭环 + persona↔内容语义配对 + canonical 1200 灌库/媒体/关系
     done_when:
-    - travel_batch_100_v1 350 候选 → 100 入选 live 管线（原地刷新）
+    - travel_photo_1k_v1 每 shard 420+ 候选 → 120 unique 入选 live 管线；10 shard 聚合 1200
+      unique，并导出 travel/photo 双 1000 view
     - 四支柱 commercialChecks 全绿
-    - artifacts/creator_batch100_commercial_readiness.json decision=go
+    - .qwq_output/artifacts/pools/creator/creator_travel_photo_1k_v1_readiness.json
+      decision=go
     - seed + user overlay + Go seed contract 绿
-    - preferredBlueprintIds 参与 match_creator 路由；内容 vertical/topic ∉ 作者 coverage 时被 creator_assignment_issues 语义 gate 拦截
-    - 100 人 author pool 经 Go fixture-seed contract 灌库（20→100）；avatar/cover 媒体入 VCS 且一致性绿
+    - preferredBlueprintIds 参与 match_creator 路由；内容 vertical/topic ∉ 作者 coverage 时被
+      creator_assignment_issues 语义 gate 拦截
+    - 1200 unique author pool 经 Go fixture-seed contract 灌库（core 100→full 1200）；avatar/cover
+      媒体入 VCS 且一致性绿
     - creator_relations follow/circle 边经消费者注入后可读（合约测试绿）
     tests:
       planned:
@@ -113,29 +112,15 @@ gwt_acceptance:
       - file: quwoquan_data/scripts/verify/verify_creator_pool_seed_consistency.py
       - file: quwoquan_service/services/user-service/tests/local_contract/creator_pool_seed_contract__local_contract_test.go
       - file: quwoquan_service/services/user-service/tests/api_integration/creator_pool_contract_fixture_seed__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/creator_travel_batch100/creator_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/creator_travel_photo_1k/creator_profile_journey__user_acceptance_test.dart
       recorded:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_commercial_readiness__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_content_workflow_smoke__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_persona_content_match__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_relations_consumer__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_service/services/user-service/tests/local_contract/creator_pool_seed_contract__local_contract_test.go
-        env: local
-        result: passed
       - file: quwoquan_service/services/user-service/tests/api_integration/creator_pool_contract_fixture_seed__api_integration_test.go
-        env: beta
-        result: passed
-      - file: quwoquan_app/test/user_acceptance/creator_travel_batch100/creator_profile_journey__user_acceptance_test.dart
-        env: local
-        result: passed
+      - file: quwoquan_app/test/user_acceptance/creator_travel_photo_1k/creator_profile_journey__user_acceptance_test.dart
     status: completed
     test_evidence:
       primary:
@@ -145,29 +130,88 @@ gwt_acceptance:
         - local_contract.runtime.system_creator_pool.commercial100.contract
         - local_contract.runtime.system_creator_pool.persona_content_match.contract
         - local_contract.runtime.system_creator_pool.relations_consumer.contract
-        envs: [local]
+        envs:
+        - local
       supporting:
       - layer: api_integration
         suite: creator_pool_seed
         cases:
         - api_integration.runtime.system_creator_pool.commercial100.profile_api
         - api_integration.runtime.system_creator_pool.fixture_seed_100.contract
-        envs: [beta]
+        envs:
+        - beta
       - layer: user_acceptance
-        suite: creator_travel_batch100
+        suite: creator_travel_photo_1k
         cases:
         - user_acceptance.runtime.system_creator_pool.commercial100.author_pool_100
-        envs: [gamma_local]
+        envs:
+        - gamma_local
     notes:
-    - persona↔内容配对（Phase1）：_creator_match_score 增加 blueprint_preference_fit 软偏好项（preferredBlueprintIds），creator_assignment_issues 增加 topic/vertical/region 语义一致性 gate；contract 证据见 test_creator_persona_content_match.py。
-    - 100 人媒体一致性：creator_pool avatar/cover 入 VCS，经 verify_creator_pool_seed_consistency.py 媒体存在性检查与 avatar 门禁 verify_creator_pool_media 分支验证为绿；avatar 全量门禁当前因 citywalk/tech/fitness 等无关 fixture 的既有 sourceHash 漂移而红，属另一任务遗留，不在本能力范围。
+    - persona↔内容配对（Phase1）：_creator_match_score 增加 blueprint_preference_fit 软偏好项（preferredBlueprintIds），creator_assignment_issues
+      增加 topic/vertical 语义一致性 gate；contract 证据见 test_creator_persona_content_match.py。
+    - 100 人媒体一致性：creator_pool avatar/cover 入 VCS，经 verify_creator_pool_seed_consistency.py
+      媒体存在性检查与 avatar 门禁 verify_creator_pool_media 分支验证为绿；avatar 全量门禁当前因 citywalk/tech/fitness
+      等无关 fixture 的既有 sourceHash 漂移而红，属另一任务待收口项，不在本能力范围。
+  GWT5:
+    title: 旅行 × 摄影 canonical 1200 / 双 1k 检索池与 profile 导入合同
+    done_when:
+    - creator source registry 每个站点声明 crawlAllowed、rightsPolicy、candidateRole、chinaAnalogLabel、rateLimit、sourceKind
+    - live candidate_pool 不出现 example 域，120 shard raw candidates >= 420，1200 plan
+      raw candidates >= 4200
+    - 每 shard 固定 20 travel_primary、20 photography_primary、80 travel_photography_cross，并导出
+      travel/photo 各 100 view、overlap=80
+    - cross 类 100% 同时具备 travel 与 photography verticalRefs，且同时具备 Topic/旅行/* 与 Topic/摄影/*
+      interest tags
+    - diversity_report 中 quotaFillRate=1.0、entropy>=0.85、topicCoverage>=12、platformMaxShare<=0.15、sourceProfileMaxCount<=3、nonChinaSourceRatio>=0.45、chinaSourceRatio>=0.35
+    - travel_photo_1k_v1 物化 1200 个 CreatorBundle，并投影 creator_travel_photo_1k_v1.seed.json、user_pool.creator_pool.travel_photo_1k_v1.json、creator_content.travel_photo_1k_v1.seed.json、creator_relations.travel_photo_1k_v1.seed.json
+    - 每个 seed creator 必须具备短 sys userId/subAccountId、avatar/cover preset、displayName、slogan、headline、bio、tagRefs、verticalRefs；不得带第三身份
+      ID、ipLocation 或旧 alias；canonical slogan 1200 条全唯一，bio 唯一数 >=600，slogan 前后 4
+      字聚集度 <=20，slogan 两两相似度 >=0.70 的句对占比 <1%，>=0.88 高相似句对为 0，禁止同骨架换词
+    - avatar/cover preset 必须来自系统预制媒体池，使用 WelcomeAppearance 花瓣色 paletteToken，且头像覆盖人物/摄影符号，封面覆盖风景/地标/摄影场景，visualSubject
+      不得同质重复
+    - content-bind 必须写入 creatorProfileId、subAccountId、authorDisplayName、authorAvatarObjectKey、contentTagRefs、entityRefs/circleRefs；内容作者字段仅等于
+      subAccountId 投影，并且只使用系统 batch creator
+    - quwoquan_data/publish/creators 与 publish/tags 平级，仅包含 manifest.json 与 creators.jsonl；creators.jsonl
+      1200 行，manifest 额外声明 dual-view `travel=1000`、`photography=1000`、`overlap=800`，publish
+      profile 不含 schemaVersion/personaVersion/importVersion/ipLocation/provenance/operations
+    - prod 只产出 rollout dry-run/import package，未审批不得 fixture apply
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_source_registry__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_live_travel_photography_pool__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_profile_import_1k__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/publish/test_publish_creators_1k__local_contract_test.py
+      - file: quwoquan_data/scripts/verify/verify_creator_pool_contract.py
+      - file: quwoquan_data/scripts/verify/verify_creator_pool_seed_consistency.py
+      recorded:
+      - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_source_registry__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_live_travel_photography_pool__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_profile_import_1k__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/publish/test_publish_creators_1k__local_contract_test.py
+    status: completed
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: creator_pool_travel_photography_live
+        cases:
+        - local_contract.runtime.system_creator_pool.travel_photography.registry
+        - local_contract.runtime.system_creator_pool.travel_photography.live120
+        - local_contract.runtime.system_creator_pool.travel_photography.profile_import_1200
+        - local_contract.runtime.system_creator_pool.travel_photography.publish_creators_1200
+        - local_contract.runtime.system_creator_pool.travel_photography.content_bind
+        - local_contract.runtime.system_creator_pool.travel_photography.prod_dryrun
+        envs:
+        - local
+    notes: []
   GWT4:
     title: 内容绑定与四环境 feed 无断点 E2E
     done_when:
-    - 经 match_creator 为 batch-100 子集真实绑定 文章/图片/视频（previewOnly=false，作者分散）
-    - creator_content.seed.json + content_scenarios creator_authored_core seedSet 单一真相源一致
-    - alpha/beta content 清单引用 creator_authored_core，seed manifest 门禁绿（gamma 为 hash 锁定 curated 子集，见 notes）
-    - content feed api_integration：创作者内容经真实发布管线投影进发现 feed，作者归属为 batch-100
+    - 经 match_creator 为 travel_photo_1k_v1 子集真实绑定 文章/图片/视频（previewOnly=false，作者分散）
+    - creator_content.travel_photo_1k_v1.seed.json + content_scenarios creator_authored_core
+      seedSet 单一真相源一致
+    - alpha/beta content 清单引用 creator_authored_core，seed manifest 门禁绿（gamma 为 hash
+      锁定 curated 子集，见 notes）
+    - content feed api_integration：创作者内容经真实发布管线投影进发现 feed，作者归属为 travel_photo_1k_v1
     - App UAT：alpha 发现 feed 返回这些创作者内容，关注分散
     - prod rollout dry-run decision=go，单一 prod 包、Remote 数据源、无 prod-gray、不携带 test_fixtures
     integration_points:
@@ -180,17 +224,11 @@ gwt_acceptance:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_content_bind__local_contract_test.py
       - file: quwoquan_data/scripts/verify/verify_creator_pool_seed_consistency.py
       - file: quwoquan_service/services/content-service/tests/creator_pool_content_feed_contract_test.go
-      - file: quwoquan_app/test/user_acceptance/creator_travel_batch100/creator_authored_feed__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/creator_travel_photo_1k/creator_authored_feed__user_acceptance_test.dart
       recorded:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_content_bind__local_contract_test.py
-        env: local
-        result: passed
       - file: quwoquan_service/services/content-service/tests/api_integration/creator_pool_content_feed_contract__api_integration_test.go
-        env: local
-        result: passed
-      - file: quwoquan_app/test/user_acceptance/creator_travel_batch100/creator_authored_feed__user_acceptance_test.dart
-        env: local
-        result: passed
+      - file: quwoquan_app/test/user_acceptance/creator_travel_photo_1k/creator_authored_feed__user_acceptance_test.dart
     status: completed
     test_evidence:
       primary:
@@ -198,45 +236,85 @@ gwt_acceptance:
         suite: creator_pool_content_bind
         cases:
         - local_contract.runtime.system_creator_pool.content_bind.contract
-        envs: [local]
+        envs:
+        - local
       supporting:
       - layer: api_integration
         suite: creator_pool_content_feed
         cases:
         - api_integration.runtime.system_creator_pool.content_bind.feed
-        envs: [beta]
+        envs:
+        - beta
       - layer: user_acceptance
         suite: creator_authored_feed
         cases:
         - user_acceptance.runtime.system_creator_pool.content_bind.feed
-        envs: [gamma_local]
+        envs:
+        - gamma_local
     notes:
-    - 四环境投递范围：alpha（App mock，UAT 验证发现 feed 渲染）+ beta（真实 DB seed，Go content feed api_integration 经真实发布管线验证）携带 creator_authored_core；gamma content 域是 hash 锁定的 curated 展示子集（≤100 张 sha256 pinned 媒体、内容 refs 固定为 content_discovery_core/intersection_core/home_showcase_core，由 avatar/curated-bundle 门禁强约束），创作者内容入 gamma 需重生成 curated media bundle，列为遗留项而非在本轮强行破坏 curated 不变量。
-    - prod 为单一 prod 包，creator 内容仅经 Remote 已发布 post 进入，rollout 仅 dry-run（无 prod-gray），证据见 artifacts/creator_content_prod_rollout_dryrun.json。
+    - 四环境投递范围：alpha（App mock，UAT 验证发现 feed 渲染）+ beta（真实 DB seed，Go content feed api_integration
+      经真实发布管线验证）携带 creator_authored_core；gamma content 域是 hash 锁定的 curated 展示子集（≤100
+      张 sha256 pinned 媒体、内容 refs 固定为 content_discovery_core/intersection_core/home_showcase_core，由
+      avatar/curated-bundle 门禁强约束），创作者内容入 gamma 需重生成 curated media bundle，列为待收口项而非在本轮强行破坏
+      curated 不变量。
+    - prod 为单一 prod 包，creator 内容仅经 Remote 已发布 post 进入，rollout 仅 dry-run（无 prod-gray），证据见
+      .qwq_output/artifacts/pools/creator/creator_content_prod_rollout_dryrun.travel_photo_1k_v1.json。
 scale_gates:
   scale10:
     target: 10
     min_review_gate_pass_rate: 1.0
     min_diversity_bucket_fill: 0.5
     prerequisite_report: null
-  scale100:
-    target: 100
+  scale120:
+    target: 120
     min_review_gate_pass_rate: 1.0
     min_diversity_entropy: 0.85
-    prerequisite_report: artifacts/creator_scale10_readiness.json
-  commercial100:
-    target: 100
-    batch_id: travel_batch_100_v1
+    prerequisite_report: .qwq_output/artifacts/pools/creator/creator_scale10_readiness.json
+  commercial1200:
+    target: 1200
+    batch_id: travel_photo_1k_v1
     mode: commercial
     min_diversity_quota_fill: 1.0
     min_diversity_entropy: 0.85
     min_topic_coverage: 12
     max_duplicate_persona_p95: 0.75
     min_persona_rubric_pass_rate: 0.95
-    prerequisite_report: artifacts/creator_batch100_commercial_readiness.json
+    prerequisite_report: .qwq_output/artifacts/pools/creator/creator_travel_photo_1k_v1_readiness.json
+  travel_photography_dual_1k:
+    target: 1200
+    shard_count: 10
+    per_shard_quota:
+      travel_primary: 20
+      photography_primary: 20
+      travel_photography_cross: 80
+    aggregate_quota:
+      travel_primary: 200
+      photography_primary: 200
+      travel_photography_cross: 800
+    travel_view_target: 1000
+    photography_view_target: 1000
+    overlap_target: 800
+    min_raw_candidates: 4200
+    recommended_raw_candidates: 6000
+    max_single_platform_share: 0.15
+    min_non_china_source_ratio: 0.45
+    min_china_source_ratio: 0.35
+    min_review_gate_pass_rate: 1.0
+    min_provenance_coverage: 1.0
+    min_persona_rubric_pass_rate: 0.95
+    max_duplicate_persona_p95: 0.75
+    readiness_report: .qwq_output/artifacts/pools/creator/creator_travel_photo_1k_v1_readiness.json
 execution:
   local_gate:
   - python3 quwoquan_data/scripts/verify/verify_creator_pool_contract.py
+  - pytest quwoquan_data/tests/local_contract/creator_pool/test_creator_source_registry__local_contract_test.py
+    -q
+  - pytest quwoquan_data/tests/local_contract/creator_pool/test_creator_live_travel_photography_pool__local_contract_test.py
+    -q
+  - pytest quwoquan_data/tests/local_contract/creator_pool/test_creator_profile_import_1k__local_contract_test.py
+    -q
+  - pytest quwoquan_data/tests/local_contract/publish/test_publish_creators_1k__local_contract_test.py
+    -q
   - python3 quwoquan_data/scripts/verify/verify_creator_pool_seed_consistency.py
   - pytest quwoquan_data/tests/local_contract/creator_pool/ -q
   full_gate:

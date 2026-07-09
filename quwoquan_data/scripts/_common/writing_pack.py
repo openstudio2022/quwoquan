@@ -71,7 +71,11 @@ def _evidence_points(evidence_bundle: Mapping[str, Any]) -> list[dict[str, Any]]
     return points
 
 
-def _compact_assets(assets: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _compact_assets(
+    assets: Sequence[Mapping[str, Any]],
+    *,
+    caption_max_chars: int | None = None,
+) -> list[dict[str, Any]]:
     keep = (
         "assetId",
         "fileName",
@@ -94,6 +98,8 @@ def _compact_assets(assets: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]
     rows: list[dict[str, Any]] = []
     for asset in assets:
         row = {key: asset.get(key) for key in keep if asset.get(key)}
+        if caption_max_chars is not None and isinstance(row.get("caption"), str):
+            row["caption"] = row["caption"][:caption_max_chars].strip()
         if row.get("assetId"):
             rows.append(row)
     return rows
@@ -122,7 +128,11 @@ def build_writing_pack(
     source_urls: Sequence[str],
     source_paths: Sequence[str],
 ) -> dict[str, Any]:
-    title = require_title_hint(brief, ref=ref)
+    is_image_carrier = str(carrier or "").lower() in ("image", "gallery")
+    title = str(brief.get("titleHint") or "").strip() if is_image_carrier else require_title_hint(brief, ref=ref)
+    source_caption = str(brief.get("caption") or "").strip()
+    if is_image_carrier:
+        source_caption = source_caption[:300]
     narrative = {
         "requireMotivation": bool((brief.get("openingTension") or {}).get("required", True)),
         "requireLike": bool((brief.get("explicitFeelings") or {}).get("requireLike", True)),
@@ -141,12 +151,12 @@ def build_writing_pack(
     )
     creator_assignment = creator_from_payload(brief)
     # 图片作品/画报是结构化图集 + 短配文，不携带长文叙事的章节意图与证据点。
-    is_image_carrier = str(carrier or "").lower() in ("image", "gallery")
     return {
         "schemaVersion": "quwoquan_data.writing_pack",
         "ref": ref,
         "kind": kind,
         "title": title,
+        "caption": source_caption,
         "byline": byline,
         "carrier": carrier,
         "publishLayout": publish_layout,
@@ -164,7 +174,10 @@ def build_writing_pack(
         "creativeBrief": creative_brief,
         **creator_assignment,
         "evidencePoints": [] if is_image_carrier else _evidence_points(evidence_bundle),
-        "assets": _compact_assets(assets),
+        "assets": _compact_assets(
+            assets,
+            caption_max_chars=300 if is_image_carrier else None,
+        ),
         "sourceUrls": [str(x) for x in source_urls if x],
         "sourcePaths": [str(x) for x in source_paths if x],
         "writingIntent": brief.get("writingIntent"),
@@ -243,6 +256,13 @@ def _creator_lock_line(pack: Mapping[str, Any]) -> str:
     return ""
 
 
+def _primary_entity_contract_line(pack: Mapping[str, Any]) -> str:
+    name = primary_entity_name(pack)
+    if not name:
+        return ""
+    return f"- 主实体: **{name}**；正文必须至少自然出现一次完整名称，禁止只写泛称或只写别名。"
+
+
 def _creative_brief_block(creative: Mapping[str, Any]) -> str:
     if not creative:
         return ""
@@ -279,6 +299,15 @@ def _writing_intent_line(pack: Mapping[str, Any]) -> str:
     return ""
 
 
+def _preferred_opening_index(ref: str, option_count: int) -> int:
+    """按 ref 确定性轮转开篇策略，避免同实体多篇独立自选后开篇/骨架趋同。"""
+    if option_count <= 0:
+        return 0
+    import zlib
+
+    return zlib.crc32(str(ref or "").encode("utf-8")) % option_count
+
+
 def _narrative_block(pack: Mapping[str, Any]) -> str:
     """叙事载体的开篇 / 情感 / 取舍创作引导（非 gate 复述，仅创作方向）。"""
     nc = pack.get("narrativeContract") or {}
@@ -286,15 +315,23 @@ def _narrative_block(pack: Mapping[str, Any]) -> str:
     og = pack.get("openingGuidance") or opening_guidance(str(pack.get("styleFamily") or ""))
     opening_opts = og.get("openingStrategies") or []
     if opening_opts:
+        preferred = opening_opts[_preferred_opening_index(str(pack.get("ref") or ""), len(opening_opts))]
         lines.append(
             f"- **开篇方式（styleFamily=`{og.get('styleFamily') or pack.get('styleFamily')}`，"
             "从下列任选一种真正落地，禁止千篇一律的套路开头）**："
         )
         for opt in opening_opts:
-            lines.append(f"  - `{opt.get('id')}`（{opt.get('label')}）：{opt.get('hint')}")
+            mark = "（本篇优先）" if opt is preferred else ""
+            lines.append(f"  - `{opt.get('id')}`{mark}（{opt.get('label')}）：{opt.get('hint')}")
         lines.append(
-            "  按原文体裁与证据择一；首段必须直接体现所选策略（结论先行 / 设问悬念 / 场景沉浸 / 对比并置），"
+            f"  默认采用本篇优先策略 `{preferred.get('id')}`（仅当底稿体裁明显不适配时才改选并在 draft_meta 说明）；"
+            "首段必须直接体现所选策略（结论先行 / 设问悬念 / 场景沉浸 / 对比并置），"
             "并在 draft_meta 写明最终 styleFamily 与 openingStrategy。"
+        )
+        lines.append(
+            "- **同实体差异化**：同一实体可能有多篇文章各配不同底稿；你的开篇措辞与章节小标题"
+            "必须从**本篇底稿自身的叙事**中生长出来，禁止使用「交通/住宿/门票/贴士」式通用模板骨架，"
+            "禁止与其它文章共用同一套开场白或标题序列。"
         )
     elif nc.get("requireMotivation"):
         lines.append("- 开篇写出**出发动机/心情铺垫**（为什么想去、出发前的犹豫或期待），不要一上来就罗列行程。")
@@ -311,6 +348,11 @@ def _narrative_block(pack: Mapping[str, Any]) -> str:
     lines.append(f"- 给出至少 {nc.get('minDecisionPoints', 2)} 处**取舍判断**（如「如果你…我会建议…」「宁可…也别…」）。")
     if nc.get("forbidStandaloneTips"):
         lines.append("- 注意事项**就地融入**叙述，禁止另起「实用信息/来源平台」清单块。")
+    lines.append(
+        "- **章节结构合同**：正文至少 3 个叙事型 `## ` 章节，每章节以成段散文为主（图/列表只作穿插）；"
+        "任一章节篇幅不得超过全文 60%——底稿单日流水过长时按场景/地点拆成多章。"
+        "底稿含多次出行或平行时间线时，归并为**单一时间顺序**叙事，禁止年代来回跳跃。"
+    )
     return "\n".join(lines)
 
 
@@ -386,6 +428,10 @@ def _base_draft_block(pack: Mapping[str, Any], *, adapt_base: bool) -> str:
         lines.append(
             "- 删除仅限广告、保险、App 下载/积分、平台活动等**非内容噪声**；底稿写到的所有目的地/行程/景点段落都是正文内容，必须整篇保留"
             "（多目的地路书照样保留全部站点），禁止以「与本篇实体无关」为由删掉其它城市/景点段落（实体只是标签，不是裁剪边界）。"
+        )
+        lines.append(
+            "- **底稿内重复去重**：底稿中逐日重复出现的同一段落/句群（如每天复制粘贴的住宿、集合、交通模板句）"
+            "只保留一次或合并改写，禁止把同一段落原样保留 2 次以上。"
         )
         lines.append(
             "- `draft_meta.selfCritique.baseDraftFidelityStrategy`：说明保留了哪些底稿段落、删除了哪些平台/广告信息。"
@@ -482,9 +528,40 @@ def _assets_block(pack: Mapping[str, Any]) -> str:
 
 def _image_assets_block(pack: Mapping[str, Any]) -> str:
     assets = [a for a in (pack.get("assets") or []) if isinstance(a, Mapping)]
+    source_title = str(pack.get("title") or "").strip()
+    source_caption = str(pack.get("caption") or "").strip()
     if not assets:
-        return "（无可用图片素材）"
+        rows = [
+            (
+                f"- 底稿标题：{source_title}（只可原样保留或轻润色）"
+                if source_title
+                else "- 底稿标题：无；公开标题必须留空。"
+            ),
+            (
+                f"- 底稿配文：{source_caption}（只可原样保留或轻润色）"
+                if source_caption
+                else "- 底稿配文：无；公开配文必须留空。"
+            ),
+            "",
+            "（无可用图片素材）",
+        ]
+        return "\n".join(rows)
     rows: list[str] = []
+    rows.extend(
+        [
+            (
+                f"- 底稿标题：{source_title}（只可原样保留或轻润色）"
+                if source_title
+                else "- 底稿标题：无；公开标题必须留空。"
+            ),
+            (
+                f"- 底稿配文：{source_caption}（只可原样保留或轻润色）"
+                if source_caption
+                else "- 底稿配文：无；公开配文必须留空。"
+            ),
+            "",
+        ]
+    )
     for index, asset in enumerate(assets[:20], start=1):
         parts = [f"`{asset.get('assetId')}`"]
         if asset.get("role"):
@@ -547,6 +624,7 @@ def render_prompt_md(pack: Mapping[str, Any]) -> str:
             "word_count_min": wc.get("min", "?"),
             "word_count_max": wc.get("max", "?"),
             "creator_lock_line": _creator_lock_line(pack),
+            "primary_entity_contract_line": _primary_entity_contract_line(pack),
             "creative_brief_block": _creative_brief_block(creative),
             "persona_block": persona_block,
             "writing_intent_line": _writing_intent_line(pack),

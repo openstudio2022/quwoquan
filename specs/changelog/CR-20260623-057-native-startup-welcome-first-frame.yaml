@@ -117,8 +117,8 @@ entries:
       - "Web 393x852 Chrome headless 截图：verify_startup_first_frame.py --screenshot web=... passed=true，plainBackground=false，blueBackground=false"
     notes:
       - Android debug 包清理后复测 `android_flutter_ui_displayed=4084ms`，已不再影响用户首帧可见性，但仍作为性能观察字段保留；后续若要把 Flutter UI 本身压回 3 秒内，应单独做 engine/Dart debug startup 性能专项。
-      - Android 最终验收 artifact：`quwoquan_app/artifacts/startup_first_frame/verify-20260624T005050-android-final-after-cleanup/20260624T005050/startup_first_frame_report.json`。
-      - Android+iOS 组合验收 artifact：`quwoquan_app/artifacts/startup_first_frame/verify-20260624T004323-android-ios-final/20260624T004324/startup_first_frame_report.json`。
+      - Android 最终验收 artifact：`quwoquan_app/.qwq_output/runs/startup_first_frame/verify-20260624T005050-android-final-after-cleanup/20260624T005050/startup_first_frame_report.json`。
+      - Android+iOS 组合验收 artifact：`quwoquan_app/.qwq_output/runs/startup_first_frame/verify-20260624T004323-android-ios-final/20260624T004324/startup_first_frame_report.json`。
   - timestamp: "2026-06-24T02:05:00+08:00"
     summary: |
       启动 engine / Dart 性能专项复盘后，确认 Android `flutter run` debug 模式是用户看到 2-4 秒纯蓝等待的主要放大器，
@@ -167,7 +167,7 @@ entries:
     notes:
       - Android debug/profile 的 500ms 纯蓝来自调试/插桩模式下 Activity 创建前的系统层等待，不等同于生产包体验；正式用户验收以 release 包为准。
       - iOS simulator 只能覆盖 debug 首帧，iOS release/profile 启动性能需真机或 TestFlight/Ad Hoc 包复测。
-      - Web release 截图 artifact：`quwoquan_app/artifacts/startup_perf/20260624T020100-web-release/web-release-viewport.png`。
+      - Web release 截图 artifact：`quwoquan_app/.qwq_output/runs/startup_perf/20260624T020100-web-release/web-release-viewport.png`。
   - timestamp: "2026-06-24T08:36:00+08:00"
     summary: |
       按 iPhone 模拟器复测反馈撤回“原生欢迎页静态镜像”方案：原生层不能再显示花瓣、标题、标语，也不能把原生停留时间当作欢迎页动效的一部分。新的启动边界为：
@@ -208,13 +208,13 @@ entries:
       - "flutter analyze --no-pub lib/app/app_startup_runtime.dart lib/ui/welcome/pages/welcome_screen.dart lib/quwoquan_app_shell.dart test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart test/app/app_startup_welcome_test.dart：No issues"
       - "flutter test --no-pub test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart test/app/app_startup_welcome_test.dart：27 passed"
       - "flutter build ios --simulator --debug --no-pub：Built build/ios/iphonesimulator/Runner.app"
-      - "iPhone 17 Pro simulator 卸载重装后冷启动探针：200ms 为无花瓣原生过渡背景，500ms 进入 Flutter 欢迎页首帧，1000/1500ms 保持同一个欢迎页动效；artifact `quwoquan_app/artifacts/startup_perf/20260624T082202-ios-debug-single-welcome-tight-threshold/20260624T082202/startup_first_frame_report.json`"
+      - "iPhone 17 Pro simulator 卸载重装后冷启动探针：200ms 为无花瓣原生过渡背景，500ms 进入 Flutter 欢迎页首帧，1000/1500ms 保持同一个欢迎页动效；artifact `quwoquan_app/.qwq_output/runs/startup_perf/20260624T082202-ios-debug-single-welcome-tight-threshold/20260624T082202/startup_first_frame_report.json`"
       - "flutter build apk --debug --no-pub：Built build/app/outputs/flutter-apk/app-debug.apk"
-      - "Android emulator-5554 debug 冷启动探针：200-1500ms 为无花瓣系统/宿主过渡背景，2000ms 进入 Flutter 欢迎页，Flutter UI displayed=3217ms；artifact `quwoquan_app/artifacts/startup_perf/20260624T082734-android-debug-xml-gradient/20260624T082734/startup_first_frame_report.json`"
+      - "Android emulator-5554 debug 冷启动探针：200-1500ms 为无花瓣系统/宿主过渡背景，2000ms 进入 Flutter 欢迎页，Flutter UI displayed=3217ms；artifact `quwoquan_app/.qwq_output/runs/startup_perf/20260624T082734-android-debug-xml-gradient/20260624T082734/startup_first_frame_report.json`"
       - "flutter build apk --release --no-pub：Built build/app/outputs/flutter-apk/app-release.apk (162.6MB)"
-      - "Android emulator-5554 release 冷启动探针：800ms 进入 Flutter 欢迎页，engine=361ms，Flutter UI displayed=1608ms；artifact `quwoquan_app/artifacts/startup_perf/20260624T083303-android-release-single-welcome-no-delay/20260624T083303/startup_first_frame_report.json`"
+      - "Android emulator-5554 release 冷启动探针：800ms 进入 Flutter 欢迎页，engine=361ms，Flutter UI displayed=1608ms；artifact `quwoquan_app/.qwq_output/runs/startup_perf/20260624T083303-android-release-single-welcome-no-delay/20260624T083303/startup_first_frame_report.json`"
       - "flutter build web --release --no-pub --no-wasm-dry-run：Built build/web；字体提示不阻断"
-      - "Web release 393x852 浏览器截图 + 探针：passed=true；artifact `quwoquan_app/artifacts/startup_perf/20260624T0834-web-release-single-welcome.png` 与 `quwoquan_app/artifacts/startup_perf/20260624T083535-web-release-single-welcome-analysis/20260624T083536/startup_first_frame_report.json`"
+      - "Web release 393x852 浏览器截图 + 探针：passed=true；artifact `quwoquan_app/.qwq_output/runs/startup_perf/20260624T0834-web-release-single-welcome.png` 与 `quwoquan_app/.qwq_output/runs/startup_perf/20260624T083535-web-release-single-welcome-analysis/20260624T083536/startup_first_frame_report.json`"
       - "git diff --check：通过"
     notes:
       - iOS simulator 仍会在最早约 200ms 出现系统原生过渡背景，这是 Flutter 首帧前的不可交互窗口，不包含花瓣/标题/标语，不再被当作欢迎页成功。
@@ -285,8 +285,8 @@ entries:
       - "python3 -m py_compile scripts/device/verify_startup_first_frame.py：通过"
       - "flutter test --no-pub test/local_contract/app/startup_native_launch_screen__local_contract_test.dart test/ui/welcome/welcome_screen_test.dart test/app/app_startup_welcome_test.dart：29 passed"
       - "make verify-app-page-horizontal-quality：page-horizontal-quality-matrix OK；78 paths inventory aligned"
-      - "Android emulator-5554 debug 探针（上一版 APK，firstDraw 打点尚未打入包）：500ms 起非纯蓝，artifact `quwoquan_app/artifacts/startup_perf/20260625T015529-android-emulator-debug-parallel-welcome-ready-fast/20260625T015529/startup_first_frame_report.json`"
-      - "Android emulator-5554 release 探针（上一版 APK，firstDraw 打点尚未打入包）：`android_flutter_welcome_ready_sequence_elapsed_ms=1500`，`flutterWelcomeSequenceContinuityWithinBudget=true`，artifact `quwoquan_app/artifacts/startup_perf/20260625T015812-android-emulator-release-parallel-welcome-actual-offsets/20260625T015812/startup_first_frame_report.json`"
+      - "Android emulator-5554 debug 探针（上一版 APK，firstDraw 打点尚未打入包）：500ms 起非纯蓝，artifact `quwoquan_app/.qwq_output/runs/startup_perf/20260625T015529-android-emulator-debug-parallel-welcome-ready-fast/20260625T015529/startup_first_frame_report.json`"
+      - "Android emulator-5554 release 探针（上一版 APK，firstDraw 打点尚未打入包）：`android_flutter_welcome_ready_sequence_elapsed_ms=1500`，`flutterWelcomeSequenceContinuityWithinBudget=true`，artifact `quwoquan_app/.qwq_output/runs/startup_perf/20260625T015812-android-emulator-release-parallel-welcome-actual-offsets/20260625T015812/startup_first_frame_report.json`"
       - "flutter build apk --debug --no-pub：阻断，当前工作树存在 user_profile_repository/profile_social_relation_row_wire DTO 契约漂移，非本启动改动引入"
       - "flutter build web --no-pub：同一 Dart 契约漂移阻断"
       - "flutter build ios --simulator --no-pub：Xcode build 长时间无输出后中断；当前 Dart 构建阻断已由 Android/Web 复现"

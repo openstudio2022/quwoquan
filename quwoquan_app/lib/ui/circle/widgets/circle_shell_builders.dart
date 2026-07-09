@@ -158,12 +158,13 @@ extension _CircleShellBuilders on _CircleShellState {
     );
   }
 
-  /// 「影响力」预览卡：与实体主页 / 用户主页同语义 token。
+  /// 「打动」预览卡：与实体主页 / 用户主页同语义 token。
   Widget _buildCircleImpactCard(bool isDark) {
     return ObjectImpactPreviewCard(
       objectId: widget.circleId,
       target: ObjectImpactTarget.circle,
       referralSource: ReferralSource.circlePost,
+      title: UITextConstants.objectImpactTitleCircle,
       enumerableHint: UITextConstants.impactEnumerableHintCircle,
       cardKey: const ValueKey<String>('circle-impact-card'),
       topDivider: false,

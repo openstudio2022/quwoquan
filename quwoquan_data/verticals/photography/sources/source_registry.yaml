@@ -8,9 +8,10 @@ sites:
     urlPatterns:
       - https://www.pinterest.com/*
       - https://pinterest.com/*
+      - https://*.pinterest.com/*
     fetchable: false
     extractor: platform_reference
-    licensePolicy: discovery_only
+    licensePolicy: attribution_no_watermark
     qualityTier: C
     siteCrawlProfile:
       crawlAllowed: false
@@ -18,13 +19,31 @@ sites:
       allowedPaths:
         - https://www.pinterest.com/*
         - https://pinterest.com/*
-      fetchMode: platform_reference
+        - https://*.pinterest.com/*
+      fetchMode: attribution_manifest
       extractor: platform_reference
-      rightsPolicy: discovery_only
+      rightsPolicy: attribution_no_watermark
       robotsPolicy: respect_robots_txt
       loginPolicy: public_only
       watermarkPolicy: reject_watermarked_publish_assets
       termsUrl: https://policy.pinterest.com/terms-of-service
+      attributionPublish:
+        allowed: true
+        downloadAllowed: true
+        authorizationBasis: attribution_no_watermark
+        evidenceFields: [pinUrl, discoveryUrl, originalAssetUrl, sourceAuthor, repostAttribution, watermarkScan, ocrScan, modelReleaseStatus, collectedAt]
+        minimumLaneCounts:
+          image: 500
+        notes: 只接受公开图归因 manifest；逐图必须补齐 pin/source/作者/转载出处/无水印扫描证据并落原图字节。
+      discoveryStrategy:
+        mode: content_search
+        seedAxes: [topic, time_window, theme, geo]
+        queryTemplates:
+          - "{geo} landscape photography"
+          - "{geo} travel photography"
+          - "{theme} {geo} scenery"
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, rights_gate]
+        notes: Pinterest 做视觉发现与 pin 候选归因；发布必须走 attribution_no_watermark manifest，并回链到原始作者/原图出处。
       maxDepth: 0
       maxPagesPerDay: 0
       controlledTrial:
@@ -34,9 +53,9 @@ sites:
         publishableAssetsAllowed: false
         minimumLaneCounts:
           image: 500
-        notes: 仅用于图片供给线 DAG、并发、质量分布和准出稳定性验证；Pinterest 默认只能做发现/参考，不发布平台素材。
-      notes: Pinterest 只作为发现源；缺少逐图授权链、原始作者授权和可发布 license 时不得进入图片作品生产。
-    notes: 发现/参考源，不作为真实批量下载或发布图片来源。
+        notes: 受控试跑仍只做发现/质量分布验证；真实发布改走 attribution_publish_ingest，不能把 controlledTrial 当发布通道。
+      notes: Pinterest 可作为 attribution_no_watermark 图片发布候选，但必须逐图保留作者、转载出处、原图链接、无水印/OCR 扫描与下载字节证据。
+    notes: 发现/归因发布候选源；不做平台正文抓取，真实发布只走 attribution manifest 与单源图片作品链路。
   - siteId: tuchong
     platform: 图虫
     category: image_community
@@ -61,6 +80,11 @@ sites:
       loginPolicy: public_only
       watermarkPolicy: reject_watermarked_publish_assets
       termsUrl: https://tuchong.com/terms/
+      discoveryStrategy:
+        mode: site_listing_scan
+        seedAxes: [topic, time_window, site_listing, collection]
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor, rights_gate]
+        notes: 图虫社区按作品页/专题页/集合页轻量巡检，不以摄影师主页为主轴；授权字段不完整不得发布。
       maxDepth: 0
       maxPagesPerDay: 0
       controlledTrial:
@@ -73,3 +97,84 @@ sites:
         notes: 仅用于图片供给线 DAG、并发、质量分布和准出稳定性验证；逐资产授权不明时不得发布。
       notes: 图虫可作为 licensed_candidate 线索源；必须有逐图 license、credit、sourceUrl、termsUrl、usageScope 和必要肖像授权后才可进入发布。
     notes: 授权候选源，不作为默认真实批量下载或自动发布图片来源。
+  - siteId: tuchong_stock_authorized
+    platform: 图虫创意
+    category: stock_authorized
+    domains: [stock.tuchong.com, open.tuchong.com]
+    urlPatterns:
+      - https://stock.tuchong.com/*
+      - https://open.tuchong.com/*
+    fetchable: false
+    extractor: platform_reference
+    licensePolicy: licensed_asset_required
+    qualityTier: B
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [image, video]
+      allowedPaths:
+        - https://stock.tuchong.com/*
+        - https://open.tuchong.com/*
+      fetchMode: licensed_api
+      extractor: platform_reference
+      rightsPolicy: licensed_asset_required
+      robotsPolicy: respect_robots_txt
+      loginPolicy: manual_authorization_required
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://stock.tuchong.com/
+      discoveryStrategy:
+        mode: licensed_asset_manifest
+        seedAxes: [topic, time_window, license_manifest, geo]
+        precheckGates: [asset_rights_manifest, scenery_or_photography_classification, quality_gate, entity_anchor]
+        notes: 只消费 API/订单/授权 manifest 中的逐资产条目；不按摄影师维度扩源。
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          image: 500
+          video: 50
+        notes: 授权升级源候选；只有 API/订单/授权凭证和逐资产 rights 字段完整后，资产层 gate 才能放行。
+      notes: 图虫创意/OpenAPI 只在授权合同与逐资产凭证完整时进入发布资产池。
+    notes: 授权图库候选源；站点注册不等于可发布，release 仍以逐资产 license/credit/sourceUrl/termsUrl/usageScope/authorizationProof/modelReleaseStatus 为准。
+  - siteId: photographer_authorized_pool
+    platform: 摄影师授权池
+    category: photography_platform
+    domains: [authorized.assets.quwoquan.local]
+    urlPatterns:
+      - https://authorized.assets.quwoquan.local/*
+    fetchable: false
+    extractor: platform_reference
+    licensePolicy: licensed_asset_required
+    qualityTier: A
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [image]
+      allowedPaths:
+        - https://authorized.assets.quwoquan.local/*
+      fetchMode: manual_authorization
+      extractor: platform_reference
+      rightsPolicy: licensed_asset_required
+      robotsPolicy: respect_robots_txt
+      loginPolicy: manual_authorization_required
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://authorized.assets.quwoquan.local/terms
+      discoveryStrategy:
+        mode: licensed_asset_manifest
+        seedAxes: [topic, time_window, license_manifest, geo]
+        precheckGates: [asset_rights_manifest, scenery_or_photography_classification, quality_gate, entity_anchor]
+        notes: 摄影师授权池按逐资产授权 manifest 入库；摄影师身份是 credit/proof 字段，不是检索主轴。
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          image: 500
+        notes: 真实发布只接受摄影师逐图授权 manifest；站点本身不可爬，图虫社区 URL 仅能作为 discovery/reference 线索。
+      notes: 摄影师授权池通过 manifest 提供逐资产 license、credit、sourceUrl、termsUrl、usageScope、authorizationProof、model/property release 与本地或授权下载文件。
+    notes: 通用摄影师授权生产入口；不从图虫社区下载，不绕过登录或反爬，发布资格以逐资产授权字段和字节预检为准。

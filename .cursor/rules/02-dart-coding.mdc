@@ -56,7 +56,7 @@ if (msg['senderId'] == AppConceptConstants.assistantSenderId) { }
 
 ### 1.4 错误码与用户文案
 
-错误码和用户可见文案由 `contracts/metadata/*/errors.yaml` 定义，经 codegen 生成 `*ErrorCode` 枚举。禁止硬编码 code 字符串或文案。
+错误码和用户可见文案由 `quwoquan_service/contracts/metadata/*/errors.yaml` 定义，经 codegen 生成 `*ErrorCode` 枚举。禁止硬编码 code 字符串或文案。
 
 ```dart
 // ❌ 禁止

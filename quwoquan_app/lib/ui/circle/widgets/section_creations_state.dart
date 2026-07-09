@@ -706,6 +706,16 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
         isDark: widget.isDark,
         // N5：圈子文章卡 → 交集句对象片段点击精确归因为圈子内容（非推荐流）。
         referralSource: ReferralSource.circlePost,
+        contextObjectName: _entryHeadlineText(entry).trim().isNotEmpty
+            ? _entryHeadlineText(entry).trim()
+            : _entrySupportingText(entry).trim(),
+        contextObjectTarget: entry.dto == null
+            ? null
+            : IntersectionTarget(
+                objectId: entry.dto!.id,
+                objectKind: 'content',
+                routeId: 'workBrowser',
+              ),
       ),
       onTap: onTap,
       footer: Column(

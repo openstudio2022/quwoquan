@@ -284,9 +284,9 @@
 - `.cursor/commands/commit.md`
 - `.cursor/commands/deliver.md`
 - `.cursor/commands/deploy.md`
-- `agent_ops/scaffold/new_feature_fullstack.sh`
+- `quwoquan_ops/gate/scaffold/new_feature_fullstack.sh`
 - `scripts/verify_feature_traceability.sh`
-- `agent_ops/scaffold/verify_feature_tree_refactor.sh`
+- `quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh`
 - `quwoquan_service/runtime/agentpack/tree_index.go`
 - `quwoquan_service/tools/gen_tree_index/main.go`
 - `specs/feature-tree/tree_index.yaml`

@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:quwoquan_app/cloud/runtime/startup_deferred_plugins.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 
@@ -85,6 +86,8 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
 
   @visibleForTesting
   static AppPermissionCoordinator? debugInstance;
+
+  static AppPermissionCoordinator get current => debugInstance ?? instance;
 
   @visibleForTesting
   static AppPermissionCoordinator get testable => debugInstance ?? instance;
@@ -447,7 +450,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
     }
 
     final copy = copyFor(kind);
-    await showCupertinoDialog<void>(
+    await showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: Text(copy.primerTitle),
@@ -523,7 +526,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       return false;
     }
     final copy = copyFor(kind);
-    final accepted = await showCupertinoDialog<bool>(
+    final accepted = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: Text(copy.primerTitle),
@@ -569,6 +572,10 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
       AppPermissionKind.contacts,
       Permission.contacts,
     );
+    _registerPermissionHandlerKind(
+      AppPermissionKind.notifications,
+      Permission.notification,
+    );
     _registerPhotosAdapter();
     _registerLocationAdapter();
     _registerPrimerDefaults(AppPermissionKind.microphone);
@@ -576,6 +583,7 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
     _registerPrimerDefaults(AppPermissionKind.photos);
     _registerPrimerDefaults(AppPermissionKind.location);
     _registerPrimerDefaults(AppPermissionKind.contacts);
+    _registerPrimerDefaults(AppPermissionKind.notifications);
   }
 
   void _registerPermissionHandlerKind(

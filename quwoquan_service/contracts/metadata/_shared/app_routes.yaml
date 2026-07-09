@@ -11,6 +11,10 @@ routes:
     path: /legal/user-agreement
   - id: legalPrivacyPolicy
     path: /legal/privacy-policy
+  - id: legalPermissions
+    path: /legal/permissions
+  - id: legalThirdPartySdkList
+    path: /legal/third-party-sdk-list
   - id: home
     path: /
   - id: circles

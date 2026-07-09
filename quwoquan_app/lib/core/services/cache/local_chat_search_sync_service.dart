@@ -8,14 +8,11 @@ import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 
 class LocalChatSearchSyncService {
   LocalChatSearchSyncService({
-    required ChatRepository chatRepository,
-    required ConversationCacheService conversationCache,
-    required LocalChatSearchStore store,
-    required PersonaContextLoader personaContextLoader,
-  }) : _chatRepository = chatRepository,
-       _conversationCache = conversationCache,
-       _store = store,
-       _personaContextLoader = personaContextLoader;
+    required this._chatRepository,
+    required this._conversationCache,
+    required this._store,
+    required this._personaContextLoader,
+  });
 
   final ChatRepository _chatRepository;
   final ConversationCacheService _conversationCache;

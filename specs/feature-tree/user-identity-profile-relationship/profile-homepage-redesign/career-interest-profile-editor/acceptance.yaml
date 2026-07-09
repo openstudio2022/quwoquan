@@ -171,7 +171,7 @@ gwt_acceptance:
       - 本轮仅补未保存退出确认的 local_contract 回归；完整 gamma_local 用户旅程仍按 planned user_acceptance 补录。
 execution:
   local_gate:
-    - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-    - bash agent_ops/scaffold/verify_acceptance_standard.sh
+    - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+    - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
     - make gate

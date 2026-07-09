@@ -1,7 +1,6 @@
 """Canonical Python runtime resolution for data/agent CLI commands."""
 from __future__ import annotations
 
-import base64
 import json
 import os
 import re
@@ -32,8 +31,25 @@ DEFAULT_NETWORK_ENDPOINTS = (
     "https://commons.wikimedia.org/",
 )
 CURSOR_CLOUD_API_ME_URL = "https://api.cursor.com/v1/me"
-DEFAULT_CURSOR_STARTUP_MODEL = "composer-2"
+DEFAULT_CURSOR_STARTUP_MODEL = os.environ.get("QWQ_CURSOR_AGENT_MODEL", "composer")
 DEFAULT_CURSOR_STARTUP_RUNTIME = "local"
+CURSOR_STARTUP_TIMEOUT_ENV = "QWQ_CURSOR_STARTUP_TIMEOUT_SECONDS"
+DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS = 240.0
+
+
+def resolve_cursor_startup_timeout_seconds(
+    value: object | None = None,
+    *,
+    default: float = DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS,
+) -> float:
+    raw = value
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        raw = os.environ.get(CURSOR_STARTUP_TIMEOUT_ENV)
+    try:
+        seconds = float(raw) if raw not in (None, "") else float(default)
+    except (TypeError, ValueError):
+        seconds = float(default)
+    return max(1.0, seconds)
 
 
 def _redact_secret_text(value: str) -> str:
@@ -313,8 +329,8 @@ def _cursor_cloud_api_probe_with_curl(key: str, *, timeout_seconds: float) -> di
             "-L",
             "--max-time",
             str(max(1, int(timeout_seconds))),
-            "-u",
-            f"{key}:",
+            "-H",
+            f"Authorization: Bearer {key}",
             "-H",
             "Accept: application/json",
             "-H",
@@ -372,12 +388,11 @@ def _cursor_cloud_api_probe(*, timeout_seconds: float = 5.0) -> dict:
             "issues": [],
             "skipReason": "CURSOR_API_KEY missing",
         }
-    auth = base64.b64encode(f"{key}:".encode("utf-8")).decode("ascii")
     request = urlrequest.Request(
         CURSOR_CLOUD_API_ME_URL,
         method="GET",
         headers={
-            "Authorization": f"Basic {auth}",
+            "Authorization": f"Bearer {key}",
             "Accept": "application/json",
             "User-Agent": "quwoquan-data-env-preflight",
         },
@@ -559,6 +574,7 @@ def cursor_startup_probe(
             "issues": ["CURSOR_API_KEY missing"],
         }
     probe_cwd = str((cwd or REPO_ROOT).resolve())
+    probe_python = resolve_data_agent_python(include_current=True) or Path(sys.executable)
     code = r'''
 import json
 import os
@@ -696,7 +712,7 @@ except Exception as exc:
         remaining = max(1, int(deadline - time.monotonic()))
         try:
             proc = subprocess.run(
-                [sys.executable, "-c", code, str(model), str(runtime), probe_cwd],
+                [str(probe_python), "-c", code, str(model), str(runtime), probe_cwd],
                 capture_output=True,
                 text=True,
                 check=False,
@@ -711,6 +727,7 @@ except Exception as exc:
                 "started": False,
                 "runtime": runtime,
                 "model": model,
+                "probePython": str(probe_python),
                 "status": "timeout",
                 "retryable": True,
                 "probeType": "agent_prompt_smoke",
@@ -787,6 +804,7 @@ except Exception as exc:
         "probeType": payload.get("probeType") or "agent_prompt_smoke",
         "runtime": runtime,
         "model": model,
+        "probePython": str(probe_python),
         "status": payload.get("status"),
         "error": _redact_secret_value(payload.get("error")),
         "errorClass": _redact_secret_value(payload.get("errorClass")),
@@ -1012,6 +1030,84 @@ def cursor_startup_probe_suite(
     }
 
 
+_CURSOR_STARTUP_PROBE_CACHE_FILENAME = "cursor_startup_probe_cache.json"
+
+
+def _cursor_startup_probe_cache_ttl_seconds() -> float:
+    raw = os.environ.get("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "")
+    try:
+        value = float(raw) if raw else 600.0
+    except ValueError:
+        value = 600.0
+    return max(0.0, value)
+
+
+def _cursor_startup_probe_cache_path() -> Path:
+    from _common.paths import current_runtime_root
+
+    return current_runtime_root() / "env" / _CURSOR_STARTUP_PROBE_CACHE_FILENAME
+
+
+def _cached_cursor_startup_probe(
+    *,
+    model: str,
+    runtime: str,
+    timeout_seconds: float,
+) -> dict:
+    """resume 轮 preflight 降本：TTL 内复用最近一次成功的 startup probe。
+
+    只缓存 ready=true 的结果（失败必须重新探测）；缓存键 = model+runtime+key 指纹，
+    避免换 key/换模型后误用旧结论。TTL=0 关闭缓存。
+    """
+    ttl = _cursor_startup_probe_cache_ttl_seconds()
+    key_fingerprint = (os.environ.get("CURSOR_API_KEY") or "")[-8:]
+    cache_key = f"{model}::{runtime}::{key_fingerprint}"
+    cache_path = _cursor_startup_probe_cache_path()
+    if ttl > 0 and cache_path.is_file():
+        try:
+            cached = json.loads(cache_path.read_text(encoding="utf-8"))
+            entry = cached.get(cache_key) if isinstance(cached, dict) else None
+            if (
+                isinstance(entry, dict)
+                and bool((entry.get("report") or {}).get("ready"))
+                and (time.time() - float(entry.get("cachedAtEpoch") or 0)) < ttl
+            ):
+                report = dict(entry["report"])
+                report["cacheHit"] = True
+                report["cachedAt"] = entry.get("cachedAt")
+                return report
+        except (OSError, ValueError, TypeError):
+            pass
+    report = cursor_startup_probe(
+        model=model,
+        runtime=runtime,
+        timeout_seconds=timeout_seconds,
+    )
+    if ttl > 0 and bool(report.get("ready")):
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            existing: dict = {}
+            if cache_path.is_file():
+                try:
+                    existing = json.loads(cache_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    existing = {}
+            if not isinstance(existing, dict):
+                existing = {}
+            existing[cache_key] = {
+                "cachedAtEpoch": time.time(),
+                "cachedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "report": report,
+            }
+            cache_path.write_text(
+                json.dumps(existing, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+    return report
+
+
 def environment_preflight(
     *,
     require_cursor_key: bool = True,
@@ -1025,6 +1121,12 @@ def environment_preflight(
     cursor_startup_timeout_seconds: float = 45.0,
 ) -> dict:
     """Single pre-run readiness gate for managed data workflows."""
+    if require_cursor_key:
+        try:
+            from _common.cursor_credentials import resolve_cursor_api_key
+        except Exception:  # noqa: BLE001
+            from cursor_credentials import resolve_cursor_api_key  # type: ignore
+        resolve_cursor_api_key()
     runtime = runtime_report()
     cursor_key = _cursor_key_report(os.environ.get("CURSOR_API_KEY"))
     issues: list[str] = []
@@ -1070,7 +1172,7 @@ def environment_preflight(
             ),
         }
     if check_cursor_startup and not issues and require_cursor_key:
-        cursor_startup = cursor_startup_probe(
+        cursor_startup = _cached_cursor_startup_probe(
             model=cursor_startup_model,
             runtime=cursor_startup_runtime,
             timeout_seconds=cursor_startup_timeout_seconds,

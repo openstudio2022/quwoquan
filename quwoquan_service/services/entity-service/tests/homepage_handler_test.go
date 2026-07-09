@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	httpadapter "quwoquan_service/services/entity-service/internal/adapters/http"
@@ -197,6 +198,149 @@ func TestHomepageDetailSupportsSemanticCanonicalLookup(t *testing.T) {
 	}
 }
 
+func TestHomepageImpactReturnsStructuredSummary(t *testing.T) {
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	impact := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/v1/homepages/homepage_sight_west_lake/impact",
+		nil,
+		http.StatusOK,
+	)
+	if got := stringField(t, impact, "homepageId"); got != "homepage_sight_west_lake" {
+		t.Fatalf("expected homepageId homepage_sight_west_lake, got %q", got)
+	}
+	if got := intField(t, impact, "total"); got <= 0 {
+		t.Fatalf("expected positive total, got %d", got)
+	}
+	items := sliceField(t, impact, "items")
+	if len(items) == 0 {
+		t.Fatalf("expected impact items")
+	}
+	first, ok := items[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first impact item map, got %T", items[0])
+	}
+	primaryText := stringField(t, first, "primaryText")
+	if primaryText == "" {
+		t.Fatalf("expected non-empty primaryText")
+	}
+	spans := sliceField(t, first, "primarySpans")
+	joined := ""
+	for _, raw := range spans {
+		span, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("expected primary span map, got %T", raw)
+		}
+		joined += stringField(t, span, "text")
+	}
+	if joined != primaryText {
+		t.Fatalf("expected joined primarySpans %q = primaryText %q", joined, primaryText)
+	}
+	actionHints := sliceField(t, first, "actionHints")
+	if len(actionHints) == 0 {
+		t.Fatalf("expected actionHints")
+	}
+	actionHint, ok := actionHints[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected action hint map, got %T", actionHints[0])
+	}
+	target, ok := actionHint["target"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected action hint target map, got %T", actionHint["target"])
+	}
+	if got := stringField(t, target, "objectId"); got != "homepage_sight_west_lake" {
+		t.Fatalf("expected action target homepage_sight_west_lake, got %q", got)
+	}
+}
+
+func TestHomepageObjectPageBundleRequestsHomepageScopedIntersections(t *testing.T) {
+	var gotObjectID string
+	var gotObjectType string
+	var gotViewerID string
+	contentServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotObjectID = r.URL.Query().Get("objectId")
+		gotObjectType = r.URL.Query().Get("objectType")
+		gotViewerID = r.Header.Get("X-Client-User-Id")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"items": []map[string]any{
+				{
+					"intersectionId": "remote_homepage_reason",
+					"primaryText":    "1位你关注的人来过「西湖景区」",
+					"primarySpans": []map[string]any{
+						{"text": "1位你关注的人来过「西湖景区」", "role": "plain"},
+					},
+					"actionHints": []map[string]any{
+						{
+							"actionKey": "view_object",
+							"label":     "查看对象",
+							"target": map[string]any{
+								"objectId":   "homepage_sight_west_lake",
+								"objectKind": "place",
+								"routeId":    "homepageDetail",
+							},
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer contentServer.Close()
+	t.Setenv("CONTENT_SERVICE_BASE_URL", contentServer.URL)
+
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	req, err := http.NewRequest(
+		http.MethodGet,
+		server.URL+"/v1/homepages/homepage_sight_west_lake/object-page-bundle",
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("X-Client-User-Id", "fixture_user_current")
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("do request: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	var bundle map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&bundle); err != nil {
+		t.Fatalf("decode bundle: %v", err)
+	}
+	if gotObjectID != "homepage_sight_west_lake" {
+		t.Fatalf("expected homepage objectId request, got %q", gotObjectID)
+	}
+	if gotObjectType != "homepage" {
+		t.Fatalf("expected homepage objectType request, got %q", gotObjectType)
+	}
+	if gotViewerID != "fixture_user_current" {
+		t.Fatalf("expected viewer header to propagate, got %q", gotViewerID)
+	}
+	reasons := sliceField(t, bundle, "intersectionReasons")
+	if len(reasons) == 0 {
+		t.Fatalf("expected remote intersection reasons in bundle")
+	}
+	first, ok := reasons[0].(map[string]any)
+	if !ok {
+		t.Fatalf("expected first reason map, got %T", reasons[0])
+	}
+	if got := stringField(t, first, "intersectionId"); got != "remote_homepage_reason" {
+		t.Fatalf("expected remote reason passthrough, got %q", got)
+	}
+}
+
 func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
 	server := httptest.NewServer(
 		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
@@ -254,6 +398,87 @@ func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
 	related := sliceField(t, introduction, "relatedObjects")
 	if len(related) == 0 {
 		t.Fatalf("expected relatedObjects")
+	}
+}
+
+func TestHomepageIntroductionProjectsIntakenPageMarkdown(t *testing.T) {
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	pageMarkdown := "---\ntitle: 都江堰\ncoverImage: asset://cover_asset\n---\n" +
+		"# 都江堰\n\n都江堰是战国时期修建的大型水利工程。\n\n" +
+		"## 历史沿革\n\n李冰父子主持修建。\n\n" +
+		":::figure id=\"fig_01\" layout=\"fullWidth\" caption=\"鱼嘴分水堤\"\nasset://inline_asset_1\n:::\n\n" +
+		"## 相关图片\n\n:::gallery layout=\"grid\"\nasset://related_asset_1\n:::\n"
+	candidate := requestJSON(t, server.Client(), http.MethodPost, server.URL+"/v1/homepages/candidates", map[string]any{
+		"title":                "都江堰",
+		"homepageType":         "sight",
+		"introductionMarkdown": pageMarkdown,
+		"introductionAssets": []map[string]any{
+			{"assetId": "cover_asset", "url": "https://cdn.example.com/cover.jpg", "caption": "都江堰全景", "role": "cover"},
+			{"assetId": "inline_asset_1", "url": "https://cdn.example.com/inline1.jpg", "caption": "鱼嘴分水堤"},
+			{"assetId": "related_asset_1", "url": "https://cdn.example.com/rel1.jpg"},
+		},
+	}, http.StatusCreated)
+	homepageID := stringField(t, candidate, "_id")
+	if got := stringField(t, candidate, "coverUrl"); got != "https://cdn.example.com/cover.jpg" {
+		t.Fatalf("expected cover derived from role=cover asset, got %q", got)
+	}
+
+	introduction := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/v1/homepages/"+homepageID+"/introduction",
+		nil,
+		http.StatusOK,
+	)
+	if got := stringField(t, introduction, "coverUrl"); got != "https://cdn.example.com/cover.jpg" {
+		t.Fatalf("expected frontmatter cover url, got %q", got)
+	}
+	sections := sliceField(t, introduction, "sections")
+	var bodySection, relatedSection map[string]any
+	for _, raw := range sections {
+		section, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("expected section object, got %T", raw)
+		}
+		kind := stringField(t, section, "kind")
+		if !isAllowedIntroductionKind(kind) {
+			t.Fatalf("unexpected section kind %q", kind)
+		}
+		switch kind {
+		case "body":
+			bodySection = section
+		case "relatedImages":
+			relatedSection = section
+		}
+	}
+	if bodySection == nil {
+		t.Fatalf("expected body section projected from page.md, got %#v", sections)
+	}
+	body, _ := bodySection["bodyMarkdown"].(string)
+	if !strings.Contains(body, `:::figure id="fig_01"`) {
+		t.Fatalf("body markdown must preserve figure directive, got %q", body)
+	}
+	bodyAssets := sliceField(t, bodySection, "assets")
+	if len(bodyAssets) != 1 {
+		t.Fatalf("expected one inline asset binding, got %#v", bodyAssets)
+	}
+	if inline, ok := bodyAssets[0].(map[string]any); !ok || inline["role"] != "inline" {
+		t.Fatalf("expected inline role binding, got %#v", bodyAssets[0])
+	}
+	if relatedSection == nil {
+		t.Fatalf("expected relatedImages section, got %#v", sections)
+	}
+	relatedAssets := sliceField(t, relatedSection, "assets")
+	if len(relatedAssets) != 1 {
+		t.Fatalf("expected related gallery asset, got %#v", relatedAssets)
+	}
+	if related, ok := relatedAssets[0].(map[string]any); !ok || related["role"] != "related" {
+		t.Fatalf("expected related role binding, got %#v", relatedAssets[0])
 	}
 }
 
@@ -394,8 +619,10 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 }
 
 func isAllowedIntroductionKind(kind string) bool {
+	// 与 projections/homepage_introduction_section.yaml 的 kind 闭集同源。
 	switch kind {
-	case "overview", "keyFacts", "timeline", "history", "relatedPeople", "relatedObjects", "map", "gallery":
+	case "overview", "keyFacts", "timeline", "history", "relatedPeople",
+		"relatedObjects", "map", "gallery", "body", "relatedImages":
 		return true
 	default:
 		return false
@@ -545,4 +772,21 @@ func sliceField(t *testing.T, data map[string]any, key string) []any {
 		t.Fatalf("field %q is not a slice", key)
 	}
 	return items
+}
+
+func intField(t *testing.T, data map[string]any, key string) int {
+	t.Helper()
+	value, ok := data[key]
+	if !ok {
+		t.Fatalf("missing field %q", key)
+	}
+	switch v := value.(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	default:
+		t.Fatalf("field %q is not a number", key)
+		return 0
+	}
 }

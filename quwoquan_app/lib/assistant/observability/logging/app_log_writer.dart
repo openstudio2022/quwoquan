@@ -17,10 +17,10 @@ class AppLogWriter {
   Future<void> _writeTail = Future<void>.value();
   bool _pruneScheduled = false;
 
-  Future<String> appendJsonLine({
+  Future<String> appendLogLine({
     required String subDirectory,
     required String fileName,
-    required Map<String, dynamic> payload,
+    required String line,
     DateTime? at,
   }) async {
     if (currentAppPlatform == AppPlatform.web) {
@@ -34,10 +34,7 @@ class AppLogWriter {
         await subDir.create(recursive: true);
       }
       final file = File('${subDir.path}/$fileName');
-      await file.writeAsString(
-        '${jsonEncode(payload)}\n',
-        mode: FileMode.append,
-      );
+      await file.writeAsString('$line\n', mode: FileMode.append);
       _schedulePruneIfNeeded();
       return file.path;
     });

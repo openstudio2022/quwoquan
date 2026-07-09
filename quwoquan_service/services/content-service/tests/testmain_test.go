@@ -147,6 +147,8 @@ func TestMain(m *testing.M) {
 	behaviorService := behaviorapp.NewBehaviorService(
 		hotPath,
 		postStore,
+		behaviorapp.WithBehaviorEventStore(persistence.NewMongoBehaviorEventStore(mongoDB, slog.Default())),
+		behaviorapp.WithWishlistEventStore(persistence.NewMongoWishlistEventStore(mongoDB, slog.Default())),
 		behaviorapp.WithDailyMetricsStore(dailyMetricsStore),
 		behaviorapp.WithAuthorImpactStore(authorImpactStore),
 		behaviorapp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
@@ -205,7 +207,7 @@ func cleanPosts(t *testing.T) {
 		return
 	}
 	ctx := context.Background()
-	for _, coll := range []string{"posts", "comments", "comment_reactions"} {
+	for _, coll := range []string{"posts", "comments", "comment_reactions", "rm_behavior_events"} {
 		if _, err := mongoDB.Collection(coll).DeleteMany(ctx, bson.M{}); err != nil {
 			t.Logf("cleanPosts(%s): %v", coll, err)
 		}

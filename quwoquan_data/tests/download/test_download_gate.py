@@ -289,6 +289,55 @@ def test_gate_download_partial_content_ignores_soft_image_fetch_report(monkeypat
     assert issues == []
 
 
+def test_gate_download_image_only_ignores_text_source_bundle_sidecar(monkeypatch):
+    batch = "download_gate_image_only_text_sidecar"
+    ensure_task_layout(TASK)
+    monkeypatch.setattr("download.gate.active_download_lanes", lambda _task_id: {"image"})
+    monkeypatch.setattr(
+        "download.gate.download_requirements",
+        lambda _task_id: {
+            "minSources": 4,
+            "minImages": 1,
+            "minArticleImageSources": 0,
+            "minArticleBaseSources": 0,
+            "minHomepageSources": 0,
+        },
+    )
+    entity_dir = batch_entity_object_dir(TASK, batch, "地点", "景区", "图片景区")
+    write_source_unit(
+        entity_dir,
+        ordinal=1,
+        source_id="image_asset_1",
+        source_md="",
+        quality={"sourceId": "image_asset_1", "quality": "A-image", "score": 9},
+        platform="Wikimedia Commons",
+        source_category="open_license_image",
+        research_lane="image",
+        url="https://example.com/image",
+        title="图片景区图集",
+        target_ref="/entity/地点/景区/图片景区",
+    )
+    _attach_image(entity_dir / "1.download/sources/01.image_asset_1", "image_only_1")
+    write_json(
+        batch_root(TASK, batch)
+        / "task_download"
+        / "results"
+        / "entity_source_bundle_gate"
+        / "图片景区.json",
+        {
+            "payload": {
+                "passed": False,
+                "ref": "图片景区",
+                "issues": ["sourceScreen: no retained source for entity"],
+            }
+        },
+    )
+
+    issues = gate_download(TASK, batch, target_entities={"图片景区"})
+
+    assert issues == []
+
+
 def test_gate_download_partial_content_keeps_image_rights_blocking(monkeypatch):
     batch = "download_gate_partial_image_rights"
     ensure_task_layout(TASK)

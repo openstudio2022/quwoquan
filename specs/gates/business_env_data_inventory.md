@@ -67,7 +67,7 @@
 
 ## 内容飞轮 ship 与环境数据分层（alpha 豁免决策）
 
-内容飞轮（`quwoquan_data` 产线 + `ship`）按 [`content_sampling_manifest.yaml`](../../deploy/shared/content_sampling_manifest.yaml) 把审核通过的真实内容采样回填各环境**服务侧运行库**。其中 `alpha` 的处理需明确两层区分，避免与 [08-mock-data-isolation](../../.cursor/rules/08-mock-data-isolation.mdc) / 编码军规 R30 冲突：
+内容飞轮（`quwoquan_data` 产线 + `ship`）按 [`content_sampling_manifest.yaml`](../../quwoquan_ops/environments/content_sampling_manifest.yaml) 把审核通过的真实内容采样回填各环境**服务侧运行库**。其中 `alpha` 的处理需明确两层区分，避免与 [08-mock-data-isolation](../../.cursor/rules/08-mock-data-isolation.mdc) / 编码军规 R30 冲突：
 
 | 层 | alpha 含义 | 数据源 | 约束来源 |
 |---|---|---|---|

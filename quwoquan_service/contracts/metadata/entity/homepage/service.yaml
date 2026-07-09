@@ -19,9 +19,9 @@ api_routes:
   - method: POST
     path: /v1/homepages/candidates
     operation: IntakeHomepageCandidate
-    description: 创建候选共享主页
+    description: 创建候选共享主页（introductionMarkdown/introductionAssets 承载数据工程 page.md 三段结构投影）
     request_entity: Homepage
-    writable_fields: [title, subtitle, homepageType, categoryTags, coverUrl, address, city, location]
+    writable_fields: [title, subtitle, homepageType, categoryTags, coverUrl, address, city, location, introductionMarkdown, introductionAssets]
     auth: required
 
   - method: POST

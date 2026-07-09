@@ -20,27 +20,29 @@ MEDIA_ROOT = (
 )
 RENDER_PKG = "./cmd/render-group-avatar"
 
-_FALLBACK_POOL = [
-    "avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
-    "avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
-    "avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
-    "avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
-    "avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
-]
-
-
-def _stable_mock_avatar_index(object_key: str) -> int:
-    digest = hashlib.sha256(object_key.encode("utf-8")).hexdigest()
-    return int(digest[:8], 16) % len(_FALLBACK_POOL)
+_AVATAR_BY_MOCK_USER_ID = {
+    "user_001": "media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png",
+    "user_002": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+    "user_003": "media/avatar/s/archived-avatar/user/fixture_user_photo/v1/avatar.png",
+    "user_004": "media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png",
+    "user_005": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+    "user_006": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png",
+    "user_007": "media/avatar/s/archived-avatar/user/fixture_user_weekend_2/v1/avatar.png",
+    "user_008": "media/avatar/s/archived-avatar/user/fixture_user_citywalk_01/v1/avatar.png",
+    "user_009": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png",
+    "user_010": "media/avatar/s/archived-avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+    "user_011": "media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png",
+    "user_012": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png",
+    "user_013": "media/avatar/s/archived-avatar/user/fixture_user_weekend_2/v1/avatar.png",
+    "user_014": "media/avatar/s/archived-avatar/user/fixture_user_citywalk_01/v1/avatar.png",
+    "user_015": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png",
+    "user_016": "media/avatar/s/archived-avatar/user/fixture_user_outdoor_01/v1/avatar.png",
+}
+_FALLBACK_AVATAR = _AVATAR_BY_MOCK_USER_ID["user_002"]
 
 
 def _resolve_mock_avatar_path(object_key: str) -> Path:
     normalized = object_key.lstrip("/")
-    if normalized.startswith("media/avatar/s/mock/"):
-        fallback = _FALLBACK_POOL[_stable_mock_avatar_index(normalized)]
-        candidate = MEDIA_ROOT / fallback
-        if candidate.is_file():
-            return candidate
     direct = MEDIA_ROOT / normalized.removeprefix("media/")
     if direct.is_file():
         return direct
@@ -48,19 +50,18 @@ def _resolve_mock_avatar_path(object_key: str) -> Path:
 
 
 def _grid_member_user_ids(count: int) -> list[str]:
-    user_ids: list[str] = ["user_001"]
-    for index in range(2, count + 1):
-        user_ids.append(f"grid_{count}_member_{index}")
-    return user_ids
+    return [f"user_{index:03d}" for index in range(1, count + 1)]
 
 
 def _avatar_object_key(user_id: str) -> str:
-    return f"media/avatar/s/mock/user/{user_id}/v1/avatar.png"
+    return _AVATAR_BY_MOCK_USER_ID.get(user_id, _FALLBACK_AVATAR)
 
 
 def render_conv_grid(n: int) -> Path:
     member_ids = _grid_member_user_ids(n)[:9]
-    input_paths = [_resolve_mock_avatar_path(_avatar_object_key(user_id)) for user_id in member_ids]
+    input_paths = [
+        _resolve_mock_avatar_path(_avatar_object_key(user_id)) for user_id in member_ids
+    ]
     output_key = f"media/avatar/s/archived-avatar/conversation/conv_grid_{n}/v1/mock.png"
     output_path = MEDIA_ROOT / output_key.removeprefix("media/")
     output_path.parent.mkdir(parents=True, exist_ok=True)

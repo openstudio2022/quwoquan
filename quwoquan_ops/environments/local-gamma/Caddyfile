@@ -1,0 +1,176 @@
+{
+	admin 0.0.0.0:2019
+	local_certs
+}
+
+(local_gamma_tls) {
+	tls internal
+}
+
+(media_cors) {
+	header {
+		Access-Control-Allow-Origin "*"
+		Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+		Access-Control-Allow-Headers "*"
+		Cross-Origin-Resource-Policy "cross-origin"
+	}
+}
+
+# 注意：local-gamma 运行栈真相源是 `quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh`
+# 内联生成的 `.qwq_output/local/gamma-local/Caddyfile`（compose 实际挂载该产物）。本文件是该路由表的
+# 静态参照副本，须与生成器逐路由一致；新增/调整领域路由时两处同步，避免第二真相源漂移。
+gamma-api.quwoquan-env.test,
+gamma-api.localhost {
+	import local_gamma_tls
+	handle /healthz {
+		reverse_proxy content-service:18080
+	}
+	handle /v1/config/app {
+		reverse_proxy content-service:18080
+	}
+	handle /livez {
+		reverse_proxy content-service:18080
+	}
+	handle /startupz {
+		reverse_proxy content-service:18080
+	}
+	@api_content path /v1/content*
+	handle @api_content {
+		reverse_proxy content-service:18080
+	}
+	@api_chat path /v1/chat*
+	handle @api_chat {
+		reverse_proxy chat-service:18081
+	}
+	@api_user path /v1/user* /v1/me /v1/me/*
+	handle @api_user {
+		reverse_proxy user-service:18082
+	}
+	@api_assistant path /v1/assistant*
+	handle @api_assistant {
+		reverse_proxy assistant-service:18087
+	}
+	@api_tag path /v1/tag*
+	handle @api_tag {
+		reverse_proxy tag-service:18092
+	}
+	@api_search path /v1/search*
+	handle @api_search {
+		reverse_proxy search-service:18095
+	}
+	@api_entity path /v1/homepages*
+	handle @api_entity {
+		reverse_proxy entity-service:18084
+	}
+	@api_circle path /v1/circles*
+	handle @api_circle {
+		reverse_proxy circle-service:18082
+	}
+	handle /v1/ops/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle /legal/* {
+		header {
+			Cache-Control "public, max-age=300"
+			X-Content-Type-Options "nosniff"
+		}
+		root * /srv/legal
+		file_server
+	}
+	handle /media/* {
+		import media_cors
+		root * /srv/media
+		file_server
+	}
+	handle {
+		respond "local-gamma mirror route is not ready for this path" 404
+	}
+}
+
+gamma-product-ops.quwoquan-env.test,
+gamma-product-ops.localhost {
+	import local_gamma_tls
+	handle /healthz {
+		reverse_proxy product-ops-service:18086
+	}
+	handle /v1/ops/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle {
+		respond "local-gamma product-ops route is not ready for this path" 404
+	}
+}
+
+gamma-avatar.quwoquan-env.test,
+gamma-image.quwoquan-env.test,
+gamma-video.quwoquan-env.test,
+gamma-upload.quwoquan-env.test,
+gamma-avatar.localhost,
+gamma-image.localhost,
+gamma-video.localhost,
+gamma-upload.localhost {
+	import local_gamma_tls
+	import media_cors
+	root * /srv/media
+	file_server
+}
+
+:80 {
+	handle /healthz {
+		reverse_proxy content-service:18080
+	}
+	handle /v1/config/app {
+		reverse_proxy content-service:18080
+	}
+	@pub_content path /v1/content*
+	handle @pub_content {
+		reverse_proxy content-service:18080
+	}
+	@pub_chat path /v1/chat*
+	handle @pub_chat {
+		reverse_proxy chat-service:18081
+	}
+	@pub_user path /v1/user* /v1/me /v1/me/*
+	handle @pub_user {
+		reverse_proxy user-service:18082
+	}
+	@pub_assistant path /v1/assistant*
+	handle @pub_assistant {
+		reverse_proxy assistant-service:18087
+	}
+	@pub_tag path /v1/tag*
+	handle @pub_tag {
+		reverse_proxy tag-service:18092
+	}
+	@pub_search path /v1/search*
+	handle @pub_search {
+		reverse_proxy search-service:18095
+	}
+	@pub_entity path /v1/homepages*
+	handle @pub_entity {
+		reverse_proxy entity-service:18084
+	}
+	@pub_circle path /v1/circles*
+	handle @pub_circle {
+		reverse_proxy circle-service:18082
+	}
+	handle /v1/ops/* {
+		reverse_proxy product-ops-service:18086
+	}
+	handle /legal/* {
+		header {
+			Cache-Control "public, max-age=300"
+			X-Content-Type-Options "nosniff"
+		}
+		root * /srv/legal
+		file_server
+	}
+	handle /media/* {
+		import media_cors
+		root * /srv/media
+		file_server
+	}
+	handle {
+		respond "local-gamma mirror route is not ready for this path" 404
+	}
+}

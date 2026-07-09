@@ -18,11 +18,13 @@ allowedValues:
     - manual_authorization
     - licensed_api
     - platform_reference
+    - attribution_manifest
   rightsPolicies:
     - factual_reference_only
     - official_terms_required
     - asset_level_required
     - open_license_required
+    - attribution_no_watermark
     - commercial_license_required
     - creator_authorization_required
     - reference_only
@@ -30,6 +32,7 @@ allowedValues:
     - siteId
     - domains
     - allowedPaths
+    - discoveryStrategy
     - timeWindowDays
     - contentLanes
     - fetchMode
@@ -86,11 +89,18 @@ sourceTierSignals:
 lanePolicies:
   homepage:
     maxCoreSources: 5
-    # P3 三类解耦：实体主页底稿主源【只来自百科】（wiki/百度/搜狗百科 = encyclopedia）。
-    # 知识图谱（Wikidata）、官网、政务文旅、权威媒体一律降为 supporting，只能补事实/交叉验证，
-    # 不得作为主页 primaryEvidenceRef（base draft 单源择优只在百科之间进行）。
-    primarySourceClasses: [encyclopedia]
-    supportingOnlySourceClasses: [knowledge_graph, official_site, government_tourism, authoritative_media]
+    # P3 三类解耦 + R-HSE06 扩源：实体主页底稿主源分两级权威：
+    # 第一权威 = 主权威百科（维基百科/维基导游/百度/搜狗百科），排序恒优先；
+    # 第二权威 = 实体官方网站 / 政务文旅站点，同样具备 sourceScreen 主源（可 seed base draft）资格，
+    #   排序恒在全部百科之后（无可用百科时兜底为主源；正文走事实化压缩，见 factual_compression）。
+    # 知识图谱（Wikidata）、权威媒体仍只 supporting；头条百科 reference_only。
+    primaryAuthorityDisplayPlatforms: [维基百科, 维基导游, 百度百科, 搜狗百科, 官方网站, 政务文旅]
+    primaryAuthorityMatchTokens: [维基百科, wikipedia, 维基导游, wikivoyage, 百度百科, 搜狗百科]
+    secondaryAuthoritySourceClasses: [official_site, government_tourism]
+    secondaryAuthorityMatchTokens: [官方网站, 官网, 景区官网, official_site, government_tourism, 政务, 文旅, gov.cn]
+    supportingOnlySourceClasses: [knowledge_graph, authoritative_media]
+    referenceOnlyDisplayPlatforms: [头条百科]
+    referenceOnlyMatchTokens: [头条百科, 字节百科, toutiao_baike]
     rankingSignals:
       - authority
       - entity_match
@@ -98,8 +108,9 @@ lanePolicies:
       - image_text_completeness
       - freshness
     promptFacts:
-      - 实体主页主源【只】从百科（维基百科 / 百度百科 / 搜狗百科）中选择，多个百科源之间按质量择优取最优单源。
-      - 知识图谱、实体/景区官网、政务、文旅、媒体和 UGC 只能补事实或交叉验证，不得作为主页 primaryEvidenceRef。
+      - 实体主页主源优先从百科（维基百科 / 维基导游 / 百度百科 / 搜狗百科）中择优；无可用百科时，实体官方网站或政务文旅站点可作为第二权威主源。
+      - 头条百科、知识图谱、权威媒体和 UGC 只能补事实或交叉验证，不得作为主页 primaryEvidenceRef。
+      - 第二权威源（官网/政务文旅）正文非开放版权，必须走事实化压缩后再进 AI 语义改写，不得整段照搬。
       - 核心主页来源最多 5 个，优先图文并茂、事实字段丰富、可抓取和可追溯的页面。
   article:
     sourceSelectionMode: quality_driven
@@ -130,7 +141,7 @@ lanePolicies:
       - dedupe_value
     promptFacts:
       - 图片广泛检索通用视觉平台、摄影社区、图库、官方图库和垂类平台。
-      - Pinterest、小红书、微博、抖音、B站等可做发现或参考，但发布必须逐图具备明确授权或开放许可。
+      - Pinterest、小红书、微博、抖音、B站等可做发现或参考；其中 Pinterest 允许走 attribution_no_watermark 逐图归因发布，但必须补齐 pin/source/作者/转载出处/无水印扫描证据。
       - 有水印、版权声明、转载痕迹、作者不明或 terms 不清的图片不得进入发布候选；去水印只允许用于自有或明确授权素材。
   video:
     discoveryAllowed: true
@@ -156,13 +167,14 @@ siteCrawlProfilePolicy:
     - controlledTrial.allowed=true 仅代表可做受控 DAG/并发/门禁验证；validationOnly 必须为 true，rawFetchAllowed 和 publishableAssetsAllowed 必须为 false。
     - 受控试跑候选只能作为 content_plan handoff 结构验证，不代表真实抓取授权，也不得把平台素材作为可发布资产。
     - 发布主线只接受 content_plan_packet 之后的标准对象，不直接消费 site crawl 产物。
+    - 站点主线 handoff 批次声明 supplyMode=site_primary 并记录 sourceKey=siteId；搜索引擎汇聚只作小流量数据补全，必须走独立 search_supplement 批次，禁止与站点主线共用 batchId 或 readiness 口径。
     - 平台发现图不能自动变发布图；逐资产缺 license、credit、sourceUrl、termsUrl、usageScope 即不可发布。
     - 日产 10 万级必须提供站点漏斗、TokenLedger、release/import、搜索可见和推荐反馈证据。
 
 common:
   entity:
     - sourceId: wikipedia
-      platform: Wikipedia
+      platform: 维基百科
       sourceClass: encyclopedia
       lanes: [homepage]
       defaultRole: primary
@@ -174,7 +186,7 @@ common:
       platform: Wikidata
       sourceClass: knowledge_graph
       lanes: [homepage]
-      defaultRole: primary
+      defaultRole: supporting
       fetchMode: api
       rightsPolicy: factual_reference_only
       rateLimit: conservative
@@ -201,16 +213,16 @@ common:
       platform: 头条百科
       sourceClass: encyclopedia
       lanes: [homepage]
-      defaultRole: primary
+      defaultRole: supporting
       fetchMode: search
       rightsPolicy: factual_reference_only
       rateLimit: conservative
-      promptFacts: [中文百科补充源, 必须验证实体匹配和正文可读]
+      promptFacts: [中文百科参考源, 只可补事实或交叉验证, 不得作为主页主锚]
     - sourceId: britannica
       platform: Britannica
       sourceClass: encyclopedia
       lanes: [homepage]
-      defaultRole: primary
+      defaultRole: supporting
       fetchMode: html
       rightsPolicy: factual_reference_only
       rateLimit: conservative
@@ -219,7 +231,7 @@ common:
       platform: Google Knowledge Graph
       sourceClass: knowledge_graph
       lanes: [homepage]
-      defaultRole: primary
+      defaultRole: supporting
       fetchMode: api
       rightsPolicy: factual_reference_only
       rateLimit: conservative
@@ -228,11 +240,22 @@ common:
       platform: 官方网站
       sourceClass: official_site
       lanes: [homepage]
+      # R-HSE06 扩源：第二权威主源（百科不可用时可 seed base draft；正文走事实化压缩）。
       defaultRole: primary
       fetchMode: html
       rightsPolicy: official_terms_required
       rateLimit: conservative
-      promptFacts: [实体官网或品牌官网, 用于开放时间、服务、公告、介绍等一手信息]
+      promptFacts: [实体官网或品牌官网, 用于开放时间、服务、公告、介绍等一手信息, 百科缺位时可作第二权威主源（事实化压缩后使用）]
+    - sourceId: government_tourism
+      platform: 政务文旅
+      sourceClass: government_tourism
+      lanes: [homepage]
+      # R-HSE06 扩源：政务/文旅站点（gov.cn 等）第二权威主源。
+      defaultRole: primary
+      fetchMode: html
+      rightsPolicy: official_terms_required
+      rateLimit: conservative
+      promptFacts: [政府/文旅部门官方站点, 用于景区等级、政策公告、开放信息等权威事实, 百科缺位时可作第二权威主源（事实化压缩后使用）]
   article:
     - sourceId: official_article
       platform: 官方文章
@@ -288,6 +311,15 @@ common:
       rightsPolicy: asset_level_required
       rateLimit: conservative
       promptFacts: [今日头条、网易、搜狐、微信、知乎等平台文章, 平台不决定优先级]
+    - sourceId: xiaohongshu_travel_reference
+      platform: 小红书
+      sourceClass: community_post
+      lanes: [article, image, video]
+      defaultRole: discovery_only
+      fetchMode: platform_reference
+      rightsPolicy: reference_only
+      rateLimit: conservative
+      promptFacts: [综合内容平台只按主题、地域和时间片检索风景/摄影候选, 默认只做发现、互证和质量分布, 未经逐资产授权不得发布]
   image:
     - sourceId: wikimedia_commons
       platform: Wikimedia Commons
@@ -320,11 +352,11 @@ common:
       platform: Pinterest
       sourceClass: visual_discovery_platform
       lanes: [image]
-      defaultRole: discovery_only
-      fetchMode: platform_reference
-      rightsPolicy: reference_only
+      defaultRole: publish_candidate
+      fetchMode: attribution_manifest
+      rightsPolicy: attribution_no_watermark
       rateLimit: conservative
-      promptFacts: [视觉发现和构图参考, 不因平台名直接排除检索, 发布需回到原图授权链]
+      promptFacts: [视觉发现和单源图片作品候选, 不因平台名直接排除检索, 发布必须逐图补齐 pinUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt]
     - sourceId: five_hundred_px
       platform: 500px
       sourceClass: photography_community
@@ -460,6 +492,24 @@ common:
       rightsPolicy: creator_authorization_required
       rateLimit: conservative
       promptFacts: [图虫社区用于发现和授权洽谈, 图虫创意需授权后发布]
+    - sourceId: tuchong_stock_authorized
+      platform: 图虫创意
+      sourceClass: domestic_stock
+      lanes: [image]
+      defaultRole: licensed_candidate
+      fetchMode: licensed_api
+      rightsPolicy: commercial_license_required
+      rateLimit: conservative
+      promptFacts: [图虫创意/OpenAPI 或订单授权素材, 必须逐图记录授权凭证、授权范围、署名和落地页]
+    - sourceId: photographer_authorized_pool
+      platform: 摄影师授权池
+      sourceClass: photography_community
+      lanes: [image]
+      defaultRole: publish_candidate
+      fetchMode: manual_authorization
+      rightsPolicy: creator_authorization_required
+      rateLimit: conservative
+      promptFacts: [摄影师逐图授权素材池, 必须逐图记录授权凭证、授权范围、署名、下载文件和落地页, 图虫社区只可作为发现线索]
     - sourceId: vcg
       platform: VCG
       sourceClass: domestic_stock
@@ -608,6 +658,16 @@ common:
 
 verticals:
   travel:
+    homepage:
+      - sourceId: wikivoyage_homepage
+        platform: 维基导游
+        sourceClass: encyclopedia
+        lanes: [homepage]
+        defaultRole: primary
+        fetchMode: api
+        rightsPolicy: factual_reference_only
+        rateLimit: conservative
+        promptFacts: [旅行百科型实体主页事实源, 只抽取可核验事实与结构, 不复现原文]
     article:
       - sourceId: ctrip_travel
         platform: 携程攻略

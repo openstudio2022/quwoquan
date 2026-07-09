@@ -7,15 +7,14 @@ import (
 
 func TestIOAccessLogValidateAppOrigin(t *testing.T) {
 	entry := IOAccessLog{
-		SchemaVersion:  "v1",
 		Service:        "gateway-service",
-		Timestamp:      "2026-02-21T10:10:10Z",
+		TS:             "2026-02-21T10:10:10Z",
 		Origin:         "app.http",
 		Direction:      DirectionInbound,
 		Endpoint:       "chat.message.create",
 		SourceID:       "quwoquan_app",
-		TraceID:        "APP.sess.chat.message.create.l9z1y4.2f8k",
-		RequestID:      "APP.chat.message.create.l9z1y4.2f8k",
+		Trace:          "APP.sess.chat.message.create.l9z1y4.2f8k",
+		Req:            "APP.chat.message.create.l9z1y4.2f8k",
 		SessionID:      "sess-001",
 		Src:            "app",
 		DevicePlatform: "ios",
@@ -32,15 +31,14 @@ func TestIOAccessLogValidateAppOrigin(t *testing.T) {
 
 func TestIOAccessLogValidateServiceOrigin(t *testing.T) {
 	entry := IOAccessLog{
-		SchemaVersion:     "v1",
 		Service:           "chat-service",
-		Timestamp:         "2026-02-21T10:10:10Z",
+		TS:                "2026-02-21T10:10:10Z",
 		Origin:            "service.mq",
 		Direction:         DirectionOutbound,
 		Endpoint:          "chat.message.deliver",
 		SourceID:          "chat-service",
-		TraceID:           "SVC.sess.chat.message.deliver.l9z1y4.2f8k",
-		RequestID:         "SVC.chat.message.deliver.l9z1y4.2f8k",
+		Trace:             "SVC.sess.chat.message.deliver.l9z1y4.2f8k",
+		Req:               "SVC.chat.message.deliver.l9z1y4.2f8k",
 		SessionID:         "run-001",
 		Src:               "service",
 		ServiceName:       "chat-service",
@@ -58,15 +56,14 @@ func TestIOAccessLogValidateErrorCodePattern(t *testing.T) {
 	var out bytes.Buffer
 	logger := NewIOAccessLogger(&out)
 	entry := IOAccessLog{
-		SchemaVersion:     "v1",
 		Service:           "chat-service",
-		Timestamp:         "2026-02-21T10:10:10Z",
+		TS:                "2026-02-21T10:10:10Z",
 		Origin:            "service.http",
 		Direction:         DirectionInbound,
 		Endpoint:          "chat.message.create",
 		SourceID:          "gateway-service",
-		TraceID:           "SVC.sess.chat.message.create.l9z1y4.2f8k",
-		RequestID:         "SVC.chat.message.create.l9z1y4.2f8k",
+		Trace:             "SVC.sess.chat.message.create.l9z1y4.2f8k",
+		Req:               "SVC.chat.message.create.l9z1y4.2f8k",
 		SessionID:         "run-001",
 		Src:               "service",
 		ServiceName:       "chat-service",
@@ -88,15 +85,14 @@ func TestIOAccessLogValidateErrorCodePattern(t *testing.T) {
 
 func TestIOAccessLogValidateStatus(t *testing.T) {
 	entry := IOAccessLog{
-		SchemaVersion:     "v1",
 		Service:           "chat-service",
-		Timestamp:         "2026-02-21T10:10:10Z",
+		TS:                "2026-02-21T10:10:10Z",
 		Origin:            "service.http",
 		Direction:         DirectionInbound,
 		Endpoint:          "chat.message.create",
 		SourceID:          "gateway-service",
-		TraceID:           "SVC.sess.chat.message.create.l9z1y4.2f8k",
-		RequestID:         "SVC.chat.message.create.l9z1y4.2f8k",
+		Trace:             "SVC.sess.chat.message.create.l9z1y4.2f8k",
+		Req:               "SVC.chat.message.create.l9z1y4.2f8k",
 		SessionID:         "run-001",
 		Src:               "service",
 		ServiceName:       "chat-service",
@@ -109,4 +105,3 @@ func TestIOAccessLogValidateStatus(t *testing.T) {
 		t.Fatalf("invalid status should fail")
 	}
 }
-

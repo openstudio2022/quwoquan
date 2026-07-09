@@ -13,10 +13,9 @@ import (
 type creatorPoolSeedUser struct {
 	CreatorProfileID string `json:"creatorProfileId"`
 	SubAccountID     string `json:"subAccountId"`
-	AuthorID         string `json:"authorId"`
 	DisplayName      string `json:"displayName"`
 	UserHandle       string `json:"userHandle"`
-	AvatarObjectKey  string `json:"avatarObjectKey"`
+	AvatarPresetID   string `json:"avatarPresetId"`
 	Bio              string `json:"bio"`
 }
 
@@ -31,7 +30,7 @@ func loadCreatorPoolSeedUsers(t *testing.T, limit int) []creatorPoolSeedUser {
 		"_shared",
 		"test_fixtures",
 		"creator_pool",
-		"creator_travel_batch100.seed.json",
+		"creator_travel_photo_1k_v1.seed.json",
 	)
 	raw, err := os.ReadFile(seedPath)
 	if err != nil {
@@ -70,7 +69,7 @@ func seedCreatorPoolUsers(t *testing.T, users []creatorPoolSeedUser) {
 			context.Background(),
 			`UPDATE personas SET user_handle = $1, avatar_url = $2 WHERE sub_account_id = $3`,
 			user.UserHandle,
-			"https://cdn.example.com/"+user.AvatarObjectKey,
+			"https://cdn.example.com/preset/avatar/"+user.AvatarPresetID+".png",
 			user.SubAccountID,
 		)
 		if err != nil {
@@ -122,22 +121,22 @@ func assertCreatorPoolReadsViaHandler(t *testing.T, users []creatorPoolSeedUser)
 	}
 }
 
-// TestContractFixtureSeed_CreatorPoolBetaReadsViaHandler validates the 20-user
-// curated pilot subset reads back via the user-service handler.
+// TestContractFixtureSeed_CreatorPoolBetaReadsViaHandler validates the 100-user
+// curated 1k subset reads back via the user-service handler.
 func TestContractFixtureSeed_CreatorPoolBetaReadsViaHandler(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	users := loadCreatorPoolSeedUsers(t, 20)
+	users := loadCreatorPoolSeedUsers(t, 100)
 	seedCreatorPoolUsers(t, users)
 	assertCreatorPoolReadsViaHandler(t, users)
 }
 
 // TestContractFixtureSeed_CreatorPoolFullBatchReadsViaHandler scales validation
-// to the full commercial batch (100 creators), not just the pilot subset.
+// to the full commercial batch (1000 creators), not just the pilot subset.
 func TestContractFixtureSeed_CreatorPoolFullBatchReadsViaHandler(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 	users := loadCreatorPoolSeedUsers(t, 0)
-	if len(users) < 100 {
-		t.Fatalf("expected full batch of 100 creators, got %d", len(users))
+	if len(users) != 1000 {
+		t.Fatalf("expected full batch of 1000 creators, got %d", len(users))
 	}
 	seedCreatorPoolUsers(t, users)
 	assertCreatorPoolReadsViaHandler(t, users)

@@ -3,13 +3,19 @@ part of 'profile_stats_page.dart';
 extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
   Widget _buildBody(BuildContext context, bool isDark) {
     if (_bundleError != null && _bundle == null) {
-      return _buildBlockingState(
-        context,
-        isDark: isDark,
-        title: UITextConstants.loadFailed,
-        message: runtimeErrorDisplayMessage(_bundleError!),
-        actionLabel: UITextConstants.tryAgain,
-        onAction: _loadBundleAndActiveTab,
+      return AppPageErrorState(
+        semantic: runtimeErrorSemantic(
+          context,
+          error: _bundleError!,
+          category: UiErrorCategory.pageLoad,
+          scope: UiErrorScope.page,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _loadBundleAndActiveTab();
+          }
+        },
       );
     }
     if (_bundle != null && !_bundle!.viewerContext.canViewFullProfile) {
@@ -35,12 +41,19 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
                 AppSpacing.containerMd,
                 AppSpacing.containerLg,
               ),
-              child: _buildStatusCard(
-                isDark: isDark,
-                title: UITextConstants.loadFailed,
-                message: runtimeErrorDisplayMessage(memory.loadError!),
-                actionLabel: UITextConstants.tryAgain,
-                onAction: () => _loadTab(_activeTab),
+              child: AppSectionErrorCard(
+                semantic: runtimeErrorSemantic(
+                  context,
+                  error: memory.loadError!,
+                  category: UiErrorCategory.sectionLoad,
+                  scope: UiErrorScope.section,
+                ),
+                onAction: (action) async {
+                  if (action.type == UiErrorActionType.retry ||
+                      action.type == UiErrorActionType.resubmit) {
+                    await _loadTab(_activeTab);
+                  }
+                },
               ),
             ),
           )
@@ -62,7 +75,7 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
     );
   }
 
-  Widget _buildSegmentedControl(BuildContext context) {
+  Widget _buildPrimaryTabBar(BuildContext context) {
     final availableWidth =
         (MediaQuery.sizeOf(context).width -
                 AppSpacing.appChromeActionButtonSize * 2)
@@ -74,17 +87,22 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
             )
             .toDouble();
     return SizedBox(
+      key: const ValueKey<String>('profile-stats-primary-tabs'),
       width: availableWidth,
-      child: AppSegmentedChoiceBar<_ProfileStatsTab>(
-        items: <AppSegmentedChoiceItem<_ProfileStatsTab>>[
+      height: AppSpacing.minInteractiveSize,
+      child: CenteredScrollableTabBar(
+        tabs: <TabItem>[
           for (final tab in _ProfileStatsTab.values)
-            AppSegmentedChoiceItem<_ProfileStatsTab>(
-              value: tab,
-              label: tab.label,
-            ),
+            TabItem(id: tab.routeValue, label: tab.label),
         ],
-        selectedValue: _activeTab,
-        onChanged: (value) => _selectTab(value, trackEvent: true),
+        activeTab: _activeTab.routeValue,
+        onTabChange: (value) => _selectTab(
+          _ProfileStatsPageState._normalizeTab(value),
+          trackEvent: true,
+        ),
+        transparentBackground: true,
+        visibleTabCount: _ProfileStatsTab.values.length,
+        selectedLabelColor: AppColors.iosAccent(context),
       ),
     );
   }
@@ -95,28 +113,6 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
       controller: _activeMemory.searchController,
       placeholder: _activeTab.searchHint,
       onChanged: (_) {},
-    );
-  }
-
-  Widget _buildBlockingState(
-    BuildContext context, {
-    required bool isDark,
-    required String title,
-    required String message,
-    required String actionLabel,
-    required Future<void> Function() onAction,
-  }) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerMd),
-        child: _buildStatusCard(
-          isDark: isDark,
-          title: title,
-          message: message,
-          actionLabel: actionLabel,
-          onAction: onAction,
-        ),
-      ),
     );
   }
 
@@ -181,12 +177,19 @@ extension _ProfileStatsPageWidgets on _ProfileStatsPageState {
               AppSpacing.containerMd,
               AppSpacing.containerLg,
             ),
-            child: _buildStatusCard(
-              isDark: isDark,
-              title: UITextConstants.loadFailed,
-              message: runtimeErrorDisplayMessage(memory.appendError!),
-              actionLabel: UITextConstants.tryAgain,
-              onAction: () => _appendTab(_activeTab),
+            child: AppListAppendErrorFooter(
+              semantic: runtimeErrorSemantic(
+                context,
+                error: memory.appendError!,
+                category: UiErrorCategory.listAppend,
+                scope: UiErrorScope.section,
+              ),
+              onAction: (action) async {
+                if (action.type == UiErrorActionType.retry ||
+                    action.type == UiErrorActionType.resubmit) {
+                  await _appendTab(_activeTab);
+                }
+              },
             ),
           ),
         ),

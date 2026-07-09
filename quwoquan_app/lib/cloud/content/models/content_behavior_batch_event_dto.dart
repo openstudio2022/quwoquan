@@ -25,7 +25,7 @@ class ContentBehaviorBatchEventDto {
       'contentId': contentId,
       'eventType': eventType,
       'timestamp': timestamp,
-      if (durationMs != null) 'durationMs': durationMs,
+      'durationMs': ?durationMs,
       if (metadata != null && metadata.isNotEmpty) 'metadata': metadata,
     });
   }

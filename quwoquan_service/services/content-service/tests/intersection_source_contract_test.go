@@ -222,6 +222,77 @@ func TestIntersectionSource_EntityObjectProducesFolloweeVisited(t *testing.T) {
 	}
 }
 
+func TestIntersectionSource_HomepageAndCircleObjectsUseConcreteActionSemantics(t *testing.T) {
+	seedIntersectionSourceFixtures(t)
+	ctx := context.Background()
+	follow := mongoDB.Collection("follow_edges")
+	events := mongoDB.Collection("rm_behavior_events")
+	docs := []any{
+		bson.M{"followerId": ixViewer, "followeeId": "ixsrc_homepage_friend"},
+		bson.M{"followerId": ixViewer, "followeeId": "ixsrc_circle_friend"},
+	}
+	if _, err := follow.InsertMany(ctx, docs); err != nil {
+		t.Fatalf("seed followees: %v", err)
+	}
+	eventDocs := []any{
+		bson.M{
+			"userId":      "ixsrc_homepage_friend",
+			"action":      "entity_page_view",
+			"entityRefs":  []string{"homepage_sight_west_lake"},
+			"displayName": "西湖景区",
+			"createdAt":   time.Now(),
+		},
+		bson.M{
+			"userId":      "ixsrc_circle_friend",
+			"action":      "entity_page_view",
+			"entityRefs":  []string{"fixture_circle_photo"},
+			"displayName": "契约摄影社",
+			"createdAt":   time.Now(),
+		},
+	}
+	if _, err := events.InsertMany(ctx, eventDocs); err != nil {
+		t.Fatalf("seed object visit display names: %v", err)
+	}
+
+	svc := newRealIntersectionService(t)
+	assertFolloweeVisitedReason := func(objectID, objectType, wantName, wantObjectKind string) {
+		t.Helper()
+		reasons, err := svc.ObjectIntersections(ctx, ixViewer, objectID, objectType, 8)
+		if err != nil {
+			t.Fatalf("object intersections %s: %v", objectID, err)
+		}
+		var hit *intersectionapp.IntersectionReasonView
+		for i := range reasons {
+			for _, p := range reasons[i].IntersectionPoints {
+				if p.SourceRef == "followeeVisited" {
+					hit = &reasons[i]
+				}
+			}
+		}
+		if hit == nil {
+			t.Fatalf("missing followeeVisited for %s", objectID)
+		}
+		if !strings.Contains(hit.PrimaryText, wantName) {
+			t.Fatalf("followeeVisited primaryText for %s = %q, want contain %q", objectID, hit.PrimaryText, wantName)
+		}
+		if hit.ActionType != "view_object" {
+			t.Fatalf("followeeVisited actionType for %s = %q, want view_object", objectID, hit.ActionType)
+		}
+		if hit.ObjectKind != wantObjectKind {
+			t.Fatalf("followeeVisited objectKind for %s = %q, want %q", objectID, hit.ObjectKind, wantObjectKind)
+		}
+		if len(hit.ActionHints) == 0 || hit.ActionHints[0].Target == nil {
+			t.Fatalf("followeeVisited actionHints for %s must target object", objectID)
+		}
+		if got := hit.ActionHints[0].Target.ObjectID; got != objectID {
+			t.Fatalf("followeeVisited target objectId for %s = %q", objectID, got)
+		}
+	}
+
+	assertFolloweeVisitedReason("homepage_sight_west_lake", "homepage", "西湖景区", "place")
+	assertFolloweeVisitedReason("fixture_circle_photo", "circle", "契约摄影社", "circle")
+}
+
 // TestIntersectionSource_FeedFactReasonUsesRegistryKinds 断言 feed 事实理由
 // （圈子兴趣 / 关注的人在看）的 point kind 使用注册表标准名而非数据源标识。
 func TestIntersectionSource_FeedFactReasonUsesRegistryKinds(t *testing.T) {

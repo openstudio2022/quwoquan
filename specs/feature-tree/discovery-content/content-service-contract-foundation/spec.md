@@ -11,7 +11,7 @@
 **目录结构重组**：
 - `contracts/metadata/` 增加域层 `content/`，形成 `contracts/metadata/content/post/` 路径
 - `_projections/` 中归属 post 实体的投影 YAML 迁入 `content/post/projections/`
-- `contracts/openapi/content-service.v1.yaml` 迁入 `contracts/metadata/content/openapi.yaml`
+- 旧 OpenAPI 单文件已迁入 `contracts/metadata/content/openapi.yaml`
 
 **新增横切 YAML 文件**（per-entity，均对 codegen 工具可见）：
 - `errors.yaml`：域级错误码声明（MODULE.KIND.REASON + i18n + HTTP映射）

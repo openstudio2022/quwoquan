@@ -241,17 +241,47 @@ def read_draft_meta(task_id: str, batch_id: str, ref: str) -> dict[str, Any] | N
     return read_json(path) if path.exists() else None
 
 
+def repair_creative_meta(task_id: str, batch_id: str, ref: str) -> dict[str, Any] | None:
+    """Complete missing creativePlan/selfCritique on an authored agent draft.
+
+    The structured creative-plan contract is a *metadata* artifact, not article
+    body: it is completed deterministically from the locked creativeBrief so the
+    review gate has a reliable structured input instead of hard-blocking drafts
+    whose body already passes every body-level gate. Only authored agent drafts
+    are touched (body + generator are never modified); image/gallery carriers and
+    opted-out briefs are no-ops. Returns the effective (possibly repaired) meta.
+    """
+    from _common.creative_brief import complete_creative_meta
+
+    meta = read_draft_meta(task_id, batch_id, ref)
+    if str((meta or {}).get("generator") or "") != GENERATOR_AGENT:
+        return meta
+    pack = read_writing_pack(task_id, batch_id, ref) or {}
+    article = read_draft_article(task_id, batch_id, ref)
+    if is_placeholder(article):
+        return meta
+    completed, changed = complete_creative_meta(meta, pack, body=str(article or ""))
+    if not changed:
+        return meta
+    completed["updatedAt"] = _now_iso()
+    write_json(draft_meta_path(task_id, batch_id, ref), completed)
+    return completed
+
+
 def _source_bundle_sha256(cited_source_paths: Sequence[str], *, base_dir: Path | None = None) -> str | None:
     if not cited_source_paths:
         return None
     bundle = []
     for raw in cited_source_paths:
-        path = Path(str(raw))
+        raw_text = str(raw)
+        path = Path(raw_text)
+        candidates = [path]
         if not path.is_absolute() and base_dir is not None:
-            path = base_dir / path
-        if not path.is_file():
+            candidates.append(base_dir / path)
+        resolved = next((candidate for candidate in candidates if candidate.is_file()), None)
+        if resolved is None:
             continue
-        bundle.append({"path": str(raw), "sha256": sha256_file(path)})
+        bundle.append({"path": raw_text, "sha256": sha256_file(resolved)})
     if not bundle:
         return None
     return sha256_text(

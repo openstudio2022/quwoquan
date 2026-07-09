@@ -82,6 +82,12 @@ def scan_entity_homepage_issues(obj: Path, *, batch: Path) -> list[str]:
             assets = manifest.get("assets") if isinstance(manifest, dict) else []
             if isinstance(assets, list):
                 issues.extend(caption_semantic_issues(assets, label=label))
+            # 主页三段结构门：frontmatter 封面唯一、正文块级 figure、gallery 仅页尾、
+            # roles 收敛 cover/inline/related、零占位符残留。
+            from build.homepage_validation import homepage_structure_issues
+
+            if isinstance(manifest, dict):
+                issues.extend(homepage_structure_issues(obj, manifest, label))
         except (OSError, ValueError, TypeError):
             issues.append(f"{label}: manifest.json 不可读")
     return issues

@@ -117,6 +117,7 @@ def build_author_job_packet(
         "writingIntent": writing_pack.get("writingIntent") or brief.get("writingIntent"),
         "baseSourceRef": writing_pack.get("baseSourceRef") or brief.get("baseSourceRef"),
         "title": writing_pack.get("title") or brief.get("titleHint"),
+        "caption": writing_pack.get("caption") or brief.get("caption") or "",
         "carrier": carrier,
         "contentObjectDir": content_object_rel,
         "promptRef": prompt_rel,

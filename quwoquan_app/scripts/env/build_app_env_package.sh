@@ -24,7 +24,7 @@ if [[ ! -f "$cfg" ]]; then
   echo "FAIL: app runtime config not found: $cfg" >&2
   exit 1
 fi
-topology_manifest="deploy/shared/environment_topology_manifest.yaml"
+topology_manifest="quwoquan_ops/environments/environment_topology_manifest.yaml"
 if [[ ! -f "$topology_manifest" ]]; then
   echo "FAIL: environment topology manifest not found: $topology_manifest" >&2
   exit 1
@@ -55,11 +55,11 @@ else:
 PY
 )"
 
-APP_RUNTIME_ENV="$env_name" CDN_DOMAIN="$cdn_domain" bash agent_ops/deploy/shared/verify_cdn_domain_injection.sh
+APP_RUNTIME_ENV="$env_name" CDN_DOMAIN="$cdn_domain" bash quwoquan_ops/cli/shared/verify_cdn_domain_injection.sh
 
 python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py >/dev/null
 
-out_dir="artifacts/app-env-packages/${env_name}"
+out_dir=".qwq_output/release/app/${env_name}"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 cp "quwoquan_app/configs/default/app_runtime.yaml" "$out_dir/default_app_runtime.yaml"

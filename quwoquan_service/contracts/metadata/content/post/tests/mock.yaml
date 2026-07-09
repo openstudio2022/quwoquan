@@ -100,6 +100,43 @@ error_scenarios:
     input_status: 400
     expected_dart_const: invalidArgument
 
+  - name: parse_assistant_mention_context_missing
+    input_code: "CONTENT.USER.assistant_mention_context_missing"
+    input_status: 400
+    expected_dart_const: assistantMentionContextMissing
+    expected_recovery_action: surface
+
+  - name: parse_media_not_found
+    input_code: "CONTENT.USER.media_not_found"
+    input_status: 404
+    expected_dart_const: mediaNotFound
+    expected_recovery_action: surface
+
+  - name: parse_original_access_denied
+    input_code: "CONTENT.USER.original_access_denied"
+    input_status: 403
+    expected_dart_const: originalAccessDenied
+    expected_recovery_action: surface
+
+  - name: parse_original_access_rate_limited
+    input_code: "CONTENT.USER.original_access_rate_limited"
+    input_status: 429
+    expected_dart_const: originalAccessRateLimited
+    expected_recovery_action: retry
+    expected_recovery_after: 60
+
+  - name: parse_comment_pin_forbidden
+    input_code: "CONTENT.USER.comment_pin_forbidden"
+    input_status: 403
+    expected_dart_const: commentPinForbidden
+    expected_recovery_action: surface
+
+  - name: parse_comment_pin_invalid_target
+    input_code: "CONTENT.USER.comment_pin_invalid_target"
+    input_status: 400
+    expected_dart_const: commentPinInvalidTarget
+    expected_recovery_action: surface
+
   - name: parse_storage_write_failed
     input_code: "CONTENT.SYSTEM.storage_write_failed"
     input_status: 500

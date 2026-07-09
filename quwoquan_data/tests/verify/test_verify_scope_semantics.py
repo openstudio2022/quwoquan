@@ -1,7 +1,7 @@
 """锁定 verify 审计范围语义（标准 CI 模型）：
 
 - 批量审计（scope=current/all，无显式目标）只针对交付面 release/；
-- runtime/tasks/**/batches/** 中间产物不进批量审计（由 produce review 门禁把关）；
+- local/data-runtime/tasks/**/batches/** 中间产物不进批量审计（由 produce review 门禁把关）；
 - 但显式 --task/--batch 仍精确校验该中间批次，门禁不放水。
 
 可直接运行：python3 quwoquan_data/tests/verify/test_verify_scope_semantics.py

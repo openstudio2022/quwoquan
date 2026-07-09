@@ -307,6 +307,112 @@ def test_mark_abandoned_content_refs_reclassifies_retrying_rows():
     assert updated["stage"] == "content_plan"
     assert "baseDraftText" in updated["reason"]
 
+def test_publish_anchor_pruning_rejects_managed_article_and_image_without_batch_homepage():
+    task_id = _make_task()
+    batch_id = "publish_anchor_prune_managed"
+    _seed_publish_inputs(task_id, batch_id)
+    ctx = _ctx(task_id, batch_id)
+    ctx.managed = True
+    ctx.release_only = True
+
+    missing_entity = "缺主页景区"
+    mirror_entity_dir = task_data(task_id).entities_dir() / "地点" / "景区" / missing_entity
+    mirror_entity_dir.mkdir(parents=True, exist_ok=True)
+    (mirror_entity_dir / "page.md").write_text(f"# {missing_entity}\n\n仅存在于 task mirror。", encoding="utf-8")
+    write_json(
+        mirror_entity_dir / "_entity.json",
+        {"entityRef": f"/entity/地点/景区/{missing_entity}", "label": missing_entity},
+    )
+    write_json(
+        mirror_entity_dir / "manifest.json",
+        {"entityRef": f"/entity/地点/景区/{missing_entity}", "tagRefs": ["景区"]},
+    )
+
+    article_ref = "missing-homepage-article"
+    image_ref = "missing-homepage-image"
+    content_object.register_content_object(
+        task_id, batch_id, article_ref, content_type="article", angle="攻略", title="缺主页文章"
+    )
+    content_object.register_content_object(
+        task_id, batch_id, image_ref, content_type="image", angle="画报", title="缺主页图片"
+    )
+    article_dir = content_object.content_object_dir(task_id, batch_id, article_ref)
+    image_dir = content_object.content_object_dir(task_id, batch_id, image_ref)
+    article_dir.mkdir(parents=True, exist_ok=True)
+    image_dir.mkdir(parents=True, exist_ok=True)
+    (article_dir / "article.md").write_text("# 缺主页文章\n\n成品不应进入 release。", encoding="utf-8")
+    write_json(
+        article_dir / "manifest.json",
+        {
+            "contentType": "article",
+            "topicId": article_ref,
+            "entityRefs": [f"/entity/地点/景区/{missing_entity}"],
+            "tagRefs": ["景区"],
+        },
+    )
+    write_json(
+        image_dir / "manifest.json",
+        {
+            "contentType": "image",
+            "carrier": "image",
+            "topicId": image_ref,
+            "entityRefs": [f"/entity/地点/景区/{missing_entity}"],
+            "tagRefs": ["景区"],
+            "assets": [],
+        },
+    )
+
+    assert f"/entity/地点/景区/{missing_entity}" not in run_mod._publishable_homepage_refs(ctx)
+
+    added = run_mod._abandon_publish_content_anchor_shortfalls(ctx)
+
+    assert set(added) == {article_ref, image_ref}
+    rows = run_mod.load_workflow_state(task_id, batch_id)["abandonedContentObjects"]
+    reasons = {row["ref"]: row["reason"] for row in rows}
+    assert "publish_content_anchor_unavailable_after_homepage_filter" in reasons[article_ref]
+    assert "publish_content_anchor_unavailable_after_homepage_filter" in reasons[image_ref]
+    assert not (article_dir / "manifest.json").exists()
+    assert not (image_dir / "manifest.json").exists()
+
+
+def test_publish_anchor_pruning_skips_image_only_batch_without_homepage_quota():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec["content"]["quotas"]["entityHomepagesPerTarget"] = 0
+    spec["content"]["quotas"]["entityArticlesPerTarget"] = 0
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 1
+    spec["content"]["research"]["lanes"] = ["image"]
+    spec["content"]["carriers"] = ["image"]
+    store.save_spec(spec)
+
+    batch_id = "publish_anchor_prune_image_only"
+    ctx = _ctx(task_id, batch_id)
+    ctx.managed = True
+    ctx.release_only = True
+
+    image_ref = "image-only-without-homepage"
+    content_object.register_content_object(
+        task_id, batch_id, image_ref, content_type="image", angle="画报", title="图片-only 内容"
+    )
+    image_dir = content_object.content_object_dir(task_id, batch_id, image_ref)
+    image_dir.mkdir(parents=True, exist_ok=True)
+    write_json(
+        image_dir / "manifest.json",
+        {
+            "contentType": "image",
+            "carrier": "image",
+            "topicId": image_ref,
+            "entityRefs": ["/entity/地点/景区/测试图片景区"],
+            "tagRefs": ["景区"],
+            "assets": [],
+        },
+    )
+
+    assert run_mod._workflow_requires_publish_anchor_pruning(ctx) is False
+    assert run_mod._abandon_publish_content_anchor_shortfalls(ctx) == []
+    assert (image_dir / "manifest.json").is_file()
+
+
 def test_download_plan_source_shortfall_becomes_deterministic_after_fetch_rewind():
     task_id = _make_task()
     batch_id = "download_plan_source_shortfall_exhausted"
@@ -357,6 +463,149 @@ def test_run_pipeline_preserves_stage_state_deltas(monkeypatch):
     assert state["abandonedContentObjects"][0]["ref"] == f"{_EID}_planning_consultation"
     assert state["abandonedContentObjects"][0]["reason"].startswith("source_unavailable:")
 
+def test_run_pipeline_clears_target_set_rerun_marker_on_success(monkeypatch):
+    task_id = _make_task()
+    batch_id = "clear_target_set_marker_on_success"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["targetSetRequiresRerunFrom"] = "download_fetch"
+    state["targetSetInvalidatedStages"] = ["download_fetch"]
+    run_mod.save_workflow_state(state)
+    original_dag = run_mod.DAG
+    original_stage_names = run_mod.STAGE_NAMES
+    monkeypatch.setattr(
+        run_mod,
+        "DAG",
+        [("publish", run_mod.AUTO, lambda _ctx: run_mod.StageResult("publish", run_mod.AUTO, "done", "ok"))],
+    )
+    monkeypatch.setattr(run_mod, "STAGE_NAMES", ["publish"])
+    try:
+        assert run_mod.run_pipeline(ctx) == 0
+    finally:
+        monkeypatch.setattr(run_mod, "DAG", original_dag)
+        monkeypatch.setattr(run_mod, "STAGE_NAMES", original_stage_names)
+
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["status"] == "succeeded"
+    assert "targetSetRequiresRerunFrom" not in state
+    assert "targetSetInvalidatedStages" not in state
+
+
+def test_run_pipeline_writes_execution_metrics_before_completion_gate_failure(monkeypatch):
+    task_id = _make_task()
+    batch_id = "metrics_before_completion_gate_failure"
+    ctx = _ctx(task_id, batch_id)
+    original_dag = run_mod.DAG
+    original_stage_names = run_mod.STAGE_NAMES
+
+    def _fake_metrics(_ctx, state):
+        state["throughput"] = {"objectsPerHour": 12.5}
+        state["quality"] = {"firstPassRate": 1.0}
+
+    monkeypatch.setattr(
+        run_mod,
+        "DAG",
+        [("publish", run_mod.AUTO, lambda _ctx: run_mod.StageResult("publish", run_mod.AUTO, "done", "ok"))],
+    )
+    monkeypatch.setattr(run_mod, "STAGE_NAMES", ["publish"])
+    monkeypatch.setattr(run_mod, "_write_workflow_execution_metrics", _fake_metrics)
+    monkeypatch.setattr(run_mod, "_workflow_completion_issues", lambda _ctx, _state: ["forced gate failure"])
+    try:
+        assert run_mod.run_pipeline(ctx) == 1
+    finally:
+        monkeypatch.setattr(run_mod, "DAG", original_dag)
+        monkeypatch.setattr(run_mod, "STAGE_NAMES", original_stage_names)
+
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["status"] == "manual_required"
+    assert state["throughput"]["objectsPerHour"] == 12.5
+    assert state["quality"]["firstPassRate"] == 1.0
+    # gate issues 落独立字段，不得污染对象级 failedObjects（自嵌套根因）。
+    assert state["completionGateIssues"] == ["forced gate failure"]
+    assert state["failedObjects"] == []
+
+
+def test_run_pipeline_clears_stale_failed_objects_when_all_stages_completed(monkeypatch):
+    """completion gate 不得把历史 waiting 快照当未收口信号（H100 卡终态根因）。
+
+    时序：某轮 build_homepage waiting 时把「采纳门未过项」写进 failedObjects
+    并 rc=10 暂停；后续轮该 stage 收口标记 completed。最终轮 resume 时全部
+    stage 都在 completed 集合里被跳过（不触发 done 路径的清空），DAG 落入
+    completion gate —— 此时 failedObjects 必然是 stale 快照，不得据此把
+    workflow 打成 manual_required（rc=1），否则 run-recipe resume 循环永远
+    无法收口。同时 gate issues 不得写回 failedObjects 造成自嵌套污染。
+    """
+    task_id = _make_task()
+    batch_id = "stale_failed_objects_completion"
+    ctx = _ctx(task_id, batch_id)
+    original_dag = run_mod.DAG
+    original_stage_names = run_mod.STAGE_NAMES
+    monkeypatch.setattr(
+        run_mod,
+        "DAG",
+        [("publish", run_mod.AUTO, lambda _ctx: run_mod.StageResult("publish", run_mod.AUTO, "done", "ok"))],
+    )
+    monkeypatch.setattr(run_mod, "STAGE_NAMES", ["publish"])
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    # 模拟历史 waiting 快照残留：stage 已收口进 completed，但 failedObjects 未清。
+    state["completed"] = ["publish"]
+    state["waitingCheckpoint"] = None
+    state["failedObjects"] = [
+        "地点/景区/黄龙: page.md 缺失",
+        "地点/景区/武侯祠: manifest.json 缺失",
+    ]
+    run_mod.save_workflow_state(state)
+    try:
+        assert run_mod.run_pipeline(ctx) == 0
+    finally:
+        monkeypatch.setattr(run_mod, "DAG", original_dag)
+        monkeypatch.setattr(run_mod, "STAGE_NAMES", original_stage_names)
+
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["status"] == "succeeded"
+    assert state["failedObjects"] == []
+    # stale 快照须留审计痕迹，不允许静默丢弃。
+    assert state.get("staleFailedObjectsCleared")
+
+
+def test_run_pipeline_marks_reasoned_reject_completion_without_gating_success_rate(monkeypatch):
+    task_id = _make_task(
+        workflow_policy={
+            "elasticOverfetch": True,
+            "allowQuotaShortfall": True,
+            "allowContentQuotaShortfall": True,
+            "allowMinEntityShortfall": True,
+            "minBatchCompletionMode": "best_effort_with_reasoned_rejects",
+        }
+    )
+    batch_id = "completed_with_reasoned_rejects"
+    ctx = _ctx(task_id, batch_id)
+    run_mod.mark_abandoned_content_refs(
+        task_id,
+        batch_id,
+        [f"{_EID}_article_shortfall_2"],
+        stage="content_plan",
+        reason="fixture article source shortfall",
+    )
+    original_dag = run_mod.DAG
+    original_stage_names = run_mod.STAGE_NAMES
+    monkeypatch.setattr(
+        run_mod,
+        "DAG",
+        [("publish", run_mod.AUTO, lambda _ctx: run_mod.StageResult("publish", run_mod.AUTO, "done", "ok"))],
+    )
+    monkeypatch.setattr(run_mod, "STAGE_NAMES", ["publish"])
+    try:
+        assert run_mod.run_pipeline(ctx) == 0
+    finally:
+        monkeypatch.setattr(run_mod, "DAG", original_dag)
+        monkeypatch.setattr(run_mod, "STAGE_NAMES", original_stage_names)
+
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["status"] == "completed_with_reasoned_rejects"
+    assert state["abandonedContentObjects"][0]["ref"] == f"{_EID}_article_shortfall_2"
+
+
 def test_reset_stage_retries_records_infra_recovery():
     task_id = _make_task()
     batch_id = "retry_stage"
@@ -386,6 +635,8 @@ def test_reset_stage_retries_records_infra_recovery():
     assert state["failedObjects"] == []
     assert state["completed"] == ["download_plan", "download_fetch", "build_prepare"]
     assert state["reactRewinds"] == {"build_validate": 1, "content_plan": 2}
+    assert state["managedInfraRecoveryCutoffs"]["build_homepage"]
+    assert state["managedInfraRecoveryCutoffs"]["produce_author"]
     assert state["recoveryActions"][-1]["stage"] == "build_homepage"
     assert state["recoveryActions"][-1]["previous"]["infrastructureRetryCount"] == 3
     assert "content_plan" in state["recoveryActions"][-1]["previous"]["completed"]
@@ -457,7 +708,7 @@ def test_reset_stage_retries_reactivates_abandoned_content_refs_for_stage():
     assert row["reactivationReason"] == "cursor bridge recovered"
     assert run_mod._drafts_authored(ctx) == (False, [ref])
 
-def test_reset_stage_retries_reactivates_tail_stage_abandoned_objects():
+def test_reset_stage_retries_reactivates_only_retryable_tail_stage_abandoned_objects():
     task_id = _make_task()
     batch_id = "retry_content_plan_reactivates_abandoned"
     state = run_mod.load_workflow_state(task_id, batch_id)
@@ -474,6 +725,12 @@ def test_reset_stage_retries_reactivates_tail_stage_abandoned_objects():
             "entityId": "旧规则误判景区",
             "stage": "content_plan",
             "reason": "article source image shortfall",
+            "status": "abandoned",
+        },
+        {
+            "entityId": "桥接中断景区",
+            "stage": "content_plan",
+            "reason": "cursor bridge interrupted during content_plan",
             "status": "abandoned",
         },
     ]
@@ -499,10 +756,19 @@ def test_reset_stage_retries_reactivates_tail_stage_abandoned_objects():
         reason="content plan scoring rule fixed",
     )
 
-    assert report["reactivatedEntities"] == ["旧规则误判景区"]
+    assert report["reactivatedEntities"] == ["桥接中断景区"]
     assert report["reactivatedContentRefs"] == ["旧规则误判景区_planning_consultation"]
     recovered = run_mod.load_workflow_state(task_id, batch_id)
-    assert [row["entityId"] for row in recovered["abandonedObjects"]] == ["上游失败景区"]
+    assert [
+        row["entityId"]
+        for row in recovered["abandonedObjects"]
+        if row.get("status") == "abandoned"
+    ] == ["上游失败景区", "旧规则误判景区"]
+    assert [
+        row["entityId"]
+        for row in recovered["abandonedObjects"]
+        if row.get("status") == "retrying"
+    ] == ["桥接中断景区"]
     assert recovered["abandonedContentObjects"][0]["status"] == "retrying"
     assert "activeAutoResearch" not in recovered
 

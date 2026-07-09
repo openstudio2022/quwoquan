@@ -10,10 +10,10 @@
 
 `dev` 可以保留为开发脚手架别名，但不作为当前门禁基线。
 
-统一配置文件：`deploy/shared/process_domain_mapping.yaml`
+统一配置文件：`quwoquan_ops/environments/process_domain_mapping.yaml`
 
 部署目录分层：
-- `deploy/shared/`：端云共享部署契约
+- `quwoquan_ops/environments/`：端云共享部署契约
 - `deploy/service/`：服务端部署资产
 - `deploy/app/`：端侧发布资产
 
@@ -24,7 +24,7 @@
 - 对外接口仍按领域服务暴露（`/v1/content/*`、`/v1/chat/*` 等），不受部署拓扑影响
 - 不新增 `all-in-one/`、`content-only/` 目录，代码目录保持按领域服务组织
 - 模块化部署通过 `RuntimeModule` 与 `DeploymentPackage` 表达；onebox 是 package 组合，不是业务代码目录
-- `deploy/shared/module_package_mapping.yaml` 表达 `deploymentPackage -> modules`，并必须与 `process_domain_mapping.yaml` 的 domain 归属一致
+- `quwoquan_ops/environments/module_package_mapping.yaml` 表达 `deploymentPackage -> modules`，并必须与 `process_domain_mapping.yaml` 的 domain 归属一致
 - package 中 module 的 domain 必须属于该 package/process 的 domains
 - module 名称必须满足 `{domain}.{capability}`，例如 `chat.task_outbox_dispatcher`
 - 同一环境内 domain 仍只能归属一个 process/package，但一个 package 可组合多个 domain 的 module
@@ -49,7 +49,7 @@
 
 ## 验收标准
 
-- A1：`deploy/shared/process_domain_mapping.yaml` 可表达 alpha/beta/gamma/prod 四态拓扑
+- A1：`quwoquan_ops/environments/process_domain_mapping.yaml` 可表达 alpha/beta/gamma/prod 四态拓扑
 - A3：门禁可阻断 domain 重复归属与 beta/gamma/prod 漂移
 - A7：部署进程映射不改变领域 API 契约
 - A8：`make verify`/`make gate` 自动执行映射校验

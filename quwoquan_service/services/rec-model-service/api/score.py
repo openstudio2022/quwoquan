@@ -21,6 +21,7 @@ from api.metrics import (
     record_rec_request,
     refresh_rec_model_loaded_gauges,
 )
+from api.time_utils import utc_iso, utc_now
 from generated.models.request_response import (
     ModelScoreRequest,
     ModelScoreResponse,
@@ -56,7 +57,7 @@ def _get_scorers() -> dict[str, Any]:
         with _scorers_lock:
             if _scorers is None:
                 _scorers = _init_scorers()
-                _last_reload = datetime.utcnow()
+                _last_reload = utc_now()
     return _scorers
 
 
@@ -66,7 +67,7 @@ def _reload_scorers():
     new_scorers = _init_scorers()
     with _scorers_lock:
         _scorers = new_scorers
-        _last_reload = datetime.utcnow()
+        _last_reload = utc_now()
     clear_score_cache()
 
 
@@ -139,7 +140,7 @@ def reload_models() -> dict[str, Any]:
             continue
         v = getattr(s, "_model_version", getattr(s, "model_version", "unknown"))
         versions[key] = v
-    return {"status": "reloaded", "versions": versions, "reloaded_at": datetime.utcnow().isoformat()}
+    return {"status": "reloaded", "versions": versions, "reloaded_at": utc_iso()}
 
 
 @router.get("/v1/model/status")
@@ -154,7 +155,7 @@ def model_status() -> dict[str, Any]:
         versions[key] = v
     return {
         "versions": versions,
-        "last_reload": _last_reload.isoformat() if _last_reload else None,
+        "last_reload": utc_iso(_last_reload) if _last_reload else None,
         "reload_interval_s": _reload_interval_s,
     }
 

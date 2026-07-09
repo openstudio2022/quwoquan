@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
@@ -105,6 +106,7 @@ void main() {
 
     return ProviderScope(
       overrides: [
+        startupAuthRestoreGateProvider.overrideWith(_OpenStartupAuthGate.new),
         authSessionStoreProvider.overrideWithValue(
           _TestAuthSessionStore(authenticated: authenticated),
         ),
@@ -149,4 +151,9 @@ void main() {
     expect(find.text('LOGIN_PAGE'), findsNothing);
     expect(find.byKey(const Key('act-button')), findsOneWidget);
   });
+}
+
+final class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
+  @override
+  bool build() => true;
 }

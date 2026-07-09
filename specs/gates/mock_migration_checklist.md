@@ -1,7 +1,7 @@
 # Mock / Repository 迁移勾选表（后续整改）
 
 > 与 [`mock_production_separation_backlog.md`](mock_production_separation_backlog.md) 配套；**运行时策略**见下文 R1/R2。  
-> **契约包**：[`packages/quwoquan_cloud_contracts`](../../packages/quwoquan_cloud_contracts/)（首批 Circle + Content 抽象）。
+> **契约包**：[`quwoquan_app/packages/quwoquan_cloud_contracts`](../../quwoquan_app/packages/quwoquan_cloud_contracts/)（首批 Circle + Content 抽象）。
 
 ---
 
@@ -64,4 +64,4 @@ make verify-app-mock-isolation
 
 - [`mock_test_separation_roadmap.md`](mock_test_separation_roadmap.md)（波次与门禁）
 - [`mock_data_cloud_integration_policy.md`](mock_data_cloud_integration_policy.md)
-- 契约包：[`packages/quwoquan_cloud_contracts/README.md`](../../packages/quwoquan_cloud_contracts/README.md)
+- 契约包：[`quwoquan_app/packages/quwoquan_cloud_contracts/README.md`](../../quwoquan_app/packages/quwoquan_cloud_contracts/README.md)

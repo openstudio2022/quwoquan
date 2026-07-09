@@ -3,12 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
-import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
-import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
-import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
@@ -78,7 +72,7 @@ class _GroupManagePageState extends ConsumerState<GroupManagePage> {
   }
 
   void _showDissolveDialog() {
-    showCupertinoDialog<void>(
+    showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: Text(UITextConstants.dissolveGroupChat),

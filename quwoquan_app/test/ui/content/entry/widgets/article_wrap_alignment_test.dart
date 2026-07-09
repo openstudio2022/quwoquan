@@ -71,7 +71,9 @@ class _RealChainHarness extends StatelessWidget {
                               key: const ValueKey<String>('test_caption_wrap'),
                               padding: EdgeInsets.only(top: wd.captionSpacing),
                               child: SizedBox(
-                                key: const ValueKey<String>('test_caption_text'),
+                                key: const ValueKey<String>(
+                                  'test_caption_text',
+                                ),
                                 height: wd.captionHeight,
                               ),
                             ),
@@ -98,9 +100,9 @@ class _RealChainHarness extends StatelessWidget {
                       color: CupertinoColors.placeholderText,
                     ),
                     placeholder: placeholder,
-                    onChanged: (_, __) {},
+                    onChanged: (_, _) {},
                     onFocused: (_) {},
-                    onSelectionChanged: (_, __) {},
+                    onSelectionChanged: (_, _) {},
                   );
                 },
               ),
@@ -125,156 +127,189 @@ void main() {
   for (final imageLayout in <String>['wrapLeft', 'wrapRight']) {
     for (final width in <double>[280, 340, 430]) {
       group('$imageLayout 宽度=$width 无配文', () {
-      testWidgets('顶部对齐', (tester) async {
-        await tester.pumpWidget(_RealChainHarness(
-          text: longText,
-          captionText: '',
-          contentWidth: width,
-          imageLayout: imageLayout,
-        ));
-        await tester.pumpAndSettle();
+        testWidgets('顶部对齐', (tester) async {
+          await tester.pumpWidget(
+            _RealChainHarness(
+              text: longText,
+              captionText: '',
+              contentWidth: width,
+              imageLayout: imageLayout,
+            ),
+          );
+          await tester.pumpAndSettle();
 
-        final imageTop = tester
-            .getTopLeft(find.byKey(const ValueKey<String>('test_image')))
-            .dy;
-        final narrowTop = tester
-            .getTopLeft(
-                find.byKey(const ValueKey<String>('wrap_narrow_test')))
-            .dy;
-        final textVisualTop = narrowTop + halfLeading;
-        final diff = (imageTop - textVisualTop).abs();
-        expect(diff, lessThanOrEqualTo(1.0),
-            reason: 'w=$width 图片顶 $imageTop ≈ 文字视觉顶 $textVisualTop');
-      });
+          final imageTop = tester
+              .getTopLeft(find.byKey(const ValueKey<String>('test_image')))
+              .dy;
+          final narrowTop = tester
+              .getTopLeft(
+                find.byKey(const ValueKey<String>('wrap_narrow_test')),
+              )
+              .dy;
+          final textVisualTop = narrowTop + halfLeading;
+          final diff = (imageTop - textVisualTop).abs();
+          expect(
+            diff,
+            lessThanOrEqualTo(1.0),
+            reason: 'w=$width 图片顶 $imageTop ≈ 文字视觉顶 $textVisualTop',
+          );
+        });
 
-      testWidgets('底部对齐', (tester) async {
-        await tester.pumpWidget(_RealChainHarness(
-          text: longText,
-          captionText: '',
-          contentWidth: width,
-          imageLayout: imageLayout,
-        ));
-        await tester.pumpAndSettle();
+        testWidgets('底部对齐', (tester) async {
+          await tester.pumpWidget(
+            _RealChainHarness(
+              text: longText,
+              captionText: '',
+              contentWidth: width,
+              imageLayout: imageLayout,
+            ),
+          );
+          await tester.pumpAndSettle();
 
-        final imageBottom = tester
-            .getRect(find.byKey(const ValueKey<String>('test_image')))
-            .bottom;
-        final narrowBottom = tester
-            .getRect(
-                find.byKey(const ValueKey<String>('wrap_narrow_test')))
-            .bottom;
-        final textVisualBottom = narrowBottom - halfLeading;
-        final diff = (imageBottom - textVisualBottom).abs();
-        expect(diff, lessThanOrEqualTo(1.0),
-            reason: 'w=$width 图片底 $imageBottom ≈ 文字视觉底 $textVisualBottom');
-      });
+          final imageBottom = tester
+              .getRect(find.byKey(const ValueKey<String>('test_image')))
+              .bottom;
+          final narrowBottom = tester
+              .getRect(find.byKey(const ValueKey<String>('wrap_narrow_test')))
+              .bottom;
+          final textVisualBottom = narrowBottom - halfLeading;
+          final diff = (imageBottom - textVisualBottom).abs();
+          expect(
+            diff,
+            lessThanOrEqualTo(1.0),
+            reason: 'w=$width 图片底 $imageBottom ≈ 文字视觉底 $textVisualBottom',
+          );
+        });
 
-      testWidgets('下方间距', (tester) async {
-        await tester.pumpWidget(_RealChainHarness(
-          text: longText,
-          captionText: '',
-          contentWidth: width,
-          imageLayout: imageLayout,
-        ));
-        await tester.pumpAndSettle();
+        testWidgets('下方间距', (tester) async {
+          await tester.pumpWidget(
+            _RealChainHarness(
+              text: longText,
+              captionText: '',
+              contentWidth: width,
+              imageLayout: imageLayout,
+            ),
+          );
+          await tester.pumpAndSettle();
 
-        final belowFinder =
-            find.byKey(const ValueKey<String>('wrap_below_test'));
-        if (!tester.any(belowFinder)) return; // 短文可能没有 below
-        final narrowBottom = tester
-            .getRect(
-                find.byKey(const ValueKey<String>('wrap_narrow_test')))
-            .bottom;
-        final imageBottom = tester
-            .getRect(find.byKey(const ValueKey<String>('test_image')))
-            .bottom;
-        final belowTop = tester.getRect(belowFinder).top;
-        final rowBottom = math.max(imageBottom, narrowBottom);
-        final expected = articleParagraphSpacing();
-        final actual = belowTop - rowBottom;
-        expect(actual, greaterThanOrEqualTo(expected - 2.0),
-            reason: 'w=$width 下方间距 $actual ≥ $expected');
-        expect(actual, lessThanOrEqualTo(expected + 2.0),
-            reason: 'w=$width 下方间距 $actual ≤ $expected');
-      });
+          final belowFinder = find.byKey(
+            const ValueKey<String>('wrap_below_test'),
+          );
+          if (!tester.any(belowFinder)) return; // 短文可能没有 below
+          final narrowBottom = tester
+              .getRect(find.byKey(const ValueKey<String>('wrap_narrow_test')))
+              .bottom;
+          final imageBottom = tester
+              .getRect(find.byKey(const ValueKey<String>('test_image')))
+              .bottom;
+          final belowTop = tester.getRect(belowFinder).top;
+          final rowBottom = math.max(imageBottom, narrowBottom);
+          final expected = articleParagraphSpacing();
+          final actual = belowTop - rowBottom;
+          expect(
+            actual,
+            greaterThanOrEqualTo(expected - 2.0),
+            reason: 'w=$width 下方间距 $actual ≥ $expected',
+          );
+          expect(
+            actual,
+            lessThanOrEqualTo(expected + 2.0),
+            reason: 'w=$width 下方间距 $actual ≤ $expected',
+          );
+        });
       });
 
       group('$imageLayout 宽度=$width 有配文', () {
-      testWidgets('顶部对齐', (tester) async {
-        await tester.pumpWidget(_RealChainHarness(
-          text: longText,
-          captionText: '图片说明',
-          contentWidth: width,
-          imageLayout: imageLayout,
-        ));
-        await tester.pumpAndSettle();
+        testWidgets('顶部对齐', (tester) async {
+          await tester.pumpWidget(
+            _RealChainHarness(
+              text: longText,
+              captionText: '图片说明',
+              contentWidth: width,
+              imageLayout: imageLayout,
+            ),
+          );
+          await tester.pumpAndSettle();
 
-        final imageTop = tester
-            .getTopLeft(find.byKey(const ValueKey<String>('test_image')))
-            .dy;
-        final narrowTop = tester
-            .getTopLeft(
-                find.byKey(const ValueKey<String>('wrap_narrow_test')))
-            .dy;
-        final textVisualTop = narrowTop + halfLeading;
-        final diff = (imageTop - textVisualTop).abs();
-        expect(diff, lessThanOrEqualTo(1.0),
-            reason: 'w=$width 有配文 图片顶 $imageTop ≈ 文字视觉顶 $textVisualTop');
-      });
+          final imageTop = tester
+              .getTopLeft(find.byKey(const ValueKey<String>('test_image')))
+              .dy;
+          final narrowTop = tester
+              .getTopLeft(
+                find.byKey(const ValueKey<String>('wrap_narrow_test')),
+              )
+              .dy;
+          final textVisualTop = narrowTop + halfLeading;
+          final diff = (imageTop - textVisualTop).abs();
+          expect(
+            diff,
+            lessThanOrEqualTo(1.0),
+            reason: 'w=$width 有配文 图片顶 $imageTop ≈ 文字视觉顶 $textVisualTop',
+          );
+        });
 
-      testWidgets('底部对齐', (tester) async {
-        await tester.pumpWidget(_RealChainHarness(
-          text: longText,
-          captionText: '图片说明',
-          contentWidth: width,
-          imageLayout: imageLayout,
-        ));
-        await tester.pumpAndSettle();
+        testWidgets('底部对齐', (tester) async {
+          await tester.pumpWidget(
+            _RealChainHarness(
+              text: longText,
+              captionText: '图片说明',
+              contentWidth: width,
+              imageLayout: imageLayout,
+            ),
+          );
+          await tester.pumpAndSettle();
 
-        final captionBottom = tester
-            .getRect(
-                find.byKey(const ValueKey<String>('test_caption_wrap')))
-            .bottom;
-        final narrowBottom = tester
-            .getRect(
-                find.byKey(const ValueKey<String>('wrap_narrow_test')))
-            .bottom;
-        final textVisualBottom = narrowBottom - halfLeading;
-        final diff = (captionBottom - textVisualBottom).abs();
-        expect(diff, lessThanOrEqualTo(1.0),
-            reason:
-                'w=$width 有配文 配文底 $captionBottom ≈ 文字视觉底 $textVisualBottom');
-      });
+          final captionBottom = tester
+              .getRect(find.byKey(const ValueKey<String>('test_caption_wrap')))
+              .bottom;
+          final narrowBottom = tester
+              .getRect(find.byKey(const ValueKey<String>('wrap_narrow_test')))
+              .bottom;
+          final textVisualBottom = narrowBottom - halfLeading;
+          final diff = (captionBottom - textVisualBottom).abs();
+          expect(
+            diff,
+            lessThanOrEqualTo(1.0),
+            reason: 'w=$width 有配文 配文底 $captionBottom ≈ 文字视觉底 $textVisualBottom',
+          );
+        });
 
-      testWidgets('下方间距', (tester) async {
-        await tester.pumpWidget(_RealChainHarness(
-          text: longText,
-          captionText: '图片说明',
-          contentWidth: width,
-          imageLayout: imageLayout,
-        ));
-        await tester.pumpAndSettle();
+        testWidgets('下方间距', (tester) async {
+          await tester.pumpWidget(
+            _RealChainHarness(
+              text: longText,
+              captionText: '图片说明',
+              contentWidth: width,
+              imageLayout: imageLayout,
+            ),
+          );
+          await tester.pumpAndSettle();
 
-        final belowFinder =
-            find.byKey(const ValueKey<String>('wrap_below_test'));
-        if (!tester.any(belowFinder)) return;
-        final captionBottom = tester
-            .getRect(
-                find.byKey(const ValueKey<String>('test_caption_wrap')))
-            .bottom;
-        final narrowBottom = tester
-            .getRect(
-                find.byKey(const ValueKey<String>('wrap_narrow_test')))
-            .bottom;
-        final belowTop = tester.getRect(belowFinder).top;
-        final rowBottom = math.max(captionBottom, narrowBottom);
-        final expected = articleParagraphSpacing();
-        final actual = belowTop - rowBottom;
-        expect(actual, greaterThanOrEqualTo(expected - 2.0),
-            reason: 'w=$width 有配文 下方间距 $actual ≥ $expected');
-        expect(actual, lessThanOrEqualTo(expected + 2.0),
-            reason: 'w=$width 有配文 下方间距 $actual ≤ $expected');
-      });
+          final belowFinder = find.byKey(
+            const ValueKey<String>('wrap_below_test'),
+          );
+          if (!tester.any(belowFinder)) return;
+          final captionBottom = tester
+              .getRect(find.byKey(const ValueKey<String>('test_caption_wrap')))
+              .bottom;
+          final narrowBottom = tester
+              .getRect(find.byKey(const ValueKey<String>('wrap_narrow_test')))
+              .bottom;
+          final belowTop = tester.getRect(belowFinder).top;
+          final rowBottom = math.max(captionBottom, narrowBottom);
+          final expected = articleParagraphSpacing();
+          final actual = belowTop - rowBottom;
+          expect(
+            actual,
+            greaterThanOrEqualTo(expected - 2.0),
+            reason: 'w=$width 有配文 下方间距 $actual ≥ $expected',
+          );
+          expect(
+            actual,
+            lessThanOrEqualTo(expected + 2.0),
+            reason: 'w=$width 有配文 下方间距 $actual ≤ $expected',
+          );
+        });
       });
     }
   }
@@ -283,22 +318,26 @@ void main() {
 
   group('placeholder', () {
     testWidgets('窄文为空时显示 placeholder', (tester) async {
-      await tester.pumpWidget(const _RealChainHarness(
-        text: '',
-        captionText: '',
-        placeholder: '+ 想写点什么',
-      ));
+      await tester.pumpWidget(
+        const _RealChainHarness(
+          text: '',
+          captionText: '',
+          placeholder: '+ 想写点什么',
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('+ 想写点什么'), findsOneWidget);
     });
 
     testWidgets('窄文非空时不显示 placeholder', (tester) async {
-      await tester.pumpWidget(_RealChainHarness(
-        text: longText,
-        captionText: '',
-        placeholder: '+ 想写点什么',
-      ));
+      await tester.pumpWidget(
+        _RealChainHarness(
+          text: longText,
+          captionText: '',
+          placeholder: '+ 想写点什么',
+        ),
+      );
       await tester.pumpAndSettle();
 
       expect(find.text('+ 想写点什么'), findsNothing);

@@ -830,7 +830,7 @@ class _GlobalSearchPageState extends ConsumerState<GlobalSearchPage> {
   }
 
   Future<void> _confirmClearHistory() async {
-    final confirmed = await showCupertinoDialog<bool>(
+    final confirmed = await showAppCupertinoDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(

@@ -404,7 +404,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 			return config{}, fmt.Errorf("read env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, fmt.Errorf("read version config: %w", err)
 			}
@@ -422,7 +422,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 			return config{}, fmt.Errorf("read local env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join("..", "..", "..", "releases", "config", serviceName, configVersion+".yaml")
+			versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
 			if _, err := os.Stat(versionFile); err == nil {
 				if err := mergeConfigFile(&cfg, versionFile); err != nil {
 					return config{}, fmt.Errorf("read local version config: %w", err)
@@ -453,13 +453,13 @@ func loadReliableTaskCatalog(configRoot string) (reliabletask.Catalog, error) {
 	}
 	if strings.TrimSpace(configRoot) != "" {
 		pairs = append(pairs, pair{
-			catalog: filepath.Join(configRoot, "deploy", "shared", "reliable_task_module_catalog.yaml"),
-			policy:  filepath.Join(configRoot, "deploy", "shared", "reliable_task_retention_policy.yaml"),
+			catalog: filepath.Join(configRoot, "quwoquan_ops", "environments", "reliable_task_module_catalog.yaml"),
+			policy:  filepath.Join(configRoot, "quwoquan_ops", "environments", "reliable_task_retention_policy.yaml"),
 		})
 	}
 	pairs = append(pairs,
-		pair{catalog: "deploy/shared/reliable_task_module_catalog.yaml", policy: "deploy/shared/reliable_task_retention_policy.yaml"},
-		pair{catalog: "../deploy/shared/reliable_task_module_catalog.yaml", policy: "../deploy/shared/reliable_task_retention_policy.yaml"},
+		pair{catalog: "quwoquan_ops/environments/reliable_task_module_catalog.yaml", policy: "quwoquan_ops/environments/reliable_task_retention_policy.yaml"},
+		pair{catalog: "../quwoquan_ops/environments/reliable_task_module_catalog.yaml", policy: "../quwoquan_ops/environments/reliable_task_retention_policy.yaml"},
 	)
 	var lastErr error
 	for _, candidate := range pairs {

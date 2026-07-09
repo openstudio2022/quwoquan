@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer' as developer;
 import 'dart:io';
 
@@ -7,11 +6,11 @@ import 'package:quwoquan_app/assistant/observability/logging/app_log_paths.dart'
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 
-/// Periodically uploads local JSON-line log files to the OpsEvent backend.
+/// Periodically uploads local delimited log files to the OpsEvent backend.
 ///
 /// Strategy:
-/// - Scans day directories for *.ndjson files.
-/// - Reads up to [maxLinesPerBatch] lines per flush cycle.
+/// - Scans day directories for *.log files.
+/// - Reads up to [maxLinesPerBatch] records per flush cycle.
 /// - Converts each line to an [OpsEventRecordInput] with eventType = 'app_log'.
 /// - Deletes fully uploaded files; truncates partially consumed files.
 /// - Upload failures are silently logged; the file will be retried next cycle.
@@ -44,11 +43,9 @@ class AppLogUploader {
       final root = await _paths.rootDirectory();
       if (!root.existsSync()) return;
 
-      final dayDirs = root
-          .listSync()
-          .whereType<Directory>()
-          .toList(growable: false)
-        ..sort((a, b) => a.path.compareTo(b.path));
+      final dayDirs = root.listSync().whereType<Directory>().toList(
+        growable: false,
+      )..sort((a, b) => a.path.compareTo(b.path));
 
       var totalSent = 0;
       for (final dayDir in dayDirs) {
@@ -68,7 +65,7 @@ class AppLogUploader {
     final files = <File>[];
     try {
       for (final entity in dir.listSync(recursive: true)) {
-        if (entity is File && entity.path.endsWith('.ndjson')) {
+        if (entity is File && entity.path.endsWith('.log')) {
           files.add(entity);
         }
       }
@@ -80,16 +77,13 @@ class AppLogUploader {
   }
 
   Future<int> _uploadFile(File file, int maxLines) async {
-    List<String> lines;
+    List<String> records;
     try {
-      lines = file
-          .readAsLinesSync()
-          .where((line) => line.trim().isNotEmpty)
-          .toList(growable: false);
+      records = _readRecords(file);
     } catch (_) {
       return 0;
     }
-    if (lines.isEmpty) {
+    if (records.isEmpty) {
       try {
         file.deleteSync();
       } catch (_) {
@@ -98,31 +92,29 @@ class AppLogUploader {
       return 0;
     }
 
-    final batch = lines.take(maxLines).toList(growable: false);
+    final batch = records.take(maxLines).toList(growable: false);
     final events = <OpsEventRecordInput>[];
     final trace = AppTraceContextStore.instance;
     final now = DateTime.now().toUtc().toIso8601String();
+    final kind = _kindFor(file);
 
-    for (final line in batch) {
-      try {
-        final json = jsonDecode(line);
-        if (json is! Map<String, dynamic>) continue;
-        events.add(OpsEventRecordInput(
+    for (final record in batch) {
+      final parsed = _parseRecord(kind, record);
+      if (parsed == null) continue;
+      events.add(
+        OpsEventRecordInput(
           eventId: trace.newRequestId(),
           eventType: 'app_log',
-          eventName: (json['logType'] ?? 'unknown').toString(),
-          occurredAt: (json['timestamp'] ?? now).toString(),
+          eventName: (parsed['event'] ?? parsed['msg'] ?? 'unknown').toString(),
+          occurredAt: (parsed['ts'] ?? now).toString(),
           clientSentAt: now,
-          sessionId: (json['sessionId'] ?? trace.sessionId).toString(),
-          pageVisitId: (json['pageVisitId'] ?? '').toString(),
-          requestId: (json['requestId'] ?? '').toString(),
+          sessionId: trace.sessionId,
+          requestId: (parsed['req'] ?? '').toString(),
           producer: 'app.log_uploader',
           source: 'app_log',
-          payload: json,
-        ));
-      } catch (_) {
-        // Skip malformed lines
-      }
+          payload: parsed,
+        ),
+      );
     }
 
     if (events.isEmpty) return 0;
@@ -134,14 +126,14 @@ class AppLogUploader {
       return 0;
     }
 
-    if (batch.length >= lines.length) {
+    if (batch.length >= records.length) {
       try {
         file.deleteSync();
       } catch (_) {
         /* best-effort: 全量上传后删除日志文件失败可忽略，残留文件会在后续轮次重传去重 */
       }
     } else {
-      final remaining = '${lines.sublist(batch.length).join('\n')}\n';
+      final remaining = '${records.sublist(batch.length).join('\n')}\n';
       try {
         file.writeAsStringSync(remaining);
       } catch (_) {
@@ -149,5 +141,87 @@ class AppLogUploader {
       }
     }
     return batch.length;
+  }
+
+  List<String> _readRecords(File file) {
+    final records = <String>[];
+    final current = StringBuffer();
+    for (final line in file.readAsLinesSync()) {
+      if (line.trim().isEmpty) continue;
+      if (line.startsWith(' ') || line.startsWith('\t')) {
+        if (current.isNotEmpty) {
+          current.write('\n${line.trimLeft()}');
+        }
+        continue;
+      }
+      if (current.isNotEmpty) {
+        records.add(current.toString());
+        current.clear();
+      }
+      current.write(line);
+    }
+    if (current.isNotEmpty) {
+      records.add(current.toString());
+    }
+    return records;
+  }
+
+  String _kindFor(File file) {
+    final name = file.uri.pathSegments.isNotEmpty
+        ? file.uri.pathSegments.last
+        : file.path;
+    return name.endsWith('.log') ? name.substring(0, name.length - 4) : name;
+  }
+
+  Map<String, dynamic>? _parseRecord(String kind, String record) {
+    final lines = record.split('\n');
+    final first = lines.first;
+    final fields = switch (kind) {
+      'access' => const [
+        'ts',
+        'level',
+        'method',
+        'route',
+        'status',
+        'durMs',
+        'req',
+        'trace',
+        'msg',
+      ],
+      'exception' => const ['ts', 'level', 'err', 'req', 'trace', 'msg'],
+      'event' => const [
+        'ts',
+        'level',
+        'event',
+        'result',
+        'req',
+        'trace',
+        'msg',
+      ],
+      _ => const ['ts', 'level', 'msg'],
+    };
+    final values = _splitFixed(first, fields.length);
+    if (values.length != fields.length) return null;
+    final parsed = <String, dynamic>{};
+    for (var i = 0; i < fields.length; i += 1) {
+      parsed[fields[i]] = values[i];
+    }
+    if (lines.length > 1) {
+      parsed['msg'] = '${parsed['msg']}\n${lines.skip(1).join('\n')}';
+    }
+    return parsed;
+  }
+
+  List<String> _splitFixed(String line, int count) {
+    final values = <String>[];
+    var start = 0;
+    for (var i = 0; i < count - 1; i += 1) {
+      final index = line.indexOf(',', start);
+      if (index < 0) return const <String>[];
+      values.add(line.substring(start, index));
+      start = index + 1;
+    }
+    values.add(line.substring(start));
+    return values;
   }
 }

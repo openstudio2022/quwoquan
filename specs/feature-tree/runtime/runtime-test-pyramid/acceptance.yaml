@@ -7,14 +7,14 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-test-pyramid
 scope:
-  summary: 以 gamma-local + prod gray-initial 的 Journey/Page 用例为顶层真相源，向下约束
-    beta/gamma api_integration 与 alpha/local local_contract 的三层测试治理验收。
+  summary: 以 gamma-local + prod gray-initial 的 Journey/Page 用例为顶层真相源，向下约束 beta/gamma
+    api_integration 与 alpha/local local_contract 的三层测试治理验收。
   in_scope:
   - 三层 only 的层命名、case id、执行环境与状态语义
   - Journey/Page 顶层 case 模型及反向绑定要求
   - App / Service / Data / Ops canonical 三层目录与 tests.recorded 证据口径
-  - verify-test-specs / verify-test-directory-layout / verify-test-no-fake /
-    verify-test-coverage-map 与 make gate / make gate-full 收口
+  - verify-test-specs / verify-test-directory-layout / verify-test-no-fake / verify-test-coverage-map
+    与 make gate / make gate-full 收口
   - user_acceptance.page.* 页面矩阵与 metadata ui_surfaces / app_routes 同源
   out_of_scope:
   - 单个业务 Story 的具体产品行为细节
@@ -29,26 +29,26 @@ sit_acceptance:
     - specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod
     done_when:
     - gamma-local + prod gray-initial 的 Journey/Page user_acceptance 成为顶层真相源。
-    - 任一已完成的 user_acceptance case 都能反向绑定至少 1 个 local_contract 与 1 个
-      api_integration case。
-    - tests.recorded 只允许 canonical 三层根或 artifacts/tests/**/report.json，不再引用
-      legacy 测试路径。
-    - App / Service / Data / Ops 的 canonical 根已落地，并成为唯一执行/证据入口；inventory
-      pending=0，page matrix 不再缺 user_acceptance.page.*。
+    - 任一已完成的 user_acceptance case 都能反向绑定至少 1 个 local_contract 与 1 个 api_integration
+      case。
+    - tests.recorded 只允许 canonical 三层根或 artifacts/tests/**/report.json，不再引用 legacy
+      测试路径。
+    - App / Service / Data / Ops 的 canonical 根已落地，并成为唯一执行/证据入口；inventory pending=0，page
+      matrix 不再缺 user_acceptance.page.*。
     performance_points: []
     tests:
       planned:
-      - file: agent_ops/scaffold/generate_canonical_test_bridges.py
-      - file: agent_ops/scaffold/generate_test_directory_inventory.py
-      - command: python3 agent_ops/scaffold/verify_test_specs.py
-      - command: python3 agent_ops/scaffold/verify_test_directory_inventory.py
-      - command: python3 agent_ops/scaffold/verify_test_no_fake.py
-      - command: python3 agent_ops/scaffold/verify_test_coverage_map.py
+      - file: quwoquan_ops/gate/scaffold/generate_canonical_test_bridges.py
+      - file: quwoquan_ops/gate/scaffold/generate_test_directory_inventory.py
+      - command: python3 quwoquan_ops/gate/scaffold/verify_test_specs.py
+      - command: python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
+      - command: python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
+      - command: python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
       recorded:
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chatList/chatList_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_list/chat_list_page__user_acceptance_test.dart
       - file: quwoquan_service/services/chat-service/tests/api_integration/social_contacts_contract__api_integration_test.go
       - file: quwoquan_service/services/chat-service/tests/local_contract/test_directory_inventory__local_contract_test.go
-      - file: agent_ops/acceptance/api_integration/test_prod_deploy_contract__api_integration_test.py
+      - file: quwoquan_ops/tests/acceptance/api_integration/test_prod_deploy_contract__api_integration_test.py
     status: implemented
     test_evidence:
       primary:
@@ -87,21 +87,21 @@ sit_acceptance:
         envs:
         - prod_gray_initial
     notes:
-    - 2026-06-22 收口：specs/gates/test_directory_inventory.yaml 升级到 version 2，App
-      377 / Service 183 / Data 101 / agent_ops 9 个 legacy suite 全部 bridged，pending=0。
+    - 2026-06-22 收口：specs/gates/test_directory_inventory.yaml 升级到 version 2，App 377
+      / Service 183 / Data 101 / quwoquan_ops 9 个 legacy suite 全部 bridged，pending=0。
       该结论表示 canonical 三层根已接管执行/证据口径，不等于 legacy 测试文件已全部物理搬迁。
     - 2026-06-22 收口：specs/gates/user_acceptance_page_inventory.yaml 落地 28 个 metadata
       surface 与 route-only 归属，page-horizontal-quality acceptance 建立 user_acceptance.page.*
       页面矩阵。
-    - 2026-06-22 收口：normalize_acceptance_recorded_paths.py 回写 66 份 acceptance，清除
-      tests.recorded 对 legacy 路径、文档路径和脚本说明的主证据依赖。
-    - 2026-06-22 风险表述校准：R-TST01 关闭的是“治理执行面已收口”，R-TST02 关闭的是
-      “suite 归类已显式可追溯”；二者都不表示全仓 legacy 测试本体已停止存在。
+    - 2026-06-22 收口：normalize_acceptance_recorded_paths.py 回写 66 份 acceptance，清除 tests.recorded
+      对 legacy 路径、文档路径和脚本说明的主证据依赖。
+    - 2026-06-22 风险表述校准：R-TST01 关闭的是“治理执行面已收口”，R-TST02 关闭的是 “suite 归类已显式可追溯”；二者都不表示全仓
+      legacy 测试本体已停止存在。
 execution:
   local_gate:
-  - python3 agent_ops/scaffold/verify_test_specs.py
-  - python3 agent_ops/scaffold/verify_test_directory_inventory.py
-  - python3 agent_ops/scaffold/verify_test_no_fake.py
-  - python3 agent_ops/scaffold/verify_test_coverage_map.py
+  - python3 quwoquan_ops/gate/scaffold/verify_test_specs.py
+  - python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
+  - python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
+  - python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
   full_gate:
   - make gate-full

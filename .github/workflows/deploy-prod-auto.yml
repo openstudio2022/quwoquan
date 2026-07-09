@@ -18,13 +18,13 @@ on:
         required: false
         default: 'aliyun'
       from_image:
-        description: 'Current prod image (empty = resolve from state/release)'
+        description: 'Current prod image (empty = resolve from .qwq_output/local/release-state)'
         required: false
       to_image:
         description: 'Target image version'
         required: false
       from_config:
-        description: 'Current prod config (empty = resolve from state/release)'
+        description: 'Current prod config (empty = resolve from .qwq_output/local/release-state)'
         required: false
       to_config:
         description: 'Target config version'
@@ -118,7 +118,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: mainline-release-artifact
-          path: .mainline-release-artifact
+          path: .qwq_output/release/service/mainline
           run-id: ${{ steps.context.outputs.release_run_id }}
           repository: ${{ github.repository }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -133,11 +133,11 @@ jobs:
           repository: ${{ github.repository }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Regenerate release artifact locally when download missing
-        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        if: ${{ hashFiles('.qwq_output/release/service/mainline/manifest.json') == '' }}
         run: |
-          rm -rf .mainline-release-artifact
-          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
-            --output-dir .mainline-release-artifact \
+          rm -rf .qwq_output/release/service/mainline
+          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
+            --output-dir .qwq_output/release/service/mainline \
             --git-sha "${{ steps.context.outputs.head_sha }}" \
             --run-number "${{ github.run_number }}" \
             --repository "${{ github.repository }}" \
@@ -145,14 +145,14 @@ jobs:
             --image-version "${{ github.event.inputs.to_image }}" \
             --config-version "${{ github.event.inputs.to_config }}"
       - name: Unpack generated release snapshots
-        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') != '' }}
+        if: ${{ hashFiles('.qwq_output/release/service/mainline/manifest.json') != '' }}
         run: |
           python3 - <<'PY'
           import json
           import shutil
           from pathlib import Path
 
-          root = Path(".mainline-release-artifact")
+          root = Path(".qwq_output/release/service/mainline")
           manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
           for rel_path in manifest.get("releaseFiles", {}).values():
               src = root / rel_path
@@ -163,7 +163,7 @@ jobs:
       - name: Detect resolved release artifact
         id: artifact
         run: |
-          if [[ -f ".mainline-release-artifact/manifest.json" ]]; then
+          if [[ -f ".qwq_output/release/service/mainline/manifest.json" ]]; then
             echo "has_release_artifact=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_release_artifact=false" >> "$GITHUB_OUTPUT"
@@ -174,7 +174,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: resolved-mainline-release-artifact
-          path: .mainline-release-artifact/**
+          path: .qwq_output/release/service/mainline/**
           if-no-files-found: error
           compression-level: 0
       - name: Resolve rollout inputs
@@ -195,12 +195,12 @@ jobs:
           if [[ -z "$P95_MS" ]]; then P95_MS="100"; fi
           if [[ -z "$REDIS_ERROR_RATE" ]]; then REDIS_ERROR_RATE="0"; fi
           if [[ -z "$DRY_RUN" ]]; then DRY_RUN="false"; fi
-          if [[ -f ".mainline-release-artifact/manifest.json" ]]; then
+          if [[ -f ".qwq_output/release/service/mainline/manifest.json" ]]; then
             if [[ -z "$TO_IMG" ]]; then
               TO_IMG="$(python3 - <<'PY'
           import json
           from pathlib import Path
-          manifest = json.loads(Path(".mainline-release-artifact/manifest.json").read_text(encoding="utf-8"))
+          manifest = json.loads(Path(".qwq_output/release/service/mainline/manifest.json").read_text(encoding="utf-8"))
           print(str(manifest["versions"]["imageVersion"]))
           PY
               )"
@@ -209,21 +209,21 @@ jobs:
               TO_CFG="$(python3 - <<'PY'
           import json
           from pathlib import Path
-          manifest = json.loads(Path(".mainline-release-artifact/manifest.json").read_text(encoding="utf-8"))
+          manifest = json.loads(Path(".qwq_output/release/service/mainline/manifest.json").read_text(encoding="utf-8"))
           print(str(manifest["versions"]["configVersion"]))
           PY
               )"
             fi
-            ARTIFACT_NOTE="consumed 02 mainline-release-artifact"
+            ARTIFACT_NOTE="consumed 02 mainline service release artifact"
           fi
           if [[ -z "$TO_IMG" || -z "$TO_CFG" ]]; then
-            echo "::error::missing target image/config version; provide workflow inputs or a valid 02 mainline-release-artifact"
+            echo "::error::missing target image/config version; provide workflow inputs or a valid 02 mainline service release artifact"
             exit 1
           fi
-          STATE="state/release/seed-box.state"
+          STATE=".qwq_output/local/release-state/seed-box.state"
           if [[ -z "$FROM_IMG" || -z "$FROM_CFG" ]]; then
             if [[ ! -f "$STATE" ]]; then
-              eval "$(python3 agent_ops/deploy/prod/resolve_prod_release_state.py --output-format shell)"
+              eval "$(python3 quwoquan_ops/cli/prod/resolve_prod_release_state.py --output-format shell)"
               if [[ -z "$FROM_IMG" ]]; then FROM_IMG="$RESOLVED_FROM_IMAGE"; fi
               if [[ -z "$FROM_CFG" ]]; then FROM_CFG="$RESOLVED_FROM_CONFIG"; fi
               ARTIFACT_NOTE="${ARTIFACT_NOTE}; current prod resolved via ${RESOLVED_FROM_SOURCE_ACCOUNT}@${RESOLVED_FROM_SOURCE_HOST}"
@@ -245,10 +245,10 @@ jobs:
       - name: Parse gray_rollout_stages
         id: stages
         run: |
-          total=$(grep '^total_replicas:' deploy/shared/gray_rollout_stages.yaml | awk '{print $2}')
+          total=$(grep '^total_replicas:' quwoquan_ops/environments/gray_rollout_stages.yaml | awk '{print $2}')
           total=${total:-2}
-          r1=$(awk '/name: initial/,/replicas:/{if(/replicas:/){print $2;exit}}' deploy/shared/gray_rollout_stages.yaml)
-          r2=$(awk '/name: full/,/replicas:/{if(/replicas:/){print $2;exit}}' deploy/shared/gray_rollout_stages.yaml)
+          r1=$(awk '/name: initial/,/replicas:/{if(/replicas:/){print $2;exit}}' quwoquan_ops/environments/gray_rollout_stages.yaml)
+          r2=$(awk '/name: full/,/replicas:/{if(/replicas:/){print $2;exit}}' quwoquan_ops/environments/gray_rollout_stages.yaml)
           r1=${r1:-1}; r2=${r2:-2}
           s1=$((r1 * 100 / total)); s2=$((r2 * 100 / total))
           for x in 5 25 50 100; do [[ $s1 -le $x ]] && { s1=$x; break; }; done
@@ -283,43 +283,43 @@ jobs:
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
       - name: Verify topology/config contracts
         run: |
-          python3 agent_ops/deploy/stackctl.py verify \
+          python3 quwoquan_ops/cli/stackctl.py verify \
             --env alpha \
             --target alpha-local \
             --kind all \
             --tier t1 \
-            --report-dir artifacts/stackctl/alpha/mainline-verify
+            --report-dir .qwq_output/runs/alpha/mainline-verify
       - name: Package alpha environment
         run: |
-          python3 agent_ops/deploy/stackctl.py package \
+          python3 quwoquan_ops/cli/stackctl.py package \
             --env alpha \
             --include-services \
-            --report-dir artifacts/stackctl/alpha/mainline-package
+            --report-dir .qwq_output/runs/alpha/mainline-package
       - name: Bring up alpha-local
         run: |
-          python3 agent_ops/deploy/stackctl.py up \
+          python3 quwoquan_ops/cli/stackctl.py up \
             --target alpha-local \
-            --report-dir artifacts/stackctl/alpha/mainline-up
+            --report-dir .qwq_output/runs/alpha/mainline-up
       - name: Alpha full health
         run: |
-          python3 agent_ops/deploy/stackctl.py health \
+          python3 quwoquan_ops/cli/stackctl.py health \
             --target alpha-local \
             --scope full \
-            --report-dir artifacts/stackctl/alpha/mainline-health
+            --report-dir .qwq_output/runs/alpha/mainline-health
       - name: Alpha inspect
         if: always()
         run: |
-          python3 agent_ops/deploy/stackctl.py inspect \
+          python3 quwoquan_ops/cli/stackctl.py inspect \
             --target alpha-local \
             --scope all \
-            --report-dir artifacts/stackctl/alpha/mainline-inspect
+            --report-dir .qwq_output/runs/alpha/mainline-inspect
       - name: Upload alpha stackctl artifacts
         if: always()
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: mainline-auto-prod-alpha
-          path: artifacts/stackctl/alpha/**
+          path: .qwq_output/runs/alpha/**
           if-no-files-found: ignore
           compression-level: 0
       - id: finish
@@ -354,20 +354,20 @@ jobs:
       - name: Validate prod plane SSH credentials
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         run: |
-          python3 agent_ops/deploy/prod/validate_prod_plane_credentials.py --stage gray-initial
+          python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py --stage gray-initial
       - name: Download resolved release artifact
         if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: resolved-mainline-release-artifact
-          path: .mainline-release-artifact
+          path: .qwq_output/release/service/mainline
       - name: Regenerate release snapshot locally
-        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        if: ${{ hashFiles('.qwq_output/release/service/mainline/manifest.json') == '' }}
         run: |
-          rm -rf .mainline-release-artifact
-          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
-            --output-dir .mainline-release-artifact \
+          rm -rf .qwq_output/release/service/mainline
+          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
+            --output-dir .qwq_output/release/service/mainline \
             --git-sha "${{ needs.prepare.outputs.head_sha }}" \
             --run-number "${{ github.run_number }}" \
             --repository "${{ github.repository }}" \
@@ -375,14 +375,14 @@ jobs:
             --image-version "${{ needs.prepare.outputs.to_image }}" \
             --config-version "${{ needs.prepare.outputs.to_config }}"
       - name: Unpack generated release snapshots
-        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') != '' }}
+        if: ${{ hashFiles('.qwq_output/release/service/mainline/manifest.json') != '' }}
         run: |
           python3 - <<'PY'
           import json
           import shutil
           from pathlib import Path
 
-          root = Path(".mainline-release-artifact")
+          root = Path(".qwq_output/release/service/mainline")
           manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
           for rel_path in manifest.get("releaseFiles", {}).values():
               src = root / rel_path
@@ -397,7 +397,7 @@ jobs:
         env:
           PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
         run: |
-          python3 agent_ops/deploy/stackctl.py deploy \
+          python3 quwoquan_ops/cli/stackctl.py deploy \
             --target prod-hosted \
             --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
             --service seed-box \
@@ -416,7 +416,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mainline-auto-prod-prod-initial
-          path: artifacts/stackctl/prod/**
+          path: .qwq_output/runs/prod/**
           if-no-files-found: ignore
           compression-level: 0
       - id: finish
@@ -442,20 +442,20 @@ jobs:
       - name: Validate prod plane SSH credentials
         if: ${{ needs.prepare.outputs.dry_run != 'true' }}
         run: |
-          python3 agent_ops/deploy/prod/validate_prod_plane_credentials.py --stage full
+          python3 quwoquan_ops/cli/prod/validate_prod_plane_credentials.py --stage full
       - name: Download resolved release artifact
         if: ${{ needs.prepare.outputs.has_release_artifact == 'true' }}
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: resolved-mainline-release-artifact
-          path: .mainline-release-artifact
+          path: .qwq_output/release/service/mainline
       - name: Regenerate release snapshot locally
-        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        if: ${{ hashFiles('.qwq_output/release/service/mainline/manifest.json') == '' }}
         run: |
-          rm -rf .mainline-release-artifact
-          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
-            --output-dir .mainline-release-artifact \
+          rm -rf .qwq_output/release/service/mainline
+          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
+            --output-dir .qwq_output/release/service/mainline \
             --git-sha "${{ needs.prepare.outputs.head_sha }}" \
             --run-number "${{ github.run_number }}" \
             --repository "${{ github.repository }}" \
@@ -463,14 +463,14 @@ jobs:
             --image-version "${{ needs.prepare.outputs.to_image }}" \
             --config-version "${{ needs.prepare.outputs.to_config }}"
       - name: Unpack generated release snapshots
-        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') != '' }}
+        if: ${{ hashFiles('.qwq_output/release/service/mainline/manifest.json') != '' }}
         run: |
           python3 - <<'PY'
           import json
           import shutil
           from pathlib import Path
 
-          root = Path(".mainline-release-artifact")
+          root = Path(".qwq_output/release/service/mainline")
           manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
           for rel_path in manifest.get("releaseFiles", {}).values():
               src = root / rel_path
@@ -485,7 +485,7 @@ jobs:
         env:
           PROD_TEST_AUTH_TOKEN: ${{ secrets.PROD_TEST_AUTH_TOKEN }}
         run: |
-          python3 agent_ops/deploy/stackctl.py deploy \
+          python3 quwoquan_ops/cli/stackctl.py deploy \
             --target prod-hosted \
             --cloud-provider "${{ needs.prepare.outputs.cloud_provider }}" \
             --service seed-box \
@@ -504,7 +504,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mainline-auto-prod-prod-full
-          path: artifacts/stackctl/prod/**
+          path: .qwq_output/runs/prod/**
           if-no-files-found: ignore
           compression-level: 0
       - id: finish
@@ -606,7 +606,7 @@ jobs:
           PROD_FULL="${PROD_FULL_SECONDS:-0}"
           CRITICAL_PATH_SECONDS=$(( DELIVERY + ALPHA + BETA + PROD_INITIAL + PROD_FULL ))
           COMMIT_TO_PROD_SECONDS=$(( SERVICE_PIPELINE + CRITICAL_PATH_SECONDS ))
-          python3 agent_ops/ci/render_ci_timing_summary.py \
+          python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 07.mainline_auto_prod \
             --title "07. Deploy To Prod (Auto)" \
             --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
@@ -616,16 +616,16 @@ jobs:
             --phase "prod_initial_checks=${PROD_INITIAL}" \
             --phase "prod_full=${PROD_FULL}" \
             --note "目标版本来源：${{ needs.prepare.outputs.artifact_note }}；主链 checkout 已锁定到触发 02 的 main commit。" \
-            --write-json "artifacts/ci-timing/mainline-auto-prod-summary.json" \
+            --write-json ".qwq_output/runs/ci-timing/mainline-auto-prod-summary.json" \
             --write-step-summary
-          python3 agent_ops/ci/render_ci_timing_summary.py \
+          python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 07.main_commit_to_prod \
             --title "Main Commit To Prod" \
             --critical-path-seconds "${COMMIT_TO_PROD_SECONDS}" \
             --phase "service_pipeline_02=${SERVICE_PIPELINE}" \
             --phase "mainline_auto_prod_07=${CRITICAL_PATH_SECONDS}" \
             --note "真实 commit-to-prod = 02.service_pipeline + 07.mainline_auto_prod；15 分钟承诺以该总和为准。" \
-            --write-json "artifacts/ci-timing/main-commit-to-prod-summary.json" \
+            --write-json ".qwq_output/runs/ci-timing/main-commit-to-prod-summary.json" \
             --write-step-summary
           if [ "${CRITICAL_PATH_SECONDS}" -gt 900 ]; then
             echo "::error::mainline_auto_prod critical_path_seconds=${CRITICAL_PATH_SECONDS} exceeds 900s budget"
@@ -638,18 +638,18 @@ jobs:
       - name: Render environment chain timing diagnostics
         if: always()
         run: |
-          python3 agent_ops/ci/render_environment_chain_timing_diagnostics.py \
+          python3 quwoquan_ops/ci/render_environment_chain_timing_diagnostics.py \
             --service-pipeline-root ".service-pipeline-timing" \
             --delivery-gate-root ".delivery-gate-timing" \
             --beta-summary-root ".beta-device-timing" \
-            --mainline-summary "artifacts/ci-timing/mainline-auto-prod-summary.json" \
-            --commit-summary "artifacts/ci-timing/main-commit-to-prod-summary.json" \
+            --mainline-summary ".qwq_output/runs/ci-timing/mainline-auto-prod-summary.json" \
+            --commit-summary ".qwq_output/runs/ci-timing/main-commit-to-prod-summary.json" \
             --alpha-stackctl-root ".mainline-alpha" \
             --beta-stackctl-root ".mainline-beta" \
             --prod-initial-stackctl-root ".mainline-prod-initial" \
             --prod-full-stackctl-root ".mainline-prod-full" \
-            --write-json "artifacts/ci-timing/environment-chain-timing-diagnostics.json" \
-            --write-markdown "artifacts/ci-timing/environment-chain-timing-diagnostics.md" \
+            --write-json ".qwq_output/runs/ci-timing/environment-chain-timing-diagnostics.json" \
+            --write-markdown ".qwq_output/runs/ci-timing/environment-chain-timing-diagnostics.md" \
             --write-step-summary \
             --emit-annotations
       - name: Upload mainline timing summaries
@@ -659,8 +659,8 @@ jobs:
         with:
           name: mainline-auto-prod-timing-summaries
           path: |
-            artifacts/ci-timing/*.json
-            artifacts/ci-timing/*.md
+            .qwq_output/runs/ci-timing/*.json
+            .qwq_output/runs/ci-timing/*.md
           if-no-files-found: error
           compression-level: 0
       - name: Assert promotion stages

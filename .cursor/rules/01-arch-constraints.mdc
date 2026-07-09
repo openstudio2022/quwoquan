@@ -184,7 +184,7 @@ class RemoteXxxRepository implements XxxRepository {
 
 **禁止行为**：
 - Mock 实现禁止发 HTTP 请求
-- alpha Mock 数据必须来自 `contracts/metadata/**/test_fixtures` 与 `_shared/test_fixtures/app_alpha_seed_manifest.json`；禁止在 UI、Provider、脚本新增第二套业务列表
+- alpha Mock 数据必须来自 `quwoquan_service/contracts/metadata/**/test_fixtures` 与 `_shared/test_fixtures/app_alpha_seed_manifest.json`；禁止在 UI、Provider、脚本新增第二套业务列表
 - Remote 实现必须使用 `CloudRuntimeConfig.gatewayBaseUrl`，禁止硬编码 URL
 - Remote 实现必须使用 metadata/codegen 生成的 path builder、operation 常量、surface 常量；禁止硬编码 path、`pageId`、`surfaceId`、`operationId`
 - Remote 请求头必须来自统一 header builder（过渡期可兼容 `forPage(pageId)`，但 `pageId` 也必须是 codegen 常量，禁止字符串字面量）
@@ -235,7 +235,7 @@ final xxxRepositoryProvider = Provider<XxxRepository>((ref) {
 > `lib/features/` 已废弃，**新建领域服务及页面必须在 `lib/ui/{domain}/` 下**，与 metadata 领域对齐。
 
 ```
-lib/ui/{domain}/              # domain 与 contracts/metadata 一致
+lib/ui/{domain}/              # domain 与 quwoquan_service/contracts/metadata 一致
 ├── pages/          # 必须存在（页面入口 Widget）
 ├── providers/      # 状态管理（Riverpod Notifier/Provider）
 ├── widgets/        # 页面专属子组件
@@ -283,7 +283,7 @@ lib/ui/content/entry/               # 创作入口，归属 content 域
 新增一个云服务 Repository 时，以下必须全部完成：
 
 ```
-☐ contracts/metadata/{entity}/service.yaml 已定义 API
+☐ quwoquan_service/contracts/metadata/{entity}/service.yaml 已定义 API
 ☐ make codegen-app 已生成 DTO
 ☐ lib/cloud/services/{domain}/{domain}_repository.dart 已创建（三层模式）
 ☐ Abstract 接口方法与 service.yaml API 一一对应
@@ -324,7 +324,7 @@ lib/ui/content/entry/               # 创作入口，归属 content 域
 | `internal/domain/{entity}.go` struct | `cloud/models/{entity}_dto.dart` | `fields.yaml` |
 | `internal/domain/{entity}_events.go` | `cloud/events/{entity}_events.dart` | `events.yaml` |
 | `internal/adapters/http/{entity}_handler.go` routes | `cloud/services/{domain}/{domain}_repository.dart` Abstract 方法 | `service.yaml` |
-| `runtime/errors` 错误码 | App 端 codegen 错误枚举 / runtime mapper | `contracts/metadata/{domain}/{entity}/errors.yaml` |
+| `runtime/errors` 错误码 | App 端 codegen 错误枚举 / runtime mapper | `quwoquan_service/contracts/metadata/{domain}/{entity}/errors.yaml` |
 | `runtime/interceptor` 字段策略 | `cloud/runtime/field_policy.dart` | `fields.yaml` |
 
 ### 3.2 metadata↔代码同步
@@ -335,7 +335,7 @@ lib/ui/content/entry/               # 创作入口，归属 content 域
 
 ### 3.3 错误码 metadata 约束
 
-错误码与用户可见文案**唯一定义于** `contracts/metadata/{domain}/{entity}/errors.yaml`，禁止在业务代码中硬编码。
+错误码与用户可见文案**唯一定义于** `quwoquan_service/contracts/metadata/{domain}/{entity}/errors.yaml`，禁止在业务代码中硬编码。
 
 | 层级 | 必须使用 | 禁止 |
 |------|----------|------|
@@ -373,7 +373,7 @@ metadata YAML → make verify → make codegen → 业务逻辑 → make test-co
 
 ### 4.1 部署拓扑映射约束（新增）
 
-部署映射唯一真相：`deploy/shared/process_domain_mapping.yaml`
+部署映射唯一真相：`quwoquan_ops/environments/process_domain_mapping.yaml`
 
 结构：
 ```yaml
@@ -409,17 +409,17 @@ environments:
 | App 端客户端 | `quwoquan_app/scripts/<domain>/` | `quwoquan_app/scripts/runtime/`、`quwoquan_app/scripts/content/` |
 | 云侧服务 | `quwoquan_service/scripts/<domain>/` | `quwoquan_service/scripts/deploy/`、`quwoquan_service/scripts/runtime/observability/` |
 | 数据工程 | `quwoquan_data/scripts/<domain>/` | `quwoquan_data/scripts/verify/`、`quwoquan_data/scripts/e2e/` |
-| 通用运维/CI/部署 | `agent_ops/<domain>/` | `agent_ops/gate/`、`agent_ops/ci/`、`agent_ops/deploy/` |
+| 通用运维/CI/部署 | `quwoquan_ops/<domain>/` | `quwoquan_ops/gate/`、`quwoquan_ops/ci/`、`quwoquan_ops/cli/` |
 
 **禁止行为**：
 - 禁止在仓库根目录创建 `scripts/` 目录
-- 禁止在 `agent_ops/` 下新增 `scripts/` 子目录（`agent_ops` 本身即脚本顶层）
+- 禁止在 `quwoquan_ops/` 下新增 `scripts/` 子目录（`quwoquan_ops` 本身即脚本顶层）
 - 新增脚本必须归入上表对应领域子目录；不确定归属时先在 PR 中说明
 
 ### 5.2 门禁
 
-- `agent_ops/scaffold/verify_engineering_directory.sh` 通过 `engineering_directory_manifest.yaml` 校验必要目录，`scripts` 已从 `required_directories` 中移除、替换为 `agent_ops`。
-- 如需添加仓库级脚本结构检查，在 `agent_ops/gate/gate_repo.sh` 中增加 `[ ! -d scripts ] || { echo "FAIL: scripts/ 禁止平铺"; exit 1; }` 等价校验。
+- `quwoquan_ops/gate/scaffold/verify_engineering_directory.sh` 通过 `engineering_directory_manifest.yaml` 校验必要目录，`scripts` 已从 `required_directories` 中移除、替换为 `quwoquan_ops`。
+- 如需添加仓库级脚本结构检查，在 `quwoquan_ops/gate/gate_repo.sh` 中增加 `[ ! -d scripts ] || { echo "FAIL: scripts/ 禁止平铺"; exit 1; }` 等价校验。
 
 ### 5.3 数据工程 CLI-first + Skill 范式（强制）
 

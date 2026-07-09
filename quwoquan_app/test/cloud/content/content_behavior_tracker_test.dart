@@ -118,6 +118,37 @@ void main() {
       expect(repo.recorded.first.duration, equals(3.5));
     });
 
+    test('works_image_pageflip_motion 上报舒适度 motion 字段', () async {
+      tracker.trackWorksImagePageflipMotion(
+        'post_image_1',
+        direction: 'forward',
+        motionProfile: 'comfort_curl',
+        settleMs: 384,
+        reducedMotion: false,
+        committed: true,
+        contentType: 'photo',
+        feedRequestId: 'feed_req_1',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.contentDepth);
+      expect(event.state, 'works_image_pageflip_motion');
+      expect(event.motionDirection, 'forward');
+      expect(event.motionProfile, 'comfort_curl');
+      expect(event.settleMs, 384);
+      expect(event.reducedMotion, isFalse);
+      expect(event.committed, isTrue);
+      expect(event.duration, 0.384);
+      final json = event.toJson();
+      expect(json['state'], 'works_image_pageflip_motion');
+      expect(json['direction'], 'forward');
+      expect(json['motionProfile'], 'comfort_curl');
+      expect(json['settleMs'], 384);
+      expect(json['reducedMotion'], isFalse);
+      expect(json['committed'], isTrue);
+    });
+
     test('达到 maxBatchSize 时自动 flush', () async {
       for (var i = 0; i < 5; i++) {
         tracker.trackClick('post_$i');
@@ -282,6 +313,10 @@ void main() {
         authorId: 'u_lin',
         referralSource: ReferralSource.authorProfile,
         tags: const <String>['relationship/sharedFollowees'],
+        feedRequestId: 'feed_req_video_book',
+        channelId: 'premium_stream',
+        rankingVersion: 'rank-v-video-book',
+        reasonVersion: 'reason-v-video-book',
         intersectionId: 'ix_1',
         intersectionDimension: 'relationship',
         intersectionSourceRef: 'sharedFollowees',
@@ -299,6 +334,10 @@ void main() {
       expect(event.contentId, equals('u_lin'));
       expect(event.authorId, equals('u_lin'));
       expect(event.referralSource, equals(ReferralSource.authorProfile));
+      expect(event.feedRequestId, equals('feed_req_video_book'));
+      expect(event.channelId, equals('premium_stream'));
+      expect(event.rankingVersion, equals('rank-v-video-book'));
+      expect(event.reasonVersion, equals('reason-v-video-book'));
       expect(event.intersectionId, equals('ix_1'));
       expect(event.intersectionDimension, equals('relationship'));
       expect(event.intersectionSourceRef, equals('sharedFollowees'));
@@ -450,6 +489,53 @@ void main() {
       tracker.trackAssistantInterest(const <String>['', '  ']);
       await tracker.flush();
       expect(repo.recorded, isEmpty);
+    });
+
+    test('wishlist_add 写入对象上下文与归因，支撑 coWishlistedEntity 事实源', () async {
+      tracker.trackWishlistAdd(
+        'homepage_west_lake',
+        objectKind: 'homepage',
+        displayName: '西湖日落机位',
+        sourceSurface: 'object_homepage',
+        feedRequestId: 'frq_wish_1',
+        position: 2,
+        referralSource: ReferralSource.entityPage,
+        channelId: 'recommend',
+        rankingVersion: 'rank-v-wishlist',
+      );
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.wishlistAdd);
+      expect(event.state, 'interaction');
+      expect(event.contentId, 'homepage_west_lake');
+      expect(event.objectId, 'homepage_west_lake');
+      expect(event.objectKind, 'homepage');
+      expect(event.displayName, '西湖日落机位');
+      expect(event.sourceSurface, 'object_homepage');
+      expect(event.entityRefs, <String>['homepage_west_lake']);
+      final json = event.toJson();
+      expect(json['action'], 'wishlist_add');
+      expect(json['objectId'], 'homepage_west_lake');
+      expect(json['objectKind'], 'homepage');
+      expect(json['displayName'], '西湖日落机位');
+      expect(json['sourceSurface'], 'object_homepage');
+      expect(json['feedRequestId'], 'frq_wish_1');
+      expect(json['referralSource'], 'entity_page');
+    });
+
+    test('wishlist_remove 写 removed 语义，空对象不上报', () async {
+      tracker.trackWishlistAdd('', objectKind: 'homepage');
+      tracker.trackWishlistRemove('homepage_west_lake', objectKind: 'homepage');
+      await tracker.flush();
+
+      final event = repo.recorded.single;
+      expect(event.action, BehaviorAction.wishlistRemove);
+      expect(event.state, 'negative');
+      expect(event.contentId, 'homepage_west_lake');
+      expect(event.objectId, 'homepage_west_lake');
+      expect(event.objectKind, 'homepage');
+      expect(event.toJson()['action'], 'wishlist_remove');
     });
   });
 }

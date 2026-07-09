@@ -13,7 +13,7 @@ scope:
   - 本地 gamma 语义镜像栈（DB/Redis/核心服务/media/TLS 反代）启停与健康前置检查
   - 本地 local_contract->user_acceptance 左移：真实 HTTP API、存储副作用、错误码、RemoteRepository 解码与模拟器/真机
     Patrol 核心旅程
-  - 提交前报告 artifacts/local-gamma/report.json，指向 deploy/shared/gamma_validation_suites.json
+  - 提交前报告 artifacts/local-gamma/report.json，指向 quwoquan_ops/environments/gamma_validation_suites.json
   - 与 prod 同构的工作负载图谱解释（同 Service 名、路由前缀、数据面 Service 名/DSN 变量）
   out_of_scope:
   - 替代云侧 gamma 的 K8s/Ingress/Secret/云观测/多云 overlay
@@ -46,11 +46,11 @@ gwt_acceptance:
     - 缺设备/DNS/TLS 时必须 GATE_BLOCK 而非静默跳过。
     - dry-run 模式仅产出 dry-run 报告，不得伪装为真实左移通过。
     contract_refs:
-    - deploy/shared/gamma_validation_suites.json
+    - quwoquan_ops/environments/gamma_validation_suites.json
     - quwoquan_app/scripts/gamma/verify_local_gamma_mirror.py
     - quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json
     - quwoquan_service/docker-compose.gamma-local.yaml
-    - deploy/shared/workload_topology_inventory.yaml
+    - quwoquan_ops/environments/workload_topology_inventory.yaml
     - quwoquan_service/scripts/deploy/verify_gamma_local_prod_consistency.py
     performance_points:
     - gamma-local 为提交前左移链，不计入 main 阻断关键路径预算。
@@ -116,8 +116,8 @@ gwt_acceptance:
     edge_cases:
     - prod gray-initial 不可见设备/平台时不得默认通过，但已发现平台必须全部成功。
     contract_refs:
-    - deploy/shared/gamma_validation_suites.json
-    - deploy/shared/environment_topology_manifest.yaml
+    - quwoquan_ops/environments/gamma_validation_suites.json
+    - quwoquan_ops/environments/environment_topology_manifest.yaml
     performance_points:
     - prod gray-initial 远端复验置信度优先，不计入提交前左移时延预算。
     tests:
@@ -143,7 +143,7 @@ gwt_acceptance:
     - '[migrated_from_planned] prod gray-initial rollout stage 承接真实远端集成与 curated 媒体路由复验链路。'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

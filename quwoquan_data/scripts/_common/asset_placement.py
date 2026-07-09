@@ -243,6 +243,148 @@ def place_assets_in_markdown(
     return frontmatter + new_content
 
 
+_RELATED_HEADING = "## 相关图片"
+
+
+def _strip_asset_figure_blocks(content: str, asset_id: str) -> str:
+    """剥离正文中引用指定 asset 的 figure 块与裸 asset:// 行（封面去重用）。"""
+    if not asset_id:
+        return content
+    escaped = re.escape(asset_id)
+    # 完整 figure 块。
+    content = re.sub(
+        rf"^:::figure[^\n]*\nasset://(?:\S*/)?{escaped}\s*\n:::\s*$",
+        "",
+        content,
+        flags=re.M,
+    )
+    # 裸引用行。
+    content = re.sub(rf"^asset://(?:\S*/)?{escaped}\s*$", "", content, flags=re.M)
+    return re.sub(r"\n{3,}", "\n\n", content)
+
+
+def place_homepage_assets_in_markdown(
+    body: str,
+    assets: Sequence[dict[str, Any]],
+    *,
+    placements: Sequence[Mapping[str, Any]] | None = None,
+) -> str:
+    """实体主页三段契约注入（区别于文章链路的 place_assets_in_markdown）。
+
+    契约（百科主页结构化计划 §6/§7/§10）：
+    - 封面只在 frontmatter `coverImage` 声明，正文不重复展示封面。
+    - 正文内嵌图唯一形态 = 块级 `:::figure layout="fullWidth"`（禁 wrapLeft/wrapRight），
+      仅原图注（一行）；无原图注的图不得进正文；每章节最多 1 张。
+    - 其余合格图全部进文末固定 `## 相关图片` 章节的单个 `:::gallery`（grid）。
+    - 就地改写 asset["role"]：cover 保持；进正文的标 inline；其余标 related。
+
+    幂等：正文已引用的 asset 不重复注入（其 role 标 inline）。
+    """
+    frontmatter, content = _split_frontmatter(body or "")
+    valid_assets = [a for a in (assets or []) if _asset_id(a)]
+    if not valid_assets:
+        return body or ""
+
+    # 封面只在 frontmatter：Agent/旧链路把封面 figure 内联进正文时，代码侧剥离
+    # （结构真相源在代码不在模型）。
+    for asset in valid_assets:
+        if str(asset.get("role") or "") == "cover":
+            content = _strip_asset_figure_blocks(content, _asset_id(asset))
+
+    referenced = referenced_asset_ids(content)
+    placement_by_id: dict[str, Mapping[str, Any]] = {}
+    for placement in placements or []:
+        ref = str(placement.get("assetId") or placement.get("assetRef") or "").strip()
+        if ref:
+            placement_by_id[ref.split("/")[-1]] = placement
+
+    lines = content.split("\n")
+    section_lines: list[tuple[str, int]] = []
+    for idx, line in enumerate(lines):
+        heading = match_heading(line)
+        if heading is None:
+            continue
+        level, title = heading
+        if level >= 2:
+            section_lines.append((slugify_section(title), idx))
+
+    inserts: dict[int, list[str]] = {}
+
+    def _queue(after_line: int, block: list[str]) -> None:
+        inserts.setdefault(after_line, [])
+        inserts[after_line].extend(["", *block])
+
+    used_section_lines: set[int] = set()
+    related: list[dict[str, Any]] = []
+    section_cursor = 0
+    seq = 2
+
+    for asset in valid_assets:
+        asset_id = _asset_id(asset)
+        role = str(asset.get("role") or "")
+        if role == "cover":
+            # 封面只在 frontmatter；若正文误引用由结构门拦截。
+            asset["imageLayout"] = "fullWidth"
+            continue
+        if asset_id in referenced:
+            asset["role"] = "inline"
+            asset["imageLayout"] = "fullWidth"
+            continue
+        caption = str(asset.get("caption") or "")
+        # 无原图注（或退化 caption）不得作正文解释图 → 页尾相关图片。
+        if not caption.strip() or _caption_is_degraded(caption, file_name=str(asset.get("fileName") or "")):
+            asset["role"] = "related"
+            related.append(asset)
+            continue
+        placement = placement_by_id.get(asset_id)
+        target_line = -1
+        if placement is not None:
+            slug = slugify_section(str(placement.get("sectionSlug") or ""))
+            for s_slug, s_line in section_lines:
+                if s_slug and slug and s_line not in used_section_lines and (
+                    s_slug == slug or s_slug.startswith(slug) or slug.startswith(s_slug)
+                ):
+                    target_line = s_line
+                    break
+        if target_line < 0:
+            # 顺序分配到尚未配图的章节（每章节最多 1 张内嵌图）。
+            while section_cursor < len(section_lines) and section_lines[section_cursor][1] in used_section_lines:
+                section_cursor += 1
+            if section_cursor < len(section_lines):
+                target_line = section_lines[section_cursor][1]
+                section_cursor += 1
+        if target_line < 0:
+            asset["role"] = "related"
+            related.append(asset)
+            continue
+        used_section_lines.add(target_line)
+        asset["role"] = "inline"
+        asset["imageLayout"] = "fullWidth"
+        _queue(
+            target_line,
+            _figure_block(asset_id, layout="fullWidth", caption=caption, fig_id=_figure_id("", seq)),
+        )
+        seq += 1
+
+    for after_line in sorted(inserts.keys(), reverse=True):
+        block = inserts[after_line]
+        lines[after_line + 1 : after_line + 1] = block
+
+    out_lines = lines
+    if related:
+        ids = ",".join(_asset_id(a) for a in related)
+        gallery_block = ["", _RELATED_HEADING, "", f':::gallery ids="{ids}" layout="grid"', ":::"]
+        for a in related:
+            a["imageLayout"] = "grid"
+        out_lines = out_lines + gallery_block
+
+    new_content = "\n".join(out_lines)
+    new_content = re.sub(r"\n{3,}", "\n\n", new_content)
+    if not new_content.endswith("\n"):
+        new_content += "\n"
+    return frontmatter + new_content
+
+
 def _caption_is_degraded(caption: str, *, file_name: str = "") -> bool:
     """caption 是否退化（文件名占位 / 原文标记残留 / 英文拉丁主导，缺中文语义）。
 
@@ -278,7 +420,11 @@ def caption_semantic_issues(
     *,
     label: str = "",
 ) -> list[str]:
-    """manifest.assets caption 语义门：禁止空/纯文件名/等于 fileName stem。"""
+    """manifest.assets caption 语义门：禁止纯文件名/无语义 caption。
+
+    role=related（页尾相关图片）允许空 caption——契约「无原图注不加说明，禁止虚构」；
+    cover/inline 必须有非退化 caption（cover 由 finalize 兜底实体名，inline 依赖原图注）。
+    """
     issues: list[str] = []
     prefix = f"{label}: " if label else ""
     for asset in assets or []:
@@ -287,6 +433,9 @@ def caption_semantic_issues(
         asset_id = str(asset.get("assetId") or asset.get("id") or "").strip()
         caption = str(asset.get("caption") or "").strip()
         file_name = str(asset.get("fileName") or "").strip()
+        role = str(asset.get("role") or "").strip()
+        if not caption and role == "related":
+            continue
         if _caption_is_degraded(caption, file_name=file_name):
             issues.append(
                 f"{prefix}asset {asset_id or file_name or '<unknown>'} caption 退化为文件名或无语义: {caption!r}"

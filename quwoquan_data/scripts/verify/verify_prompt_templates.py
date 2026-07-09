@@ -26,7 +26,13 @@ if str(SCRIPTS_ROOT) not in sys.path:
 
 from _common import prompt_render as pr  # noqa: E402
 
-FAMILIES = ("article_author", "entity_homepage", "image_curation", "review_repair")
+FAMILIES = (
+    "article_author",
+    "entity_homepage",
+    "homepage_source_judge",
+    "image_curation",
+    "review_repair",
+)
 
 # scripts 中允许出现 prompt 渲染调用、但禁止硬编码 prompt 正文的迁移函数（必须经 render()）。
 RENDER_CALLERS = {

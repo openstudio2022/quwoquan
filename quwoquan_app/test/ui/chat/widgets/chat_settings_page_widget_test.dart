@@ -80,10 +80,37 @@ void main() {
       expect(find.text(UITextConstants.groupCapabilityMembers), findsNothing);
       expect(find.text('我'), findsWidgets);
       expect(find.text('李明'), findsOneWidget);
-      expect(
-        find.text('${UITextConstants.chatInfoTitle}(15)'),
-        findsOneWidget,
+      expect(find.text('${UITextConstants.chatInfoTitle}(15)'), findsOneWidget);
+    });
+
+    testWidgets('摄影爱好者圈子标题人数与成员网格一致', (tester) async {
+      _suppressImageErrors();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: _chatTestOverrides(MockChatRepository()),
+          child: MaterialApp.router(
+            routerConfig: GoRouter(
+              initialLocation: '/chat/conv_003/settings',
+              routes: [
+                GoRoute(
+                  path: '/chat/:id/settings',
+                  builder: (_, state) => Scaffold(
+                    body: ChatSettingsPage(
+                      conversationId: state.pathParameters['id'] ?? 'conv_003',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      expect(find.text('${UITextConstants.chatInfoTitle}(3)'), findsOneWidget);
+      expect(find.text('张华'), findsOneWidget);
+      expect(find.text('李明'), findsOneWidget);
     });
 
     testWidgets('退出群聊使用 SettingsInsetCenteredActionRow', (tester) async {

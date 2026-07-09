@@ -153,7 +153,7 @@ jobs:
           if [ "${EVENT_NAME}" = "pull_request" ]; then
             PROFILE="pr_light"
           fi
-          python3 agent_ops/ci/resolve_gamma_validation_profile.py \
+          python3 quwoquan_ops/ci/resolve_gamma_validation_profile.py \
             --profile "${PROFILE}" \
             --github-output "$GITHUB_OUTPUT" >/tmp/app-env-device-matrix-profile.json
           DEFAULT_ENV_JSON="$(python3 - <<'PY'
@@ -189,7 +189,7 @@ jobs:
           PY
           )"
           DEFAULT_GAMMA_BASE_URL="$(python3 - <<'PY'
-          from agent_ops.deploy.lib.environment_topology import get_target, load_environment_topology
+          from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
 
           topology = load_environment_topology()
           public_bases = get_target(topology, 'gamma-local').get('publicBases') or {}
@@ -395,10 +395,10 @@ jobs:
           git -C "${REPO_DIR}" fetch --depth=1 origin "${GITHUB_SHA}"
           git -C "${REPO_DIR}" checkout --force --detach FETCH_HEAD
           git -C "${REPO_DIR}" sparse-checkout init --cone
-          git -C "${REPO_DIR}" sparse-checkout set agent_ops deploy packages quwoquan_app quwoquan_service
+          git -C "${REPO_DIR}" sparse-checkout set quwoquan_ops quwoquan_app quwoquan_service specs docs
           git -C "${REPO_DIR}" read-tree -mu HEAD
           git -C "${REPO_DIR}" clean -ffdx
-          test -f "${REPO_DIR}/agent_ops/assistant/run_assistant_device_matrix_ci.py"
+          test -f "${REPO_DIR}/quwoquan_service/services/assistant-service/tests/ops/ci/run_assistant_device_matrix_ci.py"
           rm -rf "${GITHUB_WORKSPACE}/repo"
           ln -s "${REPO_DIR}" "${GITHUB_WORKSPACE}/repo"
       - name: 记录发现结果
@@ -411,17 +411,6 @@ jobs:
           if [ "${{ runner.os }}" != "macOS" ]; then
             echo "::error::05 已统一要求运行在本机 macOS self-hosted runner，当前为 ${{ runner.os }}"
             exit 2
-          fi
-      - name: 准备 personal_assistant/.env
-        working-directory: ${{ github.workspace }}/repo
-        run: |
-          if [ -d quwoquan_app/personal_assistant ]; then
-            mkdir -p quwoquan_app/personal_assistant
-            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-            else
-              : > quwoquan_app/personal_assistant/.env
-            fi
           fi
       - uses: actions/setup-java@v4
         with:
@@ -475,10 +464,10 @@ jobs:
           START_APP: "0"
         run: |
           set -euo pipefail
-          python3 agent_ops/deploy/stackctl.py package --env beta --include-services --report-dir artifacts/stackctl/beta/mainline-package
-          python3 agent_ops/deploy/stackctl.py up --target beta-local --report-dir artifacts/stackctl/beta/mainline-up
-          python3 agent_ops/deploy/stackctl.py health --target beta-local --scope full --report-dir artifacts/stackctl/beta/mainline-health
-          python3 agent_ops/deploy/stackctl.py inspect --target beta-local --scope all --report-dir artifacts/stackctl/beta/mainline-inspect
+          python3 quwoquan_ops/cli/stackctl.py package --env beta --include-services --report-dir .qwq_output/runs/beta/mainline-package
+          python3 quwoquan_ops/cli/stackctl.py up --target beta-local --report-dir .qwq_output/runs/beta/mainline-up
+          python3 quwoquan_ops/cli/stackctl.py health --target beta-local --scope full --report-dir .qwq_output/runs/beta/mainline-health
+          python3 quwoquan_ops/cli/stackctl.py inspect --target beta-local --scope all --report-dir .qwq_output/runs/beta/mainline-inspect
       - id: run_matrix
         name: Run mobile matrix environments
         working-directory: ${{ github.workspace }}/repo
@@ -522,7 +511,7 @@ jobs:
                 export API_CONTRACT_ENV="${env_name}"
                 set +e
                 if [ "${matrix_kind}" = "chat-avatar" ]; then
-                  python3 agent_ops/avatar/run_chat_avatar_device_matrix_ci.py --platform "${platform}"
+                  python3 quwoquan_service/services/chat-service/tests/ops/ci/run_chat_avatar_device_matrix_ci.py --platform "${platform}"
                   matrix_exit_code=$?
                 elif [ "${matrix_kind}" = "environment-smoke" ]; then
                   smoke_supported=1
@@ -565,7 +554,7 @@ jobs:
                       ;;
                   esac
                   if [ "${smoke_supported}" = "1" ]; then
-                    python3 agent_ops/deploy/smoke/run_environment_patrol_smoke.py \
+                    python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py \
                       --env-name "${smoke_env_alias}" \
                       --runtime-env "${smoke_runtime_env}" \
                       --api-contract-env "${smoke_runtime_env}" \
@@ -575,13 +564,13 @@ jobs:
                       --media-base-url "${smoke_media_base_url}" \
                       --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-local-${env_name}-token}" \
                       --platform "${platform}" \
-                      --report "artifacts/device-matrix/environment-smoke/${env_name}-${platform}.json"
+                      --report ".qwq_output/runs/${env_name}/device-matrix/environment-smoke-${platform}.json"
                     matrix_exit_code=$?
                   else
                     matrix_exit_code=2
                   fi
                 else
-                  python3 agent_ops/assistant/run_assistant_device_matrix_ci.py --platform "${platform}"
+                  python3 quwoquan_service/services/assistant-service/tests/ops/ci/run_assistant_device_matrix_ci.py --platform "${platform}"
                   matrix_exit_code=$?
                 fi
                 set -e
@@ -636,12 +625,8 @@ jobs:
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
-            ${{ github.workspace }}/repo/artifacts/device-matrix/*-android.json
-            ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
-            ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
-            ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
-            ${{ github.workspace }}/repo/artifacts/device-matrix/environment-smoke/**
-            ${{ github.workspace }}/repo/artifacts/stackctl/beta/**
+            ${{ github.workspace }}/repo/.qwq_output/runs/*/device-matrix/**
+            ${{ github.workspace }}/repo/.qwq_output/runs/beta/**
           if-no-files-found: ignore
           compression-level: 0
       - name: Teardown beta-local stack after mainline auto prod
@@ -649,9 +634,9 @@ jobs:
         continue-on-error: true
         working-directory: ${{ github.workspace }}/repo
         run: |
-          python3 agent_ops/deploy/stackctl.py down \
+          python3 quwoquan_ops/cli/stackctl.py down \
             --target beta-local \
-            --report-dir artifacts/stackctl/beta/mainline-down
+            --report-dir .qwq_output/runs/beta/mainline-down
       - name: Retry mobile matrix report upload
         if: always() && steps.upload_mobile_matrix_report.outcome == 'failure'
         continue-on-error: true
@@ -659,12 +644,8 @@ jobs:
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
-            ${{ github.workspace }}/repo/artifacts/device-matrix/*-android.json
-            ${{ github.workspace }}/repo/artifacts/device-matrix/*-ios.json
-            ${{ github.workspace }}/repo/artifacts/device-matrix/assistant_device_matrix_logs/**
-            ${{ github.workspace }}/repo/artifacts/device-matrix/chat-avatar/**
-            ${{ github.workspace }}/repo/artifacts/device-matrix/environment-smoke/**
-            ${{ github.workspace }}/repo/artifacts/stackctl/beta/**
+            ${{ github.workspace }}/repo/.qwq_output/runs/*/device-matrix/**
+            ${{ github.workspace }}/repo/.qwq_output/runs/beta/**
           if-no-files-found: ignore
           compression-level: 0
           overwrite: true
@@ -702,25 +683,25 @@ jobs:
         run: |
           if [ "${SELF_HOSTED_ENABLED}" != "true" ]; then
             echo "critical_path_seconds=0" >> "$GITHUB_OUTPUT"
-            python3 agent_ops/ci/render_ci_timing_summary.py \
+            python3 quwoquan_ops/ci/render_ci_timing_summary.py \
               --gate-key 05.app_env_device_matrix_pr \
               --title "05. App Env Device Matrix" \
               --critical-path-seconds 0 \
               --phase "pr_default_skip=0" \
               --note "PR 默认跳过 self-hosted mobile matrix；启用后以 discover + 设备矩阵 artifacts 为准。" \
-              --write-json "artifacts/ci-timing/app-env-device-matrix-summary.json" \
+              --write-json ".qwq_output/runs/ci-timing/app-env-device-matrix-summary.json" \
               --write-step-summary
           else
             CRITICAL_PATH_SECONDS=$(( ${DISCOVER_SECONDS:-0} + ${MOBILE_SECONDS:-0} ))
             echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
-            python3 agent_ops/ci/render_ci_timing_summary.py \
+            python3 quwoquan_ops/ci/render_ci_timing_summary.py \
               --gate-key 05.app_env_device_matrix_pr \
               --title "05. App Env Device Matrix" \
               --critical-path-seconds "${CRITICAL_PATH_SECONDS:-0}" \
               --phase "discover_devices=${DISCOVER_SECONDS:-0}" \
               --phase "mobile_matrix=${MOBILE_SECONDS:-0}" \
               --note "self-hosted matrix 已统一为单 runner 单 checkout 的 mobile job；PR 默认允许缺席平台跳过，已发现的平台必须成功，详细耗时保存在 device-matrix artifacts。" \
-              --write-json "artifacts/ci-timing/app-env-device-matrix-summary.json" \
+              --write-json ".qwq_output/runs/ci-timing/app-env-device-matrix-summary.json" \
               --write-step-summary
           fi
       - name: 汇总并阻断失败项
@@ -744,7 +725,7 @@ jobs:
           if [ "${ALLOW_MISSING_PLATFORMS}" = "true" ]; then
             args+=(--allow-missing-platforms)
           fi
-          python3 agent_ops/avatar/check_device_matrix_gate.py \
+          python3 quwoquan_ops/ci/device_matrix/check_gate.py \
             --discover-result "${DISCOVER}" \
             --android-result "${ANDROID}" \
             --ios-result "${IOS}" \
@@ -763,7 +744,7 @@ jobs:
         if: ${{ always() && (github.event_name != 'pull_request' || vars.ENABLE_SELF_HOSTED_MOBILE_MATRIX == 'true') }}
         continue-on-error: true
         run: |
-          python3 agent_ops/avatar/verify_device_matrix_evidence.py \
+          python3 quwoquan_service/services/chat-service/tests/ops/gate/verify_device_matrix_evidence.py \
             --artifact-root "${RUNNER_TEMP}/app-env-device-matrix-artifacts" \
             --report-glob "**/*-android.json" \
             --report-glob "**/*-ios.json"
@@ -773,6 +754,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-env-device-matrix-timing-summary
-          path: artifacts/ci-timing/app-env-device-matrix-summary.json
+          path: .qwq_output/runs/ci-timing/app-env-device-matrix-summary.json
           if-no-files-found: error
           compression-level: 0

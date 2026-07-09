@@ -129,7 +129,7 @@ gwt_acceptance:
     - 仍不能宣称 GWT2 完成：真实 product-ops API -> Redis events.ops -> content-service Mongo rm_premium_pool -> /v1/content/feed 的 api_integration、user_acceptance 和 Gamma/UAT 仍为 planned。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

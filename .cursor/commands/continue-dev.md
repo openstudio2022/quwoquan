@@ -9,7 +9,7 @@ description: 规划就绪后进入开发验证，或开发完成后复盘遗留�
 
 目标：把「规划就绪 → 开发 → 验证」与「开发完成 → 复盘 → 盘点遗留/风险 → 新一轮规划 → 再开发」收敛为一个持续开发闭环。执行时按最资深软件工程师标准裁决方案，零技术债，严格测试收口。
 
-真相源：`specs/00_MASTER_DEVELOPMENT_FLOW.md`、特性树 `spec.md/design.md/acceptance.yaml`、`contracts/metadata/**`、`docs/outstanding_risks_backlog.md`、`.cursor/rules/**`。
+真相源：`specs/00_MASTER_DEVELOPMENT_FLOW.md`、特性树 `spec.md/design.md/acceptance.yaml`、`quwoquan_service/contracts/metadata/**`、`docs/outstanding_risks_backlog.md`、`.cursor/rules/**`。
 
 ## 两个使用场景
 
@@ -26,7 +26,7 @@ description: 规划就绪后进入开发验证，或开发完成后复盘遗留�
 ## 硬约束
 
 - **裁决最优方案**：争议由 Agent 主动裁决；以 DDD 领域模型、契约正确性、可扩展性、可维护性为准，不以工作量大小为准。
-- **metadata-first**：字段、错误码、path、surface、operation、route、decoder context 以 `contracts/metadata/**` 为唯一真相源，先 verify/codegen，再写业务逻辑。
+- **metadata-first**：字段、错误码、path、surface、operation、route、decoder context 以 `quwoquan_service/contracts/metadata/**` 为唯一真相源，先 verify/codegen，再写业务逻辑。
 - **克制不过度设计**：不为单场景硬编码，也不为假想场景新增旁路分支、第二真相源或无必要抽象。
 - **零技术债**：强相关技术债当轮清理；不保留 v1/v2 并存、shim、fallback、allowlist 扩张、死代码、弱类型穿透、空 catch、手改 codegen 或 UI 直连 Mock。
 - **诚实完成**：未达成就标记 `GATE_BLOCK`，不得用新规划掩盖旧缺口，不得以「后续补」「临时兼容」「先绕过 gate」作为完成定义。

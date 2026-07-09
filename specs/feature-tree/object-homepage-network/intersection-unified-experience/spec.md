@@ -11,9 +11,9 @@
 |---|---|---|
 | S1 首页推荐 | `home-recommend-intersection-redesign` | feed 卡 + spotlight |
 | S2 他人主页 | `user-profile-intersection-redesign`（他人） | 为什么推荐TA |
-| S2 我的主页 | `user-profile-intersection-redesign`（我的） | 我的连接 / 我的影响力 |
-| S3 实体主页 | `entity-homepage-intersection-redesign` | 我的交集 + 影响力 |
-| S4 圈子主页 | `circle-homepage-intersection-redesign` | 我的交集 + 影响力 |
+| S2 我的主页 | `user-profile-intersection-redesign`（我的） | 我的交集 / 我打动的人 |
+| S3 实体主页 | `entity-homepage-intersection-redesign` | 我的交集 + 这里打动的人 |
+| S4 圈子主页 | `circle-homepage-intersection-redesign` | 我的交集 + 圈子打动的人 |
 | S3/S4 端云闭环 | `object-homepage-gamma-real-data-closure` | gamma-local 真实 bundle / impact / object intersections |
 | S5 全局搜索 | `search-intersection-consumption` | 交集 Tab + 发现区分组 |
 | 横切 | `intersection-sentence-unification` | primaryText 单句 + G2 |
@@ -115,10 +115,10 @@
 
 | 面 | 主表达 | 具象化要点 |
 |---|---|---|
-| A 我的主页 | 我的连接（lifecycle 分桶弱标）+ 我的影响力（传播视图） | 四槽样板首落；author_impact 路径节点 + secondarySpread 计数 |
-| B 用户主页(他人) | 为什么推荐TA + TA的影响力 | 证据组叠 lifecycle 弱标 + 句内头像 |
-| C 实体主页 | 我的交集 + 影响力 + 记录流单句 | 复用 ObjectIntersectionSection；对象封面缩略图；影响数字可枚举来源 |
-| D 圈子主页 | 我的交集 + 影响力 | circle_impact 接统一三件套（解决 G4）+ 成员/讨论/记录可追溯 |
+| A 我的主页 | 我的交集（lifecycle 分桶弱标）+ 我打动的人（传播视图） | 四槽样板首落；author_impact 路径节点 + secondarySpread 计数 |
+| B 用户主页(他人) | 为什么推荐TA + TA打动的人 | 证据组叠 lifecycle 弱标 + 句内头像 |
+| C 实体主页 | 我的交集 + 这里打动的人 + 记录流单句 | 复用 ObjectIntersectionSection；对象封面缩略图；影响数字可枚举来源 |
+| D 圈子主页 | 我的交集 + 圈子打动的人 | circle_impact 接统一三件套（解决 G4）+ 成员/讨论/记录可追溯 |
 | E 首页 post | post 卡内单句 chip | 紧凑：1 句 + lifecycle 仅「新」，不堆叠 |
 
 ### 赞红线翻转（§21.9）
@@ -129,3 +129,15 @@
 
 - 本期（契约草案 + 端原型）：metadata 草案字段 + `codegen-app` 端 DTO + 端共享组件/Mock/A–E UI 原型 + 端测试。契约标「草案/未冻结」。
 - 后置（云侧）：数据源采集、Graph 加权真算、Lifecycle 状态机、多跳 Propagation、coLiked 预投影、Selection 数值化、Remote 填充。
+
+## v3 可行动交集基线（商用化对齐 2026-07-01）
+
+> 真相源：`specs/product/intersection-definition-and-application.md` §24 与 `specs/00_GLOBAL_TERMINOLOGY.md` §3「产品主轴」。本节是 L2 能力对 v3 的承接，不另起真相源。
+
+- **产品主轴**：别人帮你刷内容，我们帮你遇到对的人。本能力所有交集触点服务「把内容消费与出行意图转化为可证、安全、可沉淀的同趣关系」；北极星为「可行动交集完成 / 关系形成」，非 DAU。
+- **商用滩头**：旅行 + 摄影「同趣搭子」先行（对齐 §22 `vertical=travel_photography`）；架构横向通用，商用先落单垂类 + 单城密度。
+- **七触点统一矩阵**（密度 + 行动重心，详见 §24.8）：视频书底部单句 / 首页紧凑 chip / 用户主页证据组 / 我的主页收件箱 / 圈子主页证据卡 + 成员簇 / 实体主页证据卡 + 记录单句 / 交集配对 launcher（不产候选）。四主页表达仍复用 `ObjectIntersectionSection` / `ObjectIntersectionCard`，不新增第四套抽象。前台用户维度收敛为「交集 / 打动」、入口统一「交集配对」、收件箱统一「我的交集」；“今日”只作最小时间粒度的次级说明，机器标识 `interest_match / impact` 内部保留（详见 `00_GLOBAL_TERMINOLOGY.md` §18.7）。
+- **C0 差异化必做切片**：共同想去 → 约伴（`coWishlistedEntity` + `start_companion`），用已有 wishlist / 关注 / 交集信号，不依赖新 LBS / 实时；`start_companion` 走 safetyGate，未满足优雅降级为查看证据 / 进入对象；deferred 的附近 / 实时 / 线下局不进正式可执行 UI（对应 UAT-8）。
+- **触点审计（工作包 B，2026-07-01 完成；工作包 C，2026-07-02 完成 + PM/UX 签字返工）**：七触点端侧现状 + P0/P1 断点 + 第二真相源风险清单见 `intersection-definition-and-application.md` §24.13。C 已收敛四主页统一表达与对象页行动分发：云侧 actionHint 四字段下发；`IntersectionTargetNavigator.openActionHint` 按 `dispatch/targetAvailability` 分发，navigate/assistant 的 login 等门不在交集组件拦截，导航到承接页由承接页复用既有 gate + `AuthContinuation` 续接（§15），关注/加入/进入讨论/看共同来源等 login 门轻行动恢复可见可点（修复首版「login 门行动被系统性隐藏」P0）；`message/companion/connect` 无真实卡内 handler 时诚实不显示、deferred 不执行，死参数 gateResolver/gated 已移除（R26）；`ObjectIntersectionPreviewCard` 运行时退化为 `ObjectIntersectionSection` 薄包装。剩余 P0：`start_companion` 真实约伴承接仍归 C0，`message_person` 私信承接在 userProfile 页、归后续社交连接工作包，端云真实数据依赖 R-IX05。
+- **前置与现状**：v3 三大差异化断点根因在契约模型缺位（safetyGate / moment 意图时态 / 行动阶梯），已通过 **M0 契约模型硬化**（metadata-first）收敛；C 已消费 M0 真相源完成四主页行动闭环。C0/D/F 继续消费同一模型，不得回退端侧手写分类或旧预览渲染；端云真实数据依赖 `object-homepage-gamma-real-data-closure`（R-IX05）。
+- **验收**：见本目录 `acceptance.yaml` SIT5（v3 可行动交集与商用主轴）；UAT-1..9 与 C0–F 继承 local_contract / api_integration / user_acceptance，逐包下发。

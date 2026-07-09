@@ -183,8 +183,8 @@ quwoquan_app/test/user_acceptance/pages/<owner>/<surface_id>/<surface_id>_page__
 quwoquan_service/services/<service>/tests/local_contract/<case>__local_contract_test.go
 quwoquan_service/services/<service>/tests/api_integration/<case>__api_integration_test.go
 quwoquan_data/tests/<layer>/<domain>/test_<case>__<layer>_test.py
-agent_ops/tests/local_contract/test_<case>__local_contract_test.py
-agent_ops/acceptance/user_acceptance/test_<case>__user_acceptance_test.py
+quwoquan_ops/tests/local_contract/test_<case>__local_contract_test.py
+quwoquan_ops/tests/acceptance/user_acceptance/test_<case>__user_acceptance_test.py
 ```
 
-存量目录只作为迁移映射，不作为新增标准；其 baseline 由 `specs/gates/test_directory_inventory.yaml` 维护，并由 `python3 agent_ops/scaffold/verify_test_directory_inventory.py` 阻断新增 legacy 路径。
+存量目录只作为迁移映射，不作为新增标准；其 baseline 由 `specs/gates/test_directory_inventory.yaml` 维护，并由 `python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py` 阻断新增 legacy 路径。

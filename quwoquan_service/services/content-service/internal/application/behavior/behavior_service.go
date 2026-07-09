@@ -13,6 +13,7 @@ import (
 	"quwoquan_service/services/content-service/internal/application/ports"
 	"quwoquan_service/services/content-service/internal/domain/post/event"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	"quwoquan_service/services/content-service/internal/generated"
 )
 
 // supportedBehaviorActions derives from SignalWeights (single source of truth
@@ -38,6 +39,10 @@ type BehaviorEventInput struct {
 	Action          string   `json:"action"`
 	Type            string   `json:"type"`
 	ContentType     string   `json:"contentType"`
+	ObjectID        string   `json:"objectId"`
+	ObjectKind      string   `json:"objectKind"`
+	DisplayName     string   `json:"displayName"`
+	SourceSurface   string   `json:"sourceSurface"`
 	Tags            []string `json:"tagRefs"`
 	Duration        float64  `json:"duration"`
 	DwellMs         float64  `json:"dwellMs"`
@@ -70,6 +75,66 @@ type BehaviorEventInput struct {
 	IntersectionID         string `json:"intersectionId"`
 	IntersectionClass      string `json:"intersectionClass"`
 	IntersectionEvidenceID string `json:"intersectionEvidenceId"`
+	// 交集负反馈闭环（F 推荐差异化）：intersection_feedback 事件专属。
+	//   SubjectID    = 交集主体对象 id（person/circle/place…，与 reason.subjectId/actionTargetId 同源）；
+	//   FeedbackKind = registry.feedbackKinds 闭集（notInterested/dismiss/rejectGreeting/leaveCircle）。
+	// 二者驱动 IntersectionService 写 rec:ineg 交集负反馈冷却集（Feed 命中即过滤，不再推荐）。
+	SubjectID    string `json:"subjectId"`
+	FeedbackKind string `json:"feedbackKind"`
+}
+
+// IntersectionFeedbackSink 接收交集负反馈，驱动交集主体（subject）跨会话冷却（rec:ineg）。
+// 由 content-service IntersectionService 实现；behavior 侧仅依赖该端口（DDD 依赖倒置，
+// 避免 application 直接耦合 intersection application 实现）。
+type IntersectionFeedbackSink interface {
+	ReportNegativeFeedback(ctx context.Context, userID, subjectID, feedbackKind string) error
+}
+
+// intersectionFeedbackKindSupported 校验 feedbackKind ∈ registry.feedbackKinds 闭集
+// （codegen 单一真相源 generated.IntersectionFeedbackKinds），端上报与云侧消费同源。
+func intersectionFeedbackKindSupported(kind string) bool {
+	for _, k := range generated.IntersectionFeedbackKinds {
+		if k == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func isWishlistAction(action string) bool {
+	return action == "wishlist_add" || action == "wishlist_remove"
+}
+
+func firstString(values []string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func wishlistEventFromInput(input BehaviorEventInput, userID, contentID, action string, occurredAt time.Time) ports.WishlistEvent {
+	status := "active"
+	if action == "wishlist_remove" {
+		status = "removed"
+	}
+	entityID := strings.TrimSpace(firstNonEmptyLocal(input.ObjectID, firstString(input.EntityRefs), contentID))
+	objectType := strings.TrimSpace(firstNonEmptyLocal(input.ObjectKind, input.ContentType))
+	return ports.WishlistEvent{
+		UserID:         userID,
+		EntityID:       entityID,
+		ObjectType:     objectType,
+		DisplayName:    strings.TrimSpace(input.DisplayName),
+		Status:         status,
+		SourceSurface:  strings.TrimSpace(input.SourceSurface),
+		ReferralSource: strings.TrimSpace(input.ReferralSource),
+		FeedRequestID:  strings.TrimSpace(input.FeedRequestID),
+		SessionID:      strings.TrimSpace(input.SessionID),
+		ClientEventID:  strings.TrimSpace(input.ClientEventID),
+		CreatedAt:      occurredAt,
+		UpdatedAt:      occurredAt,
+	}
 }
 
 type BehaviorService struct {
@@ -80,11 +145,13 @@ type BehaviorService struct {
 	projector            ports.Projector
 	feedback             *rtrec.FeedbackRecorder
 	eventStore           ports.BehaviorEventStore
+	wishlistStore        ports.WishlistEventStore
 	metricsStore         ports.DailyMetricsStore
 	authorImpact         ports.AuthorImpactStore
 	authorImpactEvidence ports.AuthorImpactEvidenceStore
 	sessionInvalid       func(userID, sessionID string)
 	patchEmitter         *rtrec.FeedPatchEmitter
+	intersectionFeedback IntersectionFeedbackSink
 }
 
 type BehaviorServiceOption func(*BehaviorService)
@@ -109,6 +176,10 @@ func WithBehaviorEventStore(es ports.BehaviorEventStore) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.eventStore = es }
 }
 
+func WithWishlistEventStore(store ports.WishlistEventStore) BehaviorServiceOption {
+	return func(s *BehaviorService) { s.wishlistStore = store }
+}
+
 func WithDailyMetricsStore(ms ports.DailyMetricsStore) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.metricsStore = ms }
 }
@@ -125,6 +196,16 @@ func WithAuthorImpactEvidenceStore(store ports.AuthorImpactEvidenceStore) Behavi
 // 未注入时行为处理不发任何 patch（emitter nil 即安全 no-op）。
 func WithFeedPatchEmitter(emitter *rtrec.FeedPatchEmitter) BehaviorServiceOption {
 	return func(s *BehaviorService) { s.patchEmitter = emitter }
+}
+
+// WithIntersectionFeedbackSink 注入交集负反馈冷却下沉端口（F 推荐差异化）。
+// 未注入时 intersection_feedback 事件仍被采集/持久化，但不写交集冷却（安全降级）。
+func WithIntersectionFeedbackSink(sink IntersectionFeedbackSink) BehaviorServiceOption {
+	return func(s *BehaviorService) {
+		if sink != nil {
+			s.intersectionFeedback = sink
+		}
+	}
 }
 
 func NewBehaviorService(hotPath rtrec.SignalProcessor, store ports.PostRepository, opts ...BehaviorServiceOption) *BehaviorService {
@@ -159,8 +240,28 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 		}
 		userID := identity.NormalizeAnonymousSubAccountID(eventInput.UserID)
 		contentID := strings.TrimSpace(firstNonEmptyLocal(eventInput.ContentID, eventInput.PostID))
-		if contentID == "" && action != "assistant_interest" {
+		if contentID == "" && isWishlistAction(action) {
+			contentID = strings.TrimSpace(firstNonEmptyLocal(eventInput.ObjectID, firstString(eventInput.EntityRefs)))
+		}
+		// assistant_interest（仅 tagRefs）与 intersection_feedback（subjectId 承载对象）不绑定 post。
+		if contentID == "" && action != "assistant_interest" && action != "intersection_feedback" && !isWishlistAction(action) {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "contentId 必填", "missing contentId")
+		}
+		if isWishlistAction(action) {
+			if strings.TrimSpace(firstNonEmptyLocal(eventInput.ObjectID, firstString(eventInput.EntityRefs), contentID)) == "" {
+				return rterr.NewInvalidArgument(rterr.ModuleContent, "objectId 必填", "wishlist event requires objectId")
+			}
+			if strings.TrimSpace(firstNonEmptyLocal(eventInput.ObjectKind, eventInput.ContentType)) == "" {
+				return rterr.NewInvalidArgument(rterr.ModuleContent, "objectKind 必填", "wishlist event requires objectKind")
+			}
+		}
+		if action == "intersection_feedback" {
+			if strings.TrimSpace(eventInput.SubjectID) == "" {
+				return rterr.NewInvalidArgument(rterr.ModuleContent, "subjectId 必填", "intersection_feedback requires subjectId")
+			}
+			if !intersectionFeedbackKindSupported(strings.TrimSpace(eventInput.FeedbackKind)) {
+				return rterr.NewInvalidArgument(rterr.ModuleContent, "feedbackKind 非法", "intersection_feedback requires feedbackKind in registry.feedbackKinds")
+			}
 		}
 		duration := eventInput.Duration
 		if duration == 0 && eventInput.DwellMs > 0 {
@@ -256,6 +357,10 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			"contentId":              contentID,
 			"action":                 action,
 			"contentType":            signal.ContentType,
+			"objectId":               strings.TrimSpace(firstNonEmptyLocal(eventInput.ObjectID, contentID)),
+			"objectKind":             strings.TrimSpace(firstNonEmptyLocal(eventInput.ObjectKind, contentType)),
+			"displayName":            strings.TrimSpace(eventInput.DisplayName),
+			"sourceSurface":          strings.TrimSpace(eventInput.SourceSurface),
 			"tagRefs":                append([]string(nil), tags...),
 			"duration":               duration,
 			"timestamp":              occurredAt.Format(time.RFC3339),
@@ -281,6 +386,23 @@ func (s *BehaviorService) ProcessBatch(ctx context.Context, events []BehaviorEve
 			"intersectionClass":      signal.IntersectionClass,
 			"intersectionEvidenceId": strings.TrimSpace(eventInput.IntersectionEvidenceID),
 		})
+		// 交集负反馈冷却（F 推荐差异化）：subjectId/feedbackKind 已在上文校验、dedup 已由
+		// AcceptEvent 完成（重复事件在上方 continue 跳过），此处对唯一有效事件写交集冷却。
+		// ReportNegativeFeedback 内部对 Redis 降级 → 返回 nil 不阻断（同 ReportExposure 语义）；
+		// sink 未注入时安全跳过。
+		if action == "intersection_feedback" && s.intersectionFeedback != nil {
+			_ = s.intersectionFeedback.ReportNegativeFeedback(
+				ctx,
+				userID,
+				strings.TrimSpace(eventInput.SubjectID),
+				strings.TrimSpace(eventInput.FeedbackKind),
+			)
+		}
+		if isWishlistAction(action) && s.wishlistStore != nil {
+			if err := s.wishlistStore.UpsertWishlistEvent(ctx, wishlistEventFromInput(eventInput, userID, contentID, action, occurredAt)); err != nil {
+				return err
+			}
+		}
 		if batchUserID == "" {
 			batchUserID = userID
 		}

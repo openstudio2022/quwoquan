@@ -42,7 +42,7 @@ make test-api-integration ENV=gamma
 make test-user-acceptance TARGET=gamma-local
 make verify-test-specs
 make verify-app-page-horizontal-quality
-bash agent_ops/gate/gate_repo.sh --scope app
+bash quwoquan_ops/gate/gate_repo.sh --scope app
 ```
 
 ## 命名

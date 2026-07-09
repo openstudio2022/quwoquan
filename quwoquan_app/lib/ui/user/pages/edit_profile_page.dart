@@ -15,6 +15,7 @@ import 'package:quwoquan_app/components/media/picker/image_pick_gateway.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/constants/navigation_semantic_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/utils/tag_ref_label.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
@@ -522,7 +523,7 @@ class _RegionPickerPageState extends ConsumerState<_RegionPickerPage> {
     if (display.isNotEmpty) {
       return display;
     }
-    return _labelForTagRef(option.tagRef);
+    return tagRefDisplayLabel(option.tagRef);
   }
 }
 
@@ -669,8 +670,8 @@ _EditProfileDisplayValue _tagsSummary(
   List<String> interests,
 ) {
   final labels = <String>[
-    if (occupation.isNotEmpty) _labelForTagRef(occupation),
-    ...interests.map(_labelForTagRef),
+    if (occupation.isNotEmpty) tagRefDisplayLabel(occupation),
+    ...interests.map(tagRefDisplayLabel),
   ].where((label) => label.isNotEmpty).toList(growable: false);
   if (labels.isEmpty) {
     return const _EditProfileDisplayValue(
@@ -679,14 +680,6 @@ _EditProfileDisplayValue _tagsSummary(
     );
   }
   return _EditProfileDisplayValue(labels.join(' · '));
-}
-
-String _labelForTagRef(String tagRef) {
-  final trimmed = tagRef.trim();
-  if (trimmed.isEmpty) {
-    return '';
-  }
-  return trimmed.split('/').last;
 }
 
 bool _sameStringList(List<String> a, List<String> b) {

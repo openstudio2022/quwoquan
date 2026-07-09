@@ -22,8 +22,8 @@ import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 ///
 /// 可点击判定只看「角色 + 是否提供 onSpanTap」，**不再要求 span.target 非空**：
 /// `target` 仅决定「默认导航去哪」，而消费方对片段动作拥有最终解释权——典型如
-/// 我的连接的 count 片段携带 myIntersections target（进维度下钻列表），
-/// 我的影响力的 count 片段不依赖 target、由消费方拦截为打开影响明细 sheet。
+/// 我的交集的 count 片段携带 myIntersections target（进维度下钻列表），
+/// 打动模块的 count 片段不依赖 target、由消费方拦截为打开影响明细 sheet。
 /// 这样三个角色（object/count）的可点击语义统一，避免「有 onSpanTap 动作却因
 /// 无 target 而失去点击态」的矛盾（消费方负责对 target 为空的 object 片段优雅降级）。
 ///

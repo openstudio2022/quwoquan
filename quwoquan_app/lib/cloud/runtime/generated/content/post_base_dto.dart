@@ -104,7 +104,7 @@ abstract class PostBaseDto {
 
   String get mediaCoverUrl => resolveContentMediaUrl(coverUrl);
 
-  String get mediaVideoUrl => resolveContentMediaUrl(videoUrl);
+  String get mediaVideoUrl => resolveContentVideoUrl(videoUrl);
 
   String get mediaThumbnailUrl => resolveContentMediaUrl(thumbnailUrl);
 
@@ -158,7 +158,7 @@ abstract class PostBaseDto {
 
   bool get isArticleLike => identity == 'work' && displayFormat == 'note';
 
-  bool get isVideoLike => hasVideo || displayFormat == 'video';
+  bool get isVideoLike => hasVideo;
 
   bool get isTextOnly => displayFormat == 'note' && !hasAnyMedia;
 

@@ -419,6 +419,21 @@ def _quota_issues(root: Path) -> list[str]:
     return entity_scope_issues
 
 
+def _release_is_homepage_only(root: Path) -> bool:
+    """homepage-only release：task 只有主页配额，无 article/image/route 篇目。"""
+    manifest = _payload(root / "release_manifest.json")
+    task_id = str(manifest.get("sourceTaskId") or "").strip()
+    if not task_id:
+        return False
+    try:
+        from task import store
+        from _common.execution_branch import is_homepage_only_spec
+
+        return is_homepage_only_spec(store.load_spec(task_id))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def gate_publish(release_id: str) -> list[str]:
     """Check release completeness."""
     issues = []
@@ -434,7 +449,12 @@ def gate_publish(release_id: str) -> list[str]:
 
     posts_dir = root / "posts"
     if not posts_dir.exists() or not any(posts_dir.rglob("manifest.json")):
-        issues.append("No posts with manifest.json found")
+        if _release_is_homepage_only(root):
+            entities_dir = root / "entities"
+            if not entities_dir.is_dir() or not any(entities_dir.rglob("page.md")):
+                issues.append("homepage-only release must contain entity homepage(s) under entities/")
+        else:
+            issues.append("No posts with manifest.json found")
 
     issues.extend(_release_surface_issues(root))
     issues.extend(_quota_issues(root))

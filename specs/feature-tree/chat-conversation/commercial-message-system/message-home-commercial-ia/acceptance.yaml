@@ -64,7 +64,7 @@ contract_acceptance:
     - 页面入口和首页数据消费继续由消息域 metadata 真相源驱动。
     tests:
       planned:
-      - command: bash agent_ops/scaffold/verify_acceptance_standard.sh
+      - command: bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
       recorded: []
     status: pending
     test_evidence:
@@ -78,7 +78,7 @@ contract_acceptance:
     notes: []
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

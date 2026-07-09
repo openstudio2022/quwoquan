@@ -1,0 +1,63 @@
+creatorProfileId: sys_travel_0093
+userId: sys_travel_0093
+subAccountId: sys_travel_0093_sub_01
+displayName: 橙光长卷
+userHandle: orange-scroll
+handle: orange-scroll
+avatarPresetId: avatar_travel_train_window
+coverPresetId: cover_travel_canyon_bridge
+bio: 不是专业攻略号，更像一个认真记路的人；好走、好停、好回头最重要；不催人赶路。
+headline: 不赶场旅行
+slogan: 在寺前石阶，我喜欢慢慢抵达
+creatorArchetype: landscape_photographer
+verticalSegment: travel_primary
+verticalRefs:
+- travel
+interestTagRefs: &id001
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/风光摄影
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 景区_体验
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  - homepage/tag/Topic_摄影_风光摄影
+  circleAffinityRefs:
+  - circle/topic/travel
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/风光摄影

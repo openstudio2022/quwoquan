@@ -1,0 +1,73 @@
+name: io_access_log_baseline
+contractVersion: 2
+description: Short access log schema; run/service context comes from path, collector labels or manifest.
+enums:
+  origin:
+    - app.http
+    - app.grpc
+    - service.http
+    - service.grpc
+    - service.mq
+    - job.internal
+    - cron.internal
+  direction:
+    - inbound
+    - outbound
+  status:
+    - success
+    - failed
+    - timeout
+    - retry
+required_fields:
+  - ts
+  - level
+  - route
+  - status
+  - durMs
+  - msg
+optional_fields:
+  - method
+  - req
+  - trace
+  - err
+collector_context:
+  app_labels:
+    - platform
+    - appVersion
+    - sessionHash
+  service_labels:
+    - service
+    - instanceId
+  run_manifest:
+    - env
+    - runId
+    - releaseId
+forbidden_fields:
+  - schemaVersion
+  - signal
+  - logKind
+  - env
+  - sourceType
+  - service
+  - component
+  - instanceId
+  - runId
+  - releaseId
+  - dataReleaseId
+  - sessionId
+  - timestamp
+  - severity
+  - message
+  - requestId
+  - traceId
+  - spanId
+  - headers
+  - logType
+  - phase
+  - parentTraceId
+  - causationId
+  - statusCode
+error_code_format: "MODULE.KIND.REASON"
+notes:
+  - "One request/message produces only one terminal log."
+  - "API and messaging logs use the same schema."

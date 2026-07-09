@@ -95,6 +95,30 @@
 - 图文来源可下载、审核、加工、发布
 - authenticity / package gate 可通过
 
+### R6-P：Pinterest 图片作品 image-only 商业验证
+
+本轮新增一条**收紧后的商业验证主线**，只覆盖 Pinterest 图片作品，不把 homepage/article 的泛化改造混入同一批执行：
+
+- 范围只限 `travel / photography` 的 `image` lane，目标是单源图片作品 `H100 -> H1000` 的真实端到端闭环。
+- Pinterest 不再停留在 `discovery_only`；允许通过 `attribution_no_watermark` 正式权利模型进入发布候选，但必须逐图保留：
+  - `pinUrl`
+  - `discoveryUrl`
+  - `originalAssetUrl`
+  - `sourceAuthor`
+  - `repostAttribution`
+  - `watermarkScan`
+  - `ocrScan`
+  - `modelReleaseStatus`
+  - `collectedAt`
+- 真实下载链路必须是：`attribution manifest -> original bytes/localPath -> media/image gate -> content_plan -> produce -> review -> materialize -> ship/import/search/reco`。
+- 图片作品必须坚持 `one-source-one-work`：一条 pin/source unit 只生成一份图片作品，不得跨 pin、跨作者、跨 sourceCollection 拼接。
+- `local runtime` 是主执行平面，`cloud runtime` 只作诊断/兜底；任何 H100/H1000 证据必须在单一执行分支、单一任务级隔离根下获得，禁止全局 `pkill`、grep `WORKFLOW COMPLETE` 冒充完成、跨任务清理并行批次。
+- 在拿到真实 `download / author / release / TokenLedger / firstPassRate / objectsPerHour / downstream visibility` 之前，只允许评估 `10k/日` 与 `100k/日`，不允许提前承诺可达。
+- 输出目录口径（数据输出规范）：image lane 批次落仓外
+  `QWQ_OUTPUT_ROOT/runtime/{e2e|operations}/image/{supplyMode}/…`（`contentType=image` 独立批次，禁止与
+  homepage/article 混批）；证据只认 `batch/_shared` 权威条目，摘要落 `artifacts/content_runs/**` index-first 回指
+  （真相源 `quwoquan_data/docs/pipeline_directory_layout_spec.md` §0.5）。
+
 ### R6-H：四川酒店住宿专题作为旅行/出差扩展样例
 
 酒店住宿专题用于证明标签体系不只覆盖景区点位，也能覆盖旅行、出差、出行消费中的住宿实体与内容生产。
@@ -129,8 +153,10 @@
 **权威与图文证据的双轨准入（写入验收 A15～A17）**：
 
 1. **权威轨（直接采纳）**  
-   存在合规可用的 **百度百科词条** 与/或 **维基百科**（含延伸：如 Wikivoyage 等在 `design` 中显式列出的白名单）作为命名与锚点来源时：**直接采纳**该标准命名与主页 URL 进入实体层，**不强制**要求额外 post 篇数作为准入条件。  
+   存在合规可用的 **百度百科词条、搜狗百科词条** 与/或 **维基百科**（含延伸：如 Wikivoyage 等在 `design` 中显式列出的白名单）作为命名与锚点来源时：**直接采纳**该标准命名与主页 URL 进入实体层，**不强制**要求额外 post 篇数作为准入条件。  
    若两端均有，以中文用户可读与内部一致性规则做**单主锚 + 互链**（见 `entity_naming_rules` / `authority_pool` 约定）。
+
+   说明：**今日头条百科不属于当前主页权威轨**，只可作为参考/交叉验证来源；不得进入 homepage `primaryEvidenceRef`，也不得覆盖维基/百度/搜狗的主锚裁定。
 
 2. **图文证据轨（post 互证）**  
    当 **无**上述权威主锚（或权威不足以唯一确定实体）时，仅允许从**可合规抓取/引用**的攻略、游记、日记、摄影向图文中收敛新实体；**准入硬条件**：  

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_card.dart';
 
 /// 交集卡真闭环（V5/S5）契约：
@@ -16,6 +18,23 @@ void main() {
       dimension: dimension,
       tagRefs: tagRefs,
       primaryText: primaryText,
+      objectKind: 'topic',
+      actionTargetId: 'homepage_topic_photo',
+      primarySpans: primaryText.trim().isEmpty
+          ? const <IntersectionTextSpan>[]
+          : <IntersectionTextSpan>[
+              IntersectionTextSpan(text: '你们都喜欢 ', role: 'plain'),
+              IntersectionTextSpan(
+                text: '摄影',
+                role: 'object',
+                target: IntersectionTarget(
+                  objectType: 'homepage',
+                  objectId: 'homepage_topic_photo',
+                  objectKind: 'topic',
+                  routeId: 'homepageDetail',
+                ),
+              ),
+            ],
     );
   }
 

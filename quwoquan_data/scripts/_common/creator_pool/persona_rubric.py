@@ -3,7 +3,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from _common.creator_pool.constants import CLAIM_POLICY, TRAVEL_ARCHETYPES
+from _common.creator_pool.constants import (
+    CLAIM_POLICY,
+    PHOTOGRAPHY_ARCHETYPES,
+    TRAVEL_ARCHETYPES,
+    TRAVEL_PHOTOGRAPHY_CROSS_ARCHETYPES,
+)
 from _common.creator_pool.persona_dedup import persona_similarity
 
 RUBRIC: dict[str, Any] = {
@@ -88,9 +93,10 @@ def persona_rubric_pass_rate(
 
 
 def archetype_coverage(bundles: list[dict[str, Any]]) -> int:
+    known = set(TRAVEL_ARCHETYPES) | set(PHOTOGRAPHY_ARCHETYPES) | set(TRAVEL_PHOTOGRAPHY_CROSS_ARCHETYPES)
     seen: set[str] = set()
     for bundle in bundles:
         arch = str(bundle.get("creatorArchetype") or (bundle.get("diversitySlots") or {}).get("archetypeBucket") or "")
-        if arch in TRAVEL_ARCHETYPES:
+        if arch in known:
             seen.add(arch)
     return len(seen)

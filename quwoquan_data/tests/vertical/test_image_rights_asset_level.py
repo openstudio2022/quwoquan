@@ -31,6 +31,32 @@ def test_discovery_platform_is_not_blocked_by_source_name_when_asset_rights_are_
     assert issues == []
 
 
+def test_attribution_no_watermark_payload_passes_with_complete_pinterest_evidence():
+    issues = validate_image_rights(
+        {
+            "platform": "Pinterest",
+            "authorizationBasis": "attribution_no_watermark",
+            "license": "attribution_no_watermark",
+            "credit": "Creator",
+            "sourceUrl": "https://images.example.com/jiuzhaigou.jpg",
+            "termsUrl": "https://policy.pinterest.com/terms-of-service",
+            "authorizationProof": "https://images.example.com/jiuzhaigou.jpg",
+            "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
+            "pinUrl": "https://www.pinterest.com/pin/123456/",
+            "discoveryUrl": "https://www.pinterest.com/search/pins/?q=jiuzhaigou",
+            "originalAssetUrl": "https://images.example.com/jiuzhaigou.jpg",
+            "sourceAuthor": "Creator",
+            "repostAttribution": "转载自原作者公开 pin",
+            "watermarkScan": "no_explicit_watermark",
+            "ocrScan": "no_text_detected",
+            "collectedAt": "2026-07-05T09:30:00Z",
+        },
+        vertical="travel",
+    )
+    assert issues == []
+
+
 def test_discovery_platform_still_fails_without_asset_rights():
     issues = validate_image_rights(
         {
@@ -41,7 +67,51 @@ def test_discovery_platform_still_fails_without_asset_rights():
         vertical="travel",
     )
     assert any("missing required field license" in issue for issue in issues)
+    assert any("missing required field authorizationProof" in issue for issue in issues)
     assert not any("发现源只能作为灵感" in issue for issue in issues)
+
+
+def test_tuchong_stock_authorized_payload_requires_authorization_proof():
+    issues = validate_image_rights(
+        {
+            "platform": "图虫创意",
+            "license": "photographer_authorized",
+            "credit": "Creator",
+            "sourceUrl": "https://stock.tuchong.com/image/123",
+            "termsUrl": "https://stock.tuchong.com/",
+            "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
+        },
+        vertical="travel",
+    )
+    assert any("missing required field authorizationProof" in issue for issue in issues)
+
+
+def test_attribution_no_watermark_requires_scan_and_author_fields():
+    issues = validate_image_rights(
+        {
+            "platform": "Pinterest",
+            "authorizationBasis": "attribution_no_watermark",
+            "license": "attribution_no_watermark",
+            "credit": "Creator",
+            "sourceUrl": "https://images.example.com/jiuzhaigou.jpg",
+            "termsUrl": "https://policy.pinterest.com/terms-of-service",
+            "authorizationProof": "https://images.example.com/jiuzhaigou.jpg",
+            "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
+            "pinUrl": "https://www.pinterest.com/pin/123456/",
+            "discoveryUrl": "https://www.pinterest.com/search/pins/?q=jiuzhaigou",
+            "originalAssetUrl": "https://images.example.com/jiuzhaigou.jpg",
+            "watermarkScan": "detected",
+            "ocrScan": "detected",
+            "collectedAt": "2026-07-05T09:30:00Z",
+        },
+        vertical="travel",
+    )
+    assert any("attribution_no_watermark missing sourceAuthor" in issue for issue in issues)
+    assert any("attribution_no_watermark missing repostAttribution" in issue for issue in issues)
+    assert any("watermarkScan=clear/pass/no_explicit_watermark" in issue for issue in issues)
+    assert any("ocrScan=clear/pass/no_text_detected" in issue for issue in issues)
 
 
 def test_creative_commons_jurisdiction_suffix_normalizes_to_allowed_kind():
@@ -54,6 +124,7 @@ def test_creative_commons_jurisdiction_suffix_normalizes_to_allowed_kind():
             "termsUrl": "https://creativecommons.org/licenses/by-sa/2.5/nl/deed.en",
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Example.jpg",
             "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
         },
         vertical="travel",
     )
@@ -70,6 +141,7 @@ def test_creative_commons_1_0_remains_blocked():
             "termsUrl": "https://creativecommons.org/licenses/by-sa/1.0/",
             "authorizationProof": "https://commons.wikimedia.org/wiki/File:Old.jpg",
             "usageScope": "app_publish",
+            "modelReleaseStatus": "not_required",
         },
         vertical="travel",
     )

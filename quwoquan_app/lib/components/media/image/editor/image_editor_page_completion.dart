@@ -1,7 +1,7 @@
 part of 'image_editor_page.dart';
 
 extension _ImageEditorPageCompletion on _ImageEditorPageState {
-  void _onDone() async {
+  void _onDone({String action = 'backToPicker'}) async {
     if (_hasProBaseAdjustments ||
         _hasProHslAdjustments ||
         _hasBwLevelsAdjustments ||
@@ -38,11 +38,12 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
     _filterTemplateIndex = -1;
     _filterIntensity = 100;
     final Object? result;
-    if (_isMultiImage) {
+    if (_isMultiImage || action == 'continueToCreate') {
       result = imageEditorMultiImageDonePopPayload(
         currentIndex: _currentIndex,
         path: _currentPath,
         paths: List<String>.from(_paths),
+        action: action,
       );
     } else {
       result = _currentPath;
@@ -68,9 +69,8 @@ extension _ImageEditorPageCompletion on _ImageEditorPageState {
       isDark,
       ColorType.foregroundSecondary,
     );
-    showCupertinoModalPopup<void>(
+    showAppBottomModal<void>(
       context: context,
-      barrierColor: AppColors.transparent,
       builder: (context) {
         return AppBottomModalSurface(
           onDismiss: () => Navigator.of(context).pop(),

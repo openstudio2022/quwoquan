@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 
+TERMINAL_WORKFLOW_STATUSES = {"succeeded", "completed_with_reasoned_rejects"}
+
+
 def managed_runtime_config() -> dict[str, Any]:
     from task import run as run_mod
 
@@ -203,24 +206,24 @@ def trial_strategy(
             (
                 "python3 quwoquan_data/scripts/cli.py task run "
                 f"--task '{task_id}' --batch {batch_id} --managed --runtime local "
-                "--release-only --max-workers 2"
+                "--release-only --max-workers 2 --model composer"
             ),
             (
                 "python3 quwoquan_data/scripts/cli.py verify scale-readiness "
-                f"--task '{task_id}' --batch {batch_id} --daily-target 100 --mode trial --allow-missing-import"
+                f"--task '{task_id}' --batch {batch_id} --daily-target 100 --mode trial"
             ),
         ]
     elif category == "cursor_sdk_infra_failure":
         mode = "managed_author_retry_after_infra_recovery"
         commands = [
-            "python3 quwoquan_data/scripts/cli.py env ready",
+            "python3 quwoquan_data/scripts/cli.py env ready --model composer",
             (
                 "python3 quwoquan_data/scripts/cli.py task retry-stage "
                 f"--task '{task_id}' --batch {batch_id} --stage {terminal_cause.get('stage')}"
             ),
             (
                 "python3 quwoquan_data/scripts/cli.py task run "
-                f"--task '{task_id}' --batch {batch_id} --managed --runtime local --release-only --max-workers 2"
+                f"--task '{task_id}' --batch {batch_id} --managed --runtime local --release-only --max-workers 2 --model composer"
             ),
         ]
     elif category == "workflow_interrupted":
@@ -244,11 +247,11 @@ def trial_strategy(
         commands = [
             (
                 "python3 quwoquan_data/scripts/cli.py task run "
-                f"--task '{task_id}' --batch {clean_batch} --managed --runtime local --release-only --max-workers 2"
+                f"--task '{task_id}' --batch {clean_batch} --managed --runtime local --release-only --max-workers 2 --model composer"
             ),
             (
                 "python3 quwoquan_data/scripts/cli.py verify scale-readiness "
-                f"--task '{task_id}' --batch {clean_batch} --daily-target 100 --mode trial --allow-missing-import"
+                f"--task '{task_id}' --batch {clean_batch} --daily-target 100 --mode trial"
             ),
         ]
     stop_after = "publish"
@@ -307,8 +310,8 @@ def scale_ladder(
         (1_000, "thousand_entity_trial"),
     ):
         required = list(base_requirements)
-        if status != "succeeded":
-            required.append(f"workflow status must be succeeded; got {status or 'missing'}")
+        if status not in TERMINAL_WORKFLOW_STATUSES:
+            required.append(f"workflow status must be terminal; got {status or 'missing'}")
         if target_count < entities:
             required.append(f"current trial targetCount {target_count} < required {entities}")
         if article_per_target != 4 or image_per_target != 2:
@@ -344,8 +347,8 @@ def scale_ladder(
         (100_000, "daily_100k_challenge"),
     ):
         required = list(base_requirements)
-        if status != "succeeded":
-            required.append(f"workflow status must be succeeded; got {status or 'missing'}")
+        if status not in TERMINAL_WORKFLOW_STATUSES:
+            required.append(f"workflow status must be terminal; got {status or 'missing'}")
         if target >= 1_000 and queue_backend != "reliabletask":
             required.append("reliabletask queue backend required for thousand-level fanout")
         if target >= 1_000 and not has_token:

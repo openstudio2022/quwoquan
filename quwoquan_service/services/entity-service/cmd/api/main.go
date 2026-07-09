@@ -125,15 +125,16 @@ func main() {
 	rateLimiter := rtgov.NewRateLimiter(1000)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(withObs)
 
+	addr := getenvOrDefault("ENTITY_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	server := &http.Server{
-		Addr:              cfg.Service.HTTP.Addr,
+		Addr:              addr,
 		Handler:           rateLimited,
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
 	}
-	log.Printf("entity-service listening on %s", cfg.Service.HTTP.Addr)
+	log.Printf("entity-service listening on %s", addr)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("entity-service: %v", err)
 	}
@@ -162,7 +163,7 @@ func loadRuntimeConfig() (config, error) {
 			return config{}, err
 		}
 		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, err
 			}
@@ -173,7 +174,7 @@ func loadRuntimeConfig() (config, error) {
 	if err := mergeConfigFile(&cfg, filepath.Join("configs", "default", "config.yaml")); err == nil {
 		_ = mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml"))
 		if configVersion != "" {
-			_ = mergeConfigFile(&cfg, filepath.Join("..", "..", "..", "releases", "config", serviceName, configVersion+".yaml"))
+			_ = mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml"))
 		}
 		return cfg, nil
 	}

@@ -62,8 +62,70 @@ def _write_env_ready(batch_id: str) -> None:
             "schemaVersion": "quwoquan_data.env_ready_report",
             "ready": True,
             "preflight": {"ready": True, "issues": []},
+            "cursorStartup": {
+                "checked": True,
+                "ready": True,
+                "probeType": "agent_prompt_smoke",
+                "status": "finished",
+            },
         },
     )
+
+
+def _write_token_ledger(
+    batch_id: str,
+    *,
+    measurement_mode: str = "cursor_sdk_result_usage",
+    summary: dict | None = None,
+) -> None:
+    payload = {
+        "measurementMode": measurement_mode,
+        "summary": {"unitCost": 1, **(summary or {})},
+    }
+    write_json(batch_root(TASK, batch_id) / "_shared" / "token_ledger.json", payload)
+
+
+def _seed_passed_homepage(batch_id: str, name: str = "都江堰") -> Path:
+    entity = batch_root(TASK, batch_id) / "entities" / "地点" / "景区" / name
+    write_json(entity / "_entity.json", {"label": name, "domain": "地点", "type": "景区"})
+    (entity / "page.md").parent.mkdir(parents=True, exist_ok=True)
+    (entity / "page.md").write_text(f"# {name}\n\n主页正文", encoding="utf-8")
+    write_json(entity / "manifest.json", {"assets": []})
+    write_json(
+        entity / "1.download" / "source_refs.json",
+        {
+            "schemaVersion": "quwoquan_data.source_refs/2",
+            "sources": [
+                {
+                    "role": "base",
+                    "sourceRef": "entities/地点/景区/%s/1.download/sources/homepage_primary/source.md" % name,
+                }
+            ],
+        },
+    )
+    write_json(
+        entity / "1.download" / "sources" / "homepage_primary" / "meta.json",
+        {
+            "lane": "homepage",
+            "focusVerdict": "exact",
+            "entityFocusVerdict": "exact",
+        },
+    )
+    (entity / "1.download" / "sources" / "homepage_primary" / "source.md").write_text(
+        f"{name}位于四川，是一处用于规模门测试的景区主页底稿。" * 12,
+        encoding="utf-8",
+    )
+    write_json(entity / "5.review" / "review.json", {"decision": "approved", "issues": []})
+    write_json(
+        entity / "5.review" / "finalization_report.json",
+        {
+            "schemaVersion": "quwoquan_data.finalization_report",
+            "status": "passed",
+            "draftArticleRef": "4.draft/page.md",
+            "finalArticleRef": "page.md",
+        },
+    )
+    return entity
 
 
 def _creator_assignment() -> dict:

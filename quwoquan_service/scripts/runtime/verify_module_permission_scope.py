@@ -10,7 +10,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[3]
-CATALOG = ROOT / "deploy/shared/reliable_task_module_catalog.yaml"
+CATALOG = ROOT / "quwoquan_ops/environments/reliable_task_module_catalog.yaml"
 
 SHARED_STORE_PREFIXES = ("reliabletask.",)
 SHARED_QUEUE_PREFIXES = ("reliabletask.",)

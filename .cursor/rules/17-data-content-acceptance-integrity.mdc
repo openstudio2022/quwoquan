@@ -37,7 +37,7 @@ alwaysApply: false
 
 ## 5. 版本控制契约 / 系统内置资产跟代码走（GATE_BLOCK）
 
-- `creator_profiles` / `templates` / `schema` / `contracts/metadata` 等受版本控制的契约真相源必须跟代码走（以 `_REPO_DATA_ROOT` 解析），**禁止随运行时 `QWQ_DATA_ROOT` 漂移**到 scratch/隔离根导致注册表静默空集。
+- `creator_profiles` / `templates` / `schema` / `quwoquan_service/contracts/metadata` 等受版本控制的契约真相源必须跟代码走（以 `_REPO_DATA_ROOT` 解析），**禁止随运行时 `QWQ_DATA_ROOT` 漂移**到 scratch/隔离根导致注册表静默空集。
 - 注册表为空（如 0 个 creator）必须显式失败或回退到仓库内置，**禁止静默降级**成「指派空 creator → 下游 enqueue 才崩」的隐性假通过。
 - **creator 人设指派必须与模板路由（routes/blueprints）解耦**：内容对象的 `creatorAssignment` 只依赖「已注册 active creator 人设 + 载体亲和」即可确定性冻结（`match_creator` 传空 blueprint 按 carrier 择优），不得因模板/路由被清空而拿不到 creator。指派必须在进 author 队列前冻结写回 pack；凡 author 阶段 article/image/video/gallery 作业，`creatorAssignment` 必须完整且 registry-backed，缺失即在指派层显式失败或诚实弃稿，禁止留到 enqueue 才崩。
 

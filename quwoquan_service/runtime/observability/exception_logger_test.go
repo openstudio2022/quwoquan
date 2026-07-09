@@ -29,15 +29,14 @@ func TestExceptionLogger_WritesToErrorSink(t *testing.T) {
 	}
 
 	entry := ExceptionLog{
-		SchemaVersion:     "v1",
 		Service:           "chat-service",
-		Timestamp:         "2026-02-21T10:10:10Z",
+		TS:                "2026-02-21T10:10:10Z",
 		Origin:            "service.http",
 		Direction:         DirectionInbound,
 		Endpoint:          "chat.message.create",
 		SourceID:          "gateway-service",
-		TraceID:           "SVC.sess.chat.message.create.l9z1y4.2f8k",
-		RequestID:         "SVC.chat.message.create.l9z1y4.2f8k",
+		Trace:             "SVC.sess.chat.message.create.l9z1y4.2f8k",
+		Req:               "SVC.chat.message.create.l9z1y4.2f8k",
 		SessionID:         "run-001",
 		Src:               "service",
 		ServiceName:       "chat-service",
@@ -57,11 +56,13 @@ func TestExceptionLogger_WritesToErrorSink(t *testing.T) {
 	if standard.Len() != 0 {
 		t.Fatalf("exception log should not write to standard sink")
 	}
-	if !strings.Contains(errorBuf.String(), "\"errorCode\":\"CHAT.SYSTEM.internal_error\"") {
+	if !strings.Contains(errorBuf.String(), ",CHAT.SYSTEM.internal_error,") {
 		t.Fatalf("expected exception payload in error sink: %s", errorBuf.String())
 	}
-	if !strings.Contains(errorBuf.String(), "\"inputKv\":{\"content\":\"***\"}") {
+	if !strings.Contains(errorBuf.String(), `"inputKv":{"content":"***"}`) {
 		t.Fatalf("expected metadata filtered input kv in exception payload")
 	}
+	if strings.Contains(errorBuf.String(), "schema"+"Version") || strings.Contains(errorBuf.String(), "requestId") {
+		t.Fatalf("exception log should use compact fields: %s", errorBuf.String())
+	}
 }
-

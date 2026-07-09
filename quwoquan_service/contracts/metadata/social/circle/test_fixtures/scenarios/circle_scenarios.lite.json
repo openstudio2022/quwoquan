@@ -157,7 +157,7 @@
         {
           "id": "fixture_circle_gold_invest",
           "name": "黄金投资圈",
-          "ownerId": "fixture_user_finance_owner",
+          "ownerId": "fixture_user_tech_01",
           "role": "member",
           "joinStatus": "not_joined",
           "isFollowed": false,
@@ -201,7 +201,7 @@
         {
           "id": "fixture_circle_neworiental_alumni",
           "name": "新东方校友圈",
-          "ownerId": "fixture_user_education_owner",
+          "ownerId": "fixture_user_article",
           "role": "member",
           "joinStatus": "not_joined",
           "isFollowed": false,
@@ -337,7 +337,7 @@
             "description": "黄金投资圈默认公开群。",
             "visibility": "public",
             "joinPolicy": "apply_only",
-            "ownerUserId": "fixture_user_finance_owner",
+            "ownerUserId": "fixture_user_tech_01",
             "memberCount": 8426,
             "conversationId": "fixture_conv_fixture_circle_gold_invest",
             "storageEnabled": true,
@@ -358,7 +358,7 @@
             "description": "新东方校友圈默认公开群。",
             "visibility": "public",
             "joinPolicy": "apply_only",
-            "ownerUserId": "fixture_user_education_owner",
+            "ownerUserId": "fixture_user_article",
             "memberCount": 3120,
             "conversationId": "fixture_conv_fixture_circle_neworiental_alumni",
             "storageEnabled": true,
@@ -672,7 +672,7 @@
           {
             "_id": "fixture_member_fixture_circle_gold_invest_owner",
             "circleId": "fixture_circle_gold_invest",
-            "userId": "fixture_user_finance_owner",
+            "userId": "fixture_user_tech_01",
             "role": "owner",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-06-30T00:00:00Z",
@@ -684,40 +684,40 @@
           {
             "_id": "fixture_member_fixture_circle_gold_invest_member_01",
             "circleId": "fixture_circle_gold_invest",
-            "userId": "fixture_user_lin",
+            "userId": "fixture_user_friend",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-06-29T12:00:00Z",
             "contribution": 7,
-            "displayName": "林清越",
-            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png",
-            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png"
+            "displayName": "契约好友",
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_friend/v1/avatar.png"
           }
         ],
         "fixture_circle_neworiental_alumni": [
           {
             "_id": "fixture_member_fixture_circle_neworiental_alumni_owner",
             "circleId": "fixture_circle_neworiental_alumni",
-            "userId": "fixture_user_education_owner",
+            "userId": "fixture_user_article",
             "role": "owner",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-06-30T00:00:00Z",
             "contribution": 18,
             "displayName": "新东方校友圈圈主",
-            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png",
-            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png"
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_article/v1/avatar.png"
           },
           {
             "_id": "fixture_member_fixture_circle_neworiental_alumni_member_01",
             "circleId": "fixture_circle_neworiental_alumni",
-            "userId": "fixture_user_lin",
+            "userId": "fixture_user_weekend_1",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-06-29T12:00:00Z",
             "contribution": 7,
-            "displayName": "林清越",
-            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png",
-            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_lifestyle_01/v1/avatar.png"
+            "displayName": "契约同伴一",
+            "avatarObjectKey": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png",
+            "avatarUrl": "media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png"
           }
         ]
       },

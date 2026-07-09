@@ -37,6 +37,18 @@ class ChatMockData {
         'media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png',
     'user_010':
         'media/avatar/s/archived-avatar/user/fixture_user_outdoor_01/v1/avatar.png',
+    'user_011':
+        'media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png',
+    'user_012':
+        'media/avatar/s/archived-avatar/user/fixture_user_weekend_1/v1/avatar.png',
+    'user_013':
+        'media/avatar/s/archived-avatar/user/fixture_user_weekend_2/v1/avatar.png',
+    'user_014':
+        'media/avatar/s/archived-avatar/user/fixture_user_citywalk_01/v1/avatar.png',
+    'user_015':
+        'media/avatar/s/archived-avatar/user/fixture_user_tech_01/v1/avatar.png',
+    'user_016':
+        'media/avatar/s/archived-avatar/user/fixture_user_outdoor_01/v1/avatar.png',
     'fixture_assistant_primary':
         'media/avatar/s/archived-avatar/user/fixture_user_commenter/v1/avatar.png',
   };
@@ -154,7 +166,7 @@ class ChatMockData {
       'creatorId': 'user_003',
       'circleId': 'circle_001',
       'maxSeq': 1024,
-      'memberCount': 200,
+      'memberCount': 3,
       'maxGroupSize': 1000,
       'receiptEnabled': false,
       'lastMessagePreview': '分享一组新疆风景照',
@@ -269,7 +281,7 @@ class ChatMockData {
       'groupAvatarSourceHash': groupAvatarSourceHashFor('conv_006'),
       'creatorId': currentUserProfileId,
       'maxSeq': 512,
-      'memberCount': 8,
+      'memberCount': 3,
       'maxGroupSize': 1000,
       'receiptEnabled': true,
       'lastMessagePreview': '今晚 8 点前把评审意见同步到文档里',
@@ -380,7 +392,7 @@ class ChatMockData {
     },
   ];
 
-  /// 群聊九宫格测试 — 1~16 人群分别验证布局
+  /// 群聊云侧 top9 预合成头像测试 — 1~16 人群分别验证 memberCount 与 PNG
   static List<Map<String, dynamic>> _groupAvatarTestConversations() {
     final result = <Map<String, dynamic>>[];
     for (int n = 1; n <= 16; n++) {
@@ -441,9 +453,7 @@ class ChatMockData {
     var seq = memberCount * 2;
     for (int i = 1; i <= memberCount && i <= 6; i++) {
       final isFirst = i == 1;
-      final userId = isFirst
-          ? currentUserSenderId
-          : 'grid_${memberCount}_member_$i';
+      final userId = isFirst ? currentUserSenderId : gridMemberUserId(i);
       final name = isFirst ? '我' : '测试成员$i';
       messages.add({
         '_id': 'msg_grid_${memberCount}_$i',
@@ -925,6 +935,50 @@ class ChatMockData {
             'timestamp': '2025-12-28T20:15:00Z',
           },
         ],
+        'conv_003': [
+          {
+            '_id': 'msg_003_01',
+            'id': 'msg_003_01',
+            'conversationId': 'conv_003',
+            'seq': 1024,
+            'clientMsgId': 'client-uuid-003-01',
+            'senderId': 'user_003',
+            'senderName': nameFor('user_003'),
+            'senderAvatar': avatarFor('user_003'),
+            'type': 'text',
+            'content': '分享一组新疆风景照',
+            'status': 'sent',
+            'timestamp': '2026-03-07T08:00:00Z',
+          },
+          {
+            '_id': 'msg_003_02',
+            'id': 'msg_003_02',
+            'conversationId': 'conv_003',
+            'seq': 1023,
+            'clientMsgId': 'client-uuid-003-02',
+            'senderId': currentUserSenderId,
+            'senderName': '我',
+            'senderAvatar': avatarFor(currentUserProfileId),
+            'type': 'text',
+            'content': '构图和光线都很棒！',
+            'status': 'read',
+            'timestamp': '2026-03-07T07:55:00Z',
+          },
+          {
+            '_id': 'msg_003_03',
+            'id': 'msg_003_03',
+            'conversationId': 'conv_003',
+            'seq': 1022,
+            'clientMsgId': 'client-uuid-003-03',
+            'senderId': 'user_002',
+            'senderName': nameFor('user_002'),
+            'senderAvatar': avatarFor('user_002'),
+            'type': 'text',
+            'content': '下次一起去拍',
+            'status': 'sent',
+            'timestamp': '2026-03-07T07:50:00Z',
+          },
+        ],
       };
 
   static final List<Map<String, dynamic>> _defaultMessages = [
@@ -972,7 +1026,7 @@ class ChatMockData {
     if (_membersByConversation.containsKey(conversationId)) {
       return _membersByConversation[conversationId]!;
     }
-    // 九宫格测试群动态生成成员
+    // 云侧 top9 预合成测试群动态生成成员
     if (conversationId.startsWith('conv_grid_')) {
       final n = int.tryParse(conversationId.replaceFirst('conv_grid_', ''));
       if (n != null && n > 0) return _generateGridMembers(conversationId, n);
@@ -980,21 +1034,25 @@ class ChatMockData {
     return _defaultMembers;
   }
 
+  /// 云侧 top9 预合成测试群成员 userId：user_001..user_N
+  static String gridMemberUserId(int memberIndex) =>
+      'user_${memberIndex.toString().padLeft(3, '0')}';
+
   static List<Map<String, dynamic>> _generateGridMembers(
     String conversationId,
     int count,
   ) {
     final members = <Map<String, dynamic>>[];
     for (int i = 1; i <= count; i++) {
-      final userId = 'grid_${count}_member_$i';
+      final userId = gridMemberUserId(i);
       final isFirst = i == 1;
       members.add({
         '_id': 'cm_grid_${count}_$i',
         'id': 'cm_grid_${count}_$i',
         'conversationId': conversationId,
-        'userId': isFirst ? 'user_001' : userId,
-        'displayName': isFirst ? '我' : '测试成员$i',
-        'avatarUrl': isFirst ? avatarFor('user_001') : avatarFor(userId),
+        'userId': userId,
+        'displayName': isFirst ? '我' : nameFor(userId),
+        'avatarUrl': avatarFor(userId),
         'memberType': 'user',
         'role': isFirst ? 'owner' : (i == 2 ? 'admin' : 'member'),
         'isCurrentUser': isFirst,
@@ -1079,6 +1137,78 @@ class ChatMockData {
               'invitedBy': 'user_001',
               'joinedAt': '2026-02-01T10:${i.toString().padLeft(2, '0')}:00Z',
             },
+        ],
+        'conv_003': [
+          {
+            '_id': 'cm_003_01',
+            'id': 'cm_003_01',
+            'conversationId': 'conv_003',
+            'userId': 'user_001',
+            'displayName': '我',
+            'avatarUrl': avatarFor('user_001'),
+            'memberType': 'user',
+            'role': 'member',
+            'isCurrentUser': true,
+            'joinedAt': '2025-12-01T10:00:00Z',
+          },
+          {
+            '_id': 'cm_003_02',
+            'id': 'cm_003_02',
+            'conversationId': 'conv_003',
+            'userId': 'user_003',
+            'displayName': nameFor('user_003'),
+            'avatarUrl': avatarFor('user_003'),
+            'memberType': 'user',
+            'role': 'owner',
+            'joinedAt': '2025-12-01T10:05:00Z',
+          },
+          {
+            '_id': 'cm_003_03',
+            'id': 'cm_003_03',
+            'conversationId': 'conv_003',
+            'userId': 'user_002',
+            'displayName': nameFor('user_002'),
+            'avatarUrl': avatarFor('user_002'),
+            'memberType': 'user',
+            'role': 'member',
+            'joinedAt': '2025-12-01T10:10:00Z',
+          },
+        ],
+        'conv_006': [
+          {
+            '_id': 'cm_006_01',
+            'id': 'cm_006_01',
+            'conversationId': 'conv_006',
+            'userId': 'user_001',
+            'displayName': '我',
+            'avatarUrl': avatarFor('user_001'),
+            'memberType': 'user',
+            'role': 'owner',
+            'isCurrentUser': true,
+            'joinedAt': '2026-01-20T10:00:00Z',
+          },
+          {
+            '_id': 'cm_006_02',
+            'id': 'cm_006_02',
+            'conversationId': 'conv_006',
+            'userId': 'user_003',
+            'displayName': nameFor('user_003'),
+            'avatarUrl': avatarFor('user_003'),
+            'memberType': 'user',
+            'role': 'admin',
+            'joinedAt': '2026-01-20T10:05:00Z',
+          },
+          {
+            '_id': 'cm_006_03',
+            'id': 'cm_006_03',
+            'conversationId': 'conv_006',
+            'userId': 'user_009',
+            'displayName': nameFor('user_009'),
+            'avatarUrl': avatarFor('user_009'),
+            'memberType': 'user',
+            'role': 'member',
+            'joinedAt': '2026-01-20T10:10:00Z',
+          },
         ],
       };
 

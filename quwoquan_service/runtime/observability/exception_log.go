@@ -1,9 +1,6 @@
 package runtimeobservability
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 type ExceptionIO struct {
 	InputKV  map[string]any `json:"inputKv,omitempty"`
@@ -11,32 +8,31 @@ type ExceptionIO struct {
 }
 
 type ExceptionLog struct {
-	SchemaVersion     string      `json:"schemaVersion"`
-	Service           string      `json:"service"`
-	Timestamp         string      `json:"timestamp"`
-	Origin            string      `json:"origin"`
-	Direction         string      `json:"direction"`
-	Endpoint          string      `json:"endpoint"`
-	SourceID          string      `json:"sourceId"`
-	TraceID           string      `json:"traceId"`
-	RequestID         string      `json:"requestId"`
-	SessionID         string      `json:"sessionId"`
-	Src               string      `json:"src"`
-	UserID            string      `json:"userId,omitempty"`
-	SubAccountID      string      `json:"subAccountId,omitempty"`
-	PageID            string      `json:"pageId,omitempty"`
-	DevicePlatform    string      `json:"devicePlatform,omitempty"`
-	AppVersion        string      `json:"appVersion,omitempty"`
-	ServiceName       string      `json:"serviceName,omitempty"`
-	ServiceInstanceID string      `json:"serviceInstanceId,omitempty"`
-	ErrorCode         string      `json:"errorCode"`
-	ErrorModule       string      `json:"errorModule"`
-	ErrorKind         string      `json:"errorKind"`
-	ErrorReason       string      `json:"errorReason"`
+	TS                string      `json:"ts"`
+	Origin            string      `json:"-"`
+	Direction         string      `json:"-"`
+	Endpoint          string      `json:"-"`
+	Trace             string      `json:"trace,omitempty"`
+	Req               string      `json:"req,omitempty"`
+	Service           string      `json:"-"`
+	SourceID          string      `json:"-"`
+	SessionID         string      `json:"-"`
+	Src               string      `json:"-"`
+	UserID            string      `json:"-"`
+	SubAccountID      string      `json:"-"`
+	PageID            string      `json:"-"`
+	DevicePlatform    string      `json:"-"`
+	AppVersion        string      `json:"-"`
+	ServiceName       string      `json:"-"`
+	ServiceInstanceID string      `json:"-"`
+	ErrorCode         string      `json:"err"`
+	ErrorModule       string      `json:"module"`
+	ErrorKind         string      `json:"kind"`
+	ErrorReason       string      `json:"reason"`
 	RuntimeOrigin     string      `json:"runtimeOrigin,omitempty"`
 	RuntimeNature     string      `json:"runtimeNature,omitempty"`
-	UserMessage       string      `json:"userMessage"`
-	DebugMessage      string      `json:"debugMessage,omitempty"`
+	UserMessage       string      `json:"msg"`
+	DebugMessage      string      `json:"debug,omitempty"`
 	StackHash         string      `json:"stackHash,omitempty"`
 	FailurePoint      string      `json:"failurePoint,omitempty"`
 	BusinessObject    string      `json:"businessObject,omitempty"`
@@ -45,30 +41,21 @@ type ExceptionLog struct {
 }
 
 func (l ExceptionLog) Validate() error {
-	if l.SchemaVersion == "" || l.Service == "" || l.Timestamp == "" || l.Endpoint == "" {
-		return fmt.Errorf("missing required base fields")
+	if l.TS == "" {
+		return fmt.Errorf("missing required exception time")
 	}
-	if _, ok := allowedOrigins[l.Origin]; !ok {
-		return fmt.Errorf("invalid origin: %s", l.Origin)
+	if l.Origin != "" {
+		if _, ok := allowedOrigins[l.Origin]; !ok {
+			return fmt.Errorf("invalid origin: %s", l.Origin)
+		}
 	}
-	if _, ok := allowedDirections[l.Direction]; !ok {
-		return fmt.Errorf("invalid direction: %s", l.Direction)
-	}
-	if l.SourceID == "" || l.TraceID == "" || l.RequestID == "" || l.SessionID == "" || l.Src == "" {
-		return fmt.Errorf("missing required trace/source fields")
+	if l.Direction != "" {
+		if _, ok := allowedDirections[l.Direction]; !ok {
+			return fmt.Errorf("invalid direction: %s", l.Direction)
+		}
 	}
 	if l.ErrorCode == "" || l.ErrorModule == "" || l.ErrorKind == "" || l.ErrorReason == "" || l.UserMessage == "" {
 		return fmt.Errorf("missing required exception fields")
-	}
-	if strings.HasPrefix(l.Origin, "app.") {
-		if l.DevicePlatform == "" || l.AppVersion == "" || l.PageID == "" {
-			return fmt.Errorf("app origin requires devicePlatform/appVersion/pageId")
-		}
-	}
-	if strings.HasPrefix(l.Origin, "service.") || strings.HasPrefix(l.Origin, "job.") || strings.HasPrefix(l.Origin, "cron.") {
-		if l.ServiceName == "" || l.ServiceInstanceID == "" {
-			return fmt.Errorf("service/job/cron origin requires serviceName/serviceInstanceId")
-		}
 	}
 	if !errorCodePattern.MatchString(l.ErrorCode) {
 		return fmt.Errorf("invalid errorCode format: %s", l.ErrorCode)

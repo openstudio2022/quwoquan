@@ -49,7 +49,8 @@ def _topic_rows(task_id: str, regions: list[str], entity_types: list[str]) -> li
                 "canonical_name": name,
                 "region": task_region,
                 "source_count": 1,
-                "geo_tag_ref": f"/tag/地域/{task_region}" if task_region else "",
+                # 收债 7：geo ref 只用行政区树路径制（coverageTargets 透传的 geoTagRef），无则留空。
+                "geo_tag_ref": str(target.get("geoTagRef") or "").strip(),
                 "source_kind": "coverageTarget",
                 "status": "candidate",
                 "taskId": task_id,

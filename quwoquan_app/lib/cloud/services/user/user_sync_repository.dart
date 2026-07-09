@@ -87,10 +87,9 @@ class RemoteUserSyncRepository implements UserSyncRepository {
   RemoteUserSyncRepository({
     CloudHttpClient? httpClient,
     String? baseUrl,
-    UserSyncRemoteMergeRequestContext? mergeRequestContext,
+    this._mergeRequestContext,
   }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-       _mergeRequestContext = mergeRequestContext;
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;

@@ -196,6 +196,15 @@ var SignalWeights = map[string]float64{
 	"add_contact": 4.5,
 	// 小艺对话浮现兴趣回流（P3）：payload 仅带 tagRefs，不绑定具体 post。
 	"assistant_interest": 1.6,
+	// 交集负反馈（F 推荐差异化）：不绑定 post（subjectId 为交集主体对象），在通用 HotPath
+	// 内为 inert（ContentID 空 → RecordNegative 被守卫跳过）；真实降权 / 冷却由
+	// content-service behavior_service 经 IntersectionFeedbackSink → IntersectionService
+	// 写 rec:ineg 交集负反馈冷却集完成。此处权重仅用于登记为受支持动作 + 对齐 behaviors.yaml。
+	"intersection_feedback": -5.0,
+	// 显式「想去」事件是 coWishlistedEntity 的真实意图源。HotPath 只把动作登记为
+	// 受支持并保留弱推荐权重；持久事实投影由 content-service 写 entity_wishlist_events。
+	"wishlist_add":    3.2,
+	"wishlist_remove": -3.2,
 }
 
 // ReferralSourceMultiplier maps referral sources to tag weight multipliers.
@@ -309,6 +318,10 @@ func normalizeFeedbackState(signal BehaviorSignal) string {
 	case "dwell":
 		return "dwell"
 	case "dislike", "hide_author", "hide_content_type", "report":
+		return "negative"
+	// 交集负反馈：语义为 negative，但 subject 维度冷却由 IntersectionService 承接，
+	// 通用 rec:negative 因 ContentID 空而被守卫跳过（不污染内容级过滤集）。
+	case "intersection_feedback":
 		return "negative"
 	// click 是独立漏斗态（七态：served/visible/impressed/click/dwell/interaction/negative）：
 	// CTR = click / impressed 直接由此态分离，区别于点赞/评论/分享等深度互动（interaction）。

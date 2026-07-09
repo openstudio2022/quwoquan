@@ -21,6 +21,37 @@ _REVIEW_SIDECARS = {
 }
 
 
+def _task_is_homepage_only(task_id: str) -> bool:
+    """homepage-only 任务：仅主页配额，实体主页即发布面（无 posts 篇目）。"""
+    try:
+        from task import store
+        from _common.execution_branch import is_homepage_only_spec
+
+        return is_homepage_only_spec(store.load_spec(task_id))
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _abandoned_content_refs(task_id: str, batch_id: str) -> set[str]:
+    state_path = batch_root(task_id, batch_id) / "_shared" / "task_workflow_state.json"
+    if not state_path.is_file():
+        return set()
+    try:
+        state = read_json(state_path)
+    except Exception:  # noqa: BLE001
+        return set()
+    refs: set[str] = set()
+    for item in state.get("abandonedContentObjects") or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("status") or "").strip() != "abandoned":
+            continue
+        ref = str(item.get("ref") or "").strip()
+        if ref:
+            refs.add(ref)
+    return refs
+
+
 def assemble_release(task_id: str, release_id: str, *, batch_id: str = "") -> Path:
     """Merge all task outputs into a release directory.
 
@@ -43,10 +74,15 @@ def assemble_release(task_id: str, release_id: str, *, batch_id: str = "") -> Pa
             src = batch_dir / "posts"
             if not src.is_dir():
                 continue
+            candidate_batch_id = batch_id or batch_dir.name
+            abandoned_refs = _abandoned_content_refs(task_id, candidate_batch_id)
             for manifest_path in sorted(src.rglob("manifest.json")):
                 leaf = manifest_path.parent
                 manifest = read_json(manifest_path)
                 if not isinstance(manifest, dict):
+                    continue
+                ref = str(manifest.get("topicId") or manifest.get("ref") or "").strip()
+                if ref and ref in abandoned_refs:
                     continue
                 if not _is_asset_only_manifest(manifest) and not (leaf / "article.md").exists():
                     continue
@@ -58,11 +94,15 @@ def assemble_release(task_id: str, release_id: str, *, batch_id: str = "") -> Pa
     # Entity homepages are publishable only for the primary entities actually
     # present in release posts. Abandoned/replaced candidates may be approved in
     # the batch for audit, but they must not leak into the isolated release.
+    # homepage-only 批次没有 posts 篇目：实体主页本身就是发布面，
+    # 直接发布全部 approved 实体（abandoned 实体不产出 approved 三件套）。
     _copy_release_entities(
         task_id,
         root,
         batch_id=batch_id,
-        allowed_entity_rels=_primary_entity_rels_from_posts(posts_dst),
+        allowed_entity_rels=(
+            None if _task_is_homepage_only(task_id) else _primary_entity_rels_from_posts(posts_dst)
+        ),
     )
 
     # Release manifest

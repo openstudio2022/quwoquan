@@ -3,6 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_visual.g.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/components/object_page/intersection_statement_row.dart';
@@ -89,7 +90,8 @@ class ObjectIntersectionCard extends StatefulWidget {
     Key? key,
   }) {
     final usable = (reasons ?? const <IntersectionReason>[])
-        .where((r) => r.primaryText.trim().isNotEmpty)
+        .map(displayReadyIntersectionReason)
+        .whereType<IntersectionReason>()
         .toList(growable: false);
     if (usable.isEmpty) return null;
     return ObjectIntersectionCard(
@@ -132,7 +134,8 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
     );
 
     final rows = widget.reasons
-        .where((reason) => reason.primaryText.trim().isNotEmpty)
+        .map(displayReadyIntersectionReason)
+        .whereType<IntersectionReason>()
         .map(_IntersectionRow.new)
         .toList(growable: false);
     if (rows.isEmpty) {
@@ -213,8 +216,16 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
               ],
             ),
           ),
-          if (hiddenCount > 0 || (expanded && rows.length > inline))
-            _buildMore(context, expanded: expanded),
+          if (hiddenCount > 0 ||
+              (expanded && rows.length > inline) ||
+              (hiddenCount == 0 &&
+                  widget.moreLabel != null &&
+                  widget.onMoreTap != null))
+            _buildMore(
+              context,
+              expanded: expanded,
+              forceOpenAll: hiddenCount == 0,
+            ),
         ],
       ),
     );
@@ -230,15 +241,21 @@ class _ObjectIntersectionCardState extends State<ObjectIntersectionCard> {
     );
   }
 
-  Widget _buildMore(BuildContext context, {required bool expanded}) {
+  Widget _buildMore(
+    BuildContext context, {
+    required bool expanded,
+    bool forceOpenAll = false,
+  }) {
     final accent = AppColors.iosAccent(context);
     final canOpenAll = widget.moreLabel != null && widget.onMoreTap != null;
-    final label = expanded
+    final label = forceOpenAll && canOpenAll
+        ? widget.moreLabel!
+        : expanded
         ? (canOpenAll
               ? widget.moreLabel!
               : DiscoveryFeedText.intersectionCollapse)
         : DiscoveryFeedText.intersectionExpandMore;
-    final opensAll = expanded && canOpenAll;
+    final opensAll = (forceOpenAll || expanded) && canOpenAll;
     return Padding(
       padding: EdgeInsets.only(top: AppSpacing.intraGroupSm),
       child: GestureDetector(
@@ -334,10 +351,13 @@ class _EvidenceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reason = row.reason;
+    final reason = displayReadyIntersectionReason(row.reason);
+    if (reason == null) {
+      return const SizedBox.shrink();
+    }
     final auxiliary = row.auxiliaryText;
     final hasActionHint = reason.actionHints.any(
-      (hint) => hint.label.trim().isNotEmpty,
+      isDisplayableIntersectionActionHint,
     );
     final body = IntersectionStatementRow(
       item: IntersectionStatementItem(
@@ -352,9 +372,7 @@ class _EvidenceRow extends StatelessWidget {
         onSpanTap: onSpanTap,
         onVisualTap: onVisualTap,
         iconKey: reason.iconKey,
-        sourceRef: reason.source.trim().isNotEmpty
-            ? reason.source.trim()
-            : reason.kind.trim(),
+        sourceRef: resolvedIntersectionReasonKind(reason),
         dimension: reason.dimension,
         objectVisual: reason.objectVisual,
         actionHints: reason.actionHints,

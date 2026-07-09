@@ -169,8 +169,9 @@ void main() {
     });
 
     test('第一页返回 20 条 + cursor 非空', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final url = Uri.parse('$_apiBase/v1/content/feed?type=image&limit=20');
       final sw = Stopwatch()..start();
       final resp = await _client
@@ -206,8 +207,9 @@ void main() {
     });
 
     test('第二页与第一页无重叠 item', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final page1Url = Uri.parse(
         '$_apiBase/v1/content/feed?type=image&limit=20',
       );
@@ -243,8 +245,9 @@ void main() {
     });
 
     test('PhotoPostDto fromMap 解析所有字段包含 aspectRatio', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final url = Uri.parse('$_apiBase/v1/content/feed?type=image&limit=5');
       final resp = await _client
           .get(url, headers: _authHeaders('content.feed'))
@@ -298,8 +301,9 @@ void main() {
     });
 
     test('POST /v1/content/behaviors 返回 204', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final url = Uri.parse('$_apiBase/v1/content/behaviors');
       final sw = Stopwatch()..start();
       final resp = await _client
@@ -333,8 +337,9 @@ void main() {
     });
 
     test('事件 type 字段与 behaviors.yaml 枚举对齐', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       // 验证合法 type 值（来自 behaviors.yaml behavior_events）被接受（不返回 400）
       final validTypes = ['impression', 'dwell', 'click', 'share'];
       for (final type in validTypes) {
@@ -363,8 +368,9 @@ void main() {
     // e2e.yaml assertion: "like event NOT present in batch (dedicated route)"
     // The batch /behaviors endpoint should reject 'like' events (dedicated POST /posts/{id}/like).
     test('like type 被 batch 端点拒绝（专属路由）', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final resp = await _client
           .post(
             Uri.parse('$_apiBase/v1/content/behaviors'),
@@ -399,8 +405,9 @@ void main() {
   // e2e.yaml: error_state_displayed_correctly [test_type: api_contract]
   group('error_state_displayed_correctly', () {
     test('不存在的 postId → 404 + CONTENT.USER.post_not_found', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final resp = await _client
           .get(
             Uri.parse('$_apiBase/v1/content/posts/nonexistent_00000000'),
@@ -435,8 +442,9 @@ void main() {
     test(
       'X-Test-Error-Inject 触发 media_not_ready → 422 + recovery_action=retry',
       () async {
-        if (!_apiAvailable)
+        if (!_apiAvailable) {
           return markTestSkipped('$_apiContractEnv unavailable');
+        }
         // 此 header 仅在非生产 profile 开启，生产不生效
         final resp = await _client
             .post(
@@ -483,8 +491,9 @@ void main() {
     });
 
     test('POST /v1/content/reports 可用', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       final resp = await _client
           .post(
             Uri.parse('$_apiBase/v1/content/reports'),
@@ -510,8 +519,9 @@ void main() {
     test(
       'POST/DELETE /v1/user/sub-accounts/{targetSubAccountId}/block 可用',
       () async {
-        if (!_apiAvailable)
+        if (!_apiAvailable) {
           return markTestSkipped('$_apiContractEnv unavailable');
+        }
         if (_isLocalGammaContentOnly) {
           return markTestSkipped(
             'local gamma content mirror excludes user routes',
@@ -545,8 +555,9 @@ void main() {
     );
 
     test('PATCH /v1/user/settings/privacy 可写并回读 blockedKeywords', () async {
-      if (!_apiAvailable)
+      if (!_apiAvailable) {
         return markTestSkipped('$_apiContractEnv unavailable');
+      }
       if (_isLocalGammaContentOnly) {
         return markTestSkipped(
           'local gamma content mirror excludes user routes',

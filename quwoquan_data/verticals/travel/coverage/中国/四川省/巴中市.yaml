@@ -1,0 +1,273 @@
+# 全国地点主清单 · 四川省巴中市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 巴中市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 南江县
+  leaves:
+  - name: 光雾山
+    canonicalName: 光雾山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/地质公园
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
+    aliases:
+    - 光雾山旅游景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 米仓山国家森林公园
+    canonicalName: 米仓山国家森林公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
+    aliases:
+    - 米仓山森林公园
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 玉湖—七彩长滩
+    canonicalName: 南江玉湖—七彩长滩
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
+    aliases:
+    - 最美玉湖—七彩长滩旅游景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 断渠
+    canonicalName: 南江断渠
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/南江县
+    aliases:
+    - 断渠公园
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 巴州区
+  leaves:
+  - name: 南龛山
+    canonicalName: 巴中南龛山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
+    aliases:
+    - 南龛山景区
+    - 南龛摩崖造像
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 川陕革命根据地博物馆
+    canonicalName: 川陕革命根据地博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 山水化湖
+    canonicalName: 山水化湖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
+    aliases:
+    - 化湖
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 阴灵山
+    canonicalName: 巴中阴灵山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/巴州区
+    aliases:
+    - 阴灵山碑林
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 平昌县
+  leaves:
+  - name: 佛头山
+    canonicalName: 平昌佛头山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
+    aliases:
+    - 佛头山旅游景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 驷马水乡
+    canonicalName: 驷马水乡
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 白衣古镇
+    canonicalName: 白衣古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 巴灵台
+    canonicalName: 巴灵台
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
+    aliases:
+    - 巴灵台旅游风景区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 南天门
+    canonicalName: 平昌南天门
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
+    aliases:
+    - 平昌南天门旅游景区
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 皇家山
+    canonicalName: 平昌皇家山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
+    selectionPriority: 6
+    sourceReadiness: ready
+  - name: 三十二梁
+    canonicalName: 平昌三十二梁
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/平昌县
+    aliases:
+    - 三十二梁旅游景区
+    selectionPriority: 7
+    sourceReadiness: pending
+- district: 恩阳区
+  leaves:
+  - name: 恩阳古镇
+    canonicalName: 恩阳古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/恩阳区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 万寿养生谷
+    canonicalName: 恩阳万寿养生谷
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/恩阳区
+    aliases:
+    - 万寿养生谷旅游景区
+    selectionPriority: 2
+    sourceReadiness: pending
+- district: 通江县
+  leaves:
+  - name: 诺水河
+    canonicalName: 诺水河
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/景区/地质公园
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
+    aliases:
+    - 诺水河风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 王坪旅游景区
+    canonicalName: 川陕革命根据地红军烈士陵园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
+    aliases:
+    - 王坪红军烈士陵园
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 红四方面军总指挥部旧址纪念馆
+    canonicalName: 红四方面军总指挥部旧址纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 空山天盆
+    canonicalName: 空山天盆
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
+    aliases:
+    - 空山国家森林公园
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 诺水洞天
+    canonicalName: 诺水洞天
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
+    aliases:
+    - 诺水洞天景区
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 唱歌石林
+    canonicalName: 通江唱歌石林
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 梨园坝古村
+    canonicalName: 通江梨园坝古村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
+    aliases:
+    - 梨园坝村
+    selectionPriority: 7
+    sourceReadiness: pending
+  - name: 得汉城
+    canonicalName: 通江得汉城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/巴中市/通江县
+    selectionPriority: 8
+    sourceReadiness: ready

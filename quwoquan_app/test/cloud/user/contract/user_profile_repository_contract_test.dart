@@ -6,6 +6,7 @@ import 'package:quwoquan_app/cloud/services/user/profile_edit_models.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_edit_update_payload.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 
 const _fixtureCurrentUserId = 'fixture_user_current';
 const _fixtureProfileUserId = 'fixture_user_photo';
@@ -62,6 +63,76 @@ void main() {
           'backgroundUrl',
         ]),
       );
+    });
+
+    test('updateProfile 后本人主页与编辑快照按 alias 双向一致', () async {
+      const avatarUrl =
+          'media/avatar/s/mock/seed/u_1599566150163-29194dcaad36/v1/avatar.jpg';
+      const backgroundUrl =
+          'media/background/s/archived-avatar/user/fixture_user_current/v1/background.png';
+      const nickname = '资料同步用户';
+      const bio = '资料编辑双向一致性验证';
+      const gender = 'female';
+      const birthDate = '1996-05-21';
+      const regionTagRef = 'Topic/地理/行政区/中国/广东省/云浮市';
+      const occupationTagRef = 'Audience/用户/职业/产品/产品经理';
+      const interestTagRefs = <String>[
+        'Audience/用户/兴趣偏好/影像/摄影',
+        'Audience/用户/兴趣偏好/旅行/城市漫游',
+      ];
+
+      await repo.updateProfile(
+        const ProfileEditUpdatePayload(
+          nickname: nickname,
+          bio: bio,
+          avatarUrl: avatarUrl,
+          backgroundUrl: backgroundUrl,
+          gender: gender,
+          birthDate: birthDate,
+          regionTagRef: regionTagRef,
+          occupationTagRef: occupationTagRef,
+          interestTagRefs: interestTagRefs,
+        ),
+      );
+
+      final canonicalProfile = await repo.getUserProfile(
+        kMockCurrentSubAccountId,
+      );
+      final archiveProfile = await repo.getUserProfile('user_001');
+      final homepageBundle = await repo.getUserHomepageBundle('user_001');
+      final editSnapshot = await repo.getProfileEditSnapshot();
+      final expectedAvatarUrl = canonicalProfile.avatarUrl;
+      final expectedBackgroundUrl = canonicalProfile.backgroundUrl;
+
+      expect(expectedAvatarUrl, isNotEmpty);
+      expect(expectedBackgroundUrl, isNotEmpty);
+
+      for (final profile in <SubAccountProfileViewData>[
+        canonicalProfile,
+        archiveProfile,
+        homepageBundle.profile,
+      ]) {
+        expect(profile.displayName, nickname);
+        expect(profile.bio, bio);
+        expect(profile.avatarUrl, expectedAvatarUrl);
+        expect(profile.backgroundUrl, expectedBackgroundUrl);
+        expect(profile.identityTags, <String>[
+          occupationTagRef,
+          ...interestTagRefs,
+        ]);
+      }
+      expect(homepageBundle.viewerContext.isOwner, isTrue);
+      expect(editSnapshot.nickname, nickname);
+      expect(editSnapshot.bio, bio);
+      expect(editSnapshot.avatarUrl, expectedAvatarUrl);
+      expect(editSnapshot.backgroundUrl, expectedBackgroundUrl);
+      expect(editSnapshot.gender, gender);
+      expect(editSnapshot.birthDate, birthDate);
+      expect(editSnapshot.regionTagRef, regionTagRef);
+      expect(editSnapshot.region, '广东 云浮');
+      expect(editSnapshot.occupationTagRef, occupationTagRef);
+      expect(editSnapshot.interestTagRefs, interestTagRefs);
+      expect(editSnapshot.userHandle, canonicalProfile.userHandle);
     });
 
     test('ProfileQrCardData 要求服务返回真实 qrPayload', () {
@@ -223,7 +294,7 @@ void main() {
 
     test('getUserHomepageBundle 本人态：聚合身份域真相且不下发关系能力', () async {
       final bundle = await repo.getUserHomepageBundle(_fixtureCurrentUserId);
-      expect(bundle.profile.subAccountId, _fixtureCurrentUserId);
+      expect(bundle.profile.subAccountId, kMockCurrentSubAccountId);
       expect(bundle.viewerContext.isOwner, isTrue);
       expect(bundle.viewerContext.isGuest, isFalse);
       expect(bundle.viewerContext.relationToTarget, 'self');

@@ -57,6 +57,28 @@ def test_article_source_quality_sort_prefers_entity_focus_over_length():
     ordered = sorted(candidates, key=_article_source_quality_sort_key)
     assert ordered[0]["sourceId"] == "article_qunar_focused"
 
+def test_article_source_quality_sort_downgrades_qunar_over_three_years():
+    candidates = [
+        {
+            "sourceId": "article_qunar_2022",
+            "sourceQualityScore": 3,
+            "textLen": 1600,
+            "entityFocusScore": 0.4,
+            "sourceFreshnessTier": "stale_over_3y",
+            "rows": [],
+        },
+        {
+            "sourceId": "article_qunar_2025",
+            "sourceQualityScore": 3,
+            "textLen": 1600,
+            "entityFocusScore": 0.4,
+            "sourceFreshnessTier": "recent_3y",
+            "rows": [],
+        },
+    ]
+    ordered = sorted(candidates, key=_article_source_quality_sort_key)
+    assert ordered[0]["sourceId"] == "article_qunar_2025"
+
 
 def test_entity_focus_score_counts_alias_lines():
     aliases = _entity_focus_aliases("青城山")

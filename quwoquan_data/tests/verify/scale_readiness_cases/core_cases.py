@@ -32,6 +32,81 @@ def test_homepage_passed_count_accepts_hash_finalization_report():
     assert _homepage_passed_count(root) == 1
 
 
+def test_scale_readiness_accepts_homepage_only_publish_count():
+    spec = _save_spec()
+    spec["content"]["quotas"] = {
+        "entityHomepagesPerTarget": 1,
+        "entityArticlesPerTarget": 0,
+        "imageWorksPerTarget": 0,
+        "routeArticles": 0,
+    }
+    store.save_spec(spec)
+
+    batch_id = "homepage_only_green"
+    root = batch_root(TASK, batch_id)
+    _write_env_ready(batch_id)
+    _seed_passed_homepage(batch_id)
+    write_json(
+        root / "_shared" / "task_workflow_state.json",
+        {
+            "status": "succeeded",
+            "throughput": {
+                "objectsPerHour": 120.0,
+                "homepageCount": 1,
+                "publishedObjectCount": 1,
+            },
+            "quality": {
+                "firstPassRate": 1.0,
+                "reviewedRefs": 1,
+                "repairedRefs": 0,
+                "homepageReviewedRefs": 1,
+                "homepageRepairedRefs": 0,
+            },
+        },
+    )
+    _write_token_ledger(batch_id)
+    write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
+    write_json(release_root("homepage_only_green_release") / "release_manifest.json", {"releaseId": "homepage_only_green_release"})
+
+    import task.target_selection as target_selection
+    import verify.scale_readiness as scale_readiness
+
+    original = target_selection.audit_managed_batch
+    original_integrity = scale_readiness.scan_runtime_batch_integrity
+    try:
+        target_selection.audit_managed_batch = lambda task_id, candidate_batch_id: {
+            "targetCount": 1,
+            "lanePassed": {"homepage": 1, "article": 0, "image": 0},
+            "failedLaneCount": 0,
+            "failedLanes": [],
+            "abandonedCount": 0,
+            "abandonedContentCount": 0,
+        }
+        scale_readiness.scan_runtime_batch_integrity = lambda task_id, candidate_batch_id: {
+            "passed": True,
+            "stats": {"postCount": 0, "articleCount": 0, "imageCount": 0, "assetCount": 0},
+            "issues": [],
+        }
+        report = build_scale_readiness_report(
+            TASK,
+            batch_id,
+            daily_target=100,
+            target_goal=1,
+            source_ready_goal=0,
+            release_id="homepage_only_green_release",
+            require_import=True,
+        )
+    finally:
+        target_selection.audit_managed_batch = original
+        scale_readiness.scan_runtime_batch_integrity = original_integrity
+
+    assert report["passed"], report["blockers"]
+    assert report["decision"] == "go"
+    assert report["funnel"]["published"] == 1
+    assert report["partialDelivery"]["delivered"]["homepages"] == 1
+    assert report["partialDelivery"]["delivered"]["objects"] == 1
+
+
 def test_scale_readiness_blocks_manual_required_batch():
     _save_spec()
     write_json(
@@ -64,7 +139,7 @@ def test_scale_readiness_blocks_manual_required_batch():
     assert not report["passed"]
     assert report["decision"] == "no_go"
     assert "workflow status must be succeeded" in text
-    assert "TokenLedger evidence missing" in text
+    assert "authoritative TokenLedger missing" in text
     assert "release verify cannot be proven" in text
     assert report["downloadDiagnostics"]["rejectedByCategory"]["pixel_too_small"] == 1
     assert report["downloadDiagnostics"]["rejectedByCategory"]["fetch_or_non_image"] == 1
@@ -82,7 +157,7 @@ def test_scale_readiness_passes_when_scale_evidence_is_complete(monkeypatch=None
             "quality": {"firstPassRate": 0.82},
         },
     )
-    write_json(root / "_shared" / "token_ledger.json", {"summary": {"unitCost": 1}})
+    _write_token_ledger("green")
     write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
     write_json(release_root("green_release") / "release_manifest.json", {"releaseId": "green_release"})
 
@@ -131,7 +206,7 @@ def test_scale_readiness_allows_partial_lane_and_object_shortfall():
             "quality": {"firstPassRate": 0.82},
         },
     )
-    write_json(root / "_shared" / "token_ledger.json", {"summary": {"unitCost": 1}})
+    _write_token_ledger("partial_shortfall")
     write_json(root / "_shared" / "gamma_import_report.json", {"status": "passed"})
     write_json(release_root("partial_shortfall_release") / "release_manifest.json", {"releaseId": "partial_shortfall_release"})
 

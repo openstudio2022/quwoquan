@@ -202,7 +202,7 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       Navigator.of(context).pop(false);
       return;
     }
-    final action = await showCupertinoDialog<String>(
+    final action = await showAppCupertinoDialog<String>(
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
@@ -277,12 +277,26 @@ class _CareerInterestPageState extends ConsumerState<CareerInterestPage> {
       if (closeAfterSave && mounted) {
         Navigator.of(context).pop(true);
       }
-    } catch (_) {
+    } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() => _saving = false);
-      AppToast.show(context, UITextConstants.careerInterestSaveFailed);
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _save(closeAfterSave: closeAfterSave);
+          }
+        },
+      );
     }
   }
 

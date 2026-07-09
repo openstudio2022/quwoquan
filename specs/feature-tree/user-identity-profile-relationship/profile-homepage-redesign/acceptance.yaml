@@ -330,7 +330,7 @@ sit_acceptance:
     - "2026-06-25: alpha local_contract 已覆盖 mock catalog、旧 Topic/兴趣 拒绝、user-service 本地校验与去重保序；beta/gamma/prod 需以 tag import + object index import/backfill gate 补正式环境证据。"
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

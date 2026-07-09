@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
-LOG_DIR="$ROOT_DIR/state/local/app_beta_manual"
-eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
+LOG_DIR="$ROOT_DIR/.qwq_output/local/beta-local"
+eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
 GATEWAY_PORT="${GATEWAY_PORT}"
 FLUTTER_DEVICE_ID="${FLUTTER_DEVICE_ID:-}"
 IOS_BUNDLE_ID="${IOS_BUNDLE_ID:-com.example.quwoquanApp}"
@@ -13,9 +13,9 @@ PURGE_LOGS=0
 TERMINATE_APP=0
 
 BETA_MANUAL_LABEL="app-beta-manual"
-BETA_MANUAL_STACK_NAME="app_beta_manual"
+BETA_MANUAL_STACK_NAME="beta-local"
 BETA_MANUAL_LOG_DIR="$LOG_DIR"
-source "$ROOT_DIR/agent_ops/lib/beta_manual_lifecycle.sh"
+source "$ROOT_DIR/quwoquan_ops/lib/beta_manual_lifecycle.sh"
 
 usage() {
   cat <<EOF

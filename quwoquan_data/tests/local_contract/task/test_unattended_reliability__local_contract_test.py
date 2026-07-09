@@ -32,7 +32,7 @@ from _common.io import read_json  # noqa: E402
 from _common.paths import fanout_run_matrix_path  # noqa: E402
 from task import fanout_dispatch as fd  # noqa: E402
 from task import object_queue as oq  # noqa: E402
-from agent_ops.runners import fanout_runner as fr  # noqa: E402
+from task import fanout_runner as fr  # noqa: E402
 
 
 def _frozen(plan_id: str, names: list[str]) -> dict:

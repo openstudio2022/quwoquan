@@ -1,0 +1,60 @@
+creatorProfileId: sys_travel_0104
+userId: sys_travel_0104
+subAccountId: sys_travel_0104_sub_01
+displayName: 行李构图
+userHandle: luggage-compose
+handle: luggage-compose
+avatarPresetId: avatar_travel_lighthouse
+coverPresetId: cover_travel_lake_sunrise
+bio: 会把雨后街角里的吃住行拆开讲，内容不求热闹，求对下一趟出门有用；偏爱慢半拍。
+headline: 给出发前的人
+slogan: 在集市入口学会停下
+creatorArchetype: local_walker
+verticalSegment: travel_primary
+verticalRefs:
+- travel
+interestTagRefs: &id001
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 景区_体验
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  circleAffinityRefs:
+  - circle/topic/travel
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍

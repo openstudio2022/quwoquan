@@ -61,7 +61,7 @@
 - [~] 转发卡：当前仓库无独立「转发/引用卡」组件；共享 chip 口径已就绪，待该 surface 落地时直接采用（不阻断 A4 出口）。
 
 ### A 出口条件
-- [x] Block A 全部完成；`bash agent_ops/gate/gate_repo.sh --scope app` 全绿（含 `verify-app-page-horizontal-quality`、`verify_dart_semantic`、`verify_ui_mock_isolation`）。
+- [x] Block A 全部完成；`bash quwoquan_ops/gate/gate_repo.sh --scope app` 全绿（含 `verify-app-page-horizontal-quality`、`verify_dart_semantic`、`verify_ui_mock_isolation`）。
 
 ---
 
@@ -163,7 +163,7 @@
 5. [x] **Block B 三决策冻结**：B1/B2 落 [`review-content-type/spec.md`](review-content-type/spec.md)（方案 A + 统一 model 分支接入）；B3 落 [`creation-tagging-ia/spec.md`](creation-tagging-ia/spec.md)（可选内联打标 + 自动辅助 + 分阶段搜索）。
 6. [x] **Block C 依赖与前置全绿**：**C1 口碑 metadata 已落盘绿 + C2 tagRef 真相源已发布绿 + C3 商用/env-seed 前置已汇总冻结**（SLO/权限/生命周期/覆盖矩阵/灰度回滚落 review spec；三环境 seed manifest + 生产隔离门禁绿；content fixture moment→micro 残留已修）。
 7. [x] 内容多形态统一自身规格冻结：L3 [`unified-presentation-model`](unified-presentation-model/spec.md)、[`review-content-type`](review-content-type/spec.md)、[`creation-tagging-ia`](creation-tagging-ia/spec.md) 各自 `spec.md + acceptance.yaml`（feature-tree L3 约定 design/plan 并入 spec）已冻结；CR [021](../../../changelog/CR-20260530-021-v2-precondition-debt-cleanup.yaml)（含 D1 统一展示 model）/[022](../../../changelog/CR-20260530-022-content-naming-convergence.yaml)（命名收敛）/[023](../../../changelog/CR-20260530-023-review-content-type.yaml)（口碑 + 创作打标）已落。
-8. [x] 全量门禁无 BLOCKING：`bash agent_ops/gate/gate_repo.sh`（scope=all：service + app + portal）`[gate] OK`。本轮收口同时清理了与内容统一无关、但阻塞 gate-full 的仓库级 feature-tree 约定迁移残留——`quwoquan_service/scripts/gate.sh §5.1–5.3` 由旧约定（每节点 `tasks.md` + acceptance `feature/level`）对齐到新 L3 约定（`spec.md` + `acceptance.yaml` 的 `node.id/node.level`、`archived` 触发归档检查、`tests.recorded` 校验），并对齐 `verify_specs_l1_hierarchy.sh`（v2 `domain_services`）与 `verify_ff_config_contract.sh`（门禁矩阵迁入 `spec.md`）。`make gate-full` 额外的 gamma api_integration/user_acceptance 镜像属 `/deploy` 前置，不阻断准入。
+8. [x] 全量门禁无 BLOCKING：`bash quwoquan_ops/gate/gate_repo.sh`（scope=all：service + app + portal）`[gate] OK`。本轮收口同时清理了与内容统一无关、但阻塞 gate-full 的仓库级 feature-tree 约定迁移残留——`quwoquan_service/scripts/gate.sh §5.1–5.3` 由旧约定（每节点 `tasks.md` + acceptance `feature/level`）对齐到新 L3 约定（`spec.md` + `acceptance.yaml` 的 `node.id/node.level`、`archived` 触发归档检查、`tests.recorded` 校验），并对齐 `verify_specs_l1_hierarchy.sh`（v2 `domain_services`）与 `verify_ff_config_contract.sh`（门禁矩阵迁入 `spec.md`）。`make gate-full` 额外的 gamma api_integration/user_acceptance 镜像属 `/deploy` 前置，不阻断准入。
 
 > **准入结论（本轮）**：Gate 条目 1–8 全部勾选，全量门禁 `gate_repo.sh`（scope=all）`[gate] OK`，无 BLOCKING。内容多形态统一已满足开工（`/dev`）严格准入门。
 >

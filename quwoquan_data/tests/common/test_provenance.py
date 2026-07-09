@@ -30,7 +30,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
 
 from _common.content_object import register_content_object  # noqa: E402
-from _common.draft_io import write_prompt, write_writing_pack  # noqa: E402
+from _common.draft_io import _source_bundle_sha256, write_prompt, write_writing_pack  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.paths import (  # noqa: E402
     batch_command_root,
@@ -51,6 +51,23 @@ from produce.materialize import materialize_posts  # noqa: E402
 
 TASK = "出处记录_gwt"
 BATCH = "pilot"
+
+
+def test_source_bundle_hash_accepts_runtime_relative_path_with_batch_prefix():
+    old_cwd = Path.cwd()
+    with tempfile.TemporaryDirectory(prefix="source_bundle_hash_") as tmp:
+        os.chdir(tmp)
+        try:
+            batch = Path(".qwq_output/local/data-runtime/batches/demo_batch")
+            source = batch / "sources/su_demo/source.md"
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_text("# 来源\n\n九寨沟底稿。", encoding="utf-8")
+
+            digest = _source_bundle_sha256([source.as_posix()], base_dir=batch)
+        finally:
+            os.chdir(old_cwd)
+
+    assert digest and digest.startswith("sha256:")
 
 
 def _seed_post(produce_root: Path, ref: str, title: str) -> None:

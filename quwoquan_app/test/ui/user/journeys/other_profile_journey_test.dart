@@ -96,8 +96,11 @@ void main() {
     expect(find.text('举报'), findsOneWidget);
 
     await tester.tap(find.text('分享'));
-    await tester.pumpAndSettle();
+    // 分享 = AppToast「即将上线」（非弹层）；页面含未 settle 的网络图占位，
+    // 故用有限帧推进（与进入时 _pumpFrames 同策略），不能用 pumpAndSettle。
+    await _pumpFrames(tester);
     expect(find.byType(AppBottomModalSurface), findsNothing);
+    // 推进 AppToast 3s 自动消失定时器，避免 pending timer。
     await tester.pump(const Duration(seconds: 4));
   });
 }

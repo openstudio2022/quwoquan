@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -55,14 +53,7 @@ class AppBottomModalSurface extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: onDismiss,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: AppColorsFunctional.getColor(
-                      isDark,
-                      ColorType.modalScrim,
-                    ),
-                  ),
-                ),
+                child: const SizedBox.expand(),
               ),
             ),
             Align(
@@ -176,13 +167,6 @@ class AppTopModalSurface extends StatelessWidget {
       ColorType.separatorOpaque,
     ).withValues(alpha: isDark ? 0.28 : 0.18);
     final shadowColor = AppColors.black.withValues(alpha: isDark ? 0.18 : 0.08);
-    final resolvedBackdropColor =
-        backdropColor ??
-        AppColorsFunctional.getColor(
-          isDark,
-          ColorType.modalScrim,
-        ).withValues(alpha: isDark ? 0.06 : 0.03);
-    final resolvedBackdropBlurSigma = backdropBlurSigma ?? AppSpacing.sm / 2;
 
     return Material(
       type: MaterialType.transparency,
@@ -193,13 +177,7 @@ class AppTopModalSurface extends StatelessWidget {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: onDismiss,
-                child: BackdropFilter(
-                  filter: ui.ImageFilter.blur(
-                    sigmaX: resolvedBackdropBlurSigma,
-                    sigmaY: resolvedBackdropBlurSigma,
-                  ),
-                  child: ColoredBox(color: resolvedBackdropColor),
-                ),
+                child: const SizedBox.expand(),
               ),
             ),
             Align(

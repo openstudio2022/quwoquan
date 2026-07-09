@@ -2,11 +2,34 @@
 package local_contract
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"testing"
 )
 
 func TestMainLocalContractTest(t *testing.T) {
+	exists := func(path string) bool {
+		info, err := os.Stat(path)
+		return err == nil && info.IsDir()
+	}
+	repoRoot := func() string {
+		_, filename, _, ok := runtime.Caller(0)
+		if !ok {
+			t.Fatal("cannot resolve bridge file path")
+		}
+		for dir := filepath.Dir(filename); ; dir = filepath.Dir(dir) {
+			if exists(filepath.Join(dir, "quwoquan_service")) && exists(filepath.Join(dir, "quwoquan_ops")) {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				t.Fatal("cannot locate quwoquan repo root")
+			}
+		}
+		return ""
+	}
 	cmd := exec.Command(
 		"go",
 		"test",
@@ -15,6 +38,7 @@ func TestMainLocalContractTest(t *testing.T) {
 		"^(TestApplyEnvOverrides_CurrentAddr|TestApplyEnvOverrides_CurrentAddrNotOverrideExisting|TestApplyEnvOverrides_CurrentPassword|TestApplyEnvOverrides_NewRecOverrides|TestApplyEnvOverrides_RecModelService|TestApplyRedisSceneEnv_Addr|TestApplyRedisSceneEnv_Addrs_CommaSplit|TestApplyRedisSceneEnv_Mode|TestApplyRedisSceneEnv_NoEnvSet_NoChange|TestApplyRedisSceneEnv_Password|TestApplyRedisSceneEnv_TLS|TestLoadRuntimeConfig_ExternalRootLayered|TestLoadRuntimeConfig_LocalLayered|TestPreflightConfig_ClusterRequiresAddrs|TestResolveRuntimeIdentity_InvalidEnv|TestResolveRuntimeIdentity_ProdRequiresConfigVersion|TestToSceneConfig_ClusterNoAddrsFallsToMemory|TestToSceneConfig_PoolSizePropagated|TestToSceneConfig_StandaloneNoAddrFallsToMemory|TestToSceneConfig_StandaloneWithAddr|TestValidateRuntimeCompatibility)$",
 		"-count=1",
 	)
+	cmd.Env = append(os.Environ(), "QWQ_OUTPUT_ROOT="+filepath.Join(repoRoot(), ".qwq_output"))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("source bridge failed for quwoquan_service/services/content-service/cmd/api/main_test.go: %v\n%s", err, output)

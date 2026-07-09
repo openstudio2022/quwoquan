@@ -49,13 +49,13 @@ func TestNewOrchestratorClient_UsesMappedEndpoint(t *testing.T) {
 	}
 	_ = resp.Body.Close()
 
-	logs, err := parseJSONLines(standard.String())
+	logs, err := parseDelimitedLogs(standard.String())
 	if err != nil {
 		t.Fatalf("parse logs failed: %v", err)
 	}
 	found := false
 	for _, log := range logs {
-		if endpoint, ok := log["endpoint"].(string); ok && endpoint == "content.feed.list" {
+		if route, ok := log["route"].(string); ok && route == "content.feed.list" {
 			found = true
 		}
 	}
@@ -63,4 +63,3 @@ func TestNewOrchestratorClient_UsesMappedEndpoint(t *testing.T) {
 		t.Fatalf("expected mapped endpoint content.feed.list in logs")
 	}
 }
-

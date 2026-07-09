@@ -21,6 +21,12 @@ contracts/
 │   ├── notification/          ← 通知域 → notification-service
 │   └── ops/                   ← 运营域 → ops-service
 │
+├── runtime_errors/             ← 运行时错误码、端云错误语义与 codegen 输入
+├── observability/              ← 服务日志/异常/过程追踪最小字段基线
+│   ├── exception_log_baseline.yaml
+│   ├── io_access_log_baseline.yaml
+│   └── process_trace_log_baseline.yaml
+│
 └── [横切规范文档]              ← 跨域工程规范（不含业务对象定义）
     ├── authn_authz.md         ← 认证鉴权规范（JWT/scope/角色）
     ├── ci_cd_automation.md    ← CI/CD 自动化规范
@@ -30,10 +36,7 @@ contracts/
     ├── id_and_pagination.md   ← ID 格式 + 分页规范
     ├── metrics.md             ← 指标体系
     ├── roles_and_scopes.md    ← 角色与权限范围
-    ├── service_governance.md  ← 服务治理（熔断/限流/降级）
-    ├── exception_log_baseline.yaml    ← 异常日志格式基线
-    ├── io_access_log_baseline.yaml    ← 接入日志格式基线
-    └── process_trace_log_baseline.yaml← 过程追踪日志格式基线
+    └── service_governance.md  ← 服务治理（熔断/限流/降级）
 ```
 
 ---

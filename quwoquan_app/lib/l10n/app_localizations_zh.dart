@@ -1558,7 +1558,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mediaPickerOneTapMovie => '一键成片';
 
   @override
-  String get mediaPickerOneTapMovieQueued => '已加入一键成片，请在发视频页继续';
+  String get mediaPickerOneTapMovieQueued => '已加入一键成片，请在发布页继续';
 
   @override
   String get mediaPickerNextStep => '下一步';

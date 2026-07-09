@@ -82,8 +82,7 @@ def _load_multiobjective_models() -> tuple[dict[str, Any] | None, dict[str, floa
         load_path = None
         if artifact_uri:
             try:
-                sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ml"))
-                sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts" / "ml"))
+                sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
                 import artifact_store
                 load_path = artifact_store.download(artifact_uri)
             except Exception:

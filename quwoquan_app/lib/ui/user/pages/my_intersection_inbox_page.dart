@@ -8,9 +8,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
+import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/providers/my_intersection_inbox_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/my_intersection_impact_timeline.dart';
@@ -298,28 +300,82 @@ class _MyIntersectionInboxPageState
   ) {
     return <IntersectionTimelineEntry>[
       for (final reason in items)
-        IntersectionTimelineEntry(
-          bucket: resolveIntersectionTimeBucket(
-            reason.timeBucket,
-            reason.freshAt,
+        if (displayReadyIntersectionReason(reason) case final displayReason?)
+          IntersectionTimelineEntry(
+            bucket: resolveIntersectionTimeBucket(
+              displayReason.timeBucket,
+              displayReason.freshAt,
+            ),
+            child: IntersectionCompactTimelineRow(
+              primaryText: displayReason.primaryText,
+              spans: displayReason.primarySpans,
+              iconKey: displayReason.iconKey,
+              sourceRef: _sourceRefFor(displayReason),
+              dimension: displayReason.dimension,
+              lifecycleState: displayReason.lifecycleState,
+              onTap: () => _openReason(displayReason),
+              onSpanTap: (span) => _onSpanTap(displayReason, span),
+              onNegativeFeedback: () => _onNegativeFeedback(displayReason),
+            ),
           ),
-          child: IntersectionCompactTimelineRow(
-            primaryText: reason.primaryText,
-            spans: reason.primarySpans,
-            iconKey: reason.iconKey,
-            sourceRef: _sourceRefFor(reason),
-            dimension: reason.dimension,
-            onTap: () => _openReason(reason),
-            onSpanTap: (span) => _onSpanTap(reason, span),
-          ),
-        ),
     ];
+  }
+
+  /// 交集主体冷却主键：与云侧 coolKey()（ActionTargetID，缺省 RelationObjectID）同源，
+  /// 保证端上报的 subjectId 命中 Feed 负反馈过滤集（rec:ineg）。
+  String _subjectIdFor(IntersectionReason reason) {
+    final target = reason.actionTargetId.trim();
+    if (target.isNotEmpty) return target;
+    return reason.relationObjectId.trim();
+  }
+
+  /// 收件箱交集条目负反馈真实入口（F 推荐差异化）：长按 → action sheet「不感兴趣」→
+  /// trackIntersectionFeedback（feedbackKind ∈ registry 闭集，端云同源），驱动云侧
+  /// rec:ineg 冷却，命中 subject 冷却期内不再推荐。归因键与曝光/点击同源，负反馈可下钻。
+  Future<void> _onNegativeFeedback(IntersectionReason reason) async {
+    final subjectId = _subjectIdFor(reason);
+    if (subjectId.isEmpty) return;
+    final selected = await showAppActionSheet<String>(
+      context,
+      sections: <AppActionSheetSection<String>>[
+        AppActionSheetSection<String>(
+          items: <AppActionSheetItem<String>>[
+            AppActionSheetItem<String>(
+              label: UITextConstants.notInterested,
+              value: intersectionFeedbackKindNotInterested,
+              icon: CupertinoIcons.hand_thumbsdown,
+              isDestructive: true,
+            ),
+          ],
+        ),
+      ],
+    );
+    if (selected == null || !mounted) return;
+    ref
+        .read(contentBehaviorTrackerProvider)
+        .trackIntersectionFeedback(
+          subjectId,
+          feedbackKind: selected,
+          intersectionId: reason.intersectionId,
+          intersectionDimension: reason.dimension,
+          intersectionClass: reason.intersectionClass,
+          intersectionSourceRef: _sourceRefFor(reason),
+        );
+    if (mounted) {
+      AppToast.show(
+        context,
+        DiscoveryFeedText.feedNegativeFeedbackNotInterested,
+      );
+    }
   }
 
   List<IntersectionReason> _visibleItems(List<IntersectionReason> raw) {
     final factItems = raw.where((item) => item.intersectionClass == 'fact');
     final filtered = factItems
         .where((item) {
+          if (displayReadyIntersectionReason(item) == null) {
+            return false;
+          }
           if (widget.intersectionId.trim().isNotEmpty &&
               item.intersectionId != widget.intersectionId.trim()) {
             return false;
@@ -400,9 +456,9 @@ class _MyIntersectionInboxPageState
 }
 
 String _sourceRefFor(IntersectionReason reason) {
-  for (final point in reason.intersectionPoints) {
-    final sourceRef = point.sourceRef.trim();
-    if (sourceRef.isNotEmpty) return sourceRef;
+  final resolved = resolvedIntersectionReasonKind(reason).trim();
+  if (resolved.isNotEmpty) {
+    return resolved;
   }
   return reason.source.trim();
 }

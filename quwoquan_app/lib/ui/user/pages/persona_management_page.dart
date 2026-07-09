@@ -307,7 +307,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     String purposeHint = '';
     String isolationLevel = 'open';
 
-    await showCupertinoDialog<void>(
+    await showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => CupertinoAlertDialog(
@@ -398,7 +398,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     PersonaManagementNotifier notifier,
     PersonaManagementItemViewData created,
   ) async {
-    await showCupertinoDialog<void>(
+    await showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: const Text(UITextConstants.personaCreateSuccess),
@@ -431,7 +431,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     final emailController = TextEditingController(text: persona.email);
     String isolationLevel = persona.isolationLevel;
 
-    await showCupertinoDialog<void>(
+    await showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => CupertinoAlertDialog(
@@ -538,7 +538,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
       }
       if (!guard.canDelete) {
         if (guard.canRetire) {
-          final retire = await showCupertinoDialog<bool>(
+          final retire = await showAppCupertinoDialog<bool>(
             context: context,
             builder: (dialogContext) => CupertinoAlertDialog(
               title: const Text(UITextConstants.personaRetire),
@@ -573,7 +573,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
         );
         return;
       }
-      final confirmed = await showCupertinoDialog<bool>(
+      final confirmed = await showAppCupertinoDialog<bool>(
         context: context,
         builder: (dialogContext) => CupertinoAlertDialog(
           title: const Text(UITextConstants.personaDelete),
@@ -637,7 +637,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     final selected = <String, bool>{
       for (final id in suggestion.targetPersonaIds) id: true,
     };
-    await showCupertinoDialog<void>(
+    await showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => CupertinoAlertDialog(

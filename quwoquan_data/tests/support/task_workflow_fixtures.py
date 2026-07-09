@@ -220,7 +220,7 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
     )
     write_json(dl / "homepage_source_plan.json", {
         "payload": {
-            "primaryEvidenceRef": "home_official",
+            "primaryEvidenceRef": "home_baike",
             "sources": [
                 {
                     "source_id": "home_official",
@@ -228,23 +228,6 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
                     "url": "https://x.invalid/home",
                     "sourceUseMode": "factual_reference_only",
                     "body": source_body,
-                    "imageUrls": [
-                        {
-                            "url": "https://img.invalid/home.jpg",
-                            "platform": "景区官网",
-                            "license": "CC-BY-SA 4.0",
-                            "credit": "景区官方",
-                            "sourceUrl": "https://img.invalid/home.jpg",
-                            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
-                            "licenseSnapshot": "CC-BY-SA 4.0 test fixture",
-                            "authorizationProof": "fixture homepage image rights",
-                            "usageScope": "app_publish",
-                            "width": 960,
-                            "height": 640,
-                            "caption": "测试景区甲主景实拍",
-                            "relevance": "直接呈现测试景区甲核心景区主景",
-                        }
-                    ],
                 },
                 {
                     "source_id": "home_baike",
@@ -252,6 +235,24 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
                     "url": "https://x.invalid/baike",
                     "sourceUseMode": "factual_reference_only",
                     "body": source_body,
+                    "imageUrls": [
+                        {
+                            "url": "https://img.invalid/home.jpg",
+                            "platform": "百度百科",
+                            "license": "CC-BY-SA 4.0",
+                            "credit": "百科页面配图",
+                            "sourceUrl": "https://img.invalid/home.jpg",
+                            "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                            "licenseSnapshot": "CC-BY-SA 4.0 test fixture",
+                            "authorizationProof": "fixture homepage image rights",
+                            "usageScope": "app_publish",
+                            "modelReleaseStatus": "not_required",
+                            "width": 960,
+                            "height": 640,
+                            "caption": "测试景区甲主景实拍",
+                            "relevance": "直接呈现测试景区甲核心景区主景",
+                        }
+                    ],
                 },
             ],
         }
@@ -285,6 +286,7 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
                             "licenseSnapshot": "CC-BY-SA 4.0 test fixture",
                             "authorizationProof": f"fixture article source image rights {sid}",
                             "usageScope": "app_publish",
+                            "modelReleaseStatus": "not_required",
                             "width": 960,
                             "height": 640,
                             "caption": f"测试景区甲 {sid} 同源配图",
@@ -316,6 +318,7 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
                             "sourceUrl": "https://img.invalid/a.jpg",
                             "width": 960,
                             "height": 640,
+                            "modelReleaseStatus": "not_required",
                             "contentType": "image/jpeg",
                             "caption": "测试景区甲栈道实拍",
                             "relevance": "直接呈现测试景区甲核心景区栈道",
@@ -339,6 +342,7 @@ def _seed_source_plan(task_id: str, batch_id: str) -> None:
                             "sourceUrl": "https://img.invalid/b.jpg",
                             "width": 960,
                             "height": 640,
+                            "modelReleaseStatus": "not_required",
                             "contentType": "image/jpeg",
                             "caption": "测试景区甲森林实拍",
                             "relevance": "直接呈现测试景区甲核心景区森林步道",
@@ -759,4 +763,3 @@ def _seed_publish_inputs(task_id: str, batch_id: str) -> None:
 
 
 __all__ = sorted(name for name in globals() if name != "__all__" and not name.startswith("__"))
-

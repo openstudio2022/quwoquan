@@ -75,10 +75,12 @@ Map<String, dynamic> imageEditorMultiImageDonePopPayload({
   required int currentIndex,
   required String path,
   List<String>? paths,
+  String action = 'backToPicker',
 }) {
   return <String, dynamic>{
     'index': currentIndex,
     'path': path,
+    'action': action,
     // 携带编辑器内的完整顺序（含缩略图条拖拽重排结果），供宿主一次性回写。
     if (paths != null) 'paths': List<String>.from(paths),
   };

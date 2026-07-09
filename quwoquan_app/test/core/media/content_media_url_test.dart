@@ -54,10 +54,8 @@ void main() {
         <String>[
           'https://127.0.0.1:18088/media/image/s/archived-image/post/demo/v1/cover.png',
           'https://localhost:18088/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://10.0.2.2:18088/media/image/s/archived-image/post/demo/v1/cover.png',
           'https://127.0.0.1:18080/media/image/s/archived-image/post/demo/v1/cover.png',
           'https://localhost:18080/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://10.0.2.2:18080/media/image/s/archived-image/post/demo/v1/cover.png',
         ],
       );
     });
@@ -80,10 +78,8 @@ void main() {
         <String>[
           'https://127.0.0.1:18088/media/image/s/archived-image/post/demo/v1/cover.png?v=2',
           'https://localhost:18088/media/image/s/archived-image/post/demo/v1/cover.png?v=2',
-          'https://10.0.2.2:18088/media/image/s/archived-image/post/demo/v1/cover.png?v=2',
           'https://127.0.0.1:18080/media/image/s/archived-image/post/demo/v1/cover.png?v=2',
           'https://localhost:18080/media/image/s/archived-image/post/demo/v1/cover.png?v=2',
-          'https://10.0.2.2:18080/media/image/s/archived-image/post/demo/v1/cover.png?v=2',
         ],
       );
     });
@@ -110,6 +106,99 @@ void main() {
           'https://api.example.com/media/video/s/archived-video/post/demo/v1/play.mp4',
         ],
       );
+    });
+
+    test('video resolver rejects image cover paths across local envs', () {
+      const imageObjectKey =
+          'media/image/s/archived-image/post/fixture_photo_002/v1/cover.png';
+      final cases = <({String api, String image, String video})>[
+        (
+          api: 'alpha-api.quwoquan-env.test:17000',
+          image: 'alpha-image.quwoquan-env.test:17100',
+          video: 'alpha-video.quwoquan-env.test:17100',
+        ),
+        (
+          api: 'beta-api.quwoquan-env.test:18000',
+          image: 'beta-image.quwoquan-env.test:18100',
+          video: 'beta-video.quwoquan-env.test:18100',
+        ),
+        (
+          api: 'gamma-api.quwoquan-env.test:19000',
+          image: 'gamma-image.quwoquan-env.test:19100',
+          video: 'gamma-video.quwoquan-env.test:19100',
+        ),
+        (
+          api: 'prod-api.quwoquan-env.test:20000',
+          image: 'prod-image.quwoquan-env.test:20100',
+          video: 'prod-video.quwoquan-env.test:20100',
+        ),
+      ];
+
+      for (final scenario in cases) {
+        expect(
+          resolveContentVideoUrlCandidates(
+            imageObjectKey,
+            gatewayBaseUrl: 'https://${scenario.api}',
+            imageCdnBaseUrl: 'https://${scenario.image}',
+            videoCdnBaseUrl: 'https://${scenario.video}',
+          ),
+          isEmpty,
+          reason: scenario.api,
+        );
+        expect(
+          resolveContentVideoUrlCandidates(
+            'https://${scenario.image}/$imageObjectKey',
+            gatewayBaseUrl: 'https://${scenario.api}',
+            imageCdnBaseUrl: 'https://${scenario.image}',
+            videoCdnBaseUrl: 'https://${scenario.video}',
+          ),
+          isEmpty,
+          reason: scenario.image,
+        );
+      }
+    });
+
+    test('video resolver keeps playable video paths across local envs', () {
+      const videoObjectKey = 'media/video/s/archived-video/beta-sample.mp4';
+      final cases = <({String api, String video})>[
+        (
+          api: 'alpha-api.quwoquan-env.test:17000',
+          video: 'alpha-video.quwoquan-env.test:17100',
+        ),
+        (
+          api: 'beta-api.quwoquan-env.test:18000',
+          video: 'beta-video.quwoquan-env.test:18100',
+        ),
+        (
+          api: 'gamma-api.quwoquan-env.test:19000',
+          video: 'gamma-video.quwoquan-env.test:19100',
+        ),
+        (
+          api: 'prod-api.quwoquan-env.test:20000',
+          video: 'prod-video.quwoquan-env.test:20100',
+        ),
+      ];
+
+      for (final scenario in cases) {
+        final videoPort = scenario.video.split(':').last;
+        final apiPort = scenario.api.split(':').last;
+        expect(
+          resolveContentVideoUrlCandidates(
+            videoObjectKey,
+            gatewayBaseUrl: 'https://${scenario.api}',
+            videoCdnBaseUrl: 'https://${scenario.video}',
+          ),
+          <String>[
+            'https://localhost:$videoPort/$videoObjectKey',
+            'https://127.0.0.1:$videoPort/$videoObjectKey',
+            'https://${scenario.video}/$videoObjectKey',
+            'https://localhost:$apiPort/$videoObjectKey',
+            'https://127.0.0.1:$apiPort/$videoObjectKey',
+            'https://${scenario.api}/$videoObjectKey',
+          ],
+          reason: scenario.api,
+        );
+      }
     });
 
     test('rewrites untrusted absolute media URLs through configured base', () {
@@ -168,10 +257,8 @@ void main() {
       expect(candidates, <String>[
         'https://127.0.0.1:18088/media/video/s/archived-video/beta-sample.mp4',
         'https://localhost:18088/media/video/s/archived-video/beta-sample.mp4',
-        'https://10.0.2.2:18088/media/video/s/archived-video/beta-sample.mp4',
         'https://127.0.0.1:18080/media/video/s/archived-video/beta-sample.mp4',
         'https://localhost:18080/media/video/s/archived-video/beta-sample.mp4',
-        'https://10.0.2.2:18080/media/video/s/archived-video/beta-sample.mp4',
       ]);
     });
 
@@ -190,7 +277,7 @@ void main() {
       expect(candidates.join('\n'), isNot(contains('/mock/example/')));
     });
 
-    test('supports Android emulator private host ordering', () {
+    test('normalizes secure Android-emulator media base to loopback HTTPS', () {
       expect(
         resolveContentMediaUrlCandidates(
           'media/image/s/archived-image/post/demo/v1/cover.png',
@@ -198,34 +285,70 @@ void main() {
           imageCdnBaseUrl: 'https://10.0.2.2:18088/',
         ),
         <String>[
-          'https://10.0.2.2:18088/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://127.0.0.1:18088/media/image/s/archived-image/post/demo/v1/cover.png',
           'https://localhost:18088/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://10.0.2.2:18080/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://127.0.0.1:18080/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://127.0.0.1:18088/media/image/s/archived-image/post/demo/v1/cover.png',
           'https://localhost:18080/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://127.0.0.1:18080/media/image/s/archived-image/post/demo/v1/cover.png',
         ],
       );
     });
 
-    test('expands secure local env domains to HTTPS loopback candidates', () {
+    test('upgrades cleartext Android-emulator media base to loopback HTTPS', () {
+      const cleartextScheme = 'http';
       expect(
         resolveContentMediaUrlCandidates(
           'media/image/s/archived-image/post/demo/v1/cover.png',
-          gatewayBaseUrl: 'https://alpha-api.quwoquan-env.test:17000',
-          imageCdnBaseUrl: 'https://alpha-image.quwoquan-env.test:17100',
+          gatewayBaseUrl: '$cleartextScheme://10.0.2.2:18080/',
+          imageCdnBaseUrl: '$cleartextScheme://10.0.2.2:18088/',
         ),
         <String>[
-          'https://localhost:17100/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://127.0.0.1:17100/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://10.0.2.2:17100/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://alpha-image.quwoquan-env.test:17100/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://localhost:17000/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://127.0.0.1:17000/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://10.0.2.2:17000/media/image/s/archived-image/post/demo/v1/cover.png',
-          'https://alpha-api.quwoquan-env.test:17000/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://localhost:18088/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://127.0.0.1:18088/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://localhost:18080/media/image/s/archived-image/post/demo/v1/cover.png',
+          'https://127.0.0.1:18080/media/image/s/archived-image/post/demo/v1/cover.png',
         ],
       );
+    });
+
+    test('expands secure local env domains by manifest port profile', () {
+      const objectKey = 'media/image/s/archived-image/post/demo/v1/cover.png';
+      final cases = <({String api, String image})>[
+        (
+          api: 'alpha-api.quwoquan-env.test:17000',
+          image: 'alpha-image.quwoquan-env.test:17100',
+        ),
+        (
+          api: 'beta-api.quwoquan-env.test:18000',
+          image: 'beta-image.quwoquan-env.test:18100',
+        ),
+        (
+          api: 'gamma-api.quwoquan-env.test:19000',
+          image: 'gamma-image.quwoquan-env.test:19100',
+        ),
+        (
+          api: 'prod-api.quwoquan-env.test:20000',
+          image: 'prod-image.quwoquan-env.test:20100',
+        ),
+      ];
+
+      for (final scenario in cases) {
+        final imagePort = scenario.image.split(':').last;
+        final apiPort = scenario.api.split(':').last;
+        final candidates = resolveContentMediaUrlCandidates(
+          objectKey,
+          gatewayBaseUrl: 'https://${scenario.api}',
+          imageCdnBaseUrl: 'https://${scenario.image}',
+        );
+        expect(candidates, <String>[
+          'https://localhost:$imagePort/$objectKey',
+          'https://127.0.0.1:$imagePort/$objectKey',
+          'https://${scenario.image}/$objectKey',
+          'https://localhost:$apiPort/$objectKey',
+          'https://127.0.0.1:$apiPort/$objectKey',
+          'https://${scenario.api}/$objectKey',
+        ], reason: scenario.api);
+        expect(candidates.join('\n'), isNot(contains('https://10.0.2.2')));
+      }
     });
 
     test('keeps prod-hosted remote https media base candidates', () {

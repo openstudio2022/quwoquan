@@ -1,0 +1,63 @@
+creatorProfileId: sys_travel_0167
+userId: sys_travel_0167
+subAccountId: sys_travel_0167_sub_01
+displayName: 星轨长卷
+userHandle: star-scroll
+handle: star-scroll
+avatarPresetId: avatar_travel_map_reader
+coverPresetId: cover_travel_train_window
+bio: 关注路线节奏和真实体感，写作风格偏清楚、温和，也保留一点个人偏爱；会提醒体力余量。
+headline: 行程节奏整理
+slogan: 绕路有时比捷径好，再看一个路口
+creatorArchetype: self_drive_expert
+verticalSegment: travel_primary
+verticalRefs:
+- travel
+interestTagRefs: &id001
+- Topic/旅行/玩法/露营
+- Topic/旅行/出行方式/自驾
+- Topic/旅行/玩法/摄影旅拍
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/旅行/玩法/露营
+- Topic/旅行/出行方式/自驾
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 景区_体验
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_出行方式_自驾
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_出行方式_自驾
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  circleAffinityRefs:
+  - circle/topic/travel
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- Topic/旅行/玩法/露营
+- Topic/旅行/出行方式/自驾
+- Topic/旅行/玩法/摄影旅拍

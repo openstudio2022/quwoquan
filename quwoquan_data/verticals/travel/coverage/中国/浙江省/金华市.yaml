@@ -1,0 +1,353 @@
+# 全国地点主清单 · 浙江省金华市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 金华市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 东阳市
+  leaves:
+  - name: 横店影视城
+    canonicalName: 横店影视城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/主题乐园/影视主题乐园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/东阳市
+    aliases:
+    - 横店影视文化旅游区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 卢宅
+    canonicalName: 东阳卢宅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/东阳市
+    aliases:
+    - 卢宅建筑群
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 中国木雕博物馆
+    canonicalName: 中国木雕博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/东阳市
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 东白山
+    canonicalName: 东阳东白山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/东阳市
+    aliases:
+    - 太白尖
+    selectionPriority: 4
+    sourceReadiness: ready
+- district: 义乌市
+  leaves:
+  - name: 义乌国际商贸城
+    canonicalName: 义乌国际商贸城
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/义乌市
+    aliases:
+    - 义乌小商品城
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 佛堂古镇
+    canonicalName: 佛堂古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/义乌市
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 双林寺
+    canonicalName: 义乌双林寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/义乌市
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 义乌市博物馆
+    canonicalName: 义乌市博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/义乌市
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 兰溪市
+  leaves:
+  - name: 诸葛八卦村
+    canonicalName: 诸葛八卦村
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    aliases:
+    - 诸葛村
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 六洞山地下长河
+    canonicalName: 兰溪地下长河
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    aliases:
+    - 六洞山风景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 游埠古镇
+    canonicalName: 游埠古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 芥子园
+    canonicalName: 兰溪芥子园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    selectionPriority: 4
+    sourceReadiness: ready
+- district: 婺城区
+  leaves:
+  - name: 双龙洞
+    canonicalName: 金华双龙洞
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
+    aliases:
+    - 双龙风景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 太平天国侍王府
+    canonicalName: 太平天国侍王府
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
+    aliases:
+    - 侍王府
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 黄大仙祖宫
+    canonicalName: 金华黄大仙祖宫
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 金华市博物馆
+    canonicalName: 金华市博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 古子城历史文化街区
+    canonicalName: 金华古子城
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
+    aliases:
+    - 婺州古城
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 八咏楼
+    canonicalName: 金华八咏楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
+    selectionPriority: 6
+    sourceReadiness: ready
+- district: 武义县
+  leaves:
+  - name: 牛头山
+    canonicalName: 武义牛头山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    aliases:
+    - 牛头山国家森林公园
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 武义温泉
+    canonicalName: 武义温泉
+    entityType: 地点/温泉
+    typeTagRefs:
+    - Entity/地点/温泉
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    aliases:
+    - 武义温泉旅游度假区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 郭洞村
+    canonicalName: 武义郭洞村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    aliases:
+    - 郭洞古生态村
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 俞源村
+    canonicalName: 俞源太极星象村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 延福寺
+    canonicalName: 武义延福寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 大红岩
+    canonicalName: 武义大红岩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    selectionPriority: 6
+    sourceReadiness: pending
+- district: 永康市
+  leaves:
+  - name: 方岩
+    canonicalName: 永康方岩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    aliases:
+    - 方岩风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 中国科技五金城
+    canonicalName: 中国科技五金城
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    aliases:
+    - 永康五金城
+    selectionPriority: 2
+    sourceReadiness: ready
+- district: 浦江县
+  leaves:
+  - name: 仙华山
+    canonicalName: 浦江仙华山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/浦江县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 江南第一家
+    canonicalName: 江南第一家
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/浦江县
+    aliases:
+    - 郑义门
+    - 郑宅古镇
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 上山遗址
+    canonicalName: 上山遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/浦江县
+    aliases:
+    - 上山考古遗址公园
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 神丽峡
+    canonicalName: 浦江神丽峡
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/浦江县
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 磐安县
+  leaves:
+  - name: 花溪风景区
+    canonicalName: 磐安花溪
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/磐安县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 夹溪十八涡
+    canonicalName: 磐安十八涡
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/磐安县
+    aliases:
+    - 十八涡景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 榉溪孔氏家庙
+    canonicalName: 榉溪孔氏家庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/磐安县
+    aliases:
+    - 婺州南宗孔氏家庙
+    selectionPriority: 3
+    sourceReadiness: ready
+- district: 金东区
+  leaves:
+  - name: 艾青故里
+    canonicalName: 艾青故里
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/金东区
+    aliases:
+    - 艾青故居
+    - 畈田蒋村
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 大佛寺
+    canonicalName: 金华大佛寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/金东区
+    aliases:
+    - 曹宅大佛寺
+    selectionPriority: 2
+    sourceReadiness: ready

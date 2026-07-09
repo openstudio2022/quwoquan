@@ -64,6 +64,9 @@ String _draftFingerprints(List<CreateDraft> drafts) {
           draft.state.imagePaths.join('|'),
           draft.state.videoPath,
           draft.state.videoThumbnail,
+          draft.state.isOneTapMovie,
+          draft.state.oneTapMoviePath,
+          draft.state.oneTapMovieEffectId,
         ].join('::'),
       )
       .join('||');
@@ -91,9 +94,8 @@ class SharedPreferencesCreateDraftRepository implements CreateDraftRepository {
 
   @override
   Future<CreateDraftStoreState> load() async {
-    final snapshot = await CreateDraftLocalStorage.loadScopedDraftsWithCurrentId(
-      scopeKey,
-    );
+    final snapshot =
+        await CreateDraftLocalStorage.loadScopedDraftsWithCurrentId(scopeKey);
     return CreateDraftStoreState(
       drafts: snapshot.drafts,
       currentDraftId: snapshot.currentId,
@@ -169,7 +171,8 @@ final createDraftRepositoryProvider = Provider<CreateDraftRepository>((ref) {
 });
 
 class CreateDraftStoreController extends AsyncNotifier<CreateDraftStoreState> {
-  CreateDraftRepository get _repository => ref.read(createDraftRepositoryProvider);
+  CreateDraftRepository get _repository =>
+      ref.read(createDraftRepositoryProvider);
 
   @override
   Future<CreateDraftStoreState> build() async {
@@ -229,7 +232,7 @@ class CreateDraftStoreController extends AsyncNotifier<CreateDraftStoreState> {
   }
 }
 
-final createDraftStoreProvider = AsyncNotifierProvider<
-  CreateDraftStoreController,
-  CreateDraftStoreState
->(CreateDraftStoreController.new);
+final createDraftStoreProvider =
+    AsyncNotifierProvider<CreateDraftStoreController, CreateDraftStoreState>(
+      CreateDraftStoreController.new,
+    );

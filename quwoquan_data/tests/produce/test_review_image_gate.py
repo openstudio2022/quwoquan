@@ -25,6 +25,7 @@ import cv2  # noqa: E402
 
 from produce.route_workflow import (  # noqa: E402
     _check_image_gate,
+    _check_image_fidelity,
     _check_carrier_consistency,
     _check_evidence_quality,
     _check_image_source_scope,
@@ -132,6 +133,7 @@ def test_image_only_fallback_does_not_require_prose_checks():
     fallback = _review_fallback_stage({
         "generatorProvenance": {"passed": True},
         "imageGate": {"passed": True},
+        "imageFidelity": {"passed": True},
         "carrierConsistency": {"passed": True},
     })
 
@@ -234,6 +236,80 @@ def test_image_source_scope_blocks_article_sources_in_image_work():
     )
     assert gate["passed"] is False
     assert any("non-image source units" in issue for issue in gate["issues"]), gate["issues"]
+
+
+def test_image_fidelity_blocks_multi_creator_and_missing_provenance():
+    gate = _check_image_fidelity(
+        {
+            "carrier": "image",
+            "title": "九寨沟夏末倒影",
+            "caption": "湖面倒影与彩林一起出现。",
+            "storySpine": {"primaryEntity": "九寨沟", "sourceCollectionId": "pin-001", "beats": ["九寨沟倒影", "彩林"]},
+            "assets": [
+                {
+                    "assetId": "a1",
+                    "sourceCollectionId": "pin-001",
+                    "collectionPageUrl": "https://www.pinterest.com/pin/1/",
+                    "license": "attribution_no_watermark",
+                    "authorizationProof": "https://img.example.com/1.jpg",
+                    "creator": "作者甲",
+                    "title": "九寨沟倒影",
+                },
+                {
+                    "assetId": "a2",
+                    "sourceCollectionId": "pin-001",
+                    "collectionPageUrl": "https://www.pinterest.com/pin/1/",
+                    "license": "attribution_no_watermark",
+                    "authorizationProof": "https://img.example.com/2.jpg",
+                    "creator": "作者乙",
+                    "title": "九寨沟彩林",
+                },
+                {
+                    "assetId": "a3",
+                    "sourceCollectionId": "pin-001",
+                    "license": "attribution_no_watermark",
+                    "title": "缺少出处字段",
+                },
+            ],
+        }
+    )
+    assert gate["passed"] is False
+    assert any("one creator/sourceAuthor" in issue for issue in gate["issues"]), gate["issues"]
+    assert any("image provenance fields incomplete" in issue for issue in gate["issues"]), gate["issues"]
+
+
+def test_image_fidelity_blocks_rewrite_drift_and_routes_to_compose_brief():
+    gate = _check_image_fidelity(
+        {
+            "carrier": "image",
+            "title": "城市咖啡馆夜谈",
+            "caption": "深夜创业者的都市神经漫游与电车轰鸣。",
+            "storySpine": {"primaryEntity": "九寨沟", "sourceCollectionId": "pin-002", "beats": ["九寨沟瀑布", "原始森林"]},
+            "assets": [
+                {
+                    "assetId": "a1",
+                    "sourceCollectionId": "pin-002",
+                    "collectionPageUrl": "https://www.pinterest.com/pin/2/",
+                    "license": "attribution_no_watermark",
+                    "authorizationProof": "https://img.example.com/21.jpg",
+                    "creator": "作者甲",
+                    "title": "九寨沟瀑布",
+                    "caption": "原始森林与瀑布",
+                }
+            ],
+        }
+    )
+    assert gate["passed"] is False
+    assert any("light polishing" in issue for issue in gate["issues"]), gate["issues"]
+    fallback = _review_fallback_stage(
+        {
+            "generatorProvenance": {"passed": True},
+            "imageGate": {"passed": True},
+            "imageFidelity": gate,
+            "carrierConsistency": {"passed": True},
+        }
+    )
+    assert fallback == "compose_brief"
 
 
 def _run_all() -> None:

@@ -7,10 +7,10 @@ node:
   parent_domain_service: object-homepage-network
   parent_business_capability: intersection-unified-experience
 scope:
-  summary: 实体主页与我的主页同壳同语义 token 重做为「身份 → 我的交集 → 影响力 → 记录/讨论/相关圈子」双模块结构，资料/关于入口下沉。
+  summary: 实体主页与我的主页同壳同语义 token 重做为「身份 → 我的交集 → 这里打动的人 → 记录/讨论/相关圈子」双模块结构，资料/关于入口下沉。
   in_scope:
   - 我的交集卡标题统一为「我的交集」，渲染共享 ObjectIntersectionPreviewCard（objectBType=homepage、objectSharedReasonsProvider 单一真相源）：单列预览句 + 蓝锚点 + 查看全部。
-  - 影响力卡新增，标题「影响力」，IntersectionStatementCard + entityImpactProvider，逐条只读 EntityImpactItem，句内数字下钻影响明细，无事实不展示。
+  - 打动卡新增，标题「这里打动的人」，IntersectionStatementCard + entityImpactProvider，逐条只读 EntityImpactItem，句内数字下钻影响明细，无事实不展示。
   - 资料/关于入口不进入首屏核心模块，头部只保留一句话简介。
   - 核心动作主按钮关注、次按钮改「发记录」；移除首屏常驻「想去·结伴」入口。
   - 一级 tab 记录/讨论/相关圈子；记录流双列瀑布 + 卡内唯一交集句（封面→交集句→标题→作者→赞）。
@@ -41,8 +41,9 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -71,7 +72,7 @@ gwt_acceptance:
     when:
     - 渲染实体主页首屏。
     then:
-    - 首屏核心模块只保留头部一句话简介、我的交集、影响力与内容 Tab；资料/关于能力作为后续入口，不压过双模块。
+    - 首屏核心模块只保留头部一句话简介、我的交集、这里打动的人与内容 Tab；资料/关于能力作为后续入口，不压过双模块。
     done_when:
     - 无禁用术语外露。
     edge_cases:
@@ -82,8 +83,9 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -120,8 +122,9 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -160,8 +163,9 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -199,8 +203,10 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/entity/contract/homepage_repository_contract__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -222,18 +228,18 @@ gwt_acceptance:
       与 circle detail populated 探针；由 `object-homepage-gamma-real-data-closure` 与 R-IX05
       继续追踪。'
   GWT6:
-    title: 影响力卡可枚举可下钻 GWT
+    title: 这里打动的人卡可枚举可下钻 GWT
     given:
-    - alpha mock 提供实体影响力数据（EntityImpactSummary 含主谓宾 primaryText + 数字 spans + 来源）。
+    - alpha mock 提供实体打动数据（EntityImpactSummary 含主谓宾 primaryText + 数字 spans + 来源）。
     when:
-    - 渲染实体主页「影响力」卡并点击句内数字片段。
+    - 渲染实体主页「这里打动的人」卡并点击句内数字片段。
     then:
-    - 影响力卡标题「影响力」，与 AuthorImpactCard/圈子影响卡同构（IntersectionStatementCard），逐条只读云侧
+    - 打动卡标题「这里打动的人」，与 AuthorImpactCard/圈子打动卡同构（IntersectionStatementCard），逐条只读云侧
       EntityImpactItem.primaryText/primarySpans；点击数字片段进入「影响明细」sheet 展示来源摘要与样本视觉。
     done_when:
-    - 影响力数据来自 entityImpactProvider（alpha contract-seed mock），无可枚举影响事实时整卡不展示，无主观营销语。
+    - 打动数据来自 entityImpactProvider（alpha contract-seed mock），无可枚举影响事实时整卡不展示，无主观营销语。
     edge_cases:
-    - 无影响力事实时不展示影响力卡。
+    - 无可枚举打动事实时不展示打动卡。
     contract_refs:
     - entity/homepage/projections/entity_impact_item.yaml
     - entity/homepage/projections/entity_impact_summary.yaml
@@ -241,8 +247,9 @@ gwt_acceptance:
     tests:
       planned:
       - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-      recorded: []
-    status: pending
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -257,13 +264,13 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
         envs: *id001
     notes:
-    - '[recorded] 2026-06-29：本节点由旧单交集卡 re-PRD 为「我的交集 + 影响力」双模块，新增实体影响力端契约（entity_impact_item/summary
+    - '[recorded] 2026-06-29：本节点由旧单交集卡 re-PRD 为「我的交集 + 这里打动的人」双模块，新增实体 impact 端契约（entity_impact_item/summary
       + GetEntityImpact，下钻复用与圈子同构的影响明细 sheet，不引入独立分页 evidence 端点），云侧 Go handler 暂缓；上方早期 [migrated_from_recorded] 旧口径绿测记录为被取代内容，待 local_contract 重写转绿后回填。'
-    - '[recorded] PENDING api_integration：gamma 实体影响力真实链路待云侧 entity impact handler 落地后由 api_integration 收口。'
+    - '[recorded] PENDING api_integration：gamma 实体「这里打动的人」真实链路待云侧 GetEntityImpact handler 落地后由 api_integration 收口。'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
   full_gate:
   - make gate

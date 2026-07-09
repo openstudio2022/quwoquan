@@ -26,9 +26,9 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      container.read(themeProvider.notifier).updateSystemBrightness(
-            Brightness.dark,
-          );
+      container
+          .read(themeProvider.notifier)
+          .updateSystemBrightness(Brightness.dark);
 
       final state = container.read(themeProvider);
       expect(state.themeModeSetting, AppThemeModeSetting.system);
@@ -40,9 +40,9 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      container.read(themeProvider.notifier).updateSystemBrightness(
-            Brightness.light,
-          );
+      container
+          .read(themeProvider.notifier)
+          .updateSystemBrightness(Brightness.light);
       container.read(themeProvider.notifier).toggleTheme();
 
       final state = container.read(themeProvider);
@@ -73,6 +73,7 @@ void main() {
         size: Size(834, 1194),
         boldText: true,
         highContrast: true,
+        disableAnimations: true,
         textScaler: TextScaler.linear(1.2),
       );
 
@@ -83,6 +84,7 @@ void main() {
       final state = container.read(accessibilityProvider);
       expect(state.boldText, isTrue);
       expect(state.highContrast, isTrue);
+      expect(state.disableAnimations, isTrue);
       expect(state.textScaleFactor, closeTo(1.2, 0.0001));
     });
   });
@@ -99,17 +101,26 @@ void main() {
       container
           .read(responsiveProvider.notifier)
           .updateFromMediaQueryData(compactData);
-      expect(container.read(responsiveProvider).breakpoint, AppBreakpoint.compact);
+      expect(
+        container.read(responsiveProvider).breakpoint,
+        AppBreakpoint.compact,
+      );
 
       container
           .read(responsiveProvider.notifier)
           .updateFromMediaQueryData(regularData);
-      expect(container.read(responsiveProvider).breakpoint, AppBreakpoint.regular);
+      expect(
+        container.read(responsiveProvider).breakpoint,
+        AppBreakpoint.regular,
+      );
 
       container
           .read(responsiveProvider.notifier)
           .updateFromMediaQueryData(expandedData);
-      expect(container.read(responsiveProvider).breakpoint, AppBreakpoint.expanded);
+      expect(
+        container.read(responsiveProvider).breakpoint,
+        AppBreakpoint.expanded,
+      );
     });
   });
 
@@ -118,22 +129,27 @@ void main() {
       final container = ProviderContainer();
       addTearDown(container.dispose);
 
-      container.read(themeProvider.notifier).updateSystemBrightness(
-            Brightness.dark,
-          );
-      container.read(accessibilityProvider.notifier).setSystemTextScaleFactor(1.0);
-      container.read(accessibilityProvider.notifier).setFontSizePreset(
-            AppFontSizePreset.xl,
-          );
+      container
+          .read(themeProvider.notifier)
+          .updateSystemBrightness(Brightness.dark);
+      container
+          .read(accessibilityProvider.notifier)
+          .setSystemTextScaleFactor(1.0);
+      container
+          .read(accessibilityProvider.notifier)
+          .setFontSizePreset(AppFontSizePreset.xl);
       container
           .read(responsiveProvider.notifier)
-          .updateFromMediaQueryData(const MediaQueryData(size: Size(1024, 768)));
+          .updateFromMediaQueryData(
+            const MediaQueryData(size: Size(1024, 768)),
+          );
 
       final snapshot = container.read(appearanceSnapshotProvider);
       expect(snapshot.themeMode, ThemeMode.system);
       expect(snapshot.isDark, isTrue);
       expect(snapshot.breakpoint, AppBreakpoint.expanded);
       expect(snapshot.textScaleFactor, closeTo(1.2, 0.0001));
+      expect(snapshot.disableAnimations, isFalse);
     });
   });
 

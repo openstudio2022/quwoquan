@@ -11,11 +11,15 @@ import 'package:quwoquan_app/components/object_page/intersection_propagation_vie
 import 'package:quwoquan_app/components/object_page/intersection_visual_cluster.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
+const bool _defaultIntersectionCommerceActionsEnabled = bool.fromEnvironment(
+  'INTERSECTION_COMMERCE_ACTIONS_ENABLED',
+);
+
 /// 一条交集结论行的数据模型与单行渲染（统一交互子契约 · A–E 横切复用）。
 ///
 /// 从 `intersection_statement_card.dart` 抽出（R03 体量收敛）：单行模型 / 渲染 / 行动 pill
 /// 集中在此，section 卡容器（`IntersectionStatementCard`）只负责标题、展开、footer。
-/// 时间线（`my_intersection_inbox_timeline.dart`）与影响力（`my_intersection_impact_timeline.dart`）
+/// 时间线（`my_intersection_inbox_timeline.dart`）与打动（`my_intersection_impact_timeline.dart`）
 /// 直接复用 [IntersectionStatementRow]，避免维护第二套单行渲染。
 ///
 /// 该积木为对象页/圈子页/用户页共享展示组件，归属 components/object_page（跨 UI 模块可复用）。
@@ -34,7 +38,7 @@ enum IntersectionStatementHighlight { blue, gray }
 /// - 槽③对象封面：[objectVisual] 非空时渲染 trailing 封面（替代 chevron）；
 /// - 槽④生命周期弱标：[lifecycleState]（+ [strengthDelta]）驱动弱标/红点。
 ///
-/// [propagationPath] 非空时（我的影响力 / 圈子影响），主句下方渲染传播视图（替代 subtitle 行）。
+/// [propagationPath] 非空时（我打动的人 / 圈子打动的人），主句下方渲染传播视图（替代 subtitle 行）。
 class IntersectionStatementItem {
   const IntersectionStatementItem({
     required this.primaryText,
@@ -105,7 +109,7 @@ class IntersectionStatementItem {
   /// 紧凑面下 new 仅渲染红点。
   final bool dotOnlyForNew;
 
-  /// 传播视图（我的影响力 / 圈子影响）；非空时主句下方渲染。
+  /// 传播视图（我打动的人 / 圈子打动的人）；非空时主句下方渲染。
   final IntersectionPropagationPath? propagationPath;
 
   /// 命中传播结论句。
@@ -157,7 +161,12 @@ class IntersectionStatementRow extends StatelessWidget {
     // 避免重复；否则继续渲染 leading 簇服务通用消费者。
     final hasVisuals = item.visuals.isNotEmpty && !item._suppressLeadingCluster;
     final primaryActionHint = item.actionHints
-        .where((hint) => hint.label.trim().isNotEmpty)
+        .where(
+          (hint) => isDisplayableIntersectionActionHint(
+            hint,
+            commerceActionsEnabled: _defaultIntersectionCommerceActionsEnabled,
+          ),
+        )
         .fold<IntersectionActionHint?>(
           null,
           (best, hint) =>
@@ -207,7 +216,7 @@ class IntersectionStatementRow extends StatelessWidget {
       strengthDelta: item.strengthDelta,
       dotOnlyForNew: item.dotOnlyForNew,
     );
-    // 主句下方辅助行：传播视图（我的影响力/圈子影响）优先，否则维度副句胶囊。
+    // 主句下方辅助行：传播视图（我打动的人/圈子打动的人）优先，否则维度副句胶囊。
     final Widget auxiliaryLine = item._hasPropagation
         ? IntersectionPropagationView(
             path: item.propagationPath!,
@@ -311,6 +320,45 @@ class IntersectionStatementRow extends StatelessWidget {
       onPressed: item.onTap,
       child: content,
     );
+  }
+}
+
+/// 判定 actionHint 是否应渲染成可执行 pill。
+///
+/// 与 `IntersectionTargetNavigator.openActionHint` 分发口径保持单一真相源：
+/// - `deferred`：能力未上线，不展示；
+/// - `assistant`：展示（打开小艺）；
+/// - `navigate`：有真实可导航 target 才展示（关注 / 加入 / 进入讨论 / 看共同来源等）。
+///   `login` 等 requiredGates 由承接页承接续接（§15），不在本层隐藏，否则已登录用户
+///   也会失去行动入口；
+/// - `companion`：结伴同行类有真实承接（进发起群聊页，见
+///   `IntersectionTargetNavigator._openCompanion`），available + 有对象上下文（target 非空）时
+///   展示成可点「发起结伴」pill，兑现「共同想去→约伴」北极星闭环（C0）；target 空则不展示，
+///   避免无对象上下文的空发起；
+/// - `commerce`：必须有 target，且默认受 feature flag 关闭；真实商务渠道未接入时不展示；
+/// - `message` / `connect`：端侧尚无真实私信/心动破冰状态机，不展示成可执行 pill
+///   （§24.10 诚实红线，不伪造重社交行动，宁可不展示也不伪装成对象下钻）。
+bool isDisplayableIntersectionActionHint(
+  IntersectionActionHint hint, {
+  bool commerceActionsEnabled = _defaultIntersectionCommerceActionsEnabled,
+}) {
+  if (hint.label.trim().isEmpty) {
+    return false;
+  }
+  if (hint.targetAvailability.trim() == 'deferred') {
+    return false;
+  }
+  switch (hint.dispatch.trim()) {
+    case 'assistant':
+      return true;
+    case 'navigate':
+    case 'companion':
+      return hint.target?.objectId.trim().isNotEmpty ?? false;
+    case 'commerce':
+      return commerceActionsEnabled &&
+          (hint.target?.objectId.trim().isNotEmpty ?? false);
+    default:
+      return false;
   }
 }
 

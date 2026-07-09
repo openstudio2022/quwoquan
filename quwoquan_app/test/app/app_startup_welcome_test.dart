@@ -12,7 +12,6 @@ import 'package:quwoquan_app/app/shell/main_app_shell.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
-import 'package:quwoquan_app/core/platform/platform_providers.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
@@ -20,7 +19,6 @@ import 'package:quwoquan_app/core/services/app_content_repository.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
 import 'package:quwoquan_app/ui/user/pages/login_page.dart';
 import 'package:quwoquan_app/ui/welcome/pages/welcome_screen.dart';
-import 'package:quwoquan_app/ui/welcome/widgets/welcome_flower_mark.dart';
 
 void main() {
   setUpAll(() async {
@@ -221,12 +219,12 @@ void main() {
               authSessionRefreshExecutorProvider.overrideWithValue((
                 refreshToken,
               ) async {
-              expect(refreshToken, 'stale-refresh');
-              return AuthLoginResultDto.fromMap(<String, dynamic>{
-                'accessToken': 'fresh-access',
-                'refreshToken': 'fresh-refresh',
-              });
-            }),
+                expect(refreshToken, 'stale-refresh');
+                return AuthLoginResultDto.fromMap(<String, dynamic>{
+                  'accessToken': 'fresh-access',
+                  'refreshToken': 'fresh-refresh',
+                });
+              }),
             ],
           ),
           child: const QuWoQuanAppRoot(),

@@ -41,6 +41,21 @@ String resolveContentMediaUrl(
   return candidates.isEmpty ? '' : candidates.first;
 }
 
+String resolveContentVideoUrl(
+  String? raw, {
+  String? gatewayBaseUrl,
+  String? imageCdnBaseUrl,
+  String? videoCdnBaseUrl,
+}) {
+  final candidates = resolveContentVideoUrlCandidates(
+    raw,
+    gatewayBaseUrl: gatewayBaseUrl ?? CloudRuntimeConfig.gatewayBaseUrl,
+    imageCdnBaseUrl: imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
+    videoCdnBaseUrl: videoCdnBaseUrl ?? CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+  );
+  return candidates.isEmpty ? '' : candidates.first;
+}
+
 List<String> resolveContentMediaUrlCandidates(
   String? raw, {
   String? gatewayBaseUrl,
@@ -103,6 +118,54 @@ List<String> resolveContentMediaUrlCandidates(
     imageCdnBaseUrl: imageCdn,
     videoCdnBaseUrl: videoCdn,
   );
+}
+
+List<String> resolveContentVideoUrlCandidates(
+  String? raw, {
+  String? gatewayBaseUrl,
+  String? imageCdnBaseUrl,
+  String? videoCdnBaseUrl,
+}) {
+  final source = raw?.trim() ?? '';
+  if (!isLikelyContentVideoMediaSource(source)) {
+    return const <String>[];
+  }
+  return resolveContentMediaUrlCandidates(
+    source,
+    gatewayBaseUrl: gatewayBaseUrl ?? CloudRuntimeConfig.gatewayBaseUrl,
+    imageCdnBaseUrl: imageCdnBaseUrl ?? CloudRuntimeConfig.mediaImageCdnBaseUrl,
+    videoCdnBaseUrl: videoCdnBaseUrl ?? CloudRuntimeConfig.mediaVideoCdnBaseUrl,
+  ).where(isLikelyContentVideoMediaSource).toList(growable: false);
+}
+
+bool isLikelyContentVideoMediaSource(String? raw) {
+  final source = raw?.trim() ?? '';
+  if (source.isEmpty) {
+    return false;
+  }
+  final uri = Uri.tryParse(source);
+  final path = (uri != null && uri.hasScheme ? uri.path : source)
+      .replaceFirst(RegExp(r'^/+'), '')
+      .toLowerCase();
+  if (path.isEmpty) {
+    return false;
+  }
+  if (path.startsWith('media/image/') ||
+      path.startsWith('image/') ||
+      path.startsWith('media/background/') ||
+      path.startsWith('background/')) {
+    return false;
+  }
+  if (path.startsWith('media/video/') || path.startsWith('video/')) {
+    return true;
+  }
+  final extensionPath = path.split('?').first.split('#').first;
+  if (RegExp(
+    r'\.(png|jpe?g|gif|webp|heic|heif|avif)$',
+  ).hasMatch(extensionPath)) {
+    return false;
+  }
+  return RegExp(r'\.(mp4|m4v|mov|webm|m3u8|ts)$').hasMatch(extensionPath);
 }
 
 String _normalizeBase(String raw) {
@@ -349,12 +412,44 @@ List<String> _localHostBaseCandidates(String base) {
           .replace(host: '127.0.0.1')
           .toString()
           .replaceFirst(RegExp(r'/+$'), ''),
-      uri.replace(host: '10.0.2.2').toString().replaceFirst(RegExp(r'/+$'), ''),
       normalized,
     ]);
   }
   if (uri == null || !_isPrivateDevHost(uri.host)) {
     return <String>[normalized];
+  }
+  final effectiveUri = uri.scheme.toLowerCase() == 'http'
+      ? uri.replace(scheme: 'https')
+      : uri;
+  final effectiveNormalized = effectiveUri.toString().replaceFirst(
+    RegExp(r'/+$'),
+    '',
+  );
+  if (effectiveUri.scheme.toLowerCase() == 'https') {
+    // 10.0.2.2 是 Android emulator 寻址别名；本地 HTTPS 媒体走 adb-reversed loopback。
+    return _uniqueNonEmpty(<String>[
+      if (host == '10.0.2.2')
+        effectiveUri
+            .replace(host: 'localhost')
+            .toString()
+            .replaceFirst(RegExp(r'/+$'), ''),
+      if (host == '10.0.2.2')
+        effectiveUri
+            .replace(host: '127.0.0.1')
+            .toString()
+            .replaceFirst(RegExp(r'/+$'), ''),
+      if (host != '10.0.2.2') effectiveNormalized,
+      if (host != 'localhost' && host != '10.0.2.2')
+        effectiveUri
+            .replace(host: 'localhost')
+            .toString()
+            .replaceFirst(RegExp(r'/+$'), ''),
+      if (host != '127.0.0.1' && host != '10.0.2.2')
+        effectiveUri
+            .replace(host: '127.0.0.1')
+            .toString()
+            .replaceFirst(RegExp(r'/+$'), ''),
+    ]);
   }
   return _uniqueNonEmpty(<String>[
     normalized,

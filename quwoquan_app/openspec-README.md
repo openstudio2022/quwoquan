@@ -1,7 +1,7 @@
-# OpenSpec 已迁移到仓库根
+# App 规格已归入仓库规格体系
 
-OpenSpec 已统一安装到**仓库根目录**，本子模块不再包含 `openspec/` 或 openspec 依赖。
+本子模块不再包含 `openspec/` 或 openspec 依赖。App 规格、验收与变更记录统一归入仓库根 `specs/`。
 
-- **规格与变更**：仓库根目录下的 `openspec/specs/`、`openspec/changes/`
-- **CLI**：在仓库根执行 `npm install` 后使用 `npx openspec list` 或 `npm run openspec:list`
-- **说明**：见根目录 `quwoquan_app/OPENSPEC_README.md`
+- **规格**：`specs/feature-tree/**`
+- **变更**：`specs/changelog/CR-*.yaml`
+- **说明**：见仓库根 `specs/README.md`

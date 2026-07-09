@@ -322,7 +322,9 @@ class _VideoPlayerWidgetState extends ConsumerState<VideoPlayerWidget> {
     final result = <String>[];
     for (final value in values) {
       final normalized = value.trim();
-      if (normalized.isEmpty || !seen.add(normalized)) {
+      if (normalized.isEmpty ||
+          !isLikelyContentVideoMediaSource(normalized) ||
+          !seen.add(normalized)) {
         continue;
       }
       result.add(normalized);

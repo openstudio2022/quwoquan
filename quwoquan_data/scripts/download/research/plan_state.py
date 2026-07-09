@@ -19,6 +19,7 @@ from _common.paths import (
 from _common.source_catalog import vertical_from_task_id
 from _common.source_plan_contract import source_plan_rule_signature
 from _common.source_unit import resolve_entity_object_dir
+from _common.qunar_template import is_qunar_url
 
 from download.research.source_quality import (
     _ARTICLE_BASE_CATEGORIES,
@@ -40,6 +41,13 @@ _VERIFIED_IMAGE_PLAN_SCAN_LIMIT = max(
     0,
     int(os.environ.get("QWQ_VERIFIED_IMAGE_PLAN_SCAN_LIMIT", "80")),
 )
+
+_MEDIAWIKI_PAGE_IMAGE_LIMIT = max(
+    1,
+    int(os.environ.get("QWQ_MEDIAWIKI_PAGE_IMAGE_LIMIT", "8")),
+)
+
+_MEDIAWIKI_SOURCE_HOST_SUFFIXES = ("wikipedia.org", "wikivoyage.org")
 
 def _safe_collection_id(prefix: str, entity_id: str, ref: str) -> str:
     raw = re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "", str(ref or "").lower())[:60]
@@ -124,7 +132,71 @@ def _source(
             if not image_url or image_url in seen:
                 continue
             seen.add(image_url)
+            item.setdefault("modelReleaseStatus", "not_required")
             row["imageUrls"].append(item)
+    return row
+
+def _mediawiki_title_from_url(url: str) -> tuple[str, str]:
+    parsed = urllib.parse.urlparse(str(url or "").strip())
+    host = str(parsed.hostname or "").strip().lower()
+    if not host or not any(host.endswith(suffix) for suffix in _MEDIAWIKI_SOURCE_HOST_SUFFIXES):
+        return "", ""
+    if "/wiki/" not in parsed.path:
+        return "", ""
+    title = urllib.parse.unquote(parsed.path.split("/wiki/", 1)[1].split("#", 1)[0]).replace("_", " ").strip()
+    return host, title
+
+def _hydrate_mediawiki_same_source_images(
+    source: Mapping[str, Any] | dict[str, Any],
+    *,
+    entity_id: str,
+    limit: int = _MEDIAWIKI_PAGE_IMAGE_LIMIT,
+) -> dict[str, Any]:
+    """Hydrate same-source image evidence for MediaWiki homepage sources.
+
+    Homepage lane only allows same-source images. When a candidate is a
+    MediaWiki page URL but arrives from reuse/registry without image evidence,
+    re-resolve the page title from the URL and fetch page-owned images from the
+    single MediaWiki truth source before the source enters the consumable plan.
+    """
+
+    row = dict(source)
+    existing_images = row.get("imageUrls") if isinstance(row.get("imageUrls"), list) else []
+    if str(row.get("imageEvidenceMode") or "").strip() == "same_source" and any(
+        isinstance(item, dict) and str(item.get("url") or "").strip()
+        for item in existing_images
+    ):
+        return row
+    host, title = _mediawiki_title_from_url(str(row.get("url") or ""))
+    if not host or not title:
+        return row
+    try:
+        import download.research_plan as research_plan_mod
+    except Exception:  # noqa: BLE001
+        return row
+    try:
+        images = research_plan_mod._mediawiki_page_images(
+            host,
+            title,
+            entity_id=entity_id,
+            limit=max(1, int(limit or _MEDIAWIKI_PAGE_IMAGE_LIMIT)),
+        )
+    except Exception:  # noqa: BLE001
+        return row
+    hydrated: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for item in images or []:
+        if not isinstance(item, dict):
+            continue
+        image_url = str(item.get("url") or "").strip()
+        if not image_url or image_url in seen_urls:
+            continue
+        seen_urls.add(image_url)
+        hydrated.append(dict(item))
+    if not hydrated:
+        return row
+    row["imageUrls"] = hydrated
+    row["imageEvidenceMode"] = "same_source"
     return row
 
 def _accept_source(
@@ -531,11 +603,21 @@ def _normalize_collection_for_reuse(collection: dict[str, Any]) -> dict[str, Any
             item["creator"] = normalized.get("creator")
         if normalized.get("collectionPageUrl") and not item.get("collectionPageUrl"):
             item["collectionPageUrl"] = normalized.get("collectionPageUrl")
-        for field in ("license", "termsUrl", "authorizationProof", "licenseSnapshot", "usageScope"):
+        for field in (
+            "license",
+            "termsUrl",
+            "authorizationProof",
+            "licenseSnapshot",
+            "usageScope",
+            "modelReleaseStatus",
+        ):
             if normalized.get(field) and not item.get(field):
                 item[field] = normalized.get(field)
+        if not item.get("modelReleaseStatus"):
+            item["modelReleaseStatus"] = "not_required"
         normalized_images.append(item)
     normalized["images"] = normalized_images
+    normalized.setdefault("modelReleaseStatus", "not_required")
     normalized["discoveryProvider"] = "verified_source_pool_reuse"
     return normalized
 
@@ -721,7 +803,8 @@ def _verified_homepage_sources_from_source_units(
         platform = str(meta.get("platform") or meta.get("sourceKind") or "百科").strip()
         category = str(meta.get("category") or meta.get("sourceKind") or "").strip()
         sources.append(
-            {
+            _hydrate_mediawiki_same_source_images(
+                {
                 "source_id": source_id,
                 "platform": platform,
                 "url": url,
@@ -734,12 +817,42 @@ def _verified_homepage_sources_from_source_units(
                 "imageEvidenceMode": "",
                 "entityMatch": "strong",
                 "reuseSourceUnit": relative_batch_ref(unit / "source.md", task_id, batch_id),
-            }
+                },
+                entity_id=entity_id,
+            )
         )
         seen_urls.add(url)
         if len(sources) >= limit:
             break
     return sources
+
+def _qunar_reused_article_mentions_entity(
+    source: Mapping[str, Any],
+    *,
+    entity_id: str,
+    entity_aliases: list[str] | tuple[str, ...] = (),
+) -> bool:
+    """Current-template guard for legacy Qunar source-pool reuse.
+
+    Older plans may have accepted same-author Qunar rows whose evidenceReason
+    names the target entity while the actual travelogue title is unrelated.
+    Reuse must therefore inspect only source-owned anchor fields, not the old
+    generated reason text.
+    """
+
+    url = str(source.get("url") or "").strip()
+    if not is_qunar_url(url):
+        return True
+    route = source.get("travelRoute") if isinstance(source.get("travelRoute"), list) else []
+    anchor_text = " ".join(
+        [
+            str(source.get("title") or ""),
+            " ".join(str(item or "") for item in route),
+            str(source.get("cityName") or ""),
+        ]
+    )
+    return _text_mentions_entity(anchor_text, entity_id, entity_aliases=entity_aliases)
+
 
 def _verified_article_sources_from_prior_plans(
     task_id: str,
@@ -747,6 +860,7 @@ def _verified_article_sources_from_prior_plans(
     entity_id: str,
     *,
     entity_type: str,
+    entity_aliases: list[str] | tuple[str, ...] = (),
     rejected_source_urls: set[str] | None = None,
     limit: int = 24,
 ) -> list[dict[str, Any]]:
@@ -785,6 +899,21 @@ def _verified_article_sources_from_prior_plans(
                 source["sourceRole"] = "base"
             if not source.get("matchConfidence"):
                 source["matchConfidence"] = (gate.get("matchConfidence") if gate else 0.86) or 0.86
+            if not _qunar_reused_article_mentions_entity(
+                source,
+                entity_id=entity_id,
+                entity_aliases=entity_aliases,
+            ):
+                continue
+            current_gate = _candidate_gate(
+                source,
+                entity_id=entity_id,
+                lane="article",
+                entity_aliases=entity_aliases,
+            )
+            if not current_gate["passed"]:
+                continue
+            source["candidateGate"] = current_gate
             sources.append(source)
             seen_urls.add(url)
             if len(sources) >= limit:

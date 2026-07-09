@@ -10,6 +10,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/sub_account_profile_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
@@ -615,7 +617,7 @@ void main() {
       expect(find.text(UITextConstants.profileImpactTitleOther), findsNothing);
     });
 
-    testWidgets('other 模式默认空数据也保留交集与影响力模块空态', (tester) async {
+    testWidgets('other 模式默认空数据也保留交集与打动模块空态', (tester) async {
       _setPhoneSize(tester);
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -666,6 +668,32 @@ void main() {
                 IntersectionReason(
                   dimension: 'relationship',
                   primaryText: '你和林清越都关注胶片摄影',
+                  objectKind: 'topic',
+                  actionTargetId: 'homepage_topic_film_photo',
+                  primarySpans: <IntersectionTextSpan>[
+                    IntersectionTextSpan(text: '你和', role: 'plain'),
+                    IntersectionTextSpan(
+                      text: '林清越',
+                      role: 'object',
+                      target: IntersectionTarget(
+                        objectType: 'user',
+                        objectId: 'u_lin',
+                        objectKind: 'person',
+                        routeId: 'userProfile',
+                      ),
+                    ),
+                    IntersectionTextSpan(text: '都关注', role: 'plain'),
+                    IntersectionTextSpan(
+                      text: '胶片摄影',
+                      role: 'object',
+                      target: IntersectionTarget(
+                        objectType: 'homepage',
+                        objectId: 'homepage_topic_film_photo',
+                        objectKind: 'topic',
+                        routeId: 'homepageDetail',
+                      ),
+                    ),
+                  ],
                   intersectionPoints: <IntersectionPoint>[
                     IntersectionPoint(
                       pointId: 'shared-followees',

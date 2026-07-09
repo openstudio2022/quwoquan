@@ -56,7 +56,12 @@ def run_workflow(
     if through in STAGE_ORDER[STAGE_ORDER.index("enrich") :]:
         results["enrich"] = run_enrich(vertical=vertical, batch_id=batch_id, dry_run=dry_run)
     if through in STAGE_ORDER[STAGE_ORDER.index("materialize") :]:
-        results["materialize"] = run_materialize(vertical=vertical, batch_id=batch_id, dry_run=dry_run)
+        materialize = run_materialize(vertical=vertical, batch_id=batch_id, dry_run=dry_run)
+        results["materialize"] = {
+            key: value
+            for key, value in materialize.items()
+            if key != "bundles"
+        }
     if through in STAGE_ORDER[STAGE_ORDER.index("validate") :]:
         results["validate"] = run_validate(vertical=vertical, batch_id=batch_id, dry_run=dry_run)
     if through == "seed":

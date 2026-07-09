@@ -25,6 +25,60 @@ def test_source_plan_filled_does_not_block_discovery_platform_name_when_rights_c
 
     assert ok is True, issues
 
+def test_image_only_download_plan_skips_inactive_homepage_and_article_lanes():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec["content"]["quotas"]["entityArticlesPerTarget"] = 0
+    spec["content"]["quotas"]["entityHomepagesPerTarget"] = 0
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 1
+    spec["content"]["carriers"] = ["image"]
+    store.save_spec(spec)
+    batch_id = "image_only_download_plan_skips_inactive_lanes"
+    _seed_source_plan(task_id, batch_id)
+    obj = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    (obj / STAGE_DOWNLOAD / "homepage_source_plan.json").unlink()
+    (obj / STAGE_DOWNLOAD / "article_source_plan.json").unlink()
+    ctx = _ctx(task_id, batch_id)
+
+    ok, issues = run_mod._source_plan_filled(ctx)
+
+    assert ok is True, issues
+    assert run_mod._download_research_lane_issues(ctx, _EID, "地点/景区", "homepage") == []
+    assert run_mod._download_research_lane_issues(ctx, _EID, "地点/景区", "article") == []
+    assert run_mod._download_plan_unresolved_entities(ctx) == {}
+    assert run_mod._checkpoint_prompts(ctx, "download_plan") == []
+
+
+def test_source_plan_lane_paths_keeps_legacy_only_batch_when_article_commercial_closure_disabled():
+    task_id = _make_task()
+    batch_id = "legacy_only_source_plan_paths_allowed"
+    obj = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    dl = obj / STAGE_DOWNLOAD
+    dl.mkdir(parents=True, exist_ok=True)
+    legacy_path = dl / "source_plan.json"
+    write_json(legacy_path, {"payload": {"sources": []}})
+
+    plan_paths = run_mod._source_plan_lane_paths(_ctx(task_id, batch_id), _EID, "地点/景区")
+
+    assert plan_paths == [legacy_path]
+
+
+def test_source_plan_lane_paths_ignore_legacy_only_batch_when_article_commercial_closure_enabled():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec["workflowPolicy"] = {"articleCommercialClosure": True}
+    store.save_spec(spec)
+    batch_id = "legacy_only_source_plan_paths_blocked"
+    obj = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    dl = obj / STAGE_DOWNLOAD
+    dl.mkdir(parents=True, exist_ok=True)
+    write_json(dl / "source_plan.json", {"payload": {"sources": []}})
+
+    plan_paths = run_mod._source_plan_lane_paths(_ctx(task_id, batch_id), _EID, "地点/景区")
+
+    assert plan_paths == []
+
+
 def test_active_spec_preserves_min_entities_when_target_shortfall():
     task_id = _make_task()
     spec = store.load_spec(task_id)
@@ -65,7 +119,7 @@ def test_download_plan_repair_unresolved_becomes_deterministic_after_fetch_rewin
             "homepage": [
                 (
                     "download_repair required: 地点/景区/测试景区甲/1.download/sources: "
-                    "homepage retained sources=0 need>=1 (homepage lane must yield a readable encyclopedia/wiki/official source unit)"
+                    "homepage retained sources=0 need>=1 (homepage lane must yield a readable primary-authority encyclopedia source unit)"
                 )
             ]
         }
@@ -756,4 +810,3 @@ def test_download_stage_gate_issues_scopes_source_screen_by_payload_entity():
     assert issues == [
         "测试景区甲__article_qunar_base_1: sourceScreen: source scored Reject"
     ]
-

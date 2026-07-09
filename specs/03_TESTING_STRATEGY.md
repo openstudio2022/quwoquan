@@ -86,9 +86,9 @@ quwoquan_data/tests/
 ### Ops
 
 ```text
-agent_ops/tests/local_contract/**
-agent_ops/acceptance/api_integration/**
-agent_ops/acceptance/user_acceptance/**
+quwoquan_ops/tests/local_contract/**
+quwoquan_ops/tests/acceptance/api_integration/**
+quwoquan_ops/tests/acceptance/user_acceptance/**
 ```
 
 ## 5. 物理迁移与 bridge
@@ -98,7 +98,7 @@ agent_ops/acceptance/user_acceptance/**
 - 执行、门禁、`tests.recorded`、目录规范只认 canonical 三层根
 - legacy 到 canonical 的映射以 `specs/gates/test_directory_inventory.yaml` 为唯一清单
 - 允许继续存在的 legacy 源文件白名单以 `specs/gates/test_legacy_source_allowlist.yaml` 为唯一 ratchet；新增测试不得再通过“legacy + bridge”进入仓库
-- canonical bridge 由 `agent_ops/scaffold/generate_canonical_test_bridges.py` 生成
+- canonical bridge 由 `quwoquan_ops/gate/scaffold/generate_canonical_test_bridges.py` 生成
 - 任何新增 legacy 测试路径如果没有 canonical bridge，会被 `verify-test-directory-layout` 阻断
 - bench-only legacy runner 必须显式登记到 `test_legacy_source_allowlist.yaml`；当前仅保留已登记存量例外
 
@@ -113,7 +113,7 @@ agent_ops/acceptance/user_acceptance/**
 
 - `tests.recorded` 只允许：
   - canonical 三层测试文件
-  - `artifacts/tests/**/report.json`
+  - `.qwq_output/runs/tests/**/report.json`
 - 旅程与页面的主证据优先落在 `user_acceptance`
 - 带 `surface` / `route` 的 Story 必须在 page inventory 中登记；metadata surface 必须有 page-level `user_acceptance` wrapper
 - 文档、脚本、命令、markdown 报告不再作为 `tests.recorded` 主证据；如需保留，只能进 `notes` / `contract_refs`

@@ -36,9 +36,11 @@ from _common.paths import (  # noqa: E402
 from _common.batch_manifest import write_batch_manifest  # noqa: E402
 from _common.io import read_json, write_json  # noqa: E402
 from _common.content_evidence import public_byline_label  # noqa: E402
-from _common.draft_io import draft_article_path, read_draft_meta, read_writing_pack, write_agent_draft  # noqa: E402
+from _common.draft_io import draft_article_path, draft_meta_path, read_draft_meta, read_writing_pack, write_agent_draft  # noqa: E402
 from _common.draft_io import prompt_path  # noqa: E402
 from _common.source_unit import resolve_entity_object_dir, write_source_unit  # noqa: E402
+from _common.writing_pack import build_writing_pack as build_generic_writing_pack  # noqa: E402
+from produce import route_compose as RC  # noqa: E402
 from produce import route_workflow as RW  # noqa: E402
 from produce.route_workflow import (  # noqa: E402
     analyze_route_ref,
@@ -195,9 +197,89 @@ def test_gallery_compose_brief_uses_structural_image_contract():
     assert review["decision"] == "approved", review["issues"]
     assert review["checks"]["carrierConsistency"]["passed"]
     assert review["checks"]["imageGate"]["passed"]
+    assert review["checks"]["imageFidelity"]["passed"], review["checks"]["imageFidelity"]["issues"]
     assert review["checks"]["galleryCaption"]["passed"], review["checks"]["galleryCaption"]["issues"]
     assert "travelogueDensity" not in review["checks"], "画报载体不应套长文叙事门"
     assert review["generator"] == "image_evidence_pack"
+
+
+def test_image_writing_pack_trims_asset_caption_to_publish_limit():
+    long_caption = "山川湖海 " * 80
+    pack = build_generic_writing_pack(
+        ref="图片作品",
+        kind="entity",
+        brief={
+            "titleHint": "雪山湖泊",
+            "caption": long_caption,
+            "sourceCollectionId": "fixture:gallery",
+            "templateId": "travel.entity.gallery",
+        },
+        evidence_bundle={},
+        assets=[
+            {
+                "assetId": "asset_1",
+                "fileName": "asset_1.jpg",
+                "caption": long_caption,
+                "kind": "image",
+                "role": "cover",
+            }
+        ],
+        carrier="image",
+        byline="内容编辑",
+        publish_layout="image",
+        section_intents=[],
+        source_urls=[],
+        source_paths=[],
+    )
+
+    assert len(pack["caption"]) <= 300
+    assert len(pack["assets"][0]["caption"]) <= 300
+
+
+def test_gallery_compose_payload_prefers_agent_meta_title_and_caption():
+    _seed()
+    brief = _gallery_brief()
+    write_json(batch_inputs_dir(TASK, BATCH, "produce", "compose") / f"{REF}.json", brief)
+    quality = _low_narrative_quality_payload()
+
+    build_route_writing_pack(TASK, BATCH, REF, brief, quality)
+    pack = read_writing_pack(TASK, BATCH, REF)
+    meta = read_draft_meta(TASK, BATCH, REF)
+    assert pack is not None
+    assert meta is not None
+    meta.update(
+        {
+            "title": "Agent 轻润色标题",
+            "caption": "Agent 轻润色配文，只保留图片本身已经能支持的事实。",
+        }
+    )
+    write_json(draft_meta_path(TASK, BATCH, REF), meta)
+
+    payload = RC._compose_payload_from_pack(REF, brief, quality, pack, "", meta)
+
+    assert payload["title"] == "Agent 轻润色标题"
+    assert payload["publishTitle"] == "Agent 轻润色标题"
+    assert payload["caption"] == "Agent 轻润色配文，只保留图片本身已经能支持的事实。"
+    assert payload["summary"] == "Agent 轻润色配文，只保留图片本身已经能支持的事实。"
+
+
+def test_gallery_compose_payload_keeps_public_title_empty_when_source_title_absent():
+    _seed()
+    brief = _gallery_brief()
+    brief["titleHint"] = ""
+    write_json(batch_inputs_dir(TASK, BATCH, "produce", "compose") / f"{REF}.json", brief)
+    quality = _low_narrative_quality_payload()
+
+    build_route_writing_pack(TASK, BATCH, REF, brief, quality)
+    pack = read_writing_pack(TASK, BATCH, REF)
+    meta = read_draft_meta(TASK, BATCH, REF)
+    assert pack is not None
+    assert meta is not None
+
+    payload = RC._compose_payload_from_pack(REF, brief, quality, pack, "", meta)
+
+    assert payload["title"] == ""
+    assert payload["publishTitle"] == ""
 
 
 def test_declared_image_asset_ref_reports_safety_block_separately_from_missing_asset():

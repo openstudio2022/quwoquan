@@ -240,7 +240,7 @@ func TestLoadRuntimeConfig_ExternalRootLayered(t *testing.T) {
 	}
 	must(os.MkdirAll(filepath.Join(root, "configs", "content-service", "default"), 0o755))
 	must(os.MkdirAll(filepath.Join(root, "configs", "content-service", "beta"), 0o755))
-	must(os.MkdirAll(filepath.Join(root, "releases", "config", "content-service"), 0o755))
+	must(os.MkdirAll(filepath.Join(root, "quwoquan_service", "services", "content-service", "configs", "releases"), 0o755))
 
 	must(os.WriteFile(
 		filepath.Join(root, "configs", "content-service", "default", "config.yaml"),
@@ -253,7 +253,7 @@ func TestLoadRuntimeConfig_ExternalRootLayered(t *testing.T) {
 		0o644,
 	))
 	must(os.WriteFile(
-		filepath.Join(root, "releases", "config", "content-service", "v2026.02.28.0.yaml"),
+		filepath.Join(root, "quwoquan_service", "services", "content-service", "configs", "releases", "v2026.02.28.0.yaml"),
 		[]byte("config:\n  version: \"v2026.02.28.0\"\n"),
 		0o644,
 	))

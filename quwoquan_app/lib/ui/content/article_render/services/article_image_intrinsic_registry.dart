@@ -1,6 +1,7 @@
-import 'dart:io';
-
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/widgets.dart';
+import 'package:quwoquan_app/core/platform/local_image_provider.dart';
+import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 
 /// 文内图「宽/高」比缓存（宽 ÷ 高），供 [ArticleFlowLayoutEngine] 流式测量与 reflow。
 ///
@@ -95,9 +96,20 @@ class _ArticleImageIntrinsicListenerState
     }
     final ImageProvider<Object> provider;
     if (url.startsWith('http://') || url.startsWith('https://')) {
-      provider = NetworkImage(url);
+      provider = CachedNetworkImageProvider(
+        url,
+        cacheManager: AppImageCacheController.cacheManagerForPreset(
+          CdnImagePreset.inline,
+        ),
+        maxWidth: appImageDecodeMaxPhysicalExtent,
+        maxHeight: appImageDecodeMaxPhysicalExtent,
+      );
     } else {
-      provider = FileImage(File(url));
+      provider = ResizeImage.resizeIfNeeded(
+        appImageDecodeMaxPhysicalExtent,
+        appImageDecodeMaxPhysicalExtent,
+        localFileImageProvider(url),
+      );
     }
     final stream = provider.resolve(createLocalImageConfiguration(context));
     final listener = ImageStreamListener((ImageInfo info, bool _) {

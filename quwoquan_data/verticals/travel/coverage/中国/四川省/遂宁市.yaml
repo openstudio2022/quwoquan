@@ -1,0 +1,209 @@
+# 全国地点主清单 · 四川省遂宁市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 遂宁市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 大英县
+  leaves:
+  - name: 中国死海
+    canonicalName: 中国死海
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/温泉
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    aliases:
+    - 大英死海旅游度假区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 卓筒井
+    canonicalName: 大英卓筒井
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    aliases:
+    - 卓筒井大顺灶
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 魁山寺
+    canonicalName: 大英魁山寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 安居区
+  leaves:
+  - name: 龙凤古镇
+    canonicalName: 遂宁龙凤古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/安居区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 黄峨古镇
+    canonicalName: 黄峨古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/安居区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 海龙凯歌
+    canonicalName: 海龙凯歌
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/安居区
+    aliases:
+    - 海龙村沼气文化园区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 射洪市
+  leaves:
+  - name: 陈子昂读书台
+    canonicalName: 陈子昂读书台
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    aliases:
+    - 子昂故里
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 金华山
+    canonicalName: 射洪金华山
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    aliases:
+    - 金华山道观
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 射洪硅化木国家地质公园
+    canonicalName: 射洪硅化木国家地质公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/地质公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    aliases:
+    - 中华侏罗纪探秘旅游区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 舍得酒文化旅游区
+    canonicalName: 舍得酒文化旅游区
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    aliases:
+    - 沱牌舍得文化旅游区
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 船山区
+  leaves:
+  - name: 广德寺
+    canonicalName: 遂宁广德寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 灵泉寺
+    canonicalName: 遂宁灵泉寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 四川宋瓷博物馆
+    canonicalName: 四川宋瓷博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    aliases:
+    - 遂宁市博物馆
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 观音湖
+    canonicalName: 遂宁观音湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 圣莲岛
+    canonicalName: 遂宁圣莲岛
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    aliases:
+    - 世界荷花博览园
+    selectionPriority: 5
+    sourceReadiness: pending
+- district: 蓬溪县
+  leaves:
+  - name: 高峰山
+    canonicalName: 蓬溪高峰山
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    aliases:
+    - 高峰山道观
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 宝梵寺
+    canonicalName: 蓬溪宝梵寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    aliases:
+    - 宝梵寺壁画
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 常乐寺
+    canonicalName: 蓬溪常乐寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 赤城湖
+    canonicalName: 蓬溪赤城湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 旷继勋纪念馆
+    canonicalName: 蓬溪旷继勋纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    aliases:
+    - 旷继勋公园
+    selectionPriority: 5
+    sourceReadiness: pending

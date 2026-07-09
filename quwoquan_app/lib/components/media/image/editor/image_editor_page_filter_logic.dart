@@ -246,6 +246,7 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
     _filterTemplatePreviewBytes.clear();
     _filterTemplatePreviewLoading.clear();
     _filterTemplatePreviewQueued.clear();
+    _filterTemplatePreviewFailed.clear();
     _filterVisibleIndices.clear();
     _filterPreviewQueue.clear();
   }
@@ -338,7 +339,8 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
     for (var i = safeStart; i <= safeEnd; i++) {
       if (_filterTemplatePreviewBytes.containsKey(i) ||
           _filterTemplatePreviewLoading.contains(i) ||
-          _filterTemplatePreviewQueued.contains(i)) {
+          _filterTemplatePreviewQueued.contains(i) ||
+          _filterTemplatePreviewFailed.contains(i)) {
         continue;
       }
       _filterTemplatePreviewQueued.add(i);
@@ -354,7 +356,8 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
       final index = _filterPreviewQueue.removeAt(0);
       _filterTemplatePreviewQueued.remove(index);
       if (!_filterVisibleIndices.contains(index) ||
-          _filterTemplatePreviewBytes.containsKey(index)) {
+          _filterTemplatePreviewBytes.containsKey(index) ||
+          _filterTemplatePreviewFailed.contains(index)) {
         continue;
       }
       _setEditorState(() => _filterTemplatePreviewLoading.add(index));
@@ -364,6 +367,8 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
         _filterTemplatePreviewLoading.remove(index);
         if (bytes != null) {
           _filterTemplatePreviewBytes[index] = bytes;
+        } else {
+          _filterTemplatePreviewFailed.add(index);
         }
       });
     }
@@ -377,35 +382,43 @@ extension _ImageEditorPageFilterLogic on _ImageEditorPageState {
       return null;
     }
     final preset = _filterPresets[presetIndex];
-    final bytes = await _loadImageBytes(_currentPath);
-    if (bytes.isEmpty) return null;
-    final codec = await ui.instantiateImageCodec(bytes);
-    final frame = await codec.getNextFrame();
-    final image = frame.image;
-    const previewTarget = 220;
-    final ratio = image.width / image.height;
-    final width = ratio >= 1 ? previewTarget : (previewTarget * ratio).round();
-    final height = ratio >= 1 ? (previewTarget / ratio).round() : previewTarget;
-    final recorder = ui.PictureRecorder();
-    final canvas = Canvas(recorder);
-    final srcRect = Rect.fromLTWH(
-      0,
-      0,
-      image.width.toDouble(),
-      image.height.toDouble(),
-    );
-    final dstRect = Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
-    final paint = Paint()
-      ..filterQuality = FilterQuality.low
-      ..colorFilter = ColorFilter.matrix(
-        _buildFilterColorMatrix(
-          preset,
-          _filterStrengthByPresetId[preset.id] ?? preset.defaultStrength,
-        ),
+    try {
+      final bytes = await _loadImageBytes(_currentPath);
+      if (bytes.isEmpty) return null;
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      const previewTarget = 220;
+      final ratio = image.width / image.height;
+      final width = ratio >= 1
+          ? previewTarget
+          : math.max(1, (previewTarget * ratio).round());
+      final height = ratio >= 1
+          ? math.max(1, (previewTarget / ratio).round())
+          : previewTarget;
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final srcRect = Rect.fromLTWH(
+        0,
+        0,
+        image.width.toDouble(),
+        image.height.toDouble(),
       );
-    canvas.drawImageRect(image, srcRect, dstRect, paint);
-    final preview = await recorder.endRecording().toImage(width, height);
-    final data = await preview.toByteData(format: ui.ImageByteFormat.png);
-    return data?.buffer.asUint8List();
+      final dstRect = Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble());
+      final paint = Paint()
+        ..filterQuality = FilterQuality.low
+        ..colorFilter = ColorFilter.matrix(
+          _buildFilterColorMatrix(
+            preset,
+            _filterStrengthByPresetId[preset.id] ?? preset.defaultStrength,
+          ),
+        );
+      canvas.drawImageRect(image, srcRect, dstRect, paint);
+      final preview = await recorder.endRecording().toImage(width, height);
+      final data = await preview.toByteData(format: ui.ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
   }
 }

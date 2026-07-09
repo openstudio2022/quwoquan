@@ -32,13 +32,12 @@ class PageflipTurnPlan {
 
 class PageflipEngine {
   PageflipEngine({
-    required int pageCount,
+    required this._pageCount,
     int initialPage = 0,
     this.mode = PageflipMode.single,
     PageflipLayoutResolver? layoutResolver,
     PageflipRoleResolver? roleResolver,
-  }) : _pageCount = pageCount,
-       _currentPageIndex = initialPage,
+  }) : _currentPageIndex = initialPage,
        _layoutResolver = layoutResolver ?? const PageflipLayoutResolver(),
        _roleResolver = roleResolver ?? const PageflipSinglePageRoleResolver() {
     _state = PageflipState(mode: mode, currentPageIndex: _currentPageIndex);

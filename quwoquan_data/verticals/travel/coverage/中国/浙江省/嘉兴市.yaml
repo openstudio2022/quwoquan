@@ -1,0 +1,309 @@
+# 全国地点主清单 · 浙江省嘉兴市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 嘉兴市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 南湖区
+  leaves:
+  - name: 南湖
+    canonicalName: 嘉兴南湖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    aliases:
+    - 南湖旅游区
+    - 南湖景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 南湖革命纪念馆
+    canonicalName: 南湖革命纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 月河历史街区
+    canonicalName: 嘉兴月河历史街区
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    aliases:
+    - 月河街
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 梅湾街
+    canonicalName: 嘉兴梅湾街
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    aliases:
+    - 梅湾街历史街区
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 嘉兴博物馆
+    canonicalName: 嘉兴博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 壕股塔
+    canonicalName: 嘉兴壕股塔
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    aliases:
+    - 壕股塔院
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 嘉兴子城遗址公园
+    canonicalName: 嘉兴子城遗址公园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    aliases:
+    - 嘉兴子城
+    selectionPriority: 7
+    sourceReadiness: ready
+  - name: 范蠡湖公园
+    canonicalName: 嘉兴范蠡湖公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    selectionPriority: 8
+    sourceReadiness: pending
+- district: 嘉善县
+  leaves:
+  - name: 西塘古镇
+    canonicalName: 西塘古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/嘉善县
+    aliases:
+    - 西塘
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 歌斐颂巧克力小镇
+    canonicalName: 歌斐颂巧克力小镇
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/综合主题乐园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/嘉善县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 云澜湾温泉
+    canonicalName: 嘉善云澜湾温泉
+    entityType: 地点/温泉
+    typeTagRefs:
+    - Entity/地点/温泉
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/嘉善县
+    aliases:
+    - 大云温泉
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 平湖市
+  leaves:
+  - name: 东湖
+    canonicalName: 平湖东湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/平湖市
+    aliases:
+    - 东湖景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 莫氏庄园
+    canonicalName: 平湖莫氏庄园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/平湖市
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 九龙山旅游度假区
+    canonicalName: 平湖九龙山旅游度假区
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/平湖市
+    aliases:
+    - 九龙山
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 报本塔
+    canonicalName: 平湖报本塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/平湖市
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 桐乡市
+  leaves:
+  - name: 乌镇
+    canonicalName: 乌镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/桐乡市
+    aliases:
+    - 乌镇古镇
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 茅盾故居
+    canonicalName: 乌镇茅盾故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/桐乡市
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 濮院古镇
+    canonicalName: 濮院古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/桐乡市
+    aliases:
+    - 濮院时尚古镇
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 丰子恺纪念馆
+    canonicalName: 桐乡丰子恺纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/桐乡市
+    aliases:
+    - 缘缘堂
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 福严寺
+    canonicalName: 桐乡福严寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/桐乡市
+    selectionPriority: 5
+    sourceReadiness: ready
+- district: 海宁市
+  leaves:
+  - name: 盐官观潮景区
+    canonicalName: 海宁盐官观潮景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海宁市
+    aliases:
+    - 盐官古城
+    - 海宁潮
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 海神庙
+    canonicalName: 海宁海神庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海宁市
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 王国维故居
+    canonicalName: 海宁王国维故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海宁市
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 徐志摩故居
+    canonicalName: 海宁徐志摩故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海宁市
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 南关厢历史街区
+    canonicalName: 海宁南关厢历史街区
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海宁市
+    aliases:
+    - 南关厢
+    selectionPriority: 5
+    sourceReadiness: ready
+- district: 海盐县
+  leaves:
+  - name: 南北湖
+    canonicalName: 海盐南北湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海盐县
+    aliases:
+    - 南北湖风景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 绮园
+    canonicalName: 海盐绮园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海盐县
+    aliases:
+    - 绮园景区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 澉浦古镇
+    canonicalName: 海盐澉浦古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海盐县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 秀洲区
+  leaves:
+  - name: 新塍古镇
+    canonicalName: 嘉兴新塍古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/秀洲区
+    aliases:
+    - 新塍镇
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 莲泗荡风景区
+    canonicalName: 嘉兴莲泗荡风景区
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/秀洲区
+    aliases:
+    - 莲泗荡
+    selectionPriority: 2
+    sourceReadiness: pending

@@ -29,40 +29,40 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chatList/chatList_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/startGroupChat/startGroupChat_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chatDetail/chatDetail_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chatSettings/chatSettings_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chatManage/chatManage_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chatAddMembers/chatAddMembers_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chatTransferOwnership/chatTransferOwnership_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chatAdmins/chatAdmins_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chatMemberSearch/chatMemberSearch_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistantHalfSheet/assistantHalfSheet_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/assistant/personalAssistantDialog/personalAssistantDialog_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistantSettings/assistantSettings_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistantHistory/assistantHistory_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistantFeedback/assistantFeedback_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/search/globalSearchLanding/globalSearchLanding_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/search/globalSearchSuggestions/globalSearchSuggestions_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/search/globalSearchNetworkResults/globalSearchNetworkResults_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/search/locationPlaceLanding/locationPlaceLanding_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/entity/homepagePicker/homepagePicker_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/entity/suggestHomepage/suggestHomepage_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageIntroduction/homepageIntroduction_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageClaim/homepageClaim_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageMaintenance/homepageMaintenance_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageStatusReport/homepageStatusReport_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/content/myFootprint/myFootprint_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/user/userProfile/userProfile_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/user/addContact/addContact_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/user/addContactSearch/addContactSearch_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/user/addContactScan/addContactScan_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/user/addContactPhone/addContactPhone_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/user/addContactConfirm/addContactConfirm_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/user/myQrCode/myQrCode_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_list/chat_list_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/start_group_chat/start_group_chat_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_detail/chat_detail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_settings/chat_settings_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_manage/chat_manage_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_add_members/chat_add_members_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_transfer_ownership/chat_transfer_ownership_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_admins/chat_admins_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_member_search/chat_member_search_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_half_sheet/assistant_half_sheet_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/personal_assistant_dialog/personal_assistant_dialog_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_settings/assistant_settings_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_history/assistant_history_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/assistant/assistant_feedback/assistant_feedback_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/search/global_search_landing/global_search_landing_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/search/global_search_suggestions/global_search_suggestions_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/search/global_search_network_results/global_search_network_results_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/search/location_place_landing/location_place_landing_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_picker/homepage_picker_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/suggest_homepage/suggest_homepage_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_introduction/homepage_introduction_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_claim/homepage_claim_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_maintenance/homepage_maintenance_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_status_report/homepage_status_report_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/circle/circle_detail/circle_detail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/content/my_footprint/my_footprint_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/user_profile/user_profile_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/add_contact/add_contact_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/add_contact_search/add_contact_search_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/add_contact_scan/add_contact_scan_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/add_contact_phone/add_contact_phone_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/add_contact_confirm/add_contact_confirm_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/my_qr_code/my_qr_code_page__user_acceptance_test.dart
       - file: quwoquan_app/test/local_contract/app/shell/web_page_max_width_frame__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/app/shell/web_create_groups__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/app/shell/web_featured_no_queue__local_contract_test.dart
@@ -261,7 +261,7 @@ gwt_acceptance:
     - 'metadata page truth source: specs/gates/user_acceptance_page_inventory.yaml'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

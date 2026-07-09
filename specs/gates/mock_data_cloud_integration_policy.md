@@ -143,7 +143,7 @@ python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py
 python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py
 
 # 与仓库 app gate 一致（含 flutter analyze、上述脚本、flutter test 等）
-bash agent_ops/gate/gate_repo.sh --scope app
+bash quwoquan_ops/gate/gate_repo.sh --scope app
 ```
 
 **Makefile 等价目标（节选）：** `make verify-app-mock-isolation`、`make verify-app-lib-test-only-symbols`、`make verify-app-ui-app-data-source-mode-ratchet`。

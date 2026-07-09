@@ -341,7 +341,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     if (nextTab == MainTabDestination.create) {
       // 加号入口后置登录：先无条件打开动作面板，登录拦截下沉到具体动作
       // （写文章/发图片/发视频走 /create 路由门，添加联系人/群聊/建圈子在动作上拦截）。
-      unawaited(GlobalQuickActionSheet.show(context));
+      unawaited(GlobalQuickActionSheet.show(context, ref));
       return;
     }
 

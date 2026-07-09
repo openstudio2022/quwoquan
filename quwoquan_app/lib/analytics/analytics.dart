@@ -30,12 +30,10 @@ class AnalyticsConfig {
 
 class AnalyticsService {
   AnalyticsService({
-    required AppDataSourceMode mode,
-    required OpsEventRepository eventRepository,
+    required this._mode,
+    required this._eventRepository,
     AppLogService? appLogService,
-  }) : _mode = mode,
-       _eventRepository = eventRepository,
-       _appLogService = appLogService ?? AppLogService.instance;
+  }) : _appLogService = appLogService ?? AppLogService.instance;
 
   AnalyticsService.forTesting({
     AppDataSourceMode mode = AppDataSourceMode.mock,

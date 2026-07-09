@@ -1,0 +1,212 @@
+# 全国地点主清单 · 四川省广安市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 广安市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 广安区
+  leaves:
+  - name: 邓小平故里
+    canonicalName: 邓小平故里
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
+    aliases:
+    - 邓小平故里旅游景区
+    - 邓小平故居
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 神龙山巴人石头城
+    canonicalName: 神龙山巴人石头城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
+    aliases:
+    - 神龙山
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 肖溪古镇
+    canonicalName: 广安肖溪古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 广安白塔
+    canonicalName: 广安白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 思源广场
+    canonicalName: 广安思源广场
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
+    selectionPriority: 5
+    sourceReadiness: pending
+- district: 前锋区
+  leaves:
+  - name: 欢喜坪旅游度假区
+    canonicalName: 前锋欢喜坪旅游度假区
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/前锋区
+    aliases:
+    - 欢喜坪
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 大良田园
+    canonicalName: 前锋大良田园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/前锋区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 大良城
+    canonicalName: 广安大良城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/前锋区
+    aliases:
+    - 大良城古寨
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 华蓥市
+  leaves:
+  - name: 华蓥山
+    canonicalName: 华蓥山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/景区/地质公园
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/华蓥市
+    aliases:
+    - 华蓥山旅游区
+    - 华蓥山石林
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 安丙家族墓地
+    canonicalName: 安丙家族墓地
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/华蓥市
+    aliases:
+    - 安丙墓
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 天池湖
+    canonicalName: 华蓥天池湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/华蓥市
+    selectionPriority: 3
+    sourceReadiness: ready
+- district: 岳池县
+  leaves:
+  - name: 岳池农家生态文化旅游区
+    canonicalName: 岳池农家生态文化旅游区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
+    aliases:
+    - 岳池农家
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 翠湖
+    canonicalName: 岳池翠湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 顾县古镇
+    canonicalName: 岳池顾县古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 武胜县
+  leaves:
+  - name: 宝箴塞
+    canonicalName: 宝箴塞
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
+    aliases:
+    - 宝箴塞旅游区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 白坪—飞龙旅游区
+    canonicalName: 武胜白坪—飞龙旅游区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
+    aliases:
+    - 白坪—飞龙乡村旅游度假区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 沿口古镇
+    canonicalName: 武胜沿口古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 永寿寺
+    canonicalName: 武胜永寿寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 邻水县
+  leaves:
+  - name: 天意谷
+    canonicalName: 邻水天意谷
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/邻水县
+    aliases:
+    - 天意谷景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 五华山
+    canonicalName: 邻水五华山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/广安市/邻水县
+    aliases:
+    - 五华山旅游区
+    selectionPriority: 2
+    sourceReadiness: pending

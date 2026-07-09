@@ -1,8 +1,15 @@
 from __future__ import annotations
 
-
+from datetime import date
 
 from support.source_plan_guidance_fixtures import *  # noqa: F401,F403
+from _common.qunar_template import (  # noqa: E402
+    QUNAR_FRESH_RECENT_3Y,
+    QUNAR_FRESH_STALE_OVER_3Y,
+    QUNAR_PAGE_SEARCH_RESULT,
+    qunar_template_metadata,
+    source_author_ref,
+)
 
 
 
@@ -199,6 +206,84 @@ def test_verified_homepage_reuse_filters_bad_or_thin_source_units():
 
     assert [source["source_id"] for source in sources] == ["home_official"]
 
+def test_verified_homepage_reuse_hydrates_mediawiki_same_source_images():
+    from _common.batch_manifest import write_batch_manifest
+    from _common.paths import ensure_batch_layout, ensure_task_layout
+    from _common.source_unit import write_source_unit
+
+    task = "旅行/地域/测试省/景区/homepage维基复用补图"
+    batch = "homepage_wiki_reuse_hydrate"
+    entity = "黄龙"
+    title = "黄龙风景名胜区"
+    url = "https://zh.wikipedia.org/wiki/%E9%BB%84%E9%BE%99%E9%A3%8E%E6%99%AF%E5%90%8D%E8%83%9C%E5%8C%BA"
+    obj = resolve_entity_object_dir(task, batch, entity, etype_hint="地点/景区")
+    shutil.rmtree(obj, ignore_errors=True)
+    ensure_task_layout(task)
+    ensure_batch_layout(task, batch, "download")
+    write_batch_manifest(task, batch, command="download")
+    target_ref = f"/entity/地点/景区/{entity}"
+    write_source_unit(
+        obj,
+        ordinal=1,
+        source_id="home_wikipedia_huanglong_scenic_area",
+        source_md=(
+            "黄龙风景名胜区位于四川省阿坝藏族羌族自治州松潘县。"
+            "黄龙风景名胜区以彩池、雪山、峡谷和森林景观著称。"
+            "黄龙风景名胜区是世界自然遗产和国家5A级旅游景区。"
+            "黄龙风景名胜区的开放、票务和交通接驳以景区公告为准。"
+        ),
+        quality={
+            "sourceId": "home_wikipedia_huanglong_scenic_area",
+            "quality": "B-fact",
+            "score": 6,
+            "url": url,
+        },
+        platform="维基百科",
+        source_category="encyclopedia",
+        research_lane="homepage",
+        url=url,
+        title=title,
+        target_ref=target_ref,
+        task_id=task,
+        batch_id=batch,
+    )
+    image = {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/aa/Huanglong.jpg",
+        "platform": "维基百科",
+        "license": "CC BY-SA 4.0",
+        "credit": "Wiki contributor",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Huanglong.jpg",
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "licenseSnapshot": "CC BY-SA 4.0 snapshot",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:Huanglong.jpg",
+        "usageScope": "app_publish",
+        "width": 1600,
+        "height": 1000,
+        "caption": "黄龙风景名胜区彩池",
+        "relevance": "黄龙风景名胜区彩池",
+        "collectionPageUrl": "https://zh.wikipedia.org/wiki/黄龙风景名胜区",
+    }
+    original = research_plan_mod._mediawiki_page_images
+    research_plan_mod._mediawiki_page_images = (
+        lambda host, page_title, entity_id, limit=8: [image]
+        if host == "zh.wikipedia.org" and page_title == title and entity_id == entity
+        else []
+    )
+    try:
+        sources = _verified_homepage_sources_from_source_units(
+            task,
+            batch,
+            entity,
+            entity_type="地点/景区",
+        )
+    finally:
+        research_plan_mod._mediawiki_page_images = original
+
+    assert len(sources) == 1
+    assert sources[0]["discoveryProvider"] == "verified_homepage_source_unit_reuse"
+    assert sources[0]["imageEvidenceMode"] == "same_source"
+    assert [item["url"] for item in sources[0]["imageUrls"]] == [image["url"]]
+
 def test_source_candidate_gate_rejects_weak_entity_match():
     assert not _title_matches_entity("雅安", "碧峰峡")
     assert not _title_matches_entity("墨泉", "墨石公园")
@@ -255,6 +340,39 @@ def test_wiki_title_for_entity_uses_short_alias_variants():
     finally:
         research_plan_mod._wiki_api = original
 
+def test_wiki_title_for_entity_follows_simplified_traditional_redirect():
+    original = research_plan_mod._wiki_api
+
+    def fake_wiki_api(_host: str, params: dict) -> dict:
+        if params.get("titles") == "毕棚沟" and params.get("prop") != "extracts":
+            assert params.get("redirects") == "1"
+            return {
+                "query": {
+                    "redirects": [{"from": "毕棚沟", "to": "畢棚溝"}],
+                    "pages": {"1": {"pageid": 1, "title": "畢棚溝"}},
+                }
+            }
+        if params.get("titles") == "畢棚溝" and params.get("prop") == "extracts":
+            assert params.get("redirects") == "1"
+            return {
+                "query": {
+                    "pages": {
+                        "1": {
+                            "pageid": 1,
+                            "title": "畢棚溝",
+                            "extract": "畢棚溝位于四川阿坝理县，是米亚罗自然保护区内的旅游景区。",
+                        }
+                    }
+                }
+            }
+        return {"query": {"pages": {"-1": {"missing": ""}}}}
+
+    research_plan_mod._wiki_api = fake_wiki_api
+    try:
+        assert _wiki_title_for_entity("zh.wikipedia.org", "毕棚沟") == "畢棚溝"
+    finally:
+        research_plan_mod._wiki_api = original
+
 def test_wiki_title_for_entity_rejects_cross_entity_generic_alias_title():
     original = research_plan_mod._wiki_api
 
@@ -282,6 +400,7 @@ def test_wiki_title_for_entity_rejects_cross_entity_generic_alias_title():
         research_plan_mod._wiki_api = original
 
 def test_wiki_title_match_rejects_substitute_objects_like_airports():
+    assert _wiki_title_matches_entity("畢棚溝", "毕棚沟")
     assert _wiki_title_matches_entity("碧峰峡旅游景区", "碧峰峡")
     assert _wiki_title_matches_entity("阆中古城", "阆中古城")
     assert not _wiki_title_matches_entity("阆中古城机场", "阆中古城")
@@ -506,3 +625,151 @@ def test_clean_source_markdown_differs_from_raw_and_keeps_facts():
     assert "[3]" not in cleaned
     assert cleaned != raw
 
+def test_qunar_search_result_is_directory_not_article_base():
+    source = _source(
+        source_id="article_qunar_review_support",
+        platform="去哪儿景点点评",
+        url="https://touch.travel.qunar.com/search?q=%E5%89%91%E9%97%A8%E5%85%B3",
+        category="review_note",
+        discovery_provider="qunar_touch_search_page",
+        match_confidence=0.86,
+        source_role="base",
+    )
+
+    gate = _candidate_gate(source, entity_id="剑门关", lane="article")
+
+    assert not gate["passed"], gate
+    assert "search result directory" in "\n".join(gate["issues"])
+
+def test_qunar_search_result_markdown_rejects_and_exposes_detail_links():
+    raw = (
+        "---\n"
+        "url: https://touch.travel.qunar.com/search?q=剑门关\n"
+        "platform: 去哪儿景点点评\n"
+        "---\n\n"
+        "# 游记搜索结果\n\n"
+        "- 蜀道剑门关游记 https://touch.travel.qunar.com/youji/7864564\n"
+        "- 剑阁三日游 /youji/7786715\n"
+    )
+
+    meta = qunar_template_metadata(text=raw)
+    assessment = score_source_markdown("article_qunar_review_support", raw, entity_name="剑门关")
+
+    assert meta["pageType"] == QUNAR_PAGE_SEARCH_RESULT
+    assert meta["discoveredDetailLinks"] == [
+        "https://touch.travel.qunar.com/youji/7864564",
+        "https://touch.travel.qunar.com/youji/7786715",
+    ]
+    assert assessment.quality == "Reject"
+    assert "qunar_search_result_directory" in assessment.reasons
+
+def test_qunar_search_result_extracts_detail_links_from_html_snapshot():
+    text = (
+        "---\n"
+        "url: https://touch.travel.qunar.com/search?q=剑门关\n"
+        "platform: 去哪儿景点点评\n"
+        "---\n\n"
+        "游记搜索结果\n剑门关\n2024.08.17出发/共1天/8图\n"
+    )
+    html = (
+        '<a href="/youji/7864564">剑门关一日游</a>'
+        '<a href="https://touch.travel.qunar.com/youji/7786715">剑阁三日游</a>'
+    )
+
+    meta = qunar_template_metadata(text=text, html=html)
+
+    assert meta["discoveredDetailLinks"] == [
+        "https://touch.travel.qunar.com/youji/7864564",
+        "https://touch.travel.qunar.com/youji/7786715",
+    ]
+
+def test_qunar_detail_cleaning_drops_tags_comments_and_related_links():
+    raw = (
+        "---\n"
+        "url: https://touch.travel.qunar.com/youji/7682539\n"
+        "platform: 去哪儿攻略\n"
+        "---\n\n"
+        "人物/情侣\n"
+        "玩法/\n"
+        "人均/500元\n\n"
+        "# 金沙遗址博物馆一日游\n\n"
+        "### 成都\n\n"
+        "金沙遗址博物馆的展厅从太阳神鸟开始，动线清楚，下午适合留给陈列馆。\n\n"
+        "### 评论\n\n"
+        "用户A：写得不错。\n\n"
+        "### 相关游记\n\n"
+        "成都周末游 https://touch.travel.qunar.com/youji/7901034\n"
+    )
+
+    cleaned = clean_source_markdown(raw)
+
+    assert "人物/情侣" not in cleaned
+    assert "人均/500元" not in cleaned
+    assert "评论" not in cleaned and "用户A" not in cleaned
+    assert "相关游记" not in cleaned and "7901034" not in cleaned
+    assert "成都" in cleaned
+    assert "金沙遗址博物馆的展厅" in cleaned
+
+def test_qunar_freshness_uses_recent_three_year_window():
+    recent = (
+        "---\nurl: https://touch.travel.qunar.com/youji/1\n---\n\n"
+        "2025/06/01\n剑门关清晨入园，门票、交通、开放时间和观光车都写清楚。"
+    )
+    stale = (
+        "---\nurl: https://touch.travel.qunar.com/youji/2\n---\n\n"
+        "2022/06/30\n剑门关清晨入园，门票、交通、开放时间和观光车都写清楚。"
+    )
+
+    recent_meta = qunar_template_metadata(text=recent, today=date(2026, 7, 1))
+    stale_meta = qunar_template_metadata(text=stale, today=date(2026, 7, 1))
+    stale_assessment = score_source_markdown("article_qunar_base_2012", stale, entity_name="剑门关")
+
+    assert recent_meta["freshnessTier"] == QUNAR_FRESH_RECENT_3Y
+    assert stale_meta["freshnessTier"] == QUNAR_FRESH_STALE_OVER_3Y
+    assert "qunar_stale_over_3y" in stale_assessment.reasons
+
+def test_qunar_detail_extracts_author_books_identity_from_template_html():
+    text = "---\nurl: https://touch.travel.qunar.com/youji/7869929\n---\n\n2025/09/29出发\n剑门关栈道、交通、门票和观光车信息都写清楚。"
+    html = (
+        '<div class="title-bd">'
+        '<a href="https://touch.travel.qunar.com/3367372@qunar/books">'
+        '<img class="t_author" src="avatar.jpg" /></a>'
+        '<div class="title-content">'
+        '<h1 class="name">剑门关一日游</h1>'
+        '<ul class="messege">'
+        '<li class="item"><span class="t_date">灵光旅行</span></li>'
+        '<li class="item"><span class="t_date">2025/09/29出发</span></li>'
+        '</ul>'
+        '</div>'
+        '</div>'
+    )
+
+    meta = qunar_template_metadata(
+        url="https://touch.travel.qunar.com/youji/7869929",
+        text=text,
+        html=html,
+        today=date(2026, 7, 1),
+    )
+
+    assert meta["authorName"] == "灵光旅行"
+    assert meta["authorId"] == "3367372@qunar"
+    assert meta["authorBooksUrl"] == "https://touch.travel.qunar.com/3367372@qunar/books"
+    assert meta["sourceAuthorRef"] == source_author_ref("3367372@qunar")
+    assert meta["freshnessTier"] == QUNAR_FRESH_RECENT_3Y
+
+def test_qunar_metadata_prefers_api_author_identity():
+    meta = qunar_template_metadata(
+        url="https://touch.travel.qunar.com/youji/7869930",
+        text="2025/10/01出发\n剑门关游记正文。",
+        source={
+            "userName": "搜索作者",
+            "userId": "998877@qunar",
+            "userBooksUrl": "https://touch.travel.qunar.com/998877@qunar/books",
+        },
+        today=date(2026, 7, 1),
+    )
+
+    assert meta["authorName"] == "搜索作者"
+    assert meta["authorId"] == "998877@qunar"
+    assert meta["authorBooksUrl"] == "https://touch.travel.qunar.com/998877@qunar/books"
+    assert meta["sourceAuthorRef"] == source_author_ref("998877@qunar")

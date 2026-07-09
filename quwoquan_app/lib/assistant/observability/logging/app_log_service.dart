@@ -3,7 +3,6 @@ import 'package:quwoquan_app/assistant/observability/logging/app_log_models.dart
 import 'package:quwoquan_app/assistant/observability/logging/app_log_policy.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_redactor.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_log_writer.dart';
-import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 class AppLogContext {
   const AppLogContext({
@@ -89,37 +88,21 @@ class AppLogService {
         ? payload
         : (summaryPayload ?? _toSummary(payload));
     final redactedPayload = _redactor.redactMap(rawPayload);
-    final envelope = AppLogEnvelope(
+    final envelope = _buildEnvelope(
       ts: DateTime.now().toIso8601String(),
-      env: kReleaseMode ? 'release' : 'debug',
-      appVersion: '',
-      platform: platformWireName(currentAppPlatform),
       logType: logType,
       level: level,
-      sessionId: context.sessionId,
-      pageVisitId: context.pageVisitId,
-      runId: context.runId,
-      traceId: context.traceId,
-      requestId: context.requestId,
-      turnId: context.turnId,
-      sourceDomain: context.sourceDomain,
-      sourceService: context.sourceService,
-      component: context.component.isNotEmpty
-          ? context.component
-          : _defaultComponentFor(logType),
-      target: context.target.isNotEmpty
-          ? context.target
-          : _defaultTargetFor(logType),
-      action: context.action,
       payload: redactedPayload,
+      context: context,
+      hasError: hasError,
     );
 
     try {
       final target = _targetFor(logType);
-      final path = await _writer.appendJsonLine(
+      final path = await _writer.appendLogLine(
         subDirectory: target.subDir,
         fileName: target.fileName,
-        payload: envelope.toJson(),
+        line: envelope.toLogLine(target.kind),
       );
       return path;
     } catch (error) {
@@ -163,53 +146,209 @@ class AppLogService {
     return summary;
   }
 
+  AppLogEnvelope _buildEnvelope({
+    required String ts,
+    required AppLogType logType,
+    required AppLogLevel level,
+    required Map<String, dynamic> payload,
+    required AppLogContext context,
+    required bool hasError,
+  }) {
+    final attrs = Map<String, dynamic>.from(payload);
+    final msg =
+        _takeString(attrs, const ['msg', 'message', 'summary']) ??
+        _defaultMessageFor(logType, context);
+    final result =
+        _takeString(attrs, const ['result', 'statusText']) ??
+        (hasError ? 'failed' : 'ok');
+    final event =
+        _takeString(attrs, const ['event', 'eventName', 'action']) ??
+        context.action;
+    final method = _takeString(attrs, const ['method', 'httpMethod']) ?? '';
+    final route = _takeString(attrs, const ['route', 'path', 'url']) ?? '';
+    final status = _takeInt(attrs, const ['status', 'statusCode']);
+    final durMs = _takeInt(attrs, const ['durMs', 'durationMs', 'elapsedMs']);
+    final err =
+        _takeString(attrs, const ['err', 'error', 'exception']) ??
+        (hasError ? msg : '');
+    final target = context.target.isNotEmpty
+        ? context.target
+        : (_takeString(attrs, const ['target']) ?? _defaultTargetFor(logType));
+    if (target.isNotEmpty && logType == AppLogType.error) {
+      attrs['target'] = target;
+    }
+
+    return AppLogEnvelope(
+      ts: ts,
+      level: level,
+      msg: msg,
+      event: logType.value == 'event' ? _fallbackEvent(logType, event) : '',
+      result: logType.value == 'event' ? result : '',
+      method: logType.value == 'access'
+          ? _fallbackAccessMethod(logType, method)
+          : '',
+      route: logType.value == 'access'
+          ? _fallbackAccessRoute(logType, route)
+          : '',
+      status: logType.value == 'access'
+          ? (status ?? (hasError ? 500 : 200))
+          : null,
+      durMs: logType.value == 'access' ? (durMs ?? 0) : null,
+      req: context.requestId,
+      trace: context.traceId,
+      err: logType == AppLogType.error ? err : '',
+      attrs: _boundedAttrs(attrs),
+    );
+  }
+
+  String? _takeString(Map<String, dynamic> payload, List<String> keys) {
+    for (final key in keys) {
+      final value = payload.remove(key);
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  int? _takeInt(Map<String, dynamic> payload, List<String> keys) {
+    for (final key in keys) {
+      final value = payload.remove(key);
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      if (value is String) {
+        final parsed = int.tryParse(value);
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  String _fallbackEvent(AppLogType type, String value) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+    switch (type) {
+      case AppLogType.pageAccess:
+        return 'page_access';
+      case AppLogType.agentRun:
+        return 'agent_run';
+      case AppLogType.perf:
+        return 'perf_sample';
+      case AppLogType.llm:
+      case AppLogType.search:
+      case AppLogType.cloudApi:
+      case AppLogType.error:
+        return type.name;
+    }
+  }
+
+  String _fallbackAccessMethod(AppLogType type, String value) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) return trimmed.toUpperCase();
+    switch (type) {
+      case AppLogType.llm:
+        return 'LLM';
+      case AppLogType.search:
+        return 'SEARCH';
+      case AppLogType.cloudApi:
+        return 'HTTP';
+      case AppLogType.pageAccess:
+      case AppLogType.agentRun:
+      case AppLogType.perf:
+      case AppLogType.error:
+        return 'APP';
+    }
+  }
+
+  String _fallbackAccessRoute(AppLogType type, String value) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty) return trimmed;
+    return _defaultTargetFor(type);
+  }
+
+  Map<String, dynamic> _boundedAttrs(Map<String, dynamic> payload) {
+    if (payload.isEmpty) return const <String, dynamic>{};
+    final attrs = <String, dynamic>{};
+    for (final entry in payload.entries.take(12)) {
+      final value = entry.value;
+      if (value is String && value.length > 240) {
+        attrs[entry.key] = '${value.substring(0, 240)}...';
+      } else if (value is Map || value is Iterable) {
+        attrs[entry.key] = value.toString().length > 240
+            ? '${value.toString().substring(0, 240)}...'
+            : value.toString();
+      } else {
+        attrs[entry.key] = value;
+      }
+    }
+    return attrs;
+  }
+
   _LogTarget _targetFor(AppLogType type) {
     switch (type) {
       case AppLogType.pageAccess:
         return const _LogTarget(
-          subDir: 'page_access',
-          fileName: 'events.jsonl',
+          subDir: 'app',
+          fileName: 'event.log',
+          kind: 'event',
         );
       case AppLogType.agentRun:
         return const _LogTarget(
-          subDir: 'agent',
-          fileName: 'interactions.jsonl',
+          subDir: 'app',
+          fileName: 'event.log',
+          kind: 'event',
         );
       case AppLogType.llm:
-        return const _LogTarget(subDir: 'integrations', fileName: 'llm.jsonl');
+        return const _LogTarget(
+          subDir: 'app',
+          fileName: 'access.log',
+          kind: 'access',
+        );
       case AppLogType.search:
         return const _LogTarget(
-          subDir: 'integrations',
-          fileName: 'search.jsonl',
+          subDir: 'app',
+          fileName: 'access.log',
+          kind: 'access',
         );
       case AppLogType.cloudApi:
         return const _LogTarget(
-          subDir: 'integrations',
-          fileName: 'cloud_api.jsonl',
+          subDir: 'app',
+          fileName: 'access.log',
+          kind: 'access',
         );
       case AppLogType.perf:
-        return const _LogTarget(subDir: 'perf', fileName: 'stats.jsonl');
+        return const _LogTarget(
+          subDir: 'app',
+          fileName: 'event.log',
+          kind: 'event',
+        );
       case AppLogType.error:
-        return const _LogTarget(subDir: 'errors', fileName: 'errors.jsonl');
+        return const _LogTarget(
+          subDir: 'app',
+          fileName: 'exception.log',
+          kind: 'exception',
+        );
     }
   }
 
-  String _defaultComponentFor(AppLogType type) {
+  String _defaultMessageFor(AppLogType type, AppLogContext context) {
+    final action = context.action.trim();
+    if (action.isNotEmpty) return action;
     switch (type) {
       case AppLogType.pageAccess:
-        return 'ui';
+        return 'page access';
       case AppLogType.agentRun:
-        return 'assistant_agent_loop';
+        return 'agent run';
       case AppLogType.llm:
-        return 'llm_provider';
+        return 'llm request';
       case AppLogType.search:
-        return 'search_tool';
+        return 'search request';
       case AppLogType.cloudApi:
-        return 'gateway_client';
+        return 'cloud api request';
       case AppLogType.perf:
-        return 'perf_probe';
+        return 'performance sample';
       case AppLogType.error:
-        return 'runtime';
+        return 'app exception';
     }
   }
 
@@ -238,8 +377,13 @@ class AppLogService {
 }
 
 class _LogTarget {
-  const _LogTarget({required this.subDir, required this.fileName});
+  const _LogTarget({
+    required this.subDir,
+    required this.fileName,
+    required this.kind,
+  });
 
   final String subDir;
   final String fileName;
+  final String kind;
 }

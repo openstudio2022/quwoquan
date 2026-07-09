@@ -1,0 +1,226 @@
+# 全国地点主清单 · 四川省眉山市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 眉山市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 东坡区
+  leaves:
+  - name: 三苏祠
+    canonicalName: 眉山三苏祠
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    aliases:
+    - 三苏祠博物馆
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 中国泡菜城
+    canonicalName: 眉山中国泡菜城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    aliases:
+    - 中国泡菜博物馆
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 眉山樱花博览园
+    canonicalName: 眉山樱花博览园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 桂花湖景区
+    canonicalName: 眉山桂花湖景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 彭山区
+  leaves:
+  - name: 彭祖山
+    canonicalName: 彭祖山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    aliases:
+    - 彭祖山景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 江口沉银遗址
+    canonicalName: 江口沉银遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    aliases:
+    - 江口明末战场遗址
+    selectionPriority: 2
+    sourceReadiness: ready
+- district: 仁寿县
+  leaves:
+  - name: 黑龙滩
+    canonicalName: 黑龙滩
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    aliases:
+    - 黑龙滩旅游景区
+    - 川西第一海
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 仁寿城市湿地公园
+    canonicalName: 仁寿城市湿地公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 仁寿大佛
+    canonicalName: 仁寿大佛
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    aliases:
+    - 牛角寨大佛
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 响水六坊景区
+    canonicalName: 仁寿响水六坊景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 洪雅县
+  leaves:
+  - name: 瓦屋山
+    canonicalName: 瓦屋山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    aliases:
+    - 瓦屋山国家森林公园
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 柳江古镇
+    canonicalName: 洪雅柳江古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 槽渔滩风景区
+    canonicalName: 洪雅槽渔滩风景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 玉屏山旅游度假区
+    canonicalName: 洪雅玉屏山旅游度假区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    aliases:
+    - 玉屏山森林康养基地
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 幺麻子藤椒文化旅游景区
+    canonicalName: 洪雅幺麻子藤椒文化旅游景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 丹棱县
+  leaves:
+  - name: 老峨山
+    canonicalName: 丹棱老峨山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/丹棱县
+    aliases:
+    - 老峨山旅游景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 丹棱桃花源
+    canonicalName: 丹棱桃花源
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/丹棱县
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 青神县
+  leaves:
+  - name: 中岩寺
+    canonicalName: 青神中岩寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/青神县
+    aliases:
+    - 中岩风景区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 江湾神木园
+    canonicalName: 青神江湾神木园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/青神县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 国际竹艺城
+    canonicalName: 青神国际竹艺城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/青神县
+    aliases:
+    - 中国竹艺城
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 汉阳湖景区
+    canonicalName: 青神汉阳湖景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/3A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/青神县
+    aliases:
+    - 汉阳古镇
+    selectionPriority: 3
+    sourceReadiness: pending

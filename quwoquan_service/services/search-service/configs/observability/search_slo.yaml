@@ -1,7 +1,7 @@
 version: 1
 # 搜索 SLI/SLO 声明（单一真相源：本文件 + searchmetrics 指标）。
 # 延迟分位数来自 histogram（search_retrieve_duration_seconds_bucket），禁止用算术
-# 平均代替分位数。告警规则落在单一源 deploy/monitoring/alerts/quwoquan_alerts.yaml
+# 平均代替分位数。告警规则落在单一源 quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
 # 的 quwoquan_search 组，expr 直接消费下列指标，阈值与本文件 objective 对齐。
 service: search-service
 domain: search
@@ -58,7 +58,7 @@ ab:
   segmentation_label: bucket
 
 # 高并发负载模型与 SLO（冻结目标；单一真相源）。RPS/分位数在可重复压测校准前为
-# target，压测后由 artifacts/search-load/** 回填 measured，并据此定容量与 NO-GO 阈值。
+# target，压测后由 .qwq_output/runs/search-load/** 回填 measured，并据此定容量与 NO-GO 阈值。
 # baseline=日常稳态，peak=业务高峰，spike=突发（营销/热点）。RPS/并发为单 search-service
 # 实例可承载目标；弹性靠水平扩实例 + ES 数据节点/副本，不靠单实例堆叠。
 load_model:
@@ -107,7 +107,7 @@ load_model:
     circuit_open_rate_max: 0.02
   release_gate:
     rule: 任一 traffic class 在 peak 档实测分位数/错误率/降级率超目标即 NO-GO；spike 档允许有界降级（429/503）但不得演变为整体不可用（雪崩）。
-    benchmark_source: artifacts/search-load/**
+    benchmark_source: .qwq_output/runs/search-load/**
     capacity_calibration: specs/feature-tree/global-search-experience/search-provider-routing-and-storage-topology/search-storage-topology-and-elasticity/spec.md#容量校准
 
-alerts_source: deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_search
+alerts_source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_search

@@ -108,7 +108,8 @@ func (s *MongoIntersectionSource) AffinityReasons(ctx context.Context, userID, c
 
 func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, objectID, objectType string) ([]intersectionapp.IntersectionReasonView, error) {
 	now := time.Now().UTC()
-	dimension := objectDimension(objectType)
+	resolvedType := normalizedObjectType(objectID, objectType)
+	dimension := objectDimension(resolvedType)
 	objectTags, err := s.entityTags.GetEntityTags(ctx, objectID)
 	if err != nil {
 		objectTags = nil
@@ -116,35 +117,51 @@ func (s *MongoIntersectionSource) ObjectReasons(ctx context.Context, viewerID, o
 
 	reasons := make([]intersectionapp.IntersectionReasonView, 0, 3)
 	if len(objectTags) > 0 {
-		reasons = append(reasons, buildTagReason(
+		tagReason := buildTagReason(
 			now,
 			dimension,
 			objectID+"_tags",
 			"tagRef",
 			"sharedTagSample",
-			"view_object",
+			relationActionType(resolvedType),
 			objectTags,
 			30*24*time.Hour,
-		))
+		)
+		tagReason.RelationObjectID = objectID
+		tagReason.ActionTargetID = objectID
+		tagReason.ObjectKind = objectKindForObjectType(resolvedType)
+		reasons = append(reasons, tagReason)
 	}
 
-	if relReason, ok := s.viewerRelationReason(ctx, now, viewerID, objectID, objectType); ok {
+	if relReason, ok := s.viewerRelationReason(ctx, now, viewerID, objectID, resolvedType); ok {
 		reasons = append(reasons, relReason)
 	}
 
-	if objectKindForObjectType(objectType) != "person" {
-		if visitReason, ok := s.followeeVisitedReason(ctx, now, viewerID, objectID, objectType); ok {
+	if objectKindForObjectType(resolvedType) == "person" {
+		if wishReason, ok := s.coWishlistedEntityReason(ctx, now, viewerID, objectID); ok {
+			reasons = append(reasons, wishReason)
+		}
+	}
+
+	if objectKindForObjectType(resolvedType) != "person" {
+		if visitReason, ok := s.followeeVisitedReason(ctx, now, viewerID, objectID, resolvedType); ok {
 			reasons = append(reasons, visitReason)
 		}
 	}
 
-	kind := objectKindForObjectType(objectType)
+	kind := objectKindForObjectType(resolvedType)
 	for i := range reasons {
 		if reasons[i].ObjectKind == "" {
 			reasons[i].ObjectKind = kind
 		}
 	}
 	return reasons, nil
+}
+
+type wishlistEntityRef struct {
+	EntityID    string
+	ObjectType  string
+	DisplayName string
 }
 
 func (s *MongoIntersectionSource) socialCircleTags(ctx context.Context, userID string) ([]string, error) {
@@ -246,6 +263,72 @@ func (s *MongoIntersectionSource) behaviorRefs(ctx context.Context, userID, acti
 			out[doc.ContentID] = struct{}{}
 		}
 	}
+	return out
+}
+
+// wishlistRefs 读取稳定意图行为源 entity_wishlist_events：
+// {userId, entityId, objectType, displayName, status, createdAt}。
+// status 缺省或 active/wishlisted 视为有效；撤销/删除态不参与事实交集。
+func (s *MongoIntersectionSource) wishlistRefs(ctx context.Context, userID string) map[string]wishlistEntityRef {
+	out := map[string]wishlistEntityRef{}
+	if s.social == nil || s.social.db == nil || strings.TrimSpace(userID) == "" {
+		return out
+	}
+	cur, err := s.social.db.Collection("entity_wishlist_events").Find(ctx,
+		bson.M{
+			"userId": userID,
+			"$or": []bson.M{
+				{"status": bson.M{"$exists": false}},
+				{"status": ""},
+				{"status": "active"},
+				{"status": "wishlisted"},
+			},
+		},
+		mongoFindLimit(maxBehaviorScan),
+	)
+	if err != nil {
+		return out
+	}
+	defer cur.Close(ctx)
+	for cur.Next(ctx) {
+		var doc struct {
+			EntityID    string `bson:"entityId"`
+			ObjectType  string `bson:"objectType"`
+			DisplayName string `bson:"displayName"`
+		}
+		if err := cur.Decode(&doc); err != nil {
+			continue
+		}
+		entityID := strings.TrimSpace(doc.EntityID)
+		if entityID == "" {
+			continue
+		}
+		out[entityID] = wishlistEntityRef{
+			EntityID:    entityID,
+			ObjectType:  strings.TrimSpace(doc.ObjectType),
+			DisplayName: strings.TrimSpace(doc.DisplayName),
+		}
+	}
+	return out
+}
+
+func intersectWishlistRefs(a, b map[string]wishlistEntityRef) []wishlistEntityRef {
+	out := make([]wishlistEntityRef, 0)
+	for id, av := range a {
+		bv, ok := b[id]
+		if !ok {
+			continue
+		}
+		next := av
+		if next.DisplayName == "" {
+			next.DisplayName = bv.DisplayName
+		}
+		if next.ObjectType == "" {
+			next.ObjectType = bv.ObjectType
+		}
+		out = append(out, next)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].EntityID < out[j].EntityID })
 	return out
 }
 
@@ -391,6 +474,82 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 	}, true
 }
 
+// coWishlistedEntityReason 是 C0「共同想去 → 发起结伴」最薄事实闭环。
+// 真相源为 entity_wishlist_events，只有 viewer 与目标 person 都存在相同 entityId 的有效
+// wishlist 事件时才产出；不从内容 fixture 或端侧文案反推，避免把规划口径伪装成事实。
+func (s *MongoIntersectionSource) coWishlistedEntityReason(ctx context.Context, now time.Time, viewerID, objectID string) (intersectionapp.IntersectionReasonView, bool) {
+	shared := intersectWishlistRefs(
+		s.wishlistRefs(ctx, viewerID),
+		s.wishlistRefs(ctx, objectID),
+	)
+	if len(shared) == 0 {
+		return intersectionapp.IntersectionReasonView{}, false
+	}
+	head := shared[0]
+	entityName := strings.TrimSpace(head.DisplayName)
+	if entityName == "" {
+		entityName = head.EntityID
+	}
+	objectKind := objectKindForObjectType(head.ObjectType)
+	if objectKind == "" || objectKind == "person" {
+		objectKind = "place"
+	}
+	displayName, avatarURL := s.userDisplayProfile(ctx, objectID)
+	if displayName == "" {
+		displayName = objectID
+	}
+	points := []intersectionapp.IntersectionPointView{{
+		PointID:     objectID + "_wishlisted_" + head.EntityID,
+		PointClass:  "fact",
+		Dimension:   "location",
+		Label:       "共同想去",
+		DisplayText: "你和" + displayName + "都想去" + entityName,
+		SourceRef:   "coWishlistedEntity",
+		Visibility:  "public",
+		Count:       len(shared),
+		SampleText:  strings.Join(wishlistSampleNames(shared, maxIntersectionPoint), "、"),
+	}}
+	return intersectionapp.IntersectionReasonView{
+		IntersectionID:     objectID + "_co_wishlisted_entity",
+		IntersectionClass:  "fact",
+		Kind:               "coWishlistedEntity",
+		Vertical:           "travel_photography",
+		Dimension:          "location",
+		DisplayName:        displayName,
+		AvatarURL:          avatarURL,
+		Strength:           scoreFromCount(len(shared), 4),
+		ConfidenceLabel:    "",
+		RelationKind:       "shared_intent",
+		RelationObjectID:   head.EntityID,
+		ActionType:         "start_companion",
+		ActionTargetID:     head.EntityID,
+		Source:             "coWishlistedEntity",
+		FreshAt:            now.Format(time.RFC3339),
+		ExpiresAt:          now.Add(14 * 24 * time.Hour).Format(time.RFC3339),
+		IntersectionPoints: points,
+		FactPointCount:     1,
+		TotalPointCount:    1,
+		ObjectKind:         objectKind,
+	}, true
+}
+
+func wishlistSampleNames(refs []wishlistEntityRef, limit int) []string {
+	if limit <= 0 || limit > len(refs) {
+		limit = len(refs)
+	}
+	out := make([]string, 0, limit)
+	for _, ref := range refs[:limit] {
+		name := strings.TrimSpace(ref.DisplayName)
+		if name == "" {
+			name = strings.TrimSpace(ref.EntityID)
+		}
+		if name != "" {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
 // followeeVisitedReason 桥接型交集：viewer 关注的人里有谁到访过该对象（实体/地点页）。
 func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now time.Time, viewerID, objectID, objectType string) (intersectionapp.IntersectionReasonView, bool) {
 	if s.social == nil || s.social.db == nil || strings.TrimSpace(viewerID) == "" {
@@ -444,11 +603,12 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		Count:       n,
 		SampleText:  strings.Join(headKeys(visitorIDs, maxIntersectionPoint), "、"),
 	}}
+	displayName := s.objectDisplayName(ctx, objectID, objectType)
 	return intersectionapp.IntersectionReasonView{
 		IntersectionID:     objectID + "_followee_visited",
 		IntersectionClass:  "fact",
 		Dimension:          "relationship",
-		DisplayName:        concreteObjectDisplayName(objectID, objectType),
+		DisplayName:        displayName,
 		Strength:           scoreFromCount(n, 4),
 		RelationKind:       "bridge",
 		RelationObjectID:   objectID,
@@ -461,6 +621,30 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		FactPointCount:     1,
 		TotalPointCount:    1,
 	}, true
+}
+
+func (s *MongoIntersectionSource) objectDisplayName(ctx context.Context, objectID, objectType string) string {
+	if s.social != nil && s.social.db != nil && strings.TrimSpace(objectID) != "" {
+		var doc struct {
+			DisplayName string `bson:"displayName"`
+		}
+		err := s.social.db.Collection("rm_behavior_events").FindOne(
+			ctx,
+			bson.M{
+				"action":     "entity_page_view",
+				"entityRefs": objectID,
+				"displayName": bson.M{
+					"$exists": true,
+					"$ne":     "",
+				},
+			},
+			mongoopts.FindOne().SetSort(bson.M{"createdAt": -1}),
+		).Decode(&doc)
+		if err == nil && strings.TrimSpace(doc.DisplayName) != "" {
+			return strings.TrimSpace(doc.DisplayName)
+		}
+	}
+	return concreteObjectDisplayName(objectID, objectType)
 }
 
 // userDisplayProfile 从 posts 集合的作者快照回填用户展示资料（T3 空窗治理：
@@ -672,12 +856,38 @@ func scoreFromCount(count, saturate int) float64 {
 	return v
 }
 
+func normalizedObjectType(objectID, objectType string) string {
+	normalized := strings.TrimSpace(objectType)
+	if normalized != "" && normalized != "homepage" && normalized != "entity" {
+		return normalized
+	}
+	id := strings.TrimSpace(objectID)
+	switch {
+	case strings.Contains(id, "_university_"):
+		return "university"
+	case strings.Contains(id, "_school_"):
+		return "school"
+	case strings.Contains(id, "_travel_route_"):
+		return "route"
+	case strings.Contains(id, "_travel_spot_") || strings.Contains(id, "_photo_spot_"):
+		return "photo_spot"
+	case strings.Contains(id, "_travel_gear_"):
+		return "gear"
+	case strings.Contains(id, "_travel_place_"), strings.HasPrefix(id, "homepage_sight_"), strings.HasPrefix(id, "fixture_homepage_poi"):
+		return "sight"
+	default:
+		return normalized
+	}
+}
+
 func objectDimension(objectType string) string {
 	switch strings.TrimSpace(objectType) {
-	case "university":
+	case "university", "school":
 		return "identity"
-	case "travel_photo", "sight":
+	case "travel_photo", "sight", "place", "route", "photo_spot", "gear", "homepage":
 		return "location"
+	case "circle":
+		return "relationship"
 	default:
 		return "interest"
 	}
@@ -685,10 +895,12 @@ func objectDimension(objectType string) string {
 
 func objectLabel(objectType string) string {
 	switch strings.TrimSpace(objectType) {
-	case "university":
+	case "university", "school":
 		return "同校"
-	case "travel_photo", "sight":
+	case "travel_photo", "sight", "place", "route", "photo_spot", "gear", "homepage":
 		return "同游"
+	case "circle":
+		return "同圈"
 	default:
 		return "同好"
 	}
@@ -718,10 +930,10 @@ func concreteObjectDisplayName(objectID, objectType string) string {
 
 func relationActionType(objectType string) string {
 	switch strings.TrimSpace(objectType) {
-	case "university", "travel_photo", "sight":
-		return "view_object"
-	default:
+	case "user", "person":
 		return "open_profile"
+	default:
+		return "view_object"
 	}
 }
 
@@ -734,6 +946,12 @@ func objectKindForObjectType(objectType string) string {
 		return "circle"
 	case "university", "school":
 		return "school"
+	case "route":
+		return "route"
+	case "photo_spot":
+		return "photo_spot"
+	case "gear":
+		return "gear"
 	case "sight", "travel_photo", "place", "entity", "homepage":
 		return "place"
 	case "brand", "enterprise", "company":

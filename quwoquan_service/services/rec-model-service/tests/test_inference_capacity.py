@@ -86,7 +86,7 @@ def test_microbatcher_coalesces_duplicate_concurrent_requests() -> None:
 
 
 def test_dockerfile_uses_configurable_multi_worker_startup() -> None:
-    dockerfile = Path(__file__).resolve().parents[1] / "Dockerfile"
+    dockerfile = Path(__file__).resolve().parents[1] / "deploy" / "Dockerfile"
     text = dockerfile.read_text(encoding="utf-8")
 
     assert "REC_MODEL_UVICORN_WORKERS" in text

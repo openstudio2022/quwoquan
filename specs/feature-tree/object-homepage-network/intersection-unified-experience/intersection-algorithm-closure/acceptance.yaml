@@ -123,11 +123,11 @@ gwt_acceptance:
       经 Explain 管线产出 ≥3 个标准 kind 主谓宾句，无 displayText/label 回退，go test ./services/content-service/internal/application/intersection
       green 2026-06-16）'
   GWT_ALG4:
-    title: 旅行 travel_photography 垂类三元组实例化 + 去桥接 codegen + hydration/影响力真算 GWT（林墨 WS-ACC，§22.10/§23.4）
+    title: 旅行 travel_photography 垂类三元组实例化 + 去桥接 codegen + hydration/打动真算 GWT（林墨 WS-ACC，§22.10/§23.4）
     given:
     - registry 顶层 verticals/dimensions/lifecycleStates 闭集 + IntersectionKindMetadata
       / impact help_type 表已 codegen 下发（端零 switch 桥接）。
-    - 主 seed content_scenarios.json 已实例化林墨 35 条交集 + 14 条影响力 + 14 个专用旅行实体（0 悬空）+ N3
+    - 主 seed content_scenarios.json 已实例化林墨 35 条交集 + 14 条打动事实 + 14 个专用旅行实体（0 悬空）+ N3
       对象交集。
     when:
     - 云侧 hydration verticalForReason/lifecycleStateForReason 真算、author_impact travelImpactCountTarget
@@ -138,8 +138,8 @@ gwt_acceptance:
     - lifecycle §21.3 状态机由 previousStrength/strengthDelta 离散化产出，无信号返回空不造假。
     - route/photo_spot/gear 落点 homepageDetail、asset coverImage 经 codegen IntersectionRouteIDByObjectKind/IntersectionAssetKindByObjectKind
       单源。
-    - 旅行影响力 countTarget 由真实聚合 IntersectionTagRef 派生，被计数对象恒 person，非旅行信号留空；circle 影响力
-      helpType 多展示位由去桥接 runtime/impact 表产出。
+    - 旅行打动 countTarget 由真实聚合 IntersectionTagRef 派生，被计数对象恒 person，非旅行信号留空；circle 打动
+      的 helpType 多展示位由去桥接 runtime/impact 表产出。
     done_when:
     - Dart 林墨验收（6 objectKind + 7 lifecycle + 落点 + 实名代表人 + span 单通道不变量）全绿。
     - Go vertical/lifecycle/travel-impact 真算单测全绿；端云去桥接 registry 校验全绿。
@@ -179,7 +179,7 @@ gwt_acceptance:
         envs:
         - gamma
     notes:
-    - '[migrated_from_recorded_artifact] artifacts/intersection-travel-debridge-t3/t3_gamma_recap_20260621.json'
+    - '[migrated_from_recorded_artifact] .qwq_output/runs/intersection-travel-debridge-t3/t3_gamma_recap_20260621.json'
 execution:
   local_gate:
   - make verify-metadata

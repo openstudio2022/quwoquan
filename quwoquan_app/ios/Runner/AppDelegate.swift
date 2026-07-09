@@ -15,6 +15,9 @@ import UIKit
   ) -> Bool {
     NSLog("QWQStartup ios_did_finish_launching")
     let launched = super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    if let registrar = self.registrar(forPlugin: "QuwoquanNativeMethodChannels") {
+      registerMethodChannels(binaryMessenger: registrar.messenger())
+    }
     window?.backgroundColor = StartupTransitionBackground.color
     window?.rootViewController?.view.backgroundColor = StartupTransitionBackground.color
     return launched

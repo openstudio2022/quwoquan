@@ -42,7 +42,7 @@ L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使�
 | contracts/metadata/_projections/ | learning_events、training_samples、model_registry | ✅ 已就绪 |
 | entity_catalog.yaml | ModelScoreRequest、ModelScoreResponse 归属 rec-model-service | ✅ |
 | endpoint_catalog | recommendation.score.predict、recommendation.health | ✅ |
-| contracts/openapi/rec-model-service.v1.yaml | POST /v1/score、GET /health | ✅ |
+| contracts/metadata/recommendation/rec_model/service.yaml | POST /v1/score、GET /health | ✅ |
 | services/rec-model-service/generated/ | codegen 产出（勿手改） | ✅ 已生成 |
 
 详见 [rec-model-service/readiness.md](rec-model-service/readiness.md)。
@@ -92,7 +92,7 @@ L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使�
 | 对象 | 检查项 | 参考 |
 |------|--------|------|
 | **rec-model-service** | inference-api：main.py、POST /v1/score 真实实现、scenario 路由、content_feed 模型或占位、/health；inference-deployment：Dockerfile、docker-compose 条目 | [rec-model-service/树内任务文档](rec-model-service/树内任务文档) Phase 2/3 |
-| **rec-model-training** | 代码落点（如 scripts/ml/）、feature_registry 约定、training-pipeline 与 training-deployment 可跑通或占位 | [rec-model-training/树内任务文档](rec-model-training/树内任务文档) |
+| **rec-model-training** | 代码落点（如 services/rec-model-service/scripts/）、feature_registry 约定、training-pipeline 与 training-deployment 可跑通或占位 | [rec-model-training/树内任务文档](rec-model-training/树内任务文档) |
 | **门禁** | `make verify-metadata`、`make build`（Go）、rec-model-service 测试（若有） | quwoquan_service |
 
 ### 7.2 Go 对接（go-integration，必须在本会话完成）
@@ -122,5 +122,5 @@ L4/L5 的 acceptance 与 tasks 见各子目录，按 `/dev` 逐项实施时使�
 
 ### 7.5 线上反馈→训练 & 部署→内容服务访问
 
-- **线上反馈→训练**：行为上报经 HotPath/BufferedHotPath 写入 Redis；若接入 MongoSink 则写入 `rec_learning_events`。训练管线：`scripts/ml/sample_joiner` 读 `rec_learning_events` 写 `rec_training_samples` → `scripts/ml/train.py` 读样本训练并写 `rec_model_registry` + 模型文件。推理侧从 ModelRegistry/本地路径加载模型。详见 `scripts/ml/README.md`。
+- **线上反馈→训练**：行为上报经 HotPath/BufferedHotPath 写入 Redis；若接入 MongoSink 则写入 `rec_learning_events`。训练管线：`services/rec-model-service/scripts/sample_joiner` 读 `rec_learning_events` 写 `rec_training_samples` → `services/rec-model-service/scripts/train.py` 读样本训练并写 `rec_model_registry` + 模型文件。推理侧从 ModelRegistry/本地路径加载模型。详见 `services/rec-model-service/scripts/README.md`。
 - **部署后内容服务访问**：`docker compose up -d redis rec-model-service` 后，content-service 配置 `rec_model_service.url`（如 `http://localhost:18090`）、`enabled: true`，或使用环境变量 `REC_MODEL_SERVICE_URL=http://localhost:18090`、`REC_MODEL_SERVICE_ENABLED=true`，即可使推荐接口调用 rec-model-service 打分；超时/失败时 CascadeScorer 回退 RuleScorer。见 `services/rec-model-service/CONFIG.md`。

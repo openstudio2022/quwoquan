@@ -76,9 +76,9 @@
 
 ### Ops
 
-- `agent_ops/tests/local_contract/**`
-- `agent_ops/acceptance/api_integration/**`
-- `agent_ops/acceptance/user_acceptance/**`
+- `quwoquan_ops/tests/local_contract/**`
+- `quwoquan_ops/acceptance/api_integration/**`
+- `quwoquan_ops/acceptance/user_acceptance/**`
 
 legacy 源文件可以暂时保留，但：
 

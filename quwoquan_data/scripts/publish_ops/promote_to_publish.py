@@ -47,6 +47,13 @@ from _common.paths import (  # noqa: E402
     release_root,
     task_root,
 )
+from _common.publish_quality import (  # noqa: E402
+    collect_entity_quality_evidence,
+    quality_rank_key,
+    read_published_entity_quality,
+    should_replace_published_entity,
+    write_entity_quality_into_manifest,
+)
 
 # 内容对象根的过程阶段目录（证据链）不进发布包，只拷成品。
 _PROCESS_STAGE_DIRS = {"1.download", "2.quality", "3.compose", "3.brief", "3.build", "4.draft", "5.review"}
@@ -223,11 +230,112 @@ def promote_from_posts_root(posts_root: Path, dry_run: bool) -> tuple[int, int]:
     return count, skipped
 
 
-def promote_release(release_id: str, dry_run: bool) -> tuple[int, int]:
+# 一次 promote 运行内累计的对比门判定，收尾统一落盘 publish_compare 证据。
+_COMPARE_DECISIONS: list[dict] = []
+
+
+def _copy_entity_into_publish(entity_dir: Path, target: Path, quality: dict) -> None:
+    """拷贝实体成品进 publish 并沉淀 quality 节（对比门放行之后调用）。"""
+    target.mkdir(parents=True, exist_ok=True)
+    for fname in ("_entity.json", "page.md", "manifest.json"):
+        src_f = entity_dir / fname
+        if src_f.exists():
+            shutil.copy2(src_f, target / fname)
+    src_assets = entity_dir / "assets"
+    dst_assets = target / "assets"
+    if src_assets.is_dir():
+        if dst_assets.exists():
+            shutil.rmtree(dst_assets)
+        shutil.copytree(src_assets, dst_assets)
+    elif dst_assets.exists():
+        shutil.rmtree(dst_assets)
+    write_entity_quality_into_manifest(target, quality)
+
+
+def _entity_compare_verdict(entity_rel: str, target: Path, new_quality: dict) -> tuple[bool, dict]:
+    """对比替换门：目标已发布时，新版不劣才覆盖（mandatory 同一通道，无旁路）。"""
+    existing_published = (target / "page.md").is_file() or (target / "_entity.json").is_file()
+    old_quality = read_published_entity_quality(target) if existing_published else None
+    replace = True if not existing_published else should_replace_published_entity(new_quality, old_quality)
+    record = {
+        "entity": entity_rel,
+        "decision": ("new" if not existing_published else ("replace" if replace else "skip_inferior")),
+        "newQualityKey": list(quality_rank_key(new_quality)),
+        "oldQualityKey": list(quality_rank_key(old_quality)) if existing_published else None,
+        "newQuality": new_quality,
+        "oldQuality": old_quality,
+    }
+    _COMPARE_DECISIONS.append(record)
+    return replace, record
+
+
+def _flush_compare_report(source_label: str) -> Path | None:
+    if not _COMPARE_DECISIONS:
+        return None
+    out_dir = PUBLISH_ROOT / "publish_compare"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path = out_dir / f"{stamp}_{source_label}.json"
+    path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "quwoquan_data.publish_compare_report/1",
+                "source": source_label,
+                "generatedAt": _now_iso(),
+                "decisions": _COMPARE_DECISIONS,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _promote_entities_from_root(entities_root: Path, dry_run: bool) -> int:
+    if not entities_root.is_dir():
+        return 0
+    dst = publish_data().entities_dir()
+    count = 0
+    seen: set[Path] = set()
+    for marker in ("_entity.json", "page.md"):
+        for marker_path in sorted(entities_root.rglob(marker)):
+            entity_dir = marker_path.parent
+            if entity_dir in seen:
+                continue
+            seen.add(entity_dir)
+            rel = entity_dir.relative_to(entities_root)
+            target = dst / rel
+            new_quality = collect_entity_quality_evidence(entity_dir)
+            replace, record = _entity_compare_verdict(rel.as_posix(), target, new_quality)
+            if not replace:
+                print(
+                    f"[promote] SKIP (publish compare: inferior to published): entities/{rel.as_posix()} "
+                    f"new={record['newQualityKey']} old={record['oldQualityKey']}"
+                )
+                continue
+            if dry_run:
+                print(f"[promote] would copy release entity entities/{rel.as_posix()}")
+            else:
+                _copy_entity_into_publish(entity_dir, target, new_quality)
+            count += 1
+    return count
+
+
+def promote_release(release_id: str, dry_run: bool) -> tuple[int, int, int]:
+    """返回 (post_count, skipped, entity_count)。
+
+    homepage-only release 包只有 entities 没有 posts；entity_count 必须回传给
+    调用方计入有效晋升，否则 ship 会把实体主页发布误判为 nothing promoted。
+    """
     root = release_root(release_id)
-    posts = root / "posts"
     print(f"[promote] From release: {root}")
-    return promote_from_posts_root(posts, dry_run)
+    entity_count = _promote_entities_from_root(root / "entities", dry_run)
+    if entity_count:
+        print(f"[promote] release entities={entity_count}")
+    post_count, skipped = promote_from_posts_root(root / "posts", dry_run)
+    return post_count, skipped, entity_count
 
 
 def promote_task_batch(task_id: str, batch_id: str, dry_run: bool) -> tuple[int, int]:
@@ -236,12 +344,30 @@ def promote_task_batch(task_id: str, batch_id: str, dry_run: bool) -> tuple[int,
     return promote_from_posts_root(posts, dry_run)
 
 
+def _dedup_ledger_task_id(task_id: str) -> str:
+    """跨批去重账本维度：优先 spec.sourceTaskId（跨生产 task 全局），退回 task_id。"""
+    try:
+        from task import store
+
+        source_task = str(store.load_spec(task_id).get("sourceTaskId") or "").strip()
+        if source_task:
+            return source_task
+    except Exception:  # noqa: BLE001 - 账本回写不阻断 promote 主流程。
+        pass
+    return task_id
+
+
 def promote_task_entities(task_id: str, dry_run: bool) -> int:
     """Copy batch entity objects into the publish mainline.
 
     batch object 是主页真相源；task/entities 仅作兼容镜像，不得优先于 batch。
+    采纳成功的实体回写 dedup_ledger.completedEntities（select-targets 跨批防重复消费）。
     """
+    from _common.batch_manifest import load_batch_manifest
+    from _common.dedup import mark_entity_done
+
     dst = publish_data().entities_dir()
+    ledger_task_id = _dedup_ledger_task_id(task_id)
     count = 0
     for row in collect_task_entity_objects(
         task_id,
@@ -252,20 +378,36 @@ def promote_task_entities(task_id: str, dry_run: bool) -> int:
         src_dir = Path(row["entityDir"])
         rel = Path(str(row["entityRel"]))
         target = dst / rel.relative_to("entities")
+        batch_id = str(row.get("batchId") or "")
+        generated_at = ""
+        if batch_id:
+            generated_at = str(load_batch_manifest(task_id, batch_id).get("createdAt") or "")
+        new_quality = collect_entity_quality_evidence(
+            src_dir,
+            source_task_id=task_id,
+            source_batch_id=batch_id,
+            generated_at=generated_at,
+        )
+        replace, record = _entity_compare_verdict(
+            rel.relative_to("entities").as_posix(), target, new_quality
+        )
+        entity_name = rel.name.strip()
+        if not replace:
+            print(
+                f"[promote] SKIP (publish compare: inferior to published): {rel} "
+                f"new={record['newQualityKey']} old={record['oldQualityKey']}"
+            )
+            # 已生产完成但劣于已发布版本：仍记 dedup done，防止重复生产同一实体。
+            if not dry_run and entity_name:
+                mark_entity_done(ledger_task_id, entity_name)
+            continue
         if dry_run:
             print(f"[promote] would copy entity {rel}")
         else:
-            target.mkdir(parents=True, exist_ok=True)
-            for fname in ("_entity.json", "page.md", "manifest.json"):
-                src_f = src_dir / fname
-                if src_f.exists():
-                    shutil.copy2(src_f, target / fname)
-            src_assets = src_dir / "assets"
-            if src_assets.is_dir():
-                dst_assets = target / "assets"
-                if dst_assets.exists():
-                    shutil.rmtree(dst_assets)
-                shutil.copytree(src_assets, dst_assets)
+            new_quality["promotedAt"] = _now_iso()
+            _copy_entity_into_publish(src_dir, target, new_quality)
+            if entity_name:
+                mark_entity_done(ledger_task_id, entity_name)
         count += 1
     return count
 
@@ -274,7 +416,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Promote release/task posts to the publish mainline")
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--release-id", help="Assembled release id under release/")
-    src.add_argument("--task", help="Task id under runtime/tasks/")
+    src.add_argument("--task", help="Task id under local/data-runtime/tasks/")
     parser.add_argument("--batch", help="Batch id (required with --task)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-index", action="store_true")
@@ -287,13 +429,20 @@ def main() -> None:
     PUBLISH_ROOT.mkdir(parents=True, exist_ok=True)
 
     if args.release_id:
-        post_count, skipped = promote_release(args.release_id, args.dry_run)
+        post_count, skipped, _entity_count = promote_release(args.release_id, args.dry_run)
     else:
         post_count, skipped = promote_task_batch(args.task, args.batch, args.dry_run)
         if args.copy_entities:
             promote_task_entities(args.task, args.dry_run)
 
     print(f"[promote] Posts promoted: {post_count} (skipped: {skipped})")
+
+    if not args.dry_run:
+        report_path = _flush_compare_report(
+            args.release_id or f"{args.task}__{args.batch}".replace("/", "_")
+        )
+        if report_path:
+            print(f"[promote] publish compare report: {report_path}")
 
     if post_count == 0:
         sys.exit(1)

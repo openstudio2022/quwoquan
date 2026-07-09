@@ -116,10 +116,25 @@ def _make_task(task_id: str = "旅行/地域/四川省/景区/景区精选", *, 
                 {"entityType": "地点/景区", "name": "乐山大佛"},
             ],
         },
+        content={
+            "modalityContract": "separated_research",
+            "research": {"lanes": ["homepage"]},
+            "quotas": {
+                "entityHomepagesPerTarget": 1,
+                "entityArticlesPerTarget": 0,
+                "imageWorksPerTarget": 0,
+            },
+        },
         created_by="test",
     )
     spec["taskId"] = task_id
     spec["title"] = "四川景区精选"
+    spec["workflowPolicy"] = {
+        "allowPartialContent": True,
+        "allowContentQuotaShortfall": True,
+        "deliveryMode": "partial_with_replacement_report",
+        "minBatchCompletionMode": "best_effort_with_reasoned_rejects",
+    }
     store.save_spec(spec)
     store.save_progress(store.init_progress(task_id, remaining=["地点/景区/峨眉山", "地点/景区/乐山大佛"]))
     if with_baseline:

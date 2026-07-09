@@ -31,6 +31,10 @@ import shutil
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
 os.environ["QWQ_RUNTIME_ROOT"] = tempfile.mkdtemp()
+# promote 会写 PUBLISH_ROOT：pytest 下由 conftest 强制隔离，但本文件支持
+# `python3 ...` 直跑（__main__）——必须自带 publish 隔离根，否则测试实体/post
+# 会污染仓内 publish 主线（历史残留 都江堰_approved_only/目录布局_gwt posts 即此因）。
+os.environ.setdefault("QWQ_PUBLISH_ROOT", tempfile.mkdtemp())
 
 from _common.content_object import register_content_object  # noqa: E402
 from _common.draft_io import write_agent_draft  # noqa: E402
@@ -244,6 +248,12 @@ def test_promote_task_entities_only_copies_approved_homepages():
     assert count >= 1
     assert (PUBLISH_ROOT / "entities" / "地点" / "景区" / approved_name / "page.md").is_file()
     assert not (PUBLISH_ROOT / "entities" / "地点" / "景区" / rejected_name / "page.md").exists()
+    # 跨批去重账本回写：采纳实体进 completedEntities，rejected 不进。
+    from _common.dedup import load_manifest
+
+    completed = load_manifest(TASK).get("completedEntities", [])
+    assert approved_name in completed, completed
+    assert rejected_name not in completed, completed
 
 
 def _run_all() -> None:

@@ -54,7 +54,7 @@ gwt_acceptance:
     - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart（「交集
       tab 按云侧 connectionState 分组并只读 primaryText」：交集句严格只读 intersectionReason.primaryText，无
       primaryText 不展示，无 displayText/label 回退与端侧拼装，2026-06-16 green）'
-    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local，artifacts/local-gamma/search_intersection_smoke.json
+    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local，.qwq_output/local/gamma-local/search_intersection_smoke.json
       + backlog R-S06-S）：经网关 `POST /v1/search` 200、provider=elasticsearch、rankingVersion=search-v1、返回真实
       seeded location（杭州西湖）。BLOCKED：hit 上 populated connectionState/intersectionReason.primaryText
       需网关可识别 token + seed viewer 关系，匿名探测为 null。'
@@ -100,6 +100,6 @@ gwt_acceptance:
 execution:
   local_gate:
   - make verify-metadata
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

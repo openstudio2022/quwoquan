@@ -170,7 +170,9 @@ extension _SearchNetworkResultsPageStateHelpers
           subtitle: '基于你的互动、关注和加入',
           actionLabel: hasMore ? (_showAllConnections ? '收起' : '查看全部') : null,
           onAction: hasMore
-              ? () => setState(() => _showAllConnections = !_showAllConnections)
+              ? () => _setMountedState(
+                  () => _showAllConnections = !_showAllConnections,
+                )
               : null,
         ),
       );
@@ -369,7 +371,7 @@ extension _SearchNetworkResultsPageStateHelpers
           phase: 'onlineLoading',
           copyKey: 'pageLoadingA11y',
         );
-    setState(() {
+    _setMountedState(() {
       _isLoading = true;
       _errorSemantic = null;
       _degradeSignals = const <SearchDegradeSignal>[];
@@ -391,7 +393,7 @@ extension _SearchNetworkResultsPageStateHelpers
         if (!mounted || token != _requestToken) {
           return;
         }
-        setState(() {
+        _setMountedState(() {
           _xiaoquResult = result;
           _isLoading = false;
         });
@@ -414,7 +416,7 @@ extension _SearchNetworkResultsPageStateHelpers
           if (!mounted || token != _requestToken) {
             return;
           }
-          setState(() {
+          _setMountedState(() {
             _isLoading = false;
           });
           ref
@@ -439,7 +441,7 @@ extension _SearchNetworkResultsPageStateHelpers
           if (!mounted || token != _requestToken) {
             return;
           }
-          setState(() {
+          _setMountedState(() {
             _locationResults = _locationHitsFromResponse(locationResponse);
             _contentResults = _contentItemsFromResponse(contentResponse);
             _relatedTerms = contentResponse.relatedTerms;
@@ -475,7 +477,7 @@ extension _SearchNetworkResultsPageStateHelpers
         if (!mounted || token != _requestToken) {
           return;
         }
-        setState(() {
+        _setMountedState(() {
           _groupResults = _groupHitsFromResponse(groupResponse);
           _locationResults = _locationHitsFromResponse(locationResponse);
           _contentResults = _contentItemsFromResponse(contentResponse);
@@ -516,7 +518,7 @@ extension _SearchNetworkResultsPageStateHelpers
       if (!mounted || token != _requestToken) {
         return;
       }
-      setState(() {
+      _setMountedState(() {
         _contentResults = items;
         _relatedTerms = response?.relatedTerms ?? const <String>[];
         _degradeSignals =
@@ -543,7 +545,7 @@ extension _SearchNetworkResultsPageStateHelpers
         category: UiErrorCategory.pageLoad,
         scope: UiErrorScope.page,
       );
-      setState(() {
+      _setMountedState(() {
         _errorSemantic = UiErrorSemantic(
           category: resolved.category,
           scope: resolved.scope,

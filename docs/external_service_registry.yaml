@@ -990,7 +990,7 @@ entries:
     vendor: cursor
     endpoint: https://api2.cursor.sh/
     access_layer: dev-tool
-    consumers: [quwoquan_data, agent_ops]
+    consumers: [quwoquan_data, quwoquan_ops]
     metadata_ref: []
     impl_status: production
     env_matrix:
@@ -1001,7 +1001,7 @@ entries:
     secrets: [CURSOR_API_KEY]
     compliance: waived
     gap: 仅开发/托管工作流使用，不属于业务统一网关
-    notes: quwoquan_data 与 agent_ops fanout 都依赖 cursor_sdk
+    notes: quwoquan_data 与 quwoquan_ops fanout 都依赖 cursor_sdk
 
   - service_id: cap.os.geolocator
     display_name: geolocator / OS 定位服务

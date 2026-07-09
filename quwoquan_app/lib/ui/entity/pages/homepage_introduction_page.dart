@@ -22,6 +22,9 @@ const double _introAssetStripHeight = AppSpacing.commentComposerMaxHeight;
 const double _introHorizontalCardWidth = 180.0;
 const double _introRelatedObjectHeight = AppSpacing.homeObjectCardRailHeight;
 
+/// 正文块级内嵌图（三段结构 role=inline）统一横图比例。
+const double _introInlineFigureAspectRatio = 16 / 9;
+
 class HomepageIntroductionPage extends ConsumerStatefulWidget {
   const HomepageIntroductionPage({
     super.key,
@@ -320,8 +323,17 @@ class _IntroductionSectionCard extends StatelessWidget {
 
   final HomepageIntroductionSection section;
 
+  /// 三段结构正文章节（kind=body/overview）：assets 是正文 figure 的
+  /// role=inline 绑定，只用于块级内嵌渲染，不再重复展示横滑图条。
+  bool get _assetsInlineOnly =>
+      section.kind == 'body' || section.kind == 'overview';
+
   @override
   Widget build(BuildContext context) {
+    final assetsById = <String, HomepageIntroductionAsset>{
+      for (final asset in section.assets)
+        if (asset.assetId.isNotEmpty) asset.assetId: asset,
+    };
     return _IntroductionCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,13 +348,16 @@ class _IntroductionSectionCard extends StatelessWidget {
           ),
           if ((section.bodyMarkdown ?? '').trim().isNotEmpty) ...<Widget>[
             SizedBox(height: AppSpacing.intraGroupSm),
-            _MarkdownLite(markdown: section.bodyMarkdown!.trim()),
+            _MarkdownLite(
+              markdown: section.bodyMarkdown!.trim(),
+              assetsById: assetsById,
+            ),
           ],
           if (section.timelineItems.isNotEmpty) ...<Widget>[
             SizedBox(height: AppSpacing.containerSm),
             _TimelineList(items: section.timelineItems),
           ],
-          if (section.assets.isNotEmpty) ...<Widget>[
+          if (section.assets.isNotEmpty && !_assetsInlineOnly) ...<Widget>[
             SizedBox(height: AppSpacing.containerSm),
             _AssetStrip(assets: section.assets),
           ],
@@ -353,16 +368,47 @@ class _IntroductionSectionCard extends StatelessWidget {
 }
 
 class _MarkdownLite extends StatelessWidget {
-  const _MarkdownLite({required this.markdown});
+  const _MarkdownLite({
+    required this.markdown,
+    this.assetsById = const <String, HomepageIntroductionAsset>{},
+  });
 
   final String markdown;
+
+  /// 正文 `:::figure` 指令中 `asset://<assetId>` 的资产绑定（role=inline）。
+  final Map<String, HomepageIntroductionAsset> assetsById;
+
+  static final RegExp _figureCaptionRe = RegExp(r'caption="([^"]*)"');
+  static final RegExp _assetRefRe = RegExp(r'^asset://(\S+)$');
 
   @override
   Widget build(BuildContext context) {
     final lines = markdown.split('\n');
     final widgets = <Widget>[];
-    for (final raw in lines) {
-      final line = raw.trim();
+    for (var i = 0; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (line.startsWith(':::figure')) {
+        final caption =
+            _figureCaptionRe.firstMatch(line)?.group(1)?.trim() ?? '';
+        String assetId = '';
+        var j = i + 1;
+        for (; j < lines.length; j++) {
+          final inner = lines[j].trim();
+          if (inner == ':::') {
+            break;
+          }
+          final assetMatch = _assetRefRe.firstMatch(inner);
+          if (assetMatch != null) {
+            assetId = assetMatch.group(1) ?? '';
+          }
+        }
+        i = j;
+        final asset = assetsById[assetId];
+        if (asset != null && asset.url.trim().isNotEmpty) {
+          widgets.add(_InlineFigure(asset: asset, caption: caption));
+        }
+        continue;
+      }
       if (line.isEmpty) {
         widgets.add(SizedBox(height: AppSpacing.intraGroupXs));
         continue;
@@ -399,6 +445,53 @@ class _MarkdownLite extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: widgets,
+    );
+  }
+}
+
+/// 三段结构正文块级内嵌图：上图下文、不环绕、仅单行原图注。
+class _InlineFigure extends StatelessWidget {
+  const _InlineFigure({required this.asset, required this.caption});
+
+  final HomepageIntroductionAsset asset;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveCaption = caption.isNotEmpty
+        ? caption
+        : (asset.caption ?? '').trim();
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: AppSpacing.intraGroupSm),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
+            child: AspectRatio(
+              aspectRatio: _introInlineFigureAspectRatio,
+              child: AppMediaImage(
+                imageSource: asset.url,
+                fit: BoxFit.cover,
+                placeholder: ColoredBox(color: AppColors.iosFill(context)),
+                errorWidget: ColoredBox(color: AppColors.iosFill(context)),
+              ),
+            ),
+          ),
+          if (effectiveCaption.isNotEmpty) ...<Widget>[
+            SizedBox(height: AppSpacing.intraGroupXs),
+            Text(
+              effectiveCaption,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: AppTypography.iosCaption1,
+                color: AppColors.iosSecondaryLabel(context),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

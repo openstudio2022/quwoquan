@@ -7,6 +7,39 @@ import '../../../../common/chat/chat_mock_seed_refs.dart';
 
 void main() {
   group('从群聊中选择联系人 · Provider local_contract', () {
+    test('resolveSelectableGroupAvatar 保留云侧 conversation 预合成路径', () {
+      const raw =
+          'media/avatar/s/archived-avatar/conversation/conv_002/v1/mock.png';
+      final resolved = resolveSelectableGroupAvatar(raw);
+      expect(resolved, isNotEmpty);
+      expect(resolved, contains('conv_002'));
+    });
+
+    test('startGroupFromGroupProvider 不下 strip 群 avatarUrl', () async {
+      final repo = MockChatRepository();
+      final container = ProviderContainer(
+        overrides: [chatRepositoryProvider.overrideWithValue(repo)],
+      );
+      addTearDown(container.dispose);
+
+      final groups = await container.read(startGroupFromGroupProvider.future);
+      expect(groups, isNotEmpty);
+
+      final conv002 = groups.firstWhere(
+        (g) => g.conversationId == 'conv_002',
+        orElse: () =>
+            throw StateError('conv_002 missing from selectable groups'),
+      );
+      expect(conv002.avatarUrl, isNotEmpty);
+      expect(conv002.avatarUrl, contains('conv_002'));
+      expect(
+        resolveSelectableGroupAvatar(
+          'media/avatar/s/archived-avatar/conversation/conv_002/v1/mock.png',
+        ),
+        conv002.avatarUrl,
+      );
+    });
+
     test('图四群列表只暴露含 mutual 成员的群且 friendCount = 成员交集大小', () async {
       final repo = MockChatRepository();
       final container = ProviderContainer(
@@ -22,11 +55,7 @@ void main() {
 
       // 关键契约：每个群的「N 个朋友」必须等于图五真实可选成员数（计数↔交集一致）。
       for (final group in groups) {
-        final members = await loadGroupContactMembers(
-          repo,
-          group,
-          <String>{},
-        );
+        final members = await loadGroupContactMembers(repo, group, <String>{});
         expect(
           members.length,
           group.friendCount,
@@ -54,10 +83,7 @@ void main() {
 
       // userId 非空、无重复。
       expect(members.every((m) => m.userId.isNotEmpty), isTrue);
-      expect(
-        members.map((m) => m.userId).toSet().length,
-        members.length,
-      );
+      expect(members.map((m) => m.userId).toSet().length, members.length);
 
       // 按 displayName 升序。
       final names = members.map((m) => m.displayName).toList();
@@ -66,11 +92,9 @@ void main() {
 
       // 锁定首个成员后，应从交集中剔除且总数 -1。
       final lockedId = members.first.userId;
-      final afterLock = await loadGroupContactMembers(
-        repo,
-        group,
-        <String>{lockedId},
-      );
+      final afterLock = await loadGroupContactMembers(repo, group, <String>{
+        lockedId,
+      });
       expect(afterLock.any((m) => m.userId == lockedId), isFalse);
       expect(afterLock.length, members.length - 1);
     });

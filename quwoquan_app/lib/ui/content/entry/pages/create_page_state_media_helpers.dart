@@ -40,7 +40,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
     }
     final publishState = state.copyWith(settings: confirmedSettings);
     ref.read(createEditorProvider.notifier).setSettings(confirmedSettings);
-    setState(() => _isPublishing = true);
+    _setMountedState(() => _isPublishing = true);
     try {
       final repository = ref.read(contentRepositoryProvider);
       final preparedPayload = await buildCreatePostPayloadWithRemoteImageMedia(
@@ -113,7 +113,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       }
     } finally {
       if (mounted) {
-        setState(() => _isPublishing = false);
+        _setMountedState(() => _isPublishing = false);
       }
     }
   }
@@ -203,7 +203,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
             .ensureArticleWrapNodeGroup(figureNodeId, splitOffset: splitOffset);
       },
       onArticleIntrinsicImageResolved: () {
-        if (mounted) setState(() {});
+        if (mounted) _setMountedState(() {});
       },
       onPaperTextureSelected: (texture) {
         ref.read(createEditorProvider.notifier).setArticlePaperTexture(texture);
@@ -408,7 +408,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         if (!mounted) {
           return;
         }
-        setState(() {
+        _setMountedState(() {
           _pressedMediaPath = assetPath;
         });
       },
@@ -416,7 +416,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
         if (!mounted) {
           return;
         }
-        setState(() {
+        _setMountedState(() {
           if (_pressedMediaPath == assetPath) {
             _pressedMediaPath = null;
           }
@@ -424,7 +424,7 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
       },
       onTap: () async {
         if (mounted) {
-          setState(() {
+          _setMountedState(() {
             if (_pressedMediaPath == assetPath) {
               _pressedMediaPath = null;
             }

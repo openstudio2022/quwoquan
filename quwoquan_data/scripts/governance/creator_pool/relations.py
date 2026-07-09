@@ -1,7 +1,7 @@
 """Creator pool relations consumer.
 
-`seed.py` emits ``creator_relations.seed.json`` (follow + circle-member edges) for
-the canonical batch, but until now nothing consumed it — the file was a dead
+`seed.py` emits ``creator_relations.travel_photo_1k_v1.seed.json`` (follow +
+circle-member edges) for the canonical batch, but until now nothing consumed it — the file was a dead
 artifact. This module is the single consumer: it loads the relations seed plus the
 batch seed, validates every edge references a seeded creator ``subAccountId``, and
 projects normalized follow-graph + circle-membership injections that downstream
@@ -15,14 +15,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from _common.creator_pool.batch_policy import CANONICAL_BATCH_ID
 from _common.creator_pool.io import repo_seed_fixture_dir
 from _common.io import read_json
-
-RELATIONS_SEED_NAME = "creator_relations.seed.json"
+RELATIONS_SEED_NAME = "creator_relations.travel_photo_1k_v1.seed.json"
 
 
 def _default_seed_name(vertical: str) -> str:
-    return f"creator_{vertical}_batch100.seed.json"
+    if vertical == "travel":
+        return "creator_travel_photo_1k_v1.seed.json"
+    return f"creator_{vertical}_{CANONICAL_BATCH_ID}.seed.json"
 
 
 @dataclass
@@ -32,6 +34,8 @@ class RelationInjections:
     batch_id: str
     follow_edges: list[tuple[str, str]] = field(default_factory=list)
     circle_memberships: dict[str, list[str]] = field(default_factory=dict)
+    entity_affinities: dict[str, list[str]] = field(default_factory=dict)
+    circle_affinities: dict[str, list[str]] = field(default_factory=dict)
     issues: list[str] = field(default_factory=list)
 
     @property
@@ -46,6 +50,14 @@ class RelationInjections:
     def circle_member_count(self) -> int:
         return sum(len(members) for members in self.circle_memberships.values())
 
+    @property
+    def entity_affinity_count(self) -> int:
+        return sum(len(refs) for refs in self.entity_affinities.values())
+
+    @property
+    def circle_affinity_count(self) -> int:
+        return sum(len(refs) for refs in self.circle_affinities.values())
+
     def following_of(self, sub_account_id: str) -> list[str]:
         """Who ``sub_account_id`` follows (outbound edges)."""
         return [to for frm, to in self.follow_edges if frm == sub_account_id]
@@ -56,6 +68,12 @@ class RelationInjections:
 
     def members_of(self, circle_id: str) -> list[str]:
         return list(self.circle_memberships.get(circle_id, []))
+
+    def entity_affinities_of(self, sub_account_id: str) -> list[str]:
+        return list(self.entity_affinities.get(sub_account_id, []))
+
+    def circle_affinities_of(self, sub_account_id: str) -> list[str]:
+        return list(self.circle_affinities.get(sub_account_id, []))
 
 
 def build_relation_injections(
@@ -125,6 +143,28 @@ def build_relation_injections(
                 result.issues.append(f"edge[{idx}] duplicate CircleMember {sub} in {circle_id}")
                 continue
             members.append(sub)
+        elif kind == "EntityAffinity":
+            sub = str(edge.get("subAccountId") or "")
+            entity_ref = str(edge.get("entityRef") or "")
+            if not sub or not entity_ref:
+                result.issues.append(f"edge[{idx}] EntityAffinity missing subAccountId/entityRef")
+                continue
+            if sub not in seeded:
+                result.issues.append(f"edge[{idx}] EntityAffinity '{sub}' not a seeded creator")
+            refs = result.entity_affinities.setdefault(sub, [])
+            if entity_ref not in refs:
+                refs.append(entity_ref)
+        elif kind == "CircleAffinity":
+            sub = str(edge.get("subAccountId") or "")
+            circle_ref = str(edge.get("circleRef") or "")
+            if not sub or not circle_ref:
+                result.issues.append(f"edge[{idx}] CircleAffinity missing subAccountId/circleRef")
+                continue
+            if sub not in seeded:
+                result.issues.append(f"edge[{idx}] CircleAffinity '{sub}' not a seeded creator")
+            refs = result.circle_affinities.setdefault(sub, [])
+            if circle_ref not in refs:
+                refs.append(circle_ref)
         else:
             result.issues.append(f"edge[{idx}] unknown kind '{kind}'")
 
@@ -134,13 +174,24 @@ def build_relation_injections(
 def load_relation_injections(
     *,
     vertical: str = "travel",
+    batch_id: str | None = None,
     relations_path: Path | None = None,
     seed_path: Path | None = None,
 ) -> RelationInjections:
-    """Load + build injections from on-disk canonical seeds (default travel batch)."""
+    """Load + build injections from on-disk canonical seeds (default travel-photo 1k batch)."""
     fixtures = repo_seed_fixture_dir()
-    relations_path = relations_path or (fixtures / RELATIONS_SEED_NAME)
-    seed_path = seed_path or (fixtures / _default_seed_name(vertical))
+    if relations_path is None:
+        if batch_id and batch_id != CANONICAL_BATCH_ID:
+            relations_path = fixtures / f"creator_relations.{batch_id}.seed.json"
+        else:
+            relations_path = fixtures / RELATIONS_SEED_NAME
+    if seed_path is None:
+        if batch_id and batch_id != CANONICAL_BATCH_ID:
+            from governance.creator_pool.seed import seed_fixture_name
+
+            seed_path = fixtures / seed_fixture_name(vertical, batch_id)
+        else:
+            seed_path = fixtures / _default_seed_name(vertical)
     relations_seed = read_json(relations_path)
     batch_seed = read_json(seed_path)
     users = batch_seed.get("users") if isinstance(batch_seed, Mapping) else []

@@ -45,7 +45,7 @@ func main() {
 	repoRoot := resolveRepoRoot()
 	service := &platformService{
 		repoRoot: repoRoot,
-		store:    controlplane.NewFileStore(filepath.Join(repoRoot, "state", "control-plane", "platform-ops-service.json")),
+		store:    controlplane.NewFileStore(localControlPlaneStorePath(repoRoot, "platform-ops-service")),
 	}
 	if err := service.seed(); err != nil {
 		log.Fatalf("seed platform ops service: %v", err)
@@ -358,7 +358,7 @@ func (s *platformService) handleListPlaneBindings(w http.ResponseWriter, r *http
 			} `yaml:"bindings"`
 		} `yaml:"environments"`
 	}
-	if err := s.readYAMLInto(filepath.Join(s.repoRoot, "deploy", "shared", "process_domain_plane_mapping.yaml"), &doc); err != nil {
+	if err := s.readYAMLInto(filepath.Join(s.repoRoot, "quwoquan_ops", "environments", "process_domain_plane_mapping.yaml"), &doc); err != nil {
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
@@ -684,7 +684,7 @@ func (s *platformService) readOnboardingDomains() ([]map[string]any, error) {
 }
 
 func readReleaseState(repoRoot, service string) string {
-	stateFile := filepath.Join(repoRoot, "state", "release", service+".state")
+	stateFile := filepath.Join(repoRoot, ".qwq_output", "local", "release-state", service+".state")
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		return ""
@@ -702,7 +702,7 @@ func resolveRepoRoot() string {
 	}
 	current := wd
 	for {
-		if _, err := os.Stat(filepath.Join(current, "releases", "config")); err == nil {
+		if _, err := os.Stat(filepath.Join(current, "quwoquan_service", "services")); err == nil {
 			return current
 		}
 		parent := filepath.Dir(current)
@@ -711,6 +711,10 @@ func resolveRepoRoot() string {
 		}
 		current = parent
 	}
+}
+
+func localControlPlaneStorePath(repoRoot, serviceName string) string {
+	return filepath.Join(repoRoot, ".qwq_output", "local", serviceName, "control-plane", serviceName+".json")
 }
 
 func resolveConfigSchemaPath(repoRoot string) string {

@@ -15,7 +15,7 @@
 用户进入圈子主页或实体主页时，必须能基于真实服务数据判断：
 
 - 这里是什么，是否可信。
-- 实体/圈子「我的交集」与「影响力」双模块。
+- 实体/圈子「我的交集」与「这里打动的人 / 圈子打动的人」双模块。
 - 谁和我有关，以及证据是否可点开。
 - 我能做什么：关注、加入、私信、查看记录、参与讨论、进入相关圈子。
 
@@ -25,13 +25,16 @@
 
 ### In Scope
 
+- 当前 `/continue-dev` 收口轮次只验证 **homepage-only** 的 `H100 -> H1000` 真实端到端闭环，不把 article/image 的放量链路混入同一批执行。
 - gamma-local 拓扑闭环：`entity-service`、`circle-service` 进入 compose、gateway route、port profile、package、healthcheck、stackctl 验证证据。
-- 端云契约闭环：实体主页、圈子主页、对象交集、相关圈子、影响摘要、关注/加入状态全部走 metadata/service 契约，不在 App 维护第二套模型。
+- 端云契约闭环：实体主页、圈子主页、对象交集、相关圈子、打动摘要（内部契约仍为 impact）、关注/加入状态全部走 metadata/service 契约，不在 App 维护第二套模型。
 - 种子与身份闭环：`app_gamma_seed_manifest.json` 覆盖 viewer、用户关系、实体主页、圈子、记录、讨论、相关圈子与对象交集所需数据；api_integration/user_acceptance 使用同一 viewer 和 token 语义。
-- 真实 API 探针：覆盖 `/v1/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/related-groups`、`/v1/circles`、`/v1/circles/{circleId}`、`/impact`、`/v1/content/intersections/object`。
+- 真实 API 探针：覆盖 `/v1/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/related-groups`、`/v1/circles`、`/v1/circles/{circleId}`、`/impact`、`/v1/content/intersections/object`；前台模块标题必须稳定映射为「这里打动的人 / 圈子打动的人」。
 - App Remote 验收：实体/圈子页面在 remote/gamma 数据模式下消费同一契约，禁止回落到 Dart mock 或 UI 自造主句。
 - 交集事实契约：商用可见理由只消费 `IntersectionReason.primaryText / primarySpans / sampleVisuals / representativeActor / objectVisual / lifecycleState / actionHints / iconKey`；`join(primarySpans.text) == primaryText` 必须可测。
 - 可观测闭环：首页曝光、理由曝光、span 点击、证据展开、关注/加入/私信、Tab 切换、记录点击、错误态和空态都有 `surface/objectType/objectId/reasonId/targetType/targetId/env` 归因。
+- 实体主页 author 阶段默认通过 `cursor_sdk` 使用**最新 `composer`** 模型执行，并记录 startup、throughput、firstPassRate、authoritative ledger 等真实执行证据。
+- 实体主页主权威源冻结为 `Wikipedia/Wikivoyage + 百度百科 + 搜狗百科`；`今日头条百科` 只允许作为 supporting/reference 补事实，不得进入 `primaryEvidenceRef`。
 
 ### Out of Scope
 
@@ -39,6 +42,7 @@
 - 不新增 homepage/circle 专属交集 API；优先复用 `/v1/content/intersections/object`，只有 metadata 契约缺字段时才补契约。
 - 不解决 `R-IX01` 到 `R-IX04` 的全量算法与商业策略能力；这些风险只影响推荐精度，不阻塞真实事实展示闭环。
 - 不宣称 prod-ready；通过 gamma-local api_integration、user_acceptance 和 UAT 证据后，才能进入 prod rollout 规格。
+- 不在本轮执行 article/image 的 `H100/H1000` 放量验证；Pinterest image-only 商业线仅保留共享 runtime/composer 的非干扰回归，不纳入本 Story 的完成定义。
 
 ## 商用成熟度判定
 
@@ -93,7 +97,7 @@ flowchart LR
 
 1. 规格与契约收口：确认 L2/L3 acceptance、metadata 字段、禁词、端云模型一致。
 2. gamma-local 健康闭环：修复 gateway health、TLS/port/profile、stackctl verify 中断点。
-3. seed 与 API 探针：补齐实体、圈子、相关圈子、影响摘要、对象交集的 api_integration manifest 和严格断言。
+3. seed 与 API 探针：补齐实体、圈子、相关圈子、打动摘要（impact）、对象交集的 api_integration manifest 和严格断言。
 4. App Remote 串联：确保页面在 remote/gamma 模式下消费真实 bundle、detail、impact、intersection、related groups。
 5. 观测与 UAT：补行为归因、错误/空态、弱网/未登录恢复，输出 user_acceptance 或替代 dry-run 证据。
 6. Exit Review：按规格达成、测试证据、E2E、产品/UX、运营观测、自动化门禁、剩余风险逐项关闭。
@@ -105,7 +109,7 @@ flowchart LR
 ### P0 gamma-local health first
 
 - 目标：先让 gamma gateway、product-ops gateway、entity-service、circle-service、content-service 在 stackctl health 中可访问。
-- 输入：`docker-compose.gamma-local.yaml`、`deploy/local-gamma/Caddyfile`、port profile、stackctl package/health report。
+- 输入：`docker-compose.gamma-local.yaml`、`quwoquan_ops/environments/local-gamma/Caddyfile`、port profile、stackctl package/health report。
 - 输出：`stackctl health --target gamma-local --scope full` 通过；若仍有 TLS EOF，先修 topology/证书/服务启动，不进入对象页开发。
 - 禁止：绕过 stackctl 手写第二套 curl base URL，或把 health 失败标成 endpoint 空结果。
 

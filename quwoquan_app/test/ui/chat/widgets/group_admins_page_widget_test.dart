@@ -125,8 +125,16 @@ void main() {
 
       final member = find.text('张华');
       expect(member, findsOneWidget);
+      await tester.ensureVisible(member);
+      await tester.pump();
 
-      await tester.tap(member);
+      final memberRow = find.ancestor(
+        of: member,
+        matching: find.byType(CupertinoButton),
+      );
+      expect(memberRow, findsOneWidget);
+
+      await tester.tap(memberRow);
       await tester.pump();
 
       // 页面仍存在（不崩溃）

@@ -180,29 +180,49 @@ func getenvOrDefault(key, fallback string) string {
 func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (config, error) {
 	cfg := config{}
 	if strings.TrimSpace(configRoot) != "" {
-		mergeConfigFile(&cfg, filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml"))
-		mergeConfigFile(&cfg, filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml"))
+		if err := mergeConfigFile(&cfg, filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")); err != nil {
+			return config{}, fmt.Errorf("read default config: %w", err)
+		}
+		if err := mergeConfigFile(&cfg, filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")); err != nil {
+			return config{}, fmt.Errorf("read env config: %w", err)
+		}
 		if strings.TrimSpace(configVersion) != "" {
-			mergeConfigFile(&cfg, filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml"))
+			if err := mergeConfigFile(&cfg, filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")); err != nil {
+				return config{}, fmt.Errorf("read version config: %w", err)
+			}
 		}
 		return cfg, nil
 	}
 	localDefault := filepath.Join("configs", "default", "config.yaml")
 	if _, err := os.Stat(localDefault); err == nil {
-		mergeConfigFile(&cfg, localDefault)
-		mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml"))
+		if err := mergeConfigFile(&cfg, localDefault); err != nil {
+			return config{}, fmt.Errorf("read local default config: %w", err)
+		}
+		if err := mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml")); err != nil {
+			return config{}, fmt.Errorf("read local env config: %w", err)
+		}
+		if strings.TrimSpace(configVersion) != "" {
+			if err := mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml")); err != nil {
+				return config{}, fmt.Errorf("read local version config: %w", err)
+			}
+		}
 		return cfg, nil
 	}
-	mergeConfigFile(&cfg, filepath.Join("configs", "config.yaml"))
+	if err := mergeConfigFile(&cfg, filepath.Join("configs", "config.yaml")); err != nil {
+		return config{}, fmt.Errorf("read current config: %w", err)
+	}
 	return cfg, nil
 }
 
-func mergeConfigFile(cfg *config, path string) {
+func mergeConfigFile(cfg *config, path string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return
+		return err
 	}
-	_ = yaml.Unmarshal(raw, cfg)
+	if err := yaml.Unmarshal(raw, cfg); err != nil {
+		return fmt.Errorf("parse %s: %w", path, err)
+	}
+	return nil
 }
 
 func applyEnvOverrides(cfg *config) {

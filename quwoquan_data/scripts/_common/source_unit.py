@@ -53,8 +53,9 @@ def slugify(value: str) -> str:
 
 
 # RC3：source.md 内联图占位 :::figure 块（未绑定到真实资产的悬空占位需整块剥离）。
+# 图注行可选：无原图注的占位块只有图行（禁止人为补注），剥离时同样整块移除。
 _INLINE_FIGURE_BLOCK_RE = re.compile(
-    r"\n?:::figure\n!\[[^\]]*\]\(asset://source-inline-\d+\)\n[^\n]*\n:::\n?"
+    r"\n?:::figure\n!\[[^\]]*\]\(asset://source-inline-\d+\)\n(?:(?!:::)[^\n]*\n)?:::\n?"
 )
 
 
@@ -139,7 +140,14 @@ def _raise_if_scenic_location_type_conflict(
     sibling = batch_entity_object_dir(task_id, batch_id, domain, sibling_type, name)
     if sibling == current or not sibling.exists():
         return
-    if not any((sibling / marker).exists() for marker in ("_entity.json", "page.md", "1.download")):
+    markers = ("_entity.json", "page.md", "1.download")
+    if not any((sibling / marker).exists() for marker in markers):
+        return
+    # 「same batch contains both」要求两类型目录都真实物化：读路径以默认/空
+    # hint 解析出的 current 并不在磁盘上时，只是类型提示缺失（上游应做
+    # canonical 校正），不构成漂移共存；否则 canonical 产物存在时任何空 hint
+    # 读操作都会假阳性炸穿 audit/completion gate（WP5 舟山实测）。
+    if not current.exists() or not any((current / marker).exists() for marker in markers):
         return
     raise ValueError(
         "entity type drift detected: same batch contains both "
@@ -236,9 +244,11 @@ def write_source_unit(
     images: Sequence[Mapping[str, Any]] | None = None,
     asset_funnel: Mapping[str, Any] | None = None,
     raw_format: str = "",
+    layout: Mapping[str, Any] | None = None,
     task_id: str = "",
     batch_id: str = "",
     build_variants: bool = True,
+    source: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """写一个来源单元，返回其 manifest（含 assets.index 摘要）。
 
@@ -250,10 +260,14 @@ def write_source_unit(
     from _common.paths import STAGE_DOWNLOAD, ensure_object_stages
 
     snapshot_hash = "sha256:" + hashlib.sha256(source_md.encode("utf-8")).hexdigest()
+    # 可读命名契约（spec §3）：目录名 = {实体名}__{sourceKind}__{hash8}；
+    # 实体名取对象目录名（entities/{d}/{t}/{name}），sourceKind 与 manifest 同源。
     source_unit_id = og.source_unit_id(
         canonical_url=url,
         snapshot_hash=snapshot_hash,
         source_ref=f"{ordinal:02d}.{source_id}",
+        entity_name=object_dir.name,
+        source_kind=source_category or platform or "web",
     )
     inferred_batch_root = _batch_root_for_object_dir(object_dir) if not (task_id and batch_id) else None
     unit = (
@@ -271,6 +285,11 @@ def write_source_unit(
         (unit / source_unit_raw_snapshot_name(raw_format)).write_bytes(html_bytes)
     if quality is not None:
         write_json(unit / "source.quality.json", dict(quality))
+    if layout is not None:
+        # 统一结构化 IR 真相源（含 rejected IR：解析失败原因可审计，禁静默降级）。
+        from _common.source_layout import write_source_layout
+
+        write_source_layout(unit, layout)
 
     asset_index: list[dict[str, Any]] = []
     assets_dir = unit / "assets"
@@ -342,6 +361,21 @@ def write_source_unit(
             "variants": variants_meta,
             "variantGeneration": "inline" if build_variants else "deferred",
             "inlinePlaceholderId": str(img.get("placeholderId") or ""),
+            # 布局/封面候选语义（来自 source.layout.json figure；非结构源为空/默认）：
+            # placementType=infoboxLead|locatorMap|inline|groupMember；rank=-1 禁封面。
+            "placementType": str(img.get("placementType") or ""),
+            "groupId": str(img.get("groupId") or ""),
+            "sectionSlug": str(img.get("sectionSlug") or ""),
+            "sourceOrder": int(img.get("sourceOrder") or 0),
+            "coverCandidateRank": int(img.get("coverCandidateRank") or 0),
+            "isMapLike": bool(img.get("isMapLike")),
+            # 代表性实景图：非地图/定位图即可进入封面与配图选择池。
+            "isRepresentativeVisual": (
+                not bool(img.get("isMapLike"))
+                and str(img.get("placementType") or "") != "locatorMap"
+            ),
+            # 视觉主体描述 = 原图注（仅原图注，无则空，禁止伪造）。
+            "visualSubject": str(img.get("caption") or ""),
         }
         asset_index.append(entry)
         placeholder_id = str(img.get("placeholderId") or "").strip()
@@ -408,6 +442,31 @@ def write_source_unit(
         },
         "assetCount": len(asset_index),
     }
+    if layout is not None:
+        # meta 只保留 IR 索引摘要；结构块真相源在 source.layout.json。
+        layout_blocks = layout.get("blocks") if isinstance(layout.get("blocks"), list) else []
+        manifest["layoutSummary"] = {
+            "parseStatus": str(layout.get("parseStatus") or ""),
+            "rejectReason": str(layout.get("rejectReason") or ""),
+            "blockCount": len(layout_blocks),
+            "figureCount": int(layout.get("figureCount") or 0),
+            "tableCount": len(layout.get("tables") or []),
+        }
+    try:
+        from _common.qunar_template import qunar_template_metadata
+
+        html_text = html_bytes.decode("utf-8", errors="replace") if html_bytes else ""
+        site_template = qunar_template_metadata(url=url, text=source_md, html=html_text, title=title, source=source)
+    except Exception:  # noqa: BLE001
+        site_template = {}
+    if site_template:
+        manifest["siteTemplate"] = site_template
+        if site_template.get("publishedAt"):
+            manifest["publishedAt"] = site_template["publishedAt"]
+        if site_template.get("freshnessTier"):
+            manifest["sourceFreshnessTier"] = site_template["freshnessTier"]
+        if site_template.get("sourceAuthorRef"):
+            manifest["sourceAuthorRef"] = site_template["sourceAuthorRef"]
     if source_ref:
         manifest["sourceRef"] = source_ref
         manifest["sourceUnitRef"] = str(Path(source_ref).parent)
@@ -536,7 +595,7 @@ def object_image_candidates(
 ) -> list[dict[str, Any]]:
     """对象的可选图候选（新布局：来源单元 assets/）。
 
-    每项：{path, sourceRef(相对), sourceAssetRef(相对), sha256, caption, relevance}。
+    每项：{path, sourceRef(相对), sourceAssetId, sourceAssetRef(相对), sha256, caption, relevance}。
     """
     out: list[dict[str, Any]] = []
     for unit in iter_source_units(object_dir):
@@ -560,6 +619,7 @@ def object_image_candidates(
                 {
                     "path": asset,
                     "sourceRef": source_ref,
+                    "sourceAssetId": meta.get("sourceAssetId") or "",
                     "sourceAssetRef": relative_batch_ref(asset, task_id, batch_id),
                     "sha256": meta.get("sha256") or "",
                     "caption": meta.get("caption", ""),

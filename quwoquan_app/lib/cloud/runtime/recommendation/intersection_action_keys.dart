@@ -1,14 +1,18 @@
-/// 交集动作 `actionKey` 端侧闭集常量。
+import '../generated/recommendation/intersection_kind_metadata.g.dart';
+
+/// 交集动作 `actionKey` 端侧闭集常量与路由分类。
 ///
 /// 唯一真相源是云侧 metadata：
-/// `contracts/metadata/recommendation/rec_model/projections/intersection_action_hint.yaml`
-/// 与 `intersection_kind_registry.yaml`。metadata 明确规定「端只读 actionKey / label /
-/// target 渲染并分发动作，禁止端侧按 kind 猜测行动」。端在消费 `IntersectionActionHint`
-/// 时按本闭集分发（助手类 → 打开小艺解释；其余结构化动作 → 经统一导航到 target），
-/// 文案一律取 `hint.label`，不在端侧再造。
+/// `contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml`
+/// 与 `intersection_kind_metadata.g.dart`（codegen 下发的 `intersectionActionKeyMeta`）。
+/// metadata 明确规定「端只读 actionKey / label / target / dispatch 渲染并分发动作，
+/// 禁止端侧按 kind 猜测行动，也禁止端手写『哪些 actionKey 属助手/约伴』第二份枚举」。
 ///
-/// 注：actionKey 在 codegen DTO 中为开放 String；本类把 metadata 闭集固化为端侧分发键，
-/// 消除魔法字符串散落（如旧实体页 `'ask_xiaoqu'` 死分支——该值全仓从无产出）。
+/// - String 常量：把 metadata 闭集固化为端侧分发键，消除魔法字符串散落
+///   （如旧实体页 `'ask_xiaoqu'` 死分支——该值全仓从无产出）。
+/// - 分类判定（isAssistant / isCompanionAction）：一律委托 codegen
+///   `IntersectionActionKeyMeta.dispatch`（M0.7 行动路由类别 dispatch 一等化），
+///   端不再手写重社交/助手集合，杜绝与 registry 漂移的第二真相源。
 abstract final class IntersectionActionKeys {
   static const String followPerson = 'follow_person';
   static const String greetPerson = 'greet_person';
@@ -31,23 +35,28 @@ abstract final class IntersectionActionKeys {
   static const String meetNearby = 'meet_nearby';
   static const String startVoiceRoom = 'start_voice_room';
   static const String expressInterest = 'express_interest';
+  static const String viewOfficialDeals = 'view_official_deals';
+  static const String bookTicket = 'book_ticket';
+  static const String bookHotel = 'book_hotel';
 
-  /// 助手类动作：点击该交集行打开小艺解释 / 追问，而非导航到对象页。
+  /// 助手类动作（dispatch==assistant，即 ask_assistant / create_followup）：
+  /// 点击该交集行打开小艺解释 / 追问 / 续写，而非导航到对象页。
+  /// 真相源为 codegen `IntersectionActionKeyMeta.dispatch`（M0.7），未知 key 安全返回 false。
   static bool isAssistant(String actionKey) {
-    final key = actionKey.trim();
-    return key == askAssistant || key == createFollowup;
+    return IntersectionActionKeyMeta.of(actionKey)?.isAssistant ?? false;
   }
 
-  /// 重社交行动（同行 / 线下 / 实时 / 心动）：进入破冰阶梯或同频连接专属落点，
-  /// 非简单对象下钻；端侧据此决定是否走打招呼请求 / 建群 / 报名等专属流程。
-  static bool isHeavySocialAction(String actionKey) {
-    final key = actionKey.trim();
-    return key == joinTopicRoom ||
-        key == startCompanion ||
-        key == joinTrip ||
-        key == joinMeetup ||
-        key == meetNearby ||
-        key == startVoiceRoom ||
-        key == expressInterest;
+  /// 同行 / 线下约伴类动作（dispatch==companion，即 start_companion / join_trip /
+  /// join_meetup / meet_nearby）：唯一驱动「有人同行」徽标与约伴专属落点。
+  /// 真相源为 codegen `IntersectionActionKeyMeta.dispatch`（M0.7）；话题房 / 语音房 /
+  /// 心动（dispatch==connect）与私信（dispatch==message）不属此类，不再误标为同行。
+  static bool isCompanionAction(String actionKey) {
+    return IntersectionActionKeyMeta.of(actionKey)?.isCompanion ?? false;
+  }
+
+  /// 商用转化动作（dispatch==commerce）：真实渠道和法务条款未就绪时必须保持
+  /// targetAvailability=deferred 或被端侧 feature flag 拦截，不得伪造交易。
+  static bool isCommerce(String actionKey) {
+    return IntersectionActionKeyMeta.of(actionKey)?.dispatch == 'commerce';
   }
 }

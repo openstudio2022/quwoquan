@@ -17,7 +17,7 @@ The application is migrating to a strict iOS-first design. All new UI code must 
 | **Inputs** | `TextField` | `CupertinoTextField` | |
 | **List Item** | `ListTile` | `CupertinoListTile` | Custom implementation required |
 | **Icons** | `Icons.arrow_back` | `CupertinoIcons.back` | |
-| **Modals** | `showModalBottomSheet` | `showCupertinoModalPopup` | |
+| **Modals** | `showModalBottomSheet` | `showAppBottomModal` / `showAppCupertinoDialog` | route barrier 固定透明，底层亮度由统一 presenter 原地 fade |
 
 ## 2. The "Material Tunnel" Pattern
 

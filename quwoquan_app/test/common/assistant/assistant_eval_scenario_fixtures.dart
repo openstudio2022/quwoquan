@@ -1,9 +1,5 @@
 import 'dart:convert';
 
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_conversation.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_stream_event.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/assistant_turn_envelope.g.dart';
-import 'package:quwoquan_app/assistant/generated/contracts/tool_use.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
 
 const String _assistantScenarioFixtureJsonBase64 = String.fromEnvironment(

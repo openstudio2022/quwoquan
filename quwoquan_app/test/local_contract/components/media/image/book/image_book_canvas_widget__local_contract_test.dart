@@ -31,6 +31,57 @@ Future<ui.Image> _solidImage(int width, int height, Color color) async {
   return image;
 }
 
+Future<ui.Image> _quadrantImage({
+  required int width,
+  required int height,
+  required Color topLeft,
+  required Color topRight,
+  required Color bottomLeft,
+  required Color bottomRight,
+}) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  final halfWidth = width / 2;
+  final halfHeight = height / 2;
+  canvas
+    ..drawRect(
+      Rect.fromLTWH(0, 0, halfWidth, halfHeight),
+      ui.Paint()..color = topLeft,
+    )
+    ..drawRect(
+      Rect.fromLTWH(halfWidth, 0, halfWidth, halfHeight),
+      ui.Paint()..color = topRight,
+    )
+    ..drawRect(
+      Rect.fromLTWH(0, halfHeight, halfWidth, halfHeight),
+      ui.Paint()..color = bottomLeft,
+    )
+    ..drawRect(
+      Rect.fromLTWH(halfWidth, halfHeight, halfWidth, halfHeight),
+      ui.Paint()..color = bottomRight,
+    );
+  final picture = recorder.endRecording();
+  final image = await picture.toImage(math.max(1, width), math.max(1, height));
+  picture.dispose();
+  return image;
+}
+
+Future<double> _sampleLuminance(
+  ui.Image image, {
+  required int x,
+  required int y,
+}) async {
+  final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+  final bytes = data!.buffer.asUint8List();
+  final sampleX = x.clamp(0, image.width - 1).toInt();
+  final sampleY = y.clamp(0, image.height - 1).toInt();
+  final offset = (sampleY * image.width + sampleX) * 4;
+  final r = bytes[offset].toDouble();
+  final g = bytes[offset + 1].toDouble();
+  final b = bytes[offset + 2].toDouble();
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
 Future<double> _averageLuminance(ui.Image image) async {
   final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
   final bytes = data!.buffer.asUint8List();
@@ -41,6 +92,25 @@ Future<double> _averageLuminance(ui.Image image) async {
     final g = bytes[i + 1].toDouble();
     final b = bytes[i + 2].toDouble();
     total += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    count += 1;
+  }
+  return total / count;
+}
+
+Future<double> _averageSaturation(ui.Image image) async {
+  final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+  final bytes = data!.buffer.asUint8List();
+  var total = 0.0;
+  var count = 0;
+  for (var i = 0; i < bytes.length; i += 4) {
+    final r = bytes[i].toDouble();
+    final g = bytes[i + 1].toDouble();
+    final b = bytes[i + 2].toDouble();
+    final maxChannel = math.max(r, math.max(g, b));
+    final minChannel = math.min(r, math.min(g, b));
+    if (maxChannel > 0) {
+      total += (maxChannel - minChannel) / maxChannel;
+    }
     count += 1;
   }
   return total / count;
@@ -102,10 +172,21 @@ void main() {
       lessThan(wideFrontLuminance),
       reason: '图片书背面必须比正面略淡，不能用正面高光纹理冒充。',
     );
+    final backBrightnessRatio = wideBackLuminance / wideFrontLuminance;
     expect(
-      wideBackLuminance,
-      greaterThan(wideFrontLuminance * 0.72),
-      reason: '深色图片背面只应轻微变淡，不能被 wash/动态阴影压成黑片。',
+      backBrightnessRatio,
+      greaterThanOrEqualTo(0.62),
+      reason: '背面 wash 不能把图片压成黑片。',
+    );
+    expect(
+      backBrightnessRatio,
+      lessThanOrEqualTo(0.78),
+      reason: '背面必须降低亮度刺激，不能保留高对比镜像图。',
+    );
+    expect(
+      await _averageSaturation(widePair.back.image),
+      lessThan(await _averageSaturation(widePair.front.image) * 0.72),
+      reason: '图片书背面必须降低饱和度，降低连续翻页刺激。',
     );
     expect(
       await _averageLuminance(failurePair.back.image),
@@ -119,6 +200,55 @@ void main() {
     failurePair.dispose();
     wideImage.dispose();
     tallImage.dispose();
+  });
+
+  test('ImageBookPageSurfaceFactory 翻页材质不烘焙底部黑角 chrome', () async {
+    const factory = ImageBookPageSurfaceFactory();
+    const pageSize = Size(120, 180);
+    final quadrantImage = await _quadrantImage(
+      width: 120,
+      height: 180,
+      topLeft: const Color(0xFFE7DCCF),
+      topRight: const Color(0xFFC6D7EA),
+      bottomLeft: const Color(0xFF8FC98F),
+      bottomRight: const Color(0xFFD7C29B),
+    );
+
+    final pair = await factory.rasterizeImageTexture(
+      image: quadrantImage,
+      pageSize: pageSize,
+      pixelRatio: 1,
+    );
+
+    final frontTopRight = await _sampleLuminance(
+      pair.front.image,
+      x: pair.front.image.width - 4,
+      y: 4,
+    );
+    final frontBottomRight = await _sampleLuminance(
+      pair.front.image,
+      x: pair.front.image.width - 4,
+      y: pair.front.image.height - 4,
+    );
+    final backBottomRight = await _sampleLuminance(
+      pair.back.image,
+      x: pair.back.image.width - 4,
+      y: pair.back.image.height - 4,
+    );
+
+    expect(
+      frontBottomRight,
+      greaterThan(frontTopRight * 0.58),
+      reason: '翻页 front texture 不得再带静态底部黑渐变，否则右下角会先被压暗。',
+    );
+    expect(
+      backBottomRight,
+      greaterThan(45),
+      reason: '镜像后的背面右下角必须保留图片语义纹理，不允许被 chrome/wash 压成黑角。',
+    );
+
+    pair.dispose();
+    quadrantImage.dispose();
   });
 
   testWidgets('ImageBookCanvas 接入公共翻书宿主并上报初始页', (tester) async {
@@ -243,5 +373,46 @@ void main() {
       find.byKey(const ValueKey<String>('media-pageflip-static-page-1')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('ImageBookCanvas 第一页中心左滑立即进入公共翻书跟手层', (tester) async {
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            imageUrls: const <String>[
+              'media/image/s/fixture/book-1.jpg',
+              'media/image/s/fixture/book-2.jpg',
+            ],
+            onImageChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    _consumeImageExceptions(tester);
+    await tester.pump(const Duration(milliseconds: 16));
+    _consumeImageExceptions(tester);
+
+    final gestureLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    final rect = tester.getRect(gestureLayer);
+    final gesture = await tester.startGesture(rect.center);
+    await gesture.moveBy(const Offset(-12, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    _consumeImageExceptions(tester);
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+      reason: '图片书第一页从画面中心左滑应与文章一样立即跟手前翻，不能等待 release。',
+    );
+
+    await gesture.up();
+    await tester.pump();
+    _consumeImageExceptions(tester);
   });
 }
