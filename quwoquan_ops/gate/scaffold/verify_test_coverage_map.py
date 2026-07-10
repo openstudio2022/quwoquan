@@ -14,12 +14,14 @@ from test_directory_inventory_lib import (
     PAGE_INVENTORY_PATH,
     REQUIRED_PAGE_CASE_SUFFIXES,
     ROOT,
+    iter_canonical_files,
     page_wrapper_target_path,
     recorded_file_is_canonical,
 )
 
 
 FEATURE_TREE = ROOT / "specs" / "feature-tree"
+OUTPUT_REPORT = ROOT / ".qwq_output" / "env" / "repo" / "runs" / "tests" / "coverage-map" / "report.json"
 JOURNEY_REGISTRY_PATH = FEATURE_TREE / "journey_scenario_registry.yaml"
 STRICT_TRACEABILITY_PATHS = {
     "specs/feature-tree/runtime/runtime-test-pyramid/acceptance.yaml",
@@ -73,6 +75,27 @@ ACCEPTANCE_GROUPS = (
     "contract_acceptance",
 )
 DONE_STATUSES = {"implemented", "completed"}
+QUALITY_FACETS = (
+    "functional",
+    "contract",
+    "reliability",
+    "availability",
+    "observability",
+    "experience",
+    "security",
+    "performance",
+    "data_consistency",
+)
+FACET_HINTS = {
+    "contract": ("contract", "metadata", "schema", "dto", "api_contract"),
+    "reliability": ("reliability", "retry", "timeout", "offline", "failure", "recover"),
+    "availability": ("availability", "health", "degrade", "fallback", "rollback"),
+    "observability": ("observability", "telemetry", "metric", "metrics", "trace", "log", "audit", "event"),
+    "experience": ("experience", "journey", "page", "widget", "ui", "empty", "permission"),
+    "security": ("security", "auth", "permission", "privacy", "token", "secret", "redact", "audit"),
+    "performance": ("performance", "latency", "capacity", "p95", "p99", "budget", "startup"),
+    "data_consistency": ("data_consistency", "consistency", "idempot", "projection", "outbox", "publish", "import", "stable"),
+}
 
 
 class Failures:
@@ -84,15 +107,95 @@ class Failures:
 
     def exit_code(self) -> int:
         if not self.items:
-            print("[verify] OK: coverage map checked")
+            print(f"[verify] OK: coverage map checked ({OUTPUT_REPORT.relative_to(ROOT)})")
             return 0
         for item in self.items:
             print(f"[verify] FAIL: {item}", file=sys.stderr)
         return 1
 
+    def exit_code_value(self) -> int:
+        return 0 if not self.items else 1
+
 
 def load_yaml(path: Path) -> dict[str, Any]:
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+
+def infer_quality_facet(path_text: str) -> str:
+    text = path_text.lower()
+    for facet, hints in FACET_HINTS.items():
+        if any(hint in text for hint in hints):
+            return facet
+    return "functional"
+
+
+def collect_coverage_index() -> dict[str, Any]:
+    canonical_files: list[dict[str, str]] = []
+    counts: dict[str, dict[str, int]] = {
+        "area": {},
+        "layer": {},
+        "quality_facet": {facet: 0 for facet in QUALITY_FACETS},
+    }
+    for area, path, layer in iter_canonical_files():
+        rel_path = path.relative_to(ROOT).as_posix()
+        facet = infer_quality_facet(rel_path)
+        canonical_files.append(
+            {
+                "area": area,
+                "layer": layer,
+                "quality_facet": facet,
+                "source_file": rel_path,
+            }
+        )
+        counts["area"][area] = counts["area"].get(area, 0) + 1
+        counts["layer"][layer] = counts["layer"].get(layer, 0) + 1
+        counts["quality_facet"][facet] = counts["quality_facet"].get(facet, 0) + 1
+
+    acceptance_quality_facets: dict[str, int] = {facet: 0 for facet in QUALITY_FACETS}
+    for path in FEATURE_TREE.rglob("acceptance.yaml"):
+        data = load_yaml(path)
+        for group_name in ACCEPTANCE_GROUPS:
+            group = data.get(group_name) or {}
+            if not isinstance(group, dict):
+                continue
+            for item in group.values():
+                if not isinstance(item, dict):
+                    continue
+                for facet in item.get("quality_facets") or []:
+                    facet_text = str(facet)
+                    if facet_text in acceptance_quality_facets:
+                        acceptance_quality_facets[facet_text] += 1
+                test_evidence = item.get("test_evidence") or {}
+                for bucket_name in ("primary", "supporting"):
+                    for entry in test_evidence.get(bucket_name) or []:
+                        if not isinstance(entry, dict):
+                            continue
+                        facet_text = str(entry.get("quality_facet") or "")
+                        if facet_text in acceptance_quality_facets:
+                            acceptance_quality_facets[facet_text] += 1
+
+    return {
+        "counts": counts,
+        "acceptance_quality_facets": acceptance_quality_facets,
+        "canonical_files": canonical_files,
+    }
+
+
+def write_coverage_report(index: dict[str, Any], failures: Failures) -> None:
+    OUTPUT_REPORT.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "suite_id": "test_coverage_map",
+        "exit_code": failures.exit_code_value(),
+        "status": "passed" if not failures.items else "failed",
+        "case_results": [
+            {
+                "case_id": "local_contract.runtime.test_governance.coverage_map",
+                "status": "passed" if not failures.items else "failed",
+            }
+        ],
+        "coverage": index,
+    }
+    OUTPUT_REPORT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def normalize_record(record: Any) -> tuple[str | None, str | None]:
@@ -445,6 +548,7 @@ def main() -> int:
     verify_page_inventory(failures)
     verify_page_case_ids(failures)
     verify_journey_scenario_bindings(failures)
+    write_coverage_report(collect_coverage_index(), failures)
     return failures.exit_code()
 
 

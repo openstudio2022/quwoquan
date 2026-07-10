@@ -15,11 +15,65 @@ ROOT = Path(__file__).resolve().parents[3]
 FEATURE_TREE = ROOT / "specs" / "feature-tree"
 
 ALLOWED_LAYERS = {"local_contract", "api_integration", "user_acceptance"}
-ALLOWED_ENVS = {"local", "alpha", "beta", "gamma", "prod", "gamma_local", "prod_gray_initial"}
+ALLOWED_ENVS = {"local", "alpha", "beta", "gamma", "prod", "gamma_local"}
 ALLOWED_ENVS_BY_LAYER = {
     "local_contract": {"local", "alpha"},
-    "api_integration": {"beta", "gamma", "prod", "prod_gray_initial"},
-    "user_acceptance": {"gamma_local", "prod_gray_initial"},
+    "api_integration": {"beta", "gamma", "prod"},
+    "user_acceptance": {"gamma_local", "prod"},
+}
+ALLOWED_ROLLOUT_STAGES = {"gray_initial", "carry_on", "full"}
+ALLOWED_QUALITY_FACETS = {
+    "functional",
+    "contract",
+    "reliability",
+    "availability",
+    "observability",
+    "experience",
+    "security",
+    "performance",
+    "data_consistency",
+}
+ALLOWED_TEST_OBJECTS = {
+    "page",
+    "component",
+    "widget",
+    "provider",
+    "repository",
+    "mapper",
+    "route",
+    "runtime_config",
+    "observability",
+    "security_policy",
+    "performance_budget",
+    "metadata",
+    "handler",
+    "application_service",
+    "domain_rule",
+    "store_repository",
+    "message_event",
+    "api_operation",
+    "job",
+    "config_release",
+    "schema",
+    "cli_command",
+    "workflow",
+    "source_adapter",
+    "quality_gate",
+    "publisher",
+    "importer",
+    "release_bundle",
+    "stackctl_command",
+    "environment_topology",
+    "package_contract",
+    "deploy_gate",
+    "observability_collector",
+    "portal_surface",
+    "algorithm",
+    "model_contract",
+    "feature_pipeline",
+    "serving_api",
+    "evaluation",
+    "performance",
 }
 ACCEPTANCE_GROUPS = {
     "uat_acceptance",
@@ -78,6 +132,10 @@ COMMAND_PREFIXES = (
 )
 
 
+def is_template_path(path: Path) -> bool:
+    return (FEATURE_TREE / "templates") in path.parents
+
+
 class FailureCollector:
     def __init__(self) -> None:
         self.failures: list[str] = []
@@ -101,6 +159,71 @@ def load_yaml(path: Path, failures: FailureCollector) -> dict[str, Any]:
     except Exception as exc:  # pragma: no cover - defensive CLI boundary
         failures.add(f"{path.relative_to(ROOT)} cannot be parsed as YAML: {exc}")
         return {}
+
+
+def validate_rollout_stages(
+    path: Path,
+    item_id: str,
+    owner: Any,
+    envs: list[str],
+    failures: FailureCollector,
+) -> None:
+    rollout_stages = owner.get("rollout_stages") if isinstance(owner, dict) else None
+    if rollout_stages is None:
+        return
+    if not isinstance(rollout_stages, list):
+        failures.add(f"{path.relative_to(ROOT)} {item_id} rollout_stages must be list")
+        return
+    invalid = [str(stage) for stage in rollout_stages if str(stage) not in ALLOWED_ROLLOUT_STAGES]
+    if invalid:
+        failures.add(f"{path.relative_to(ROOT)} {item_id} invalid rollout_stages {invalid}")
+    if rollout_stages and "prod" not in envs:
+        failures.add(f"{path.relative_to(ROOT)} {item_id} rollout_stages require envs to include prod")
+
+
+def validate_quality_fields(
+    path: Path,
+    item_id: str,
+    owner: Any,
+    failures: FailureCollector,
+    *,
+    require: bool = False,
+    require_refs: bool | None = None,
+) -> None:
+    if require_refs is None:
+        require_refs = require
+    if not isinstance(owner, dict):
+        return
+    test_object = owner.get("test_object")
+    if test_object is None:
+        if require:
+            failures.add(f"{path.relative_to(ROOT)} {item_id} missing test_object")
+    elif str(test_object) not in ALLOWED_TEST_OBJECTS:
+        failures.add(f"{path.relative_to(ROOT)} {item_id} invalid test_object {test_object!r}")
+
+    quality_facet = owner.get("quality_facet")
+    if quality_facet is not None and str(quality_facet) not in ALLOWED_QUALITY_FACETS:
+        failures.add(f"{path.relative_to(ROOT)} {item_id} invalid quality_facet {quality_facet!r}")
+
+    quality_facets = owner.get("quality_facets")
+    if quality_facets is None:
+        if require and quality_facet is None:
+            failures.add(f"{path.relative_to(ROOT)} {item_id} missing quality_facets or quality_facet")
+    elif not isinstance(quality_facets, list) or not quality_facets:
+        failures.add(f"{path.relative_to(ROOT)} {item_id} quality_facets must be non-empty list")
+    else:
+        invalid_facets = [str(facet) for facet in quality_facets if str(facet) not in ALLOWED_QUALITY_FACETS]
+        if invalid_facets:
+            failures.add(f"{path.relative_to(ROOT)} {item_id} invalid quality_facets {invalid_facets}")
+
+    for refs_key in ("slo_refs", "observability_refs", "security_refs"):
+        refs = owner.get(refs_key)
+        if refs is None:
+            if require_refs:
+                failures.add(f"{path.relative_to(ROOT)} {item_id} missing {refs_key}")
+            continue
+        if not isinstance(refs, list):
+            failures.add(f"{path.relative_to(ROOT)} {item_id} {refs_key} must be list")
 
 
 def validate_evidence_entry(path: Path, item_id: str, entry: Any, failures: FailureCollector) -> None:
@@ -132,23 +255,29 @@ def validate_evidence_entry(path: Path, item_id: str, entry: Any, failures: Fail
                     f"{path.relative_to(ROOT)} {item_id} case {case_text!r} does not match layer {layer!r}"
                 )
 
+    require_quality = is_template_path(path)
+    validate_quality_fields(path, item_id, entry, failures, require=require_quality, require_refs=False)
+
     envs = entry.get("envs")
+    normalized_envs: list[str] = []
     if not isinstance(envs, list) or not envs:
         failures.add(f"{path.relative_to(ROOT)} {item_id} missing envs")
     else:
-        invalid_envs = [str(env) for env in envs if str(env) not in ALLOWED_ENVS]
+        normalized_envs = [str(env) for env in envs]
+        invalid_envs = [env for env in normalized_envs if env not in ALLOWED_ENVS]
         if invalid_envs:
             failures.add(f"{path.relative_to(ROOT)} {item_id} invalid envs {invalid_envs}")
         unexpected_envs = [
-            str(env)
-            for env in envs
-            if str(env) in ALLOWED_ENVS and str(env) not in ALLOWED_ENVS_BY_LAYER[layer]
+            env
+            for env in normalized_envs
+            if env in ALLOWED_ENVS and env not in ALLOWED_ENVS_BY_LAYER[layer]
         ]
         if unexpected_envs:
             allowed = sorted(ALLOWED_ENVS_BY_LAYER[layer])
             failures.add(
                 f"{path.relative_to(ROOT)} {item_id} layer {layer!r} uses disallowed envs {unexpected_envs}; allowed={allowed}"
             )
+    validate_rollout_stages(path, item_id, entry, normalized_envs, failures)
 
 
 def validate_item(path: Path, group_name: str, item_id: str, item: Any, failures: FailureCollector) -> None:
@@ -159,6 +288,13 @@ def validate_item(path: Path, group_name: str, item_id: str, item: Any, failures
     for key in ("title", "done_when", "tests", "status"):
         if key not in item:
             failures.add(f"{path.relative_to(ROOT)} {group_name}.{item_id} missing {key}")
+    validate_quality_fields(
+        path,
+        f"{group_name}.{item_id}",
+        item,
+        failures,
+        require=is_template_path(path),
+    )
 
     if "evidence" in item:
         failures.add(f"{path.relative_to(ROOT)} {group_name}.{item_id} uses retired evidence field")

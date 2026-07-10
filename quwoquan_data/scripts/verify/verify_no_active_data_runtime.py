@@ -61,7 +61,3 @@ def main() -> int:
         return 1
     print("[verify_no_active_data_runtime] OK")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

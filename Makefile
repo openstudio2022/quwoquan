@@ -456,6 +456,7 @@ gate:
 	@$(MAKE) verify-test-directory-layout
 	@$(MAKE) verify-test-no-fake
 	@$(MAKE) verify-test-coverage-map
+	@$(MAKE) verify-test-nonfunctional-coverage
 	@$(MAKE) test-local-contract
 	@bash quwoquan_ops/environments/verify/verify_deployment_domain_mapping.sh
 	@bash quwoquan_ops/environments/verify/verify_topology_contract_regression.sh
@@ -513,6 +514,7 @@ verify:
 	@$(MAKE) verify-agent-context-contract
 	@$(MAKE) verify-test-specs
 	@$(MAKE) verify-test-directory-layout
+	@$(MAKE) verify-test-nonfunctional-coverage
 	@bash quwoquan_ops/gate/scaffold/verify_feature_traceability.sh
 	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
 	@bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
@@ -600,7 +602,7 @@ config-slo-gate:
 	@bash quwoquan_ops/cli/prod/config_release_slo_gate.sh --error-rate "$(ERROR_RATE)" --p95-ms "$(P95_MS)" --redis-error-rate "$(REDIS_ERROR_RATE)"
 
 .PHONY: l2-content gate-full test-api-contract test-api-contract-chat
-.PHONY: verify-test-specs verify-test-no-fake verify-test-coverage-map verify-test-directory-layout
+.PHONY: verify-test-specs verify-test-no-fake verify-test-coverage-map verify-test-nonfunctional-coverage verify-test-directory-layout
 .PHONY: normalize-acceptance-recorded-paths
 .PHONY: test-local-contract test-api-integration test-user-acceptance
 
@@ -618,6 +620,13 @@ verify-test-no-fake:
 verify-test-coverage-map:
 	@python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
 
+verify-test-nonfunctional-coverage:
+	@python3 quwoquan_ops/gate/scaffold/verify_runtime_error_coverage.py
+	@python3 quwoquan_ops/gate/scaffold/verify_security_coverage.py
+	@python3 quwoquan_ops/gate/scaffold/verify_performance_budget.py
+	@python3 quwoquan_ops/gate/scaffold/verify_observability_coverage.py
+	@python3 quwoquan_ops/gate/scaffold/verify_data_consistency_coverage.py
+
 verify-test-directory-layout:
 	@python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
 
@@ -632,6 +641,7 @@ test-local-contract:
 	@$(MAKE) verify-test-directory-layout
 	@$(MAKE) verify-test-no-fake
 	@$(MAKE) verify-test-coverage-map
+	@$(MAKE) verify-test-nonfunctional-coverage
 	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
 	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/
 	@cd quwoquan_service && go test $$(go list ./services/... | grep -v '/tests/api_integration') -count=1

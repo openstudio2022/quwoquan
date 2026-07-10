@@ -4,17 +4,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
 
-hook_src="$ROOT/githooks/pre-commit"
-hook_dst="$ROOT/.git/hooks/pre-commit"
+hook_dir="$ROOT/quwoquan_ops/hooks"
 
-if [[ ! -d "$ROOT/.git/hooks" ]]; then
-  echo "[hooks] not a git repo: $ROOT" 1>&2
+if [[ ! -d "$hook_dir" ]]; then
+  echo "[hooks] missing hook directory: $hook_dir" 1>&2
   exit 2
 fi
 
-cp "$hook_src" "$hook_dst"
-chmod +x "$hook_dst"
+git config core.hooksPath quwoquan_ops/hooks
+chmod +x "$hook_dir"/pre-commit "$hook_dir"/pre-push
 
-echo "[hooks] installed: $hook_dst"
-echo "[hooks] note: runs gate on staged changes under quwoquan_app/ or quwoquan_service/"
-
+echo "[hooks] installed via core.hooksPath=quwoquan_ops/hooks"
+echo "[hooks] note: pre-commit blocks non-whitelisted branches before commit; pre-push blocks pushes to non-whitelisted branches"

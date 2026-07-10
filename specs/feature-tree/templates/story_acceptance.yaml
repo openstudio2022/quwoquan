@@ -25,6 +25,15 @@ gwt_acceptance:
       - observable result
     done_when:
       - minimum value is complete
+    quality_facets:
+      - functional
+      - experience
+    test_object: widget
+    slo_refs:
+      - specs or SLO document path
+    observability_refs:
+      - metric, log, trace or dashboard reference
+    security_refs: []
     edge_cases:
       - empty state
       - permission denied
@@ -44,12 +53,16 @@ gwt_acceptance:
           cases:
             - local_contract.domain.capability.story.primary
           envs: [local]
+          test_object: widget
+          quality_facet: functional
       supporting:
         - layer: api_integration
           suite: story_remote_flow
           cases:
             - api_integration.domain.operation.story_case
           envs: [beta, gamma]
+          test_object: api_operation
+          quality_facet: contract
     tests:
       planned:
         - command: replace-with-real-story-test-command
@@ -63,6 +76,14 @@ contract_acceptance:
       - contracts/metadata/domain/entity/service.yaml
     done_when:
       - API path, operation, DTO, error and route/surface constants come from metadata
+    quality_facets:
+      - contract
+      - observability
+    test_object: metadata
+    slo_refs: []
+    observability_refs:
+      - metric, log, trace or dashboard reference
+    security_refs: []
     test_evidence:
       primary:
         - layer: local_contract
@@ -70,6 +91,8 @@ contract_acceptance:
           cases:
             - local_contract.domain.metadata.contract
           envs: [local]
+          test_object: metadata
+          quality_facet: contract
       supporting: []
     tests:
       planned:

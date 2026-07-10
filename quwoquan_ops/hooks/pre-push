@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+
+python3 - <<'PY'
+from pathlib import Path
+import subprocess
+import sys
+
+import yaml
+
+root = Path.cwd()
+policy = yaml.safe_load((root / "quwoquan_ops/policies/branch_policy.yaml").read_text(encoding="utf-8")) or {}
+allowed_local = {str(name).strip() for name in policy.get("allowed_local_branches", []) if str(name).strip()}
+
+completed = subprocess.run(
+    ["git", "symbolic-ref", "--quiet", "--short", "HEAD"],
+    cwd=root,
+    capture_output=True,
+    text=True,
+)
+current_branch = completed.stdout.strip() if completed.returncode == 0 else None
+if not current_branch:
+    print("[pre-push] FAIL: detached HEAD is forbidden; push from dev1.0 or main", file=sys.stderr)
+    raise SystemExit(1)
+if current_branch not in allowed_local:
+    print(
+        f"[pre-push] FAIL: current branch '{current_branch}' is not allowed; only {sorted(allowed_local)} may push",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+PY
+
+allowed_remote_refs="$(python3 - <<'PY'
+from pathlib import Path
+import yaml
+
+root = Path.cwd()
+policy = yaml.safe_load((root / "quwoquan_ops/policies/branch_policy.yaml").read_text(encoding="utf-8")) or {}
+for name in policy.get("allowed_remote_branches", []) or []:
+    name = str(name).strip()
+    if name:
+        print(f"refs/heads/{name}")
+PY
+)"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ -n "${remote_ref:-}" ]] || continue
+  case "$remote_ref" in
+    refs/heads/*)
+      if ! printf '%s\n' "$allowed_remote_refs" | grep -Fxq "$remote_ref"; then
+        echo "[pre-push] FAIL: push to $remote_ref is blocked by branch policy; only dev1.0 and main are allowed." >&2
+        exit 1
+      fi
+      ;;
+  esac
+done

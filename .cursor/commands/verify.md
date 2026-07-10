@@ -12,6 +12,7 @@
 - 业务能力 SIT 是否闭环并有 local_contract/api_integration。
 - Story GWT/contract 是否闭环并有 local_contract。
 - metadata、seed、mock、页面质量、runtime error、CR 是否同步。
+- 异常/恢复、性能、安全/隐私、可观测、可靠性/可用性、数据一致性是否按 `quality_facet` 有证据。
 - 是否完成 `docs/agent_context_contract.md` 要求的完成后多视角验收复盘：测试、E2E、产品/UX、运营观测、自动化/门禁、剩余风险。
 - 若触及跨域链路，是否证明 Data / Service / App / Behavior / Recommendation / Observability / Environment 无断点。
 
@@ -20,6 +21,7 @@
 出口：
 - 输出 `Exit Review` 七项。
 - 任何 `implemented/completed` 但无测试证据的项必须标记为缺口。
+- 任何适用的非功能质量维度缺少证据，必须标记为 `GATE_BLOCK`。
 - 若需要下一轮规划，先完成本轮缺口归因，再进入 `/plan-next`。
 
 自然语言等价触发：用户说“检查是否完成”“收口一下”“验一下这轮改动”时，也按 `/verify` 语义执行。

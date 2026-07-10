@@ -51,4 +51,11 @@ cd quwoquan_ops/portal && npm test && npm run build
 bash quwoquan_ops/gate/gate_repo.sh
 ```
 
+## 分支治理
+
+- 长期分支只允许 `dev1.0` 与 `main`。
+- `dev1.0` 是唯一开发主线；`main` 只接受从 `dev1.0` 合入的主干发布更新。
+- 未经明确批准，不允许创建、提交或推送其他分支。
+- 本地执行 `bash quwoquan_ops/gate/scaffold/install-hooks.sh` 后，`pre-commit` 和 `pre-push` 会阻断非白名单分支；repo gate 也会对本地/远端分支做同样校验。
+
 规格入口见 `specs/README.md`，文档边界见 `docs/README.md`，Codex 执行约束见 `AGENTS.md` 与 `docs/codex_workflow.md`。

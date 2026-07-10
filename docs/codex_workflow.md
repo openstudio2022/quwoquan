@@ -75,6 +75,7 @@ L2_business_capability: <capability>
 L3_story: <story>
 验收意图: UAT / SIT / GWT / contract
 测试证据: local_contract / api_integration / user_acceptance
+质量维度: functional / contract / reliability / availability / observability / experience / security / performance / data_consistency
 ```
 
 起手式前先审视 `docs/outstanding_risks_backlog.md` 的未解决项；若本轮识别出新的长期遗留，需先向用户复述并在确认后登记。
@@ -135,6 +136,7 @@ Codex 每次执行都必须带 review 视角，而不是只按用户指令完成
 
 - 验收意图：`UAT`、`SIT`、`GWT`、`contract`
 - 测试工程层：`local_contract`、`api_integration`、`user_acceptance`
+- 非功能质量维度：通过 `quality_facet` 横切到三层测试，不新增第四层目录。
 
 默认映射：
 
@@ -150,6 +152,7 @@ Codex 每次执行都必须带 review 视角，而不是只按用户指令完成
 - `api_integration` 中验证的字段、状态码、错误码、边界行为，必须在 `local_contract` Mock/Provider/Widget/领域规则测试中有对应断言。
 - `acceptance.yaml` 不能标记完成却缺 `tests.recorded`。
 - 高风险改动必须先有失败测试或明确替代验证说明。
+- 异常恢复、性能、安全隐私、可观测、可靠性/可用性、数据一致性适用时必须声明 `quality_facet` 并给出证据；缺证据时返回 `GATE_BLOCK`。
 
 ### 5.2 四环境
 

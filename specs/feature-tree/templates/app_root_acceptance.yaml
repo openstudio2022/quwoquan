@@ -27,6 +27,16 @@ uat_acceptance:
       - Android
     done_when:
       - observable user outcome
+    quality_facets:
+      - functional
+      - experience
+      - observability
+    test_object: page
+    slo_refs:
+      - specs or SLO document path
+    observability_refs:
+      - metric, log, trace or dashboard reference
+    security_refs: []
     performance_points:
       - action-to-feedback latency target
       - animation jank threshold
@@ -36,13 +46,18 @@ uat_acceptance:
           suite: journey_primary
           cases:
             - user_acceptance.journey-id.scenario-id.primary
-          envs: [gamma_local, prod_gray_initial]
+          envs: [gamma_local, prod]
+          rollout_stages: [gray_initial]
+          test_object: page
+          quality_facet: experience
       supporting:
         - layer: api_integration
           suite: app_root_supporting_api
           cases:
             - api_integration.domain.operation.primary
           envs: [beta, gamma]
+          test_object: api_operation
+          quality_facet: contract
     tests:
       planned:
         - command: replace-with-real-user-acceptance-command

@@ -37,6 +37,7 @@ if [ -d "$ROOT/scripts" ]; then
 fi
 
 bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
+python3 quwoquan_ops/gate/verify_git_branch_policy.py
 python3 quwoquan_ops/gate/verify_agent_context_contract.py
 python3 quwoquan_ops/gate/scaffold/verify_test_specs.py
 python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py

@@ -16,7 +16,7 @@ export QWQ_OUTPUT_ROOT="$DATA_VERIFY_OUTPUT_ROOT"
 
 # 全量 data gate 必须在安静工作区运行：活跃 run-recipe/scaled-e2e/workflow
 # 会合法写 runtime/publish 证据，导致 pytest 隔离门把外部写入误判为测试泄漏。
-python3 quwoquan_data/scripts/verify/verify_no_active_data_runtime.py
+python3 quwoquan_data/scripts/cli.py verify active-runtime-preflight
 
 # CLI-first ratchet：拦截新增直跑业务入口脚本（必须经 qwq-data 暴露给 skill）
 python3 quwoquan_data/scripts/cli.py verify data-layout

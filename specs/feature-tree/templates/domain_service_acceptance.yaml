@@ -19,6 +19,16 @@ domain_acceptance:
       - domain-owned objects are explicit
       - upstream and downstream dependencies are explicit
       - app, metadata, service, deploy and test mappings are registered
+    quality_facets:
+      - contract
+      - reliability
+      - observability
+    test_object: metadata
+    slo_refs:
+      - specs or SLO document path
+    observability_refs:
+      - metric, log, trace or dashboard reference
+    security_refs: []
     test_evidence:
       primary:
         - layer: local_contract
@@ -26,17 +36,24 @@ domain_acceptance:
           cases:
             - local_contract.domain.boundary.static_contract
           envs: [local]
+          test_object: metadata
+          quality_facet: contract
         - layer: api_integration
           suite: domain_boundary_api_integration
           cases:
             - api_integration.domain.service.contract
           envs: [beta, gamma]
+          test_object: api_operation
+          quality_facet: contract
       supporting:
         - layer: user_acceptance
           suite: domain_user_acceptance
           cases:
             - user_acceptance.journey-id.scenario-id.domain_effect
-          envs: [gamma_local, prod_gray_initial]
+          envs: [gamma_local, prod]
+          rollout_stages: [gray_initial]
+          test_object: page
+          quality_facet: experience
     tests:
       planned:
         - command: replace-with-real-domain-gate-or-test-command

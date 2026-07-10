@@ -23,7 +23,7 @@ RETIRED_NUMERIC_LAYER_MAP = {
 ENVS_BY_LAYER = {
     "local_contract": ["local", "alpha"],
     "api_integration": ["beta", "gamma"],
-    "user_acceptance": ["gamma_local", "prod_gray_initial"],
+    "user_acceptance": ["gamma_local", "prod"],
 }
 
 ACCEPTANCE_GROUPS = {

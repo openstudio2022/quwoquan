@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT"
+
+python3 quwoquan_ops/gate/verify_git_branch_policy.py
+
 changed="$(git diff --cached --name-only)"
 
 has_service=false
@@ -23,4 +28,3 @@ elif [[ "$has_app" == true ]]; then
   echo "[pre-commit] running gate (app)"
   bash scripts/gate_repo.sh --scope app
 fi
-
