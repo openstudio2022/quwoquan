@@ -10,11 +10,11 @@ if str(ROOT) not in sys.path:
 from quwoquan_ops.gate.verify_git_branch_policy import branch_policy_issues
 
 
-def test_branch_policy_accepts_dev_and_main_only() -> None:
+def test_branch_policy_accepts_dev1_only_locally_and_main_remotely() -> None:
     issues = branch_policy_issues(
-        allowed_local={"dev1.0", "main"},
+        allowed_local={"dev1.0"},
         allowed_remote={"dev1.0", "main"},
-        local_branches=["dev1.0", "main"],
+        local_branches=["dev1.0"],
         remote_branches=["dev1.0", "main"],
         current_branch="dev1.0",
     )
@@ -24,9 +24,9 @@ def test_branch_policy_accepts_dev_and_main_only() -> None:
 
 def test_branch_policy_rejects_extra_local_branch() -> None:
     issues = branch_policy_issues(
-        allowed_local={"dev1.0", "main"},
+        allowed_local={"dev1.0"},
         allowed_remote={"dev1.0", "main"},
-        local_branches=["dev1.0", "feature/demo", "main"],
+        local_branches=["dev1.0", "feature/demo"],
         remote_branches=["dev1.0", "main"],
         current_branch="feature/demo",
     )
@@ -34,11 +34,24 @@ def test_branch_policy_rejects_extra_local_branch() -> None:
     assert any("feature/demo" in issue for issue in issues)
 
 
-def test_branch_policy_rejects_extra_remote_branch() -> None:
+def test_branch_policy_rejects_local_main_branch() -> None:
     issues = branch_policy_issues(
-        allowed_local={"dev1.0", "main"},
+        allowed_local={"dev1.0"},
         allowed_remote={"dev1.0", "main"},
         local_branches=["dev1.0", "main"],
+        remote_branches=["dev1.0", "main"],
+        current_branch="main",
+    )
+
+    assert any("current branch 'main'" in issue for issue in issues)
+    assert any("unexpected local branches: main" in issue for issue in issues)
+
+
+def test_branch_policy_rejects_extra_remote_branch() -> None:
+    issues = branch_policy_issues(
+        allowed_local={"dev1.0"},
+        allowed_remote={"dev1.0", "main"},
+        local_branches=["dev1.0"],
         remote_branches=["cursor/demo", "dev1.0", "main"],
         current_branch="dev1.0",
     )

@@ -23,7 +23,7 @@ completed = subprocess.run(
 )
 current_branch = completed.stdout.strip() if completed.returncode == 0 else None
 if not current_branch:
-    print("[pre-push] FAIL: detached HEAD is forbidden; push from dev1.0 or main", file=sys.stderr)
+    print("[pre-push] FAIL: detached HEAD is forbidden; push from an allowed local branch in branch_policy.yaml", file=sys.stderr)
     raise SystemExit(1)
 if current_branch not in allowed_local:
     print(
