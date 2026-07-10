@@ -8,7 +8,7 @@ from typing import Any
 
 from _common.io import read_json, write_json
 from _common.paths import (
-    REPO_ROOT,
+    OUTPUT_ARTIFACTS_ROOT,
     SCHEMA_ROOT,
     SERVICE_CONTRACTS_METADATA_ROOT,
     _REPO_DATA_ROOT,
@@ -29,7 +29,7 @@ def repo_seed_fixture_dir() -> Path:
 
 
 def artifacts_readiness_path(name: str) -> Path:
-    return REPO_ROOT / "artifacts" / name
+    return OUTPUT_ARTIFACTS_ROOT / "pools" / "creator" / name
 
 
 def write_gate(path: Path, *, gate_id: str, passed: bool, issues: list[str] | None = None) -> dict[str, Any]:

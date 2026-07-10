@@ -3,6 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_point.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_kind_mapping.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
@@ -267,6 +268,20 @@ IntersectionReason _ensureInboxDisplayMeta(
       ? reason.objectKind.trim()
       : (meta?.objectKind ?? '');
   final objectId = reason.actionTargetId.trim();
+  final mutualCount = reason.mutualCount > 0
+      ? reason.mutualCount
+      : intersectionMutualCountOf(reason);
+  final hasCountSpan = reason.primarySpans.any(
+    (span) => span.role.trim() == 'count',
+  );
+  final actorEvidenceTotalCount = reason.actorEvidenceTotalCount > 0
+      ? reason.actorEvidenceTotalCount
+      : mutualCount > 0
+      ? mutualCount
+      : hasCountSpan
+      ? 1
+      : 0;
+  final representativeActor = _hydrateRepresentativeActor(reason, kind);
   // iconKey 回填降级链（与端 IntersectionIconResolver 同源）：reason.iconKey（云侧直出）→
   // 注册表 kind.iconKey（codegen）→ dimension 末级回退（codegen intersectionIconKeyByDimension，
   // 覆盖 affinity 等未登记 kind，保证不空图标）。
@@ -280,13 +295,134 @@ IntersectionReason _ensureInboxDisplayMeta(
     dedupeKey: reason.dedupeKey.trim().isNotEmpty
         ? reason.dedupeKey
         : 'viewer:$objectId:$objectKind',
-    mutualCount: reason.mutualCount > 0
-        ? reason.mutualCount
-        : intersectionMutualCountOf(reason),
+    mutualCount: mutualCount,
+    actorEvidenceTotalCount: actorEvidenceTotalCount,
+    actorEvidenceCompleteness:
+        hasCountSpan && reason.actorEvidenceCompleteness.trim() != 'complete'
+        ? 'complete'
+        : reason.actorEvidenceCompleteness,
+    representativeActor: representativeActor,
     actionHints: reason.actionHints.isNotEmpty
-        ? reason.actionHints
+        ? reason.actionHints.map(_hydrateActionHint).toList(growable: false)
         : _genericActionHints(reason, kind),
   );
+}
+
+IntersectionRepresentativeActor? _hydrateRepresentativeActor(
+  IntersectionReason reason,
+  String kind,
+) {
+  final existing = reason.representativeActor;
+  if (existing != null) {
+    final target = _representativeTarget(
+      existing.target,
+      existing.actorId.trim(),
+    );
+    return existing.copyWith(
+      actorId: existing.actorId.trim().isNotEmpty
+          ? existing.actorId.trim()
+          : (target?.objectId ?? ''),
+      relationLabel: existing.relationLabel.trim().isNotEmpty
+          ? existing.relationLabel
+          : _representativeRelationLabel(kind),
+      target: target,
+    );
+  }
+  final name = _representativeDisplayName(reason, kind);
+  if (name.isEmpty) return null;
+  final actorId = reason.objectKind.trim() == 'person'
+      ? reason.actionTargetId.trim()
+      : 'mock_intersection_rep';
+  if (actorId.isEmpty) return null;
+  return IntersectionRepresentativeActor(
+    actorId: actorId,
+    displayName: name,
+    relationLabel: _representativeRelationLabel(kind),
+    privacyState: 'visible',
+    target: IntersectionTarget(
+      objectType: 'user',
+      objectId: actorId,
+      objectKind: 'person',
+      routeId: 'userProfile',
+    ),
+    snapshotVersion: reason.intersectionId,
+  );
+}
+
+IntersectionTarget? _representativeTarget(
+  IntersectionTarget? target,
+  String actorId,
+) {
+  final objectId = (target?.objectId.trim().isNotEmpty ?? false)
+      ? target!.objectId.trim()
+      : actorId;
+  if (objectId.isEmpty) return target;
+  return IntersectionTarget(
+    objectType: 'user',
+    objectId: objectId,
+    objectKind: 'person',
+    routeId: 'userProfile',
+  );
+}
+
+String _representativeDisplayName(IntersectionReason reason, String kind) {
+  if (reason.objectKind.trim() == 'person') {
+    return reason.displayName.trim();
+  }
+  switch (kind.trim()) {
+    case 'coCommented':
+    case 'coLiked':
+    case 'sharedDiscussion':
+    case 'coSharedContent':
+    case 'coCreatedContent':
+      return '王然';
+    case 'coVisitedEntity':
+    case 'coWishlistedEntity':
+      return '张可';
+    case 'sameSchool':
+    case 'sameDepartment':
+    case 'sameMajor':
+    case 'sameCohort':
+    case 'alumni':
+    case 'alumniHere':
+      return '陈默';
+    case 'sharedCircle':
+    case 'coMemberCircle':
+      return '周屿';
+    default:
+      return '林清越';
+  }
+}
+
+String _representativeRelationLabel(String kind) {
+  switch (kind.trim()) {
+    case 'sharedFollowees':
+    case 'followeeInObject':
+    case 'followeeVisited':
+    case 'followeeViewing':
+    case 'followeeDiscussedThis':
+      return '你关注的人';
+    case 'sameSchool':
+    case 'sameDepartment':
+    case 'sameMajor':
+    case 'sameCohort':
+    case 'alumni':
+    case 'alumniHere':
+      return '校友';
+    case 'sameCompany':
+    case 'sameTeam':
+      return '同事';
+    case 'sameIndustry':
+      return '同行';
+    case 'sharedCircle':
+    case 'coMemberCircle':
+      return '同圈成员';
+    case 'coVisitedEntity':
+    case 'coWishlistedEntity':
+      return '同游伙伴';
+    default:
+      return '联系人';
+  }
 }
 
 List<IntersectionActionHint> _genericActionHints(
@@ -295,6 +431,7 @@ List<IntersectionActionHint> _genericActionHints(
 ) {
   final meta = IntersectionKindMetadata.of(kind);
   final actionKey = meta?.primaryActionKey ?? 'ask_assistant';
+  final actionMeta = IntersectionActionKeyMeta.of(actionKey);
   final objectKind = reason.objectKind.trim().isNotEmpty
       ? reason.objectKind.trim()
       : (meta?.objectKind ?? '');
@@ -312,8 +449,23 @@ List<IntersectionActionHint> _genericActionHints(
             ),
       isPrimary: true,
       priority: 1,
+      actionTier: actionMeta?.tier ?? 'light',
+      requiredGates: actionMeta?.requiredGates ?? const <String>[],
+      targetAvailability: actionMeta?.targetAvailability ?? 'available',
+      dispatch: actionMeta?.dispatch ?? 'assistant',
     ),
   ];
+}
+
+IntersectionActionHint _hydrateActionHint(IntersectionActionHint hint) {
+  final meta = IntersectionActionKeyMeta.of(hint.actionKey);
+  if (meta == null) return hint;
+  return hint.copyWith(
+    actionTier: meta.tier,
+    requiredGates: meta.requiredGates,
+    targetAvailability: meta.targetAvailability,
+    dispatch: meta.dispatch,
+  );
 }
 
 /// 解析 reason 的标准 kind（一等字段 [IntersectionReason.kind] 为真相源）。

@@ -13,14 +13,14 @@ import 'package:quwoquan_app/ui/user/widgets/author_impact_evidence.dart';
 import 'package:quwoquan_app/components/object_page/intersection_statement_card.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 
-/// 影响力摘要模块（他人主页 / 我的主页双视角，可解释）。
+/// 打动摘要模块（他人主页 / 我的主页双视角，可解释）。
 ///
 /// 统一交互子契约落地（Phase 0 §20.7）：逐条只读 [AuthorImpactSummary]：
 /// - 结论句走 [AuthorImpactItem.primarySpans] + 统一渲染器（[IntersectionStatementRow]），
 ///   端不本地拼装文案（G2），spans 缺省回落 [AuthorImpactItem.primaryText]；
 /// - 样本视觉走 [AuthorImpactItem.sampleVisuals] + [IntersectionVisualCluster]；
 /// - 名字 / 对象片段经 [IntersectionTargetNavigator] 进对应主页；
-/// - 数字片段 / 整行进「影响明细」iOS 底部 sheet，展示来源摘要 + 云侧样本视觉；
+/// - 数字片段 / 整行进「打动明细」iOS 底部 sheet，展示来源摘要 + 云侧样本视觉；
 ///   完整名单（[AuthorImpactItem.evidenceSnapshotId] / 分页）未就绪时只展示样本、不编造全量。
 /// other 模式无数据不占位，mine 模式空态展示鼓励发布文案。
 class AuthorImpactCard extends ConsumerWidget {
@@ -46,7 +46,7 @@ class AuthorImpactCard extends ConsumerWidget {
       summary.total <= 0 ||
       summary.items.every((item) => item.primaryText.trim().isEmpty);
 
-  /// 影响明细分页拉取闭包：经 Provider 注入仓库，按 (subAccountId, impactId) 取真实分页。
+  /// 打动明细分页拉取闭包：经 Provider 注入仓库，按 (subAccountId, impactId) 取真实分页。
   /// 延迟到 sheet 打开时才 `ref.read`，构建期不触达 Provider。
   AuthorImpactEvidenceFetcher _evidenceFetcher(
     WidgetRef ref,
@@ -73,7 +73,7 @@ class AuthorImpactCard extends ConsumerWidget {
               .read(contentBehaviorTrackerProvider)
               .trackClick(
                 id,
-                // 作者影响力卡展示在用户主页（自/他人）→ 来源为作者主页面，非推荐流。
+                // 作者打动卡展示在用户主页（自/他人）→ 来源为作者主页面，非推荐流。
                 referralSource: ReferralSource.authorProfile,
                 intersectionDimension: attribution.dimension,
                 intersectionSourceRef: attribution.sourceRef,

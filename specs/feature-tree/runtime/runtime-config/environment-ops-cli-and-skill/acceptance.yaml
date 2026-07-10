@@ -45,7 +45,7 @@ gwt_acceptance:
     notes: []
 execution:
   local_gate:
-  - python3 agent_ops/deploy/stackctl.py verify
+  - python3 quwoquan_ops/cli/stackctl.py verify
   full_gate:
   - make stackctl-verify
   - make gate

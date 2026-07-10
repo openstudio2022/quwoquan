@@ -101,6 +101,39 @@ def test_publish_stage_allows_partial_posts_without_entity_homepages_for_entity_
     assert first_manifest["entityRefs"] == []
     assert first_manifest["pendingEntityMentions"][0]["sourceEntityRef"] == f"/entity/地点/景区/{_EID}"
 
+def test_publish_stage_reasoned_rejects_articles_without_content_anchor():
+    task_id = _make_task(
+        workflow_policy={
+            "allowPartialContent": True,
+            "allowQuotaShortfall": True,
+            "elasticOverfetch": True,
+            "minBatchCompletionMode": "best_effort_with_reasoned_rejects",
+        }
+    )
+    batch_id = "publish_reasoned_reject_no_homepage_anchor"
+    _seed_publish_inputs(task_id, batch_id)
+    shutil.rmtree(batch_root(task_id, batch_id) / "entities", ignore_errors=True)
+    shutil.rmtree(task_data(task_id).entities_dir(), ignore_errors=True)
+
+    ctx = _ctx(task_id, batch_id)
+    result = run_mod._run_publish(ctx)
+
+    assert result.status == "done", result.message
+    state = read_json(batch_workflow_state_path(task_id, batch_id))
+    abandoned = {
+        item.get("ref"): item
+        for item in state.get("abandonedContentObjects", [])
+        if item.get("status") == "abandoned"
+    }
+    assert abandoned[f"{_EID}-article-001"]["stage"] == "publish"
+    assert abandoned[f"{_EID}-article-002"]["stage"] == "publish"
+    release_id = run_mod._workflow_release_id(task_id, batch_id)
+    release_root_dir = release_root(release_id)
+    article_manifests = sorted((release_root_dir / "posts" / "article").rglob("manifest.json"))
+    image_manifests = sorted((release_root_dir / "posts" / "image").rglob("manifest.json"))
+    assert article_manifests == []
+    assert image_manifests
+
 def test_post_verify_scope_excludes_unrelated_green_refs():
     from verify.verify_content_quality import verify_posts
 
@@ -179,4 +212,3 @@ def test_release_only_ship_report_records_no_import_claim():
     assert payload["sourceReleaseId"] == "release_1"
     assert payload["importRequested"] is False
     assert payload["importReports"] == []
-

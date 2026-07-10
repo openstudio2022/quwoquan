@@ -1,0 +1,77 @@
+creatorProfileId: sys_travelphoto_0041
+userId: sys_travelphoto_0041
+subAccountId: sys_travelphoto_0041_sub_01
+displayName: 晚晴暗房
+userHandle: clear-darkroom
+handle: clear-darkroom
+avatarPresetId: avatar_travelphoto_city_shooter
+coverPresetId: cover_travelphoto_waterfall_mist
+bio: 会把一段小路写进路线，也把距离写进照片，内容偏实拍和复盘；不把风景拍成清单。
+headline: 机位与路线笔记
+slogan: 在渡口清晨，先找光，再决定往哪走
+creatorArchetype: city_walk_photographer
+verticalSegment: travel_photography_cross
+verticalRefs:
+- travel
+- photography
+interestTagRefs: &id001
+- Topic/旅行/旅行主题/亲子游
+- Topic/摄影/静物摄影
+- Topic/摄影/摄影教程
+- Topic/旅行/旅行主题/城市漫步
+- Topic/摄影/街头摄影
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/旅行摄影
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/摄影
+- Topic/旅行/旅行主题/亲子游
+- Topic/摄影/静物摄影
+creatorClassTagRefs: []
+preferredContentTypes:
+- image
+- article
+carrierAffinity:
+  article: 0.25
+  image: 0.7
+  video: 0.05
+preferredBlueprintIds:
+- 图片_风光
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/topic/photography
+  - homepage/tag/Topic_旅行_旅行主题_亲子游
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/topic/photography
+  - homepage/tag/Topic_旅行_旅行主题_亲子游
+  - homepage/tag/Topic_摄影_静物摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  circleAffinityRefs:
+  - circle/topic/travel
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- photography
+- Topic/旅行/旅行主题/亲子游
+- Topic/摄影/静物摄影
+- Topic/摄影/摄影教程
+- Topic/旅行/旅行主题/城市漫步
+- Topic/摄影/街头摄影
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/旅行摄影

@@ -1,0 +1,60 @@
+creatorProfileId: sys_photo_0054
+userId: sys_photo_0054
+subAccountId: sys_photo_0054_sub_01
+displayName: 云片取景
+userHandle: cloud-frame
+handle: cloud-frame
+avatarPresetId: avatar_photo_drone_mark
+coverPresetId: cover_photo_studio_light
+bio: 偏爱克制的画面，也会分享失败样片和调整过程，让方法比结果更清楚；少讲参数神话。
+headline: 耐看画面研究
+slogan: 在旧楼楼梯，构图不是把世界摆正
+creatorArchetype: gear_reviewer
+verticalSegment: photography_primary
+verticalRefs:
+- photography
+interestTagRefs: &id001
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+publicProfileTagRefs:
+- Topic/摄影
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 图片_专题
+- 摄影_教程
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  entityAffinityRefs:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  circleAffinityRefs:
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- photography
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程

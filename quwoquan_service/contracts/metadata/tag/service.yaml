@@ -39,8 +39,8 @@ api_routes:
   - method: GET
     path: /v1/tag/inverted
     operation: InvertedObjects
-    description: 反向索引——引用某 tagRef 的对象集合
-    query_params: [tagRef, objectType, limit]
+    description: 反向索引——引用某 tagRef 的对象集合；includeDescendants=true 时按路径制子孙标签展开聚合（省/市级 geo 标签反查含全部区县级叶子对象，查询侧展开、存储不变）
+    query_params: [tagRef, objectType, limit, includeDescendants]
     response_entity: InvertedObjectsView
     response_fields: [tagRef, objectCount, objectIds]
 

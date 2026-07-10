@@ -192,7 +192,7 @@ MainAppShell
 - 三套 profile：`CapabilityProfile.mobile|web|ohos`，经 `platformCapabilitiesProvider` override 注入。
 - 同一批 Provider/Repository/导航/错误态/降级 行为契约测试，在不同 profile 下参数化运行。
 - 平台测试只测差异边界：Web 无本地文件降级、鸿蒙缺相册缓存 API、RTC/视频编辑能力关闭时入口隐藏与提示。
-- 本次交付：本设计 + 1 个示例骨架 `quwoquan_app/test/core/platform/platform_capabilities_profile_test.dart`（capability 驱动的入口降级断言）。
+- 本次交付：本设计 + 1 个示例骨架 `quwoquan_app/test/local_contract/core/platform/platform_capabilities_profile__local_contract_test.dart`（capability 驱动的入口降级断言）。
 
 ## 分阶段里程碑
 
@@ -210,7 +210,7 @@ MainAppShell
 | local_contract contract | `verify_lib_dart_io_budget.py`、`verify_lib_platform_check_isolation.py` 基线只减不增 |
 | local_contract widget | capability profile 驱动的入口降级契约测试（示例骨架） |
 | 静态 | `flutter analyze quwoquan_app/lib/`、`verify_dart_semantic.py` 不回退 |
-| 串联 | `bash agent_ops/gate/gate_repo.sh --scope app` |
+| 串联 | `bash quwoquan_ops/gate/gate_repo.sh --scope app` |
 
 ## 验收
 

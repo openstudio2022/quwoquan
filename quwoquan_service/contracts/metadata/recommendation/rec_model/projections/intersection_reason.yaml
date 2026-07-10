@@ -32,6 +32,13 @@ description: |
       主语[N位 + 关系限定] + 谓语[行为动词] + 宾语[对象]，如"你的8位校友关注了Claude Code"、
       "4位共同关注的人讨论了这篇内容"、"你和8人共同关注了Claude Code"；表达规范见
       specs/product/intersection-definition-and-application.md §17（事实通道禁止朋友/好友/收藏/同趣词，affinity 明确标注推荐）。
+    首页内容卡人数句额外遵守「可点开交集人数」原则：N 表示同一证据快照下可枚举、可点击的交集人列表；
+      representativeActor 只表达其中关系最密切、最能解释推荐的代表人，不要求 N 人同属同一来源。
+      代表关系优先级为：联系人/共同联系人 > 你关注的人/共同关注的人 > 同圈圈友 > 你曾互动过其内容的用户。
+      count 点击后的列表必须由 actorEvidence 完整承载，逐人说明来源（如联系人、你关注的人、某圈圈友）
+      及其在当前对象上的动作；actorEvidenceCompleteness != complete 时，端不得把人数 N 渲染成完整列表入口。
+      首页内容卡不得使用"都来这里互动过"等泛化句；若有动作证据，应具象为"赞过"、"赞过和评论过"、"赞过、评论过并转发过"等动作摘要，
+      禁止把"2赞 1评 1转"这类数字统计直接暴露为主结论句。
     secondaryText 是副交集辅助说明（灰色）；仅列表入口（我的连接 / 为什么推荐TA / 我的影响力）可作辅助说明，
       紧凑 surface（首页内容卡 / spotlight）严格单句、不展示副句（§17.2）。
     端禁止再用 intersectionPoints/EvidenceGroup 本地拼装主/副交集文案（G2）。
@@ -55,6 +62,7 @@ client_projection:
     - intersection_text_span.g.dart
     - intersection_visual.g.dart
     - intersection_representative_actor.g.dart
+    - intersection_actor_evidence.g.dart
     - intersection_action_hint.g.dart
   fields:
     - name: kind
@@ -200,6 +208,24 @@ client_projection:
       source: pointSummarySnapshotId
       aliases: [pointSummarySnapshotId]
       default: "''"
+    - name: actorEvidenceTotalCount
+      dart_type: int
+      nullable: false
+      source: actorEvidenceTotalCount
+      aliases: [actorEvidenceTotalCount]
+      default: "0"
+    - name: actorEvidenceCompleteness
+      dart_type: String
+      nullable: false
+      source: actorEvidenceCompleteness
+      aliases: [actorEvidenceCompleteness]
+      default: "'unknown'"
+    - name: actorEvidence
+      dart_type: List<IntersectionActorEvidence>
+      nullable: false
+      source: actorEvidence
+      aliases: [actorEvidence, actorEvidences, actorEvidenceItems]
+      list_element_dart_class: IntersectionActorEvidence
     - name: factPointCount
       dart_type: int
       nullable: false
@@ -357,3 +383,26 @@ client_projection:
       source: mutualCount
       aliases: [mutualCount, mutual_count]
       default: "0"
+    # §24 v3 可行动交集实例硬化（M0.2 moment 意图时态 + M0.4 subject 显式主体）：
+    #   moment 表交集指向过去/当下/未来（registry.moments 闭集，缺省 current），端据此调整语气与可行动性；
+    #     与 lifecycleState 正交（lifecycleState 表边强弱变化，moment 表时态意图）。
+    #   subjectId / subjectContext 是交集主体显式锚点（谁与谁的交集，通常 viewer 侧），
+    #     取代此前隐式以 viewer 为主体的推断，便于「我打动的人 / TA 打动的人」归因不混淆。
+    - name: moment
+      dart_type: String
+      nullable: false
+      source: moment
+      aliases: [moment]
+      default: "'current'"
+    - name: subjectId
+      dart_type: String
+      nullable: false
+      source: subjectId
+      aliases: [subjectId]
+      default: "''"
+    - name: subjectContext
+      dart_type: String
+      nullable: false
+      source: subjectContext
+      aliases: [subjectContext]
+      default: "''"

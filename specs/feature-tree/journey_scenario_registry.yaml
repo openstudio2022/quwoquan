@@ -142,6 +142,7 @@ journeys:
       - 归属决策（复用扩展，不新建独立后端服务进程）：交集行动深化挂 object-homepage-network/intersection-unified-experience；附近同趣/结伴同行/线下局挂 circle-community 新 L2 companionship-and-nearby-connection；派生称谓与联系人标签挂 user-identity-profile-relationship/persona-follow-graph。
       - UAT_INTERSECTION_ACTION_TO_COMPANIONSHIP 与下列 scenario 的新增 capability/story 为规划草案，待 design/acceptance 落地后回填双向绑定；当前 status:draft 仅登记归属与旅程范围。
       - 2026-06-30「交集行动重建」：前台主词收敛为「同趣/找同趣/兴趣配对」，旧 plaza/connection 原型已整体下线；底栏 + 动作面板「兴趣配对」以 interest_match_page launcher 落地（导流到 /search、/search/network、/profile/intersections 等既有真实面 + 曝光埋点），不自建第二套 Mock 候选列表。附近同趣/结伴同行/线下局的真实聚合与风控仍 deferred，未落地前 status 保持 draft，详见 specs/product/intersection-action-deepening-and-social-ia.md §0。
+      - 2026-07-01「交集 v3 商用化基线」：产品主轴「别人帮你刷内容，我们帮你遇到对的人」，商用滩头旅行+摄影同趣搭子，北极星为可行动交集完成/关系形成（非 DAU）；v3 先落 C0 最薄闭环「共同想去→约伴」（coWishlistedEntity + start_companion，复用已有 wishlist/关注/交集信号，不依赖新 LBS/实时），附近/实时/线下局真实聚合仍 deferred。真相源 specs/product/intersection-definition-and-application.md §24，验收见 intersection-unified-experience/acceptance.yaml SIT5。前台概念收敛为「交集 / 打动」两维度，入口统一「交集配对」、收件箱统一「今日交集」（旧兴趣配对/找同趣/同趣机会/影响力前台退场，机器标识 interest_match/impact 保留），详见 00_GLOBAL_TERMINOLOGY.md §18.7。
     status: draft
 
 scenarios:

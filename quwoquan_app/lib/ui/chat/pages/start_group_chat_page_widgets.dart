@@ -174,11 +174,14 @@ class _RelatedFriendRow extends StatelessWidget {
             ),
             Padding(
               padding: EdgeInsets.only(
-                left: AppSpacing.minInteractiveSize +
+                left:
+                    AppSpacing.minInteractiveSize +
                     ChatConversationAvatarTokens.dividerInset(_avatarSize),
               ),
               child: Divider(
-                key: ValueKey<String>('start-group-candidate-divider-$username'),
+                key: ValueKey<String>(
+                  'start-group-candidate-divider-$username',
+                ),
                 height: AppSpacing.one,
                 thickness: AppSpacing.hairline,
                 color: dividerColor,
@@ -240,7 +243,8 @@ class _ActionEntryRow extends StatelessWidget {
                     ),
                   ),
                   SizedBox(
-                    width: ChatConversationAvatarTokens.listSize -
+                    width:
+                        ChatConversationAvatarTokens.listSize -
                         AppSpacing.minInteractiveSize +
                         ChatConversationAvatarTokens.leadingGap,
                   ),
@@ -258,7 +262,7 @@ class _ActionEntryRow extends StatelessWidget {
                     ),
                   ),
                   Icon(
-                    CupertinoIcons.chevron_right,
+                    CupertinoIcons.chevron_forward,
                     size: AppSpacing.iconSmall,
                     color: fgPrimary.withValues(alpha: 0.4),
                   ),
@@ -267,13 +271,16 @@ class _ActionEntryRow extends StatelessWidget {
             ),
             Padding(
               padding: EdgeInsets.only(
-                left: AppSpacing.minInteractiveSize +
+                left:
+                    AppSpacing.minInteractiveSize +
                     ChatConversationAvatarTokens.dividerInset(
                       ChatConversationAvatarTokens.listSize,
                     ),
               ),
               child: Divider(
-                key: ValueKey<String>('start-group-action-entry-divider-$title'),
+                key: ValueKey<String>(
+                  'start-group-action-entry-divider-$title',
+                ),
                 height: AppSpacing.one,
                 thickness: AppSpacing.hairline,
                 color: dividerColor,
@@ -281,6 +288,76 @@ class _ActionEntryRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _CompanionContextBanner extends StatelessWidget {
+  const _CompanionContextBanner({
+    required this.rowBackground,
+    required this.fgPrimary,
+    required this.fgSecondary,
+  });
+
+  final Color rowBackground;
+  final Color fgPrimary;
+  final Color fgSecondary;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey<String>('start-group-companion-context-card'),
+      margin: EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: rowBackground,
+        borderRadius: BorderRadius.circular(
+          SettingsSemanticConstants.conversationSheetCardCornerRadius,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            CupertinoIcons.location_solid,
+            size: AppSpacing.iconSmall,
+            color: fgSecondary,
+          ),
+          SizedBox(width: AppSpacing.intraGroupSm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  UITextConstants.startGroupChatCompanionContextTitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosFootnote,
+                    fontWeight: AppTypography.semiBold,
+                    color: fgPrimary,
+                    height: AppTypography.lineHeightCompact,
+                  ),
+                ),
+                SizedBox(height: AppSpacing.intraGroupXs),
+                Text(
+                  UITextConstants.startGroupChatCompanionContextSubtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosCaption1,
+                    color: fgSecondary,
+                    height: AppTypography.lineHeightCompact,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

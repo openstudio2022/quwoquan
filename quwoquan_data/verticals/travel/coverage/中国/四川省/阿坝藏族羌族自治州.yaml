@@ -1,0 +1,1076 @@
+# 全国地点主清单 · 四川省阿坝藏族羌族自治州（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 阿坝藏族羌族自治州
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 九寨沟县
+  leaves:
+  - name: 九寨沟
+    canonicalName: 九寨沟
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县
+    aliases:
+    - 九寨沟风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 神仙池
+    canonicalName: 九寨神仙池
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 甲勿海
+    canonicalName: 九寨沟甲勿海
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县
+    aliases:
+    - 甲勿池
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 唐卡寺
+    canonicalName: 唐卡寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 四川白河国家级自然保护区
+    canonicalName: 四川白河国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 達瓊貢巴寺
+    canonicalName: 達瓊貢巴寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县
+    sourceReadiness: pending
+    selectionPriority: 6
+- district: 松潘县
+  leaves:
+  - name: 黄龙
+    canonicalName: 黄龙风景名胜区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    aliases:
+    - 黄龙景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 牟尼沟
+    canonicalName: 牟尼沟
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    aliases:
+    - 扎嘎瀑布
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 松州古城
+    canonicalName: 松州古城
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    aliases:
+    - 松潘古城
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 红军长征纪念碑碑园
+    canonicalName: 红军长征纪念碑碑园
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 小河古城牆
+    canonicalName: 小河古城牆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 川主寺镇
+    canonicalName: 川主寺镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 松潘古城墙
+    canonicalName: 松潘古城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 毛爾蓋會議會址
+    canonicalName: 毛爾蓋會議會址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 沙窩會議會址
+    canonicalName: 沙窩會議會址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 紅軍長征紀念碑碑園
+    canonicalName: 紅軍長征紀念碑碑園
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 靖夷堡遺址
+    canonicalName: 靖夷堡遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 黄龙寺 (松潘)
+    canonicalName: 黄龙寺 (松潘)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    sourceReadiness: pending
+    selectionPriority: 12
+- district: 汶川县
+  leaves:
+  - name: 汶川特别旅游区
+    canonicalName: 汶川特别旅游区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 卧龙自然保护区
+    canonicalName: 卧龙国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    aliases:
+    - 卧龙大熊猫自然保护区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 水磨古镇
+    canonicalName: 水磨古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 萝卜寨
+    canonicalName: 汶川萝卜寨
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 映秀震中纪念馆
+    canonicalName: 汶川映秀震中纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 克枯栈道
+    canonicalName: 克枯栈道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 姜维城遗址
+    canonicalName: 姜维城遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 布瓦黃土碉群
+    canonicalName: 布瓦黃土碉群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 汶川特大地震震中纪念馆
+    canonicalName: 汶川特大地震震中纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 馬嶺山紅軍阻擊戰場遺址
+    canonicalName: 馬嶺山紅軍阻擊戰場遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/汶川县
+    sourceReadiness: pending
+    selectionPriority: 10
+- district: 理县
+  leaves:
+  - name: 毕棚沟
+    canonicalName: 毕棚沟
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 桃坪羌寨
+    canonicalName: 桃坪羌寨
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 甘堡藏寨
+    canonicalName: 甘堡藏寨
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 米亚罗
+    canonicalName: 米亚罗红叶风景区
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 古尔沟温泉
+    canonicalName: 古尔沟温泉
+    entityType: 地点/温泉
+    typeTagRefs:
+    - Entity/地点/温泉
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 鹧鸪山自然公园
+    canonicalName: 鹧鸪山自然公园
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/冰雪带
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 建威將軍墓
+    canonicalName: 建威將軍墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 朴头山隋唐石刻
+    canonicalName: 朴头山隋唐石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 桃坪羌寨碉群
+    canonicalName: 桃坪羌寨碉群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 理縣張家碉房
+    canonicalName: 理縣張家碉房
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 畢棚溝
+    canonicalName: 畢棚溝
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 箭山遺址
+    canonicalName: 箭山遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 籌邊樓
+    canonicalName: 籌邊樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 維州城遺址
+    canonicalName: 維州城遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 薛城紅軍石刻標語
+    canonicalName: 薛城紅軍石刻標語
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 雜谷土司碉群
+    canonicalName: 雜谷土司碉群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/理县
+    sourceReadiness: pending
+    selectionPriority: 16
+- district: 茂县
+  leaves:
+  - name: 中国古羌城
+    canonicalName: 中国古羌城
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 中国羌族博物馆
+    canonicalName: 中国羌族博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    aliases:
+    - 茂县羌族博物馆
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 松坪沟
+    canonicalName: 叠溪松坪沟
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    aliases:
+    - 叠溪·松坪沟风景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 九鼎山
+    canonicalName: 茂县九鼎山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    - Entity/地点/自然景观/冰雪带
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    aliases:
+    - 九鼎山太子岭
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 三元桥 (茂县)
+    canonicalName: 三元桥 (茂县)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 叠溪镇
+    canonicalName: 叠溪镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 左封縣城遺址
+    canonicalName: 左封縣城遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 營盤山遺址
+    canonicalName: 營盤山遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 鹰嘴河寨碉群
+    canonicalName: 鹰嘴河寨碉群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 點將台摩崖造像
+    canonicalName: 點將台摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/茂县
+    sourceReadiness: pending
+    selectionPriority: 10
+- district: 小金县
+  leaves:
+  - name: 四姑娘山
+    canonicalName: 四姑娘山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    aliases:
+    - 四姑娘山风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:57:53Z'
+    sourceScreenEvidence: zh.wikipedia.org:四姑娘山 extract=247ch
+  - name: 两河口会议纪念馆
+    canonicalName: 两河口会议纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    aliases:
+    - 两河口会议旧址
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 达维会师桥
+    canonicalName: 达维会师桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    aliases:
+    - 达维红军会师遗址
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:58:02Z'
+    sourceScreenEvidence: zh.wikipedia.org:达维会师桥 extract=243ch
+  - name: 三關橋
+    canonicalName: 三關橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 兩河口會議會址
+    canonicalName: 兩河口會議會址
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 小金天主教堂
+    canonicalName: 小金天主教堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 小金川流域古遺址群
+    canonicalName: 小金川流域古遺址群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 沃日土司官寨碉及經樓
+    canonicalName: 沃日土司官寨碉及經樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 猛固橋
+    canonicalName: 猛固橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 結斯喇嘛寺
+    canonicalName: 結斯喇嘛寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    sourceReadiness: pending
+    selectionPriority: 10
+- district: 金川县
+  leaves:
+  - name: 观音桥观音庙
+    canonicalName: 金川观音庙
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/金川县
+    aliases:
+    - 绰斯甲观音庙
+    - 观音桥景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 广法寺
+    canonicalName: 金川广法寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/金川县
+    aliases:
+    - 雍仲拉顶寺
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 神仙包
+    canonicalName: 金川神仙包
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/金川县
+    aliases:
+    - 沙耳神仙包梨花观景点
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 御製平定金川勒銘葛喇依之碑
+    canonicalName: 御製平定金川勒銘葛喇依之碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/金川县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 曾達關碉
+    canonicalName: 曾達關碉
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/金川县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 綽斯甲觀音廟
+    canonicalName: 綽斯甲觀音廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/金川县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 观音桥镇 (金川县)
+    canonicalName: 观音桥镇 (金川县)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/金川县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 金川商周遺址
+    canonicalName: 金川商周遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/金川县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 金川紅軍革命紀念建築群
+    canonicalName: 金川紅軍革命紀念建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/金川县
+    sourceReadiness: pending
+    selectionPriority: 9
+- district: 黑水县
+  leaves:
+  - name: 达古冰川
+    canonicalName: 达古冰川
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/冰雪带
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/黑水县
+    aliases:
+    - 达古冰山
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 卡龙沟
+    canonicalName: 卡龙沟
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/黑水县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 奶子沟彩林
+    canonicalName: 奶子沟彩林
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/黑水县
+    aliases:
+    - 奶子沟八十里彩林
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 色尔古藏寨
+    canonicalName: 色尔古藏寨
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/黑水县
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 徐古摩崖造像
+    canonicalName: 徐古摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/黑水县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 徐向前住址和紅軍石刻標語
+    canonicalName: 徐向前住址和紅軍石刻標語
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/黑水县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 蘆花會議會址
+    canonicalName: 蘆花會議會址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/黑水县
+    sourceReadiness: pending
+    selectionPriority: 7
+- district: 马尔康市
+  leaves:
+  - name: 卓克基土司官寨
+    canonicalName: 卓克基土司官寨
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 西索民居
+    canonicalName: 西索民居
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 昌列寺
+    canonicalName: 马尔康昌列寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 松岗直波碉楼
+    canonicalName: 松岗直波碉楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    aliases:
+    - 直波八角碉楼
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 哈休遺址
+    canonicalName: 哈休遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 大藏寺
+    canonicalName: 大藏寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 昌列寺小經堂
+    canonicalName: 昌列寺小經堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 甲扎爾甲山洞窟壁畫
+    canonicalName: 甲扎爾甲山洞窟壁畫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 直波碉楼
+    canonicalName: 直波碉楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 腳木足河流域古遺址群
+    canonicalName: 腳木足河流域古遺址群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 草登寺
+    canonicalName: 草登寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 莫斯都岩畫
+    canonicalName: 莫斯都岩畫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/马尔康市
+    sourceReadiness: pending
+    selectionPriority: 12
+- district: 红原县
+  leaves:
+  - name: 月亮湾
+    canonicalName: 红原月亮湾
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/红原县
+    aliases:
+    - 白河月亮湾
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 俄么塘花海
+    canonicalName: 俄么塘花海
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/红原县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 麦洼寺
+    canonicalName: 麦洼寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/红原县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 瓦切塔林
+    canonicalName: 瓦切塔林
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/红原县
+    aliases:
+    - 瓦切经幡群
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 日干乔湿地
+    canonicalName: 日干乔湿地
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/湿地荒漠
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/红原县
+    aliases:
+    - 日干乔大沼泽
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 亞口夏山紅軍烈士墓
+    canonicalName: 亞口夏山紅軍烈士墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/红原县
+    sourceReadiness: pending
+    selectionPriority: 6
+- district: 若尔盖县
+  leaves:
+  - name: 花湖
+    canonicalName: 若尔盖花湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    - Entity/地点/自然景观/湿地荒漠
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    aliases:
+    - 热尔大草原花湖
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 黄河九曲第一湾
+    canonicalName: 黄河九曲第一湾
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    aliases:
+    - 唐克黄河第一湾
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 格尔底寺
+    canonicalName: 达仓郎木格尔底寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    aliases:
+    - 郎木寺格尔底寺
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 巴西会议旧址
+    canonicalName: 巴西会议旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 包座戰役遺址
+    canonicalName: 包座戰役遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 協瑪堅遺址
+    canonicalName: 協瑪堅遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 巴西會議會址
+    canonicalName: 巴西會議會址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 潘州城遺址
+    canonicalName: 潘州城遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 甲格寺
+    canonicalName: 甲格寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 苟均橋
+    canonicalName: 苟均橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 苟象寺
+    canonicalName: 苟象寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 達扎寺 (若爾蓋縣)
+    canonicalName: 達扎寺 (若爾蓋縣)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/若尔盖县
+    sourceReadiness: pending
+    selectionPriority: 12
+- district: 阿坝县
+  leaves:
+  - name: 莲宝叶则
+    canonicalName: 莲宝叶则
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/阿坝县
+    aliases:
+    - 莲宝叶则石头山
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:58:45Z'
+    sourceScreenEvidence: zh.wikipedia.org:莲宝叶则 extract=202ch
+  - name: 各莫寺
+    canonicalName: 各莫寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/阿坝县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 郎依寺
+    canonicalName: 郎依寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/阿坝县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 柯河姊妹碉
+    canonicalName: 柯河姊妹碉
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/阿坝县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 茸安蒙古伸臂橋
+    canonicalName: 茸安蒙古伸臂橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/阿坝县
+    sourceReadiness: pending
+    selectionPriority: 5
+- district: 壤塘县
+  leaves:
+  - name: 棒托寺
+    canonicalName: 棒托寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/壤塘县
+    aliases:
+    - 棒托寺石刻大藏经
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 曾克寺
+    canonicalName: 曾克寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/壤塘县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 日斯满巴碉房
+    canonicalName: 日斯满巴碉房
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/壤塘县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 措爾機寺
+    canonicalName: 措爾機寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/壤塘县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 日斯滿巴碉房
+    canonicalName: 日斯滿巴碉房
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/壤塘县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 藏哇寺
+    canonicalName: 藏哇寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/壤塘县
+    sourceReadiness: pending
+    selectionPriority: 6

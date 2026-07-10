@@ -11,7 +11,7 @@ from template.creator import _creator_match_score, blueprint_preference_fit, mat
 from template.registry import TemplateRegistry
 
 PREF_BLUEPRINT = "景区_体验"
-REGIONAL_CREATOR = "qwq_creator_travel_casual_tourist_001"
+BATCH_ID = "travel_photo_1k_v1"
 
 
 class _FakeRegistry:
@@ -67,38 +67,58 @@ def test_real_registry_preferred_blueprint_routes() -> None:
     registry = TemplateRegistry.load()
     blueprint = {"templateId": PREF_BLUEPRINT, "creatorPersona": {"archetype": "casual_tourist"}}
     chosen = match_creator(
-        registry, blueprint, carrier="article", region="西南", vertical="travel", seed="real"
+        registry, blueprint, carrier="article", vertical="travel", seed="real"
     )
     assert chosen.get("creatorArchetype") == "casual_tourist"
     assert str(chosen.get("status")) == "active"
 
 
-def test_assignment_base_passes_for_registered_creator() -> None:
+def _thematic_travel_profile() -> dict:
     registry = TemplateRegistry.load()
-    profile = registry.creators[REGIONAL_CREATOR]
+    for profile in registry.creators.values():
+        scope = profile.get("coverageScope") if isinstance(profile.get("coverageScope"), dict) else {}
+        topics = scope.get("topicRefs") or []
+        if (
+            profile.get("cohortId") == BATCH_ID
+            and (profile.get("verticalRefs") or []) == ["travel"]
+            and topics
+            and (profile.get("carrierAffinity") or {}).get("article", 0) > 0
+        ):
+            return profile
+    raise AssertionError("missing thematic travel creator")
+
+
+def _other_topic(topics: list[str]) -> str:
+    for candidate in ("Topic/摄影/人像摄影", "Topic/校园/生活", "Topic/美食/探店"):
+        if candidate not in topics:
+            return candidate
+    return "Topic/摄影/人像摄影"
+
+
+def test_assignment_base_passes_for_registered_creator() -> None:
+    profile = _thematic_travel_profile()
     payload = creator_assignment_from_profile(profile)
     assert creator_assignment_issues(payload, carrier="article") == []
 
 
-def test_assignment_blocks_region_topic_mismatch() -> None:
-    registry = TemplateRegistry.load()
-    profile = registry.creators[REGIONAL_CREATOR]
+def test_assignment_blocks_topic_mismatch() -> None:
+    profile = _thematic_travel_profile()
+    topics = [str(item) for item in profile["coverageScope"]["topicRefs"]]
+    topic = topics[0]
     payload = creator_assignment_from_profile(profile)
     issues = creator_assignment_issues(
         payload,
         carrier="article",
-        content_region="华东",
-        content_tag_refs=["Topic/旅行/华东/沿海"],
+        content_tag_refs=[_other_topic(topics)],
     )
     assert any("semanticFit" in i for i in issues), issues
-    # Matching region must not raise a semantic-fit issue.
-    ok = creator_assignment_issues(payload, carrier="article", content_region="西南")
+    # Matching topic must not raise a semantic-fit issue.
+    ok = creator_assignment_issues(payload, carrier="article", content_tag_refs=[topic])
     assert ok == []
 
 
 def test_assignment_blocks_vertical_mismatch() -> None:
-    registry = TemplateRegistry.load()
-    profile = registry.creators[REGIONAL_CREATOR]
+    profile = _thematic_travel_profile()
     payload = creator_assignment_from_profile(profile)
     issues = creator_assignment_issues(payload, carrier="article", content_vertical="campus")
     assert any("verticalRefs" in i for i in issues), issues

@@ -94,7 +94,7 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 
 ### 部署约束
 
-- `deploy/shared/process_domain_mapping.yaml` 中 content 归属不变：dev=content-service，integration/prod=seed-box。
+- `quwoquan_ops/environments/process_domain_mapping.yaml` 中 content 归属不变：dev=content-service，integration/prod=seed-box。
 - integration 与 prod 的 process-domain 映射必须一致。
 - content-service 部署配置必须参照 chat-service 的 Kustomize 结构（base + 3 overlays）。
 

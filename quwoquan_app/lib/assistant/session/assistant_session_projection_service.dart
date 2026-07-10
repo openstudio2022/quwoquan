@@ -6,11 +6,9 @@ import 'package:quwoquan_app/assistant/session/session_summary_builder.dart';
 
 class AssistantSessionProjectionService {
   const AssistantSessionProjectionService({
-    PreferenceFactService preferenceFactService = const PreferenceFactService(),
-    AssistantSessionSummaryBuilder summaryBuilder =
-        const AssistantSessionSummaryBuilder(),
-  }) : _preferenceFactService = preferenceFactService,
-       _summaryBuilder = summaryBuilder;
+    this._preferenceFactService = const PreferenceFactService(),
+    this._summaryBuilder = const AssistantSessionSummaryBuilder(),
+  });
 
   final PreferenceFactService _preferenceFactService;
   final AssistantSessionSummaryBuilder _summaryBuilder;

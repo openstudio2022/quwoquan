@@ -9,6 +9,10 @@ class IntersectionActionHint {
   final IntersectionTarget? target;
   final bool isPrimary;
   final int priority;
+  final String actionTier;
+  final List<String> requiredGates;
+  final String targetAvailability;
+  final String dispatch;
 
   IntersectionActionHint({
     this.actionKey = '',
@@ -16,6 +20,10 @@ class IntersectionActionHint {
     this.target,
     this.isPrimary = false,
     this.priority = 0,
+    this.actionTier = 'light',
+    this.requiredGates = const <String>[],
+    this.targetAvailability = 'available',
+    this.dispatch = 'navigate',
   });
 
   factory IntersectionActionHint.fromMap(Map<String, dynamic> m) {
@@ -25,6 +33,10 @@ class IntersectionActionHint {
       target: m['target'] == null ? null : IntersectionTarget.fromMap(_parseStringKeyMap(m['target'])!),
       isPrimary: m['isPrimary'] as bool? ?? false,
       priority: (m['priority'] as num?)?.toInt() ?? 0,
+      actionTier: m['actionTier']?.toString() ?? 'light',
+      requiredGates: _parseStringList(m['requiredGates']) ?? <String>[],
+      targetAvailability: m['targetAvailability']?.toString() ?? 'available',
+      dispatch: m['dispatch']?.toString() ?? 'navigate',
     );
   }
 
@@ -35,6 +47,10 @@ class IntersectionActionHint {
       'target': target,
       'isPrimary': isPrimary,
       'priority': priority,
+      'actionTier': actionTier,
+      'requiredGates': requiredGates,
+      'targetAvailability': targetAvailability,
+      'dispatch': dispatch,
     };
   }
 
@@ -44,6 +60,10 @@ class IntersectionActionHint {
     IntersectionTarget? target,
     bool? isPrimary,
     int? priority,
+    String? actionTier,
+    List<String>? requiredGates,
+    String? targetAvailability,
+    String? dispatch,
   }) {
     return IntersectionActionHint(
       actionKey: actionKey ?? this.actionKey,
@@ -51,10 +71,19 @@ class IntersectionActionHint {
       target: target ?? this.target,
       isPrimary: isPrimary ?? this.isPrimary,
       priority: priority ?? this.priority,
+      actionTier: actionTier ?? this.actionTier,
+      requiredGates: requiredGates ?? this.requiredGates,
+      targetAvailability: targetAvailability ?? this.targetAvailability,
+      dispatch: dispatch ?? this.dispatch,
     );
   }
 }
 
+List<String>? _parseStringList(dynamic v) {
+  if (v == null) return null;
+  if (v is List) return v.map((e) => e?.toString() ?? '').toList();
+  return null;
+}
 
 Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
   if (v == null) return null;

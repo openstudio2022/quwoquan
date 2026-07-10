@@ -25,8 +25,8 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:meta/meta.dart';
 
-import './proto/livekit_models.pb.dart' as lk_models;
-import './support/native.dart';
+import 'proto/livekit_models.pb.dart' as lk_models;
+import 'support/native.dart';
 import 'extensions.dart';
 import 'livekit.dart';
 import 'logger.dart';

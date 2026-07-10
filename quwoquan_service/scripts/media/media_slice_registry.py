@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_REGISTRY_PATH = WORKSPACE_ROOT / "deploy" / "shared" / "media_slice_registry.json"
+DEFAULT_REGISTRY_PATH = WORKSPACE_ROOT / "quwoquan_ops" / "environments" / "media_slice_registry.json"
 
 
 def load_registry(path: str | Path = DEFAULT_REGISTRY_PATH) -> dict[str, Any]:

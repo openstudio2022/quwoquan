@@ -195,7 +195,9 @@ class MockIntersectionRepository implements IntersectionRepository {
   /// 对象页「你们的交集」seed 真相源（intersection_core.objectIntersections，按 objectId 索引）。
   /// 自带 primarySpans/intersectionPoints；命中即直出（与 inbox 同一 hydrate 管线收敛点摘要）。
   static List<IntersectionReason> _seedObjectIntersections(String objectId) {
-    final seed = ContractFixtureRuntimeLoader.contentSeedSet('intersection_core');
+    final seed = ContractFixtureRuntimeLoader.contentSeedSet(
+      'intersection_core',
+    );
     if (seed == null) return const <IntersectionReason>[];
     final raw = seed['objectIntersections'];
     if (raw is! Map) return const <IntersectionReason>[];
@@ -358,7 +360,8 @@ class MockIntersectionRepository implements IntersectionRepository {
       final objectId = item.actionTargetId.trim();
       visuals.add(
         IntersectionVisual(
-          assetKind: UnifiedObjectKind.fromWire(objectKind)?.assetKind ?? 'avatar',
+          assetKind:
+              UnifiedObjectKind.fromWire(objectKind)?.assetKind ?? 'avatar',
           imageUrl: url,
           displayName: name,
           target: objectId.isEmpty
@@ -462,7 +465,7 @@ class MockIntersectionRepository implements IntersectionRepository {
           reason.representativeActor ??
           _representativeActorFor(reason, visible),
       actionHints: reason.actionHints.isNotEmpty
-          ? reason.actionHints
+          ? reason.actionHints.map(_hydrateActionHint).toList(growable: false)
           : _actionHintsFor(reason, visible),
       rankState: 'fresh',
     );
@@ -515,6 +518,7 @@ class MockIntersectionRepository implements IntersectionRepository {
     final key =
         IntersectionKindMetadata.of(sourceRef)?.primaryActionKey ??
         IntersectionActionKeys.askAssistant;
+    final meta = IntersectionActionKeyMeta.of(key);
     return <IntersectionActionHint>[
       IntersectionActionHint(
         actionKey: key,
@@ -528,8 +532,27 @@ class MockIntersectionRepository implements IntersectionRepository {
               ),
         isPrimary: true,
         priority: 1,
+        actionTier: meta?.tier ?? 'light',
+        requiredGates: meta?.requiredGates ?? const <String>[],
+        targetAvailability: meta?.targetAvailability ?? 'available',
+        dispatch: meta?.dispatch ?? 'assistant',
       ),
     ];
+  }
+
+  static IntersectionActionHint _hydrateActionHint(
+    IntersectionActionHint hint,
+  ) {
+    final meta = IntersectionActionKeyMeta.of(hint.actionKey);
+    if (meta == null) {
+      return hint;
+    }
+    return hint.copyWith(
+      actionTier: meta.tier,
+      requiredGates: meta.requiredGates,
+      targetAvailability: meta.targetAvailability,
+      dispatch: meta.dispatch,
+    );
   }
 
   static String _relationLabelFor(String sourceRef) {
@@ -620,24 +643,37 @@ class MockIntersectionRepository implements IntersectionRepository {
 
 /// Remote 实现：调用 content-service 交集 API。
 class RemoteIntersectionRepository implements IntersectionRepository {
-  RemoteIntersectionRepository({CloudHttpClient? httpClient, String? baseUrl})
-    : _httpClient = httpClient ?? CloudHttpClient(),
-      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
+  RemoteIntersectionRepository({
+    CloudHttpClient? httpClient,
+    String? baseUrl,
+    String? currentUserId,
+  }) : _httpClient = httpClient ?? CloudHttpClient(),
+       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
+       _currentUserId =
+           (currentUserId ??
+                   const String.fromEnvironment('APP_CURRENT_USER_ID'))
+               .trim();
 
   final CloudHttpClient _httpClient;
   final String _baseUrl;
+  final String _currentUserId;
 
   Uri _uri(String path, [Map<String, String>? query]) => Uri.parse(
     '$_baseUrl$path',
   ).replace(queryParameters: (query == null || query.isEmpty) ? null : query);
 
+  Map<String, String> _headers(String pageId) =>
+      CloudRequestHeaders.withOwnerSubAccountContext(
+        CloudRequestHeaders.forPage(pageId),
+        ownerUserId: _currentUserId,
+        subAccountId: _currentUserId,
+      );
+
   @override
   Future<IntersectionInboxSummary> getMyIntersectionSummary() async {
     final decoded = await _httpClient.getJson(
       _uri(ContentApiMetadata.getMyIntersectionSummaryPath),
-      headers: CloudRequestHeaders.forPage(
-        ContentRequestPageIds.getMyIntersectionSummary,
-      ),
+      headers: _headers(ContentRequestPageIds.getMyIntersectionSummary),
     );
     final obj = CloudResponseDecoder.asObject(
       decoded,
@@ -673,9 +709,7 @@ class RemoteIntersectionRepository implements IntersectionRepository {
     }
     final decoded = await _httpClient.getJson(
       _uri(ContentApiMetadata.listMyIntersectionsPath, query),
-      headers: CloudRequestHeaders.forPage(
-        ContentRequestPageIds.listMyIntersections,
-      ),
+      headers: _headers(ContentRequestPageIds.listMyIntersections),
     );
     final obj = CloudResponseDecoder.asObject(
       decoded,
@@ -694,9 +728,7 @@ class RemoteIntersectionRepository implements IntersectionRepository {
     final body = <String, dynamic>{'dimension': (dimension ?? '').trim()};
     await _httpClient.postJson(
       _uri(ContentApiMetadata.markIntersectionsVisitedPath),
-      headers: CloudRequestHeaders.forPage(
-        ContentRequestPageIds.markIntersectionsVisited,
-      ),
+      headers: _headers(ContentRequestPageIds.markIntersectionsVisited),
       body: body,
     );
   }
@@ -714,9 +746,7 @@ class RemoteIntersectionRepository implements IntersectionRepository {
     };
     final decoded = await _httpClient.getJson(
       _uri(ContentApiMetadata.getObjectIntersectionsPath, query),
-      headers: CloudRequestHeaders.forPage(
-        ContentRequestPageIds.getObjectIntersections,
-      ),
+      headers: _headers(ContentRequestPageIds.getObjectIntersections),
     );
     final obj = CloudResponseDecoder.asObject(
       decoded,

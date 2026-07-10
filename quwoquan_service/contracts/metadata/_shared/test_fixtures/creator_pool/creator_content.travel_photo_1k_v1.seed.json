@@ -1,0 +1,359 @@
+{
+  "schemaVersion": "creator_pool.content_bind/1",
+  "batchId": "travel_photo_1k_v1",
+  "vertical": "travel",
+  "previewOnly": false,
+  "routedBy": "match_creator",
+  "distinctAuthors": 9,
+  "posts": [
+    {
+      "postId": "creator_content_travel_article_001",
+      "contentType": "article",
+      "carrier": "article",
+      "workloadLane": "travel",
+      "authorId": "sys_travel_0007_sub_01",
+      "subAccountId": "sys_travel_0007_sub_01",
+      "creatorProfileId": "sys_travel_0007",
+      "creatorArchetype": "casual_tourist",
+      "displayName": "白露游记",
+      "authorDisplayName": "白露游记",
+      "authorAvatarUrl": "media/preset/avatar/avatar_travel_rooftop_viewer.png",
+      "authorAvatarObjectKey": "media/preset/avatar/avatar_travel_rooftop_viewer.png",
+      "coverUrl": "media/preset/cover/cover_travel_coastal_lighthouse.jpg",
+      "coverObjectKey": "media/preset/cover/cover_travel_coastal_lighthouse.jpg",
+      "title": "travel·travel·景区_体验",
+      "summary": "travel lane article 内容（平台虚拟创作者出品）",
+      "tagRefs": [
+        "Topic/旅行/出行方式/自驾"
+      ],
+      "contentTagRefs": [
+        "Topic/旅行/出行方式/自驾"
+      ],
+      "entityRefs": [
+        "fixture_homepage_travel_photo_west_lake",
+        "fixture_homepage_travel_route_chuanxi"
+      ],
+      "circleRefs": [
+        "fixture_circle_travel"
+      ],
+      "region": null,
+      "templateId": "景区_体验",
+      "vertical": "travel",
+      "cohortId": "travel_photo_1k_v1",
+      "routedBy": "match_creator",
+      "bodyMode": "deterministic_stub"
+    },
+    {
+      "postId": "creator_content_travel_image_002",
+      "contentType": "image",
+      "carrier": "image",
+      "workloadLane": "travel",
+      "authorId": "sys_travel_0015_sub_01",
+      "subAccountId": "sys_travel_0015_sub_01",
+      "creatorProfileId": "sys_travel_0015",
+      "creatorArchetype": "casual_tourist",
+      "displayName": "石阶坐标",
+      "authorDisplayName": "石阶坐标",
+      "authorAvatarUrl": "media/preset/avatar/avatar_travel_rooftop_viewer.png",
+      "authorAvatarObjectKey": "media/preset/avatar/avatar_travel_rooftop_viewer.png",
+      "coverUrl": "media/preset/cover/cover_travel_coastal_lighthouse.jpg",
+      "coverObjectKey": "media/preset/cover/cover_travel_coastal_lighthouse.jpg",
+      "title": "travel·travel·景区_体验",
+      "summary": "travel lane image 内容（平台虚拟创作者出品）",
+      "tagRefs": [
+        "Topic/旅行/出行方式/自驾"
+      ],
+      "contentTagRefs": [
+        "Topic/旅行/出行方式/自驾"
+      ],
+      "entityRefs": [
+        "fixture_homepage_travel_photo_west_lake",
+        "fixture_homepage_travel_route_chuanxi"
+      ],
+      "circleRefs": [
+        "fixture_circle_travel"
+      ],
+      "region": null,
+      "templateId": "景区_体验",
+      "vertical": "travel",
+      "cohortId": "travel_photo_1k_v1",
+      "routedBy": "match_creator",
+      "bodyMode": "deterministic_stub"
+    },
+    {
+      "postId": "creator_content_travel_video_003",
+      "contentType": "video",
+      "carrier": "video",
+      "workloadLane": "travel",
+      "authorId": "sys_travel_0025_sub_01",
+      "subAccountId": "sys_travel_0025_sub_01",
+      "creatorProfileId": "sys_travel_0025",
+      "creatorArchetype": "casual_tourist",
+      "displayName": "薄荷旅笺",
+      "authorDisplayName": "薄荷旅笺",
+      "authorAvatarUrl": "media/preset/avatar/avatar_travel_wayfinder.png",
+      "authorAvatarObjectKey": "media/preset/avatar/avatar_travel_wayfinder.png",
+      "coverUrl": "media/preset/cover/cover_travel_snowpeak_route.jpg",
+      "coverObjectKey": "media/preset/cover/cover_travel_snowpeak_route.jpg",
+      "title": "travel·travel·景区_体验",
+      "summary": "travel lane video 内容（平台虚拟创作者出品）",
+      "tagRefs": [
+        "Topic/旅行/出行方式/自驾"
+      ],
+      "contentTagRefs": [
+        "Topic/旅行/出行方式/自驾"
+      ],
+      "entityRefs": [
+        "fixture_homepage_travel_photo_west_lake",
+        "fixture_homepage_travel_route_chuanxi"
+      ],
+      "circleRefs": [
+        "fixture_circle_travel"
+      ],
+      "region": null,
+      "templateId": "景区_体验",
+      "vertical": "travel",
+      "cohortId": "travel_photo_1k_v1",
+      "routedBy": "match_creator",
+      "bodyMode": "deterministic_stub"
+    },
+    {
+      "postId": "creator_content_photography_article_004",
+      "contentType": "article",
+      "carrier": "article",
+      "workloadLane": "photography",
+      "authorId": "sys_photo_0008_sub_01",
+      "subAccountId": "sys_photo_0008_sub_01",
+      "creatorProfileId": "sys_photo_0008",
+      "creatorArchetype": "architecture_still_photographer",
+      "displayName": "山野片刻",
+      "authorDisplayName": "山野片刻",
+      "authorAvatarUrl": "media/preset/avatar/avatar_photo_flash_meter.png",
+      "authorAvatarObjectKey": "media/preset/avatar/avatar_photo_flash_meter.png",
+      "coverUrl": "media/preset/cover/cover_photo_darkroom_contactsheet.jpg",
+      "coverObjectKey": "media/preset/cover/cover_photo_darkroom_contactsheet.jpg",
+      "title": "photography·photography·图片_专题",
+      "summary": "photography lane article 内容（平台虚拟创作者出品）",
+      "tagRefs": [
+        "Topic/摄影/器材评测"
+      ],
+      "contentTagRefs": [
+        "Topic/摄影/器材评测"
+      ],
+      "entityRefs": [
+        "fixture_homepage_travel_gear_sony_a7m4",
+        "fixture_homepage_travel_gear_lens_35",
+        "fixture_homepage_travel_photo_west_lake"
+      ],
+      "circleRefs": [
+        "fixture_circle_photo"
+      ],
+      "region": null,
+      "templateId": "图片_专题",
+      "vertical": "photography",
+      "cohortId": "travel_photo_1k_v1",
+      "routedBy": "match_creator",
+      "bodyMode": "deterministic_stub"
+    },
+    {
+      "postId": "creator_content_photography_image_005",
+      "contentType": "image",
+      "carrier": "image",
+      "workloadLane": "photography",
+      "authorId": "sys_photo_0003_sub_01",
+      "subAccountId": "sys_photo_0003_sub_01",
+      "creatorProfileId": "sys_photo_0003",
+      "creatorArchetype": "architecture_still_photographer",
+      "displayName": "暮色长卷",
+      "authorDisplayName": "暮色长卷",
+      "authorAvatarUrl": "media/preset/avatar/avatar_photo_viewfinder.png",
+      "authorAvatarObjectKey": "media/preset/avatar/avatar_photo_viewfinder.png",
+      "coverUrl": "media/preset/cover/cover_photo_film_table.jpg",
+      "coverObjectKey": "media/preset/cover/cover_photo_film_table.jpg",
+      "title": "photography·photography·图片_专题",
+      "summary": "photography lane image 内容（平台虚拟创作者出品）",
+      "tagRefs": [
+        "Topic/摄影/器材评测"
+      ],
+      "contentTagRefs": [
+        "Topic/摄影/器材评测"
+      ],
+      "entityRefs": [
+        "fixture_homepage_travel_gear_sony_a7m4",
+        "fixture_homepage_travel_gear_lens_35",
+        "fixture_homepage_travel_photo_west_lake"
+      ],
+      "circleRefs": [
+        "fixture_circle_photo"
+      ],
+      "region": null,
+      "templateId": "图片_专题",
+      "vertical": "photography",
+      "cohortId": "travel_photo_1k_v1",
+      "routedBy": "match_creator",
+      "bodyMode": "deterministic_stub"
+    },
+    {
+      "postId": "creator_content_photography_video_006",
+      "contentType": "video",
+      "carrier": "video",
+      "workloadLane": "photography",
+      "authorId": "sys_photo_0010_sub_01",
+      "subAccountId": "sys_photo_0010_sub_01",
+      "creatorProfileId": "sys_photo_0010",
+      "creatorArchetype": "architecture_still_photographer",
+      "displayName": "松间风景",
+      "authorDisplayName": "松间风景",
+      "authorAvatarUrl": "media/preset/avatar/avatar_photo_film_grain.png",
+      "authorAvatarObjectKey": "media/preset/avatar/avatar_photo_film_grain.png",
+      "coverUrl": "media/preset/cover/cover_photo_night_tripod.jpg",
+      "coverObjectKey": "media/preset/cover/cover_photo_night_tripod.jpg",
+      "title": "photography·photography·图片_专题",
+      "summary": "photography lane video 内容（平台虚拟创作者出品）",
+      "tagRefs": [
+        "Topic/摄影/器材评测"
+      ],
+      "contentTagRefs": [
+        "Topic/摄影/器材评测"
+      ],
+      "entityRefs": [
+        "fixture_homepage_travel_gear_sony_a7m4",
+        "fixture_homepage_travel_gear_lens_35",
+        "fixture_homepage_travel_photo_west_lake"
+      ],
+      "circleRefs": [
+        "fixture_circle_photo"
+      ],
+      "region": null,
+      "templateId": "图片_专题",
+      "vertical": "photography",
+      "cohortId": "travel_photo_1k_v1",
+      "routedBy": "match_creator",
+      "bodyMode": "deterministic_stub"
+    },
+    {
+      "postId": "creator_content_cross_article_007",
+      "contentType": "article",
+      "carrier": "article",
+      "workloadLane": "cross",
+      "authorId": "sys_travelphoto_0226_sub_01",
+      "subAccountId": "sys_travelphoto_0226_sub_01",
+      "creatorProfileId": "sys_travelphoto_0226",
+      "creatorArchetype": "gear_lightweight_traveler",
+      "displayName": "慢门画册",
+      "authorDisplayName": "慢门画册",
+      "authorAvatarUrl": "media/preset/avatar/avatar_travelphoto_heritage_observer.png",
+      "authorAvatarObjectKey": "media/preset/avatar/avatar_travelphoto_heritage_observer.png",
+      "coverUrl": "media/preset/cover/cover_travelphoto_waterfall_mist.jpg",
+      "coverObjectKey": "media/preset/cover/cover_travelphoto_waterfall_mist.jpg",
+      "title": "cross·travel·图片_风光",
+      "summary": "cross lane article 内容（平台虚拟创作者出品）",
+      "tagRefs": [
+        "Topic/旅行/玩法/节庆民俗",
+        "Topic/摄影/夜景星空"
+      ],
+      "contentTagRefs": [
+        "Topic/旅行/玩法/节庆民俗",
+        "Topic/摄影/夜景星空"
+      ],
+      "entityRefs": [
+        "fixture_homepage_travel_photo_west_lake",
+        "fixture_homepage_travel_gear_sony_a7m4",
+        "fixture_homepage_travel_place_dali_oldtown"
+      ],
+      "circleRefs": [
+        "fixture_circle_travel",
+        "fixture_circle_photo"
+      ],
+      "region": null,
+      "templateId": "图片_风光",
+      "vertical": "travel",
+      "cohortId": "travel_photo_1k_v1",
+      "routedBy": "match_creator",
+      "bodyMode": "deterministic_stub"
+    },
+    {
+      "postId": "creator_content_cross_image_008",
+      "contentType": "image",
+      "carrier": "image",
+      "workloadLane": "cross",
+      "authorId": "sys_travelphoto_0007_sub_01",
+      "subAccountId": "sys_travelphoto_0007_sub_01",
+      "creatorProfileId": "sys_travelphoto_0007",
+      "creatorArchetype": "city_walk_photographer",
+      "displayName": "日落远山",
+      "authorDisplayName": "日落远山",
+      "authorAvatarUrl": "media/preset/avatar/avatar_travelphoto_lake_tripod.png",
+      "authorAvatarObjectKey": "media/preset/avatar/avatar_travelphoto_lake_tripod.png",
+      "coverUrl": "media/preset/cover/cover_travelphoto_glacier_light.jpg",
+      "coverObjectKey": "media/preset/cover/cover_travelphoto_glacier_light.jpg",
+      "title": "cross·photography·图片_风光",
+      "summary": "cross lane image 内容（平台虚拟创作者出品）",
+      "tagRefs": [
+        "Topic/旅行/旅行主题/美食之旅",
+        "Topic/摄影/纪实摄影"
+      ],
+      "contentTagRefs": [
+        "Topic/旅行/旅行主题/美食之旅",
+        "Topic/摄影/纪实摄影"
+      ],
+      "entityRefs": [
+        "fixture_homepage_travel_photo_west_lake",
+        "fixture_homepage_travel_gear_sony_a7m4",
+        "homepage_restaurant_night_market"
+      ],
+      "circleRefs": [
+        "fixture_circle_travel",
+        "fixture_circle_photo"
+      ],
+      "region": null,
+      "templateId": "图片_风光",
+      "vertical": "photography",
+      "cohortId": "travel_photo_1k_v1",
+      "routedBy": "match_creator",
+      "bodyMode": "deterministic_stub"
+    },
+    {
+      "postId": "creator_content_cross_video_009",
+      "contentType": "video",
+      "carrier": "video",
+      "workloadLane": "cross",
+      "authorId": "sys_travelphoto_0015_sub_01",
+      "subAccountId": "sys_travelphoto_0015_sub_01",
+      "creatorProfileId": "sys_travelphoto_0015",
+      "creatorArchetype": "city_walk_photographer",
+      "displayName": "片场小站",
+      "authorDisplayName": "片场小站",
+      "authorAvatarUrl": "media/preset/avatar/avatar_travelphoto_lake_tripod.png",
+      "authorAvatarObjectKey": "media/preset/avatar/avatar_travelphoto_lake_tripod.png",
+      "coverUrl": "media/preset/cover/cover_travelphoto_rice_terrace.jpg",
+      "coverObjectKey": "media/preset/cover/cover_travelphoto_rice_terrace.jpg",
+      "title": "cross·travel·图片_风光",
+      "summary": "cross lane video 内容（平台虚拟创作者出品）",
+      "tagRefs": [
+        "Topic/旅行/旅行主题/美食之旅",
+        "Topic/摄影/纪实摄影"
+      ],
+      "contentTagRefs": [
+        "Topic/旅行/旅行主题/美食之旅",
+        "Topic/摄影/纪实摄影"
+      ],
+      "entityRefs": [
+        "fixture_homepage_travel_photo_west_lake",
+        "fixture_homepage_travel_gear_sony_a7m4",
+        "homepage_restaurant_night_market"
+      ],
+      "circleRefs": [
+        "fixture_circle_travel",
+        "fixture_circle_photo"
+      ],
+      "region": null,
+      "templateId": "图片_风光",
+      "vertical": "travel",
+      "cohortId": "travel_photo_1k_v1",
+      "routedBy": "match_creator",
+      "bodyMode": "deterministic_stub"
+    }
+  ],
+  "generatedAt": "2026-07-05T13:26:17.248214+00:00"
+}

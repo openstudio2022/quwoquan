@@ -1,0 +1,2346 @@
+# 全国地点主清单 · 四川省成都市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 四川省
+city: 成都市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 都江堰市
+  leaves:
+  - name: 都江堰
+    canonicalName: 都江堰
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:43:51Z'
+    sourceScreenEvidence: zh.wikipedia.org:都江堰 extract=458ch
+  - name: 青城山
+    canonicalName: 青城山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    aliases:
+    - 青城山风景区
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:43:52Z'
+    sourceScreenEvidence: zh.wikipedia.org:青城山 extract=202ch
+  - name: 灌县古城
+    canonicalName: 灌县古城
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    aliases:
+    - 都江堰古城
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 成都融创文旅城
+    canonicalName: 成都融创文旅城
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/综合主题乐园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    aliases:
+    - 成都融创乐园
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 虹口景区
+    canonicalName: 都江堰虹口景区
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    aliases:
+    - 虹口漂流
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 都江堰熊猫谷
+    canonicalName: 都江堰熊猫谷
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/动物主题乐园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    aliases:
+    - 成都大熊猫繁育研究基地都江堰基地
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 三佛洞摩崖造像
+    canonicalName: 三佛洞摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 二王庙
+    canonicalName: 二王庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 伏龙观
+    canonicalName: 伏龙观
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 大唐開元神武皇帝敕書碑
+    canonicalName: 大唐開元神武皇帝敕書碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 天师洞
+    canonicalName: 天师洞
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 奎光塔
+    canonicalName: 奎光塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 安瀾橋 (四川)
+    canonicalName: 安瀾橋 (四川)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 普照寺 (都江堰)
+    canonicalName: 普照寺 (都江堰)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 清真寶瓶寺
+    canonicalName: 清真寶瓶寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 灌县城墙
+    canonicalName: 灌县城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 灌县文庙
+    canonicalName: 灌县文庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 灌口城隍庙
+    canonicalName: 灌口城隍庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 灌縣魁星閣
+    canonicalName: 灌縣魁星閣
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 灵岩寺及千佛塔
+    canonicalName: 灵岩寺及千佛塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 玉堂窑址
+    canonicalName: 玉堂窑址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 芒城遗址
+    canonicalName: 芒城遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 蒲陽興隆橋
+    canonicalName: 蒲陽興隆橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 青城山古建筑群
+    canonicalName: 青城山古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 24
+  - name: 青城山摩崖石刻
+    canonicalName: 青城山摩崖石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    sourceReadiness: pending
+    selectionPriority: 25
+- district: 武侯区
+  leaves:
+  - name: 武侯祠
+    canonicalName: 武侯祠
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    aliases:
+    - 成都武侯祠博物馆
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:43:57Z'
+    sourceScreenEvidence: zh.wikipedia.org:成都武侯祠博物馆 extract=361ch
+  - name: 锦里
+    canonicalName: 锦里
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    aliases:
+    - 锦里古街
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 望江楼公园
+    canonicalName: 成都望江楼公园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    aliases:
+    - 望江公园
+    - 崇丽阁
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:44:16Z'
+    sourceScreenEvidence: zh.wikipedia.org:崇丽阁 extract=230ch
+  - name: 四川大学博物馆
+    canonicalName: 四川大学博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    selectionPriority: 4
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:44:17Z'
+    sourceScreenEvidence: zh.wikipedia.org:四川大学博物馆 extract=424ch
+  - name: 天府芙蓉园
+    canonicalName: 天府芙蓉园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 成都环球中心
+    canonicalName: 成都环球中心
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    aliases:
+    - 新世纪环球中心
+    selectionPriority: 6
+    sourceReadiness: ready
+  - name: 三义庙 (成都)
+    canonicalName: 三义庙 (成都)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 刘湘陵园
+    canonicalName: 刘湘陵园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 四川大學早期建築
+    canonicalName: 四川大學早期建築
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 四川大學辦公大樓
+    canonicalName: 四川大學辦公大樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 成汉墓
+    canonicalName: 成汉墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 成都来福士广场
+    canonicalName: 成都来福士广场
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 成都武侯祠
+    canonicalName: 成都武侯祠
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 望江楼
+    canonicalName: 望江楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 望江楼古建筑群
+    canonicalName: 望江楼古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 王光祈墓碑
+    canonicalName: 王光祈墓碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 立巢航空博物馆
+    canonicalName: 立巢航空博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 頤廬
+    canonicalName: 頤廬
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    sourceReadiness: pending
+    selectionPriority: 18
+- district: 青羊区
+  leaves:
+  - name: 宽窄巷子
+    canonicalName: 宽窄巷子
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:44:25Z'
+    sourceScreenEvidence: zh.wikipedia.org:宽窄巷子 extract=374ch
+  - name: 杜甫草堂
+    canonicalName: 杜甫草堂
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    aliases:
+    - 成都杜甫草堂博物馆
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 四川博物院
+    canonicalName: 四川博物院
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 青羊宫
+    canonicalName: 青羊宫
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    selectionPriority: 4
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:44:36Z'
+    sourceScreenEvidence: zh.wikipedia.org:青羊宫 extract=200ch
+  - name: 金沙遗址博物馆
+    canonicalName: 金沙遗址博物馆
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    aliases:
+    - 金沙遗址
+    selectionPriority: 5
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:44:41Z'
+    sourceScreenEvidence: zh.wikipedia.org:金沙遗址 extract=283ch
+  - name: 文殊院
+    canonicalName: 文殊院
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    selectionPriority: 6
+    sourceReadiness: ready
+  - name: 成都博物馆
+    canonicalName: 成都博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    selectionPriority: 7
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:44:46Z'
+    sourceScreenEvidence: zh.wikipedia.org:成都博物馆 extract=331ch
+  - name: 人民公园
+    canonicalName: 成都人民公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    aliases:
+    - 少城公园
+    selectionPriority: 8
+    sourceReadiness: ready
+  - name: 天府广场
+    canonicalName: 天府广场
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    selectionPriority: 9
+    sourceReadiness: ready
+  - name: 上翔堂
+    canonicalName: 上翔堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 中正图书馆旧址 (成都)
+    canonicalName: 中正图书馆旧址 (成都)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 二仙庵
+    canonicalName: 二仙庵
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 人民公园近现代建筑群
+    canonicalName: 人民公园近现代建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 努力餐
+    canonicalName: 努力餐
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 十二桥遗址
+    canonicalName: 十二桥遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 四川科技馆
+    canonicalName: 四川科技馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 川军抗日阵亡将士纪念碑
+    canonicalName: 川军抗日阵亡将士纪念碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 平安桥主教座堂
+    canonicalName: 平安桥主教座堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 張清平宅
+    canonicalName: 張清平宅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 成都东华门遗址
+    canonicalName: 成都东华门遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 成都十二橋烈士墓
+    canonicalName: 成都十二橋烈士墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 成都古蜀船棺合葬墓
+    canonicalName: 成都古蜀船棺合葬墓
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 成都城墙
+    canonicalName: 成都城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 成都民众教育馆旧址
+    canonicalName: 成都民众教育馆旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 24
+  - name: 成都畫院民居建築
+    canonicalName: 成都畫院民居建築
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 25
+  - name: 成都陕西会馆
+    canonicalName: 成都陕西会馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 26
+  - name: 李家鈺住宅
+    canonicalName: 李家鈺住宅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 27
+  - name: 李家鈺兄弟住宅
+    canonicalName: 李家鈺兄弟住宅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 28
+  - name: 浣花溪公园
+    canonicalName: 浣花溪公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 29
+  - name: 百花潭公园
+    canonicalName: 百花潭公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 30
+  - name: 辛亥秋保路死事纪念碑
+    canonicalName: 辛亥秋保路死事纪念碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 31
+  - name: 通俗教育馆旧址
+    canonicalName: 通俗教育馆旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 32
+  - name: 金沙滨河公园
+    canonicalName: 金沙滨河公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 33
+  - name: 青羊宮窯址
+    canonicalName: 青羊宮窯址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 34
+  - name: 鼓樓南街清真寺
+    canonicalName: 鼓樓南街清真寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青羊区
+    sourceReadiness: pending
+    selectionPriority: 35
+- district: 成华区
+  leaves:
+  - name: 成都大熊猫繁育研究基地
+    canonicalName: 成都大熊猫繁育研究基地
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/成华区
+    aliases:
+    - 熊猫基地
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:45:01Z'
+    sourceScreenEvidence: zh.wikipedia.org:成都大熊猫繁育研究基地 extract=254ch
+  - name: 成都动物园
+    canonicalName: 成都动物园
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/动物主题乐园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/成华区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 东郊记忆
+    canonicalName: 东郊记忆
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/成华区
+    aliases:
+    - 东郊记忆音乐公园
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 昭觉寺
+    canonicalName: 成都昭觉寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/成华区
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 成都自然博物馆
+    canonicalName: 成都自然博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/成华区
+    aliases:
+    - 成都理工大学博物馆
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 孟知祥墓
+    canonicalName: 孟知祥墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/成华区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 成都量具刃具廠大樓
+    canonicalName: 成都量具刃具廠大樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/成华区
+    sourceReadiness: pending
+    selectionPriority: 7
+- district: 锦江区
+  leaves:
+  - name: 春熙路
+    canonicalName: 春熙路
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 成都远洋太古里
+    canonicalName: 成都远洋太古里
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    aliases:
+    - 太古里
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 大慈寺
+    canonicalName: 成都大慈寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 合江亭
+    canonicalName: 成都合江亭
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 塔子山公园
+    canonicalName: 成都塔子山公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 嚴谷蓀書庫
+    canonicalName: 嚴谷蓀書庫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 大慈寺 (成都)
+    canonicalName: 大慈寺 (成都)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 尹昌衡公館
+    canonicalName: 尹昌衡公館
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 恩光堂
+    canonicalName: 恩光堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 成都基督教青年會
+    canonicalName: 成都基督教青年會
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 成都广东会馆
+    canonicalName: 成都广东会馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 成都琉璃厂窑
+    canonicalName: 成都琉璃厂窑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 李劼人舊居
+    canonicalName: 李劼人舊居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 水井街酒坊遗址
+    canonicalName: 水井街酒坊遗址
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 江南馆街街坊遗址
+    canonicalName: 江南馆街街坊遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 西川邮政管理局旧址
+    canonicalName: 西川邮政管理局旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/锦江区
+    sourceReadiness: pending
+    selectionPriority: 16
+- district: 金牛区
+  leaves:
+  - name: 成都欢乐谷
+    canonicalName: 成都欢乐谷
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/综合主题乐园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 天府艺术公园
+    canonicalName: 天府艺术公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 成都露天音乐公园
+    canonicalName: 成都露天音乐公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    aliases:
+    - 凤凰山露天音乐公园
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 土桥清真上寺
+    canonicalName: 土桥清真上寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 張家巷天主教堂
+    canonicalName: 張家巷天主教堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 成都凤凰山体育公园
+    canonicalName: 成都凤凰山体育公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 成都市天府美术馆
+    canonicalName: 成都市天府美术馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 朱悦燫墓
+    canonicalName: 朱悦燫墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 王建墓
+    canonicalName: 王建墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 金牛坝张大千旧居
+    canonicalName: 金牛坝张大千旧居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 金華寺
+    canonicalName: 金華寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 黄忠公园
+    canonicalName: 黄忠公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金牛区
+    sourceReadiness: pending
+    selectionPriority: 12
+- district: 龙泉驿区
+  leaves:
+  - name: 洛带古镇
+    canonicalName: 洛带古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 石经寺
+    canonicalName: 石经寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 龙泉山城市森林公园
+    canonicalName: 龙泉山城市森林公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 北周文王碑及摩崖造像
+    canonicalName: 北周文王碑及摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 唯仁山莊
+    canonicalName: 唯仁山莊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 明蜀僖王墓
+    canonicalName: 明蜀僖王墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 明蜀昭王墓
+    canonicalName: 明蜀昭王墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 洛带会馆
+    canonicalName: 洛带会馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 燃灯寺
+    canonicalName: 燃灯寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 石經寺
+    canonicalName: 石經寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 龍泉驛田氏支祠
+    canonicalName: 龍泉驛田氏支祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/龙泉驿区
+    sourceReadiness: pending
+    selectionPriority: 11
+- district: 青白江区
+  leaves:
+  - name: 凤凰湖湿地公园
+    canonicalName: 青白江凤凰湖湿地公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青白江区
+    aliases:
+    - 凤凰湖
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 城厢古城
+    canonicalName: 青白江城厢古城
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青白江区
+    aliases:
+    - 城厢天府文化古镇
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 彭大將軍紀念碑
+    canonicalName: 彭大將軍紀念碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青白江区
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 明教寺觉皇殿
+    canonicalName: 明教寺觉皇殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青白江区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 繡川書院
+    canonicalName: 繡川書院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青白江区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 金堂文武廟
+    canonicalName: 金堂文武廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青白江区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 青白江陳氏宗祠
+    canonicalName: 青白江陳氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/青白江区
+    sourceReadiness: pending
+    selectionPriority: 7
+- district: 新都区
+  leaves:
+  - name: 宝光寺
+    canonicalName: 新都宝光寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新都区
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:45:48Z'
+    sourceScreenEvidence: zh.wikipedia.org:宝光寺 extract=206ch
+  - name: 桂湖
+    canonicalName: 新都桂湖
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新都区
+    aliases:
+    - 升庵桂湖
+    - 桂湖公园
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T13:25:02Z'
+    sourceScreenEvidence: baike.baidu.com:桂湖公园
+  - name: 天府沸腾小镇
+    canonicalName: 天府沸腾小镇
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新都区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 千佛碑
+    canonicalName: 千佛碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新都区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 新繁東湖
+    canonicalName: 新繁東湖
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新都区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 旃檀寺 (成都)
+    canonicalName: 旃檀寺 (成都)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新都区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 楊慎家族墓
+    canonicalName: 楊慎家族墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新都区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 艾蕪墓
+    canonicalName: 艾蕪墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新都区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 龍藏寺
+    canonicalName: 龍藏寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新都区
+    sourceReadiness: pending
+    selectionPriority: 9
+- district: 温江区
+  leaves:
+  - name: 国色天乡乐园
+    canonicalName: 国色天乡乐园
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/综合主题乐园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/温江区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 成都泰迪熊博物馆
+    canonicalName: 成都泰迪熊博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/温江区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 鱼凫村遗址
+    canonicalName: 温江鱼凫村遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/温江区
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:46:07Z'
+    sourceScreenEvidence: zh.wikipedia.org:鱼凫村遗址 extract=331ch
+  - name: 寿安陈家大院
+    canonicalName: 寿安陈家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/温江区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 溫江文廟
+    canonicalName: 溫江文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/温江区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 蓉府藏文典籍博物馆
+    canonicalName: 蓉府藏文典籍博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/温江区
+    sourceReadiness: pending
+    selectionPriority: 6
+- district: 双流区
+  leaves:
+  - name: 黄龙溪古镇
+    canonicalName: 黄龙溪古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/双流区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 空港花田
+    canonicalName: 空港花田
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/双流区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 棠湖公园
+    canonicalName: 双流棠湖公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/双流区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 三縣衙門
+    canonicalName: 三縣衙門
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/双流区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 二江寺拱橋
+    canonicalName: 二江寺拱橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/双流区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 金華庵
+    canonicalName: 金華庵
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/双流区
+    sourceReadiness: pending
+    selectionPriority: 6
+- district: 郫都区
+  leaves:
+  - name: 望丛祠
+    canonicalName: 望丛祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 三道堰古镇
+    canonicalName: 三道堰古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 成都川菜博物馆
+    canonicalName: 成都川菜博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 农科村
+    canonicalName: 郫都农科村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    aliases:
+    - 中国农家乐旅游发源地
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 唐昌梁家大院
+    canonicalName: 唐昌梁家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 崇寧文廟
+    canonicalName: 崇寧文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 揚雄墓
+    canonicalName: 揚雄墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 望叢祠
+    canonicalName: 望叢祠
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 石佛寺 (成都)
+    canonicalName: 石佛寺 (成都)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 郫县古城遗址
+    canonicalName: 郫县古城遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/郫都区
+    sourceReadiness: pending
+    selectionPriority: 10
+- district: 大邑县
+  leaves:
+  - name: 西岭雪山
+    canonicalName: 西岭雪山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    - Entity/地点/自然景观/冰雪带
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 安仁古镇
+    canonicalName: 大邑安仁古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    aliases:
+    - 安仁古镇
+    - 中国博物馆小镇
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:46:19Z'
+    sourceScreenEvidence: zh.wikipedia.org:安仁古镇 extract=269ch
+  - name: 建川博物馆
+    canonicalName: 建川博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    aliases:
+    - 建川博物馆聚落
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 刘氏庄园
+    canonicalName: 大邑刘氏庄园
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    aliases:
+    - 刘氏庄园博物馆
+    selectionPriority: 4
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:46:27Z'
+    sourceScreenEvidence: zh.wikipedia.org:大邑刘氏庄园 extract=531ch
+  - name: 花水湾温泉
+    canonicalName: 花水湾温泉
+    entityType: 地点/温泉
+    typeTagRefs:
+    - Entity/地点/温泉
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 鹤鸣山
+    canonicalName: 大邑鹤鸣山
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    selectionPriority: 6
+    sourceReadiness: ready
+  - name: 劉元瑄公館
+    canonicalName: 劉元瑄公館
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 劉湘公館
+    canonicalName: 劉湘公館
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 新场川王宫
+    canonicalName: 新场川王宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 新場李氏民居
+    canonicalName: 新場李氏民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 新場陳家大院
+    canonicalName: 新場陳家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 藥師岩摩崖造像
+    canonicalName: 藥師岩摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 趙子龍祠墓
+    canonicalName: 趙子龍祠墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 霧中山佛教遺址
+    canonicalName: 霧中山佛教遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 静惠山公园
+    canonicalName: 静惠山公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 高山古城遗址
+    canonicalName: 高山古城遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 鹽店古城
+    canonicalName: 鹽店古城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/大邑县
+    sourceReadiness: pending
+    selectionPriority: 17
+- district: 崇州市
+  leaves:
+  - name: 街子古镇
+    canonicalName: 街子古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 罨画池
+    canonicalName: 罨画池
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    aliases:
+    - 罨画池博物馆
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:46:35Z'
+    sourceScreenEvidence: zh.wikipedia.org:罨画池 extract=368ch
+  - name: 元通古镇
+    canonicalName: 元通古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 鸡冠山
+    canonicalName: 崇州鸡冠山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 上古寺
+    canonicalName: 上古寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 下古寺
+    canonicalName: 下古寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 元通天主教堂
+    canonicalName: 元通天主教堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 元通黃氏宗祠
+    canonicalName: 元通黃氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 双河遗址
+    canonicalName: 双河遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 崇州陳家大院
+    canonicalName: 崇州陳家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 崇慶州文廟
+    canonicalName: 崇慶州文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 懷遠洄瀾塔
+    canonicalName: 懷遠洄瀾塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 曇雲寺
+    canonicalName: 曇雲寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 楊遇春宮保府
+    canonicalName: 楊遇春宮保府
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 紫竹遗址
+    canonicalName: 紫竹遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 街子镇 (崇州市)
+    canonicalName: 街子镇 (崇州市)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 陸游祠
+    canonicalName: 陸游祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 麒麟街民居
+    canonicalName: 麒麟街民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/崇州市
+    sourceReadiness: pending
+    selectionPriority: 18
+- district: 邛崃市
+  leaves:
+  - name: 平乐古镇
+    canonicalName: 平乐古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 天台山
+    canonicalName: 邛崃天台山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 文君井
+    canonicalName: 文君井
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    aliases:
+    - 文君井公园
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 邛窑遗址
+    canonicalName: 邛窑遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    aliases:
+    - 邛窑考古遗址公园
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 什邡堂邛窑遗址
+    canonicalName: 什邡堂邛窑遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 大渔村窑址
+    canonicalName: 大渔村窑址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 天台山 (四川省)
+    canonicalName: 天台山 (四川省)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 天宮寺摩崖造像
+    canonicalName: 天宮寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 平樂冶鐵遺址
+    canonicalName: 平樂冶鐵遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 平樂李家大院
+    canonicalName: 平樂李家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 樂善橋 (邛崍)
+    canonicalName: 樂善橋 (邛崍)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 永樂寺
+    canonicalName: 永樂寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 瓦窑山窑址
+    canonicalName: 瓦窑山窑址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 石塔寺石塔
+    canonicalName: 石塔寺石塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 石笋山造像
+    canonicalName: 石笋山造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 石筍寺
+    canonicalName: 石筍寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 磐陀寺造像
+    canonicalName: 磐陀寺造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 興賢塔 (邛崍)
+    canonicalName: 興賢塔 (邛崍)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 花置寺造像
+    canonicalName: 花置寺造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 邛崃石窟
+    canonicalName: 邛崃石窟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 邛崍寺廟建築群
+    canonicalName: 邛崍寺廟建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 邛崍興福寺
+    canonicalName: 邛崍興福寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 邛崍迴瀾塔
+    canonicalName: 邛崍迴瀾塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 邛崍龍興寺遺址
+    canonicalName: 邛崍龍興寺遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/邛崃市
+    sourceReadiness: pending
+    selectionPriority: 24
+- district: 蒲江县
+  leaves:
+  - name: 石象湖
+    canonicalName: 石象湖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 明月村
+    canonicalName: 蒲江明月村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 朝阳湖
+    canonicalName: 蒲江朝阳湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 河沙寺大雄寶殿
+    canonicalName: 河沙寺大雄寶殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 白雲鹽井遺址
+    canonicalName: 白雲鹽井遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 蒲江大佛寺摩崖造像
+    canonicalName: 蒲江大佛寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 蒲江文廟
+    canonicalName: 蒲江文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 蒲江石窟
+    canonicalName: 蒲江石窟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 飞仙阁摩崖造像
+    canonicalName: 飞仙阁摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 魏了翁墓
+    canonicalName: 魏了翁墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 龙拖湾摩崖造像
+    canonicalName: 龙拖湾摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/蒲江县
+    sourceReadiness: pending
+    selectionPriority: 11
+- district: 新津区
+  leaves:
+  - name: 观音寺
+    canonicalName: 新津观音寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新津区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 老君山
+    canonicalName: 新津老君山
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新津区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 斑竹林
+    canonicalName: 新津斑竹林
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新津区
+    aliases:
+    - 斑竹林景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 新津純陽觀
+    canonicalName: 新津純陽觀
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新津区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 新津黃鶴樓
+    canonicalName: 新津黃鶴樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新津区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 观音寺 (新津区)
+    canonicalName: 观音寺 (新津区)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新津区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 鄧雙崖墓群
+    canonicalName: 鄧雙崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新津区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 金華胡家大院
+    canonicalName: 金華胡家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/新津区
+    sourceReadiness: pending
+    selectionPriority: 8
+- district: 金堂县
+  leaves:
+  - name: 五凤溪古镇
+    canonicalName: 五凤溪古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    aliases:
+    - 五凤古镇
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 云顶山
+    canonicalName: 金堂云顶山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    aliases:
+    - 云顶石城
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 七堆瓦天主堂
+    canonicalName: 七堆瓦天主堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 云顶城
+    canonicalName: 云顶城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 五鳳南華宮
+    canonicalName: 五鳳南華宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 土橋南華宮
+    canonicalName: 土橋南華宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 土橋禹王宮
+    canonicalName: 土橋禹王宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 淮口瑞光塔
+    canonicalName: 淮口瑞光塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 舒家灣天主堂
+    canonicalName: 舒家灣天主堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 關聖宮 (金堂縣)
+    canonicalName: 關聖宮 (金堂縣)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/金堂县
+    sourceReadiness: pending
+    selectionPriority: 10
+- district: 彭州市
+  leaves:
+  - name: 丹景山
+    canonicalName: 彭州丹景山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/彭州市
+    aliases:
+    - 天彭牡丹花乡
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 龙门山国家地质公园
+    canonicalName: 龙门山国家地质公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/地质公园
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/彭州市
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 白鹿镇
+    canonicalName: 彭州白鹿镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/彭州市
+    aliases:
+    - 白鹿音乐小镇
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 阳平观
+    canonicalName: 彭州阳平观
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/彭州市
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 云居院塔
+    canonicalName: 云居院塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/彭州市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 尹昌衡墓
+    canonicalName: 尹昌衡墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/彭州市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 彭县窑
+    canonicalName: 彭县窑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/彭州市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 彭州法藏寺
+    canonicalName: 彭州法藏寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/彭州市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 领报修院
+    canonicalName: 领报修院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/彭州市
+    sourceReadiness: pending
+    selectionPriority: 9
+- district: 简阳市
+  leaves:
+  - name: 三岔湖
+    canonicalName: 简阳三岔湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    aliases:
+    - 三岔湖
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 龙泉湖
+    canonicalName: 简阳龙泉湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 圣德寺白塔
+    canonicalName: 简阳圣德寺白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    aliases:
+    - 简阳白塔
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 朝陽寺摩崖造像
+    canonicalName: 朝陽寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 瓦房溝摩崖造像
+    canonicalName: 瓦房溝摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 石盤題名塔
+    canonicalName: 石盤題名塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 禾豐字庫塔
+    canonicalName: 禾豐字庫塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 簡陽奎星閣摩崖造像
+    canonicalName: 簡陽奎星閣摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 簡陽紅白塔
+    canonicalName: 簡陽紅白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 聖德寺白塔
+    canonicalName: 聖德寺白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 逍遙洞崖墓石刻
+    canonicalName: 逍遙洞崖墓石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 長嶺山摩崖造像
+    canonicalName: 長嶺山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/简阳市
+    sourceReadiness: pending
+    selectionPriority: 12

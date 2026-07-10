@@ -72,6 +72,7 @@ class _HomeFeedScrollView extends StatefulWidget {
   const _HomeFeedScrollView({
     required this.pageBackground,
     required this.isDark,
+    required this.resourceProfile,
     required this.isMultiColumn,
     required this.columns,
     required this.horizontalPad,
@@ -96,6 +97,7 @@ class _HomeFeedScrollView extends StatefulWidget {
 
   final Color pageBackground;
   final bool isDark;
+  final AppResourceCacheProfile resourceProfile;
   final bool isMultiColumn;
   final int columns;
   final double horizontalPad;
@@ -274,6 +276,9 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
 
   @override
   Widget build(BuildContext context) {
+    final cacheExtent = ScrollCacheExtent.viewport(
+      widget.resourceProfile.feedCacheExtentViewportMultiplier,
+    );
     return ColoredBox(
       color: widget.pageBackground,
       child: NotificationListener<ScrollNotification>(
@@ -282,6 +287,7 @@ class _HomeFeedScrollViewState extends State<_HomeFeedScrollView> {
           coordinator: _videoFocus,
           child: CustomScrollView(
             controller: _controller,
+            scrollCacheExtent: cacheExtent,
             slivers: _buildSlivers(),
           ),
         ),

@@ -46,10 +46,10 @@ gwt_acceptance:
     - 小趣检索必须记录 search.intensity、provider coverage、citation count 与 degrade signal。
     tests:
       planned:
-      - file: quwoquan_service/services/assistant-service/internal/application/tool_coordinator_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/tool_coordinator__local_contract_test.go
       recorded:
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/tool_coordinator__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/tool_coordinator__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
       - file: quwoquan_service/services/assistant-service/tests/api_integration/search_xiaoqu_contract__api_integration_test.go
     status: implemented
     test_evidence:
@@ -78,7 +78,7 @@ gwt_acceptance:
     - '[migrated_from_planned] quwoquan_app/test/common/search/search_to_xiaoqu_journey_test.dart'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

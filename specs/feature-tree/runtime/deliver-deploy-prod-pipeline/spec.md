@@ -15,8 +15,8 @@
 
 - **PR 前置收敛**：`03/04/05` 保持 required checks 名称稳定，继续负责进入 `main` 前的质量收敛。
 - **main 自动 promotion**：`repo verify/package -> alpha-local -> beta-local -> prod gray-initial -> prod checks -> prod full`（已无 `gamma-hosted` 阶段）。
-- **统一验证 profile**：`deploy/shared/gamma_validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`。
-- **统一证据归档**：每个 promotion 阶段必须落 `artifacts/stackctl/<env>/<run-id>/report.json` 与 `summary.md`，workflow 同步上传 artifact。
+- **统一验证 profile**：`quwoquan_ops/environments/gamma_validation_suites.json` 统一定义 `pr_light / manual_full / nightly_full / release_candidate / mainline_auto_prod`。
+- **统一证据归档**：每个 promotion 阶段必须落 `.qwq_output/runs/<env>/<run-id>/report.json` 与 `summary.md`，workflow 同步上传 artifact。
 - **15 分钟硬预算**：阻断主链的 `critical_path_seconds <= 900`，重型 Patrol/full semantic/全设备全旅程留在 `nightly_full` 与 `release_candidate`。
 - **local-gamma left shift**：仍作为提交前左移预测试拓扑，但不替代 `main` 后自动 promotion。
 - **ACK 集群拓扑形态**：`prod-hosted` 采用 single-cluster + modular-monolith-first + 独立 Deployment + 托管数据面 + Strangler split-ready，且 `gamma-local` 与 `prod-hosted` 工作负载图谱同构。

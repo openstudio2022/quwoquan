@@ -57,7 +57,7 @@
 - `scripts/verify_reliable_task_migration.py`
 - `Makefile` 新增 `verify-reliable-task-topology`
 - `make verify` 与 `make gate` 已接入可靠任务拓扑校验
-- `agent_ops/gate/gate_repo.sh --scope service` 已接入可靠任务拓扑校验
+- `quwoquan_ops/gate/gate_repo.sh --scope service` 已接入可靠任务拓扑校验
 - `scripts/verify_topology_contract_regression.sh` 已接入 module/package/catalog 校验
 
 ## 已验证项

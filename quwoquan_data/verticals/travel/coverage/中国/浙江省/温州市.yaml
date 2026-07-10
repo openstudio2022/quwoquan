@@ -1,0 +1,932 @@
+# 全国地点主清单 · 浙江省温州市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 温州市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 乐清市
+  leaves:
+  - name: 雁荡山
+    canonicalName: 雁荡山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    aliases:
+    - 北雁荡山
+    - 雁荡山风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 灵峰景区
+    canonicalName: 灵峰景区（雁荡山）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    aliases:
+    - 雁荡山灵峰
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 大龙湫
+    canonicalName: 大龙湫
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    aliases:
+    - 大龙湫瀑布
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 灵岩景区
+    canonicalName: 灵岩景区（雁荡山）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    aliases:
+    - 雁荡山灵岩
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 中雁荡山
+    canonicalName: 中雁荡山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    aliases:
+    - 白石山
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 乐清古桥群
+    canonicalName: 乐清古桥群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 大乌石雷公殿
+    canonicalName: 大乌石雷公殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 朱质庵墓
+    canonicalName: 朱质庵墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 真如寺石塔
+    canonicalName: 真如寺石塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 雁荡山龙鼻洞摩崖题记
+    canonicalName: 雁荡山龙鼻洞摩崖题记
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    sourceReadiness: pending
+    selectionPriority: 10
+- district: 平阳县
+  leaves:
+  - name: 南麂列岛
+    canonicalName: 南麂列岛
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    aliases:
+    - 南麂岛
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T14:10:48Z'
+    sourceScreenEvidence: baike.baidu.com:南麂列岛
+  - name: 南雁荡山
+    canonicalName: 南雁荡山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    aliases:
+    - 南雁
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 中共浙江省一大旧址
+    canonicalName: 中共浙江省一大旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    aliases:
+    - 省一大纪念园
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 顺溪古建筑群
+    canonicalName: 顺溪古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    aliases:
+    - 顺溪陈氏民居
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 中共浙江临时省委成立旧址
+    canonicalName: 中共浙江临时省委成立旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 中共闽浙边临时省委机关驻地旧址
+    canonicalName: 中共闽浙边临时省委机关驻地旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 中国共产党浙江省第一次代表大会会址
+    canonicalName: 中国共产党浙江省第一次代表大会会址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 六份内大屋
+    canonicalName: 六份内大屋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 师儒侍养牌坊
+    canonicalName: 师儒侍养牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 文明塔 (平阳县)
+    canonicalName: 文明塔 (平阳县)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 栖真寺五佛塔
+    canonicalName: 栖真寺五佛塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    sourceReadiness: pending
+    selectionPriority: 11
+- district: 文成县
+  leaves:
+  - name: 刘伯温故里
+    canonicalName: 刘伯温故里
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/文成县
+    aliases:
+    - 刘伯温故里景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 百丈漈
+    canonicalName: 百丈漈
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/文成县
+    aliases:
+    - 百丈漈瀑布
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:17:22Z'
+    sourceScreenEvidence: zh.wikipedia.org:百丈漈 extract=345ch
+  - name: 刘基庙
+    canonicalName: 刘基庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/文成县
+    aliases:
+    - 诚意伯庙
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:17:27Z'
+    sourceScreenEvidence: zh.wikipedia.org:刘基庙 extract=227ch
+  - name: 铜铃山国家森林公园
+    canonicalName: 铜铃山国家森林公园
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/文成县
+    aliases:
+    - 铜铃山
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 依仁灯柱
+    canonicalName: 依仁灯柱
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/文成县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 方坑太阴宫
+    canonicalName: 方坑太阴宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/文成县
+    sourceReadiness: pending
+    selectionPriority: 6
+- district: 永嘉县
+  leaves:
+  - name: 楠溪江
+    canonicalName: 楠溪江
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    aliases:
+    - 楠溪江风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 芙蓉古村
+    canonicalName: 芙蓉古村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    aliases:
+    - 芙蓉村
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 苍坡古村
+    canonicalName: 苍坡古村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    aliases:
+    - 苍坡村
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 丽水街
+    canonicalName: 丽水街（岩头）
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    aliases:
+    - 岩头丽水街
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 石桅岩
+    canonicalName: 石桅岩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 龙湾潭国家森林公园
+    canonicalName: 龙湾潭国家森林公园
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 丽水桥
+    canonicalName: 丽水桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 岩坦戴氏宗祠
+    canonicalName: 岩坦戴氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 楠溪江宗祠建筑群
+    canonicalName: 楠溪江宗祠建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 红十三军军部旧址
+    canonicalName: 红十三军军部旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 花坦古建筑群
+    canonicalName: 花坦古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    sourceReadiness: pending
+    selectionPriority: 11
+- district: 泰顺县
+  leaves:
+  - name: 廊桥文化园
+    canonicalName: 廊桥文化园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    aliases:
+    - 泰顺廊桥
+    - 泗溪廊桥
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:18:00Z'
+    sourceScreenEvidence: zh.wikipedia.org:泰顺廊桥 extract=213ch
+  - name: 氡泉
+    canonicalName: 泰顺氡泉
+    entityType: 地点/温泉
+    typeTagRefs:
+    - Entity/地点/温泉
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    aliases:
+    - 承天氡泉
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 乌岩岭国家级自然保护区
+    canonicalName: 乌岩岭国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    aliases:
+    - 乌岩岭
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 刘宅桥
+    canonicalName: 刘宅桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 回澜桥 (泰顺县)
+    canonicalName: 回澜桥 (泰顺县)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 城水桥
+    canonicalName: 城水桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 墩头桥
+    canonicalName: 墩头桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 毓文桥
+    canonicalName: 毓文桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 泰顺抗战阵亡将士纪念碑
+    canonicalName: 泰顺抗战阵亡将士纪念碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 浙江乌岩岭国家级自然保护区
+    canonicalName: 浙江乌岩岭国家级自然保护区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 薛宅桥
+    canonicalName: 薛宅桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 霞光桥
+    canonicalName: 霞光桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 霞庄桥
+    canonicalName: 霞庄桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    sourceReadiness: pending
+    selectionPriority: 13
+- district: 洞头区
+  leaves:
+  - name: 洞头列岛
+    canonicalName: 洞头列岛
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/洞头区
+    aliases:
+    - 百岛洞头
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 望海楼
+    canonicalName: 望海楼（洞头）
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/洞头区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 仙叠岩
+    canonicalName: 仙叠岩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/洞头区
+    aliases:
+    - 仙叠岩景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 东沙妈祖宫
+    canonicalName: 东沙妈祖宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/洞头区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 半屏山 (温州)
+    canonicalName: 半屏山 (温州)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/洞头区
+    sourceReadiness: pending
+    selectionPriority: 5
+- district: 瑞安市
+  leaves:
+  - name: 玉海楼
+    canonicalName: 玉海楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瑞安市
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 寨寮溪
+    canonicalName: 寨寮溪
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瑞安市
+    aliases:
+    - 寨寮溪风景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 利济医学堂旧址
+    canonicalName: 利济医学堂旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瑞安市
+    aliases:
+    - 利济医学堂博物馆
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:18:25Z'
+    sourceScreenEvidence: zh.wikipedia.org:利济医学堂旧址 extract=202ch
+  - name: 圣井山石殿
+    canonicalName: 圣井山石殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瑞安市
+    aliases:
+    - 圣井山
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 心兰书社
+    canonicalName: 心兰书社
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瑞安市
+    sourceReadiness: pending
+    selectionPriority: 5
+- district: 瓯海区
+  leaves:
+  - name: 泽雅
+    canonicalName: 泽雅
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瓯海区
+    aliases:
+    - 泽雅风景区
+    - 西雁荡
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 温州乐园
+    canonicalName: 温州乐园
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/综合主题乐园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瓯海区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 仙岩风景区
+    canonicalName: 仙岩风景区
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瓯海区
+    aliases:
+    - 梅雨潭
+    selectionPriority: 3
+    sourceReadiness: pending
+- district: 苍南县
+  leaves:
+  - name: 渔寮
+    canonicalName: 渔寮
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/苍南县
+    aliases:
+    - 渔寮沙滩
+    - 渔寮风景区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 玉苍山
+    canonicalName: 玉苍山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/苍南县
+    aliases:
+    - 玉苍山国家森林公园
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 碗窑古村
+    canonicalName: 碗窑古村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/苍南县
+    aliases:
+    - 碗窑村
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 福德湾村
+    canonicalName: 福德湾村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/苍南县
+    aliases:
+    - 矾山福德湾
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 矾山矾矿遗址
+    canonicalName: 矾山矾矿遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/苍南县
+    sourceReadiness: pending
+    selectionPriority: 5
+- district: 鹿城区
+  leaves:
+  - name: 江心屿
+    canonicalName: 江心屿
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    aliases:
+    - 江心屿景区
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:18:44Z'
+    sourceScreenEvidence: zh.wikipedia.org:江心屿 extract=220ch
+  - name: 五马街
+    canonicalName: 五马街
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    aliases:
+    - 五马历史文化街区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 温州博物馆
+    canonicalName: 温州博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T14:12:43Z'
+    sourceScreenEvidence: baike.baidu.com:温州博物馆
+  - name: 松台山
+    canonicalName: 松台山
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    aliases:
+    - 松台山公园
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 温州动物园
+    canonicalName: 温州动物园
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/动物主题乐园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    aliases:
+    - 温州野生动物园
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 华盖山
+    canonicalName: 华盖山（温州）
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    aliases:
+    - 华盖山公园
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 东瓯王庙
+    canonicalName: 东瓯王庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 二十八宿井
+    canonicalName: 二十八宿井
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 周宅祠巷圣保禄堂
+    canonicalName: 周宅祠巷圣保禄堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 夏鼐故居
+    canonicalName: 夏鼐故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 张璁碑亭
+    canonicalName: 张璁碑亭
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 文天祥祠 (温州)
+    canonicalName: 文天祥祠 (温州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 曹湾山遗址
+    canonicalName: 曹湾山遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 朔门古港遗址
+    canonicalName: 朔门古港遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 杨府山下陡门遗址
+    canonicalName: 杨府山下陡门遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 永嘉战时青年服务团旧址
+    canonicalName: 永嘉战时青年服务团旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 江心寺
+    canonicalName: 江心寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 江心屿东、西塔
+    canonicalName: 江心屿东、西塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 沧河巷金宅
+    canonicalName: 沧河巷金宅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 温州城墙
+    canonicalName: 温州城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 温州城西堂
+    canonicalName: 温州城西堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 温州府学文庙
+    canonicalName: 温州府学文庙
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 益康钱庄旧址
+    canonicalName: 益康钱庄旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 英国驻温州领事馆
+    canonicalName: 英国驻温州领事馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 24
+  - name: 铁栏井
+    canonicalName: 铁栏井
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    sourceReadiness: pending
+    selectionPriority: 25
+- district: 龙港市
+  leaves:
+  - name: 鲸头杨府殿
+    canonicalName: 鲸头杨府殿
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/龙港市
+    aliases:
+    - 鲸头风景区杨府殿
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 龙港新城世纪公园
+    canonicalName: 龙港新城世纪公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/龙港市
+    aliases:
+    - 龙港世纪公园
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 张家堡双牌坊
+    canonicalName: 张家堡双牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/龙港市
+    sourceReadiness: pending
+    selectionPriority: 3
+- district: 龙湾区
+  leaves:
+  - name: 永昌堡
+    canonicalName: 永昌堡
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/龙湾区
+    aliases:
+    - 永昌古堡
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 瑶溪
+    canonicalName: 瑶溪
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/龙湾区
+    aliases:
+    - 瑶溪风景区
+    selectionPriority: 2
+    sourceReadiness: pending

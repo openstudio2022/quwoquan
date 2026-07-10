@@ -32,7 +32,7 @@
 |---|---|---|---|---|
 | `explore` | 任务说明、目标范围、notes、已有目录快照 | 探索包、候选对象清单、候选 sourceKind 白名单、初步检索维度 | 目标对象不完整、主线缺失、无法冻结 baseline | 交给 `baseline` 的覆盖目标与检索维度 |
 | `baseline` | 探索包、task manifest、规则 hash | `baseline_freeze_packet.json`、冻结后的范围、门禁阈值、对象列表 | 范围未锁定、对象未稳定、后续 stage 依赖不明确 | 交给 `download` 的冻结范围与阈值 |
-| `download` | baseline packet、对象分解计划、source plan、source catalog | `batch_manifest.json`、`_shared/source_catalog.json`、对象级 `1.download/source_plan.json`、`1.download/source_refs.json`、批次级 `sources/{sourceUnitId}/`、`source.quality.json`、`assets/index.json` | 下载失败、来源不带 license / relevance / sourceKind、图片未过安全门、来源质量低于阈值 | 交给 `build` 的可用来源单元、质量分析与图片安全结果 |
+| `download` | baseline packet、对象分解计划、lane source plans、source catalog | `batch_manifest.json`、`_shared/source_catalog.json`、对象级 `1.download/{homepage,article,image}_source_plan.json`、`1.download/source_refs.json`、批次级 `sources/{sourceUnitId}/`、`source.quality.json`、`assets/index.json` | 下载失败、来源不带 license / relevance / sourceKind、图片未过安全门、来源质量低于阈值 | 交给 `build` 的可用来源单元、质量分析与图片安全结果 |
 | `build` | download 产物、实体主题包、SOP / 模板 | 实体三件套 `page.md`、`_entity.json`、`manifest.json`、`assets/`，以及对象过程树 `1.download..5.review` | 页长不达标、条件画像缺失、资产闭环不完整、模板/平台痕迹存在 | 交给 `content_plan` 的可消费实体成品与来源证据 |
 | `content_plan` | download/build 落盘来源、`source.quality.json`、实体主页摘要、`task.yaml` 内容配额 | `_shared/content_plan_packet.json`（篇目+`evidenceRefs`+`entityRefs`+`mustIncludeFacts`）、`content_object_index` 注册、各篇 `3.compose/brief.json` | 篇目无证据引用、B 组线路无联游互证、预置营销 ref、配额未满足 | 交给 `produce` 的已锁定篇目与 brief |
 | `produce` | content_plan packet、实体成品、写作契约 | `3.compose/writing_pack.json`、`4.draft/prompt.md`、`4.draft/draft.article.md`、`4.draft/draft_meta.json`、`5.review/review.json`、`5.review/review_gate.json`、对象根 `article.md` / `manifest.json` / `assets/` | 写作包未闭合、草稿不是 `generator=agent`、事实不可回溯、图片未过安全门、正文出现机械标题或模板拼接、`citedSourcePaths` 超出 content_plan 证据 | 交给 `publish` 的 approved 成品、review ledger、provenance |
@@ -99,7 +99,7 @@ Cursor 只允许三类执行面：
 
 网站线是实体线的上游补给模式，不是第二套内容工厂：
 
-- 工作区固定为 `runtime/site_supply/{vertical}/{siteId}/{batch}`，不得写入实体线 `runtime/tasks/**` 的候选池、队列状态或临时文件。
+- 工作区固定为 `data/local/runtime/site_supply/{vertical}/{siteId}/{batch}`，不得写入实体线 `data/local/runtime/tasks/**` 的候选池、队列状态或临时文件。
 - 唯一站点真相源仍是垂类 `source_registry.yaml` 的 `siteCrawlProfile`；`fetchable=false` 或 `crawlAllowed=false` 的站点不得进入批量抓取。
 - `controlledTrial.allowed=true` 只允许站点作为受控验证源进入 `site-supply trial --admission-mode controlled_trial`，用于验证 DAG、并发、lane mix、stage evidence、repair/gate 和 readiness；它不代表真实批量抓取授权，不允许 raw fetch，也不得把平台素材标记为可发布资产。
 - 前半段只产出 `site_frontier_packet`、`site_candidate_packet`、`site_score_packet`、`site_map_packet` 与 `site_rollup_report`；发布主线只接受 `content_plan_packet` 之后的标准对象。
@@ -199,7 +199,9 @@ AI 不可以自主决定：
 
 ### 阶段产物最小契约
 
-`runtime/tasks/{task}/batches/{batch}/...` 是工程过程目录，默认可重建；进入模型上下文或高频报告的文件必须瘦身：
+批次树是仓外工程过程目录（`QWQ_OUTPUT_ROOT/data/local/runtime/{phase}/{contentType}/{supplyMode}/…`，
+见 [`pipeline_directory_layout_spec.md`](pipeline_directory_layout_spec.md) §0.5），默认可重建；
+进入模型上下文或高频报告的文件必须瘦身：
 
 - `task_download/inputs/source_plan/*.json`：人工或工具给定 source 列表，保留；这是离线复跑入口。
 - `task_download/sources/**`：原文、图片与 `source.quality.json`，保留；review 事实回溯和图片门会读取。
@@ -209,7 +211,7 @@ AI 不可以自主决定：
 - `posts/{type}/{angle}/{title}/{seq}/`：保留；这是 materialize 成品包，必须包含 `article.md/manifest.json/assets/` 与可选 `5.review/` sidecar。`gallery.md` 仅在 gallery carrier 时作为展示层出现，article 载体不得写入。
 - `publish/{posts,entities,tags,index,sample_bundles,env_releases}`：保留；这是发布主线和环境同步输入。
 
-可清理原则：`assistant_tasks/`、过期 `results/*_gate`、失败批次草稿、可从 source/brief 重建的中间分析明细均不进入 post 包；需要审计时从 task/batch 源目录重算。
+可清理原则：`assistant_tasks/`、`workflow_packets/`、`object_queue/`、过期 `results/*_gate`、失败批次草稿、可从 source/brief 重建的中间分析明细均不进入 post 包；需要审计时从 task/batch 源目录重算。`batch/_shared` 按 `paths.BATCH_SHARED_AUTHORITATIVE_ENTRIES`（不可重算真相源）与 `BATCH_SHARED_RECLAIMABLE_ENTRIES`（可清理层）两分，未登记条目由目录证据链门 BLOCK；仓外 `.qwq_output/env/repo/runs/**` 只做 index-first 摘要索引，必须回指 `runtimeBatchRoot/taskId/publishRoot/releaseId` 与批次三轴。
 
 ## 3. Human-in-loop 标注账本（唯一发布态真相源）
 
@@ -241,7 +243,7 @@ review 写 `5.review/ledger/{ref}.json` 与 `entities/{ref}.json`；materialize 
 
 ### 按环境采样（确定性）
 
-`deploy/shared/content_sampling_manifest.yaml` 是唯一采样真相源：prod=全量；gamma/beta/alpha 配 `sampleRatio + postCapPerBucket + entityCapPerBucket + maxPosts/maxEntities`。
+`quwoquan_ops/environments/content_sampling_manifest.yaml` 是唯一采样真相源：prod=全量；gamma/beta/alpha 配 `sampleRatio + postCapPerBucket + entityCapPerBucket + maxPosts/maxEntities`。
 采样 `rank = sha1(salt|ref) → [0,1)`，`< sampleRatio` 入选，再按 bucket cap / max 截断；同 env/salt 下稳定可重跑。
 产出端云桥契约 `publish/sample_bundles/{env}.json`（`{environment, sampleRatio, posts:[postRef], entities:[entityRef], counts}`）。
 

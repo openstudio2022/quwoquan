@@ -3,6 +3,8 @@
 /// 语义对齐原 [`search_repository`] `_normalizeCircleGroupPayload` 与
 /// [`local_circle_group_snapshot_store`] `_normalizeGroup`。
 
+library;
+
 enum CircleGroupWireShape {
   /// 全局搜索 / `_circleGroupHit`：保留 `matchedField`、`highlightText`，`memberCount` 保持 wire 原样。
   searchHit,
@@ -89,10 +91,7 @@ Map<String, dynamic> normalizeCircleGroupWireMap(
           raw['circle_name'],
           raw['circleDisplayName'],
         ]),
-        'groupType': _cgFirstNonEmpty(<Object?>[
-          raw['groupType'],
-          raw['kind'],
-        ]),
+        'groupType': _cgFirstNonEmpty(<Object?>[raw['groupType'], raw['kind']]),
         'visibility': _cgTrim(raw['visibility']),
         'conversationId': _cgTrim(raw['conversationId']),
         'memberCount': (raw['memberCount'] as num?)?.toInt() ?? 0,

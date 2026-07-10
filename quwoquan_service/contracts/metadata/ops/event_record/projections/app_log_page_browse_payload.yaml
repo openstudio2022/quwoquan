@@ -2,7 +2,7 @@ version: 1
 read_model: AppLogPageBrowsePayload
 
 description: |
-  客户端 browse 事件完整 payload（event=browse，与 AppLog page_access JSONL 根级 payload 对齐）。
+  客户端 browse 事件完整 payload（event=browse，与 AppLog page_access 诊断记录 payload 对齐）。
 
 source_entities: []
 

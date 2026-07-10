@@ -106,7 +106,7 @@ flowchart LR
 ## 策略真相源
 
 - 指标与目标：`quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml`。
-- 告警：`deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model`。
+- 告警：`quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model`。
 - Redis key：`quwoquan_service/contracts/metadata/_shared/redis_keyspace.yaml`。
 - policy：`quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml` 或其 codegen 产物。
 - 读模型：`rm_exposure_state` 进入 metadata/projection 后再实现。

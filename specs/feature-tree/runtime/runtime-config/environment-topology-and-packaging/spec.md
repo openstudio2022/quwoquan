@@ -6,8 +6,8 @@
 
 统一真相源：
 
-- `deploy/shared/environment_topology_manifest.yaml`
-- `deploy/shared/local_env_port_manifest.yaml`
+- `quwoquan_ops/environments/environment_topology_manifest.yaml`
+- `quwoquan_ops/environments/local_env_port_manifest.yaml`
 
 ## 核心约束
 

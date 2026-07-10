@@ -36,8 +36,8 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/accepta
 | 测试层 | 环境 | 典型对象 |
 |---|---|---|
 | `local_contract` | 本地 / CI / alpha fixture | metadata、DTO、错误码、Repository、Provider、Widget、领域规则、单服务 handler |
-| `api_integration` | beta / gamma / prod_gray_initial（只读/幂等） | gateway/API、真实存储、事件/outbox、RemoteRepository、跨服务一致性 |
-| `user_acceptance` | gamma_local / prod_gray_initial / 设备矩阵 | 用户旅程、页面功能、UI/UX、页面生命周期、权限、弱网、SLO、灰度验收 |
+| `api_integration` | beta / gamma / prod（只读/幂等） | gateway/API、真实存储、事件/outbox、RemoteRepository、跨服务一致性 |
+| `user_acceptance` | gamma_local / prod rollout stage / 设备矩阵 | 用户旅程、页面功能、UI/UX、页面生命周期、权限、弱网、SLO、灰度验收 |
 
 规则：
 
@@ -113,13 +113,24 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/accepta
 - `local_contract`
 - `api_integration`
 - `gamma_local` `user_acceptance`
-- `prod_gray_initial` 条件具备时的低风险发布验收
+- `prod` + `rollout_stage=gray_initial` 条件具备时的低风险发布验收
 
 发布前必须补齐：
 
 - `api_integration`
 - `user_acceptance`
 - SLO、告警、灰度、回滚证据
+
+非功能质量不新增第四层测试，统一写入 `quality_facet`：
+
+- 异常与恢复：`reliability + experience + observability`
+- 性能：`performance`
+- 安全与隐私：`security`
+- 埋点、日志、指标、trace、audit：`observability`
+- 健康检查、降级、重试、回滚：`availability + reliability`
+- 读写一致、事件/outbox、导入发布、推荐归因：`data_consistency`
+
+任何适用的非功能维度必须在 `acceptance.yaml` 的 `quality_facets` 与 `test_evidence` 中声明；缺证据时返回 `GATE_BLOCK`。
 
 ---
 
@@ -158,7 +169,10 @@ test_evidence:
       suite: suite_id
       cases:
         - user_acceptance.domain.capability.story.case
-      envs: [gamma_local, prod_gray_initial]
+      envs: [gamma_local, prod]
+      rollout_stages: [gray_initial]
+      test_object: page
+      quality_facet: experience
 tests:
   planned: []
   recorded: []
@@ -177,14 +191,14 @@ tests:
 新增测试目录：
 
 ```text
-quwoquan_app/test/local_contract/<domain>/<...>/<case>__local_contract_test.dart
-quwoquan_app/test/api_integration/<env>/<case>__api_integration_test.dart
+quwoquan_app/test/local_contract/<test_object>/<domain>/<...>/<case>__<facet>__local_contract_test.dart
+quwoquan_app/test/api_integration/<test_object>/<domain>/<case>__<facet>__api_integration_test.dart
 quwoquan_app/test/user_acceptance/pages/<owner>/<surface_id>/<surface_id>_page__user_acceptance_test.dart
-quwoquan_service/services/<service>/tests/local_contract/<case>__local_contract_test.go
-quwoquan_service/services/<service>/tests/api_integration/<case>__api_integration_test.go
-quwoquan_data/tests/<layer>/<domain>/test_<case>__<layer>_test.py
-agent_ops/tests/local_contract/test_<case>__local_contract_test.py
-agent_ops/acceptance/user_acceptance/test_<case>__user_acceptance_test.py
+quwoquan_service/services/<service>/tests/local_contract/<case>__<facet>__local_contract_test.go
+quwoquan_service/services/<service>/tests/api_integration/<case>__<facet>__api_integration_test.go
+quwoquan_data/tests/<layer>/<domain>/test_<case>__<facet>__<layer>_test.py
+quwoquan_ops/tests/local_contract/test_<case>__<facet>__local_contract_test.py
+quwoquan_ops/tests/acceptance/user_acceptance/test_<case>__<facet>__user_acceptance_test.py
 ```
 
-存量目录只作为迁移映射，不作为新增标准；其 baseline 由 `specs/gates/test_directory_inventory.yaml` 维护，并由 `python3 agent_ops/scaffold/verify_test_directory_inventory.py` 阻断新增 legacy 路径。
+存量无 facet 文件由统计器推导；新增或重命名测试必须显式携带 facet。存量目录只作为迁移映射，不作为新增标准，并由 `python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py` 阻断新增 legacy 路径。

@@ -292,14 +292,29 @@ func (s *TagService) SharedTags(ctx context.Context, aID, aType, bID, bType stri
 	return out, nil
 }
 
-// Inverted 返回引用某 tagRef 的对象集合。
-func (s *TagService) Inverted(ctx context.Context, tagRef, objectType string, limit int) (*InvertedObjectsView, error) {
-	idxs, err := s.objects.FindObjectsByTagRef(ctx, tagRef, objectType, int64(limit))
+// Inverted 返回引用某 tagRef 的对象集合。includeDescendants=true 时按路径制
+// 子孙标签展开聚合（省/市级 geo 标签反查含全部区县级叶子对象；查询侧展开，
+// 存储不物化祖先链）。
+func (s *TagService) Inverted(ctx context.Context, tagRef, objectType string, limit int, includeDescendants bool) (*InvertedObjectsView, error) {
+	var (
+		idxs []model.ObjectTagIndex
+		err  error
+	)
+	if includeDescendants {
+		idxs, err = s.objects.FindObjectsByTagRefSubtree(ctx, tagRef, objectType, int64(limit))
+	} else {
+		idxs, err = s.objects.FindObjectsByTagRef(ctx, tagRef, objectType, int64(limit))
+	}
 	if err != nil {
 		return nil, err
 	}
 	ids := make([]string, 0, len(idxs))
+	seen := make(map[string]bool, len(idxs))
 	for _, x := range idxs {
+		if seen[x.ObjectID] {
+			continue
+		}
+		seen[x.ObjectID] = true
 		ids = append(ids, x.ObjectID)
 	}
 	return &InvertedObjectsView{TagRef: tagRef, ObjectCount: len(ids), ObjectIds: ids}, nil

@@ -3,18 +3,18 @@
   "hooks": {
     "subagentStart": [
       {
-        "command": "python3 agent_ops/hooks/subagent_start_guard.py"
+        "command": "python3 quwoquan_ops/hooks/subagent_start_guard.py"
       }
     ],
     "beforeShellExecution": [
       {
-        "command": "python3 agent_ops/hooks/shell_cli_first_guard.py",
+        "command": "python3 quwoquan_ops/hooks/shell_cli_first_guard.py",
         "matcher": "python"
       }
     ],
     "afterFileEdit": [
       {
-        "command": "python3 agent_ops/hooks/draft_quickcheck.py"
+        "command": "python3 quwoquan_ops/hooks/draft_quickcheck.py"
       }
     ]
   }

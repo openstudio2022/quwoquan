@@ -42,10 +42,10 @@ class HomepageUIConfig {
   ];
 
   static const List<HomepageSubTabConfig> subTabs = <HomepageSubTabConfig>[
-    HomepageSubTabConfig(id: "all", labelKey: "homepage_sub_all", isDefault: true, homepageTypes: const <String>[]),
-    HomepageSubTabConfig(id: "image", labelKey: "homepage_sub_image", isDefault: false, homepageTypes: const <String>[]),
-    HomepageSubTabConfig(id: "video", labelKey: "homepage_sub_video", isDefault: false, homepageTypes: const <String>[]),
-    HomepageSubTabConfig(id: "opinion", labelKey: "homepage_sub_opinion", isDefault: false, homepageTypes: const <String>[]),
-    HomepageSubTabConfig(id: "question", labelKey: "homepage_sub_question", isDefault: false, homepageTypes: const <String>[]),
+    HomepageSubTabConfig(id: "all", labelKey: "homepage_sub_all", isDefault: true, homepageTypes: <String>[]),
+    HomepageSubTabConfig(id: "image", labelKey: "homepage_sub_image", isDefault: false, homepageTypes: <String>[]),
+    HomepageSubTabConfig(id: "video", labelKey: "homepage_sub_video", isDefault: false, homepageTypes: <String>[]),
+    HomepageSubTabConfig(id: "opinion", labelKey: "homepage_sub_opinion", isDefault: false, homepageTypes: <String>[]),
+    HomepageSubTabConfig(id: "question", labelKey: "homepage_sub_question", isDefault: false, homepageTypes: <String>[]),
   ];
 }

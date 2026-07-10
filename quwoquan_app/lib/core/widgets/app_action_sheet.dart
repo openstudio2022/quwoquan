@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/core/widgets/conversation_sheet.dart';
 import 'package:quwoquan_app/core/widgets/ios_selection_page_components.dart';
@@ -40,9 +40,8 @@ Future<T?> showAppActionSheet<T>(
   String cancelLabel = UITextConstants.cancel,
   double? maxHeightRatio,
 }) {
-  return showCupertinoModalPopup<T>(
+  return showAppBottomModal<T>(
     context: context,
-    barrierColor: Colors.transparent,
     builder: (sheetContext) => _AppActionSheet<T>(
       title: title,
       message: message,
@@ -64,9 +63,8 @@ Future<T?> showAppActionSheetForConfirm<T>(
   String confirmLabel = UITextConstants.confirm,
   double? maxHeightRatio,
 }) {
-  return showCupertinoModalPopup<T>(
+  return showAppBottomModal<T>(
     context: context,
-    barrierColor: Colors.transparent,
     builder: (sheetContext) => _AppActionSheetForConfirm<T>(
       title: title,
       message: message,
@@ -125,10 +123,7 @@ class _AppActionSheet<T> extends StatelessWidget {
               footnote: message,
             ),
             for (final section in sections) ...[
-              _ActionSheetSectionCard<T>(
-                isDark: isDark,
-                section: section,
-              ),
+              _ActionSheetSectionCard<T>(isDark: isDark, section: section),
               SizedBox(
                 height: SettingsSemanticConstants.conversationSheetSectionGap,
               ),
@@ -146,10 +141,7 @@ class _AppActionSheet<T> extends StatelessWidget {
 }
 
 class _ActionSheetSectionCard<T> extends StatelessWidget {
-  const _ActionSheetSectionCard({
-    required this.isDark,
-    required this.section,
-  });
+  const _ActionSheetSectionCard({required this.isDark, required this.section});
 
   final bool isDark;
   final AppActionSheetSection<T> section;

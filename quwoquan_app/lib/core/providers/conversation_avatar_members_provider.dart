@@ -96,9 +96,7 @@ class ConversationAvatarMembersNotifier
       return;
     }
     await Future.wait<void>(
-      ids.map(
-        (id) => ensureLoaded(id).then((_) {}).catchError((_, __) => null),
-      ),
+      ids.map((id) => ensureLoaded(id).then((_) {}).catchError((_, _) => null)),
       eagerError: false,
     );
   }

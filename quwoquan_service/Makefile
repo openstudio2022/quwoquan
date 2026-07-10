@@ -12,7 +12,11 @@ ML_DRIFT_BASELINE_DATE ?=
 ML_DRIFT_OUT ?=
 FLYWHEEL_REQUIRE_CLOSED ?= false
 FLYWHEEL_OUT ?=
-ML_PYTHON ?= $(if $(wildcard services/rec-model-service/.venv/bin/python),services/rec-model-service/.venv/bin/python,python3)
+REPO_ROOT ?= $(abspath ..)
+ML_PYTHON ?= $(if $(wildcard $(REPO_ROOT)/.qwq_output/env/repo/local/python-envs/rec-model/bin/python),$(REPO_ROOT)/.qwq_output/env/repo/local/python-envs/rec-model/bin/python,python3)
+ML_SCRIPTS := services/rec-model-service/scripts
+PYTEST_NO_CACHE := -p no:cacheprovider
+export PYTHONDONTWRITEBYTECODE ?= 1
 
 # ─── Quality Gate ────────────────────────────────────────────────────
 gate:
@@ -83,7 +87,7 @@ codegen-app:
 	go run ./tools/codegen_app_metadata --metadata-dir contracts/metadata --app-dir ../quwoquan_app --integration-service-dir ./services/integration-service --rtc-service-dir ./services/rtc-service --chat-service-dir ./services/chat-service --user-service-dir ./services/user-service
 
 codegen-ops-portal:
-	go run ./tools/codegen_ops_portal_metadata --metadata-dir contracts/metadata --portal-dir ../apps/ops-portal
+	go run ./tools/codegen_ops_portal_metadata --metadata-dir contracts/metadata --portal-dir ../quwoquan_ops/portal
 
 codegen-control-plane-runtime:
 	go run ./tools/codegen_control_plane_runtime --metadata-dir contracts/metadata --go-out-dir ./generated/control_plane --python-out-dir ./services/rec-model-service/generated/control_plane
@@ -112,20 +116,20 @@ codegen-storage:
 
 # ─── Dev Environment ─────────────────────────────────────────────────
 dev:
-	docker compose up -d
+	docker compose -f ../quwoquan_ops/environments/compose/docker-compose.yaml up -d
 	@echo "Waiting for services..."
 	@sleep 5
-	@docker compose ps
+	@docker compose -f ../quwoquan_ops/environments/compose/docker-compose.yaml ps
 
 dev-down:
-	docker compose down -v
+	docker compose -f ../quwoquan_ops/environments/compose/docker-compose.yaml down -v
 
 dev-redis:
-	docker compose -f docker-compose.local-redis.yml up -d
-	@docker compose -f docker-compose.local-redis.yml ps
+	docker compose -f ../quwoquan_ops/environments/compose/docker-compose.local-redis.yml up -d
+	@docker compose -f ../quwoquan_ops/environments/compose/docker-compose.local-redis.yml ps
 
 dev-redis-down:
-	docker compose -f docker-compose.local-redis.yml down
+	docker compose -f ../quwoquan_ops/environments/compose/docker-compose.local-redis.yml down
 
 dev-reliable-task-local: dev-redis
 
@@ -138,33 +142,33 @@ clean:
 
 # ─── ML Verification ────────────────────────────────────────────────
 verify-ml-features:
-	$(ML_PYTHON) scripts/ml/verify_feature_consistency.py
+	$(ML_PYTHON) $(ML_SCRIPTS)/verify_feature_consistency.py
 
 verify-ml-tests:
-	$(ML_PYTHON) -m pytest services/rec-model-service/tests -q
+	$(ML_PYTHON) -m pytest $(PYTEST_NO_CACHE) services/rec-model-service/tests -q
 
 verify-rec-policy-advisor:
-	$(ML_PYTHON) -m pytest scripts/recommendation/test_rec_policy_advisor.py -q
+	$(ML_PYTHON) -m pytest $(PYTEST_NO_CACHE) scripts/recommendation/test_rec_policy_advisor.py -q
 
 verify-content-flywheel-tests:
-	$(ML_PYTHON) -m pytest scripts/recommendation/test_eval_content_flywheel_loop.py -q
+	$(ML_PYTHON) -m pytest $(PYTEST_NO_CACHE) scripts/recommendation/test_eval_content_flywheel_loop.py -q
 
 verify-content-flywheel-loop:
 	$(ML_PYTHON) scripts/recommendation/eval_content_flywheel_loop.py --mongodb-uri "$(MONGODB_URI)" $(if $(filter 1 true yes,$(FLYWHEEL_REQUIRE_CLOSED)),--require-closed-loop,) $(if $(strip $(FLYWHEEL_OUT)),--output "$(FLYWHEEL_OUT)",)
 
 verify-ml-model-quality:
-	$(ML_PYTHON) scripts/ml/evaluate_gate.py --scenario "$(SCENARIO)" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "eval_report_$(SCENARIO).json"
-	$(ML_PYTHON) scripts/ml/evaluate_gate.py --scenario "$(SCENARIO)_multiobjective" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "eval_report_$(SCENARIO)_multiobjective.json"
+	$(ML_PYTHON) $(ML_SCRIPTS)/evaluate_gate.py --scenario "$(SCENARIO)" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "eval_report_$(SCENARIO).json"
+	$(ML_PYTHON) $(ML_SCRIPTS)/evaluate_gate.py --scenario "$(SCENARIO)_multiobjective" $(if $(filter 1 true yes,$(ML_DRY_RUN)),--dry-run,) --out "eval_report_$(SCENARIO)_multiobjective.json"
 
 verify-ml-e2e:
-	$(ML_PYTHON) scripts/ml/e2e_learning_loop_verify.py --scenario "$(SCENARIO)" --full-pipeline $(if $(strip $(REC_MODEL_URL)),--rec-model $(REC_MODEL_URL),--skip-service)
+	$(ML_PYTHON) $(ML_SCRIPTS)/e2e_learning_loop_verify.py --scenario "$(SCENARIO)" --full-pipeline $(if $(strip $(REC_MODEL_URL)),--rec-model $(REC_MODEL_URL),--skip-service)
 
 verify-ml-e2e-live:
 	@test -n "$(strip $(REC_MODEL_URL))" || (echo "REC_MODEL_URL is required for verify-ml-e2e-live" >&2; exit 1)
-	$(ML_PYTHON) scripts/ml/e2e_learning_loop_verify.py --scenario "$(SCENARIO)" --mongodb-uri "$(MONGODB_URI)" --db "$(DB)" --rec-model "$(REC_MODEL_URL)"
+	$(ML_PYTHON) $(ML_SCRIPTS)/e2e_learning_loop_verify.py --scenario "$(SCENARIO)" --mongodb-uri "$(MONGODB_URI)" --db "$(DB)" --rec-model "$(REC_MODEL_URL)"
 
 verify-ml-guardrail:
-	$(ML_PYTHON) scripts/ml/online_guardrail.py --scenario "$(SCENARIO)" --window-hours "$(ML_GUARDRAIL_WINDOW_HOURS)" --env "$(ML_GUARDRAIL_ENV)" $(if $(filter 1 true yes,$(ML_GUARDRAIL_DRY_RUN)),--dry-run,) $(if $(strip $(ML_GUARDRAIL_OUT)),--out "$(ML_GUARDRAIL_OUT)",)
+	$(ML_PYTHON) $(ML_SCRIPTS)/online_guardrail.py --scenario "$(SCENARIO)" --window-hours "$(ML_GUARDRAIL_WINDOW_HOURS)" --env "$(ML_GUARDRAIL_ENV)" $(if $(filter 1 true yes,$(ML_GUARDRAIL_DRY_RUN)),--dry-run,) $(if $(strip $(ML_GUARDRAIL_OUT)),--out "$(ML_GUARDRAIL_OUT)",)
 
 verify-ml-drift:
-	$(ML_PYTHON) scripts/ml/feature_drift_monitor.py --scenario "$(SCENARIO)" --baseline-date "$(ML_DRIFT_BASELINE_DATE)" $(if $(strip $(ML_DRIFT_OUT)),--out "$(ML_DRIFT_OUT)",)
+	$(ML_PYTHON) $(ML_SCRIPTS)/feature_drift_monitor.py --scenario "$(SCENARIO)" --baseline-date "$(ML_DRIFT_BASELINE_DATE)" $(if $(strip $(ML_DRIFT_OUT)),--out "$(ML_DRIFT_OUT)",)

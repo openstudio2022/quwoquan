@@ -589,7 +589,9 @@ def _download_source_unit_images(
             "keptCount": len(images),
             "droppedCount": len(drops),
             "dedupeRemoved": dedupe_removed,
+            # 组感知配额：散图按源级上限；宫格/表格行图成组保完整（只受总保险丝）。
             "maxKeptPerSource": SOURCE_UNIT_MAX_IMAGES_PER_SOURCE,
+            "quotaMode": "group_aware",
             "dropReasonCounts": reason_counts,
             "drops": drops,
         }
@@ -603,9 +605,17 @@ def _download_source_unit_images(
     all_candidates = list(raw_images) + list(extra_candidates or [])
     source_id = str(source.get("source_id") or "")
     candidate_count = len(all_candidates)
+    # 组感知配额：宫格/表格行图（groupId 非空）成组保完整，不占散图配额，
+    # 只受总保险丝约束；散图仍按源级上限截断（修复图库整组被硬截断丢图）。
+    loose_kept = 0
+    total_ceiling = max(SOURCE_UNIT_MAX_IMAGES_PER_SOURCE * 6, 48)
     for idx_img, raw in enumerate(all_candidates, start=1):
-        if len(images) >= SOURCE_UNIT_MAX_IMAGES_PER_SOURCE:
-            drops.append({"slug": f"{source_id}#{idx_img}", "reason": "capReached: 已达单源保留上限"})
+        candidate_group = str(raw.get("groupId") or "") if isinstance(raw, Mapping) else ""
+        if len(images) >= total_ceiling:
+            drops.append({"slug": f"{source_id}#{idx_img}", "reason": "capReached: 已达单源总保险丝"})
+            continue
+        if not candidate_group and loose_kept >= SOURCE_UNIT_MAX_IMAGES_PER_SOURCE:
+            drops.append({"slug": f"{source_id}#{idx_img}", "reason": "capReached: 已达单源散图保留上限"})
             continue
         if not isinstance(raw, Mapping):
             issues.append(f"{source_id} image[{idx_img}] invalid payload")
@@ -718,8 +728,18 @@ def _download_source_unit_images(
                 "slug": f"{source_id}_{idx_img}",
                 # RC3：内联同源图回连 source.md 段落占位（非内联候选为空字符串）。
                 "placeholderId": str(spec.get("placeholderId") or ""),
+                # 布局/封面候选语义透传（source.layout.json figure 同源；无结构源为默认值）。
+                "placementType": str(spec.get("placementType") or ""),
+                "groupId": candidate_group,
+                "sectionSlug": str(spec.get("sectionSlug") or ""),
+                "sourceOrder": int(spec.get("sourceOrder") or 0),
+                "coverCandidateRank": int(spec.get("coverCandidateRank") or 0),
+                "isMapLike": bool(spec.get("isMapLike")),
+                "fileTitle": str(spec.get("fileTitle") or ""),
             }
         )
+        if not candidate_group:
+            loose_kept += 1
     images, duplicates = dedupe_image_payloads(images)
     if duplicates:
         issues.append(f"{source_id}: source image dedupe removed {len(duplicates)} near-duplicate image(s)")

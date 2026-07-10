@@ -17,7 +17,7 @@ artifacts:
   - specs/gates/metadata_driven_ui_gap_inventory.yaml
   - specs/feature-tree/tree_index.yaml
   - quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py
-  - agent_ops/gate/gate_repo.sh
+  - quwoquan_ops/gate/gate_repo.sh
   - quwoquan_app/lib/cloud/services/chat/chat_repository.dart
   - quwoquan_app/lib/components/content/media_post_card.dart
 dev_log:

@@ -1,9 +1,9 @@
 # =============================================================================
 # Service Pipeline — quwoquan_service CI/CD
 # =============================================================================
-# 触发条件：main 合入后的 quwoquan_service/**、deploy/** 路径变动 / 手动
+# 触发条件：main 合入后的 quwoquan_service/**、quwoquan_ops/** 路径变动 / 手动
 # 流程：Go 构建 + Python (rec-model-service) Docker 镜像 → kustomize/prod 部署清单校验
-# 当前部署目标：阿里云 ACK（deploy/kustomization/aliyun-prod）
+# 当前部署目标：阿里云 ACK（quwoquan_ops/environments/kustomization/aliyun-prod）
 #
 # 【必须配置的 GitHub Secrets】（部署时）
 #   DOCKER_REGISTRY     — Docker 镜像仓库地址，如 ghcr.io
@@ -19,10 +19,8 @@ on:
       - main
     paths:
       - '.github/workflows/**'
-      - 'agent_ops/**'
+      - 'quwoquan_ops/**'
       - 'quwoquan_service/**'
-      - 'deploy/**'
-      - 'releases/**'
   workflow_dispatch:
 
 env:
@@ -60,9 +58,9 @@ jobs:
           PY
       - name: Generate mainline release artifact
         run: |
-          rm -rf .mainline-release-artifact
-          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
-            --output-dir .mainline-release-artifact \
+          rm -rf .qwq_output/release/service/mainline
+          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
+            --output-dir .qwq_output/release/service/mainline \
             --git-sha "${GITHUB_SHA}" \
             --run-number "${{ github.run_number }}" \
             --repository "${{ github.repository }}" \
@@ -74,7 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: mainline-release-artifact
-          path: .mainline-release-artifact/**
+          path: .qwq_output/release/service/mainline/**
           if-no-files-found: error
           compression-level: 0
       - id: finish
@@ -142,13 +140,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: mainline-release-artifact
-          path: .mainline-release-artifact
+          path: .qwq_output/release/service/mainline
       - name: Regenerate release snapshot locally
-        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        if: ${{ hashFiles('.qwq_output/release/service/mainline/manifest.json') == '' }}
         run: |
-          rm -rf .mainline-release-artifact
-          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
-            --output-dir .mainline-release-artifact \
+          rm -rf .qwq_output/release/service/mainline
+          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
+            --output-dir .qwq_output/release/service/mainline \
             --git-sha "${GITHUB_SHA}" \
             --run-number "${{ github.run_number }}" \
             --repository "${{ github.repository }}" \
@@ -162,7 +160,7 @@ jobs:
           import shutil
           from pathlib import Path
 
-          root = Path(".mainline-release-artifact")
+          root = Path(".qwq_output/release/service/mainline")
           manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
           for rel_path in manifest.get("releaseFiles", {}).values():
               src = root / rel_path
@@ -182,7 +180,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: deploy/service/seed-box/Dockerfile
+          file: quwoquan_service/services/seed-box/deploy/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}/seed-box:${{ needs.prepare-release.outputs.image_version }}
@@ -214,13 +212,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: mainline-release-artifact
-          path: .mainline-release-artifact
+          path: .qwq_output/release/service/mainline
       - name: Regenerate release snapshot locally
-        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        if: ${{ hashFiles('.qwq_output/release/service/mainline/manifest.json') == '' }}
         run: |
-          rm -rf .mainline-release-artifact
-          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
-            --output-dir .mainline-release-artifact \
+          rm -rf .qwq_output/release/service/mainline
+          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
+            --output-dir .qwq_output/release/service/mainline \
             --git-sha "${GITHUB_SHA}" \
             --run-number "${{ github.run_number }}" \
             --repository "${{ github.repository }}" \
@@ -234,7 +232,7 @@ jobs:
           import shutil
           from pathlib import Path
 
-          root = Path(".mainline-release-artifact")
+          root = Path(".qwq_output/release/service/mainline")
           manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
           for rel_path in manifest.get("releaseFiles", {}).values():
               src = root / rel_path
@@ -290,13 +288,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: mainline-release-artifact
-          path: .mainline-release-artifact
+          path: .qwq_output/release/service/mainline
       - name: Regenerate release snapshot locally
-        if: ${{ hashFiles('.mainline-release-artifact/manifest.json') == '' }}
+        if: ${{ hashFiles('.qwq_output/release/service/mainline/manifest.json') == '' }}
         run: |
-          rm -rf .mainline-release-artifact
-          python3 agent_ops/deploy/prod/generate_mainline_release_artifact.py \
-            --output-dir .mainline-release-artifact \
+          rm -rf .qwq_output/release/service/mainline
+          python3 quwoquan_ops/cli/prod/generate_mainline_release_artifact.py \
+            --output-dir .qwq_output/release/service/mainline \
             --git-sha "${GITHUB_SHA}" \
             --run-number "${{ github.run_number }}" \
             --repository "${{ github.repository }}" \
@@ -310,7 +308,7 @@ jobs:
           import shutil
           from pathlib import Path
 
-          root = Path(".mainline-release-artifact")
+          root = Path(".qwq_output/release/service/mainline")
           manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
           for rel_path in manifest.get("releaseFiles", {}).values():
               src = root / rel_path
@@ -320,45 +318,45 @@ jobs:
           PY
 
       - name: 安装 kustomize
-        run: bash agent_ops/deploy/shared/install_kustomize.sh
+        run: bash quwoquan_ops/cli/shared/install_kustomize.sh
 
       - name: Kustomize build 校验
         run: |
-          kustomize build deploy/kustomization/aliyun-prod > /dev/null
+          kustomize build quwoquan_ops/environments/kustomization/aliyun-prod > /dev/null
           echo "Kustomize build (aliyun-prod) OK"
 
       - name: Kustomize build 校验 (chat-service overlays)
         run: |
           for env in dev integration prod; do
-            kustomize build deploy/service/chat-service/kustomize/overlays/$env > /dev/null
+            kustomize build quwoquan_service/services/chat-service/deploy/kustomize/overlays/$env > /dev/null
             echo "chat-service overlay $env OK"
           done
 
       - name: Kustomize build 校验 (content-service overlays)
         run: |
           for env in dev integration prod; do
-            kustomize build deploy/service/content-service/kustomize/overlays/$env > /dev/null
+            kustomize build quwoquan_service/services/content-service/deploy/kustomize/overlays/$env > /dev/null
             echo "content-service overlay $env OK"
           done
 
       - name: Kustomize build 校验 (rtc-service overlays)
         run: |
           for env in dev integration prod; do
-            kustomize build deploy/service/rtc-service/kustomize/overlays/$env > /dev/null
+            kustomize build quwoquan_service/services/rtc-service/deploy/kustomize/overlays/$env > /dev/null
             echo "rtc-service overlay $env OK"
           done
 
       - name: Kustomize build 校验 (livekit-sfu overlays)
         run: |
           for env in dev integration prod; do
-            kustomize build deploy/service/livekit-sfu/kustomize/overlays/$env > /dev/null
+            kustomize build quwoquan_service/services/livekit-sfu/deploy/kustomize/overlays/$env > /dev/null
             echo "livekit-sfu overlay $env OK"
           done
 
       - name: Kustomize build 校验 (coturn overlays)
         run: |
           for env in dev integration prod; do
-            kustomize build deploy/service/coturn/kustomize/overlays/$env > /dev/null
+            kustomize build quwoquan_service/services/coturn/deploy/kustomize/overlays/$env > /dev/null
             echo "coturn overlay $env OK"
           done
       - id: finish
@@ -399,7 +397,7 @@ jobs:
           if [ "${BUILD_SEED_BOX}" -gt "${FANOUT}" ]; then FANOUT="${BUILD_SEED_BOX}"; fi
           if [ "${BUILD_PYTHON}" -gt "${FANOUT}" ]; then FANOUT="${BUILD_PYTHON}"; fi
           CRITICAL_PATH_SECONDS=$(( PREPARE + FANOUT + VALIDATE ))
-          python3 agent_ops/ci/render_ci_timing_summary.py \
+          python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 02.service_pipeline \
             --title "02. Service Pipeline" \
             --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
@@ -409,7 +407,7 @@ jobs:
             --phase "build_recommendation_service=${BUILD_PYTHON}" \
             --phase "validate_deploy=${VALIDATE}" \
             --note "02 负责 mainline release artifact、镜像构建推送与部署清单校验；该耗时必须计入真实 commit-to-prod。" \
-            --write-json "artifacts/ci-timing/service-pipeline-summary.json" \
+            --write-json ".qwq_output/runs/ci-timing/service-pipeline-summary.json" \
             --write-step-summary
           echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
       - name: Upload service pipeline timing summary
@@ -418,6 +416,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: service-pipeline-timing-summary
-          path: artifacts/ci-timing/service-pipeline-summary.json
+          path: .qwq_output/runs/ci-timing/service-pipeline-summary.json
           if-no-files-found: error
           compression-level: 0

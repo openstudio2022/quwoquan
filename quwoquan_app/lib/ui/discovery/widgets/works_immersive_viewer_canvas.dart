@@ -13,18 +13,11 @@ class _WorksTopChromeTheme {
     required this.overlayStyle,
     required this.foregroundColor,
     required this.mutedForegroundColor,
-    this.surfaceColor,
-    this.surfaceBorderColor,
   });
 
   final SystemUiOverlayStyle overlayStyle;
   final Color foregroundColor;
   final Color mutedForegroundColor;
-  final Color? surfaceColor;
-  final Color? surfaceBorderColor;
-
-  bool get hasSurfaceDecoration =>
-      surfaceColor != null && surfaceBorderColor != null;
 }
 
 /// Work Browser 顶部栏（V1.0）：极简，仅「返回」与「更多」。
@@ -184,9 +177,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
   }
 
   void _pruneControllerRegistry({required int aroundIndex}) {
-    _controllersByIndex.removeWhere(
-      (index, _) => (index - aroundIndex).abs() > 1,
-    );
+    _controllersByIndex.removeWhere((index, _) => index != aroundIndex);
   }
 
   void _togglePlayback(int index) {
@@ -213,7 +204,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
           child: PageView.builder(
             controller: _episodeController,
             scrollDirection: Axis.horizontal,
-            allowImplicitScrolling: true,
+            allowImplicitScrolling: false,
             itemCount: items.length,
             onPageChanged: (index) {
               setState(() {
@@ -234,7 +225,7 @@ class _WorksVideoCanvasState extends State<_WorksVideoCanvas> {
                 return Container(color: AppColors.worksBackground);
               }
               final isCurrent = index == _currentEpisodeIndex;
-              final keepAlive = (index - _currentEpisodeIndex).abs() <= 1;
+              final keepAlive = isCurrent;
               return _KeepAliveStage(
                 key: ValueKey<String>(
                   'works-video-stage-${widget.post.id}-$index',
@@ -320,10 +311,12 @@ class _WorksArticleCanvas extends StatelessWidget {
     required this.onPageChanged,
     required this.onResolvedPageCountChanged,
     required this.topChromeSafeInset,
+    required this.reserveContentIntersection,
     this.onFallbackResolved,
     this.onPageFlipCommitted,
     this.onPageCurlAborted,
     this.onEntityTap,
+    this.gestureIntentController,
     this.initialPage = 0,
     this.onOverflowPrevious,
     this.onOverflowNext,
@@ -337,10 +330,12 @@ class _WorksArticleCanvas extends StatelessWidget {
   final ValueChanged<int> onPageChanged;
   final ValueChanged<int> onResolvedPageCountChanged;
   final double topChromeSafeInset;
+  final bool reserveContentIntersection;
   final ValueChanged<ArticleReaderFallbackReason>? onFallbackResolved;
   final ValueChanged<ArticleReaderPageFlipCommit>? onPageFlipCommitted;
   final ValueChanged<ArticleReaderPageCurlAbort>? onPageCurlAborted;
   final ValueChanged<ArticleInlineSpan>? onEntityTap;
+  final ImmersiveGestureIntentController? gestureIntentController;
   final int initialPage;
   final VoidCallback? onOverflowPrevious;
   final VoidCallback? onOverflowNext;
@@ -351,7 +346,6 @@ class _WorksArticleCanvas extends StatelessWidget {
         topChromeSafeInset +
         AppSpacing.appChromeTopBarHeight(context) +
         AppSpacing.intraGroupSm;
-    final stagePadding = EdgeInsets.only(top: topPaperReservedHeight);
     final palette = resolveArticlePaperPalette(context, paperTexture);
     // Work Browser V1.0 Dark Paper：文章默认延续深色沉浸背景，
     // 翻页正面、背面、底页都消费同一 paperTexture。
@@ -360,13 +354,14 @@ class _WorksArticleCanvas extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ColoredBox(color: palette.stageBackground),
+          ColoredBox(color: palette.paperColor),
           Positioned(
             left: 0,
             right: 0,
             top: 0,
-            bottom: ImmersiveEngagementBar.overlayClearance(
+            bottom: _worksContentOverlayBottomClearance(
               context,
+              includeIntersection: reserveContentIntersection,
               gap: AppSpacing.containerMd,
             ),
             child: LayoutBuilder(
@@ -391,17 +386,35 @@ class _WorksArticleCanvas extends StatelessWidget {
                   constraints,
                   variant: ArticleCanvasVariant.immersive,
                 );
+                final pageAspectRatio =
+                    constraints.maxWidth > 0 && constraints.maxHeight > 0
+                    ? constraints.maxWidth / constraints.maxHeight
+                    : metrics.aspectRatio;
+                final immersiveMetrics = ArticleCanvasMetrics(
+                  aspectRatio: pageAspectRatio,
+                  outerPadding: metrics.outerPadding,
+                  contentPadding: metrics.contentPadding.copyWith(
+                    top: metrics.contentPadding.top + topPaperReservedHeight,
+                  ),
+                  headerReservedHeight: metrics.headerReservedHeight,
+                  footerReservedHeight: metrics.footerReservedHeight,
+                  wrapImageGap: metrics.wrapImageGap,
+                  wrapImageMaxWidth: metrics.wrapImageMaxWidth,
+                  fullWidthImageAspectRatio: metrics.fullWidthImageAspectRatio,
+                  journalImageAspectRatio: metrics.journalImageAspectRatio,
+                  inlineImageSpacing: metrics.inlineImageSpacing,
+                );
                 return ArticleReaderFlipHost(
                   adapter: ImmersiveBrowserReaderAdapter(
                     ArticleReaderHostConfig(
                       pages: pages,
                       template: article.template,
                       fontPreset: article.fontPreset,
-                      metrics: metrics,
+                      metrics: immersiveMetrics,
                       coverUrl: post.primaryImageUrl,
                       initialPage: safeInitialPage,
                       enablePageCurl: enablePageCurl,
-                      pagePadding: stagePadding,
+                      pagePadding: EdgeInsets.zero,
                       headerLabel: timeLine,
                       showFooterPageLabel: false,
                       paperTexture: paperTexture,
@@ -414,6 +427,7 @@ class _WorksArticleCanvas extends StatelessWidget {
                       onPageFlipCommitted: onPageFlipCommitted,
                       onPageCurlAborted: onPageCurlAborted,
                       onEntityTap: onEntityTap,
+                      gestureIntentController: gestureIntentController,
                     ),
                   ),
                 );
@@ -431,12 +445,14 @@ class _WorksTextCanvas extends StatelessWidget {
     required this.layoutSpec,
     required this.title,
     required this.body,
+    required this.reserveContentIntersection,
     this.imageUrl,
   });
 
   final ImmersiveViewerStageLayoutSpec layoutSpec;
   final String title;
   final String body;
+  final bool reserveContentIntersection;
   final String? imageUrl;
 
   @override
@@ -477,8 +493,9 @@ class _WorksTextCanvas extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.only(
               top: AppSpacing.containerLg,
-              bottom: ImmersiveEngagementBar.overlayClearance(
+              bottom: _worksContentOverlayBottomClearance(
                 context,
+                includeIntersection: reserveContentIntersection,
                 gap: AppSpacing.containerMd,
               ),
             ),

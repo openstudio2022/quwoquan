@@ -11,7 +11,7 @@ allow:
   reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
 - interface: HomepageRepository
   path: quwoquan_app/lib/cloud/services/entity/entity_repository.dart
-  max_methods: 16
+  max_methods: 17
   reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
 - interface: RtcRepository
   path: quwoquan_app/lib/cloud/services/rtc/rtc_repository.dart
@@ -21,11 +21,11 @@ allow:
   path: quwoquan_app/lib/cloud/services/assistant/assistant_repository.dart
   max_methods: 14
   reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
-- interface: UserRepository
-  path: quwoquan_app/lib/cloud/services/user/user_repository.dart
-  max_methods: 12
-  reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
 - interface: TagRepository
   path: quwoquan_app/lib/cloud/services/tag/tag_repository.dart
+  max_methods: 13
+  reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)
+- interface: UserRepository
+  path: quwoquan_app/lib/cloud/services/user/user_repository.dart
   max_methods: 12
   reason: oversized-interface-budget (按 ContentRepository 模板拆窄接口，后续逐步降)

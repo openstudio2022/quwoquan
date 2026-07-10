@@ -1,0 +1,332 @@
+{
+  "schemaVersion": "quwoquan_data.discovery_seed/1",
+  "generatedBy": "codex_mfw_real_e2e_source_precheck_20260705",
+  "createdFor": "mfw_reference_release_safe_100_object_rerun",
+  "sourceEvidence": "/tmp/qwq_mfw_real_e2e_20260704/.qwq_output/env/repo/runs/source_precheck_all_downloaded_entities.json",
+  "sourcePolicy": {
+    "mafengwo": "reference_only_no_publish_assets",
+    "releaseAssets": "official_open_license_or_authorized_only"
+  },
+  "leafCount": 52,
+  "minimumRequiredLeafCount": 25,
+  "partitions": [
+    {
+      "key": "中国",
+      "label": "中国 source-ready scenic candidates from mfw strict topup evidence",
+      "leaves": [
+        {
+          "name": "三清山",
+          "canonicalName": "三清山",
+          "entityType": "地点/景区",
+          "selectionPriority": 1
+        },
+        {
+          "name": "中央大街",
+          "canonicalName": "中央大街",
+          "entityType": "地点/景区",
+          "selectionPriority": 2
+        },
+        {
+          "name": "九寨沟",
+          "canonicalName": "九寨沟",
+          "entityType": "地点/景区",
+          "selectionPriority": 3
+        },
+        {
+          "name": "五台山",
+          "canonicalName": "五台山",
+          "entityType": "地点/景区",
+          "selectionPriority": 4
+        },
+        {
+          "name": "五大连池",
+          "canonicalName": "五大连池",
+          "entityType": "地点/景区",
+          "selectionPriority": 5
+        },
+        {
+          "name": "井冈山",
+          "canonicalName": "井冈山",
+          "entityType": "地点/景区",
+          "selectionPriority": 6
+        },
+        {
+          "name": "净月潭",
+          "canonicalName": "净月潭",
+          "entityType": "地点/景区",
+          "selectionPriority": 7
+        },
+        {
+          "name": "凤凰古城",
+          "canonicalName": "凤凰古城",
+          "entityType": "地点/景区",
+          "selectionPriority": 8
+        },
+        {
+          "name": "北海公园",
+          "canonicalName": "北海公园",
+          "entityType": "地点/景区",
+          "selectionPriority": 9
+        },
+        {
+          "name": "北海银滩",
+          "canonicalName": "北海银滩",
+          "entityType": "地点/景区",
+          "selectionPriority": 10
+        },
+        {
+          "name": "千山",
+          "canonicalName": "千山",
+          "entityType": "地点/景区",
+          "selectionPriority": 11
+        },
+        {
+          "name": "千岛湖",
+          "canonicalName": "千岛湖",
+          "entityType": "地点/景区",
+          "selectionPriority": 12
+        },
+        {
+          "name": "华山",
+          "canonicalName": "华山",
+          "entityType": "地点/景区",
+          "selectionPriority": 13
+        },
+        {
+          "name": "哈尔滨冰雪大世界",
+          "canonicalName": "哈尔滨冰雪大世界",
+          "entityType": "地点/景区",
+          "selectionPriority": 14
+        },
+        {
+          "name": "圆明园",
+          "canonicalName": "圆明园",
+          "entityType": "地点/景区",
+          "selectionPriority": 15
+        },
+        {
+          "name": "壶口瀑布",
+          "canonicalName": "壶口瀑布",
+          "entityType": "地点/景区",
+          "selectionPriority": 16
+        },
+        {
+          "name": "大雁塔",
+          "canonicalName": "大雁塔",
+          "entityType": "地点/景区",
+          "selectionPriority": 17
+        },
+        {
+          "name": "天坛",
+          "canonicalName": "天坛",
+          "entityType": "地点/景区",
+          "selectionPriority": 18
+        },
+        {
+          "name": "山海关",
+          "canonicalName": "山海关",
+          "entityType": "地点/景区",
+          "selectionPriority": 19
+        },
+        {
+          "name": "岳阳楼",
+          "canonicalName": "岳阳楼",
+          "entityType": "地点/景区",
+          "selectionPriority": 20
+        },
+        {
+          "name": "峨眉山",
+          "canonicalName": "峨眉山",
+          "entityType": "地点/景区",
+          "selectionPriority": 21
+        },
+        {
+          "name": "崂山",
+          "canonicalName": "崂山",
+          "entityType": "地点/景区",
+          "selectionPriority": 22
+        },
+        {
+          "name": "平遥古城",
+          "canonicalName": "平遥古城",
+          "entityType": "地点/景区",
+          "selectionPriority": 23
+        },
+        {
+          "name": "库布齐沙漠",
+          "canonicalName": "库布齐沙漠",
+          "entityType": "地点/景区",
+          "selectionPriority": 24
+        },
+        {
+          "name": "悬空寺",
+          "canonicalName": "悬空寺",
+          "entityType": "地点/景区",
+          "selectionPriority": 25
+        },
+        {
+          "name": "成吉思汗陵",
+          "canonicalName": "成吉思汗陵",
+          "entityType": "地点/景区",
+          "selectionPriority": 26
+        },
+        {
+          "name": "故宫",
+          "canonicalName": "故宫",
+          "entityType": "地点/景区",
+          "selectionPriority": 27
+        },
+        {
+          "name": "旅顺口",
+          "canonicalName": "旅顺口",
+          "entityType": "地点/景区",
+          "selectionPriority": 28
+        },
+        {
+          "name": "普陀山",
+          "canonicalName": "普陀山",
+          "entityType": "地点/景区",
+          "selectionPriority": 29
+        },
+        {
+          "name": "景山公园",
+          "canonicalName": "景山公园",
+          "entityType": "地点/景区",
+          "selectionPriority": 30
+        },
+        {
+          "name": "本溪水洞",
+          "canonicalName": "本溪水洞",
+          "entityType": "地点/景区",
+          "selectionPriority": 31
+        },
+        {
+          "name": "松花湖",
+          "canonicalName": "松花湖",
+          "entityType": "地点/景区",
+          "selectionPriority": 32
+        },
+        {
+          "name": "查干湖",
+          "canonicalName": "查干湖",
+          "entityType": "地点/景区",
+          "selectionPriority": 33
+        },
+        {
+          "name": "横店影视城",
+          "canonicalName": "横店影视城",
+          "entityType": "地点/景区",
+          "selectionPriority": 34
+        },
+        {
+          "name": "武夷山",
+          "canonicalName": "武夷山",
+          "entityType": "地点/景区",
+          "selectionPriority": 35
+        },
+        {
+          "name": "沈阳故宫",
+          "canonicalName": "沈阳故宫",
+          "entityType": "地点/景区",
+          "selectionPriority": 36
+        },
+        {
+          "name": "法门寺",
+          "canonicalName": "法门寺",
+          "entityType": "地点/景区",
+          "selectionPriority": 37
+        },
+        {
+          "name": "泰山",
+          "canonicalName": "泰山",
+          "entityType": "地点/景区",
+          "selectionPriority": 38
+        },
+        {
+          "name": "滕王阁",
+          "canonicalName": "滕王阁",
+          "entityType": "地点/景区",
+          "selectionPriority": 39
+        },
+        {
+          "name": "白洋淀",
+          "canonicalName": "白洋淀",
+          "entityType": "地点/景区",
+          "selectionPriority": 40
+        },
+        {
+          "name": "衡山",
+          "canonicalName": "衡山",
+          "entityType": "地点/景区",
+          "selectionPriority": 41
+        },
+        {
+          "name": "西湖",
+          "canonicalName": "西湖",
+          "entityType": "地点/景区",
+          "selectionPriority": 42
+        },
+        {
+          "name": "金石滩",
+          "canonicalName": "金石滩",
+          "entityType": "地点/景区",
+          "selectionPriority": 43
+        },
+        {
+          "name": "长白山",
+          "canonicalName": "长白山",
+          "entityType": "地点/景区",
+          "selectionPriority": 44
+        },
+        {
+          "name": "雁荡山",
+          "canonicalName": "雁荡山",
+          "entityType": "地点/景区",
+          "selectionPriority": 45
+        },
+        {
+          "name": "雁门关",
+          "canonicalName": "雁门关",
+          "entityType": "地点/景区",
+          "selectionPriority": 46
+        },
+        {
+          "name": "雪乡",
+          "canonicalName": "雪乡",
+          "entityType": "地点/景区",
+          "selectionPriority": 47
+        },
+        {
+          "name": "颐和园",
+          "canonicalName": "颐和园",
+          "entityType": "地点/景区",
+          "selectionPriority": 48
+        },
+        {
+          "name": "香港海洋公园",
+          "canonicalName": "香港海洋公园",
+          "entityType": "地点/景区",
+          "selectionPriority": 49
+        },
+        {
+          "name": "黄山",
+          "canonicalName": "黄山",
+          "entityType": "地点/景区",
+          "selectionPriority": 50
+        },
+        {
+          "name": "龙脊梯田",
+          "canonicalName": "龙脊梯田",
+          "entityType": "地点/景区",
+          "selectionPriority": 51
+        },
+        {
+          "name": "龙虎山",
+          "canonicalName": "龙虎山",
+          "entityType": "地点/景区",
+          "selectionPriority": 52
+        }
+      ]
+    }
+  ]
+}

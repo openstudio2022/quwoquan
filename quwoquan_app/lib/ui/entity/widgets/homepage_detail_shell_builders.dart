@@ -28,6 +28,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       objectId: objectId,
       target: ObjectImpactTarget.homepage,
       referralSource: ReferralSource.entityPage,
+      title: UITextConstants.objectImpactTitleEntity,
       enumerableHint: UITextConstants.impactEnumerableHintEntity,
       cardKey: const ValueKey<String>('homepage-impact-card'),
       topDivider: false,
@@ -36,16 +37,32 @@ extension _HomepageBuilders on _HomepageDetailShellState {
 
   /// 身份头像内容（封面缩略 / Logo）；为空返回 null，由 [ObjectIdentityAvatar]
   /// 回退到类型占位图标，避免空白方块。
+  String _resolvedHeroImageUrl() {
+    final candidates = <String?>[
+      _reference?.coverUrl,
+      widget.objectPageBundle?.coverUrl,
+      widget.detail?.coverUrl,
+      widget.initialSummary?.coverUrl,
+      for (final item in _contentPreview) item.coverUrl,
+    ];
+    for (final candidate in candidates) {
+      final value = (candidate ?? '').trim();
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return '';
+  }
+
   Widget? _buildIdentityMedia(BuildContext context, String? coverUrl) {
     final source = (coverUrl ?? '').trim();
     if (source.isEmpty) {
       return null;
     }
     return AppMediaImage(
+      key: const ValueKey<String>('homepage-identity-media'),
       imageSource: source,
       fit: BoxFit.cover,
-      placeholder: const SizedBox.shrink(),
-      errorWidget: const SizedBox.shrink(),
     );
   }
 
@@ -165,7 +182,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
   }
 
   Widget _buildCompactToolbarAvatar(BuildContext context) {
-    final coverUrl = (_reference?.coverUrl ?? '').trim();
+    final coverUrl = _resolvedHeroImageUrl();
     final fallback = DecoratedBox(
       decoration: BoxDecoration(color: AppColors.iosSecondaryFill(context)),
       child: Center(
@@ -194,7 +211,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
   }
 
   Widget _buildBackgroundLayer(BuildContext context) {
-    final coverUrl = (_reference?.coverUrl ?? '').trim();
+    final coverUrl = _resolvedHeroImageUrl();
     final pageBackground = AppColors.iosPageBackground(context);
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
@@ -208,13 +225,6 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           ],
         ),
       ),
-      child: Center(
-        child: Icon(
-          CupertinoIcons.photo_fill_on_rectangle_fill,
-          size: AppSpacing.iconLarge,
-          color: AppColors.iosSecondaryLabel(context),
-        ),
-      ),
     );
 
     return Stack(
@@ -224,6 +234,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
           fallback
         else
           AppMediaImage(
+            key: const ValueKey<String>('homepage-background-media'),
             imageSource: coverUrl,
             fit: BoxFit.cover,
             placeholder: fallback,
@@ -294,6 +305,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
     ];
 
     final identityCard = Container(
+      key: const ValueKey<String>('homepage-summary-identity-card'),
       decoration: BoxDecoration(
         color: summarySurface,
         borderRadius: BorderRadius.circular(
@@ -311,7 +323,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
       child: Padding(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.feedContentHorizontal(context),
-          AppSpacing.containerLg,
+          0,
           AppSpacing.feedContentHorizontal(context),
           AppSpacing.containerLg,
         ),
@@ -324,7 +336,7 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                   UITextConstants.objectHomepageDefaultTitle,
               media: ObjectIdentityAvatar(
                 kind: ObjectIdentityKind.entity,
-                child: _buildIdentityMedia(context, reference?.coverUrl),
+                child: _buildIdentityMedia(context, _resolvedHeroImageUrl()),
               ),
               titleTrailing: (detail?.verified ?? false)
                   ? Icon(
@@ -346,6 +358,19 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                   bio: _entityIntroLine(),
                   onTap: widget.onOpenIntroduction,
                   cardKey: const ValueKey<String>('homepage-intro-slogan-card'),
+                ),
+              ],
+              // WP3 统一打标：实体主页展示数据工程标签（类型 + 地理，叶子名），
+              // 与摘要卡 [ObjectMetaChip] 同款胶囊 token。
+              if (_displayTagLabels.isNotEmpty) ...<Widget>[
+                SizedBox(height: AppSpacing.containerSm),
+                Wrap(
+                  key: const ValueKey<String>('homepage-tag-refs-wrap'),
+                  spacing: AppSpacing.intraGroupXs,
+                  runSpacing: AppSpacing.intraGroupXs,
+                  children: _displayTagLabels
+                      .map((label) => ObjectMetaChip(label: label))
+                      .toList(growable: false),
                 ),
               ],
               if (statItems.isNotEmpty) ...<Widget>[
@@ -551,10 +576,10 @@ extension _HomepageBuilders on _HomepageDetailShellState {
                 ].join(' · '),
                 showChevron: false,
               ),
-            if (detail.categoryTags.isNotEmpty)
+            if (_displayTagLabels.isNotEmpty)
               ProfileIosGroupedCell(
                 title: HomepageDetailText.categoryInfoTitle,
-                subtitle: detail.categoryTags.join(' · '),
+                subtitle: _displayTagLabels.join(' · '),
                 showChevron: false,
               ),
             if (detail.establishedYear != null && detail.establishedYear! > 0)

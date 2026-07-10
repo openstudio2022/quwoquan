@@ -10,7 +10,7 @@
   cold 轮转大量唯一 query（强制 miss），用于暴露穿透后端的真实成本。
 - 统计真分位数（排序取值，绝不用算术平均替代 P95/P99）。
 - 把 429/503 计为受控 shed，与真正 5xx error 区分；shed 不算可用性失败但计入退化。
-- 报告落盘 artifacts/search-load/，可重复对比。
+- 报告落盘 .qwq_output/env/repo/runs/search-load/，可重复对比。
 
 注意：本工具产出的是“被测环境”的数字。local-gamma 单节点 ES 不代表生产；真集群/prod-sim
 数字才用于关闭 R-S06-S-1。无被测服务时退化为 dry-run（仍校验脚本可运行 + 报告 schema）。
@@ -297,7 +297,7 @@ def main() -> int:
     ap.add_argument("--duration-sec", type=float, default=10.0)
     ap.add_argument("--concurrency", type=int, default=20)
     ap.add_argument("--timeout-sec", type=float, default=5.0)
-    ap.add_argument("--out-dir", default="artifacts/search-load")
+    ap.add_argument("--out-dir", default=".qwq_output/env/repo/runs/search-load")
     ap.add_argument("--repo-root", default=os.getcwd())
     args = ap.parse_args()
 

@@ -8,6 +8,8 @@ enum UserErrorCode {
   greetingTargetBlockedSender('USER.GREETING.target_blocked_sender', '发送失败，对方不接收你的打招呼', 403),
   greetingDuplicatePending('USER.GREETING.duplicate_pending', '已发送过打招呼，请等待对方回复', 409),
   greetingRateLimited('USER.GREETING.rate_limited', '打招呼发送频率超限，请稍后再试', 429),
+  greetingSenderRealnameRequired('USER.GREETING.sender_realname_required', '完成实名认证后才能发起打招呼或约伴', 403),
+  greetingMinorRestricted('USER.GREETING.minor_restricted', '青少年模式下暂不支持向陌生人打招呼或约伴', 403),
   greetingAlreadyContact('USER.GREETING.already_contact', '已互相关注，可直接进入正式私信', 409),
   greetingNotFound('USER.GREETING.not_found', '打招呼请求不存在', 404),
   greetingInvalidStatusTransition('USER.GREETING.invalid_status_transition', '操作不可用，请求状态已变更', 409),

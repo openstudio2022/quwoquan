@@ -215,7 +215,7 @@ func loadRuntimeConfig() (config, error) {
 			return config{}, err
 		}
 		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", name, configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", name, "configs", "releases", configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, err
 			}
@@ -226,7 +226,7 @@ func loadRuntimeConfig() (config, error) {
 	if err := mergeConfigFile(&cfg, filepath.Join("configs", "default", "config.yaml")); err == nil {
 		_ = mergeConfigFile(&cfg, filepath.Join("configs", appEnv, "config.yaml"))
 		if configVersion != "" {
-			_ = mergeConfigFile(&cfg, filepath.Join("..", "..", "..", "releases", "config", name, configVersion+".yaml"))
+			_ = mergeConfigFile(&cfg, filepath.Join("configs", "releases", configVersion+".yaml"))
 		}
 		return cfg, nil
 	}

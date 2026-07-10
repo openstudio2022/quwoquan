@@ -10,6 +10,7 @@ import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.d
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
+import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
@@ -54,10 +55,12 @@ class StartGroupChatPage extends ConsumerStatefulWidget {
   const StartGroupChatPage({
     super.key,
     this.conversationId,
+    this.routeExtra,
     required this.onBack,
   });
 
   final String? conversationId;
+  final StartGroupChatRouteExtra? routeExtra;
   final VoidCallback onBack;
 
   bool get isCreateMode => conversationId == null || conversationId!.isEmpty;
@@ -111,6 +114,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
     _journeyTracker = ref.read(journeyEventTrackerProvider);
     _enteredAt = DateTime.now();
     _recordPageState(phase: 'enter');
+    _recordCompanionContextEnter();
     Future<void>.microtask(() {
       if (!mounted) {
         return;
@@ -210,18 +214,13 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
   }
 
   void _handleSubmitSelectionError(Object error) {
-    final semantic = UiErrorSemantic(
-      category: UiErrorCategory.submit,
-      scope: UiErrorScope.global,
-      title: widget.isCreateMode
-          ? UITextConstants.startGroupChatCreateIncompleteTitle
-          : UITextConstants.startGroupChatAddMembersIncompleteTitle,
-      message: runtimeErrorDisplayMessage(error),
-      primaryAction: const UiErrorAction(
-        type: UiErrorActionType.retry,
-        label: UITextConstants.tryAgain,
+    final semantic = _startGroupSubmitErrorSemantic(
+      runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.global,
       ),
-      dismissible: true,
     );
     unawaited(
       AppActionErrorFeedback.show(
@@ -234,6 +233,35 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           }
         },
       ),
+    );
+  }
+
+  UiErrorSemantic _startGroupSubmitErrorSemantic(UiErrorSemantic base) {
+    return UiErrorSemantic(
+      category: base.category,
+      scope: base.scope,
+      title: widget.isCreateMode
+          ? UITextConstants.startGroupChatCreateIncompleteTitle
+          : UITextConstants.startGroupChatAddMembersIncompleteTitle,
+      message: base.message,
+      secondaryMessage: base.secondaryMessage,
+      primaryAction:
+          base.primaryAction ??
+          const UiErrorAction(
+            type: UiErrorActionType.dismiss,
+            label: UITextConstants.confirm,
+          ),
+      secondaryAction: base.secondaryAction,
+      dismissible: base.dismissible,
+      sourceCode: base.sourceCode,
+      failureKind: base.failureKind,
+      copyKey: base.copyKey,
+      recoveryAction: base.recoveryAction,
+      presentation: UiErrorPresentation.actionDialog,
+      tone: base.tone,
+      appearanceMode: base.appearanceMode,
+      sourceRouteId: base.sourceRouteId,
+      sourceSurfaceId: base.sourceSurfaceId,
     );
   }
 
@@ -293,6 +321,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         payload: <String, dynamic>{
           'isCreateMode': widget.isCreateMode,
           'memberCount': memberCount,
+          ...?widget.routeExtra?.toAnalyticsPayload(),
         },
       ),
     );
@@ -300,6 +329,27 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
       phase: success ? 'submitSuccess' : 'submitFailure',
       error: error,
       itemCount: memberCount,
+    );
+  }
+
+  void _recordCompanionContextEnter() {
+    final extra = widget.routeExtra;
+    if (extra == null || !extra.hasCompanionContext) {
+      return;
+    }
+    unawaited(
+      _journeyTracker.trackAction(
+        journey: _kStartGroupChatJourney,
+        action: 'companion_context_enter',
+        pageName: _analyticsPageName,
+        targetType: extra.safeTargetObjectKind.isEmpty
+            ? 'intersection_target'
+            : extra.safeTargetObjectKind,
+        targetKey: extra.safeTargetObjectId,
+        entityType: 'intersection',
+        entityId: extra.intersectionId.trim(),
+        payload: extra.toAnalyticsPayload(),
+      ),
     );
   }
 
@@ -343,9 +393,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
         _handleCreateConversationSuccess(conversationId);
       } else {
         await ref
-            .read(
-              conversationMembersProvider(widget.conversationId!).notifier,
-            )
+            .read(conversationMembersProvider(widget.conversationId!).notifier)
             .addMembers(selectedIds);
         _recordSubmitOutcome(success: true, memberCount: selectedIds.length);
         await _refreshChatEntryLists();
@@ -509,6 +557,12 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           ],
         ),
       ],
+      if (widget.routeExtra?.hasCompanionContext ?? false)
+        _CompanionContextBanner(
+          rowBackground: rowBackground,
+          fgPrimary: fgPrimary,
+          fgSecondary: fgSecondary,
+        ),
       // 「从群聊中选择」入口（图三微信菜单项对齐），仅在无搜索词时展示。
       if (_query.trim().isEmpty)
         _ActionEntryRow(
@@ -557,9 +611,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
                   AppRoutePaths.userProfile(username: username),
                   extra: UserProfileRouteExtra(
                     subAccountId: username,
-                    avatar: m.avatarUrl.isNotEmpty
-                        ? m.avatarUrl
-                        : null,
+                    avatar: m.avatarUrl.isNotEmpty ? m.avatarUrl : null,
                     displayName: m.displayName.isNotEmpty
                         ? m.displayName
                         : null,
@@ -595,12 +647,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
           ),
           if (selectedMembers.isNotEmpty)
             Padding(
-              padding: EdgeInsets.fromLTRB(
-                0,
-                0,
-                0,
-                AppSpacing.sm,
-              ),
+              padding: EdgeInsets.fromLTRB(0, 0, 0, AppSpacing.sm),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -672,9 +719,7 @@ class _StartGroupChatPageState extends ConsumerState<StartGroupChatPage> {
               children: [
                 ListView(
                   controller: _listScrollController,
-                  padding: EdgeInsets.only(
-                    bottom: AppSpacing.lg,
-                  ),
+                  padding: EdgeInsets.only(bottom: AppSpacing.lg),
                   children: listChildren,
                 ),
                 if (_isLoading)

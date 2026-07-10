@@ -1,0 +1,81 @@
+id: CR-20260704-087-tuchong-imageworks-authorized-ingest
+title: 图虫发现 + 摄影师授权池图片作品 ingest 与 100 到 1000 放量门
+date: 2026-07-04
+area: Data
+domain: content-supply
+type: additive
+summary: >
+  为图虫站点维度图片作品放量新增授权资产清单 ingest 路径，并将图虫社区发现线与
+  图虫创意/摄影师授权池 production 线拆层。社区源只验证供给结构、质量分布和吞吐；
+  图虫创意/OpenAPI/订单授权或摄影师逐图授权素材必须逐资产通过 rights/provenance/
+  source-unit/asset-bytes 门后才能进入 release。
+featureTree:
+  L1_domain_service: runtime
+  L2_business_capability: runtime-data-engineering
+  L3_story: geo-content-trinity
+acceptanceIntent: [GWT, contract, SIT]
+evidenceLayers: [local_contract, api_integration, runtime_e2e]
+changes:
+  - site-supply 新增 licensed_asset_ingest admission mode 和 ingest-authorized-assets CLI；允许 licensed_api 与 manual_authorization 两类授权输入。
+  - 新增 photographer_authorized_pool source profile，作为摄影师逐图授权 manifest 的 production 入口；图虫社区 URL 只能作为 discovery/reference，不能作为发布资产 URL。
+  - 图虫创意或摄影师授权清单按 sourceCollectionId 聚合为 image work；每个 image work 遵守现有 WorksClassifier 的 minImagesForImageWork 规则。
+  - 授权资产逐项校验 assetId/sourceUrl/(downloadUrl|localPath)/title/creator/credit/license/termsUrl/usageScope/authorizationProof/modelReleaseStatus/propertyReleaseStatus/sourceCollectionId/collectionPageUrl/tags。
+  - ingest 可通过 --download-assets 下载 downloadUrl 或校验 localPath，落盘 sha256、mimeType、byteSize、width/height、localPath/sourcePath 等字节证据。
+  - 重复 assetId/sourceUrl/downloadUrl/localPath/sha256、低清、水印、弱实体相关、缺肖像或物权状态的资产在源头 reject。
+  - site-supply content-plan bridge 支持 image lane：授权 image handoff 物化为标准 source unit + carrier=image brief + content_plan_packet，不走 article-only baseDraft 分支。
+  - site-scale-readiness commercial 对 licensed_asset_ingest 检查 authorized_asset_ingest 阶段与 releasedPostLaneCounts，不用 handoff counts 代替发布证据。
+  - content source registry 新增 tuchong_stock_authorized 与 photographer_authorized_pool，避免和 tuchong 社区源混用。
+scaleGates:
+  controlled100:
+    batch: tuchong_image_100_controlled
+    siteId: tuchong
+    mode: controlled_trial
+    target: image handoff >= 100
+    kpi: 不计入发布 KPI
+  production100:
+    batch: photographer_imageworks_100_prod_a
+    siteId: photographer_authorized_pool
+    mode: commercial
+    target: releasedPostLaneCounts.image >= 100
+    sourceInput: 摄影师逐图授权 manifest；按现有 image work 合同，每 100 个 image works 至少需要约 400 张合格授权图，建议 raw >= 600
+  production1000:
+    batch: photographer_imageworks_1000_prod
+    siteId: photographer_authorized_pool
+    mode: commercial
+    target: releasedPostLaneCounts.image >= 1000
+    sourceInput: 摄影师逐图授权 manifest overfetch；raw >= 6000、qualified >= 4000；必须落盘 raw discovered、qualified、picked、authored、reviewed、released、imported 漏斗
+policy:
+  - 图虫社区 tuchong 只能作为 controlled_trial / validationOnly，不允许 raw crawl 或 publish assets。
+  - 图虫创意 tuchong_stock_authorized 只接受 OpenAPI 或订单授权逐资产凭证。
+  - 摄影师授权池 photographer_authorized_pool 只接受 creator/credit/termsUrl/usageScope/authorizationProof/modelReleaseStatus/propertyReleaseStatus 与 downloadUrl/localPath 完整的逐图 manifest。
+  - 缺授权配置或授权清单时，production 直接 GATE_BLOCK；必须落盘分层漏斗和 repair report，再从同一层补 manifest 重跑。
+verification:
+  local_contract:
+    - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/site_supply/authorized_assets.py quwoquan_data/scripts/site_supply/content_plan.py quwoquan_data/scripts/site_supply/core.py quwoquan_data/scripts/site_supply/cli_handlers.py
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/site_supply/test_tuchong_authorized_assets__local_contract_test.py quwoquan_data/tests/local_contract/site_supply/test_content_plan_bridge__local_contract_test.py -q
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/site_supply -q
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/template/test_source_catalog__local_contract_test.py quwoquan_data/tests/local_contract/verify/test_site_scale_readiness__local_contract_test.py quwoquan_data/tests/local_contract/vertical/test_image_rights_asset_level__local_contract_test.py quwoquan_data/tests/local_contract/produce/test_image_post_contract__local_contract_test.py quwoquan_data/tests/local_contract/produce/test_review_image_gate__local_contract_test.py -q
+  api_integration:
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/verify/test_site_scale_readiness__local_contract_test.py -q
+  runtime_e2e:
+    - QWQ_RUNTIME_ROOT=/tmp/qwq-tuchong-imageworks-20260704/runtime quwoquan_data/.venv/bin/python quwoquan_data/scripts/cli.py site-supply trial --vertical photography --site-id tuchong --batch tuchong_image_100_controlled --target-count 100 --image-count 100 --daily-target 1000 --objects-per-hour 120 --first-pass-rate 0.82 --token-ledger-count 100
+    - QWQ_RUNTIME_ROOT=/tmp/qwq-tuchong-imageworks-20260704/runtime QWQ_PUBLISH_ROOT=/tmp/qwq-tuchong-imageworks-20260704/publish QWQ_COMMITTED_TASKS_ROOT=/tmp/qwq-tuchong-imageworks-20260704/tasks quwoquan_data/.venv/bin/python quwoquan_data/scripts/cli.py verify site-scale-readiness --mode trial --vertical photography --site-id tuchong --batch tuchong_image_100_controlled --daily-target 1000 --min-image-count 100 --report-out /tmp/qwq-tuchong-imageworks-20260704/tuchong_image_100_controlled_trial_readiness.json
+    - QWQ_RUNTIME_ROOT=/tmp/qwq-tuchong-imageworks-20260704/runtime QWQ_PUBLISH_ROOT=/tmp/qwq-tuchong-imageworks-20260704/publish QWQ_COMMITTED_TASKS_ROOT=/tmp/qwq-tuchong-imageworks-20260704/tasks quwoquan_data/.venv/bin/python quwoquan_data/scripts/cli.py site-supply ingest-authorized-assets --vertical photography --site-id photographer_authorized_pool --batch photographer_imageworks_100_prod_a --manifest /tmp/qwq-tuchong-imageworks-20260704/photographer_authorized_imageworks_100.json --target-count 100 --min-raw-count 600 --min-qualified-count 400 --daily-target 1000 --objects-per-hour 120 --token-ledger-count 1 --download-assets
+    - QWQ_RUNTIME_ROOT=/tmp/qwq-tuchong-imageworks-20260704/runtime QWQ_PUBLISH_ROOT=/tmp/qwq-tuchong-imageworks-20260704/publish QWQ_COMMITTED_TASKS_ROOT=/tmp/qwq-tuchong-imageworks-20260704/tasks quwoquan_data/.venv/bin/python quwoquan_data/scripts/cli.py verify site-scale-readiness --mode commercial --vertical photography --site-id photographer_authorized_pool --batch photographer_imageworks_100_prod_a --daily-target 1000 --min-image-count 100 --report-out /tmp/qwq-tuchong-imageworks-20260704/photographer_imageworks_100_prod_a_commercial_readiness.json
+  currentRuntimeResult:
+    controlled100:
+      decision: go
+      contentPlanHandoffLaneCounts: {image: 100}
+      firstPassRate: 0.82
+      tokenLedgerCount: 100
+      report: /tmp/qwq-tuchong-imageworks-20260704/tuchong_image_100_controlled_trial_readiness.json
+    production100:
+      decision: gate_block
+      reason: /tmp/qwq-tuchong-imageworks-20260704/photographer_authorized_imageworks_100.json missing
+      funnel: {rawDiscovered: 0, qualified: 0, qualifiedImageWorks: 0, picked: 0, authored: 0, reviewed: 0, released: 0, imported: 0}
+      repairReport: /tmp/qwq-tuchong-imageworks-20260704/runtime/site_supply/photography/photographer_authorized_pool/photographer_imageworks_100_prod_a/authorized_asset_ingest/repair_report.json
+      commercialReadinessReport: /tmp/qwq-tuchong-imageworks-20260704/photographer_imageworks_100_prod_a_commercial_readiness.json
+risks:
+  - 图虫官方条款、OpenAPI、授权订单规则会变；每轮 production 前必须刷新官方 terms/robots/OpenAPI 文档和授权清单。
+  - 当前实现不绕过 WorksClassifier 的 image work 最小图片数门；因此 100 个发布 image works 的授权资产需求高于 100 张单图。
+  - 截至 2026-07-04，本地未提供真实摄影师逐图授权 manifest；production 不能进入 produce/publish/import，也不能声明 100/1000 commercial ready。

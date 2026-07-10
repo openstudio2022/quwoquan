@@ -12,7 +12,7 @@
 
 ## 验收标准概要
 
-- A1：存在可检索的 [environment_matrix.md](../../../../../deploy/shared/environment_matrix.md)
+- A1：存在可检索的 [environment_matrix.md](../../../../../quwoquan_ops/environments/environment_matrix.md)
 - A2：CI `l3-api-contract` 与 `make test-api-contract` 同时提供双 HTTP 基址
 - A3：灰度 D/E 与 `prod` 映射在文档与 `gray_rollout_stages` 可核对
 - A4：文档与 workflow 都明确保持 `alpha-local / beta-local / prod-hosted`（gamma 仅本地），不引入 `beta-hosted`、`prod-gray` 或远端 `gamma-hosted`

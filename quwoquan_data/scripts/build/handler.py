@@ -16,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from _common.io import read_json  # noqa: E402
 from _common.paths import batch_root, ensure_batch_layout  # noqa: E402
+from _common.workflow_abandonment import ABANDON_SCOPE_ENTITY, abandoned_entity_ids  # noqa: E402
 from task.store import load_spec  # noqa: E402
 from build.homepage import (  # noqa: E402
     MIN_PAGE_CHARS,
@@ -58,11 +59,10 @@ def _batch_active_spec(task_id: str, batch_id: str, spec: dict) -> dict:
         state = read_json(state_path)
     except Exception:  # noqa: BLE001
         return spec
-    abandoned = {
-        str(item.get("entityId") or "").strip()
-        for item in (state.get("abandonedObjects") or [])
-        if isinstance(item, dict) and str(item.get("status") or "abandoned") == "abandoned"
-    }
+    abandoned = abandoned_entity_ids(
+        state.get("abandonedObjects") or [],
+        scope=ABANDON_SCOPE_ENTITY,
+    )
     replacements = [
         item for item in (state.get("replacementObjects") or [])
         if isinstance(item, dict)

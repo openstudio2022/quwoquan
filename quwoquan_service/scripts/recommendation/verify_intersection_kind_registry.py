@@ -263,11 +263,31 @@ def parse_generated_table() -> dict[str, dict]:
     route_by_obj = parse_str_map("IntersectionRouteIDByObjectKind")
     asset_by_obj = parse_str_map("IntersectionAssetKindByObjectKind")
     action_label = parse_str_map("IntersectionActionLabelByKey")
+    # §24 M0：意图时态 / 行动阶梯 str 表。
+    moment_by_kind = parse_str_map("IntersectionMomentByKind")
+    action_tier = parse_str_map("IntersectionActionTierByKey")
+    target_avail = parse_str_map("IntersectionActionTargetAvailabilityByKey")
+    action_dispatch = parse_str_map("IntersectionActionDispatchByKey")
 
-    actions: dict[str, list[str]] = {}
-    body = _table_block(src, "IntersectionActionKeysByKind", "[]string")
-    for k, raw in re.findall(r'"([^"]+)":\s*\{([^}]*)\},', body):
-        actions[k] = re.findall(r'"([^"]+)"', raw)
+    def parse_action_keys(var_name: str) -> dict[str, list[str]]:
+        out: dict[str, list[str]] = {}
+        body = _table_block(src, var_name, "[]string")
+        for k, raw in re.findall(r'"([^"]+)":\s*\{([^}]*)\},', body):
+            out[k] = re.findall(r'"([^"]+)"', raw)
+        return out
+
+    def parse_slice_var(var_name: str) -> list[str]:
+        m = re.search(rf"var {re.escape(var_name)} = \[\]string\{{([^}}]*)\}}", src)
+        if not m:
+            fail(f"generated table missing slice var {var_name} (run `make codegen-rec-intersection`)")
+        return re.findall(r'"([^"]+)"', m.group(1))
+
+    actions = parse_action_keys("IntersectionActionKeysByKind")
+    required_gates = parse_action_keys("IntersectionRequiredGatesByActionKey")
+    moments = parse_slice_var("IntersectionMoments")
+    gate_keys = parse_slice_var("IntersectionGateKeys")
+    feedback_kinds = parse_slice_var("IntersectionFeedbackKinds")
+    action_dispatch_set = parse_slice_var("IntersectionActionDispatch")
 
     return {
         "evidenceRank": evidence,
@@ -277,6 +297,15 @@ def parse_generated_table() -> dict[str, dict]:
         "assetByObjectKind": asset_by_obj,
         "actionKeysByKind": actions,
         "actionLabelByKey": action_label,
+        "momentByKind": moment_by_kind,
+        "actionTierByKey": action_tier,
+        "targetAvailabilityByKey": target_avail,
+        "dispatchByKey": action_dispatch,
+        "requiredGatesByActionKey": required_gates,
+        "moments": moments,
+        "gateKeys": gate_keys,
+        "feedbackKinds": feedback_kinds,
+        "actionDispatch": action_dispatch_set,
     }
 
 
@@ -293,6 +322,7 @@ def expected_from_registry(by_kind: dict[str, dict], data: dict) -> dict[str, di
         for ok in object_kinds
         if str(ok.get("assetKind", "")).strip()
     }
+    action_meta = data.get("actionKeyMeta") or {}
     return {
         "evidenceRank": {k: v["evidenceRank"] for k, v in by_kind.items()},
         "iconKeyByKind": {k: v["iconKey"] for k, v in by_kind.items()},
@@ -301,6 +331,15 @@ def expected_from_registry(by_kind: dict[str, dict], data: dict) -> dict[str, di
         "assetByObjectKind": asset,
         "actionKeysByKind": {k: list(v) for k, v in (data.get("actionHintsByKind") or {}).items()},
         "actionLabelByKey": dict(data.get("actionLabelByKey") or {}),
+        "momentByKind": {k: (v.get("moment") or "current") for k, v in by_kind.items()},
+        "actionTierByKey": {k: v.get("tier", "") for k, v in action_meta.items()},
+        "targetAvailabilityByKey": {k: v.get("targetAvailability", "") for k, v in action_meta.items()},
+        "dispatchByKey": {k: v.get("dispatch", "") for k, v in action_meta.items()},
+        "requiredGatesByActionKey": {k: list(v.get("requiredGates") or []) for k, v in action_meta.items()},
+        "moments": list(data.get("moments") or []),
+        "gateKeys": list(data.get("gateKeys") or []),
+        "feedbackKinds": list(data.get("feedbackKinds") or []),
+        "actionDispatch": list(data.get("actionDispatch") or []),
     }
 
 
@@ -351,8 +390,20 @@ def main() -> int:
         "assetByObjectKind",
         "actionKeysByKind",
         "actionLabelByKey",
+        # §24 M0：意图时态 / 行动阶梯 map 表逐字段一致。
+        "momentByKind",
+        "actionTierByKey",
+        "targetAvailabilityByKey",
+        "dispatchByKey",
+        "requiredGatesByActionKey",
     ):
         diff_field(field, expected[field], actual[field], problems)
+    # §24 M0：闭集 slice（保序）一致。
+    for field in ("moments", "gateKeys", "feedbackKinds", "actionDispatch"):
+        if expected[field] != actual[field]:
+            problems.append(
+                f"{field}: registry={expected[field]!r} generated={actual[field]!r} (run `make codegen-rec-intersection`)"
+            )
     check_consumers_table_driven(problems)
 
     if problems:

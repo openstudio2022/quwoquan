@@ -8,11 +8,7 @@ import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:sqflite/sqflite.dart';
 
 class LocalCircleGroupSnapshotStore {
-  LocalCircleGroupSnapshotStore({
-    String? databasePath,
-    DatabaseFactory? databaseFactory,
-  }) : _databasePath = databasePath,
-       _databaseFactory = databaseFactory;
+  LocalCircleGroupSnapshotStore({this._databasePath, this._databaseFactory});
 
   static final LocalCircleGroupSnapshotStore shared =
       LocalCircleGroupSnapshotStore();
@@ -139,9 +135,11 @@ class LocalCircleGroupSnapshotStore {
       <Object?>[namespace.key, '%$normalizedQuery%', limit],
     );
     return rows
-        .map((row) => LocalCircleGroupSnapshotRecord.fromWireMap(
-              _decodePayload(row['payload_json']),
-            ))
+        .map(
+          (row) => LocalCircleGroupSnapshotRecord.fromWireMap(
+            _decodePayload(row['payload_json']),
+          ),
+        )
         .where((item) => item.groupId.isNotEmpty && item.circleId.isNotEmpty)
         .map((item) {
           final matchedField = _matchedField(query, item);
@@ -279,10 +277,7 @@ class LocalCircleGroupSnapshotStore {
     );
   }
 
-  String _matchedField(
-    String query,
-    LocalCircleGroupSnapshotRecord payload,
-  ) {
+  String _matchedField(String query, LocalCircleGroupSnapshotRecord payload) {
     final normalizedQuery = _normalize(query);
     if (normalizedQuery == null) {
       return '';

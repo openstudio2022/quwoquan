@@ -14,7 +14,7 @@
 
 In Scope:
 
-- `releases/config/search-service/v*.yaml` 版本快照。
+- `quwoquan_service/services/search-service/v*.yaml` 版本快照。
 - `search-service` 的 ES/Redis 配置灰度与回滚门槛。
 - 写侧服务 `es:` 配置接入共享 `quwoquan_objects` 的灰度风险说明。
 - prod rollout stage（gray-initial / carry-on / full）中的 SLO gate、回滚粒度和证据。
@@ -27,7 +27,7 @@ Out of Scope:
 
 ## 配置合同
 
-1. 发布配置必须有 `releases/config/<service>/v*.yaml` 版本文件，并声明 `config.version / min_image_version / max_image_version`。
+1. 发布配置必须有 `quwoquan_service/services/<service>/v*.yaml` 版本文件，并声明 `config.version / min_image_version / max_image_version`。
 2. 提交的配置不得包含真实 endpoint、password、token 或证书；端点和凭据仅由部署环境变量/secret 注入。
 3. `es.enabled=true` 只允许在 gamma/prod-sim/prod rollout stage 中通过 stackctl 验证后生效。
 4. Redis publish 是 best-effort，Redis 配置故障不得反压 `/v1/search` result 主路径。
@@ -37,7 +37,7 @@ Out of Scope:
 
 - 灰度由 `stackctl deploy --target prod-hosted` 的 prod rollout stage 驱动，不存在 `prod-gray` 环境。
 - 回滚粒度：
-  - config rollback：回退到上一 `releases/config/search-service/v*.yaml`。
+  - config rollback：回退到上一 `quwoquan_service/services/search-service/v*.yaml`。
   - service rollback：回退 search-service image/config 组合。
   - dependency restore：ES/Redis 恢复或切回 native fallback。
 - 回滚触发：

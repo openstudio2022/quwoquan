@@ -6,6 +6,7 @@ import json
 import sys
 from pathlib import Path
 
+from _common.creator_pool.batch_policy import default_target_for_batch
 from governance.creator_pool.plan import run_plan
 from governance.creator_pool.diversify import run_diversify
 from governance.creator_pool.acquire import run_acquire
@@ -107,6 +108,19 @@ def handle_creator_pool(args: argparse.Namespace) -> None:
         path = write_prod_rollout_dryrun(batch_id=batch)
         print(json.dumps({"wrote": path}, ensure_ascii=False))
         return
+    if cmd == "publish-creators":
+        from governance.creator_pool.publish_creators import run_publish_creators
+
+        result = run_publish_creators(
+            vertical=vertical,
+            batch_id=batch,
+            target=int(args.target),
+            out=Path(args.out) if getattr(args, "out", None) else None,
+            mode=args.mode,
+            dry_run=bool(args.dry_run),
+        )
+        print(json.dumps(result, ensure_ascii=False))
+        return
     if cmd == "report":
         shared = creator_pool_shared_dir(vertical, batch)
         rollup = shared / "creator_rollup_report.json"
@@ -168,7 +182,7 @@ def register_creator_pool_parser(sub: argparse._SubParsersAction) -> None:
     p_merge.add_argument("--dry-run", action="store_true")
     p_merge.set_defaults(handler=handle_creator_pool)
 
-    p_pool = cp_sub.add_parser("merge-user-pool", help="Merge creator slice into user_pool.creator_pool.json + manifest")
+    p_pool = cp_sub.add_parser("merge-user-pool", help="Merge creator slice into canonical 1k user_pool creator slice + manifest")
     _common(p_pool)
     p_pool.add_argument("--include-current-user-slot", action="store_true", default=True)
     p_pool.add_argument("--no-include-current-user-slot", action="store_false", dest="include_current_user_slot")
@@ -189,6 +203,14 @@ def register_creator_pool_parser(sub: argparse._SubParsersAction) -> None:
     _common(p_rollout)
     p_rollout.add_argument("--dry-run", action="store_true")
     p_rollout.set_defaults(handler=handle_creator_pool)
+
+    p_publish = cp_sub.add_parser("publish-creators", help="Project an approved creator batch into publish/creators")
+    _common(p_publish)
+    p_publish.add_argument("--target", type=int, default=default_target_for_batch("travel_photo_1k_v1"))
+    p_publish.add_argument("--out", default=None, help="Output root, default quwoquan_data/publish/creators")
+    p_publish.add_argument("--mode", default="commercial", choices=["trial", "commercial"])
+    p_publish.add_argument("--dry-run", action="store_true")
+    p_publish.set_defaults(handler=handle_creator_pool)
 
     p_report = cp_sub.add_parser("report")
     _common(p_report)

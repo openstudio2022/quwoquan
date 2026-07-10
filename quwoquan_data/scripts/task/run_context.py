@@ -49,7 +49,7 @@ FALLBACK_DAG_STAGE = {
 }
 MAX_REACT_REWINDS = 2  # 单 stage 自动回退次数上限，超出转人工，防无限自省
 MAX_MANAGED_INFRA_RETRIES = 3
-DEFAULT_CURSOR_AGENT_MODEL = os.environ.get("QWQ_CURSOR_AGENT_MODEL", "composer-2")
+DEFAULT_CURSOR_AGENT_MODEL = os.environ.get("QWQ_CURSOR_AGENT_MODEL", "composer")
 DEFAULT_CODEX_AGENT_MODEL = os.environ.get("QWQ_CODEX_AGENT_MODEL", "").strip()
 DEFAULT_MANAGED_AGENT_PROVIDER = os.environ.get("QWQ_MANAGED_AGENT_PROVIDER", "cursor_sdk")
 MANAGED_AGENT_PROVIDERS = {"cursor_sdk", "codex_cli"}
@@ -99,7 +99,7 @@ def _resolve_managed_model(provider: str, raw_model: str | None) -> str:
 
 MANAGED_LANE_LIMITS = _parse_managed_lane_limits(os.environ.get("QWQ_MANAGED_LANE_LIMITS"))
 MANAGED_AGENT_TIMEOUT_SECONDS = max(
-    60, int(os.environ.get("QWQ_MANAGED_AGENT_TIMEOUT_SECONDS", "240"))
+    60, int(os.environ.get("QWQ_MANAGED_AGENT_TIMEOUT_SECONDS", "360"))
 )
 MANAGED_AGENT_FUTURE_GRACE_SECONDS = max(
     5, int(os.environ.get("QWQ_MANAGED_AGENT_FUTURE_GRACE_SECONDS", "15"))

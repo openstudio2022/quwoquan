@@ -19,7 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:livekit_client/livekit_client.dart';
 import '../core/signal_client_test.dart';
-import '../mock/e2e_container.dart';
+import 'e2e_container.dart';
 
 void main() {
   late E2EContainer container;

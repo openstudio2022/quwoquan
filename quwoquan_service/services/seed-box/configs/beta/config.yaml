@@ -1,0 +1,5 @@
+service:
+  name: seed-box
+config:
+  env: beta
+  version: "v2026.06.17.rootless-service-plane"

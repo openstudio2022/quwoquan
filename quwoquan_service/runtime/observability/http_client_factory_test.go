@@ -100,7 +100,7 @@ func TestNewObservedHTTPClient_RetryAndSingleTerminalLogging(t *testing.T) {
 		t.Fatalf("expected 2 attempts by retry transport, got=%d", seqRT.attempts)
 	}
 
-	standardLogs, err := parseJSONLines(standard.String())
+	standardLogs, err := parseDelimitedLogs(standard.String())
 	if err != nil {
 		t.Fatalf("parse logs failed: %v", err)
 	}
@@ -111,4 +111,3 @@ func TestNewObservedHTTPClient_RetryAndSingleTerminalLogging(t *testing.T) {
 		t.Fatalf("error sink should be empty in success flow")
 	}
 }
-

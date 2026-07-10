@@ -8,7 +8,7 @@
 
 | 特性树层级 | 端侧对应 | 测试对应 |
 |---|---|---|
-| 应用根 | `lib/app`、`lib/core`、`lib/cloud/runtime` | `test/app`、`test/core`、`test/cloud`、`test/patrol` |
+| 应用根 | `lib/app`、`lib/core`、`lib/cloud/runtime` | `test/app`、`test/core`、`test/cloud`、`test/user_acceptance/patrol` |
 | `L1_domain_service` | `lib/ui/{domain}`、`lib/cloud/services/{domain}` | `test/ui/{domain}`、`test/cloud/{domain}` |
 | `L2_business_capability` | `lib/ui/{domain}/pages|providers|widgets|models` 下的能力模块 | 能力级 widget/provider/module/integration 测试 |
 | `L3_story` | Story 涉及的最小页面、Provider、Repository、DTO 或路由变更 | GWT、contract、widget/provider/API contract 测试 |

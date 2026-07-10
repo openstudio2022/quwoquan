@@ -143,7 +143,7 @@ python3 quwoquan_app/scripts/runtime/verify_lib_no_test_only_symbols.py
 python3 quwoquan_app/scripts/env/verify_ui_app_data_source_mode_ratchet.py
 
 # 与仓库 app gate 一致（含 flutter analyze、上述脚本、flutter test 等）
-bash agent_ops/gate/gate_repo.sh --scope app
+bash quwoquan_ops/gate/gate_repo.sh --scope app
 ```
 
 **Makefile 等价目标（节选）：** `make verify-app-mock-isolation`、`make verify-app-lib-test-only-symbols`、`make verify-app-ui-app-data-source-mode-ratchet`。
@@ -227,11 +227,11 @@ quwoquan_app/test/support/
 ```
 
 - **规则**：`test/support/**` 内 **不得** `import flutter_test` 以外的 app 代码仅通过 **公开 API**；若需测 `lib` 私有实现，应通过 **同测目录** 下的 `*_test.dart` 或 **export 测试专用 API**（避免回到 §4.1 禁止的同文件混写）。  
-- **contract 测试**：继续放在 `test/cloud/{domain}/contract/`，数据源用 **`Mock*Repository` 或 `test/support/fakes`**，**不**从 `lib/.../mock/` 再拷一份 Map。
+- **contract 测试**：继续放在 `test/local_contract/cloud/{domain}/`，数据源用 **`Mock*Repository` 或 `test/support/fakes`**，**不**从 `lib/.../mock/` 再拷一份 Map。
 
 ### 9.3 与环境测试目录的关系
 
-- E2E / Patrol 等统一放在 **`quwoquan_app/test/`** 下：环境无关放 `test/common`，本地端侧 mock 放 `test/alpha`，本地端云集成放 `test/beta`，云侧集成放 `test/gamma`，真机系统能力放 `test/patrol`。
+- E2E / Patrol 等统一放在 **`quwoquan_app/test/`** 下：环境无关放 `test/common`，本地端侧 mock 放 `test/alpha`，本地端云集成放 `test/beta`，云侧集成放 `test/gamma`，真机系统能力放 `test/user_acceptance/patrol`。
 - 是否跑设备/模拟器由 runner 的 `-d <device>` 参数决定，不再通过目录名表达。
 
 ### 9.4 移植清单（混入代码落点速查）

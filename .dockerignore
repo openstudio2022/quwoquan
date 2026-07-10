@@ -1,11 +1,10 @@
 .git/
 .cursor/
 .worktrees/
-state/
-artifacts/
+.qwq_output/
 quwoquan_app/
 quwoquan_data/
-apps/ops-portal/node_modules/
+quwoquan_ops/portal/node_modules/
 node_modules/
 **/.venv/
 **/__pycache__/

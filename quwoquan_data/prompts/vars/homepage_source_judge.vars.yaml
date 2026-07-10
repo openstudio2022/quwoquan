@@ -1,0 +1,14 @@
+template: homepage_source_judge
+system:
+  required: []
+  optional: []
+task:
+  required:
+    - target_entity
+    - source_meta_block
+    - head_text_block
+  optional:
+    - entity_type
+    - aliases_line
+    - unit_ref
+    - prescreen_block

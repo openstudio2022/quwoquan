@@ -26,14 +26,14 @@ minimum_package:
     t1:
       - contracts/metadata/realtime/connection/service.yaml
     t2:
-      - ../quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
+      - ../quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart
     t3:
       - contracts/metadata/realtime/connection/tests/e2e.yaml
     t4: []
 deployment:
   plane_binding_domain: realtime
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []

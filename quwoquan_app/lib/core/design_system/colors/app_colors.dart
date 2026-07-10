@@ -60,6 +60,15 @@ class AppColors {
   /// 动态视频卡片底层深色底
   static const Color momentVideoCardBackdrop = Color(0xFF212121);
 
+  /// 图片书页加载占位底色（沉浸式固定深底）。
+  static const Color imageBookPlaceholderBackdrop = Color(0xFF141B25);
+
+  /// 图片书页失败占位底色（比常规占位略亮，区分加载失败）。
+  static const Color imageBookFailurePlaceholderBackdrop = Color(0xFF18202C);
+
+  /// 图片书页背面轻微压暗洗色。
+  static const Color imageBookBackFaceWash = Color(0xFF111821);
+
   /// 发现页作品宫格卡片内层占位（浅灰）
   static const Color discoveryPostGridInnerFallback = Color(0xFFE0E0E0);
 
@@ -136,7 +145,7 @@ class AppColors {
   static const Color profileSloganAccentLight = Color(0xFF5A8FC7);
   static const Color profileSloganAccentDark = Color(0xFF8DBCF1);
 
-  /// 交集 / 影响力类型图标：非品牌蓝的低饱和语义色阶。
+  /// 交集 / 打动类型图标：非品牌蓝的低饱和语义色阶。
   static const Color profileIntersectionTeaLight = Color(0xFF786F62);
   static const Color profileIntersectionTeaDark = Color(0xFFC9BFB0);
   static const Color profileIntersectionSageLight = Color(0xFF5F7464);

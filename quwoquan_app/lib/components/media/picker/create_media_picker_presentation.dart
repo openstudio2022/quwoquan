@@ -63,18 +63,22 @@ List<CreateMediaPickerBottomActionSpec> mediaPickerBottomActionsForEntryMode({
   CreateMediaPickerFlowIntent flowIntent = CreateMediaPickerFlowIntent.publish,
 }) {
   final canContinue = selectionCount > 0;
+  final canCreateOneTapMovie = selectionCount >= 2;
   if (isPhotoCreationEntryMode(mode) &&
       flowIntent != CreateMediaPickerFlowIntent.oneTapMovieSource) {
     return <CreateMediaPickerBottomActionSpec>[
       CreateMediaPickerBottomActionSpec(
         action: CreateMediaPickerBottomAction.editImage,
-        label: UITextConstants.mediaPickerEditImage,
-        enabled: canContinue,
+        label: UITextConstants.mediaPickerOneTapMovie,
+        enabled: canCreateOneTapMovie,
         isPrimary: false,
       ),
       CreateMediaPickerBottomActionSpec(
         action: CreateMediaPickerBottomAction.completeImage,
-        label: '${UITextConstants.mediaPickerComplete}($selectionCount)',
+        label: mediaPickerCompletionLabel(
+          mode: mode,
+          selectionCount: selectionCount,
+        ),
         enabled: canContinue,
         isPrimary: true,
       ),

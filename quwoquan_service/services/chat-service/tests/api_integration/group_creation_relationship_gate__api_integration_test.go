@@ -40,16 +40,13 @@ var groupCreationCollections = []string{
 	"notification_delivery_ledger",
 }
 
-func TestMain(m *testing.M) {
-	code := m.Run()
-	ctx := context.Background()
+func cleanupGroupCreationResources(ctx context.Context) {
 	if groupCreationMongoClient != nil {
 		_ = groupCreationMongoClient.Disconnect(ctx)
 	}
 	if groupCreationMongoContainer != nil {
 		_ = groupCreationMongoContainer.Terminate(ctx)
 	}
-	os.Exit(code)
 }
 
 func requireGroupCreationMongoDB(tb testing.TB) *mongo.Database {

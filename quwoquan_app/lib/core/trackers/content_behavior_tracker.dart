@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 
@@ -660,6 +661,183 @@ class ContentBehaviorTracker {
     );
   }
 
+  /// 记录交集条目负反馈（intersection_feedback，F 推荐与交集配对差异化）。
+  ///
+  /// 不绑定具体 post：[subjectId] 为交集主体对象（person/circle/place…，与
+  /// reason.subjectId / actionTargetId 同源），[feedbackKind] 必须属于
+  /// registry.feedbackKinds 闭集（[intersectionFeedbackKinds] codegen 常量，
+  /// 端上报与云侧降权/冷却读同一集合）。非法 kind 或空 subject 直接丢弃不上报，
+  /// 避免脏信号污染云侧 rec:ineg 交集负反馈冷却集（命中 subject 冷却期内不再推荐）。
+  void trackIntersectionFeedback(
+    String subjectId, {
+    required String feedbackKind,
+    String? intersectionId,
+    String? intersectionDimension,
+    String? intersectionClass,
+    String? intersectionSourceRef,
+  }) {
+    final normalizedSubject = subjectId.trim();
+    final normalizedKind = feedbackKind.trim();
+    if (normalizedSubject.isEmpty ||
+        !intersectionFeedbackKinds.contains(normalizedKind)) {
+      return;
+    }
+    _add(
+      BehaviorEvent(
+        contentId: '',
+        action: BehaviorAction.intersectionFeedback,
+        state: 'negative',
+        subjectId: normalizedSubject,
+        feedbackKind: normalizedKind,
+        intersectionId: intersectionId,
+        intersectionDimension: intersectionDimension,
+        intersectionClass: intersectionClass,
+        intersectionSourceRef: intersectionSourceRef,
+      ),
+    );
+  }
+
+  /// 记录用户显式点亮「想去 / 收藏 / 计划去」。
+  ///
+  /// 该事件会由 content-service 投影到 `entity_wishlist_events`，作为
+  /// `coWishlistedEntity` 的真实意图源；缺对象 id 或类型时不上报，避免生成
+  /// 无法参与交集的脏事实。
+  void trackWishlistAdd(
+    String objectId, {
+    required String objectKind,
+    String? displayName,
+    String? sourceSurface,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+  }) {
+    _trackWishlistIntent(
+      objectId,
+      action: BehaviorAction.wishlistAdd,
+      objectKind: objectKind,
+      displayName: displayName,
+      sourceSurface: sourceSurface,
+      feedRequestId: feedRequestId,
+      position: position,
+      referralSource: referralSource,
+      channelId: channelId,
+      rankingVersion: rankingVersion,
+    );
+  }
+
+  /// 记录用户取消「想去 / 收藏 / 计划去」，云侧标记为 removed。
+  void trackWishlistRemove(
+    String objectId, {
+    required String objectKind,
+    String? sourceSurface,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+  }) {
+    _trackWishlistIntent(
+      objectId,
+      action: BehaviorAction.wishlistRemove,
+      objectKind: objectKind,
+      sourceSurface: sourceSurface,
+      feedRequestId: feedRequestId,
+      position: position,
+      referralSource: referralSource,
+      channelId: channelId,
+      rankingVersion: rankingVersion,
+    );
+  }
+
+  void trackWorksImagePageflipMotion(
+    String contentId, {
+    required String direction,
+    required String motionProfile,
+    required int settleMs,
+    required bool reducedMotion,
+    required bool committed,
+    String? contentType,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+    String? reasonVersion,
+    String? recallPath,
+    String? contentVertical,
+    String? supplySource,
+  }) {
+    final normalizedContentId = contentId.trim();
+    if (normalizedContentId.isEmpty) {
+      return;
+    }
+    _add(
+      BehaviorEvent(
+        contentId: normalizedContentId,
+        action: BehaviorAction.contentDepth,
+        state: 'works_image_pageflip_motion',
+        contentType: contentType,
+        sourceSurface: 'works_immersive_viewer',
+        duration: settleMs <= 0 ? null : settleMs / 1000.0,
+        feedRequestId: feedRequestId,
+        position: position,
+        referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
+        reasonVersion: reasonVersion,
+        recallPath: recallPath,
+        contentVertical: contentVertical,
+        supplySource: supplySource,
+        motionDirection: direction,
+        motionProfile: motionProfile,
+        settleMs: settleMs,
+        reducedMotion: reducedMotion,
+        committed: committed,
+      ),
+    );
+  }
+
+  void _trackWishlistIntent(
+    String objectId, {
+    required BehaviorAction action,
+    required String objectKind,
+    String? displayName,
+    String? sourceSurface,
+    String? feedRequestId,
+    int? position,
+    ReferralSource? referralSource,
+    String? channelId,
+    String? rankingVersion,
+  }) {
+    final normalizedObjectId = objectId.trim();
+    final normalizedObjectKind = objectKind.trim();
+    if (normalizedObjectId.isEmpty || normalizedObjectKind.isEmpty) {
+      return;
+    }
+    _add(
+      BehaviorEvent(
+        contentId: normalizedObjectId,
+        action: action,
+        state: action == BehaviorAction.wishlistRemove
+            ? 'negative'
+            : 'interaction',
+        contentType: normalizedObjectKind,
+        objectId: normalizedObjectId,
+        objectKind: normalizedObjectKind,
+        displayName: displayName?.trim(),
+        sourceSurface: sourceSurface?.trim(),
+        entityRefs: <String>[normalizedObjectId],
+        feedRequestId: feedRequestId,
+        position: position,
+        referralSource: referralSource,
+        channelId: channelId,
+        rankingVersion: rankingVersion,
+      ),
+    );
+  }
+
   void _add(BehaviorEvent event) {
     final normalized = _withClientEventId(event);
     final dedupKey = _dedupKey(normalized);
@@ -682,6 +860,10 @@ class ContentBehaviorTracker {
       contentId: event.contentId,
       action: event.action,
       contentType: event.contentType,
+      objectId: event.objectId,
+      objectKind: event.objectKind,
+      displayName: event.displayName,
+      sourceSurface: event.sourceSurface,
       tags: event.tags,
       duration: event.duration,
       feedRequestId: event.feedRequestId,
@@ -706,12 +888,28 @@ class ContentBehaviorTracker {
       intersectionId: event.intersectionId,
       intersectionClass: event.intersectionClass,
       intersectionEvidenceId: event.intersectionEvidenceId,
+      subjectId: event.subjectId,
+      feedbackKind: event.feedbackKind,
+      motionDirection: event.motionDirection,
+      motionProfile: event.motionProfile,
+      settleMs: event.settleMs,
+      reducedMotion: event.reducedMotion,
+      committed: event.committed,
     );
   }
 
   String _dedupKey(BehaviorEvent event) {
     final feed = event.feedRequestId ?? '';
-    return '$feed|${event.contentId}|${event.action.wireValue}|${event.state ?? ''}';
+    // subjectId + feedbackKind 纳入去重键：交集负反馈不绑定 post（contentId 恒空），
+    // 若仅按 contentId/action/state 去重会把不同 subject / 不同 kind 的负反馈误合并成一条，
+    // 导致多主体降权 / 冷却丢失（F 推荐差异化）。非交集事件二者为空，去重语义不变。
+    final subject = event.subjectId ?? '';
+    final kind = event.feedbackKind ?? '';
+    final motion =
+        '${event.motionDirection ?? ''}|${event.motionProfile ?? ''}|'
+        '${event.settleMs ?? ''}|${event.reducedMotion ?? ''}|'
+        '${event.committed ?? ''}';
+    return '$feed|${event.contentId}|${event.action.wireValue}|${event.state ?? ''}|$subject|$kind|$motion';
   }
 
   String _stateForAction(BehaviorAction action) {
@@ -725,6 +923,8 @@ class ContentBehaviorTracker {
       case BehaviorAction.hideContentType:
       case BehaviorAction.report:
       case BehaviorAction.skip:
+      case BehaviorAction.intersectionFeedback:
+      case BehaviorAction.wishlistRemove:
         return 'negative';
       case BehaviorAction.click:
       case BehaviorAction.like:
@@ -739,6 +939,7 @@ class ContentBehaviorTracker {
       case BehaviorAction.joinCircle:
       case BehaviorAction.addContact:
       case BehaviorAction.assistantInterest:
+      case BehaviorAction.wishlistAdd:
         return 'interaction';
     }
   }

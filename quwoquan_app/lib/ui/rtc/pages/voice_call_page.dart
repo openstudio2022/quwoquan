@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/services/active_call_service.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_participant_picker_route_extra.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
@@ -83,8 +84,7 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
     });
 
     final participants = session.session?.participants ?? [];
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final stageGradient = CallStageChrome.backgroundGradient(isDark);
 
     return PopScope(
@@ -139,21 +139,32 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
                         _TopActionButton(
                           icon: CupertinoIcons.person_2,
                           onTap: () {
-                            showCupertinoModalPopup<void>(
+                            showAppBottomModal<void>(
                               context: context,
-                              barrierColor: AppColors.transparent,
-                              builder: (_) => ParticipantListSheet(
+                              builder: (sheetContext) => ParticipantListSheet(
                                 maxParticipants:
                                     session.session?.maxParticipants ?? 32,
                                 onInviteMore: () {
-                                  Navigator.of(context).pop();
-                                  context.push(
-                                    AppRoutePaths.rtcPickParticipants,
-                                    extra: CallParticipantPickerRouteExtra(
-                                      callId: widget.callId,
-                                      maxParticipants:
-                                          session.session?.maxParticipants ??
-                                          32,
+                                  unawaited(
+                                    dismissAppModalAndRun(
+                                      sheetContext,
+                                      action: () {
+                                        if (!context.mounted) {
+                                          return;
+                                        }
+                                        context.push(
+                                          AppRoutePaths.rtcPickParticipants,
+                                          extra:
+                                              CallParticipantPickerRouteExtra(
+                                                callId: widget.callId,
+                                                maxParticipants:
+                                                    session
+                                                        .session
+                                                        ?.maxParticipants ??
+                                                    32,
+                                              ),
+                                        );
+                                      },
                                     ),
                                   );
                                 },
@@ -206,15 +217,19 @@ class _VoiceCallPageState extends ConsumerState<VoiceCallPage> {
   }
 
   Widget _buildParticipantAvatars(List<CallParticipantDto> participants) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final mutedFg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary)
-            .withValues(alpha: 0.35);
-    final nameFg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final onAccent =
-        AppColorsFunctional.getColor(isDark, ColorType.badgeForeground);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final mutedFg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    ).withValues(alpha: 0.35);
+    final nameFg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final onAccent = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.badgeForeground,
+    );
 
     if (participants.isEmpty) {
       return Icon(
@@ -296,12 +311,12 @@ class _TopActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
-    final fg =
-        AppColorsFunctional.getColor(isDark, ColorType.foregroundPrimary);
-    final glass =
-        AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+    final fg = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.foregroundPrimary,
+    );
+    final glass = AppColorsFunctional.getColor(isDark, ColorType.glassSurface);
     return GestureDetector(
       onTap: onTap,
       child: Container(

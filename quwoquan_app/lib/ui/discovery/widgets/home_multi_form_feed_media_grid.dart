@@ -73,75 +73,120 @@ class _HomeMomentGridCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final visibleCount = _momentGridVisibleCount(urls.length);
     final columns = _momentGridColumns(visibleCount);
+    final rows = ((visibleCount + columns - 1) ~/ columns).clamp(1, 3).toInt();
     final remaining = urls.length - visibleCount;
     return ClipRRect(
       key: const ValueKey('home-moment-grid'),
       borderRadius: BorderRadius.circular(
         DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
       ),
-      child: GridView.builder(
-        padding: EdgeInsets.zero,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: columns,
-          crossAxisSpacing: _feedMediaGap,
-          mainAxisSpacing: _feedMediaGap,
-        ),
-        itemCount: visibleCount,
-        itemBuilder: (context, index) {
-          final showMore = remaining > 0 && index == visibleCount - 1;
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => onTap(index),
-            child: Stack(
-              key: ValueKey<String>('home-moment-grid-tile-$index'),
-              fit: StackFit.expand,
-              children: [
-                AppCachedNetworkImage(
-                  imageUrl: urls[index],
-                  imageUrlCandidates: resolveContentMediaUrlCandidates(
-                    urls[index],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (!constraints.hasBoundedWidth ||
+              !constraints.hasBoundedHeight ||
+              visibleCount <= 0) {
+            return const SizedBox.shrink();
+          }
+          final tileWidth =
+              ((constraints.maxWidth - _feedMediaGap * (columns - 1)) / columns)
+                  .clamp(AppSpacing.zero, double.infinity)
+                  .toDouble();
+          final tileHeight =
+              ((constraints.maxHeight - _feedMediaGap * (rows - 1)) / rows)
+                  .clamp(AppSpacing.zero, double.infinity)
+                  .toDouble();
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              for (var index = 0; index < visibleCount; index++)
+                Positioned(
+                  left: (index % columns) * (tileWidth + _feedMediaGap),
+                  top: (index ~/ columns) * (tileHeight + _feedMediaGap),
+                  width: tileWidth,
+                  height: tileHeight,
+                  child: _HomeMomentGridTile(
+                    tileKey: ValueKey<String>('home-moment-grid-tile-$index'),
+                    url: urls[index],
+                    isDark: isDark,
+                    showMore: remaining > 0 && index == visibleCount - 1,
+                    remaining: remaining,
+                    onTap: () => onTap(index),
                   ),
-                  cdnPreset: CdnImagePreset.thumbnail,
-                  fit: BoxFit.cover,
-                  placeholder: _mediaPlaceholder(isDark),
-                  errorWidget: _mediaPlaceholder(isDark),
                 ),
-                if (showMore)
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      key: const ValueKey('home-moment-grid-more-scrim'),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            AppColors.black.withValues(
-                              alpha: DiscoveryFeedSpacing
-                                  .homeFeedGridMoreScrimTopOpacity,
-                            ),
-                            AppColors.black.withValues(
-                              alpha: DiscoveryFeedSpacing
-                                  .homeFeedGridMoreScrimBottomOpacity,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                if (showMore)
-                  Positioned(
-                    top: AppSpacing.intraGroupSm,
-                    right: AppSpacing.intraGroupSm,
-                    child: _HomeFeedMediaOverlayPill(
-                      key: const ValueKey('home-moment-grid-more'),
-                      label: '+$remaining',
-                    ),
-                  ),
-              ],
-            ),
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _HomeMomentGridTile extends StatelessWidget {
+  const _HomeMomentGridTile({
+    required this.tileKey,
+    required this.url,
+    required this.isDark,
+    required this.showMore,
+    required this.remaining,
+    required this.onTap,
+  });
+
+  final Key tileKey;
+  final String url;
+  final bool isDark;
+  final bool showMore;
+  final int remaining;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Stack(
+        key: tileKey,
+        fit: StackFit.expand,
+        children: [
+          AppCachedNetworkImage(
+            imageUrl: url,
+            imageUrlCandidates: resolveContentMediaUrlCandidates(url),
+            cdnPreset: CdnImagePreset.thumbnail,
+            fit: BoxFit.cover,
+            placeholder: _mediaPlaceholder(isDark),
+            errorWidget: _mediaPlaceholder(isDark),
+          ),
+          if (showMore)
+            Positioned.fill(
+              child: DecoratedBox(
+                key: const ValueKey('home-moment-grid-more-scrim'),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      AppColors.black.withValues(
+                        alpha: DiscoveryFeedSpacing
+                            .homeFeedGridMoreScrimTopOpacity,
+                      ),
+                      AppColors.black.withValues(
+                        alpha: DiscoveryFeedSpacing
+                            .homeFeedGridMoreScrimBottomOpacity,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (showMore)
+            Positioned(
+              top: AppSpacing.intraGroupSm,
+              right: AppSpacing.intraGroupSm,
+              child: _HomeFeedMediaOverlayPill(
+                key: const ValueKey('home-moment-grid-more'),
+                label: '+$remaining',
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -377,7 +422,7 @@ class _HomeFeedVideoCard extends ConsumerWidget {
               VideoPlayerWidget(
                 key: ValueKey<String>('home-video-player-${dto.id}'),
                 videoUrl: videoUrl,
-                videoUrlCandidates: resolveContentMediaUrlCandidates(videoUrl),
+                videoUrlCandidates: resolveContentVideoUrlCandidates(videoUrl),
                 thumbnailUrl: dto.mediaVideoCoverUrl.isNotEmpty
                     ? dto.mediaVideoCoverUrl
                     : dto.primaryVisualUrl,

@@ -7,7 +7,7 @@
 单/多 agent 共用同一套 `qwq-data` 动词与同一 DAG，差异只在「驱动者 + 并发 + CHECKPOINT 接缝」（见 `quwoquan_data/docs/fanout_scaffold_spec.md`）：
 
 - **单分区/小批（默认，本页「标准流程」）**：会话内单 agent 顺序跑，CHECKPOINT 由会话 Agent 创作后 `--resume`。
-- **大规模分层（多省/区县/多对象）→ 委托 fanout**：先 `qwq-data task decompose` 发现式分片冻结计划，再 `qwq-data task run --mode fanout` 建多 task/batch + 入队叶子，最后外部 `agent_ops/runners/fanout_runner.py` 多 worker 并行（每 worker=独立 cloud agent）。
+- **大规模分层（多省/区县/多对象）→ 委托 fanout**：先 `qwq-data task decompose` 发现式分片冻结计划，再 `qwq-data task run --mode fanout` 建多 task/batch + 入队叶子，最后 `qwq-data task scaled-e2e author-runner` 多 worker 并行（每 worker=独立 cloud agent）。
 
 ```bash
 # 阶段 A：发现式分解 + 冻结（agent 联网枚举分区/叶子写回）
@@ -20,8 +20,8 @@ python3 quwoquan_data/scripts/cli.py task decompose freeze --plan <planId> --con
 # 阶段 B：确定性分层调度（建 task/batch + 入队叶子，幂等可重放）
 python3 quwoquan_data/scripts/cli.py task run --mode fanout --plan <planId> --strategy by-partition --concurrency 8
 
-# 外部多 worker 执行（cursor-sdk 真实执行）+ 归并治理
-python3 agent_ops/runners/fanout_runner.py --plan <planId> --strategy by-partition --concurrency 8
+# 多 worker 执行（cursor-sdk 真实执行）+ 归并治理
+python3 quwoquan_data/scripts/cli.py task scaled-e2e author-runner --plan <planId> --strategy by-partition --concurrency 8
 python3 quwoquan_data/scripts/cli.py task rollup --plan <planId>
 ```
 
@@ -55,8 +55,10 @@ python3 quwoquan_data/scripts/cli.py template audience-lint
 ```bash
 python3 quwoquan_data/scripts/cli.py plan \
   --instruction "为川西做自驾线路攻略，面向休闲游客" \
-  --output quwoquan_data/runtime/tasks/<task>/batches/<batch>/produce/inputs/compose/<ref>.json
+  --output <批次根>/posts/<type>/<angle>/<title>/<seq>/3.brief/brief.json
 ```
+
+批次根 = `QWQ_OUTPUT_ROOT/local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`（数据输出规范 `quwoquan_data/docs/pipeline_directory_layout_spec.md` §0.5；由 `qwq-data task` 编排创建，路径一律经 `_common/paths.py` 推导，禁止手拼仓内 `runtime/tasks/...` 旧树）。
 
 或显式输入（含地域/季节条件维）：
 
@@ -70,7 +72,7 @@ python3 quwoquan_data/scripts/cli.py plan \
   --region 高原 \
   --season 冬 \
   --entity-refs 地点/景区/四姑娘山,地点/古镇/丹巴甲居 \
-  --output quwoquan_data/runtime/tasks/<task>/batches/<batch>/produce/inputs/compose/<ref>.json
+  --output <批次根>/posts/<type>/<angle>/<title>/<seq>/3.brief/brief.json
 ```
 
 `--region/--season` 命中且模板声明 `conditionAxes` 适用时，brief 会注入 `conditionContext` 与对应 `mustIncludeFacts/imagePlan`，并透传到 recommendation manifest。地域季节矩阵批量生产示例：同一受众 × {高原, 沿海海岛} × {夏, 冬} 跑成多个 brief。

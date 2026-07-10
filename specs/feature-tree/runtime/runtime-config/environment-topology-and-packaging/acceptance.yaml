@@ -45,8 +45,8 @@ gwt_acceptance:
     notes: []
 execution:
   local_gate:
-  - python3 agent_ops/gate/verify_environment_topology_manifest.py
-  - python3 agent_ops/gate/verify_local_env_port_manifest.py
+  - python3 quwoquan_ops/gate/verify_environment_topology_manifest.py
+  - python3 quwoquan_ops/gate/verify_local_env_port_manifest.py
   - python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
   full_gate:
   - make verify-env-packaging

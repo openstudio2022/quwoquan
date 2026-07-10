@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/post_base_dto.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/post/post_preview_card.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
@@ -64,6 +65,12 @@ class RecordPostCard extends ConsumerWidget {
     return body;
   }
 
+  String get _intersectionObjectName {
+    final title = post.normalizedTitle.trim();
+    if (title.isNotEmpty) return title;
+    return post.normalizedBody.trim();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(postInteractionStateProvider);
@@ -92,6 +99,12 @@ class RecordPostCard extends ConsumerWidget {
         post.intersectionReasons,
         isDark: isDark,
         referralSource: referralSource,
+        contextObjectName: _intersectionObjectName,
+        contextObjectTarget: IntersectionTarget(
+          objectId: post.id,
+          objectKind: 'content',
+          routeId: 'workBrowser',
+        ),
       ),
       footer: Row(
         children: <Widget>[

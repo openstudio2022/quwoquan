@@ -51,6 +51,17 @@ def test_auto_research_source_uses_candidate_image_window():
         "https://img.example/4.jpg",
     ]
 
+def test_homepage_wikivoyage_preserves_explicit_encyclopedia_category():
+    source = _source(
+        source_id="home_wikivoyage",
+        platform="维基导游",
+        url="https://zh.wikivoyage.org/wiki/九寨沟",
+        category="encyclopedia",
+        discovery_provider="test",
+        match_confidence=0.9,
+    )
+    assert source["category"] == "encyclopedia"
+
 def test_qunar_travelogue_sources_search_multiple_entity_aliases():
     original_curl_json = research_plan_mod._curl_json
     original_sleep = research_plan_mod.time.sleep
@@ -96,6 +107,255 @@ def test_qunar_travelogue_sources_search_multiple_entity_aliases():
     assert sources[0]["sourceRole"] == "base"
     assert sources[0]["url"] == "https://touch.travel.qunar.com/youji/10001"
 
+def test_qunar_travelogue_sources_preserve_author_and_freshness_metadata():
+    original_curl_json = research_plan_mod._curl_json
+    original_curl_text = research_plan_mod._curl_text
+    original_sleep = research_plan_mod.time.sleep
+
+    def _fake_curl_json(url: str, *, timeout: int = 0):
+        _ = timeout
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("q", [""])[0]
+        if query != "锦里":
+            return {"ret": True, "data": {"bookList": [], "more": False}}
+        return {
+            "ret": True,
+            "data": {
+                "bookList": [
+                    {
+                        "id": "7869929",
+                        "title": "成都及周边6天5晚自由行",
+                        "travelRoute": ["锦里古街", "成都大熊猫繁育研究基地"],
+                        "cityName": "成都",
+                        "userId": "1355244214@qunar",
+                        "userName": "去哪儿用户",
+                        "startTime": 1727539200000,
+                    }
+                ],
+                "more": False,
+            },
+        }
+
+    try:
+        research_plan_mod._curl_json = _fake_curl_json
+        research_plan_mod._curl_text = lambda *_args, **_kwargs: ""
+        research_plan_mod.time.sleep = lambda *_args, **_kwargs: None
+        sources = _qunar_travelogue_sources("锦里", entity_aliases=["锦里古街"], limit=4)
+    finally:
+        research_plan_mod._curl_json = original_curl_json
+        research_plan_mod._curl_text = original_curl_text
+        research_plan_mod.time.sleep = original_sleep
+
+    assert sources[0]["authorName"] == "去哪儿用户"
+    assert sources[0]["authorId"] == "1355244214@qunar"
+    assert sources[0]["authorBooksUrl"] == "https://touch.travel.qunar.com/1355244214@qunar/books"
+    assert sources[0]["publishedAt"] == "2024-09-29"
+
+def test_qunar_travelogue_sources_prioritize_high_intent_queries():
+    original_curl_json = research_plan_mod._curl_json
+    original_curl_text = research_plan_mod._curl_text
+    original_sleep = research_plan_mod.time.sleep
+    queries: list[str] = []
+
+    def _fake_curl_json(url: str, *, timeout: int = 0):
+        _ = timeout
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("q", [""])[0]
+        queries.append(query)
+        if query != "都江堰攻略":
+            return {"ret": True, "data": {"bookList": [], "more": False}}
+        return {
+            "ret": True,
+            "data": {
+                "bookList": [
+                    {
+                        "id": "7783661",
+                        "title": "成都—都江堰5日游攻略",
+                        "travelRoute": ["都江堰景区", "青城山"],
+                        "userId": "1383305677@qunar",
+                        "userName": "去哪儿用户",
+                        "startTime": 1684252800000,
+                    }
+                ],
+                "more": False,
+            },
+        }
+
+    try:
+        research_plan_mod._curl_json = _fake_curl_json
+        research_plan_mod._curl_text = lambda *_args, **_kwargs: ""
+        research_plan_mod.time.sleep = lambda *_args, **_kwargs: None
+        sources = _qunar_travelogue_sources("都江堰", limit=4)
+    finally:
+        research_plan_mod._curl_json = original_curl_json
+        research_plan_mod._curl_text = original_curl_text
+        research_plan_mod.time.sleep = original_sleep
+
+    assert queries[0] == "都江堰攻略"
+    assert sources[0]["url"] == "https://touch.travel.qunar.com/youji/7783661"
+    assert sources[0]["title"] == "成都—都江堰5日游攻略"
+
+def test_qunar_travelogue_sources_expand_same_author_books_page():
+    original_curl_json = research_plan_mod._curl_json
+    original_curl_text = research_plan_mod._curl_text
+    original_sleep = research_plan_mod.time.sleep
+
+    def _fake_curl_json(url: str, *, timeout: int = 0):
+        _ = timeout
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(url).query).get("q", [""])[0]
+        if query != "锦里":
+            return {"ret": True, "data": {"bookList": [], "more": False}}
+        return {
+            "ret": True,
+            "data": {
+                "bookList": [
+                    {
+                        "id": "7825234",
+                        "title": "成都的乒乓、熊猫之旅",
+                        "travelRoute": ["锦里古街", "杜甫草堂"],
+                        "userId": "265590601@qunar",
+                        "userName": "猫成",
+                        "startTime": 1714521600000,
+                    }
+                ],
+                "more": False,
+            },
+        }
+
+    def _fake_curl_text(url: str, *, timeout: int = 0):
+        _ = timeout
+        assert url == "https://touch.travel.qunar.com/265590601@qunar/books"
+        return (
+            '<a href="https://touch.travel.qunar.com/youji/7825234" class="list_txt_link">'
+            '<p class="tit-text">成都的乒乓、熊猫之旅</p><p class="tit-time">2024.05.01出发/共4天</p></a>'
+            '<a href="https://touch.travel.qunar.com/youji/7894819" class="list_txt_link">'
+            '<p class="tit-text">锦里夜游复盘</p><p class="tit-time">2025.07.06出发/共2天</p></a>'
+            '<a href="https://touch.travel.qunar.com/youji/7899999" class="list_txt_link">'
+            '<p class="tit-text">山西古建巡游</p><p class="tit-time">2025.07.09出发/共5天</p></a>'
+        )
+
+    try:
+        research_plan_mod._curl_json = _fake_curl_json
+        research_plan_mod._curl_text = _fake_curl_text
+        research_plan_mod.time.sleep = lambda *_args, **_kwargs: None
+        sources = _qunar_travelogue_sources("锦里", entity_aliases=["锦里古街"], limit=4)
+    finally:
+        research_plan_mod._curl_json = original_curl_json
+        research_plan_mod._curl_text = original_curl_text
+        research_plan_mod.time.sleep = original_sleep
+
+    assert [source["url"] for source in sources] == [
+        "https://touch.travel.qunar.com/youji/7825234",
+        "https://touch.travel.qunar.com/youji/7894819",
+    ]
+    assert sources[1]["discoveryProvider"] == "qunar_author_books_page"
+    assert sources[1]["authorId"] == "265590601@qunar"
+    assert sources[1]["publishedAt"] == "2025.07.06出发/共2天"
+    assert "https://touch.travel.qunar.com/youji/7899999" not in {
+        source["url"] for source in sources
+    }
+
+def test_qunar_travelogue_sources_caps_search_budget_and_single_page():
+    original_curl_json = research_plan_mod._curl_json
+    original_sleep = research_plan_mod.time.sleep
+    calls: list[tuple[str, str]] = []
+
+    def _fake_curl_json(url: str, *, timeout: int = 0):
+        _ = timeout
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        query = params.get("q", [""])[0]
+        page = params.get("page", [""])[0]
+        calls.append((query, page))
+        return {
+            "ret": True,
+            "data": {
+                "bookList": [
+                    {
+                        "id": f"900{len(calls)}",
+                        "title": "无关城市周末游",
+                        "travelRoute": ["无关城市"],
+                        "cityName": "无关",
+                    }
+                ],
+                "more": True,
+            },
+        }
+
+    try:
+        research_plan_mod._curl_json = _fake_curl_json
+        research_plan_mod.time.sleep = lambda *_args, **_kwargs: None
+        sources = _qunar_travelogue_sources(
+            "洪泽湖湿地景区",
+            entity_aliases=_known_entity_aliases("洪泽湖湿地景区"),
+            limit=4,
+        )
+    finally:
+        research_plan_mod._curl_json = original_curl_json
+        research_plan_mod.time.sleep = original_sleep
+
+    unique_queries = list(dict.fromkeys(query for query, _page in calls))
+    assert sources == []
+    assert len(unique_queries) <= 8
+    assert "洪泽湖" in unique_queries
+    assert {page for _query, page in calls} == {"1"}
+
+def test_qunar_travelogue_sources_fetch_second_page_after_anchor_hits():
+    original_curl_json = research_plan_mod._curl_json
+    original_sleep = research_plan_mod.time.sleep
+    calls: list[tuple[str, str]] = []
+
+    def _fake_curl_json(url: str, *, timeout: int = 0):
+        _ = timeout
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        query = params.get("q", [""])[0]
+        page = params.get("page", [""])[0]
+        calls.append((query, page))
+        if query != "锦里":
+            return {"ret": True, "data": {"bookList": [], "more": False}}
+        if page == "1":
+            return {
+                "ret": True,
+                "data": {
+                    "bookList": [
+                        {
+                            "id": "7825234",
+                            "title": "锦里夜游攻略",
+                            "travelRoute": ["锦里古街"],
+                            "cityName": "成都",
+                            "viewCount": 100,
+                        }
+                    ],
+                    "more": True,
+                },
+            }
+        return {
+            "ret": True,
+            "data": {
+                "bookList": [
+                    {
+                        "id": "7894819",
+                        "title": "锦里古街半日游",
+                        "travelRoute": ["锦里古街", "武侯祠"],
+                        "cityName": "成都",
+                        "viewCount": 90,
+                    }
+                ],
+                "more": False,
+            },
+        }
+
+    try:
+        research_plan_mod._curl_json = _fake_curl_json
+        research_plan_mod.time.sleep = lambda *_args, **_kwargs: None
+        sources = _qunar_travelogue_sources("锦里", entity_aliases=["锦里古街"], limit=4)
+    finally:
+        research_plan_mod._curl_json = original_curl_json
+        research_plan_mod.time.sleep = original_sleep
+
+    assert [source["url"] for source in sources] == [
+        "https://touch.travel.qunar.com/youji/7825234",
+        "https://touch.travel.qunar.com/youji/7894819",
+    ]
+    assert ("锦里", "2") in calls
+
 def test_known_entity_aliases_registry_covers_operational_article_search_names():
     assert "沈阳世博园" in _known_entity_aliases("沈阳市沈阳植物园")
     assert "长春世界雕塑园" in _known_entity_aliases("世界雕塑公园景区")
@@ -113,21 +373,32 @@ def test_known_article_sources_skip_non_fetchable_registry_sites():
     assert any(source["platform"] == "景区官网" for source in sources)
     assert not any("you.ctrip.com" in url for url in urls)
 
-def test_homepage_seed_source_requires_encyclopedia_primary_only():
-    # P3 三类解耦：实体主页 base draft 主源【只来自百科】(wiki/百度/搜狗百科 = encyclopedia)。
-    # 官网/官方/政务文旅/权威媒体一律降为 supporting，不得作 primaryEvidenceRef。
+def test_homepage_seed_source_two_tier_authority():
+    # P3 三类解耦 + R-HSE06 扩源：主页 base draft 主源 = 第一权威百科
+    # (wiki/wikivoyage/百度/搜狗百科) 优先 + 第二权威（官网/政务文旅）兜底；
+    # 权威媒体/头条百科仍为 supporting/reference，不得作 primaryEvidenceRef。
     assert _homepage_can_seed_base_draft({
         "platform": "维基百科",
         "category": "encyclopedia",
         "url": "https://zh.wikipedia.org/wiki/example",
     })
-    # 景区官网/official 不再能作主页 base draft 主源(P3 收紧为仅百科)。
+    assert _homepage_can_seed_base_draft({
+        "platform": "维基导游",
+        "category": "encyclopedia",
+        "url": "https://zh.wikivoyage.org/wiki/example",
+    })
     assert not _homepage_can_seed_base_draft({
+        "platform": "头条百科",
+        "category": "encyclopedia",
+        "url": "https://www.baike.com/wikiid/1",
+    })
+    # R-HSE06：景区官网/政务文旅是第二权威主源，可 seed base draft。
+    assert _homepage_can_seed_base_draft({
         "platform": "景区官网",
         "category": "official",
         "url": "https://example.com/about",
     })
-    assert not _homepage_can_seed_base_draft({
+    assert _homepage_can_seed_base_draft({
         "platform": "文旅局",
         "category": "official",
         "url": "https://example.gov.cn/scenic",
@@ -291,6 +562,28 @@ def test_article_base_candidate_limit_has_research_buffer():
     assert _article_base_candidate_limit(4) == 16
     assert _article_base_candidate_limit(10) == 32
 
+def test_sichuan_homepage_anchor_failures_have_registry_support_sources():
+    entities = {
+        "黄龙",
+        "西岭雪山",
+        "木格措",
+        "瓦屋山",
+        "三星堆博物馆",
+        "自贡恐龙博物馆",
+        "武侯祠",
+        "杜甫草堂",
+        "三苏祠",
+        "宽窄巷子",
+        "黄龙溪古镇",
+        "上里古镇",
+        "贡嘎山",
+        "卧龙自然保护区",
+    }
+    for entity in entities:
+        sources = _known_homepage_support_websites(entity)
+        assert sources, entity
+        assert any(source["category"] == "encyclopedia" for source in sources), sources
+
 def test_article_plan_source_selection_preserves_supporting_categories():
     sources = [
         _source(
@@ -341,7 +634,7 @@ def test_article_plan_source_selection_preserves_supporting_categories():
     assert sum(1 for source in selected if source["sourceRole"] == "base") == 8
     assert {"travelogue", "review", "encyclopedia"}.issubset(categories)
 
-def test_homepage_core_sources_are_capped_at_five_and_encyclopedia_first():
+def test_homepage_core_sources_prioritize_primary_authority_and_cap_at_five():
     from download.research_plan import _homepage_core_sources
 
     sources = [
@@ -362,6 +655,14 @@ def test_homepage_core_sources_are_capped_at_five_and_encyclopedia_first():
             match_confidence=0.99,
         ),
         _source(
+            source_id="home_wikivoyage",
+            platform="维基导游",
+            url="https://zh.wikivoyage.org/wiki/九寨沟",
+            category="encyclopedia",
+            discovery_provider="test",
+            match_confidence=0.88,
+        ),
+        _source(
             source_id="home_baidu",
             platform="百度百科",
             url="https://baike.baidu.com/item/九寨沟",
@@ -376,6 +677,14 @@ def test_homepage_core_sources_are_capped_at_five_and_encyclopedia_first():
             category="encyclopedia",
             discovery_provider="test",
             match_confidence=0.78,
+        ),
+        _source(
+            source_id="home_toutiao",
+            platform="头条百科",
+            url="https://www.baike.com/wikiid/1",
+            category="encyclopedia",
+            discovery_provider="test",
+            match_confidence=0.92,
         ),
         _source(
             source_id="home_support_gov",
@@ -396,8 +705,11 @@ def test_homepage_core_sources_are_capped_at_five_and_encyclopedia_first():
     ]
     selected = _homepage_core_sources(sources)
     assert len(selected) == 5
+    selected_ids = {source["source_id"] for source in selected}
+    assert {"home_wikipedia", "home_wikivoyage", "home_baidu", "home_sogou"}.issubset(selected_ids)
+    assert "home_toutiao" in selected_ids
     assert selected[0]["source_id"] == "home_wikipedia"
-    assert "home_media" not in {source["source_id"] for source in selected}
+    assert "home_media" not in selected_ids
 
 def test_source_unit_image_collection_id_is_global_not_local_source_id():
     from download.handler import _stable_source_image_collection_id
@@ -533,4 +845,3 @@ def test_known_official_site_registry_covers_previous_missing_official_sources()
         "home_wikipedia_gulangyu",
         "home_wikipedia_kanas_lake",
     }
-

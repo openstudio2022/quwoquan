@@ -33,7 +33,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -51,7 +51,7 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.home_recommend_intersection_redesign.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart（双列/单列卡片均经统一交集句组件渲染唯一蓝色主谓宾句，无来源不展示，2026-06-16
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart（双列/单列卡片均经统一交集句组件渲染唯一蓝色主谓宾句，无来源不展示，2026-06-16
       green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma 发现流真实 IntersectionReason
       拉取链路待 WP-D。'
@@ -71,7 +71,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -88,14 +88,14 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.home_recommend_intersection_redesign.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart（spotlight
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart（spotlight
       卡：头像/封面 + 类型角标 + 一条主谓宾句，无主/副双句堆叠，≤4 卡曝光归因 + 换一批，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma /v1/content/feed/intersections
       真实 spotlight 链路待 WP-D。'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
   full_gate:
   - make gate

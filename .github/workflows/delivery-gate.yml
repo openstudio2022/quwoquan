@@ -1,7 +1,7 @@
 # Delivery Gate — PR 合入主门禁（L1+L2）
 # 触发：pull_request(main) + workflow_dispatch
 # 职责：拓扑校验 + metadata + L1(Flutter) + L2(Go contract) + portal
-# 端到端闭环见 deploy/shared/ci_cd_end_to_end_design.md
+# 端到端闭环见 quwoquan_ops/environments/ci_cd_end_to_end_design.md
 name: 03. Delivery Gate
 
 on:
@@ -58,7 +58,7 @@ jobs:
           BASE_SHA: ${{ inputs.base_sha || github.event.pull_request.base.sha || '' }}
           HEAD_SHA: ${{ inputs.head_sha || github.sha }}
         run: |
-          python3 agent_ops/ci/detect_ci_impacted_scopes.py \
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
             --base-sha "${BASE_SHA}" \
             --head-sha "${HEAD_SHA}" \
             --github-output "$GITHUB_OUTPUT"
@@ -95,13 +95,13 @@ jobs:
       - name: 设置 Dart
         uses: dart-lang/setup-dart@v1
       - name: 安装 kustomize
-        run: bash agent_ops/deploy/shared/install_kustomize.sh
+        run: bash quwoquan_ops/cli/shared/install_kustomize.sh
       - name: 安装 Python 依赖 (rec-model-service)
         run: |
           pip install -r quwoquan_service/services/rec-model-service/requirements.txt
       - name: Gate (quwoquan_service)
         run: |
-          bash agent_ops/gate/gate_repo.sh --scope service
+          bash quwoquan_ops/gate/gate_repo.sh --scope service
       - id: finish
         if: always()
         name: Finish timer
@@ -122,23 +122,13 @@ jobs:
       - id: start
         name: Start timer
         run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
-      - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
-        run: |
-          if [ -d quwoquan_app/personal_assistant ]; then
-            mkdir -p quwoquan_app/personal_assistant
-            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-            else
-              : > quwoquan_app/personal_assistant/.env
-            fi
-          fi
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
       - name: Gate (quwoquan_app)
         run: |
-          bash agent_ops/gate/gate_repo.sh --scope app
+          bash quwoquan_ops/gate/gate_repo.sh --scope app
       - id: finish
         if: always()
         name: Finish timer
@@ -166,7 +156,7 @@ jobs:
           cache: npm
       - name: Gate (ops-portal)
         run: |
-          bash agent_ops/gate/gate_repo.sh --scope portal
+          bash quwoquan_ops/gate/gate_repo.sh --scope portal
       - id: finish
         if: always()
         name: Finish timer
@@ -205,7 +195,7 @@ jobs:
           if [ "${APP_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${APP_SECONDS}"; fi
           if [ "${PORTAL_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${PORTAL_SECONDS}"; fi
           CRITICAL_PATH_SECONDS=$(( TOPOLOGY_SECONDS + FANOUT_SECONDS ))
-          python3 agent_ops/ci/render_ci_timing_summary.py \
+          python3 quwoquan_ops/ci/render_ci_timing_summary.py \
             --gate-key 03.delivery_gate \
             --title "03. Delivery Gate" \
             --critical-path-seconds "${CRITICAL_PATH_SECONDS}" \
@@ -213,7 +203,7 @@ jobs:
             --phase "quwoquan_service=${SERVICE_SECONDS}" \
             --phase "quwoquan_app=${APP_SECONDS}" \
             --phase "ops_portal=${PORTAL_SECONDS}" \
-            --write-json "artifacts/ci-timing/delivery-gate-summary.json" \
+            --write-json ".qwq_output/runs/ci-timing/delivery-gate-summary.json" \
             --write-step-summary
           echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
       - name: 汇总并阻断失败项
@@ -256,6 +246,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: delivery-gate-timing-summary
-          path: artifacts/ci-timing/delivery-gate-summary.json
+          path: .qwq_output/runs/ci-timing/delivery-gate-summary.json
           if-no-files-found: error
           compression-level: 0

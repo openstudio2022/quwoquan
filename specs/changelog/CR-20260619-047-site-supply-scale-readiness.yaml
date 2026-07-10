@@ -26,7 +26,7 @@ evidence:
     - python3 quwoquan_data/scripts/cli.py vertical source-registry
   t2:
     - python3 quwoquan_data/tests/site_supply/test_site_supply_contract.py
-    - python3 quwoquan_data/tests/verify/test_site_scale_readiness.py
+    - python3 quwoquan_data/tests/local_contract/verify/test_site_scale_readiness__local_contract_test.py
     - QWQ_RUNTIME_ROOT=/tmp/qwq-ctrip-mafengwo-controlled-650-FII5U1/runtime python3 quwoquan_data/scripts/cli.py verify site-scale-readiness --mode trial --vertical travel --batch ctrip_mafengwo_controlled_650 --daily-target 10000 --min-article-count 1000 --min-image-count 200 --min-video-count 100
     - QWQ_RUNTIME_ROOT=/tmp/qwq-ctrip-mafengwo-controlled-10000-ouYsX9/runtime python3 quwoquan_data/scripts/cli.py verify site-scale-readiness --mode trial --vertical travel --batch ctrip_mafengwo_controlled_10000 --daily-target 10000 --min-article-count 500 --min-image-count 100 --min-video-count 50
   t3:

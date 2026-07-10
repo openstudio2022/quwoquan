@@ -34,7 +34,7 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/chat/widgets/chat_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -71,7 +71,7 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/chat/widgets/chat_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -111,7 +111,7 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/chat/providers/chat_contacts_rows_provider_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/providers/chat_contacts_rows_provider__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -133,7 +133,7 @@ sit_acceptance:
         - local_contract.chat_conversation.commercial_message_system.sit3.sit3_local_contract
         envs: *id001
     notes:
-    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/contact_home_projection_contract_test.go'
+    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/api_integration/contact_home_projection_contract__api_integration_test.go'
     - '[migrated_from_planned] quwoquan_app/test/ui/chat/widgets/contact_home_widget_test.dart'
   SIT4:
     title: 群聊天和聊天信息页使用同一 GroupHome 真相源
@@ -148,9 +148,9 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/components/avatar/conversation_avatar_test.dart
-      - file: quwoquan_app/test/ui/chat/widgets/chat_settings_page_widget_test.dart
-      - file: quwoquan_app/test/ui/chat/journeys/chat_group_management_journey_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/avatar/conversation_avatar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_settings_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -226,8 +226,8 @@ contract_acceptance:
       planned:
       - command: make -C quwoquan_service verify-metadata
       - command: make codegen-app
-      - file: quwoquan_app/test/cloud/chat/contract/chat_repository_contract_test.dart
-      - file: quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/chat/contract/chat_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -252,11 +252,11 @@ contract_acceptance:
     - '[migrated_from_planned] quwoquan_app/test/cloud/notification/app_message_repository_contract_test.dart'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
   - make verify-app-mock-isolation
   - make verify-app-login-entry-loop-contract
   full_gate:
-  - bash agent_ops/gate/gate_repo.sh --scope app
+  - bash quwoquan_ops/gate/gate_repo.sh --scope app
   - make gate

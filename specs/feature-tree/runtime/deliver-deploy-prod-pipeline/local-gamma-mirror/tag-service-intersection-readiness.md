@@ -15,8 +15,8 @@
 - **端云一致性**：前端 `test/cloud/tag/tag_repository_consistency_test.dart`（local_contract）锁定 Mock 行为
   与后端 `*View` → 前端 DTO `fromJson` 字段映射。
 - **local-gamma 拓扑接入（静态验证通过）**：
-  - 端口：`deploy/shared/local_env_port_manifest.yaml` 新增 `tag-service` role（service plane,
-    slot 270 → gamma `19270`）；`agent_ops/deploy/print_local_port_profile.py` 导出 `LOCAL_GAMMA_TAG_PORT`。
+  - 端口：`quwoquan_ops/environments/local_env_port_manifest.yaml` 新增 `tag-service` role（service plane,
+    slot 270 → gamma `19270`）；`quwoquan_ops/cli/print_local_port_profile.py` 导出 `LOCAL_GAMMA_TAG_PORT`。
   - 容器：`quwoquan_service/docker-compose.gamma-local.yaml` 新增 `tag-service`（go run, `:18092`,
     healthz 探活），`gamma-proxy` 依赖其 healthy。
   - 配置：`start_local_gamma_mirror.sh` 的 `prepare_config_root` 落 `tag-service` default/gamma/release。
@@ -32,14 +32,14 @@ bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
 
 # 2) 灌入路径制 taxonomy → tag_nodes（幂等可重跑；唯一真相源 publish/tags）
 cd quwoquan_service && \
-  TAG_MONGO_PORT="$(python3 ../agent_ops/deploy/print_local_port_profile.py --profile gamma-local --format json | python3 -c 'import json,sys;print(json.load(sys.stdin)["ports"]["mongodb"])')" && \
+  TAG_MONGO_PORT="$(python3 ../quwoquan_ops/cli/print_local_port_profile.py --profile gamma-local --format json | python3 -c 'import json,sys;print(json.load(sys.stdin)["ports"]["mongodb"])')" && \
   go run ./services/tag-service/cmd/import \
     --tags-dir ../quwoquan_data/publish/tags \
     --mongo-uri "mongodb://127.0.0.1:${TAG_MONGO_PORT}/?directConnection=true" \
     --db quwoquan_tag
 
 # 3) 经网关真打验证（resolve / shared-tags / 5 个新增 API）
-GW="http://127.0.0.1:$(python3 agent_ops/deploy/print_local_port_profile.py --profile gamma-local --format json | python3 -c 'import json,sys;print(json.load(sys.stdin)["ports"]["api-edge"])')"
+GW="http://127.0.0.1:$(python3 quwoquan_ops/cli/print_local_port_profile.py --profile gamma-local --format json | python3 -c 'import json,sys;print(json.load(sys.stdin)["ports"]["api-edge"])')"
 curl -s "$GW/v1/tag/resolve?tagRef=Topic/旅行"
 curl -s "$GW/v1/tag/shared-tags?objectAId=u1&objectAType=user&objectBId=u2&objectBType=user"
 curl -s "$GW/v1/tag/search?q=旅"
@@ -57,7 +57,7 @@ curl -s "$GW/v1/tag/search?q=旅"
 - **无 Docker 的 api_integration**：本机 MongoDB 时 `make -C quwoquan_service test-contract-local`，或
   `TEST_MONGO_URI=mongodb://localhost:27017 go test ./services/tag-service/... -count=1`。
 - **patrol（user_acceptance）**：`dart pub global activate patrol_cli` + 启动 iOS/Android 模拟器，
-  交集 user_acceptance case 经 `agent_ops/deploy/gamma/run_gamma_patrol_matrix_ci.py` 矩阵执行。
+  交集 user_acceptance case 经 `quwoquan_ops/cli/gamma/run_gamma_patrol_matrix_ci.py` 矩阵执行。
 
 ## 4. 受控后续项（已登记，进 V5 后处理）
 

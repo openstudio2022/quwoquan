@@ -22,7 +22,7 @@
 ### Feature
 
 - `recommend_feature.yaml` → `socialFeatures.intersection.*`
-- `scripts/ml/feature_registry.yaml` 同步字段
+- `services/rec-model-service/scripts/feature_registry.yaml` 同步字段
 - rec-model-service `transformer.py` 消费 intersection 特征（实现会话）
 
 ### Ranking

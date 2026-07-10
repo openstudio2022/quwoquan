@@ -22,6 +22,7 @@ class ArticleWrapLayout extends StatelessWidget {
   final Widget? aboveChild;
   final Widget? belowChild;
   final double sideMinHeight;
+
   /// 下方全宽区与 Row 之间的间距（行间距，非段间距）。
   final double belowSpacing;
 
@@ -37,7 +38,7 @@ class ArticleWrapLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        if (aboveChild != null) aboveChild!,
+        ?aboveChild,
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: isLeft

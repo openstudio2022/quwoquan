@@ -77,13 +77,13 @@ gwt_acceptance:
     - gamma 白名单与非白名单 OTP 行为被同一套 application 测试覆盖。
     - 非白名单号码无法通过 sandbox 路径拿到 debugCode。
     contract_refs:
-    - quwoquan_service/services/user-service/internal/application/sandbox_allowlist_test.go
+    - quwoquan_service/services/user-service/internal/application/sandbox_allowlist__local_contract_test.go
     - quwoquan_service/services/user-service/configs/gamma/config.yaml
     performance_points:
     - OTP sandbox 判定必须是本地配置查表，不引入额外网络调用。
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/internal/application/sandbox_allowlist_test.go
+      - file: quwoquan_service/services/user-service/internal/application/sandbox_allowlist__local_contract_test.go
       recorded: []
     status: pending_evidence
     test_evidence:
@@ -116,14 +116,14 @@ gwt_acceptance:
     - mock、sandbox、http 三类 ExternalAuthProviderClient 均有确定性测试。
     - prod 未配置支付宝/QQ 凭证时只返回结构化 unavailable，不产生成功身份。
     contract_refs:
-    - quwoquan_service/services/user-service/internal/infrastructure/integration/external_auth_provider_client_test.go
+    - quwoquan_service/services/user-service/internal/infrastructure/integration/external_auth_provider_client__local_contract_test.go
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
     - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
     performance_points:
     - sandbox 命中白名单时应本地返回；未命中真实上游时必须保留超时与结构化失败语义。
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/internal/infrastructure/integration/external_auth_provider_client_test.go
+      - file: quwoquan_service/services/user-service/internal/infrastructure/integration/external_auth_provider_client__local_contract_test.go
       recorded: []
     status: pending_evidence
     test_evidence:
@@ -159,12 +159,12 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/user/user_profile/fields.yaml
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    - quwoquan_service/services/user-service/tests/auth_contract_test.go
+    - quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
     performance_points:
     - 社交票据置换 P95 <= 1500ms；首登资料同步 P95 <= 1000ms，资料同步失败不阻断登录。
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:
@@ -196,13 +196,13 @@ gwt_acceptance:
     contract_refs:
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
     - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
-    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
     performance_points:
     - 登录页错误恢复必须就近完成，不造成页面重建死循环或重复弹窗。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       recorded: []
     status: pending_evidence
     test_evidence:
@@ -235,13 +235,13 @@ gwt_acceptance:
     - shouldRevealOtpDebugCode 覆盖 alpha/beta/gamma/prod 与 sandbox/non-sandbox 组合。
     - prod 在任何输入下都不会回填 debugCode。
     contract_refs:
-    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
     - quwoquan_service/services/user-service/configs/prod/config.yaml
     performance_points:
     - 调试码显示判定必须为端侧纯函数或等价本地状态判断，不依赖网络。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       recorded: []
     status: pending_evidence
     test_evidence:
@@ -265,7 +265,7 @@ contract_acceptance:
     - 端侧 RemoteAuthRepository 消费生成的 path/pageId，不硬编码。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
       recorded: []
     status: pending_evidence
     test_evidence:
@@ -290,7 +290,7 @@ contract_acceptance:
     - owner 内 owner_id+credential_type 唯一。
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:
@@ -343,7 +343,7 @@ uat_acceptance:
     - '[migrated_from_planned] manual four-env login smoke evidence'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
   - make verify-app-login-entry-loop-contract
   full_gate:

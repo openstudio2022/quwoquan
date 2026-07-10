@@ -3,9 +3,12 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/components/media/picker/one_tap_movie_composer.dart';
+import 'package:quwoquan_app/components/media/shared/media_creation_bottom_button.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
-import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -33,6 +36,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
   bool _playing = true;
   bool _composing = false;
   Duration _position = Duration.zero;
+  String _selectedEffectId = 'original';
 
   List<CreateMediaItem> get _images =>
       widget.items.where((item) => item.isImage).toList();
@@ -91,6 +95,10 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
     if (_images.isEmpty || _composing) {
       return;
     }
+    if (_selectedEffectId == _OneTapMovieEffectIds.original) {
+      _continueWithSourceImages();
+      return;
+    }
     setState(() {
       _composing = true;
       _playing = false;
@@ -98,16 +106,46 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
     try {
       final result = await widget.composer.compose(images: _images);
       if (!mounted) return;
-      Navigator.of(context).pop(result);
+      Navigator.of(context).pop(
+        OneTapMovieComposeResult(
+          videoPath: result.videoPath,
+          durationMs: result.durationMs,
+          coverPath: result.coverPath,
+          effectId: _selectedEffectId,
+        ),
+      );
     } on UnsupportedError {
       if (!mounted) return;
-      AppToast.show(context, UITextConstants.mediaPickerOneTapMovieUnavailable);
-      setState(() => _composing = false);
-    } catch (_) {
+      _continueWithSourceImages();
+    } catch (error) {
       if (!mounted) return;
-      AppToast.show(context, UITextConstants.mediaPickerOneTapMovieFailed);
       setState(() => _composing = false);
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.global,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _composeAndContinue();
+          }
+        },
+      );
     }
+  }
+
+  void _continueWithSourceImages() {
+    Navigator.of(context).pop(
+      OneTapMovieComposeResult(
+        videoPath: '',
+        durationMs: _totalDuration.inMilliseconds,
+        effectId: _selectedEffectId,
+      ),
+    );
   }
 
   int get _currentImageIndex {
@@ -151,43 +189,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                     child: Icon(CupertinoIcons.back, color: fg),
                   ),
                   const Spacer(),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    onPressed: _images.isEmpty || _composing
-                        ? null
-                        : _composeAndContinue,
-                    minimumSize: Size(
-                      AppSpacing.minInteractiveSize,
-                      AppSpacing.minInteractiveSize,
-                    ),
-                    child: _composing
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const CupertinoActivityIndicator(radius: 8),
-                              SizedBox(width: AppSpacing.intraGroupXs),
-                              Text(
-                                UITextConstants.mediaPickerOneTapMovieComposing,
-                                style: TextStyle(
-                                  color: AppColors.white.withValues(alpha: 0.7),
-                                  fontSize: AppTypography.base,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          )
-                        : Text(
-                            UITextConstants.mediaPickerNextStep,
-                            style: TextStyle(
-                              color: _images.isEmpty
-                                  ? AppColors.white.withValues(alpha: 0.54)
-                                  : AppColors.white,
-                              fontSize: AppTypography.base,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                  ),
-                  SizedBox(width: AppSpacing.intraGroupSm),
+                  SizedBox(width: AppSpacing.minInteractiveSize),
                 ],
               ),
             ),
@@ -239,7 +241,7 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                 AppSpacing.containerMd,
                 AppSpacing.intraGroupSm,
                 AppSpacing.containerMd,
-                AppSpacing.interGroupMd,
+                AppSpacing.intraGroupSm,
               ),
               child: Row(
                 children: [
@@ -279,6 +281,78 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
                 ],
               ),
             ),
+            SizedBox(
+              height: AppSpacing.bottomNavHeight + AppSpacing.containerSm,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerMd,
+                  vertical: AppSpacing.intraGroupXs,
+                ),
+                itemCount: _oneTapMovieEffects.length,
+                separatorBuilder: (context, index) =>
+                    SizedBox(width: AppSpacing.intraGroupSm),
+                itemBuilder: (context, index) {
+                  final effect = _oneTapMovieEffects[index];
+                  final selected = effect.id == _selectedEffectId;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedEffectId = effect.id),
+                    child: Container(
+                      width: AppSpacing.bottomNavHeight * 1.4,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppColors.primaryColor.withValues(alpha: 0.18)
+                            : AppColors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(
+                          AppSpacing.borderRadius,
+                        ),
+                        border: Border.all(
+                          color: selected
+                              ? AppColors.primaryColor
+                              : AppColors.white.withValues(alpha: 0.16),
+                        ),
+                      ),
+                      child: Text(
+                        effect.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: selected
+                              ? AppColors.primaryColor
+                              : AppColors.white.withValues(alpha: 0.86),
+                          fontSize: AppTypography.sm,
+                          fontWeight: selected
+                              ? AppTypography.semiBold
+                              : AppTypography.regular,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                AppSpacing.containerMd,
+                AppSpacing.intraGroupSm,
+                AppSpacing.containerMd,
+                (MediaQuery.paddingOf(context).bottom > 0
+                        ? MediaQuery.paddingOf(context).bottom
+                        : AppSpacing.containerMd) +
+                    AppSpacing.intraGroupSm,
+              ),
+              child: MediaCreationBottomButton(
+                label: _composing
+                    ? UITextConstants.mediaPickerOneTapMovieComposing
+                    : UITextConstants.mediaPickerNextStep,
+                variant: MediaCreationBottomButtonVariant.fullWidthNeutral,
+                isLoading: _composing,
+                onPressed: _images.isEmpty || _composing
+                    ? null
+                    : _composeAndContinue,
+              ),
+            ),
             if (!isDark) SizedBox(height: AppSpacing.intraGroupSm),
           ],
         ),
@@ -293,3 +367,33 @@ class _OneTapMoviePreviewPageState extends State<OneTapMoviePreviewPage> {
     return '$minutes:$seconds';
   }
 }
+
+class _OneTapMovieEffect {
+  const _OneTapMovieEffect({required this.id, required this.label});
+
+  final String id;
+  final String label;
+}
+
+abstract final class _OneTapMovieEffectIds {
+  static const String original = 'original';
+}
+
+const _oneTapMovieEffects = <_OneTapMovieEffect>[
+  _OneTapMovieEffect(
+    id: _OneTapMovieEffectIds.original,
+    label: UITextConstants.mediaPickerOneTapMovieOriginal,
+  ),
+  _OneTapMovieEffect(
+    id: 'gentle_motion',
+    label: UITextConstants.mediaPickerOneTapMovieGentleMotion,
+  ),
+  _OneTapMovieEffect(
+    id: 'beat',
+    label: UITextConstants.mediaPickerOneTapMovieBeat,
+  ),
+  _OneTapMovieEffect(
+    id: 'scenery',
+    label: UITextConstants.mediaPickerOneTapMovieScenery,
+  ),
+];

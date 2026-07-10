@@ -1,0 +1,48 @@
+# 多 worker 小样本吞吐探针第二轮（WP7 放量评估）：3 实体 trial 口径。
+# maxWorkers=3，与 mw_probe（2 worker）对照产出 per-worker 退化曲线。
+# 需要钉住实体时通过 `task run-recipe --mandatory ...` 作为运行实例参数传入。
+schemaVersion: quwoquan.task.recipe
+recipeId: content/travel/homepage/mw3_probe
+title: 全国景区主页三worker吞吐探针（trial）
+presetRef: content/travel/homepage/base
+batchAxes:
+  phase: e2e
+  contentType: homepage
+  supplyMode: site_primary
+runtimeProfile: cursor_local
+env:
+  QWQ_HOMEPAGE_ONLY_EXECUTION_BRANCH: feature/homepage-commercial-lane
+  QWQ_CONTENT_SUPPLY_EXECUTION_BRANCH: feature/homepage-commercial-lane
+  QWQ_CURSOR_BRIDGE_LAUNCH_COOLDOWN_SECONDS: "10"
+task:
+  generate:
+    name: 全国景区主页三worker探针0707
+    title: 全国景区主页三worker探针0707
+    intentLabel: 主页三worker探针0707
+    discovery: quwoquan_data/verticals/travel/coverage/discovery_china_scenic_220_20260705.json
+    limit: 3
+    reserveRatio: 0.2
+    entityHomepagesPerTarget: 1
+    entityArticlesPerTarget: 0
+    imageWorksPerTarget: 0
+    allowQuotaShortfall: true
+contract:
+  requireActiveStatus: true
+  executionBranch: feature/homepage-commercial-lane
+  targetObjectCount: 3
+execution:
+  mode: scaled_e2e
+  concurrency: 4
+  maxWorkers: 3
+  cycles: 3
+  runtime: local
+  model: composer
+  startupTimeoutSeconds: 240
+  maxAuthorRounds: 60
+readiness:
+  dailyTarget: 3
+  target: 3
+  minPassRate: 0.0
+  mode: trial
+  failOnNoGo: false
+  acceptEstimatedTokenLedger: true

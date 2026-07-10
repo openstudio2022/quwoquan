@@ -18,7 +18,7 @@
 
 ## 2. Cursor 分页（强制口径）
 
-- 列表接口优先 cursor + limit（见 `contracts/openapi/common.yaml`）。
+- 列表接口优先 cursor + limit（见 `contracts/metadata/_shared/request_context.yaml`）。
 - 排序必须稳定：建议 `createdAt DESC, id DESC` 或 `createdAt ASC, id ASC`（二者择一并全域统一）。
 - cursor 编码建议：base64url(JSON) 或安全编码字符串，至少包含：
   - `sortCreatedAt`

@@ -19,7 +19,7 @@ void main() {
               context: context,
               snapshot: startupWelcomeAppearanceSnapshot(),
               child: const Text(
-                '找同趣',
+                '交集配对',
                 key: textKey,
                 style: TextStyle(fontSize: 18),
               ),

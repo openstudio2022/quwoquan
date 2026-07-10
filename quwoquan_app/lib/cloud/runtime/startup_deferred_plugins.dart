@@ -1,62 +1,42 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart';
-import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/core/platform/startup_native_bridge.dart';
 
 /// Android 冷启动延后注册的重 native 插件（RTC / 创作入口）。
 final class StartupDeferredPlugins {
   StartupDeferredPlugins._();
 
-  static const MethodChannel _channel = MethodChannel(
-    'quwoquan/startup/deferred_plugins',
-  );
+  static const StartupDeferredPluginsNativeBridge _bridge =
+      MethodChannelStartupDeferredPluginsNativeBridge();
 
   static bool _rtcEnsured = false;
   static bool _contentEntryEnsured = false;
   static bool _locationEnsured = false;
 
   static Future<void> ensureRtcPlugins() async {
-    if (_rtcEnsured || currentAppPlatform != AppPlatform.android) {
+    if (_rtcEnsured) {
       _rtcEnsured = true;
       return;
     }
-    try {
-      await _channel.invokeMethod<void>('ensureRtc');
-      _rtcEnsured = true;
-    } on MissingPluginException {
-      _rtcEnsured = true;
-    } on PlatformException {
-      _rtcEnsured = true;
-    }
+    await _bridge.ensureRtc();
+    _rtcEnsured = true;
   }
 
   static Future<void> ensureContentEntryPlugins() async {
-    if (_contentEntryEnsured || currentAppPlatform != AppPlatform.android) {
+    if (_contentEntryEnsured) {
       _contentEntryEnsured = true;
       return;
     }
-    try {
-      await _channel.invokeMethod<void>('ensureContentEntry');
-      _contentEntryEnsured = true;
-    } on MissingPluginException {
-      _contentEntryEnsured = true;
-    } on PlatformException {
-      _contentEntryEnsured = true;
-    }
+    await _bridge.ensureContentEntry();
+    _contentEntryEnsured = true;
   }
 
   static Future<void> ensureLocationPlugins() async {
-    if (_locationEnsured || currentAppPlatform != AppPlatform.android) {
+    if (_locationEnsured) {
       _locationEnsured = true;
       return;
     }
-    try {
-      await _channel.invokeMethod<void>('ensureLocation');
-      _locationEnsured = true;
-    } on MissingPluginException {
-      _locationEnsured = true;
-    } on PlatformException {
-      _locationEnsured = true;
-    }
+    await _bridge.ensureLocation();
+    _locationEnsured = true;
   }
 }

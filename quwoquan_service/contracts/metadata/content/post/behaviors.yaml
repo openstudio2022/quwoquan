@@ -161,6 +161,65 @@ behavior_events:
     ml_signal: explicit_negative
     signal_weight: -4.0
 
+  - type: intersection_feedback
+    description: |
+      用户对「交集 / 交集配对」条目的显式负反馈（不感兴趣 / 忽略 / 拒绝打招呼 / 退出圈子），
+      驱动交集主体（subject）跨会话降权与冷却。不绑定具体 post（subjectId 为交集对象）。
+    trigger: user_action_intersection_negative
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackIntersectionFeedback
+    payload_fields: [subjectId, feedbackKind, intersectionId, intersectionDimension, intersectionClass, intersectionSourceRef]
+    ml_signal: explicit_negative
+    signal_weight: -5.0
+    notes: |
+      交集负反馈闭环（F 推荐与交集配对差异化）：
+      - feedbackKind ∈ intersection_kind_registry.feedbackKinds 闭集
+        （notInterested / dismiss / rejectGreeting / leaveCircle），端上报与云侧降权 / 冷却
+        读同一集合（Go generated.IntersectionFeedbackKinds / Dart intersectionFeedbackKinds），
+        禁止端各写一份（单一真相源 = registry）。
+      - subjectId 为交集主体对象 id（person / circle / place 等，与 reason.subjectId /
+        actionTargetId 同源）。云侧 IntersectionService.ReportNegativeFeedback 据此写
+        rec:ineg 交集负反馈冷却集；Feed / ObjectIntersections 合并时对命中 subject 过滤
+        （冷却期内不再推荐），区别于曝光冷却 rec:icool（seen 仅降权保留）。
+      - intersectionId / intersectionDimension / intersectionClass(fact|affinity) /
+        intersectionSourceRef 与曝光 → 点击 → 转化保持同一漏斗归因键，使负反馈可按维度 /
+        标准 kind / 类别下钻。intersection_feedback 与 assistant_interest 同为不需 contentId
+        的事件（subjectId 承载对象），服务端 contentId 必填校验对其豁免。
+
+  - type: wishlist_add
+    description: |
+      用户显式点亮「想去 / 收藏 / 计划去」对象。该事件是 `coWishlistedEntity`
+      的稳定事实源，服务端必须投影到 `entity_wishlist_events`，禁止只停留在
+      rm_behavior_events 或端侧本地状态。
+    trigger: user_action_want_to_go_add
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackWishlistAdd
+    payload_fields: [objectId, objectKind, displayName, sourceSurface, entityRefs]
+    ml_signal: explicit_positive
+    signal_weight: 3.2
+    notes: |
+      objectId/objectKind/displayName/sourceSurface 是 wishlist 投影专属字段；
+      feedRequestId/referralSource/position 仍走 common_fields。服务端按
+      userId + objectId 幂等 upsert 到 entity_wishlist_events(status=active)，
+      为 coWishlistedEntity 提供真实用户意图输入。
+
+  - type: wishlist_remove
+    description: |
+      用户取消「想去 / 收藏 / 计划去」对象。服务端必须把对应
+      `entity_wishlist_events` 标记为 removed，避免撤销后继续参与共同想去交集。
+    trigger: user_action_want_to_go_remove
+    batch: true
+    batch_route: POST /v1/content/behaviors
+    dart_method: trackWishlistRemove
+    payload_fields: [objectId, objectKind, sourceSurface, entityRefs]
+    ml_signal: explicit_negative
+    signal_weight: -3.2
+    notes: |
+      与 wishlist_add 使用同一 objectId 幂等键；displayName 可缺省，取消时不需要
+      端侧再次提供展示名。
+
   - type: share
     description: 分享到外部/圈子
     trigger: user_action_share_sheet

@@ -115,8 +115,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: content
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: [chat]
@@ -163,8 +163,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: content
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: [chat]
@@ -200,8 +200,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: chat
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -237,8 +237,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: circle
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -274,8 +274,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: user
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -322,8 +322,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: content
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: [chat]
@@ -360,8 +360,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: chat
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -397,8 +397,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: circle
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -434,8 +434,8 @@ minimum_package:
     t4: []
 deployment:
   plane_binding_domain: user
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []
@@ -706,8 +706,8 @@ minimum_package:
   template_domain: content
   first_wave_replica_domains: [chat, circle, user]
   required_deploy_sources:
-    current: deploy/shared/process_domain_mapping.yaml
-    plane_aware: deploy/shared/process_domain_plane_mapping.yaml
+    current: quwoquan_ops/environments/process_domain_mapping.yaml
+    plane_aware: quwoquan_ops/environments/process_domain_plane_mapping.yaml
 `)+"\n")
 
 	mustWriteFixtureFile(t, filepath.Join(metadataRoot, "content", "post", "aggregate.yaml"), "aggregate_root: Post\n")

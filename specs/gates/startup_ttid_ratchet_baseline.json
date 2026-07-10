@@ -4,6 +4,6 @@
   "p50": {
     "firstVisibleMs": 600
   },
-  "sourceBaseline": "quwoquan_app/artifacts/startup_first_frame/baseline_release_android_emulator_api35.json",
+  "sourceBaseline": "specs/gates/startup_ttid_ratchet_baseline.json",
   "note": "2026-06-26 arm64 release + deferred plugins; branded content TTID P50=600ms (emulator API35)"
 }

@@ -1,0 +1,63 @@
+id: CR-20260702-001-photo-picker-editor-one-tap-flow
+title: 图片选择到编辑再到创作与一键成片归属调整
+slug: photo-picker-editor-one-tap-flow
+revision: 1
+status: implemented
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification
+  - specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update
+  - quwoquan_app/lib/components/media
+  - quwoquan_app/lib/ui/content/entry
+
+entries:
+  - timestamp: "2026-07-02T00:00:00+08:00"
+    summary: |
+      图片发布链路调整为“图片选择器 -> 图片编辑页 -> 图片创作页”。图片选择页底部从“编辑图片 / 完成(n)”改为“一键成片 / 下一步(n)”，右上新增“草稿箱”；“下一步(n)”进入图片编辑页，图片编辑页底部工具栏下方新增紧凑蓝色“下一步”，再进入图片创作页。
+      一键成片从视频入口迁回图片入口，至少选中 2 张图片才可点击；完成后进入图片创作页并锁定为单素材作品，不进入视频选择器或视频发布页。视频选择页移除一键成片，只保留“拍视频”和全部视频资源。
+    reason: |
+      用户确认一键成片应服务于图片发布心智，而不是视频选择心智；图片选择、图片编辑和图片创作三段之间还必须保持图片顺序与编辑状态一致。旧口径把一键成片放在视频入口，会导致视频页空态与图片发布主链路不一致，也让图片编辑页缺少明确的下一步转场。
+    supersedes:
+      - CR-20260628-075-xhs-create-entry-mixed-media-draft-toolbar#2026-06-29T09:40:00+08:00
+    change_type:
+      - ux-spec
+      - app-feature
+      - local-contract
+      - user-acceptance
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/spec.md
+        sections:
+          - F3.1 照片 / 视频入口结果分流
+      - path: specs/feature-tree/discovery-content/content-type-framework/creation-mode-and-surface-ia-unification/acceptance.yaml
+        sections:
+          - GWT1
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md
+        sections:
+          - 图片作品商用创作链路 / 图片选择器
+          - 图片作品商用创作链路 / 图片编辑与创作页语义
+          - 视频作品商用创作与封面闭环 / 视频选择与拍摄
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/acceptance.yaml
+        sections:
+          - GWT1
+          - GWT4
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - user_acceptance
+      rollout_impact: medium
+      breaking_contract: false
+    test_evidence:
+      recorded:
+        - cd quwoquan_app && flutter analyze lib/core/models/create_media_models.dart lib/components/media/picker/create_media_picker_presentation.dart lib/components/media/picker/create_media_picker_page.dart lib/components/media/picker/one_tap_movie_composer.dart lib/components/media/picker/one_tap_movie_preview_page.dart lib/components/media/image/editor/image_editor_page.dart lib/components/media/image/editor/bottom_bar/image_editor_bottom_bar.dart lib/ui/content/models/create_editor_models.dart lib/ui/content/entry/providers/create_editor_provider.dart lib/ui/content/entry/pages/create_page_state.dart lib/ui/content/entry/pages/create_page_state_helpers.dart lib/ui/content/entry/providers/create_draft_store_provider.dart lib/core/constants/ui_text_constants_values.dart
+        - cd quwoquan_app && flutter test test/local_contract/ui/content/create/photo_media_picker_commercial_flow__local_contract_test.dart test/local_contract/ui/content/create/video_media_picker_dark_flow__local_contract_test.dart test/local_contract/ui/content/create/creation_media_mode_split__local_contract_test.dart
+        - cd quwoquan_app && flutter test test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart test/local_contract/ui/content/create/create_entry_media_resolution__local_contract_test.dart test/local_contract/ui/content/create/create_video_entry_mode__local_contract_test.dart test/ui/content/entry/unified_editor_mode_switch_widget_test.dart
+      pending:
+        - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+        - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+        - make verify-app-page-horizontal-quality
+        - make verify-app-mock-isolation
+    notes:
+      - 本轮不新增服务端发布契约；一键成片 UI 进入图片创作壳，端侧如需动态本地媒体仍由现有媒体上传链路承载。
+      - 主题色沿用趣我圈蓝色，不采用小红书红色；图片编辑页只调整布局和下一步转场，不新增音乐、图集或 AI 功能入口。

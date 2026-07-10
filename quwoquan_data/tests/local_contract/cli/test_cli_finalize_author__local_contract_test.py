@@ -33,7 +33,7 @@ def test_task_scaled_e2e_finalize_reruns_author_when_produce_author_pauses():
     calls: list[tuple[str, str, bool]] = []
     original_handle_run = run_mod.handle_run
     original_load_state = run_mod.load_workflow_state
-    original_module = sys.modules.get("agent_ops.runners.fanout_runner")
+    original_module = sys.modules.get("task.fanout_runner")
     original_prepare = scaled_e2e_mod._prepare_author_jobs_for_paused_targets
     try:
         attempts = {"count": 0}
@@ -60,7 +60,7 @@ def test_task_scaled_e2e_finalize_reruns_author_when_produce_author_pauses():
 
         run_mod.handle_run = _fake_handle_run
         run_mod.load_workflow_state = _fake_load_state
-        sys.modules["agent_ops.runners.fanout_runner"] = types.SimpleNamespace(main=_fake_main)
+        sys.modules["task.fanout_runner"] = types.SimpleNamespace(main=_fake_main)
         scaled_e2e_mod._prepare_author_jobs_for_paused_targets = _fake_prepare
         _seed_frozen_plan("plan_finalize_author")
         task_handler_mod.handle_scaled_e2e(
@@ -71,7 +71,7 @@ def test_task_scaled_e2e_finalize_reruns_author_when_produce_author_pauses():
                 concurrency=3,
                 max_workers=2,
                 runtime="local",
-                model="composer-2.5",
+                model="composer",
                 cwd="/repo",
                 spend_limit=2.0,
                 reset_state=True,
@@ -82,9 +82,9 @@ def test_task_scaled_e2e_finalize_reruns_author_when_produce_author_pauses():
         run_mod.load_workflow_state = original_load_state
         scaled_e2e_mod._prepare_author_jobs_for_paused_targets = original_prepare
         if original_module is None:
-            del sys.modules["agent_ops.runners.fanout_runner"]
+            del sys.modules["task.fanout_runner"]
         else:
-            sys.modules["agent_ops.runners.fanout_runner"] = original_module
+            sys.modules["task.fanout_runner"] = original_module
     assert calls == [
         ("旅行/地域/四川省/plan_finalize_author_task", "fanout_plan_finalize_author", True),
         ("旅行/地域/四川省/plan_finalize_author_task", "fanout_plan_finalize_author", True),
@@ -94,7 +94,7 @@ def test_task_scaled_e2e_finalize_reruns_author_when_produce_author_pauses():
         "--concurrency", "3",
         "--max-workers", "2",
         "--runtime", "local",
-        "--model", "composer-2.5",
+        "--model", "composer",
         "--cwd", "/repo",
         "--spend-limit-usd", "2.0",
         "--no-orchestrate",
@@ -110,9 +110,9 @@ def test_task_scaled_e2e_author_runner_delegates_to_fanout_runner():
         return 0
 
     fake_module = types.SimpleNamespace(main=_fake_main)
-    original = sys.modules.get("agent_ops.runners.fanout_runner")
+    original = sys.modules.get("task.fanout_runner")
     try:
-        sys.modules["agent_ops.runners.fanout_runner"] = fake_module
+        sys.modules["task.fanout_runner"] = fake_module
         task_handler_mod.handle_scaled_e2e(
             argparse.Namespace(
                 scaled_e2e_command="author-runner",
@@ -121,7 +121,7 @@ def test_task_scaled_e2e_author_runner_delegates_to_fanout_runner():
                 concurrency=2,
                 max_workers=4,
                 runtime="local",
-                model="composer-2.5",
+                model="composer",
                 cwd="/repo",
                 spend_limit=1.5,
                 refs="route_都江堰",
@@ -132,16 +132,16 @@ def test_task_scaled_e2e_author_runner_delegates_to_fanout_runner():
         )
     finally:
         if original is None:
-            del sys.modules["agent_ops.runners.fanout_runner"]
+            del sys.modules["task.fanout_runner"]
         else:
-            sys.modules["agent_ops.runners.fanout_runner"] = original
+            sys.modules["task.fanout_runner"] = original
     assert captured["argv"] == [
         "--plan", "plan_run",
         "--strategy", "flat-pool",
         "--concurrency", "2",
         "--max-workers", "4",
         "--runtime", "local",
-        "--model", "composer-2.5",
+        "--model", "composer",
         "--cwd", "/repo",
         "--spend-limit-usd", "1.5",
         "--refs", "route_都江堰",
@@ -187,7 +187,7 @@ def test_task_scaled_e2e_author_runner_falls_back_to_venv_python_when_sdk_missin
         scaled_e2e_mod.subprocess.run = original_run
     assert calls == [[
         "/tmp/.venv-fanout/bin/python",
-        str((SCRIPTS_ROOT.parent.parent / "agent_ops" / "runners" / "fanout_runner.py").resolve()),
+        str((SCRIPTS_ROOT / "task" / "fanout_runner.py").resolve()),
         "--plan",
         "plan_run_sdkless",
         "--refs",

@@ -22,14 +22,14 @@ changes:
   - trial_review 将默认部分交付下的 source_unavailable 归因为 partial delivery recovery，不再建议整批替换。
 evidence:
   t1:
-    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/annotate/test_annotate_publish_filter.py -q
-    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/verify/test_scale_readiness.py -q
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/annotate/test_annotate_publish_filter__local_contract_test.py -q
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/verify/test_scale_readiness__local_contract_test.py -q
     - quwoquan_data/.venv/bin/python -m py_compile quwoquan_data/scripts/_common/publish_filter.py quwoquan_data/scripts/publish/handler.py quwoquan_data/scripts/publish/assemble.py quwoquan_data/scripts/publish/gate.py quwoquan_data/scripts/_common/release_integrity.py quwoquan_data/scripts/task/run.py quwoquan_data/scripts/verify/scale_readiness.py quwoquan_data/scripts/task/trial_review.py
   t2:
     - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/workflow/test_task_run_pipeline.py::test_publish_stage_materializes_task_inputs_and_release quwoquan_data/tests/workflow/test_task_run_pipeline.py::test_publish_stage_allows_site_supply_dynamic_posts_without_entity_homepages quwoquan_data/tests/workflow/test_task_run_pipeline.py::test_publish_stage_allows_partial_posts_without_entity_homepages_for_entity_batch -q
-    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/task/test_trial_review.py -q
-    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/verify/test_release_integrity_gate.py -q
-    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/produce/test_image_post_contract.py quwoquan_data/tests/media/test_media_asset_url.py -q
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py -q
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/user_acceptance/verify/test_release_integrity_gate__user_acceptance_test.py -q
+    - quwoquan_data/.venv/bin/python -m pytest quwoquan_data/tests/local_contract/produce/test_image_post_contract__local_contract_test.py quwoquan_data/tests/local_contract/media/test_media_asset_url__local_contract_test.py -q
   t3:
     - 待下一轮真实百级/千级托管试跑补录 release/import/smoke 证据。
   t4:

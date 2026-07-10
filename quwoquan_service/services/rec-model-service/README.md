@@ -30,5 +30,5 @@ From `quwoquan_service`: `docker compose up -d rec-model-service`. Service liste
 
 ## Contract
 
-- `contracts/metadata/rec_model_service/`, `contracts/openapi/rec-model-service.v1.yaml`
+- `contracts/metadata/rec_model_service/`, `contracts/metadata/recommendation/rec_model/service.yaml`
 - Codegen: `make codegen-rec-model-python` (from quwoquan_service root)

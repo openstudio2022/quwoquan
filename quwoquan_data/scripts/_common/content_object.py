@@ -6,7 +6,7 @@ brief 阶段即可确定（全部来自 brief，不依赖 agent 创作）：
 
 - `contentType` = produce `--type`（默认 `article`）。
 - `angle` = `_publish_angle(brief)`（底稿派生内容类目：image→画报，否则按 writingIntent 派生标签）。
-- `title` = `brief.titleHint`（= 取自单一底稿的清洗标题 `extract_source_title`，与 publishTitle 同源；文章源取不出标题则上游弃稿）。
+- `title` = `brief.titleHint`（文章与公开图片标题同源；image/gallery 若公开标题缺失，内部对象坐标允许回退到 `ref`，但该回退不得复制到 `publishTitle`）。
 - `seq` = 默认 `1`；同 `(type,angle,title)` 组多 ref 按 ref 稳定排序递增（与 promote/materialize 对齐）。
 
 `ref → coords` 路由持久化在 `batches/{batch}/_shared/content_object_index.json`，作为批次内
@@ -68,13 +68,40 @@ def require_title_hint(brief: Mapping[str, Any], *, ref: str = "") -> str:
     raise ValueError(f"titleHint missing or empty{suffix}; publish title must be decided before content object routing")
 
 
-def compute_content_coords(brief: Mapping[str, Any], content_type: str = "article") -> dict[str, Any]:
+def compute_content_coords(
+    brief: Mapping[str, Any],
+    content_type: str = "article",
+    *,
+    ref: str = "",
+) -> dict[str, Any]:
     """从 brief 确定性算出内容对象坐标（angle/title），不含 seq。"""
     from produce.route_workflow import _publish_angle  # 延迟导入避免循环依赖
 
     angle = _publish_angle(brief)
-    title = require_title_hint(brief)
+    title = require_title_hint(brief, ref=ref)
     return {"contentType": content_type, "angle": angle, "title": title}
+
+
+def _enforce_single_batch_content_type(
+    task_id: str, batch_id: str, content_type: str, *, ref: str = ""
+) -> None:
+    """目录规范硬门：一个批次只允许一个 contentType，禁止混批。
+
+    批次声明真相源是 batch_manifest.json.contentType（homepage/article/image/video）；
+    内容对象 content_type（article/image/...）必须与之一致。manifest 未声明
+    contentType（legacy 批次）时不拦截，由 legacy 只读策略兜底。
+    """
+    from _common.batch_manifest import load_batch_manifest  # 延迟导入避免循环依赖
+
+    declared = str(load_batch_manifest(task_id, batch_id).get("contentType") or "").strip()
+    if not declared:
+        return
+    if str(content_type or "").strip() != declared:
+        raise ValueError(
+            f"batch contentType mixed: batch={batch_id} declared={declared!r} "
+            f"but object ref={ref!r} contentType={content_type!r}; "
+            "一批次只允许一个 contentType，请为其它内容类型另起批次"
+        )
 
 
 def register_content_object(
@@ -87,23 +114,31 @@ def register_content_object(
     title: str,
     seq: int | None = None,
 ) -> dict[str, Any]:
-    """登记/刷新 ref→coords 路由（幂等）。seq 缺省时整组按 ref 稳定排序重排（常态 1:1 → 1）。"""
+    """登记/刷新 ref→coords 路由（幂等）。
+
+    seq 一旦分配就不能因后续同标题 ref 注册而漂移；对象阶段文件已经写入
+    posts/{type}/{angle}/{title}/{seq}/，重排旧 seq 会让已落盘 brief/draft 与索引脱节。
+    """
     title = str(title or "").strip()
     if not title:
         raise ValueError(f"content object title missing or empty for ref={ref!r}")
+    _enforce_single_batch_content_type(task_id, batch_id, content_type, ref=ref)
     index = load_index(task_id, batch_id)
-    index[ref] = {"contentType": content_type, "angle": angle, "title": title,
-                  "seq": int(seq) if seq is not None else int((index.get(ref) or {}).get("seq") or 1)}
-    if seq is None:
-        # 同 (type,angle,title) 组按 ref 排序稳定分配 seq（含本 ref），避免顺序相关漂移。
-        group = sorted(
-            r for r, c in index.items()
+    existing = index.get(ref) or {}
+    if seq is not None:
+        next_seq = int(seq)
+    elif existing.get("seq"):
+        next_seq = int(existing.get("seq") or 1)
+    else:
+        group_seqs = [
+            int(c.get("seq") or 0)
+            for c in index.values()
             if c.get("contentType") == content_type
             and c.get("angle") == angle
             and c.get("title") == title
-        )
-        for position, member in enumerate(group, start=1):
-            index[member]["seq"] = position
+        ]
+        next_seq = max(group_seqs or [0]) + 1
+    index[ref] = {"contentType": content_type, "angle": angle, "title": title, "seq": next_seq}
     write_json(index_path(task_id, batch_id), {"schemaVersion": INDEX_SCHEMA, "refs": index})
     return index[ref]
 
@@ -111,7 +146,7 @@ def register_content_object(
 def register_from_brief(
     task_id: str, batch_id: str, ref: str, brief: Mapping[str, Any], content_type: str = "article"
 ) -> dict[str, Any]:
-    coords = compute_content_coords(brief, content_type)
+    coords = compute_content_coords(brief, content_type, ref=ref)
     return register_content_object(
         task_id, batch_id, ref,
         content_type=coords["contentType"], angle=coords["angle"], title=coords["title"],

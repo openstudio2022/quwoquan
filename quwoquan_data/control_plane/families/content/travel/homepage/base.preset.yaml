@@ -1,0 +1,28 @@
+# 旅行实体主页（homepage-only）任务基线 preset。
+# 家族契约：只产实体主页，article/image 配额为 0；research 单 homepage lane。
+schemaVersion: quwoquan.task.preset
+presetId: content/travel/homepage/base
+title: 旅行实体主页任务基线
+defaults:
+  content:
+    angles:
+    - 体验
+    - 美图
+    - 攻略
+    audiences:
+    - 通用
+    carriers:
+    - article
+    modalityContract: separated_research
+    research:
+      lanes:
+      - homepage
+      maxConcurrency: 4
+      laneConcurrency:
+        homepage: 4
+      allowAiImages: false
+    quotas:
+      entityHomepagesPerTarget: 1
+      entityArticlesPerTarget: 0
+      imageWorksPerTarget: 0
+      routeArticles: 0

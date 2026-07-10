@@ -15,6 +15,8 @@
 7. 【回退门】task_produce stage-first 扁平面被重新写入（task_produce/{posts,inputs,drafts,results,review/*}），
    即 M3/M4 已迁对象根的成品/草稿/brief/阶段报告/账本不得回退。
 8. 【同步门】成品对象目录与 `_shared/content_object_index.json` 路由漂移（对象在盘上但未登记）。
+9. 【证据面门】batch/_shared 出现未登记条目（不属于 paths.BATCH_SHARED_AUTHORITATIVE_ENTRIES
+   权威证据，也不属于 BATCH_SHARED_RECLAIMABLE_ENTRIES / `tmp_*` 可清理层）。
 
 旧 stage-first 布局（download/sources）已废弃；若被写入，按回退门直接 BLOCK。
 
@@ -23,6 +25,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -38,15 +41,16 @@ from _common.paths import (  # noqa: E402
     TASKS_ROOT,
     TASK_ROOT_ALLOWED_ENTRIES,
     TASK_ROOT_LEGACY_COMPAT_ENTRIES,
-    TASK_SHARED_LEDGER_FILENAMES,
+    TASK_SHARED_ALLOWED_ENTRIES,
     batch_root,
+    batch_shared_entry_role,
     batch_task_id,
-    batches_root,
     iter_all_batch_dirs,
     normalize_task_id,
     task_root,
     task_shared_dir,
 )
+from _common.asset_identity import parse_post_asset_id  # noqa: E402
 from _common.prose_style import mechanical_ending_title_issues  # noqa: E402
 from _common.source_catalog import source_unit_category_issues  # noqa: E402
 from _common.entity_object import batch_entity_type_conflicts  # noqa: E402
@@ -70,13 +74,8 @@ _REF_FIELDS = (
 )
 _UNIT_RE = __import__("re").compile(r"^(\d{2})\.(.+)$")
 _OBJECT_CHILD_ALLOW = set(OBJECT_STAGES) | {"assets"}
-_TASK_SHARED_ALLOW = {
-    *TASK_SHARED_LEDGER_FILENAMES,
-    "baseline_freeze_packet.json",
-    "baseline_report.json",
-    "explore_packet.json",
-    "discovery_adopt",
-}
+# task/_shared 最小证据面（真相源：paths.TASK_SHARED_ALLOWED_ENTRIES）。
+_TASK_SHARED_ALLOW = set(TASK_SHARED_ALLOWED_ENTRIES)
 
 # 批次顶层允许集（§2/§12 A5）：对象目录 + 批次公共 + 受控 workspace 命令目录。
 # workspace 命令目录不得承载对象证据（由回退门 _regression_issues 保证）。
@@ -191,6 +190,11 @@ def _source_refs_issues(obj: Path, batch: Path) -> list[str]:
         data = read_json(snapshot_path)
     except Exception as exc:  # noqa: BLE001
         return [f"{rel}: source_refs.json unreadable ({exc})"]
+    if not isinstance(data, dict):
+        # agent 产物是外部输入：顶层写成数组/标量属于契约违规，必须报 issue 而非崩溃。
+        return [
+            f"{rel}: source_refs.json 顶层必须是 object（实得 {type(data).__name__}）"
+        ]
     issues: list[str] = []
     if snapshot_path.stat().st_size > SOURCE_REFS_MAX_BYTES:
         issues.append(
@@ -244,6 +248,10 @@ def _object_source_unit_records(obj: Path, batch: Path) -> list[tuple[str, str]]
     try:
         data = read_json(snapshot_path)
     except Exception:  # noqa: BLE001
+        return []
+    if not isinstance(data, dict):
+        # 顶层坏类型（agent 写成数组等）：无可提取记录；契约违规由
+        # _source_refs_issues / download gate 负责报 issue，这里不得崩溃。
         return []
     rows = data.get("sources") or []
     if not isinstance(rows, list):
@@ -433,6 +441,29 @@ def _naming_issues(obj: Path, rel: Path) -> list[str]:
     return issues
 
 
+def _batch_shared_issues(batch: Path) -> list[str]:
+    """证据面门：batch/_shared 条目 ⊆ 权威证据 ∪ 可清理层（真相源 paths）。
+
+    - authoritative：不可重算真相源，readiness/审计只认这些条目。
+    - reclaimable（含 `tmp_*`）：调试/过程层，允许存在、可随时清理，不算证据。
+    - unknown：未登记条目直接 BLOCK，防止证据面无限膨胀出第二真相源。
+    """
+    issues: list[str] = []
+    shared_dir = batch / "_shared"
+    if not shared_dir.is_dir():
+        return issues
+    for entry in sorted(shared_dir.iterdir()):
+        if entry.name.startswith("."):
+            continue
+        if batch_shared_entry_role(entry.name) == "unknown":
+            issues.append(
+                f"_shared/{entry.name}: 未登记的批次共享条目"
+                "（须先在 paths.BATCH_SHARED_AUTHORITATIVE_ENTRIES 或 "
+                "BATCH_SHARED_RECLAIMABLE_ENTRIES 登记角色）"
+            )
+    return issues
+
+
 def _top_level_issues(batch: Path) -> list[str]:
     """顶层结构门：批次根条目 ⊆ 允许集（§2/§12 A5），拦截漂移/散落文件。"""
     issues: list[str] = []
@@ -456,6 +487,70 @@ def _regression_issues(batch: Path) -> list[str]:
         matches = d.rglob(pattern) if recursive else d.glob(pattern)
         if any(m.is_file() for m in matches):
             issues.append(f"{relpath}: stage-first 回退禁止 — {msg}")
+    return issues
+
+
+# 批次级来源单元可读命名（spec §3）：{实体名}__{sourceKind}__{hash8}。
+_SOURCE_UNIT_READABLE_RE = re.compile(r"^.+__[A-Za-z0-9_\-]+__[0-9a-f]{8}$")
+_SOURCE_UNIT_LEGACY_HASH_RE = re.compile(r"^su_[0-9a-f]{20}$")
+
+# 成品资产命名门允许的图片扩展（对象 assets/ 下的成品图）。
+_PRODUCT_ASSET_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+
+
+def _batch_assets_naming_issues(batch: Path) -> list[str]:
+    """命名门：对象 assets/ 成品图片文件名必须是 v2 assetId
+    （实体_角色_图注_批次号_hash，见 asset_id_zero_collision_spec §3）。
+
+    与 sources 命名门平级：旧 v1 四段格式（无图注段）在新批次成品中禁止回归。
+    """
+    issues: list[str] = []
+    for obj in iter_batch_object_dirs(batch):
+        assets_dir = obj / "assets"
+        if not assets_dir.is_dir():
+            continue
+        rel = obj.relative_to(batch)
+        for item in sorted(assets_dir.iterdir()):
+            if not item.is_file() or item.suffix.lower() not in _PRODUCT_ASSET_EXTS:
+                continue
+            stem = item.stem
+            try:
+                parsed = parse_post_asset_id(stem)
+            except ValueError:
+                issues.append(
+                    f"{rel}: 成品资产文件名不可解析为 assetId：assets/{item.name}"
+                    "（须为 实体_角色_图注_批次号_hash，spec §4.1）"
+                )
+                continue
+            if parsed.get("format") != "v2":
+                issues.append(
+                    f"{rel}: 成品资产命名缺图注段（v1 已废弃）：assets/{item.name}"
+                    "（须为 实体_角色_图注_批次号_hash，spec §4.1）"
+                )
+    return issues
+
+
+def _batch_sources_naming_issues(batch: Path) -> list[str]:
+    """命名门：批次级 sources/ 目录必须用可读命名，禁止回归纯哈希 su_ 目录。"""
+    issues: list[str] = []
+    sources_root = batch / "sources"
+    if not sources_root.is_dir():
+        return issues
+    for unit in sorted(sources_root.iterdir()):
+        if not unit.is_dir():
+            continue
+        name = unit.name
+        if _SOURCE_UNIT_LEGACY_HASH_RE.match(name):
+            issues.append(
+                f"sources/{name}: 纯哈希来源单元目录名已废弃，"
+                "必须使用可读命名 {实体名}__{sourceKind}__{hash8}（spec §3）"
+            )
+            continue
+        if not _SOURCE_UNIT_READABLE_RE.match(name):
+            issues.append(
+                f"sources/{name}: 来源单元目录名不符可读命名契约 "
+                "{实体名}__{sourceKind}__{hash8}（spec §3）"
+            )
     return issues
 
 
@@ -705,7 +800,10 @@ def scan_batch(task_id: str, batch_id: str, *, require_stage_tree: bool = True) 
     for obj in iter_batch_object_dirs(batch):
         _scan_object(obj, batch, issues)
     issues.extend(_top_level_issues(batch))
+    issues.extend(_batch_shared_issues(batch))
     issues.extend(_regression_issues(batch))
+    issues.extend(_batch_sources_naming_issues(batch))
+    issues.extend(_batch_assets_naming_issues(batch))
     issues.extend(_sync_issues(task_id, batch_id, batch))
     issues.extend(_orphan_post_object_issues(task_id, batch_id, batch))
     issues.extend(scan_asset_ids(task_id, batch_id))
@@ -736,7 +834,10 @@ def scan_all() -> list[str]:
         for obj in iter_batch_object_dirs(batch):
             _scan_object(obj, batch, issues)
         issues.extend(_top_level_issues(batch))
+        issues.extend(_batch_shared_issues(batch))
         issues.extend(_regression_issues(batch))
+        issues.extend(_batch_sources_naming_issues(batch))
+        issues.extend(_batch_assets_naming_issues(batch))
         issues.extend(_sync_issues(current_task_id, batch_id, batch))
         issues.extend(_orphan_post_object_issues(current_task_id, batch_id, batch))
         issues.extend(scan_asset_ids(current_task_id, batch_id))

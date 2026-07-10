@@ -75,6 +75,7 @@ L2_business_capability: <capability>
 L3_story: <story>
 验收意图: UAT / SIT / GWT / contract
 测试证据: local_contract / api_integration / user_acceptance
+质量维度: functional / contract / reliability / availability / observability / experience / security / performance / data_consistency
 ```
 
 起手式前先审视 `docs/outstanding_risks_backlog.md` 的未解决项；若本轮识别出新的长期遗留，需先向用户复述并在确认后登记。
@@ -100,8 +101,8 @@ L3_story: <story>
 
 ```bash
 go run ./quwoquan_service/tools/gen_tree_index specs/feature-tree specs/feature-tree/tree_index.yaml
-bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-bash agent_ops/scaffold/verify_acceptance_standard.sh
+bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
 ```
 
 ## 4. 商用品质 Review 门
@@ -135,6 +136,7 @@ Codex 每次执行都必须带 review 视角，而不是只按用户指令完成
 
 - 验收意图：`UAT`、`SIT`、`GWT`、`contract`
 - 测试工程层：`local_contract`、`api_integration`、`user_acceptance`
+- 非功能质量维度：通过 `quality_facet` 横切到三层测试，不新增第四层目录。
 
 默认映射：
 
@@ -150,6 +152,7 @@ Codex 每次执行都必须带 review 视角，而不是只按用户指令完成
 - `api_integration` 中验证的字段、状态码、错误码、边界行为，必须在 `local_contract` Mock/Provider/Widget/领域规则测试中有对应断言。
 - `acceptance.yaml` 不能标记完成却缺 `tests.recorded`。
 - 高风险改动必须先有失败测试或明确替代验证说明。
+- 异常恢复、性能、安全隐私、可观测、可靠性/可用性、数据一致性适用时必须声明 `quality_facet` 并给出证据；缺证据时返回 `GATE_BLOCK`。
 
 ### 5.2 四环境
 
@@ -165,10 +168,10 @@ Codex 每次执行都必须带 review 视角，而不是只按用户指令完成
 环境与部署任务必须优先使用 `stackctl`：
 
 ```bash
-python3 agent_ops/deploy/stackctl.py package --env <alpha|beta|gamma|prod>
-python3 agent_ops/deploy/stackctl.py verify --env <env> --kind all --tier all
-python3 agent_ops/deploy/stackctl.py health --target <target> --scope full
-python3 agent_ops/deploy/stackctl.py inspect --target <target> --kind all
+python3 quwoquan_ops/cli/stackctl.py package --env <alpha|beta|gamma|prod>
+python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all
+python3 quwoquan_ops/cli/stackctl.py health --target <target> --scope full
+python3 quwoquan_ops/cli/stackctl.py inspect --target <target> --kind all
 ```
 
 生产没有 `prod-gray` 环境；灰度是 `prod` 的 rollout stage。涉及 prod-hosted 放量、回滚版本、密钥、hosted URL 或破坏性 repair 时，必须停下请求人工确认。
@@ -202,7 +205,7 @@ python3 agent_ops/deploy/stackctl.py inspect --target <target> --kind all
 错误码是端云产品语义，不是技术实现细节。任何新增或修改错误、权限、降级、重试、超时、风控、限流、校验失败、第三方失败，都必须按同一条链路处理：
 
 ```text
-contracts/metadata/**/errors.yaml
+quwoquan_service/contracts/metadata/**/errors.yaml
   -> verify/codegen
   -> 服务端 RuntimeErrorResponse
   -> HTTP status + stable code + requestId/traceId + context.attributes
@@ -237,7 +240,7 @@ contracts/metadata/**/errors.yaml
 make verify-metadata
 make codegen
 make codegen-app
-dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
+dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
 ```
 
 如果只改了 UI 文案但没有 metadata/codegen，如果只改了服务错误但没有端侧 mapper/UI，如果只有日志没有用户恢复路径，均视为未完成。
@@ -363,5 +366,5 @@ codex --print-instructions
 ## 14. 维护原则
 
 - 尽量把稳定规则写进最近的 `AGENTS.md`，不要把大量一次性说明塞进 prompt。
-- 规则要短、可执行、可验证；细节放到现有 `specs/`、`contracts/metadata/`、`.cursor/rules/` 文档。
+- 规则要短、可执行、可验证；细节放到现有 `specs/`、`quwoquan_service/contracts/metadata/`、`.cursor/rules/` 文档。
 - 如果 Codex 某个误判反复出现，修 `AGENTS.md` 或补 gate，而不是反复口头纠正。

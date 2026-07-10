@@ -1076,7 +1076,7 @@ metadata v3（模块化目录）→ codegen 模板 → 生成物
     → Handler 骨架（adapters/http_handler.go）
 
 {aggregate}/fields.yaml + service.yaml
-    → OpenAPI schema（contracts/openapi/<service>.v1.yaml）
+    → metadata service/openapi fragments（contracts/metadata/<domain>/）
     → Dart DTO（quwoquan_app/lib/cloud/models/）
 
 {aggregate}/events.yaml

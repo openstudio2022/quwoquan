@@ -1,0 +1,1330 @@
+# 全国地点主清单 · 浙江省宁波市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 宁波市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 余姚市
+  leaves:
+  - name: 河姆渡遗址
+    canonicalName: 河姆渡遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    aliases:
+    - 河姆渡遗址博物馆
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:07:34Z'
+    sourceScreenEvidence: zh.wikipedia.org:河姆渡遗址 extract=238ch
+  - name: 王阳明故居
+    canonicalName: 王阳明故居（余姚）
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    aliases:
+    - 瑞云楼
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 丹山赤水
+    canonicalName: 丹山赤水
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    aliases:
+    - 丹山赤水风景区
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T13:59:28Z'
+    sourceScreenEvidence: baike.baidu.com:丹山赤水风景区
+  - name: 四明山国家森林公园
+    canonicalName: 四明山国家森林公园
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 中天阁
+    canonicalName: 中天阁
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 五桂楼
+    canonicalName: 五桂楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 井头山遗址
+    canonicalName: 井头山遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 余姚博物馆
+    canonicalName: 余姚博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 大隐石宕遗址
+    canonicalName: 大隐石宕遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 孙子秀墓
+    canonicalName: 孙子秀墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 成之庄
+    canonicalName: 成之庄
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 施岙遗址
+    canonicalName: 施岙遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 泗门谢氏始祖祠堂
+    canonicalName: 泗门谢氏始祖祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 白云桥 (余姚)
+    canonicalName: 白云桥 (余姚)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 祝江大桥
+    canonicalName: 祝江大桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 胡公岩摩崖石刻
+    canonicalName: 胡公岩摩崖石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 舜江楼
+    canonicalName: 舜江楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 马渚横河水利航运设施
+    canonicalName: 马渚横河水利航运设施
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    sourceReadiness: pending
+    selectionPriority: 18
+- district: 北仑区
+  leaves:
+  - name: 中国港口博物馆
+    canonicalName: 中国港口博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 九峰山
+    canonicalName: 九峰山（北仑）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    aliases:
+    - 九峰山旅游区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 洋沙山
+    canonicalName: 洋沙山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    aliases:
+    - 洋沙山海滨
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 梅山湾沙滩公园
+    canonicalName: 梅山湾沙滩公园
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 北仑博物馆
+    canonicalName: 北仑博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 大榭遗址
+    canonicalName: 大榭遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 小浃江碶闸群
+    canonicalName: 小浃江碶闸群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 张人亚故居
+    canonicalName: 张人亚故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 张人亚衣冠冢
+    canonicalName: 张人亚衣冠冢
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 总台山烽火台
+    canonicalName: 总台山烽火台
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 梅山盐场旧址
+    canonicalName: 梅山盐场旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 瑞庐
+    canonicalName: 瑞庐
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    sourceReadiness: pending
+    selectionPriority: 12
+- district: 奉化区
+  leaves:
+  - name: 溪口风景区
+    canonicalName: 溪口风景区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    aliases:
+    - 溪口
+    - 溪口雪窦山风景区
+    - 蒋氏故里
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 雪窦山
+    canonicalName: 雪窦山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 雪窦寺
+    canonicalName: 雪窦寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    aliases:
+    - 雪窦资圣禅寺
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 蒋氏故居
+    canonicalName: 蒋氏故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    aliases:
+    - 丰镐房
+    selectionPriority: 4
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:09:13Z'
+    sourceScreenEvidence: zh.wikipedia.org:蒋氏故居 extract=362ch
+  - name: 滕头村
+    canonicalName: 滕头村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    aliases:
+    - 滕头生态旅游区
+    selectionPriority: 5
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T14:01:03Z'
+    sourceScreenEvidence: baike.baidu.com:滕头生态旅游区
+  - name: 中正图书馆旧址 (奉化)
+    canonicalName: 中正图书馆旧址 (奉化)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 名山后遗址
+    canonicalName: 名山后遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 奉化博物馆
+    canonicalName: 奉化博物馆
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 奉化县学旧址
+    canonicalName: 奉化县学旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 总理纪念堂
+    canonicalName: 总理纪念堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 溪口镇 (宁波市)
+    canonicalName: 溪口镇 (宁波市)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 爱日庐
+    canonicalName: 爱日庐
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 王任叔故居
+    canonicalName: 王任叔故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 萧王庙
+    canonicalName: 萧王庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 葛竹王宅
+    canonicalName: 葛竹王宅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 青云孙氏宗祠
+    canonicalName: 青云孙氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    sourceReadiness: pending
+    selectionPriority: 16
+- district: 宁海县
+  leaves:
+  - name: 前童古镇
+    canonicalName: 前童古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 宁海森林温泉
+    canonicalName: 宁海森林温泉
+    entityType: 地点/温泉
+    typeTagRefs:
+    - Entity/地点/温泉
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    aliases:
+    - 南溪温泉
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 伍山石窟
+    canonicalName: 伍山石窟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    aliases:
+    - 伍山海滨石窟
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 万年桥 (宁海)
+    canonicalName: 万年桥 (宁海)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 前童镇
+    canonicalName: 前童镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 宁海城隍庙
+    canonicalName: 宁海城隍庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 宁海石碾群
+    canonicalName: 宁海石碾群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 戊己桥
+    canonicalName: 戊己桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 柔石故居
+    canonicalName: 柔石故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 西岙石拱桥
+    canonicalName: 西岙石拱桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 黄坛三堂
+    canonicalName: 黄坛三堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    sourceReadiness: pending
+    selectionPriority: 11
+- district: 慈溪市
+  leaves:
+  - name: 上林湖越窑遗址
+    canonicalName: 上林湖越窑遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    aliases:
+    - 上林湖越窑国家考古遗址公园
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:09:24Z'
+    sourceScreenEvidence: zh.wikipedia.org:上林湖越窑遗址 extract=352ch
+  - name: 鸣鹤古镇
+    canonicalName: 鸣鹤古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 杭州湾国家湿地公园
+    canonicalName: 杭州湾国家湿地公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/湿地公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 达蓬山
+    canonicalName: 达蓬山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    aliases:
+    - 达蓬山旅游度假区
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 七星桥
+    canonicalName: 七星桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 双河堰
+    canonicalName: 双河堰
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 吴锦堂墓
+    canonicalName: 吴锦堂墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 吴锦堂故居
+    canonicalName: 吴锦堂故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 孙家境孙氏祠堂
+    canonicalName: 孙家境孙氏祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 慈溪博物馆
+    canonicalName: 慈溪博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 杨贤江故居
+    canonicalName: 杨贤江故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 灵龙宫
+    canonicalName: 灵龙宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 童家岙遗址
+    canonicalName: 童家岙遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 达蓬山摩崖石刻
+    canonicalName: 达蓬山摩崖石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 逍路沿徐氏旧宅
+    canonicalName: 逍路沿徐氏旧宅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 鸣鹤新五房
+    canonicalName: 鸣鹤新五房
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 鸣鹤镇
+    canonicalName: 鸣鹤镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 龙山抗日碉堡群
+    canonicalName: 龙山抗日碉堡群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    sourceReadiness: pending
+    selectionPriority: 18
+- district: 江北区
+  leaves:
+  - name: 宁波老外滩
+    canonicalName: 宁波老外滩
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    aliases:
+    - 老外滩
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 慈城古县城
+    canonicalName: 慈城古县城
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    aliases:
+    - 慈城
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:09:46Z'
+    sourceScreenEvidence: zh.wikipedia.org:慈城 extract=206ch
+  - name: 保国寺
+    canonicalName: 保国寺
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    aliases:
+    - 保国寺古建筑博物馆
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:09:47Z'
+    sourceScreenEvidence: zh.wikipedia.org:保国寺 extract=311ch
+  - name: 中国通商银行宁波分行旧址
+    canonicalName: 中国通商银行宁波分行旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 刘家祠堂 (宁波)
+    canonicalName: 刘家祠堂 (宁波)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 刘氏贞节坊
+    canonicalName: 刘氏贞节坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 句章故城遗址
+    canonicalName: 句章故城遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 向宅
+    canonicalName: 向宅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 姚江运河渡口群
+    canonicalName: 姚江运河渡口群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 宁波耶稣圣心堂
+    canonicalName: 宁波耶稣圣心堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 宁波英国领事馆旧址
+    canonicalName: 宁波英国领事馆旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 宁波邮政局旧址
+    canonicalName: 宁波邮政局旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 恩荣坊 (宁波)
+    canonicalName: 恩荣坊 (宁波)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 慈城古建筑群
+    canonicalName: 慈城古建筑群
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 方家砖雕台门
+    canonicalName: 方家砖雕台门
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 朱贵祠
+    canonicalName: 朱贵祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 江北岸
+    canonicalName: 江北岸
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 浙海关旧址
+    canonicalName: 浙海关旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 程氏庆余堂
+    canonicalName: 程氏庆余堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 符卿第
+    canonicalName: 符卿第
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 谢蘅窗旧宅
+    canonicalName: 谢蘅窗旧宅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    sourceReadiness: pending
+    selectionPriority: 21
+- district: 海曙区
+  leaves:
+  - name: 天一阁
+    canonicalName: 天一阁
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    aliases:
+    - 天一阁博物院
+    - 天一阁·月湖景区
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:09:49Z'
+    sourceScreenEvidence: zh.wikipedia.org:天一阁 extract=268ch
+  - name: 月湖
+    canonicalName: 月湖（宁波）
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    aliases:
+    - 月湖公园
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 宁波鼓楼
+    canonicalName: 宁波鼓楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    aliases:
+    - 鼓楼沿
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 天封塔
+    canonicalName: 天封塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 宁波府城隍庙
+    canonicalName: 宁波府城隍庙
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    aliases:
+    - 郡庙
+    selectionPriority: 5
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:10:24Z'
+    sourceScreenEvidence: zh.wikipedia.org:宁波府城隍庙 extract=214ch
+  - name: 它山堰
+    canonicalName: 它山堰
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    selectionPriority: 6
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:10:25Z'
+    sourceScreenEvidence: zh.wikipedia.org:它山堰 extract=213ch
+  - name: 五龙潭
+    canonicalName: 五龙潭（宁波）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    aliases:
+    - 五龙潭风景区
+    selectionPriority: 7
+    sourceReadiness: ready
+  - name: 中山广场 (宁波)
+    canonicalName: 中山广场 (宁波)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 伏跗室
+    canonicalName: 伏跗室
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 十三洞桥
+    canonicalName: 十三洞桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 大革命时期中共宁波地委旧址
+    canonicalName: 大革命时期中共宁波地委旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 孙传哲故居
+    canonicalName: 孙传哲故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 宁波城墙
+    canonicalName: 宁波城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 宁波市人民大会堂
+    canonicalName: 宁波市人民大会堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 宁波水利航运遗址碑
+    canonicalName: 宁波水利航运遗址碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 张苍水故居
+    canonicalName: 张苍水故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 星光沈氏宗祠
+    canonicalName: 星光沈氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 月湖清真寺
+    canonicalName: 月湖清真寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 朱陛墓
+    canonicalName: 朱陛墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 樟村四明山烈士墓
+    canonicalName: 樟村四明山烈士墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 百梁桥
+    canonicalName: 百梁桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 翁文灏故居
+    canonicalName: 翁文灏故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    sourceReadiness: pending
+    selectionPriority: 22
+- district: 象山县
+  leaves:
+  - name: 象山影视城
+    canonicalName: 象山影视城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/主题乐园/影视主题乐园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    aliases:
+    - 宁波影视城
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:10:37Z'
+    sourceScreenEvidence: zh.wikipedia.org:象山影视城 extract=212ch
+  - name: 石浦渔港古城
+    canonicalName: 石浦渔港古城
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    aliases:
+    - 石浦古城
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 松兰山
+    canonicalName: 松兰山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    aliases:
+    - 松兰山海滨旅游度假区
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:10:45Z'
+    sourceScreenEvidence: zh.wikipedia.org:松兰山 extract=236ch
+  - name: 中国渔村
+    canonicalName: 中国渔村
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 花岙岛
+    canonicalName: 花岙岛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    aliases:
+    - 花岙石林
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 渔山列岛
+    canonicalName: 渔山列岛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    aliases:
+    - 渔山岛
+    selectionPriority: 6
+    sourceReadiness: ready
+  - name: “钟郝遗徽”石亭
+    canonicalName: “钟郝遗徽”石亭
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 东门天后宫
+    canonicalName: 东门天后宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 大百丈岩画
+    canonicalName: 大百丈岩画
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 淳熙井
+    canonicalName: 淳熙井
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 游仙寨
+    canonicalName: 游仙寨
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 爵溪街心戏亭
+    canonicalName: 爵溪街心戏亭
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    sourceReadiness: pending
+    selectionPriority: 12
+- district: 鄞州区
+  leaves:
+  - name: 宁波博物院
+    canonicalName: 宁波博物院
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    aliases:
+    - 宁波博物馆
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:11:07Z'
+    sourceScreenEvidence: zh.wikipedia.org:宁波博物馆 extract=312ch
+  - name: 东钱湖
+    canonicalName: 东钱湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    aliases:
+    - 东钱湖旅游度假区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 天童寺
+    canonicalName: 天童寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    aliases:
+    - 天童禅寺
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:11:15Z'
+    sourceScreenEvidence: zh.wikipedia.org:天童寺 extract=237ch
+  - name: 阿育王寺
+    canonicalName: 阿育王寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    selectionPriority: 4
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:11:16Z'
+    sourceScreenEvidence: zh.wikipedia.org:阿育王寺 extract=284ch
+  - name: 东钱湖南宋石刻公园
+    canonicalName: 东钱湖南宋石刻公园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    aliases:
+    - 南宋石刻遗址公园
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 天童国家森林公园
+    canonicalName: 天童国家森林公园
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    selectionPriority: 6
+    sourceReadiness: ready
+  - name: 走马塘村
+    canonicalName: 走马塘村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    aliases:
+    - 中国进士第一村
+    selectionPriority: 7
+    sourceReadiness: pending
+  - name: 七塔寺
+    canonicalName: 七塔寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 周尧故居
+    canonicalName: 周尧故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 沙耆故居
+    canonicalName: 沙耆故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 碧环桥
+    canonicalName: 碧环桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 童第周故居 (宁波)
+    canonicalName: 童第周故居 (宁波)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    sourceReadiness: pending
+    selectionPriority: 12
+- district: 镇海区
+  leaves:
+  - name: 招宝山
+    canonicalName: 招宝山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/镇海区
+    aliases:
+    - 招宝山旅游风景区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 郑氏十七房
+    canonicalName: 郑氏十七房
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/镇海区
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:11:28Z'
+    sourceScreenEvidence: zh.wikipedia.org:郑氏十七房 extract=207ch
+  - name: 宁波帮博物馆
+    canonicalName: 宁波帮博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/镇海区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 九龙湖
+    canonicalName: 九龙湖（镇海）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/镇海区
+    aliases:
+    - 九龙湖旅游度假区
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 包玉刚故居
+    canonicalName: 包玉刚故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/镇海区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 吴杰故居
+    canonicalName: 吴杰故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/镇海区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 朱枫故居
+    canonicalName: 朱枫故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/镇海区
+    sourceReadiness: pending
+    selectionPriority: 7

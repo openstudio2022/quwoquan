@@ -47,7 +47,7 @@ parse_flutter_device_id() {
 
 DEVICE_ID="$(parse_flutter_device_id "$@")"
 
-bash "$ROOT_DIR/agent_ops/deploy/alpha/start_alpha_mock_stack.sh" up
+bash "$ROOT_DIR/quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh" up
 
 ANDROID_LOCAL_GATEWAY_BASE_URL=""
 ANDROID_LOCAL_LEGAL_BASE_URL=""
@@ -62,7 +62,7 @@ if [[ -n "$DEVICE_ID" ]]; then
 import shlex
 import sys
 
-from agent_ops.deploy.lib.dev_up import (
+from quwoquan_ops.cli.lib.dev_up import (
     detect_device_kind,
     enable_android_adb_reverse,
     find_device,

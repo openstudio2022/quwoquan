@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prefab user provenance gate: block new legacy fixture_user_* references."""
+"""Prefab user provenance gate: block new archive fixture_user_* references."""
 from __future__ import annotations
 
 import json
@@ -7,18 +7,26 @@ import re
 import sys
 from pathlib import Path
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SCRIPTS_ROOT = REPO_ROOT / "quwoquan_data" / "scripts"
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
+
+from _common.creator_pool.batch_policy import default_target_for_batch
+
 try:
     import yaml
 except ImportError:  # pragma: no cover
     yaml = None
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
 ALLOWLIST = REPO_ROOT / "specs" / "gates" / "prefab_user_fixture_allowlist.yaml"
 PROVENANCE = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "prefab_user_provenance.yaml"
-MANIFEST = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "user_pool.manifest.json"
-CREATOR_SLICE = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "user_pool.creator_pool.json"
+MANIFEST = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "user_pool.manifest.travel_photo_1k_v1.json"
+CREATOR_SLICE = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "user_pool.creator_pool.travel_photo_1k_v1.json"
 MIGRATION_MAP = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "prefab_user_migration_map.yaml"
 CUTOVER = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "prefab_cutover.yaml"
+CANONICAL_TARGET = default_target_for_batch("travel_photo_1k_v1")
+EXPECTED_CREATOR_SLICE_COUNT = CANONICAL_TARGET + 1
 
 FIXTURE_USER_RE = re.compile(r"fixture_user_[a-z0-9_]+")
 CORE_PRESET_RE = re.compile(r"CORE_USER_PRESETS\s*=")
@@ -35,9 +43,9 @@ def _load_allowlist() -> tuple[set[str], set[str]]:
     if yaml is None or not ALLOWLIST.is_file():
         return set(), set()
     data = yaml.safe_load(ALLOWLIST.read_text(encoding="utf-8")) or {}
-    legacy = set(data.get("legacyUserIds") or [])
+    archive = set(data.get("archiveUserIds") or [])
     presets = set(data.get("coreUserPresets") or [])
-    return legacy, presets
+    return archive, presets
 
 
 def _scan_fixture_user_refs() -> set[str]:
@@ -78,14 +86,14 @@ def main() -> int:
         if not required.is_file():
             issues.append(f"missing required metadata: {required.relative_to(REPO_ROOT)}")
 
-    allow_legacy, allow_presets = _load_allowlist()
-    found_legacy = _scan_fixture_user_refs()
+    allow_archive, allow_presets = _load_allowlist()
+    found_archive = _scan_fixture_user_refs()
     found_presets = {p.strip('"') for p in _scan_core_user_presets()}
 
-    new_legacy = sorted(found_legacy - allow_legacy)
+    new_archive = sorted(found_archive - allow_archive)
     new_presets = sorted(found_presets - allow_presets)
-    if new_legacy:
-        issues.append(f"new fixture_user_* references ({len(new_legacy)}): {new_legacy[:10]}")
+    if new_archive:
+        issues.append(f"new fixture_user_* references ({len(new_archive)}): {new_archive[:10]}")
     if new_presets:
         issues.append(f"new CORE_USER_PRESETS entries: {new_presets}")
 
@@ -93,15 +101,19 @@ def main() -> int:
         creator = json.loads(CREATOR_SLICE.read_text(encoding="utf-8"))
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
         users = creator.get("users") or []
-        if len(users) < 101:
-            issues.append(f"creator slice expects 101 users (100 authors + currentUserVariant), got {len(users)}")
+        if len(users) != EXPECTED_CREATOR_SLICE_COUNT:
+            issues.append(
+                "creator slice expects "
+                f"{EXPECTED_CREATOR_SLICE_COUNT} users ({CANONICAL_TARGET} authors + currentUserVariant), "
+                f"got {len(users)}"
+            )
         slot_roles = [u.get("slotRole") for u in users if isinstance(u, dict)]
         if "currentUserVariant" not in slot_roles:
             issues.append("creator slice missing currentUserVariant slot")
         if manifest.get("currentUserVariant", {}).get("subAccountId") is None:
             issues.append("manifest missing currentUserVariant.subAccountId")
     else:
-        issues.append("T1 artifacts missing: user_pool.creator_pool.json or user_pool.manifest.json")
+        issues.append("T1 artifacts missing: travel_photo_1k_v1 user_pool creator slice or manifest")
 
     for optional in (MIGRATION_MAP, CUTOVER):
         if not optional.is_file():
@@ -115,7 +127,7 @@ def main() -> int:
 
     print(
         f"[verify-prefab-user-provenance] PASSED "
-        f"(allowlist legacy={len(allow_legacy)} presets={len(allow_presets)})"
+        f"(allowlist archive={len(allow_archive)} presets={len(allow_presets)})"
     )
     return 0
 

@@ -20,7 +20,7 @@
 
 | 接口 | method | path | 说明 | 契约位置 |
 |------|--------|------|------|----------|
-| 多场景打分 | POST | `/v1/score` | scenario + userId + sessionId + userFeatures + sessionSignals + candidates → scores[] | `rec_model_service/service.yaml`、`contracts/openapi/rec-model-service.v1.yaml` |
+| 多场景打分 | POST | `/v1/score` | scenario + userId + sessionId + userFeatures + sessionSignals + candidates → scores[] | `rec_model_service/service.yaml`、`contracts/metadata/recommendation/rec_model/service.yaml` |
 | 健康检查 | GET | `/health` | 健康探测 | 同上 |
 
 与 Go 端对齐：`runtime/recommendation/scorer.go` 中 `ModelPredictRequest` / `ModelPredictResponse`；metadata 中已增加 `scenario`、`context` 以支持多场景扩展。
@@ -37,7 +37,7 @@
 - [x] **_projections/training_samples.yaml**：rec_training_samples 集合与索引
 - [x] **_projections/model_registry.yaml**：rec_model_registry 集合与索引
 - [x] **contracts/endpoint_catalog.md**：recommendation.score.predict、recommendation.health 及错误归因
-- [x] **contracts/openapi/rec-model-service.v1.yaml**：POST /v1/score、GET /health 的请求/响应 schema
+- [x] **contracts/metadata/recommendation/rec_model/service.yaml**：POST /v1/score、GET /health 的请求/响应 schema
 - [x] **Python codegen**：`make codegen-rec-model-python` 从同一 metadata 生成 Pydantic 模型与 FastAPI 路由骨架（见下文）
 
 ---
@@ -76,7 +76,7 @@ make codegen-app              # 端侧 DTO/Repository（若 App 需直连 rec-mo
 ## 5. 与 content-service 的契约关系
 
 - content-service 通过 `ModelServiceClient.Predict(ctx, *ModelPredictRequest)` 调用 rec-model-service。
-- 请求/响应需与 **contracts/openapi/rec-model-service.v1.yaml** 及 **rec_model_service/fields.yaml** 一致；新增字段时需同步 metadata、OpenAPI 与 Go 结构体。
+- 请求/响应需与 **contracts/metadata/recommendation/rec_model/service.yaml** 及 **rec_model_service/fields.yaml** 一致；新增字段时需同步 metadata、OpenAPI 与 Go 结构体。
 - 错误码与 **endpoint_catalog.md** 一致：`RECOMMENDATION.USER.*` / `RECOMMENDATION.NETWORK.*` / `RECOMMENDATION.SYSTEM.*`。
 
 ---

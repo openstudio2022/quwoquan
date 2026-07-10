@@ -8,7 +8,7 @@ affected_nodes:
   - specs/feature-tree/recommendation-platform/evaluation-and-flywheel
   - specs/feature-tree/recommendation-platform/evaluation-and-flywheel/recommendation-commercial-alerting
   - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
-  - deploy/monitoring/alerts/quwoquan_alerts.yaml
+  - quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
 
 entries:
   - timestamp: "2026-06-25T01:30:00+08:00"
@@ -49,7 +49,7 @@ entries:
           - alerts
           - slis
           - alerts_source
-      - path: deploy/monitoring/alerts/quwoquan_alerts.yaml
+      - path: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
         sections:
           - quwoquan_rec_model
     impact:

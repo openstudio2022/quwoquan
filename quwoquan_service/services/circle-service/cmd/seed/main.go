@@ -103,6 +103,29 @@ type circleFixtureFile struct {
 	UpdatedAt  string `json:"updatedAt"`
 }
 
+type contentFixturePack struct {
+	SeedSets map[string]contentFixtureSeedSet `json:"seedSets"`
+}
+
+type contentFixtureSeedSet struct {
+	Posts []contentFixturePost `json:"posts"`
+}
+
+type contentFixturePost struct {
+	ID          string   `json:"id"`
+	PostID      string   `json:"postId"`
+	Title       string   `json:"title"`
+	Summary     string   `json:"summary"`
+	ContentType string   `json:"contentType"`
+	CoverURL    string   `json:"coverUrl"`
+	CircleID    string   `json:"circleId"`
+	CircleIDs   []string `json:"circleIds"`
+	LikeCount   int64    `json:"likeCount"`
+	CreatedAt   string   `json:"createdAt"`
+	UpdatedAt   string   `json:"updatedAt"`
+	PublishedAt string   `json:"publishedAt"`
+}
+
 func parseFixtureTime(value string) time.Time {
 	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
 		return parsed
@@ -203,6 +226,55 @@ func circleFileFromFixture(ff circleFixtureFile) *model.CircleFile {
 	}
 }
 
+func circleIDsFromContentPost(post contentFixturePost) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, 1+len(post.CircleIDs))
+	if id := strings.TrimSpace(post.CircleID); id != "" {
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	for _, raw := range post.CircleIDs {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+func circleFeedDocFromFixture(post contentFixturePost) bson.M {
+	postID := strings.TrimSpace(post.PostID)
+	if postID == "" {
+		postID = strings.TrimSpace(post.ID)
+	}
+	title := strings.TrimSpace(post.Title)
+	if title == "" {
+		title = postID
+	}
+	createdAt := parseFixtureTime(post.CreatedAt)
+	updatedAt := parseFixtureTime(post.UpdatedAt)
+	publishedAt := parseFixtureTime(post.PublishedAt)
+	return bson.M{
+		"_id":         postID,
+		"postId":      postID,
+		"title":       title,
+		"summary":     strings.TrimSpace(post.Summary),
+		"contentType": strings.TrimSpace(post.ContentType),
+		"coverUrl":    strings.TrimSpace(post.CoverURL),
+		"circleIds":   circleIDsFromContentPost(post),
+		"likeCount":   post.LikeCount,
+		"status":      "published",
+		"createdAt":   createdAt,
+		"updatedAt":   updatedAt,
+		"publishedAt": publishedAt,
+	}
+}
+
 func main() {
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "MongoDB connection URI")
 	database := flag.String("database", "quwoquan_circle", "circle MongoDB database name")
@@ -212,11 +284,21 @@ func main() {
 		"metadata-relative circle fixture path",
 	)
 	refsCSV := flag.String("refs", "circle_core,circle_group_chat_link_core", "comma-separated seed refs")
+	contentFixtureRel := flag.String(
+		"content-fixture",
+		"content/test_fixtures/scenarios/content_scenarios.gamma-curated.json",
+		"metadata-relative content fixture path for circle feed posts",
+	)
+	contentRefsCSV := flag.String("content-refs", "content_discovery_core", "comma-separated content seed refs")
 	flag.Parse()
 
 	pack, err := contractfixture.LoadMetadataJSON[circleFixturePack](*fixtureRel)
 	if err != nil {
 		log.Fatalf("load circle fixture %s: %v", *fixtureRel, err)
+	}
+	contentPack, err := contractfixture.LoadMetadataJSON[contentFixturePack](*contentFixtureRel)
+	if err != nil {
+		log.Fatalf("load content fixture %s: %v", *contentFixtureRel, err)
 	}
 
 	ctx := context.Background()
@@ -225,11 +307,12 @@ func main() {
 	db := client.Database(*database)
 
 	// Reset previously seeded fixture rows so reseeding stays deterministic.
-	for _, coll := range []string{"circles", "circle_members", "circle_groups", "circle_files"} {
+	for _, coll := range []string{"circles", "circle_members", "circle_groups", "circle_files", "posts"} {
 		if _, err := db.Collection(coll).DeleteMany(ctx, bson.M{
 			"$or": []bson.M{
 				{"_id": bson.M{"$regex": "^fixture_"}},
 				{"circleId": bson.M{"$regex": "^fixture_"}},
+				{"circleIds": bson.M{"$regex": "^fixture_"}},
 			},
 		}); err != nil {
 			log.Fatalf("reset %s: %v", coll, err)
@@ -248,6 +331,7 @@ func main() {
 	}
 
 	inserted := 0
+	seededCircleIDs := map[string]struct{}{}
 	for _, ref := range strings.Split(*refsCSV, ",") {
 		ref = strings.TrimSpace(ref)
 		seedSet, ok := pack.SeedSets[ref]
@@ -258,6 +342,7 @@ func main() {
 		for _, fc := range seedSet.Circles {
 			c := circleFromFixture(fc)
 			upsert("circles", c.ID, c)
+			seededCircleIDs[c.ID] = struct{}{}
 			inserted++
 		}
 		for _, members := range seedSet.Members {
@@ -280,6 +365,34 @@ func main() {
 				upsert("circle_files", f.ID, f)
 				inserted++
 			}
+		}
+	}
+	for _, ref := range strings.Split(*contentRefsCSV, ",") {
+		ref = strings.TrimSpace(ref)
+		seedSet, ok := contentPack.SeedSets[ref]
+		if !ok {
+			log.Printf("WARN: content seed ref not found: %s", ref)
+			continue
+		}
+		for _, post := range seedSet.Posts {
+			circleIDs := circleIDsFromContentPost(post)
+			keep := false
+			for _, circleID := range circleIDs {
+				if _, ok := seededCircleIDs[circleID]; ok {
+					keep = true
+					break
+				}
+			}
+			if !keep {
+				continue
+			}
+			doc := circleFeedDocFromFixture(post)
+			postID := strings.TrimSpace(post.PostID)
+			if postID == "" {
+				postID = strings.TrimSpace(post.ID)
+			}
+			upsert("posts", postID, doc)
+			inserted++
 		}
 	}
 

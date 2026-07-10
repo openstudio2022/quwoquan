@@ -28,7 +28,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_OUT = ROOT / "artifacts/local-gamma/search_r_s06_s1_local_gamma_report.json"
+DEFAULT_OUT = ROOT / ".qwq_output/env/gamma/local/gamma-local/search_r_s06_s1_local_gamma_report.json"
 SEARCH_BASE = "http://127.0.0.1:19280"
 ES_BASE = "http://127.0.0.1:19430"
 
@@ -177,7 +177,7 @@ def main() -> int:
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    load_dir = ROOT / "artifacts/search-load/local-gamma"
+    load_dir = ROOT / ".qwq_output/env/repo/runs/search-load/local-gamma"
 
     report: dict = {
         "kind": "search_r_s06_s1_local_gamma_capacity",
@@ -209,7 +209,7 @@ def main() -> int:
     }
 
     report["stackctl_verify"] = run(
-        [sys.executable, "agent_ops/deploy/stackctl.py", "verify", "--env", "gamma", "--kind", "all"],
+        [sys.executable, "quwoquan_ops/cli/stackctl.py", "verify", "--env", "gamma", "--kind", "all"],
         timeout=180,
     )
     report["search_healthz"] = http_json(SEARCH_BASE + "/healthz")
@@ -223,8 +223,8 @@ def main() -> int:
     report["load_summary"] = load_latest_json(load_dir)
     report["repeatability"] = repeatability("成都", args.repeat)
 
-    rollback_json = ROOT / "artifacts/local-gamma/search_rollback_rehearsal_report.json"
-    rollback_md = ROOT / "artifacts/stackctl/gamma/search_rollback_rehearsal.md"
+    rollback_json = ROOT / ".qwq_output/env/gamma/local/gamma-local/search_rollback_rehearsal_report.json"
+    rollback_md = ROOT / ".qwq_output/env/gamma/runs/search_rollback_rehearsal.md"
     report["rollback_evidence"] = {
         "json_exists": rollback_json.exists(),
         "json_path": str(rollback_json),

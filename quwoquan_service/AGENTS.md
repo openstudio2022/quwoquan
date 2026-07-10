@@ -1,6 +1,6 @@
 # quwoquan_service Codex Guide
 
-在 `quwoquan_service/` 工作时，除仓库根 `AGENTS.md` 外，先阅读：
+在 `quwoquan_service/` 工作时，除仓库根 `AGENTS.md` 外，先阅读仓库根 `.cursor/rules/` 与服务契约入口：
 
 1. `quwoquan_service/contracts/metadata/README.md`
 2. `.cursor/rules/01-arch-constraints.mdc`
@@ -43,6 +43,6 @@
 
 - metadata 变更后优先执行：`make verify-metadata`
 - 需要生成产物时执行：`make codegen` 与必要的 `make codegen-app`
-- 结构化错误边界变化时执行：`dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart`
+- 结构化错误边界变化时执行：`dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart`
 - 再运行对应 Go 测试与 `make gate`
-- 环境、部署或拓扑相关改动使用 `python3 agent_ops/deploy/stackctl.py package/verify/health/inspect` 收集证据。
+- 环境、部署或拓扑相关改动使用 `python3 quwoquan_ops/cli/stackctl.py package/verify/health/inspect` 收集证据。

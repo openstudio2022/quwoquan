@@ -25,7 +25,7 @@ scenarios:
   - name: discovery_feed_load_and_render
     description: 发现页加载 → 渲染内容卡片（全链路）
     test_type: ui_journey
-    patrol_flow: test/patrol/discovery/feed_load_test.dart
+    patrol_flow: test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart
     actors:
       app: lib/ui/discovery/pages/discovery_page.dart
       gateway: /v1/orch/discovery/feed
@@ -51,7 +51,7 @@ scenarios:
   - name: like_post_realtime
     description: 点赞 → 计数实时更新 → 错误 UI 正确展示
     test_type: ui_journey
-    patrol_flow: test/patrol/content/like_post_test.dart
+    patrol_flow: test/user_acceptance/patrol/content/like_post__user_acceptance_test.dart
     actors:
       app: post card like button
       service: content-service POST /v1/content/posts/{postId}/like
@@ -103,7 +103,7 @@ scenarios:
   - name: error_empty_state_ui
     description: 帖子不存在错误 → 端侧空状态 Widget 正确渲染
     test_type: ui_journey
-    patrol_flow: test/patrol/content/error_empty_state_test.dart
+    patrol_flow: test/user_acceptance/patrol/content/error_empty_state__user_acceptance_test.dart
     # 补充 L3 error_state_displayed_correctly 中无法通过 HTTP 验证的 UI 渲染层
     actors:
       app: lib/ui/content/pages/work_browser_entry_page.dart
@@ -145,7 +145,7 @@ scenarios:
   - name: comment_on_post_journey
     description: 评论内容旅程：发表评论 → 评论数更新 → 行为信号到达推荐服务
     test_type: ui_journey
-    patrol_flow: test/patrol/content/comment_post_test.dart
+    patrol_flow: test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
     actors:
       app: lib/ui/content/pages/unified_media_viewer_page.dart
       service: content-service POST /v1/content/posts/{postId}/comments

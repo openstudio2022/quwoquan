@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 
 
 from support.task_workflow_fixtures import *  # noqa: F401,F403
@@ -133,7 +135,290 @@ def test_auto_content_plan_article_sources_reserve_unique_asset_refs():
     # writingIntent 是底稿派生的合法标签；实体退化为含本实体的多标签。
     valid_intents = {"planning_consultation", "decision_experience", "post_trip_journal"}
     assert all(item["writingIntent"] in valid_intents for item in article_items)
+    assert all(item["evidenceRequirements"]["emotion"]["required"] is False for item in article_items)
     assert all(_EID in item["entityTags"] for item in article_items)
+
+
+def test_auto_content_plan_elastic_shortfall_keeps_admitted_items_and_reports_rejects():
+    task_id = _make_task(
+        workflow_policy={
+            "elasticOverfetch": True,
+            "allowQuotaShortfall": True,
+            "allowContentQuotaShortfall": True,
+            "allowMinEntityShortfall": True,
+            "allowOverProduction": True,
+            "minBatchCompletionMode": "best_effort_with_reasoned_rejects",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 2
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 0
+    store.save_spec(spec)
+    batch_id = "content_plan_elastic_reasoned_shortfall"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    body = "\n".join(
+        [
+            f"{_EID}是测试省适合半日至一日游览的山地景区，行前需要核对开放时间、预约方式和天气。",
+            f"{_EID}的核心看点分布在步道沿线，游客需要根据体力安排入口、观景点、补给点和返程时间。",
+            f"{_EID}在雨天会出现路面湿滑和能见度下降，晴天则更适合安排观景、摄影和慢行休息。",
+            f"{_EID}的底稿包含交通、季节、排队和同行人群判断，足以支持一篇轻改 article base。",
+        ]
+        * 80
+    )
+    _write_content_plan_source(
+        object_dir,
+        task_id=task_id,
+        batch_id=batch_id,
+        ordinal=1,
+        source_id="article_fixture_1",
+        body=body,
+        title="测试景区甲实地游览记录",
+        quality=0.9,
+    )
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert issues == [], issues
+    root = batch_root(task_id, batch_id)
+    packet = read_json(root / "_shared" / "content_plan_packet.json")
+    assert [item["ref"] for item in packet["items"]] == [f"{_EID}__article_fixture_1"]
+    state = read_json(batch_workflow_state_path(task_id, batch_id))
+    abandoned = state["abandonedContentObjects"]
+    assert [item["ref"] for item in abandoned] == [f"{_EID}_article_shortfall_2"]
+    assert "only picked 1 qualified article source" in abandoned[0]["reason"]
+    reject_report = read_json(root / "_shared" / "reasoned_rejects.json")
+    assert reject_report["completionMode"] == "best_effort_with_reasoned_rejects"
+    assert reject_report["counts"]["rejectedContentObjects"] == 1
+    assert reject_report["objects"][0]["carrier"] == "article"
+    assert reject_report["objects"][0]["entity"] == _EID
+
+
+def test_auto_content_plan_commercial_closure_records_pool_diagnostics_without_shortfall():
+    task_id = _make_task(
+        workflow_policy={
+            "articleCommercialClosure": True,
+            "targetObjectCount": 100,
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 4
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 0
+    store.save_spec(spec)
+    batch_id = "content_plan_commercial_pool_no_shortfall"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    body = "\n".join(
+        [
+            f"{_EID}需要核对开放时间、预约规则、入口换乘和返程末班。",
+            f"{_EID}的核心游览动线适合拆成行前、现场和返程三段说明。",
+            f"{_EID}不同季节体验差异明显，雨天与节假日都需要单独提示。",
+            f"{_EID}的底稿应保留单 source unit 边界，并允许在 shared pool 内只产出一篇合格作品。",
+        ]
+        * 80
+    )
+    _write_content_plan_source(
+        object_dir,
+        task_id=task_id,
+        batch_id=batch_id,
+        ordinal=1,
+        source_id="article_fixture_1",
+        body=body,
+        title="商业闭环单底稿文章",
+        quality=0.92,
+        asset_name="source.jpg",
+        asset_bytes=_real_jpeg(512),
+        collection_id="commercial-pool-1",
+        caption=f"{_EID} 同源配图",
+        usage_scope="factual_reference_only",
+    )
+
+    ok, capacity_issues, capacity_diag = run_mod._content_capacity_gate_for_entity(
+        ctx,
+        _EID,
+        active_spec=spec,
+    )
+
+    assert ok is True
+    assert capacity_issues == []
+    assert capacity_diag["desiredArticleSources"] == 4
+    assert capacity_diag["minimumRequiredArticleSources"] == 1
+    assert capacity_diag["pickedArticleBaseSources"] == 1
+    assert capacity_diag["minimumQualityPassed"] is True
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert issues == [], issues
+    root = batch_root(task_id, batch_id)
+    packet = read_json(root / "_shared" / "content_plan_packet.json")
+    assert [item["ref"] for item in packet["items"]] == [f"{_EID}__article_fixture_1"]
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state.get("abandonedContentObjects", []) == []
+    diagnostics = read_json(root / "_shared" / "content_plan_source_diagnostics.json")
+    target_diag = diagnostics["targets"][_EID]
+    assert target_diag["desiredArticleSources"] == 4
+    assert target_diag["minimumRequiredArticleSources"] == 1
+    assert target_diag["pickedArticleBaseSources"] == 1
+    assert target_diag["minimumQualityPassed"] is True
+    assert run_mod._content_plan_source_shortfall_entity_ids(ctx) == []
+    assert run_mod._content_plan_source_shortfall_reasons(ctx) == {}
+
+
+def test_auto_content_plan_image_only_missing_source_dir_becomes_reasoned_reject():
+    missing_entity = "测试景区乙"
+    task_id = _make_task(
+        workflow_policy={
+            "elasticOverfetch": True,
+            "allowQuotaShortfall": True,
+            "allowContentQuotaShortfall": True,
+            "allowMinEntityShortfall": True,
+            "allowOverProduction": True,
+            "minBatchCompletionMode": "best_effort_with_reasoned_rejects",
+        }
+    )
+    spec = store.load_spec(task_id)
+    spec.setdefault("scope", {})["coverageTargets"] = [
+        {"entityType": "地点/景区", "name": _EID},
+        {"entityType": "地点/景区", "name": missing_entity},
+    ]
+    spec.setdefault("content", {})["carriers"] = ["image"]
+    spec["content"].setdefault("quotas", {})["entityArticlesPerTarget"] = 0
+    spec["content"]["quotas"]["entityHomepagesPerTarget"] = 0
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 1
+    store.save_spec(spec)
+    batch_id = "content_plan_image_only_missing_sources_reasoned_reject"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    _write_content_plan_source(
+        object_dir,
+        task_id=task_id,
+        batch_id=batch_id,
+        ordinal=1,
+        source_id="image_fixture_1",
+        body=f"# {_EID} 开放许可图片\n\n{_EID} image fixture",
+        title=f"{_EID} 开放许可摄影作品",
+        lane="image",
+        asset_name="image.jpg",
+        asset_bytes=_real_jpeg(411),
+        collection_id="image-collection-1",
+        caption=f"{_EID} 山地景观",
+        usage_scope="app_publish",
+    )
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert issues == [], issues
+    root = batch_root(task_id, batch_id)
+    packet = read_json(root / "_shared" / "content_plan_packet.json")
+    assert [item["ref"] for item in packet["items"]] == [f"{_EID}_image"]
+    state = read_json(batch_workflow_state_path(task_id, batch_id))
+    abandoned = state["abandonedContentObjects"]
+    assert [item["ref"] for item in abandoned] == [f"{missing_entity}_image_shortfall_1"]
+    assert abandoned[0]["reason"] == f"{missing_entity}: sources directory missing"
+    reject_report = read_json(root / "_shared" / "reasoned_rejects.json")
+    assert reject_report["counts"]["rejectedContentObjects"] == 1
+    assert reject_report["objects"][0]["carrier"] == "image"
+    assert reject_report["objects"][0]["entity"] == missing_entity
+    diagnostics = read_json(root / "_shared" / "content_plan_source_diagnostics.json")
+    assert diagnostics["targets"][missing_entity]["imageRejects"] == {"sources_directory_missing": 1}
+    assert diagnostics["targets"][missing_entity]["articleRejects"] == {}
+
+
+def test_content_capacity_preflight_respects_full_article_quota():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 4
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 0
+    store.save_spec(spec)
+    batch_id = "content_capacity_requires_four_article_sources"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    repeated_body = "\n".join(
+        [
+            f"{_EID}行前需要核对开放时间、门票预约、交通接驳、返程末班和天气变化。",
+            f"{_EID}核心游览点之间有步行距离，节假日需要额外预留排队和补给时间。",
+            f"{_EID}不同季节体验不同，雨天注意湿滑，晴天适合安排观景与休息点。",
+        ]
+        * 90
+    )
+    for index in range(1, 4):
+        _write_content_plan_source(
+            object_dir,
+            task_id=task_id,
+            batch_id=batch_id,
+            ordinal=index,
+            source_id=f"article_fixture_{index}",
+            body=repeated_body,
+            title=f"测试底稿 {index}",
+            quality=0.9,
+        )
+
+    ok, issues, diagnostics = run_mod._content_capacity_gate_for_entity(
+        ctx,
+        _EID,
+        active_spec=spec,
+    )
+
+    assert ok is False
+    assert any("content capacity article base source shortfall 3<4" in issue for issue in issues), issues
+    assert diagnostics["pickedArticleBaseSources"] == 3
+
+
+def test_content_capacity_and_auto_plan_respect_qunar_meta_off_entity_verdict():
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 1
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 0
+    store.save_spec(spec)
+    batch_id = "content_plan_qunar_meta_off_entity_blocks_base"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    body = "\n".join(
+        [
+            f"{_EID}在这篇底稿中被多次提及，单纯重算关键词可能会给出较高实体焦点分。",
+            f"{_EID}的交通、预约、停留时长、季节差异和返程安排都在正文里出现。",
+            f"{_EID}仍然不能覆盖下载阶段已经记录的 Qunar off_entity 判定。",
+        ]
+        * 90
+    )
+    source_unit = _write_content_plan_source(
+        object_dir,
+        task_id=task_id,
+        batch_id=batch_id,
+        ordinal=1,
+        source_id="article_qunar_base_1",
+        body=body,
+        title=f"{_EID} 测试 Qunar 游记",
+    )
+    meta_path = (batch_root(task_id, batch_id) / source_unit["sourceRef"]).parent / "meta.json"
+    meta = read_json(meta_path)
+    meta.update(
+        {
+            "entityFocusVerdict": "off_entity",
+            "entityFocusScore": 0.01,
+            "siteTemplate": {
+                "site": "qunar",
+                "pageType": "travelogue_detail",
+                "canonicalUrl": "https://touch.travel.qunar.com/youji/1000001",
+            },
+        }
+    )
+    write_json(meta_path, meta)
+
+    ok, issues, diagnostics = run_mod._content_capacity_gate_for_entity(
+        ctx,
+        _EID,
+        active_spec=spec,
+    )
+    assert ok is False
+    assert diagnostics["articleRejects"]["qunar_off_entity_no_anchor"] == 1
+    assert any("content capacity article base source shortfall 0<1" in issue for issue in issues), issues
+
+    auto_issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert any("entityArticlesPerTarget quota 1 but only picked 0" in issue for issue in auto_issues), auto_issues
+    auto_diag = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
+    assert auto_diag["targets"][_EID]["articleRejects"]["qunar_off_entity_no_anchor"] == 1
 
 def test_auto_content_plan_article_brief_has_no_policy_as_mustincludefact():
     """契约：article brief 的 mustIncludeFacts 不得塞写作策略/指令当"可追溯事实"。
@@ -188,6 +473,7 @@ def test_auto_content_plan_article_brief_has_no_policy_as_mustincludefact():
         brief = read_brief_object(task_id, batch_id, ref) or {}
         if str(brief.get("carrier") or "") != "article":
             continue
+        assert brief["evidenceRequirements"]["emotion"]["required"] is False
         facts = [str(x) for x in (brief.get("mustIncludeFacts") or [])]
         for fact in facts:
             assert not any(marker in fact for marker in _POLICY_MARKERS), (
@@ -490,13 +776,13 @@ def test_auto_content_plan_allows_text_only_article_base_without_source_assets()
     assert issues == []
     packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
     article_items = [item for item in packet["items"] if item["carrier"] == "article"]
-    # 底稿中心 1:1：两个合格 article source 各成一篇；无源图者 text_only，有源图者绑定源图。
-    assert len(article_items) == 2
+    # 配额选源：entityArticlesPerTarget=1 时只选质量最高底稿；无源图者仍可 text_only 成稿。
+    assert len(article_items) == 1
     by_title = {item["title"]: item for item in article_items}
     text_only_item = by_title["测试底稿 1"]
     assert text_only_item["assetRefs"] == []
     assert text_only_item["publishMediaMode"] == "text_only"
-    assert by_title["测试底稿 2"]["assetRefs"]
+    assert "测试底稿 2" not in by_title
     diagnostics = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
     target_diag = diagnostics["targets"][_EID]
     assert target_diag["articleImageSoftWarnings"]["no_source_assets"] == 1
@@ -550,20 +836,20 @@ def test_auto_content_plan_allows_article_base_reusing_source_image_as_text_only
     assert issues == [], issues
     packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
     article_items = [item for item in packet["items"] if item["carrier"] == "article"]
-    # 底稿中心 1:1：3 个合格 article source 各成一篇；复用同一物理源图者降级 text_only。
-    assert len(article_items) == 3
+    # 配额选源：按质量 Top-2 成稿；复用同一物理源图者降级 text_only。
+    assert len(article_items) == 2
     by_title = {item["title"]: item for item in article_items}
     assert by_title["测试底稿第1篇"].get("assetRefs")  # 最优先获得去重源图
     assert by_title["测试底稿第2篇"].get("assetRefs") == []  # 同图被占用 -> text_only
     assert by_title["测试底稿第2篇"]["publishMediaMode"] == "text_only"
-    assert by_title["测试底稿第3篇"].get("assetRefs")  # 独立源图自成一篇
+    assert "测试底稿第3篇" not in by_title
     diagnostics = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
     assert diagnostics["schemaVersion"] == "quwoquan_data.content_plan_source_diagnostics"
     target_diag = diagnostics["targets"][_EID]
     assert target_diag["articleImageSoftWarnings"]["source_asset_reused"] == 1
     assert "source_asset_reused" not in target_diag["articleRejects"]
 
-def test_auto_content_plan_disambiguates_duplicate_image_captions():
+def test_auto_content_plan_preserves_source_image_titles_without_synthetic_dedupe():
     task_id = _make_task()
     spec = store.load_spec(task_id)
     spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 0
@@ -597,10 +883,10 @@ def test_auto_content_plan_disambiguates_duplicate_image_captions():
     assert issues == []
     packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
     image_items = [item for item in packet["items"] if item["carrier"] == "image"]
-    title_prefix = shared_caption_prefix[:60]
-    assert [item["title"] for item in image_items] == [
-        f"{_EID}·{title_prefix}·视角1",
-        f"{_EID}·{title_prefix}·视角2",
+    assert [item["title"] for item in image_items] == ["共享景观", "共享景观"]
+    assert [item["caption"] for item in image_items] == [
+        f"{shared_caption_prefix}1",
+        f"{shared_caption_prefix}2",
     ]
 
 def test_auto_content_plan_skips_image_assets_blocked_by_safety_gate():
@@ -659,6 +945,76 @@ def test_auto_content_plan_skips_image_assets_blocked_by_safety_gate():
     assert target_diag["qualifiedImageAssets"] == 1
     assert target_diag["imageRejects"]["image_safety_blocked"] == 1
     assert "image_pixels_too_large" in target_diag["imageRejectExamples"]["image_safety_blocked"][0]
+
+
+def test_auto_content_plan_skips_publish_safety_blocked_image_assets(monkeypatch):
+    task_id = _make_task()
+    spec = store.load_spec(task_id)
+    spec.setdefault("content", {}).setdefault("quotas", {})["entityArticlesPerTarget"] = 0
+    spec["content"]["quotas"]["imageWorksPerTarget"] = 1
+    spec.setdefault("acceptance", {})["requiredAngles"] = ["image"]
+    store.save_spec(spec)
+    batch_id = "content_plan_image_publish_safety_gate"
+    ctx = _ctx(task_id, batch_id)
+    object_dir = resolve_entity_object_dir(task_id, batch_id, _EID, etype_hint="地点/景区")
+    fixtures = [
+        (
+            "01.image_watermark",
+            "watermark.jpg",
+            _real_jpeg(321),
+            "fixture:image:watermark",
+            "带平台文字图",
+        ),
+        (
+            "02.image_safe",
+            "safe.jpg",
+            _real_jpeg(322),
+            "fixture:image:safe",
+            "合格视角",
+        ),
+    ]
+    for index, (source_name, asset_name, asset_bytes, collection_id, caption) in enumerate(fixtures, start=1):
+        _write_content_plan_source(
+            object_dir,
+            task_id=task_id,
+            batch_id=batch_id,
+            ordinal=index,
+            source_id=source_name.split(".", 1)[1],
+            body=f"# {_EID} {caption}",
+            title=caption,
+            lane="image",
+            asset_name=asset_name,
+            asset_bytes=asset_bytes,
+            collection_id=collection_id,
+            caption=caption,
+        )
+
+    def fake_publish_image_gate(asset_path, ctx):
+        if "watermark" in Path(asset_path).name:
+            return SimpleNamespace(
+                blocks_image_publish=True,
+                reasons=("watermark_or_platform_text",),
+                status="unsafe",
+            )
+        return SimpleNamespace(blocks_image_publish=False, reasons=(), status="safe")
+
+    monkeypatch.setattr(run_mod, "_assess_content_plan_publish_image", fake_publish_image_gate)
+
+    issues = run_mod._auto_content_plan(ctx, spec)
+
+    assert issues == []
+    packet = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_packet.json")
+    image_items = [item for item in packet["items"] if item["carrier"] == "image"]
+    assert len(image_items) == 1
+    assert image_items[0]["sourceCollectionId"] == "fixture:image:safe"
+    assert image_items[0]["assetRefs"][0].endswith("safe.jpg")
+    diagnostics = read_json(batch_root(task_id, batch_id) / "_shared" / "content_plan_source_diagnostics.json")
+    target_diag = diagnostics["targets"][_EID]
+    assert target_diag["rawImageAssets"] == 2
+    assert target_diag["qualifiedImageAssets"] == 1
+    assert target_diag["imageRejects"]["image_safety_blocked"] == 1
+    assert "watermark_or_platform_text" in target_diag["imageRejectExamples"]["image_safety_blocked"][0]
+
 
 def test_content_plan_override_replaces_stale_brief_base_source():
     from produce.handler import _apply_writing_intent_override

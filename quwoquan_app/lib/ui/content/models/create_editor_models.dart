@@ -697,6 +697,9 @@ class CreateEditorState {
     required this.titlePresentation,
     required this.titleHintDismissed,
     required this.settings,
+    this.isOneTapMovie = false,
+    this.oneTapMoviePath = '',
+    this.oneTapMovieEffectId = '',
     this.draftId,
   });
 
@@ -723,6 +726,9 @@ class CreateEditorState {
       videoWidth: 0,
       videoHeight: 0,
       videoMuted: false,
+      isOneTapMovie: false,
+      oneTapMoviePath: '',
+      oneTapMovieEffectId: '',
       currentMediaIndex: 0,
       title: '',
       body: initialDocument.body,
@@ -756,6 +762,9 @@ class CreateEditorState {
   final int videoWidth;
   final int videoHeight;
   final bool videoMuted;
+  final bool isOneTapMovie;
+  final String oneTapMoviePath;
+  final String oneTapMovieEffectId;
   final int currentMediaIndex;
   final String title;
   final String body;
@@ -815,6 +824,9 @@ class CreateEditorState {
     int? videoWidth,
     int? videoHeight,
     bool? videoMuted,
+    bool? isOneTapMovie,
+    String? oneTapMoviePath,
+    String? oneTapMovieEffectId,
     int? currentMediaIndex,
     String? title,
     String? body,
@@ -851,6 +863,9 @@ class CreateEditorState {
       videoWidth: videoWidth ?? this.videoWidth,
       videoHeight: videoHeight ?? this.videoHeight,
       videoMuted: videoMuted ?? this.videoMuted,
+      isOneTapMovie: isOneTapMovie ?? this.isOneTapMovie,
+      oneTapMoviePath: oneTapMoviePath ?? this.oneTapMoviePath,
+      oneTapMovieEffectId: oneTapMovieEffectId ?? this.oneTapMovieEffectId,
       currentMediaIndex: currentMediaIndex ?? this.currentMediaIndex,
       title: title ?? this.title,
       body: body ?? this.body,
@@ -969,6 +984,9 @@ class CreateDraft {
         videoWidth: (map['videoWidth'] as num?)?.toInt() ?? 0,
         videoHeight: (map['videoHeight'] as num?)?.toInt() ?? 0,
         videoMuted: map['videoMuted'] == true,
+        isOneTapMovie: map['isOneTapMovie'] == true,
+        oneTapMoviePath: (map['oneTapMoviePath'] ?? '').toString(),
+        oneTapMovieEffectId: (map['oneTapMovieEffectId'] ?? '').toString(),
         currentMediaIndex:
             (map['currentMediaIndex'] as num?)?.toInt().clamp(0, 9999) ?? 0,
         title: (map['title'] ?? '').toString(),
@@ -1032,6 +1050,9 @@ class CreateDraft {
       'videoWidth': state.videoWidth,
       'videoHeight': state.videoHeight,
       'videoMuted': state.videoMuted,
+      'isOneTapMovie': state.isOneTapMovie,
+      'oneTapMoviePath': state.oneTapMoviePath,
+      'oneTapMovieEffectId': state.oneTapMovieEffectId,
       'currentMediaIndex': state.currentMediaIndex,
       'title': state.title,
       'body': state.body,
@@ -1110,6 +1131,9 @@ class CreateDraft {
       'videoWidth': state.videoWidth,
       'videoHeight': state.videoHeight,
       'videoMuted': state.videoMuted,
+      'isOneTapMovie': state.isOneTapMovie,
+      'oneTapMoviePath': state.oneTapMoviePath,
+      'oneTapMovieEffectId': state.oneTapMovieEffectId,
     };
   }
 

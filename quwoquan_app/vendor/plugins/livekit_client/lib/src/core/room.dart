@@ -19,7 +19,7 @@ import 'package:collection/collection.dart';
 import 'package:http/http.dart' as http;
 import 'package:meta/meta.dart';
 
-import '../core/signal_client.dart';
+import 'signal_client.dart';
 import '../data_stream/errors.dart';
 import '../data_stream/stream_reader.dart';
 import '../e2ee/e2ee_manager.dart';

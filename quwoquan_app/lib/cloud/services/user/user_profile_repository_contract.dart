@@ -9,7 +9,7 @@ abstract class ProfileReadRepository {
 
   /// 主页首屏聚合（GetUserHomepageBundle，锁定决策 #1）：一次返回 profile / stats /
   /// relationshipCapability / tabCounts / viewerContext / cacheVersion，消除首屏串行
-  /// 阻塞。交集卡与影响力 evidence 属 content 域，由端侧并发补充，不进 bundle。
+  /// 阻塞。交集卡与打动 evidence 属 content 域，由端侧并发补充，不进 bundle。
   Future<UserHomepageBundleViewData> getUserHomepageBundle(String subAccountId);
 
   // ── 主页 Tab 数据 ─────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ abstract class ProfileReadRepository {
 
   Future<UserProfileStatsViewData> getUserStats(String userId);
 
-  /// 创作者影响力摘要（GetAuthorImpact，codegen DTO；displayText 云侧产出端只读直出）。
+  /// 创作者打动摘要（GetAuthorImpact，codegen DTO；displayText 云侧产出端只读直出）。
   Future<AuthorImpactSummary> getAuthorImpact(String userId);
 
   /// 创作者单条影响（impactId）的完整证据分页明细（ListAuthorImpactEvidence；R-ID03 端侧下钻闭合）。

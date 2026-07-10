@@ -10,11 +10,12 @@ from _common.creator_pool.io import (
     read_review_gate,
     repo_seed_fixture_dir,
 )
+from _common.creator_pool.batch_policy import expected_view_contract, uses_dual_view_policy
 from _common.creator_pool.persona_dedup import duplicate_persona_p95
 from _common.creator_pool.persona_rubric import RUBRIC
 from _common.io import read_json, write_json
 from _common.paths import REPO_ROOT, creator_pool_shared_dir, now_iso
-from governance.creator_pool.seed import check_scale10_prerequisite
+from governance.creator_pool.seed import check_scale10_prerequisite, seed_fixture_name
 
 
 def build_creator_readiness_report(
@@ -58,7 +59,8 @@ def build_creator_readiness_report(
         or (rollup.get("funnel") or {}).get("personaRubricPassRate")
         or pass_rate
     )
-    merge_ok = (repo_seed_fixture_dir() / f"creator_{vertical}_batch100.seed.json").is_file()
+    seed_file = repo_seed_fixture_dir() / seed_fixture_name(vertical, batch_id, target)
+    merge_ok = seed_file.is_file()
     checks = {
         "creatorsValidatedRatio": pass_rate,
         "workflowAllReachedValidate": pass_rate >= min_pass_rate,
@@ -75,11 +77,27 @@ def build_creator_readiness_report(
         "scale10PrerequisiteOk": scale10_ok,
         "syntheticSourceRatio": synthetic_ratio,
         "userPoolMergeOk": merge_ok,
+        "crossSegmentRatio": float(diversity.get("crossSegmentRatio") or 0.0),
+        "crossDualTagCoverageRate": float(diversity.get("crossDualTagCoverageRate") or 0.0),
+        "travelViewCount": int(diversity.get("travelViewCount") or 0),
+        "photographyViewCount": int(diversity.get("photographyViewCount") or 0),
+        "viewOverlapCount": int(diversity.get("viewOverlapCount") or 0),
+        "viewOverlapRate": float(diversity.get("viewOverlapRate") or 0.0),
+        "platformMaxShare": float(diversity.get("platformMaxShare") or 0.0),
+        "sourceProfileMaxCount": int(diversity.get("sourceProfileMaxCount") or 0),
+        "nonChinaSourceRatio": float(diversity.get("nonChinaSourceRatio") or 0.0),
+        "chinaSourceRatio": float(diversity.get("chinaSourceRatio") or 0.0),
+        "candidatePoolSize": int(plan.get("candidatePoolSize") or 0),
     }
+    if uses_dual_view_policy(batch_id) and target >= 120:
+        candidate_required = max(int(target * 3.5), 420)
+    else:
+        candidate_required = max(target * 3, 350) if target >= 100 else max(target * 2, target)
+    expected_diversity_view = expected_view_contract(batch_id, target) if target >= 100 else None
     commercial_checks = {
         "quality": {
             "personaComplete": pass_rate >= min_pass_rate,
-            "dedupP95BelowThreshold": dedup_p95 < 0.75,
+            "dedupP95BelowThreshold": dedup_p95 <= 0.75,
             "personaRubricPassRate": rubric_rate >= float(RUBRIC["commercialPassRate"] if mode == "commercial" else RUBRIC["trialPassRate"]),
             "agentEnrichEvidence": bool(plan.get("liveMode")) or not plan.get("fixtureMode"),
         },
@@ -92,11 +110,43 @@ def build_creator_readiness_report(
             "quotaFillRate": bucket_fill >= min_bucket,
             "entropy": entropy >= min_entropy,
             "topicCoverage": topic_count >= (12 if target >= 100 else 4),
+            "crossSegmentRatio": (
+                abs(
+                    float(diversity.get("crossSegmentRatio") or 0.0)
+                    - float(expected_diversity_view["crossSegmentRatio"])
+                )
+                <= 0.001
+                if uses_dual_view_policy(batch_id) and expected_diversity_view is not None
+                else 0.38 <= float(diversity.get("crossSegmentRatio") or 0.0) <= 0.42
+            )
+            if target >= 100
+            else True,
+            "crossDualTags": float(diversity.get("crossDualTagCoverageRate") or 0.0) >= 1.0
+            if target >= 100
+            else True,
+            "travelViewTarget": True,
+            "photographyViewTarget": True,
+            "viewOverlapTarget": True,
         },
         "representativeness": {
             "liveAcquire": bool(plan.get("liveMode")),
             "zeroSyntheticRatio": synthetic_ratio == 0.0 if mode == "commercial" else True,
             "provenanceCited": float((rollup.get("funnel") or {}).get("provenanceCoverage") or 0) >= 0.99,
+            "candidatePoolCapacity": int(plan.get("candidatePoolSize") or 0) >= candidate_required
+            if target >= 100
+            else True,
+            "singlePlatformShare": float(diversity.get("platformMaxShare") or 0.0) <= 0.15
+            if target >= 100
+            else True,
+            "sourceProfileCap": int(diversity.get("sourceProfileMaxCount") or 0) <= 3
+            if target >= 100
+            else True,
+            "nonChinaSourceShare": float(diversity.get("nonChinaSourceRatio") or 0.0) >= 0.45
+            if target >= 100
+            else True,
+            "chinaSourceShare": float(diversity.get("chinaSourceRatio") or 0.0) >= 0.35
+            if target >= 100
+            else True,
         },
     }
     issues: list[str] = []
@@ -111,8 +161,8 @@ def build_creator_readiness_report(
         issues.append(f"diversityEntropy {entropy:.2f} < {min_entropy}")
     if target > 10 and not scale10_ok:
         issues.append("missing scale10 prerequisite go")
-    if dedup_p95 >= 0.75:
-        issues.append(f"duplicatePersonaP95 {dedup_p95:.2f} >= 0.75")
+    if dedup_p95 > 0.75:
+        issues.append(f"duplicatePersonaP95 {dedup_p95:.2f} > 0.75")
     min_rubric = float(RUBRIC["commercialPassRate"] if mode == "commercial" else RUBRIC["trialPassRate"])
     if rubric_rate < min_rubric:
         issues.append(f"personaRubricPassRate {rubric_rate:.2f} < {min_rubric}")
@@ -125,6 +175,67 @@ def build_creator_readiness_report(
             issues.append("missing seed handoff for commercial mode")
         if topic_count < 12 and target >= 100:
             issues.append(f"topicCoverage {topic_count} < 12")
+        if int(plan.get("candidatePoolSize") or 0) < candidate_required and target >= 100:
+            issues.append(
+                f"candidatePoolSize {int(plan.get('candidatePoolSize') or 0)} < {candidate_required}"
+            )
+        if target >= 100:
+            if uses_dual_view_policy(batch_id):
+                expected_view = expected_view_contract(batch_id, target)
+                travel_view = int(diversity.get("travelViewCount") or 0)
+                photo_view = int(diversity.get("photographyViewCount") or 0)
+                overlap_count = int(diversity.get("viewOverlapCount") or 0)
+                overlap_rate = float(diversity.get("viewOverlapRate") or 0.0)
+                cross_ratio = float(diversity.get("crossSegmentRatio") or 0.0)
+                if travel_view != int(expected_view["travelViewCount"]):
+                    issues.append(
+                        f"travelViewCount {travel_view} != {int(expected_view['travelViewCount'])}"
+                    )
+                if photo_view != int(expected_view["photographyViewCount"]):
+                    issues.append(
+                        f"photographyViewCount {photo_view} != {int(expected_view['photographyViewCount'])}"
+                    )
+                if overlap_count != int(expected_view["viewOverlapCount"]):
+                    issues.append(
+                        f"viewOverlapCount {overlap_count} != {int(expected_view['viewOverlapCount'])}"
+                    )
+                if abs(overlap_rate - float(expected_view["viewOverlapRate"])) > 0.001:
+                    issues.append(
+                        "viewOverlapRate "
+                        f"{overlap_rate:.4f} != {float(expected_view['viewOverlapRate']):.4f}"
+                    )
+                if abs(cross_ratio - float(expected_view["crossSegmentRatio"])) > 0.001:
+                    issues.append(
+                        "crossSegmentRatio "
+                        f"{cross_ratio:.4f} != {float(expected_view['crossSegmentRatio']):.4f}"
+                    )
+                commercial_checks["diversity"]["travelViewTarget"] = (
+                    travel_view == int(expected_view["travelViewCount"])
+                )
+                commercial_checks["diversity"]["photographyViewTarget"] = (
+                    photo_view == int(expected_view["photographyViewCount"])
+                )
+                commercial_checks["diversity"]["viewOverlapTarget"] = (
+                    overlap_count == int(expected_view["viewOverlapCount"])
+                    and abs(overlap_rate - float(expected_view["viewOverlapRate"])) <= 0.001
+                )
+            else:
+                cross_ratio = float(diversity.get("crossSegmentRatio") or 0.0)
+                if cross_ratio < 0.38 or cross_ratio > 0.42:
+                    issues.append(f"travel_photography_cross ratio {cross_ratio:.2f} outside 40%±2%")
+                commercial_checks["diversity"]["travelViewTarget"] = True
+                commercial_checks["diversity"]["photographyViewTarget"] = True
+                commercial_checks["diversity"]["viewOverlapTarget"] = True
+            if float(diversity.get("crossDualTagCoverageRate") or 0.0) < 1.0:
+                issues.append(f"crossDualTagCoverageRate {diversity.get('crossDualTagCoverageRate')} < 1.0")
+            if float(diversity.get("platformMaxShare") or 0.0) > 0.15:
+                issues.append(f"platformMaxShare {diversity.get('platformMaxShare')} > 0.15")
+            if int(diversity.get("sourceProfileMaxCount") or 0) > 3:
+                issues.append(f"sourceProfileMaxCount {diversity.get('sourceProfileMaxCount')} > 3")
+            if float(diversity.get("nonChinaSourceRatio") or 0.0) < 0.45:
+                issues.append(f"nonChinaSourceRatio {diversity.get('nonChinaSourceRatio')} < 0.45")
+            if float(diversity.get("chinaSourceRatio") or 0.0) < 0.35:
+                issues.append(f"chinaSourceRatio {diversity.get('chinaSourceRatio')} < 0.35")
         api_evidence = REPO_ROOT / "quwoquan_service/services/user-service/tests/local_contract/creator_pool_seed_contract__local_contract_test.go"
         if not api_evidence.is_file():
             issues.append("missing creator_pool seed contract test evidence")

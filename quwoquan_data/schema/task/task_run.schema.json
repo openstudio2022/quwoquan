@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "单次运行账本 — quwoquan_data/tasks/<taskId>/runs/run_<ts>.json。沉淀会话总结与增量，供复盘与重启参考。",
+  "description": "单次运行账本 — quwoquan_data/control_plane/tasks/<taskId>/runs/run_<ts>.json（本地账本，不入库）。沉淀会话总结与增量，供复盘与重启参考。",
   "type": "object",
   "properties": {
     "schemaVersion": { "const": "quwoquan.task.run" },

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import sys
@@ -53,6 +54,38 @@ from download.handler_plan import *  # noqa: F403
 from download.handler_images import *  # noqa: F403
 from download.handler_images import _find_source_unit_by_plan_key  # noqa: F401
 from download import handler_bridge
+
+_NON_OPEN_BAIKE_HOSTS = ("baike.baidu.com", "baike.sogou.com")
+
+
+def _canonicalize_source_url(url: str) -> str:
+    """canonical URL 归一（消重键）：去 scheme/query/fragment，小写 host，去尾斜杠。"""
+    text = str(url or "").strip().lower()
+    if not text:
+        return ""
+    text = re.sub(r"^https?://", "", text)
+    text = text.split("#", 1)[0].split("?", 1)[0]
+    return text.rstrip("/")
+
+
+def _is_non_open_baike_source(source: Mapping[str, Any]) -> bool:
+    """百度/搜狗百科等非开放版权源：clean 文本必须走事实化压缩。"""
+    url = str(source.get("url") or "").lower()
+    return any(host in url for host in _NON_OPEN_BAIKE_HOSTS)
+
+
+def _requires_factual_compression(source: Mapping[str, Any]) -> bool:
+    """非开放版权源统一判定：百度/搜狗百科 + R-HSE06 第二权威源（官网/政务文旅）。
+
+    第二权威源判定唯一真相源 = content_source_registry lanePolicies.homepage
+    （homepage_source_is_secondary_authority），禁止在此再维护第二套 host/词元表。
+    """
+    if _is_non_open_baike_source(source):
+        return True
+    from _common.content_source_registry import homepage_source_is_secondary_authority
+
+    return homepage_source_is_secondary_authority(source)
+
 
 def _fetch_download_entity(
     *,
@@ -241,6 +274,9 @@ def _fetch_download_entity(
             m for i, m in enumerate(image_manifest) if i not in set(dup_idx)
         ]
 
+    # 同实体源级去重：canonical URL 归一后重复的候选直接 Reject（跨源站消重）。
+    seen_canonical_urls: set[str] = set()
+
     for ordinal, source in enumerate(sources, start=1):
         _write_download_progress(
             task_id,
@@ -261,6 +297,8 @@ def _fetch_download_entity(
         status_code = 0
         fetched_text = ""
         raw_format = ""
+        # 统一结构化 IR（wiki wikitext / baike HTML 前端产物；None = 该源无结构前端）。
+        source_layout: dict[str, Any] | None = None
         # RC3：本次抓取的同源内联 <img> 清单（与 source_md 的 source-inline 占位同序）。
         inline_images: list = []
         try:
@@ -274,6 +312,7 @@ def _fetch_download_entity(
             status_code = fetched["statusCode"]
             fetched_text = str(fetched.get("text") or "").strip()
             inline_images = fetched.get("inlineImages") or []
+            source_layout = fetched.get("layout") if isinstance(fetched.get("layout"), dict) else None
             raw_format = str((fetched.get("runtime") or {}).get("rawFormat") or "")
             source_md = source_frontmatter(source, entity_id)
             if fetched_text:
@@ -285,18 +324,65 @@ def _fetch_download_entity(
             source_md = source_md.rstrip() + f"\n\n{note}\n"
         clean_md = clean_source_markdown(source_md, raw_format=raw_format)
         assessment = score_source_markdown(source["source_id"], source_md, entity_name=entity_id)
+        quality_value = assessment.quality
+        quality_score = assessment.score
+        quality_reasons = list(assessment.reasons)
+
+        # 同实体 canonical URL 消重：同一 URL 归一后第二次出现直接 Reject。
+        canonical_url = _canonicalize_source_url(str(source.get("url") or ""))
+        if canonical_url and canonical_url in seen_canonical_urls:
+            quality_value = "Reject"
+            quality_score = 0
+            quality_reasons.append("duplicate_source_url")
+        elif canonical_url:
+            seen_canonical_urls.add(canonical_url)
+
+        # homepage 底稿事实门：通用 UGC 打分不足以保底稿，主页 lane 叠加事实密度/
+        # 消歧义/重定向检查（西岭雪山类弱源、消歧义页在此打回，触发候选补源）。
+        if (
+            quality_value != "Reject"
+            and str(source.get("researchLane") or "") == "homepage"
+            and str(source.get("sourceRole") or "") != "support"
+        ):
+            from download.research.source_quality import homepage_text_quality_issue
+
+            homepage_issue = homepage_text_quality_issue(fetched_text or source_md, entity_id)
+            if homepage_issue:
+                quality_value = "Reject"
+                quality_score = 0
+                quality_reasons.append(homepage_issue)
+
+        # 非开放版权源（百度/搜狗百科 + 第二权威官网/政务文旅）事实化压缩：
+        # >2000 字压至约 50%，1000-2000 轻度，<=1000 不压；
+        # 结果进 source.clean.md，账目进 quality。
+        compression_note: dict = {}
+        if quality_value != "Reject" and _requires_factual_compression(source):
+            from _common.factual_compression import factual_compress_text
+
+            compressed = factual_compress_text(clean_md or fetched_text, entity_name=entity_id)
+            if compressed["policy"] != "none":
+                clean_md = compressed["text"]
+                quality_reasons.append(f"factual_compression_{compressed['policy']}")
+            compression_note = {
+                "policy": compressed["policy"],
+                "originalChars": compressed["originalChars"],
+                "compressedChars": compressed["compressedChars"],
+            }
+
         quality = {
             "sourceId": source["source_id"],
             "entity": entity_id,
-            "quality": assessment.quality,
-            "score": assessment.score,
-            "reasons": list(assessment.reasons),
+            "quality": quality_value,
+            "score": quality_score,
+            "reasons": quality_reasons,
             "excerpt": assessment.excerpt,
             "url": source["url"],
             "statusCode": status_code,
             "fetchSucceeded": bool(fetched_text),
             "taskProvidedBodyPresent": bool(str(source.get("body") or "").strip()),
         }
+        if compression_note:
+            quality["factualCompression"] = compression_note
         cached_quality = _cached_source_quality_if_better(
             object_dir,
             ordinal=ordinal,
@@ -383,9 +469,11 @@ def _fetch_download_entity(
             images=source_images,
             asset_funnel=source_image_funnel,
             raw_format=raw_format,
+            layout=source_layout,
             task_id=task_id,
             batch_id=batch_id,
             build_variants=False,
+            source=source,
         )
         unit_dir = batch_source_unit_dir(task_id, batch_id, str(manifest.get("sourceUnitId") or ""))
         if str(quality.get("quality") or "") == "Reject":

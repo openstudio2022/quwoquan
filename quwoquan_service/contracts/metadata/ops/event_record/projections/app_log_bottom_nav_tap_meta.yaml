@@ -2,7 +2,7 @@ version: 1
 read_model: AppLogBottomNavTapMeta
 
 description: |
-  客户端 page_access 日志中 bottom_nav_tap 的 actionMeta 结构（与 JSONL 中 actionMeta 对象键一致）。
+  客户端 page_access 诊断事件中 bottom_nav_tap 的 actionMeta 结构。
   真相源：本投影；端侧禁止在业务代码中手写同形状 Map。
 
 source_entities: []

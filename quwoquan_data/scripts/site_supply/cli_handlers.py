@@ -27,6 +27,8 @@ from site_supply.content_plan import *  # noqa: F403
 from site_supply.reports import *  # noqa: F403
 from site_supply.trial import *  # noqa: F403
 from site_supply.crawler import *  # noqa: F403
+from site_supply.authorized_assets import handle_attributed_assets, handle_authorized_assets
+from site_supply.pinterest_public_pin import handle_harvest_pinterest_pins
 from site_supply import bridge
 
 def handle_plan(args: argparse.Namespace) -> None:
@@ -551,6 +553,53 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     prr.add_argument("--objects-per-hour", type=float)
     prr.add_argument("--write", action="store_true")
     prr.set_defaults(handler=handle_rerollup)
+
+    paa = sub.add_parser("ingest-authorized-assets", help="把授权图库资产清单转为 image work site-supply 候选")
+    paa.add_argument("--vertical", default="photography")
+    paa.add_argument("--site-id", default="tuchong_stock_authorized")
+    paa.add_argument("--batch", required=True)
+    paa.add_argument("--manifest", required=True)
+    paa.add_argument("--target-count", type=int, required=True)
+    paa.add_argument("--min-raw-count", type=int, default=0)
+    paa.add_argument("--min-qualified-count", type=int, default=0)
+    paa.add_argument("--daily-target", type=int, default=10_000)
+    paa.add_argument("--queue-backend", choices=["local_file", "reliabletask"], default="reliabletask")
+    paa.add_argument("--end-date", default=dt.date.today().isoformat())
+    paa.add_argument("--objects-per-hour", type=float)
+    paa.add_argument("--token-ledger-count", type=int)
+    paa.add_argument("--download-assets", action="store_true", help="下载 downloadUrl 或校验 localPath 并落盘授权资产字节证据")
+    paa.set_defaults(handler=handle_authorized_assets)
+
+    pat = sub.add_parser("ingest-attributed-assets", help="把 Pinterest 等公开图归因清单转为 image work site-supply 候选")
+    pat.add_argument("--vertical", default="photography")
+    pat.add_argument("--site-id", default="pinterest")
+    pat.add_argument("--batch", required=True)
+    pat.add_argument("--manifest", required=True)
+    pat.add_argument("--target-count", type=int, required=True)
+    pat.add_argument("--min-raw-count", type=int, default=0)
+    pat.add_argument("--min-qualified-count", type=int, default=0)
+    pat.add_argument("--daily-target", type=int, default=10_000)
+    pat.add_argument("--queue-backend", choices=["local_file", "reliabletask"], default="reliabletask")
+    pat.add_argument("--end-date", default=dt.date.today().isoformat())
+    pat.add_argument("--objects-per-hour", type=float)
+    pat.add_argument("--token-ledger-count", type=int)
+    pat.add_argument("--download-assets", action="store_true", help="下载 originalAssetUrl/downloadUrl 或校验 localPath 并落盘公开图字节证据")
+    pat.set_defaults(handler=handle_attributed_assets)
+
+    php = sub.add_parser("harvest-pinterest-pins", help="把公开 Pinterest pin URL 列表转为归因发布 manifest，并落本地图字节/扫描证据")
+    php.add_argument("--vertical", default="photography")
+    php.add_argument("--site-id", default="pinterest")
+    php.add_argument("--input", required=True, help="支持 .txt（每行一个 pinUrl）或 JSON（assets/items/urls）")
+    php.add_argument("--output", required=True, help="输出 attributed asset manifest JSON 路径")
+    php.add_argument("--download-root", help="本地字节与扫描缓存根目录；默认跟随 output 派生")
+    php.add_argument("--default-tags", default="", help="逗号分隔默认 tags，seed 行可附加覆盖")
+    php.add_argument("--default-entity-ref", default="")
+    php.add_argument("--default-topic-ref", default="")
+    php.add_argument("--usage-scope", choices=["app_publish", "commercial"], default="commercial")
+    php.add_argument("--publishable-only", action="store_true", help="只保留通过 OCR/水印/人脸初筛的 pin 资产")
+    php.add_argument("--sleep-seconds", type=float, default=0.0, help="相邻 pin 之间的抓取间隔秒数")
+    php.add_argument("--limit", type=int, default=0, help="仅处理前 N 个 pin")
+    php.set_defaults(handler=handle_harvest_pinterest_pins)
 
     pde = sub.add_parser("downstream-evidence", help="汇总 content_plan→ship/import→search/reco 证据并回写站点准出")
     pde.add_argument("--vertical", default="travel")

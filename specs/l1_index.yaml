@@ -193,7 +193,8 @@ domain_services:
       - quwoquan_service/contracts/metadata/_shared
     service_modules:
       - quwoquan_service/runtime
-      - quwoquan_service/platform
+      - quwoquan_service/contracts
+      - quwoquan_ops
     deploy_processes:
       - all
     test_roots:
@@ -206,7 +207,7 @@ domain_services:
     key: platform-ops-governance
     directory: specs/feature-tree/platform-ops-governance
     app_modules:
-      - agent_ops
+      - quwoquan_ops
     metadata_domains:
       - quwoquan_service/contracts/metadata/ops
     service_modules:
@@ -214,7 +215,7 @@ domain_services:
     deploy_processes:
       - platform-ops
     test_roots:
-      - agent_ops/tests
+      - quwoquan_ops/tests
       - quwoquan_service/services/platform-ops-service
 
   - category: nonfunctional

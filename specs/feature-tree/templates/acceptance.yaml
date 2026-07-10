@@ -14,6 +14,14 @@ domain_acceptance:
     title: templates 领域边界验收
     done_when:
     - 领域边界、上下游依赖、工程映射和服务治理清晰。
+    quality_facets:
+    - contract
+    - observability
+    test_object: metadata
+    slo_refs: []
+    observability_refs:
+    - metric, log, trace or dashboard reference
+    security_refs: []
     boundary_points: []
     tests:
       planned: []
@@ -27,6 +35,8 @@ domain_acceptance:
         - local_contract.templates.domain_service.da1.da1_local_contract
         envs:
         - local
+        test_object: metadata
+        quality_facet: contract
       - layer: api_integration
         suite: da1_api_integration
         cases:
@@ -34,11 +44,13 @@ domain_acceptance:
         envs:
         - beta
         - gamma
+        test_object: api_operation
+        quality_facet: contract
       supporting: []
     notes: []
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

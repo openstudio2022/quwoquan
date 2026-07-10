@@ -10,8 +10,8 @@ _DOMAIN_ONBOARDING_SCHEMA_JSON = r'''{
       "user"
     ],
     "required_deploy_sources": {
-      "current": "deploy/shared/process_domain_mapping.yaml",
-      "plane_aware": "deploy/shared/process_domain_plane_mapping.yaml"
+      "current": "quwoquan_ops/environments/process_domain_mapping.yaml",
+      "plane_aware": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "template_domain": "content"
   },

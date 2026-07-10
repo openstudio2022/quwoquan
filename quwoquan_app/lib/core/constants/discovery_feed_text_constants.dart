@@ -19,11 +19,8 @@ class DiscoveryFeedText {
   static const String feedRealtimeUpdateHint = '有新内容，点击刷新';
   static String feedRealtimeNewContentBadge(int count) => '$count 条新内容，点击刷新';
 
-  static const String homeFeedVerticalSwitchUnavailable =
-      '当前不支持上下切换内容，请返回首页继续浏览';
-
   // ==================== 交集入口与解释 ====================
-  static const String intersectionMoreLabel = '全部连接';
+  static const String intersectionMoreLabel = '全部交集';
   // Work Browser 作者区交集入口与详情解释层（V1.0：N 个交集 › → 弹出推荐解释）
   static String intersectionEntrySummary(int count) => '$count 个交集';
   static const String intersectionDetailTitle = '与你相关的线索';
@@ -31,8 +28,8 @@ class DiscoveryFeedText {
 
   // ==================== 我的交集收件箱 ====================
   // V5 口径（user-profile-intersection-redesign S2b / 主任务 V5 成功标准）：
-  // 我的主页交集模块统一命名「我的连接」，与他人主页「我与TA的交集」并列为列表入口。
-  static const String myIntersectionsTitle = '我的连接';
+  // 我的主页交集模块统一命名「我的交集」，与他人主页「我与TA的交集」并列为列表入口。
+  static const String myIntersectionsTitle = '我的交集';
   static const String intersectionViewAll = '查看全部';
   static const String intersectionFilterAll = '全部';
   static const String intersectionFilterPeople = '人';
@@ -78,13 +75,17 @@ class DiscoveryFeedText {
     'create_followup': '写续篇',
     'ask_assistant': '解释这条交集',
     // §交集行动深化：同趣 / 同行 / 线下 / 实时 / 意图 行动阶梯按钮文案。
-    'join_topic_room': '进同趣群',
+    'join_topic_room': '进话题群',
     'start_companion': '发起结伴',
     'join_trip': '加入同行',
     'join_meetup': '报名',
     'meet_nearby': '附近碰头',
     'start_voice_room': '进语音房',
     'express_interest': '打个招呼',
+    // §交集商用闭环：commerce 契约位，真实渠道未接入前由 feature flag / deferred 闸拦截。
+    'view_official_deals': '看官方优惠',
+    'book_ticket': '订门票',
+    'book_hotel': '订住宿',
   };
 
   /// `actionKey` → 行动按钮文案；未知 key 回退助手解释（与 `ask_assistant` 同义）。

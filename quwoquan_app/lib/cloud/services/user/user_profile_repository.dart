@@ -52,6 +52,9 @@ part 'user_profile_repository_helpers.dart';
 part 'user_profile_repository_contract.dart';
 part 'user_profile_repository_remote.dart';
 
+typedef _ProfileEditSnapshotOverrideMap =
+    Map<String, ProfileEditSnapshotWireDto>;
+
 // ─── Mock 实现（本地数据，不发 HTTP）──────────────────────────────────────────
 
 class MockUserProfileRepository extends UserProfileRepository {
@@ -68,9 +71,42 @@ class MockUserProfileRepository extends UserProfileRepository {
   static final Map<String, SubAccountProfileWireDto> _profileOverrides =
       <String, SubAccountProfileWireDto>{};
 
+  /// 本人编辑页私有快照覆盖。
+  ///
+  /// 公开主页 wire 不承载生日、性别、地区等私有编辑字段；这些字段必须在
+  /// ProfileEditSnapshotWire 维度独立往返，避免编辑页再次进入时退回空值。
+  static final _ProfileEditSnapshotOverrideMap _profileEditSnapshotOverrides =
+      _ProfileEditSnapshotOverrideMap();
+
   /// 解析某个用户的基础 wire（覆盖优先，其次契约种子，最后默认档案）。
   SubAccountProfileWireDto _baseProfileWire(String userId) {
-    return resolveMockUserProfileWire(userId);
+    final override = _profileOverrides[userId];
+    if (override != null) {
+      return _normalizeCurrentUserVariantWire(userId, override);
+    }
+    if (_ownerLikeSubAccountIds.contains(userId)) {
+      final currentOverride = _profileOverrides[kMockCurrentSubAccountId];
+      if (currentOverride != null) {
+        return _normalizeCurrentUserVariantWire(userId, currentOverride);
+      }
+    }
+    return _normalizeCurrentUserVariantWire(
+      userId,
+      resolveMockUserProfileWire(userId),
+    );
+  }
+
+  SubAccountProfileWireDto _normalizeCurrentUserVariantWire(
+    String requestedId,
+    SubAccountProfileWireDto wire,
+  ) {
+    if (!_ownerLikeSubAccountIds.contains(requestedId)) {
+      return wire;
+    }
+    return wire.copyWith(
+      ownerUserId: kMockCurrentOwnerId,
+      subAccountId: kMockCurrentSubAccountId,
+    );
   }
 
   @override
@@ -80,7 +116,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     );
   }
 
-  /// Mock 本人态判定（开发态约定）：'me' / contract 当前用户 / legacy alias 视为本人。
+  /// Mock 本人态判定（开发态约定）：'me' / contract 当前用户 / archive alias 视为本人。
   static Set<String> get _ownerLikeSubAccountIds => {
     'me',
     'fixture_user_current',
@@ -96,7 +132,8 @@ class MockUserProfileRepository extends UserProfileRepository {
     final resolvedId = PrefabUserResolver.resolveSubAccountId(subAccountId);
     final profile = await getUserProfile(resolvedId);
     final stats = UserProfileStatsViewData.fromProfile(profile);
-    final isOwner = _ownerLikeSubAccountIds.contains(subAccountId) ||
+    final isOwner =
+        _ownerLikeSubAccountIds.contains(subAccountId) ||
         _ownerLikeSubAccountIds.contains(resolvedId);
     final relation = await getRelationship(resolvedId);
     final viewerSubAccountId = isOwner
@@ -131,10 +168,18 @@ class MockUserProfileRepository extends UserProfileRepository {
   @override
   Future<ProfileEditSnapshotData> getProfileEditSnapshot() async {
     final profile = await getUserProfile(kMockCurrentSubAccountId);
-    return ProfileEditSnapshotData.fromProfile(
+    final credentials = await listCredentialsForProfileEdit();
+    final base = ProfileEditSnapshotData.fromProfile(
       profile: profile,
-      credentials: await listCredentialsForProfileEdit(),
+      credentials: credentials,
     );
+    final override = _resolveMockProfileEditSnapshotWire(
+      kMockCurrentSubAccountId,
+    );
+    if (override == null) {
+      return base;
+    }
+    return base.copyWithPrivateFieldsFromWire(override);
   }
 
   Future<List<OwnerCredentialRowDto>> listCredentialsForProfileEdit() async {
@@ -195,6 +240,9 @@ class MockUserProfileRepository extends UserProfileRepository {
     // currentUserIdProvider 同源）。按 PATCH 语义只改本次携带的字段。
     final subAccountId = kMockCurrentSubAccountId;
     var next = _baseProfileWire(subAccountId);
+    var editNext =
+        _resolveMockProfileEditSnapshotWire(subAccountId) ??
+        _profileEditSnapshotWireFromProfile(next);
     final nickname = data.nickname;
     if (nickname != null) {
       // 昵称同时回填 displayName，并标记 nicknameCustomized=true（主页画笔随之隐藏）。
@@ -203,18 +251,43 @@ class MockUserProfileRepository extends UserProfileRepository {
         displayName: nickname,
         nicknameCustomized: true,
       );
+      editNext = editNext.copyWith(nickname: nickname, displayName: nickname);
     }
     final bio = data.bio;
     if (bio != null) {
       next = next.copyWith(bio: bio);
+      editNext = editNext.copyWith(bio: bio);
     }
     final avatarUrl = data.avatarUrl;
     if (avatarUrl != null) {
       next = next.copyWith(avatarUrl: avatarUrl);
+      editNext = editNext.copyWith(
+        avatarUrl: avatarUrl,
+        avatarAssetId: data.avatarAssetId,
+      );
     }
     final backgroundUrl = data.backgroundUrl;
     if (backgroundUrl != null) {
       next = next.copyWith(backgroundUrl: backgroundUrl);
+      editNext = editNext.copyWith(
+        backgroundUrl: backgroundUrl,
+        backgroundAssetId: data.backgroundAssetId,
+      );
+    }
+    final gender = data.gender;
+    if (gender != null) {
+      editNext = editNext.copyWith(gender: gender);
+    }
+    final birthDate = data.birthDate;
+    if (birthDate != null) {
+      editNext = editNext.copyWith(birthDate: birthDate);
+    }
+    final regionTagRef = data.regionTagRef;
+    if (regionTagRef != null) {
+      editNext = editNext.copyWith(
+        regionTagRef: regionTagRef,
+        region: _regionDisplayFromTagRef(regionTagRef),
+      );
     }
     final identityTags = <String>[
       if (data.occupationTagRef != null &&
@@ -226,9 +299,29 @@ class MockUserProfileRepository extends UserProfileRepository {
     ];
     if (data.occupationTagRef != null || data.interestTagRefs != null) {
       next = next.copyWith(identityTags: identityTags);
+      editNext = editNext.copyWith(
+        identityTags: identityTags,
+        occupationTagRef: data.occupationTagRef,
+        interestTagRefs: data.interestTagRefs,
+      );
     }
-    next = next.copyWith(updatedAt: DateTime.now());
+    final updatedAt = DateTime.now();
+    next = next.copyWith(updatedAt: updatedAt);
+    editNext = editNext.copyWith(
+      ownerUserId: next.ownerUserId,
+      subAccountId: next.subAccountId,
+      userHandle: next.userHandle,
+      avatarUrl: next.avatarUrl,
+      avatarVersion: next.avatarVersion,
+      backgroundUrl: next.backgroundUrl,
+      nickname: next.nickname.isNotEmpty ? next.nickname : next.displayName,
+      displayName: next.displayName,
+      bio: next.bio,
+      identityTags: next.identityTags,
+      updatedAt: updatedAt,
+    );
     _profileOverrides[subAccountId] = next;
+    _profileEditSnapshotOverrides[subAccountId] = editNext;
   }
 
   @override
@@ -329,7 +422,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     final impactByAuthor = seed?['authorImpact'];
     if (impactByAuthor is Map) {
       // alpha 原型：guest / 空 / owner-like 视角（me / user_001）解析为本人种子作者，
-      // 保证「我的影响力」详情页不因 currentUserId 未就绪而空白；其它已登记作者按原 id 取数。
+      // 保证「打动」详情页不因 currentUserId 未就绪而空白；其它已登记作者按原 id 取数。
       final resolvedId = _resolveImpactAuthorId(userId);
       final entry = impactByAuthor[resolvedId] ?? impactByAuthor[userId];
       if (entry is Map) {
@@ -435,7 +528,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     });
   }
 
-  /// 影响力作者归一：空 / owner-like（me/user_001）→ 本人种子作者 fixture_user_current。
+  /// 打动作者归一：空 / owner-like（me/user_001）→ 本人种子作者 fixture_user_current。
   static String _resolveImpactAuthorId(String userId) {
     final trimmed = userId.trim();
     if (trimmed.isEmpty || _ownerLikeSubAccountIds.contains(trimmed)) {

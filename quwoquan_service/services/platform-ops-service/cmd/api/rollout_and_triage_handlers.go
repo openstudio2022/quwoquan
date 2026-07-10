@@ -231,7 +231,7 @@ func sanitizeBacklogSegment(raw string) string {
 }
 
 func (s *platformService) handleListReleases(w http.ResponseWriter, service string) {
-	base := filepath.Join(s.repoRoot, "releases", "config")
+	base := filepath.Join(s.repoRoot, "quwoquan_service", "services")
 	items := make([]map[string]any, 0)
 	services := []string{}
 	if strings.TrimSpace(service) != "" {
@@ -246,7 +246,7 @@ func (s *platformService) handleListReleases(w http.ResponseWriter, service stri
 	}
 	sort.Strings(services)
 	for _, svc := range services {
-		pattern := filepath.Join(base, svc, "v*.yaml")
+		pattern := filepath.Join(base, svc, "configs", "releases", "v*.yaml")
 		files, _ := filepath.Glob(pattern)
 		sort.Strings(files)
 		releaseState := parseReleaseStateFile(readReleaseState(s.repoRoot, svc))
@@ -299,7 +299,7 @@ func (s *platformService) handleApplyRelease(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	observedSLO := s.observeReleaseSLO(body)
-	result := runScriptWithExitCode(s.repoRoot, "agent_ops/deploy/prod/config_release_apply_stage.sh",
+	result := runScriptWithExitCode(s.repoRoot, "quwoquan_ops/cli/prod/config_release_apply_stage.sh",
 		"--service", body.Service,
 		"--from-image", body.FromImage,
 		"--to-image", body.ToImage,
@@ -387,7 +387,7 @@ func (s *platformService) handleRollbackRelease(w http.ResponseWriter, r *http.R
 		writeRuntimeError(w, r, http.StatusInternalServerError, "请求处理失败", err.Error())
 		return
 	}
-	result := runScriptWithExitCode(s.repoRoot, "agent_ops/deploy/prod/config_release_rollback.sh",
+	result := runScriptWithExitCode(s.repoRoot, "quwoquan_ops/cli/prod/config_release_rollback.sh",
 		"--service", body.Service,
 		"--to-config-version", body.TargetConfigVersion,
 	)

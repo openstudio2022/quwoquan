@@ -25,7 +25,8 @@ scope:
 sit_acceptance:
   SIT1:
     title: 我的主页交集聚合入口与清零 SIT
-    story_refs: []
+    story_refs:
+    - user-profile-intersection-redesign
     done_when:
     - 我的主页展示交集总数与最多 3 个维度的变化红点/数字，超 3 维度可展开更多。
     - 点击进入按维度分组列表页，展示自上次查看的新增交集。
@@ -34,11 +35,15 @@ sit_acceptance:
     - 读模型 viewer_object_intersections 预物化 + 缓存，请求期零打分。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
-      - file: quwoquan_app/test/ui/user/pages/my_intersection_inbox_page_test.dart
-      - file: quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart
-      recorded: []
-    status: pending
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/my_intersection_inbox_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/pages/my_intersection_inbox_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/my_intersection_inbox_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/pages/my_intersection_inbox_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -61,17 +66,23 @@ sit_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.sit1.sit1_local_contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart（聚合入口：总数红点
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/user/widgets/my_intersection_inbox_widget__local_contract_test.dart（聚合入口：总数红点
       + ≤3 维度简报 + 展开更多 + 维度下钻导航，2026-06-16 green）'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/user/pages/my_intersection_inbox_page_test.dart（分组列表展示云侧对象名/证据，打开即
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/user/pages/my_intersection_inbox_page__local_contract_test.dart（分组列表展示云侧对象名/证据，打开即
       markVisited 清零，2026-06-16 green）'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart（summary/list/visit
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart（summary/list/visit
       契约对齐，2026-06-16 green）'
-    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，artifacts/local-gamma/search_intersection_smoke.json）：content-service
+    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，.qwq_output/env/gamma/local/gamma-local/search_intersection_smoke.json）：content-service
       在 stackctl gamma 运行栈内，`/v1/content/intersections/{summary,object}`、`/v1/content/intersections`
       GET 路由全部上线并强制 viewer 鉴权（匿名返回 CONTENT.USER.invalid_argument『需要登录』）；`/v1/content/feed/intersections`
       200。BLOCKED：populated summary→list→visit 需网关可识别 token + 已 seed viewer 关系，见 backlog
       R-IX05 衍生待办。'
+    - '[recorded] 2026-07-05 continue-dev：`flutter test test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+      test/ui/user/pages/my_intersection_inbox_page_test.dart test/cloud/content/intersection_repository_contract_test.dart`
+      全绿；`flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart
+      --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，确认 gamma-local seeded
+      summary/list/object 可由 RemoteIntersectionRepository 与 CloudHttpClient 真实读取。仍未单独证明
+      remote visit→summary 清零，因此 status 维持 partial。'
   SIT2:
     title: 对象页交集卡与 demo dock 移除 SIT
     story_refs:
@@ -84,12 +95,20 @@ sit_acceptance:
     - 圈子主页出现「你认识的人有 N 个在这」交集卡。
     performance_points:
     - bundle 优先，回退共享 provider。
+    - 实体主页 introduction/bundle/search 读路径 SLO：P50≤60ms、P95≤300ms、可用性≥0.995，
+      SLI/告警真相源 quwoquan_service/services/entity-service/configs/observability/homepage_introduction_slo.yaml
+      + quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_entity_homepage（含 homepage-import 导入新鲜度/完整性观测）。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
-      recorded: []
-    status: pending
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_header_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -114,7 +133,7 @@ sit_acceptance:
       已从 EvidenceGroup/intersectionPoints 主句拼装切到 IntersectionReason.primaryText/primarySpans
       单通道，覆盖无 primaryText 隐藏、affinity 推荐辅助、span/visual/actionHint 导航入口、展开与高亮。'
     - '[recorded] local_contract 2026-06-25：`flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart`
-      6/6 green；实体主页我的交集、影响力、记录/讨论/相关圈子 Tab、相关圈子卡片化、内部字段不外露均有断言。'
+      6/6 green；实体主页我的交集、这里打动的人、记录/讨论/相关圈子 Tab、相关圈子卡片化、内部字段不外露均有断言。'
     - '[recorded] local_contract 2026-06-25：`flutter test test/ui/circle/widgets/circle_header_widget_test.dart
       test/ui/circle/widgets/section_widgets_test.dart` 25/25 green；`flutter test test/ui/circle/widgets/circle_shell_widget_test.dart`
       10/10 green；圈子主页 Shell、Header、记录/讨论/成员 section 局部契约均通过。'
@@ -122,23 +141,30 @@ sit_acceptance:
       lib/components/object_page/object_intersection_section.dart lib/ui/entity/widgets/homepage_detail_shell.dart
       lib/ui/entity/widgets/homepage_detail_shell_builders.dart lib/ui/entity/widgets/homepage_detail_shell_components2.dart
       lib/core/constants/homepage_detail_text_constants.dart` 0 issue；`bash quwoquan_service/scripts/contract/verify_contract_metadata.sh`、
-      `make -C quwoquan_service verify-metadata`、`bash agent_ops/scaffold/verify_acceptance_standard.sh`、`bash
-      agent_ops/scaffold/verify_feature_tree_refactor.sh`、`make verify-app-page-horizontal-quality`、`make verify-app-mock-isolation`、`git
+      `make -C quwoquan_service verify-metadata`、`bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh`、`bash
+      quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh`、`make verify-app-page-horizontal-quality`、`make verify-app-mock-isolation`、`git
       diff --check` 均通过。'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（实体主页交集卡
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart（实体主页交集卡
       + 无 demo dock，2026-06-16 green）'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（圈子主页「你认识的人有
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart（圈子主页「你认识的人有
       N 个在这」交集卡 + 无 demo dock，2026-06-16 green）'
     - '[recorded] PARTIAL api_integration 2026-06-25：`docker-compose.gamma-local.yaml`
-      与 `deploy/local-gamma/Caddyfile` 已静态包含 entity-service / circle-service；`docker
-      compose -f quwoquan_service/docker-compose.gamma-local.yaml config` 通过，metadata verify
-      通过。`python3 agent_ops/deploy/stackctl.py verify --env gamma --kind all --tier all`
+      与 `quwoquan_ops/environments/local-gamma/Caddyfile` 已静态包含 entity-service / circle-service；`docker
+      compose -f quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml config` 通过，metadata verify
+      通过。`python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all`
       仍在 api_integration gateway health 因 SSL UNEXPECTED_EOF_WHILE_READING gate_block，user_acceptance
       page smoke 因缺少 Patrol CLI 失败；真实 bundle/impact/related-groups/object-intersections populated
       验收由 `object-homepage-gamma-real-data-closure` 接管，R-IX05 继续打开。'
+    - '[recorded] 2026-07-05 continue-dev：修复 `lib/ui/entity/widgets/homepage_detail_shell.dart`
+      把 `HomepageContentPreview.id` 误用为不存在字段的问题，统一改读 `postId` 后重跑 `flutter
+      test test/ui/entity/pages/homepage_detail_page_widget_test.dart test/ui/circle/widgets/circle_shell_widget_test.dart
+      test/components/object_page/object_intersection_card_test.dart test/components/object_page/object_intersection_section_test.dart`
+      48/48 全绿；证明实体/圈子主页交集卡与 ObjectIntersection 共享组件未再受 DTO 漂移阻断。'
   SIT3:
     title: 首页与频道交集推荐重设计 SIT
-    story_refs: []
+    story_refs:
+    - home-recommend-intersection-redesign
+    - intersection-sentence-unification
     done_when:
     - 首页交集卡去掉关注按钮，使用真实头像 + 名字 + 维度 chip + 安静共同点 chip。
     - 模块头展示「N 位与你有交集」红数字；首页 ≤4 卡、频道 ≤3 卡。
@@ -148,10 +174,13 @@ sit_acceptance:
     - 事实读模型 + 概率打分混排；过保鲜期/冷却不再出现。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
-      - file: quwoquan_app/test/ui/discovery/home_intersection_object_nav_test.dart
-      recorded: []
-    status: pending
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_object_nav__local_contract_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_object_nav__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -171,17 +200,25 @@ sit_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.sit3.sit3_local_contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart（交集
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart（交集
       spotlight rail：去关注按钮、头像+名字+一句 primaryText、≤4 卡曝光归因、换一批、概率交集标注、无 primaryText
       过滤，2026-06-16 green）'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/discovery/home_intersection_object_nav_test.dart（事实/概率交集卡点击经
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/discovery/home_intersection_object_nav__local_contract_test.dart（事实/概率交集卡点击经
       metadata 路由进对象页，2026-06-16 green）'
-    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，artifacts/local-gamma/search_intersection_smoke.json）：`/v1/content/feed/intersections`
+    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，.qwq_output/env/gamma/local/gamma-local/search_intersection_smoke.json）：`/v1/content/feed/intersections`
       经网关 200（匿名诚实返回空 items，不伪造）；BLOCKED：校园/旅行频道分通道混排的 populated 结果需 seed viewer 关系
       + 频道参数，见 backlog R-IX05/R-IX07。'
+    - '[recorded] 2026-07-05 continue-dev：`flutter test test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
+      test/ui/discovery/home_intersection_object_nav_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart`
+      全绿；同日 `flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart
+      --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，确认 summary/list/object/feed attribution
+      已连接 gamma-local 真实 content-service。频道专属 populated `feed/intersections` 仍待 seed +
+      channel 组合验收，因此 status 维持 partial。'
   SIT4:
     title: 保鲜冷却与曝光转化漏斗 SIT
-    story_refs: []
+    story_refs:
+    - intersection-algorithm-closure
+    - object-homepage-gamma-real-data-closure
     done_when:
     - 曝光未转化的交集对象在配置窗口（默认 14 天）内不再重复推荐。
     - 事实交集带 computedAt/expiresAt，过期触发重算。
@@ -190,12 +227,17 @@ sit_acceptance:
     - 冷却查询 O(logN)（Redis sorted set ZRANGEBYSCORE）。
     tests:
       planned:
-      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_service_test.go
-      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go
-      - file: quwoquan_service/services/content-service/tests/viewer_object_intersection_store_contract_test.go
-      - file: quwoquan_app/test/core/trackers/intersection_attribution_test.dart
-      recorded: []
-    status: pending
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_service__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/viewer_object_intersection_store_contract__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart
+      recorded:
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_service__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/viewer_object_intersection_store_contract__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_metrics__local_contract_test.go
+    status: partial
     test_evidence:
       primary:
       - layer: api_integration
@@ -215,30 +257,131 @@ sit_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.sit4.sit4_local_contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/internal/application/intersection/intersection_service_test.go（ExposureRetainsButDemotesSeen
+    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/internal/application/intersection/intersection_service__local_contract_test.go（ExposureRetainsButDemotesSeen
       冷却窗口、MaxCandidateWindowCapsBeforeLimit O(logN) 窗口、SummaryNewCountAndVisitClears
       水位清零，2026-06-16 green）'
-    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source_test.go（PerDimensionFreshnessTriggersRecompute：computedAt/expiresAt
+    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/internal/infrastructure/recommendation/read_model_intersection_source__local_contract_test.go（PerDimensionFreshnessTriggersRecompute：computedAt/expiresAt
       过保鲜触发重算，2026-06-16 green）'
-    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/tests/viewer_object_intersection_store_contract_test.go（read-through
+    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/tests/api_integration/viewer_object_intersection_store_contract__api_integration_test.go（read-through
       命中保鲜零打分，2026-06-16 green）'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/core/trackers/intersection_attribution_test.dart（曝光/点击携带
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart（曝光/点击携带
       intersectionId/dimension/class/sourceRef/evidenceId，转化携带 dimension/sourceRef/tagRefs，2026-06-16
       green）'
-    - '[migrated_from_recorded] local_contract quwoquan_service/services/content-service/internal/application/intersection/intersection_metrics_test.go（TestIntersectionService_FunnelMetrics：Feed
+    - '[migrated_from_recorded] local_contract quwoquan_service/services/content-service/internal/application/intersection/intersection_metrics__local_contract_test.go（TestIntersectionService_FunnelMetrics：Feed
       候选 fact/affinity·fresh/seen、stale 与 display_incomplete 过滤、ReportExposure 冷却写入、MarkVisited
       清零按维度发射业务 SLI，2026-06-16 green）'
     - '[migrated_from_recorded] OBS（WP-E）：业务漏斗指标 intersection_feed_candidates_total/feed_filtered_total/cooldown_exposure_reported_total/inbox_visit_total/inbox_filtered_total
       经 infrastructure/intersectionmetrics 落地并注入 main.go；HTTP 延迟/可用性走 http_server_*
       中间件按 route 过滤；SLO 声明 quwoquan_service/services/content-service/configs/observability/intersection_slo.yaml（P95/可用性/重复曝光率/保鲜过滤率/展示完备率/事实占比/清零量
-      + 回滚分层）；告警组 deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_intersection（4
+      + 回滚分层）；告警组 quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_intersection（4
       条规则，YAML 校验通过）。'
-    - '[migrated_from_recorded] PENDING api_integration：gamma 全链路「曝光→点击→转化→清零」漏斗指标的真实采样需
-      seed viewer 关系后在 stackctl 栈采集 /metrics（依赖 R-IX05 gamma-local 拓扑/鉴权 seed）。'
+    - '[recorded] 2026-07-06 continue-dev：`flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart
+      --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，gamma-local 真实验证
+      `getMyIntersectionSummary -> markIntersectionsVisited -> getMyIntersectionSummary`
+      清零链路；同轮 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all`
+      16 checks 全绿，且只读抓取 `http://127.0.0.1:19220/metrics` 已观测到
+      `intersection_feed_candidates_total` / `intersection_feed_filtered_total` /
+      `intersection_cooldown_exposure_reported_total` / `intersection_inbox_visit_total`。`intersection_inbox_filtered_total`
+      本轮未采样到（未触发 stale filter），因此 status 维持 partial。'
+    - '[recorded] 2026-07-05 continue-dev：`flutter test test/core/trackers/intersection_attribution_test.dart
+      test/cloud/content/intersection_repository_contract_test.dart` 全绿；`go test
+      ./services/content-service/internal/application/intersection ./services/content-service/internal/infrastructure/recommendation
+      ./services/content-service/tests` 全绿，冷却/保鲜/MarkVisited/漏斗归因/负反馈冷却在本轮再次复验。
+      gamma `/metrics` 真实采样与 page-smoke 仍未补，因此 status 维持 partial。'
+  SIT5:
+    title: v3 可行动交集与商用主轴 SIT
+    story_refs:
+    - intersection-sentence-unification
+    - home-recommend-intersection-redesign
+    - user-profile-intersection-redesign
+    - entity-homepage-intersection-redesign
+    - circle-homepage-intersection-redesign
+    - object-homepage-gamma-real-data-closure
+    done_when:
+    - 交集触点统一遵循产品主轴「别人帮你刷内容，我们帮你遇到对的人」；所有可见交集句只读云侧 primaryText/primarySpans，端不拼句，join(spans.text)==primaryText 不变量成立。
+    - 前台用户维度收敛为「交集 / 打动」两词，入口统一「交集配对」、收件箱统一「我的交集」；“今日”只保留为最小时间粒度的次级说明，辐射他人用「打动」；旧「兴趣配对 / 找同趣 / 今日同趣机会 / 影响力」前台退场（机器标识 interest_match/impact 保留，见 00_GLOBAL_TERMINOLOGY.md §18.7）。
+    - 七触点（视频书/首页内容卡/用户主页/我的主页/圈子主页/实体主页/交集配对 launcher）密度与行动重心符合定义文档 §24.8；四主页复用 ObjectIntersectionSection/ObjectIntersectionCard，不新增第四套抽象。
+    - C0 差异化切片「共同想去→约伴」用已有 coWishlistedEntity + 关注 + 交集信号触发 start_companion；safetyGate 未满足时优雅降级为查看证据/进入对象，无登录死循环。
+    - deferred 的附近/实时/线下局（coPresentHere/nearbyAffinity/meet_nearby/tripDetail/meetupDetail）不出现在正式可执行 UI；交集配对 launcher 不渲染伪候选。
+    - 北极星为可行动交集完成/关系形成（非 DAU），护栏反指标（骚扰率/拒绝率/举报率）与漏斗（曝光→证据展开→行动→完成→关系形成→回流）可观测。
+    performance_points:
+    - 读路径复用 viewer_object_intersections 预物化 + 缓存，请求期零同步打分；coWishlistedEntity 走预投影/采样，禁请求期全量求交。
+    tests:
+      planned:
+      - file: quwoquan_app/test/ui/intersection/intersection_v3_actionable_instance_test.dart
+      - file: quwoquan_app/test/ui/intersection/companion_wishlist_slice_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/intersection/companion_wishlist_readpath__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/intersection/companion_slice__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/content_behavior_tracker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/intersection_target_navigator__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart
+    status: partial
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit5_local_contract
+        cases:
+        - local_contract.object_homepage_network.intersection_unified_experience.sit5.sit5_local_contract
+        envs:
+        - local
+      - layer: api_integration
+        suite: sit5_api_integration
+        cases:
+        - api_integration.object_homepage_network.intersection_unified_experience.sit5.sit5_api_integration
+        envs:
+        - gamma
+      supporting:
+      - layer: user_acceptance
+        suite: sit5_user_acceptance
+        cases:
+        - user_acceptance.object_homepage_network.intersection_unified_experience.sit5.sit5_user_acceptance
+        envs:
+        - gamma_local
+    notes:
+    - v3 工作包 A 冻结项：本 SIT 的 done_when 为规格意图，local_contract/api_integration/user_acceptance 证据由工作包 C0–F 持续回填；planned 测试路径为目标路径，当前状态按已回填证据记为 partial。
+    - '[recorded] local_contract 2026-07-02（工作包 D 视频书交集表达）：`flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart`
+      55/55 green；新增 span 点击、fallback sampleVisual 点击与 fallback actionTargetId 点击断言，
+      三者均经统一 `IntersectionTargetNavigator` 触发 `tag_click`，透传非空 `feedRequestId`、
+      `intersectionSourceRef`、`intersectionEvidenceId` 与 `intersectionClass/dimension`；actionTargetId
+      路径消费 C 统一 `IntersectionTargetNavigator.targetForReason`，且保留底部单句、详情 sheet、内容区净空等最小 UX 验收。'
+    - '[recorded] local_contract 2026-07-02（工作包 D 行为序列化）：`flutter test test/cloud/content/content_behavior_tracker_test.dart`
+      24/24 green；`ContentBehaviorTracker.trackTagClick` 保持 `tag_click` 语义并序列化
+      `feedRequestId/channelId/rankingVersion/reasonVersion`，证明视频书触点漏斗可按 feed 请求串联。'
+    - '[recorded] supporting local_contract 2026-07-02：`flutter test test/ui/discovery/home_intersection_multiform_feed_widget_test.dart`
+      20/20 green；首页同族交集 span 点击归因不回归。`make verify-app-mock-isolation`
+      与 `make verify-app-page-horizontal-quality` 通过。'
+    - '[recorded] local_contract + api_integration 2026-07-02（工作包 C0/E）：`coWishlistedEntity`
+      已由 `entity_wishlist_events` 真实来源产出，metadata 从 deferred/R4 推进到 active/R2；
+      `start_companion` 走 `dispatch=companion` 并复用 `AppRoutePaths.startGroupChat` 承接，
+      不新增端侧 actionKey 分类。验证：`flutter test test/components/object_page/intersection_target_navigator_test.dart`
+      companion 用例通过；`flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart`
+      在 local-gamma seed 后观测到 `coWishlistedEntity` 与 `start_companion` action hint。'
+    - '[recorded] user_acceptance/gamma_local 2026-07-02（工作包 E/F）：`LOCAL_GAMMA_SKIP_FIXTURE_SEEDS=0
+      quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh --skip-build` 通过，落盘
+      `.qwq_output/env/gamma/local/gamma-local/intersection-seed-report.json` 与 `.qwq_output/env/gamma/local/gamma-local/premium-pool-seed-report.json`；
+      premium stream 只返回 `gamma_premium_pool_eligible_post`，`recallPath=premium_pool`，expired/rolled_back/takedown
+      三类 ineligible 未泄漏。'
+    - '[recorded] local_contract 2026-07-02（工作包 F 推荐差异化）：`go test
+      ./services/content-service/internal/infrastructure/recommendation ./services/content-service/internal/application/feed
+      ./services/content-service/tests -run Test\(GatePremiumStreamSourceBlocksGenericSource|PremiumPoolSourceGatesToPremiumStream|ListFeed_PremiumStreamDoesNotUseRepositoryFallback|ListFeed_PremiumStreamRoutesToSimilarPresetSurface|IntersectionFeedbackCooldown\)
+      -count=1` 通过；`intersection_feedback` 写入负反馈冷却并过滤交集 feed，
+      `premium_stream` 对非 PremiumPoolSource fail-closed，且禁用普通 repository fallback。'
+    - '[partial] SIT5 仍未标 completed：真实 product-ops API→Redis→content-service `rm_premium_pool`
+      的跨服务事件链、replay/AB 分桶、prod gray 与真机 Patrol UAT 未在本轮本地环境证明；已在 backlog
+      R-IX04/R-IX05 保留剩余边界。'
+    - '[recorded] 2026-07-05 continue-dev：跨首页/视频书/实体主页/圈子主页再次补跑 `home_intersection_multiform_feed_widget_test.dart`、
+      `works_immersive_viewer_widget_test.dart`、`homepage_detail_page_widget_test.dart`、`circle_shell_widget_test.dart`
+      与 `object_intersection_card_test.dart`，并修复实体主页 `HomepageContentPreview.postId` 编译漂移；`python3
+      quwoquan_ops/cli/stackctl.py health --target gamma-local --scope service` 8/8 healthy，为 v3 七触点继续收口提供可用环境。'
+    - 真相源 specs/product/intersection-definition-and-application.md §24；产品主轴登记于 specs/00_GLOBAL_TERMINOLOGY.md §3。
+    - UAT-1..9（视频书发现/内容到实体/圈子加入/我的交集窗口/打动回流/安全边界/推荐差异化/deferred 诚实边界/同趣搭子）见 specs/changelog/CR-20260701-083-intersection-v3-actionable-instance-baseline.yaml。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
   full_gate:
   - make gate-full

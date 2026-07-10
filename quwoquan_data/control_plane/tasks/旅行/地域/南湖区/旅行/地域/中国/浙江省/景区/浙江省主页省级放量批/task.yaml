@@ -1,0 +1,83 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/南湖区/旅行/地域/中国/浙江省/景区/浙江省主页省级放量批
+title: 南湖区旅行/地域/中国/浙江省/景区/浙江省主页省级放量批
+intentLabel: 旅行地域中国浙江省景区浙江省主页
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 南湖区
+entityCategory: null
+parentTaskId: null
+status: active
+scope:
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 嘉兴南湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 南湖旅游区
+    - 南湖景区
+  - entityType: 地点/博物馆
+    name: 南湖革命纪念馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    typeTagRefs:
+    - Entity/地点/博物馆
+  entityTypes:
+  - 地点/博物馆
+  - 地点/景区
+  region: 南湖区
+provenance:
+  createdAt: '2026-07-09T16:01:52.490746+00:00'
+  createdBy: task run --mode fanout
+presetRef: content/travel/homepage/base
+content:
+  angles:
+  - 体验
+  - 美图
+  - 攻略
+  audiences:
+  - 通用
+  carriers:
+  - article
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+    allowAiImages: false
+    imageAssetStrategy: open_license_publish
+    imageCountPolicy: score_bonus
+  quotas:
+    entityHomepagesPerTarget: 1
+    entityArticlesPerTarget: 0
+    imageWorksPerTarget: 0
+    routeArticles: 0
+acceptance:
+  minEntities: 100
+  minPostsPerEntity: 1
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+  maxReplacementWaves: 3
+  maxReplacementCandidatesPerWave: 25
+  maxReplacementScreenedPerRun: 25
+  elasticOverfetch: false
+  overfetchMultiplier: 2.0
+  targetEntityCount: 100
+  targetObjectCount: 100
+  allowQuotaShortfall: true
+  allowContentQuotaShortfall: true
+  allowMinEntityShortfall: true
+  allowOverProduction: false
+  minBatchCompletionMode: best_effort_with_reasoned_rejects
+  publishCadence:
+    mode: deterministic_creator_day_spread
+    targetDailyObjects: 100
+    maxDailyPostsPerCreator: 1
+  executionBranch: feature/homepage-commercial-lane
+sourceTaskId: 旅行/地域/中国/景区/景区全覆盖

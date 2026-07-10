@@ -7,7 +7,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-PrefabTrack = Literal["creator_pool", "legacy", "all"]
+import yaml
+
+PrefabTrack = Literal["creator_pool", "archive", "all"]
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURES_DIR = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures"
@@ -18,7 +20,6 @@ PROVENANCE_PATH = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_
 class PrefabUserRecord:
     user_id: str
     sub_account_id: str | None
-    author_id: str | None
     prefab_track: PrefabTrack
     slot_role: str | None = None
 
@@ -28,8 +29,28 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
+def _provenance() -> dict[str, Any]:
+    if not PROVENANCE_PATH.is_file():
+        return {}
+    data = yaml.safe_load(PROVENANCE_PATH.read_text(encoding="utf-8")) or {}
+    return data if isinstance(data, dict) else {}
+
+
+def _creator_pool_path() -> Path:
+    track = ((_provenance().get("tracks") or {}).get("creator_pool") or {})
+    rel = str(track.get("fixturePath") or "_shared/test_fixtures/user_pool.creator_pool.travel_photo_1k_v1.json")
+    return REPO_ROOT / "quwoquan_service/contracts/metadata" / rel
+
+
+def _creator_manifest_path() -> Path:
+    track = ((_provenance().get("tracks") or {}).get("creator_pool") or {})
+    rel = str(track.get("manifestPath") or "_shared/test_fixtures/user_pool.manifest.travel_photo_1k_v1.json")
+    return REPO_ROOT / "quwoquan_service/contracts/metadata" / rel
+
+
+@lru_cache(maxsize=1)
 def _creator_index() -> dict[str, PrefabUserRecord]:
-    path = FIXTURES_DIR / "user_pool.creator_pool.json"
+    path = _creator_pool_path()
     if not path.is_file():
         return {}
     payload = _load_json(path)
@@ -40,7 +61,6 @@ def _creator_index() -> dict[str, PrefabUserRecord]:
         record = PrefabUserRecord(
             user_id=str(user.get("userId") or ""),
             sub_account_id=str(user.get("subAccountId") or user.get("subAccountRefs", [None])[0] or "") or None,
-            author_id=str(user.get("authorId") or "") or None,
             prefab_track="creator_pool",
             slot_role=user.get("slotRole"),
         )
@@ -48,25 +68,12 @@ def _creator_index() -> dict[str, PrefabUserRecord]:
             index[record.user_id] = record
         if record.sub_account_id:
             index[record.sub_account_id] = record
-        if record.author_id:
-            index[record.author_id] = record
     return index
 
 
 @lru_cache(maxsize=1)
 def _legacy_aliases() -> dict[str, str]:
-    manifest_path = FIXTURES_DIR / "user_pool.manifest.json"
-    if manifest_path.is_file():
-        manifest = _load_json(manifest_path)
-        slot = manifest.get("currentUserVariant") or {}
-        target = str(slot.get("userId") or "")
-        aliases = [str(a) for a in slot.get("legacyAliases") or []]
-        if target:
-            return {alias: target for alias in aliases}
-    return {
-        "fixture_user_current": "qwq_creator_current_user_variant",
-        "user_001": "qwq_creator_current_user_variant",
-    }
+    return {}
 
 
 def resolve_user_id(user_id: str, *, track: PrefabTrack = "all") -> str:
@@ -97,7 +104,7 @@ def resolve_sub_account_id(sub_account_id: str) -> str:
 
 
 def current_user_variant_sub_account_id() -> str:
-    manifest_path = FIXTURES_DIR / "user_pool.manifest.json"
+    manifest_path = _creator_manifest_path()
     if manifest_path.is_file():
         slot = _load_json(manifest_path).get("currentUserVariant") or {}
         sub = str(slot.get("subAccountId") or "")
@@ -107,14 +114,14 @@ def current_user_variant_sub_account_id() -> str:
     for record in creator.values():
         if record.slot_role == "currentUserVariant" and record.sub_account_id:
             return record.sub_account_id
-    return "agent_sub_account_travel_current_user_variant"
+    return "fixture_sub_current"
 
 
 def list_users(*, track: PrefabTrack = "all") -> list[PrefabUserRecord]:
     creator = list({r.user_id: r for r in _creator_index().values() if r.user_id}.values())
     if track == "creator_pool":
         return creator
-    if track == "legacy":
+    if track == "archive":
         legacy_path = FIXTURES_DIR / "user_pool.json"
         if not legacy_path.is_file():
             return []
@@ -123,8 +130,7 @@ def list_users(*, track: PrefabTrack = "all") -> list[PrefabUserRecord]:
             PrefabUserRecord(
                 user_id=str(u.get("userId") or ""),
                 sub_account_id=(u.get("subAccountRefs") or [None])[0],
-                author_id=None,
-                prefab_track="legacy",
+                prefab_track="archive",
             )
             for u in users
             if isinstance(u, dict) and u.get("userId")
@@ -133,5 +139,6 @@ def list_users(*, track: PrefabTrack = "all") -> list[PrefabUserRecord]:
 
 
 def clear_cache() -> None:
+    _provenance.cache_clear()
     _creator_index.cache_clear()
     _legacy_aliases.cache_clear()

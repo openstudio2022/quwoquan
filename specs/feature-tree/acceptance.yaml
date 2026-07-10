@@ -63,8 +63,8 @@ uat_acceptance:
     - media page-swipe and edge-back false-positive conflicts are covered
     tests:
       planned:
-      - file: quwoquan_app/test/app/navigation/native_back_navigation_policy_test.dart
-      - file: quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
+      - file: quwoquan_app/test/local_contract/app/navigation/native_back_navigation_policy__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -90,7 +90,7 @@ uat_acceptance:
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/content/edge_gesture/immersive_media_edge_swipe_back_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/app/navigation/home_edge_swipe_exit_guard_test.dart'
-    - '[migrated_from_planned] quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart'
+    - '[migrated_from_planned] quwoquan_app/test/user_acceptance/patrol/edge_swipe_navigation_e2e_test.dart'
   UAT_EXTERNAL_ACQUISITION:
     title: 对外引流与深链回流端到端价值闭环
     journey: 用户在微信朋友圈/聊天群、小红书/今日头条等 UGC 平台、浏览器与搜索引擎看到内容（文章/图文/视频/动态）或主页（实体/用户/圈子/我）的分享卡、海报、口令或链接，点击后在已安装时可靠回流到
@@ -186,8 +186,8 @@ uat_acceptance:
       - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_settings_page_widget__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/chat/pages/chat_conversation_page_realtime_journey__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/chat/journeys/chat_assistant_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/circle/contract/circle_group_dto_contract__local_contract_test.dart
@@ -243,22 +243,22 @@ uat_acceptance:
     - 主动投递 wrong-destination 事故 = 0。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
-      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer_test.go
-      - file: quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
+      - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
       recorded:
-      - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/chat_message_provider__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/assistant/widgets/assistant_half_sheet_personalization_provider__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/assistant/personal_content_access_provider__local_contract_test.dart
       - file: quwoquan_service/services/chat-service/tests/api_integration/event_publish_contract__api_integration_test.go
       - file: quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/chat_mention_service__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/service__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/skill_subscription_service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/chat_mention_service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service__local_contract_test.go
       - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/infrastructure/chatclient/client__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
     status: partial
     test_evidence:
       primary:
@@ -291,7 +291,7 @@ uat_acceptance:
     - '[migrated_from_recorded_reference] specs/feature-tree/assistant-run-learning/commercial_slo_observability.md'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

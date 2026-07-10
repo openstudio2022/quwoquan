@@ -63,7 +63,7 @@ VALID_EXPERIENCE_CLAIM_MODES = {
 # 内容对象在 posts/{contentType}/{angle}/{title}/{seq}/，过程阶段统一编号挂对象目录下。
 STAGE_EVIDENCE_CONTRACT = {
     "download": {
-        "input": "entities/{domain}/{type}/{name}/1.download/source_plan.json",
+        "input": "entities/{domain}/{type}/{name}/1.download/{homepage,article,image}_source_plan.json",
         "output": "sources/{sourceUnitId}/source.md + assets/ and entities/{domain}/{type}/{name}/1.download/source_refs.json",
     },
     "quality_analysis": {

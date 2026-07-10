@@ -1,0 +1,74 @@
+name: process_trace_log_baseline
+contractVersion: 2
+description: Short runtime event log schema with metadata-driven kv.
+enums:
+  origin:
+    - app.http
+    - app.grpc
+    - service.http
+    - service.grpc
+    - service.mq
+    - job.internal
+    - cron.internal
+  direction:
+    - inbound
+    - outbound
+  level:
+    - info
+    - debug
+required_fields:
+  - ts
+  - level
+  - event
+  - result
+  - msg
+optional_fields:
+  - req
+  - trace
+  - io.inputKv
+  - io.outputKv
+collector_context:
+  app_labels:
+    - platform
+    - appVersion
+    - sessionHash
+  service_labels:
+    - service
+    - instanceId
+  run_manifest:
+    - env
+    - runId
+    - releaseId
+io_kv:
+  input_field: io.inputKv
+  output_field: io.outputKv
+  source: metadata_driven
+  default_strategy: minimal
+forbidden_fields:
+  - schemaVersion
+  - signal
+  - logKind
+  - env
+  - sourceType
+  - service
+  - component
+  - instanceId
+  - runId
+  - releaseId
+  - dataReleaseId
+  - sessionId
+  - timestamp
+  - severity
+  - message
+  - requestId
+  - traceId
+  - spanId
+  - headers
+  - statusCode
+  - logType
+  - phase
+  - parentTraceId
+  - causationId
+notes:
+  - "Process trace logs do not carry error objects."
+  - "io.inputKv/io.outputKv only include fields allowed by metadata."

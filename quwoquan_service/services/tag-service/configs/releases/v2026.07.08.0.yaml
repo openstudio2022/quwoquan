@@ -1,0 +1,7 @@
+config:
+  version: "v2026.07.08.0"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+
+service:
+  name: tag-service

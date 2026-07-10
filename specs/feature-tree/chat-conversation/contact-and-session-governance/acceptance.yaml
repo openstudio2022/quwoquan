@@ -73,7 +73,7 @@ sit_acceptance:
     - 拉黑写入到所有门禁生效 p95 <= 1s。
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/tests/block_cascade_contract_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/block_cascade_contract__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:
@@ -112,7 +112,7 @@ sit_acceptance:
     - 打招呼回复到正式会话可见 p95 <= 2s。
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/tests/greeting_request_state_machine_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/greeting_request_state_machine__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:
@@ -143,7 +143,7 @@ sit_acceptance:
     - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/greeting_reply_promotes_conversation_test.go'
     - '[migrated_from_planned] quwoquan_app/test/cloud/user/greeting_repository_contract_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/ui/chat/pages/greeting_request_inbox_test.dart'
-    - '[migrated_from_planned] runtime/reports/contact_session_governance_t4_evidence.md'
+    - '[migrated_from_planned] .qwq_output/env/repo/runs/contact_session_governance_t4_evidence.md'
   SIT4:
     title: 私信与 1v1 RTC 服务端门禁不可绕过
     story_refs:
@@ -159,9 +159,9 @@ sit_acceptance:
     - SendMessage 门禁校验额外耗时 p95 <= 20ms。
     tests:
       planned:
-      - file: quwoquan_service/services/chat-service/tests/direct_conversation_relationship_gate_test.go
-      - file: quwoquan_service/services/chat-service/tests/send_message_relationship_gate_test.go
-      - file: quwoquan_service/services/rtc-service/tests/one_to_one_relationship_gate_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/direct_conversation_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
+      - file: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:
@@ -191,7 +191,7 @@ sit_acceptance:
     notes:
     - '[migrated_from_planned] quwoquan_app/test/ui/chat/pages/chat_conversation_relationship_gate_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/ui/rtc/call_relationship_gate_test.dart'
-    - '[migrated_from_planned] runtime/reports/contact_session_governance_t4_evidence.md'
+    - '[migrated_from_planned] .qwq_output/env/repo/runs/contact_session_governance_t4_evidence.md'
 contract_acceptance:
   CONTRACT1:
     title: 关系治理 metadata 与端云 DTO 一致
@@ -208,7 +208,7 @@ contract_acceptance:
     - UserBlocked/UserUnblocked、GreetingRequestReplied、MessageSent 事件字段可被端云测试引用。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/chat/message/contract/send_message_request_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/chat/message/contract/send_message_request_contract__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -230,8 +230,8 @@ contract_acceptance:
     - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/conversation_metadata_contract_test.go'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-login-entry-loop-contract
   full_gate:
   - make gate

@@ -10,9 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class UserProfileCacheService {
   UserProfileCacheService({
     int maxMemoryEntries = 200,
-    bool persistToPreferences = false,
-  }) : _maxMemory = maxMemoryEntries,
-       _persistToPreferences = persistToPreferences {
+    this._persistToPreferences = false,
+  }) : _maxMemory = maxMemoryEntries {
     if (_persistToPreferences) {
       unawaited(_hydrateFromPreferences());
     }

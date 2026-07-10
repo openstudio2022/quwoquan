@@ -11,10 +11,10 @@ affected_nodes:
   - quwoquan_service/tools/codegen_app_metadata/content_post_mutation_wires_codegen_test.go
   - quwoquan_app/lib/cloud/runtime/generated/content/content_post_mutation_wires.g.dart
   - quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart
-  - quwoquan_app/test/ui/content/entry/contract/publish_payload_contract_test.dart
-  - quwoquan_app/test/ui/content/entry/publish_draft_projection_bridge_test.dart
+  - quwoquan_app/test/local_contract/ui/content/entry/contract/publish_payload_contract__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/content/entry/publish_draft_projection_bridge__local_contract_test.dart
   - quwoquan_service/services/content-service/internal/application/post/post_service.go
-  - quwoquan_service/services/content-service/internal/application/post/create_semantic_projection_test.go
+  - quwoquan_service/services/content-service/internal/application/post/create_semantic_projection__local_contract_test.go
 
 entries:
   - timestamp: "2026-06-21T18:00:00+08:00"

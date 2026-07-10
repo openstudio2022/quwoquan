@@ -3,6 +3,14 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
+const int _minCommitSettleMs = 320;
+const int _maxCommitSettleMs = 520;
+const int _minCancelSettleMs = 220;
+const int _maxCancelSettleMs = 360;
+const double _baseCommitPageWidthsPerSecond = 1.45;
+const double _baseCancelPageWidthsPerSecond = 1.75;
+const double _minimumSettleTravelPageFraction = 0.14;
+
 @immutable
 class PageflipReleaseDecision {
   const PageflipReleaseDecision({
@@ -40,10 +48,9 @@ PageflipReleaseDecision resolvePageflipReleaseDecision({
   final elapsedMs = dragStartedAt == null
       ? 0
       : DateTime.now().difference(dragStartedAt).inMilliseconds;
-  final crossedMidpoint = progress >
-      (usesMirroredBackwardReplay
-          ? 1.0
-          : (isForwardDirection ? 0.44 : 1.0));
+  final crossedMidpoint =
+      progress >
+      (usesMirroredBackwardReplay ? 1.0 : (isForwardDirection ? 0.44 : 1.0));
   final sustainedPull = dragRatio > (usesMirroredBackwardReplay ? 0.3 : 0.24);
   final deliberateCornerLift =
       progress > (usesMirroredBackwardReplay ? 0.18 : 0.14) &&
@@ -71,12 +78,24 @@ PageflipReleaseDecision resolvePageflipReleaseDecision({
       quickLift ||
       assistedSnap;
   final remainingProgress = commitsTurn ? (1 - progress) : progress;
-  final travelPx = math.max(pageWidth * remainingProgress, pageWidth * 0.12);
-  final speedPxPerSecond = math.max(directionalVelocityDx.abs(), pageWidth * 1.8);
+  final travelPx = math.max(
+    pageWidth * remainingProgress,
+    pageWidth * _minimumSettleTravelPageFraction,
+  );
+  final basePageWidthsPerSecond = commitsTurn
+      ? _baseCommitPageWidthsPerSecond
+      : _baseCancelPageWidthsPerSecond;
+  final speedPxPerSecond = math.max(
+    directionalVelocityDx.abs(),
+    pageWidth * basePageWidthsPerSecond,
+  );
+  final minSettleMs = commitsTurn ? _minCommitSettleMs : _minCancelSettleMs;
+  final maxSettleMs = commitsTurn ? _maxCommitSettleMs : _maxCancelSettleMs;
   final settleDuration = Duration(
-    milliseconds: (travelPx / speedPxPerSecond * 1000)
-        .round()
-        .clamp(180, 420),
+    milliseconds: (travelPx / speedPxPerSecond * 1000).round().clamp(
+      minSettleMs,
+      maxSettleMs,
+    ),
   );
   return PageflipReleaseDecision(
     commitsTurn: commitsTurn,

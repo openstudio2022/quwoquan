@@ -29,23 +29,41 @@ def run_acquire(*, vertical: str, batch_id: str, dry_run: bool = False) -> dict[
             source_dir.mkdir(parents=True, exist_ok=True)
             profile = {
                 "candidateRef": candidate_ref,
+                "verticalSegment": cand.get("verticalSegment"),
+                "verticalRefs": cand.get("verticalRefs") or [],
+                "topicRefs": cand.get("topicRefs") or [],
+                "sourceSiteId": cand.get("sourceSiteId"),
                 "sourceKind": cand.get("sourceKind") or "open_web_profile",
                 "sourceUrl": cand.get("sourceUrl"),
                 "sourceDomain": cand.get("sourceDomain"),
+                "sourceProfileKey": cand.get("sourceProfileKey"),
+                "chinaAnalogLabel": cand.get("chinaAnalogLabel"),
+                "candidateRole": cand.get("candidateRole"),
+                "crawlAllowed": cand.get("crawlAllowed"),
+                "validationOnly": cand.get("validationOnly"),
+                "rightsPolicy": cand.get("rightsPolicy"),
+                "sourceRegionClass": cand.get("sourceRegionClass"),
                 "capturedAt": now_iso(),
                 "signals": cand.get("signals") or {},
             }
             write_json(stage_dir / "source_profile.json", profile)
             (source_dir / "source.md").write_text(
-                f"# Public profile snapshot\n\nDerivative signal for {candidate_ref}\n"
-                f"Domain: {cand.get('sourceDomain')}\n",
+                "# Public profile snapshot\n\n"
+                f"Derivative public signal for {candidate_ref}\n"
+                f"Site: {cand.get('sourceSiteId')} ({cand.get('chinaAnalogLabel')})\n"
+                f"Domain: {cand.get('sourceDomain')}\n"
+                "Identity policy: public style signals only; no real account name, avatar, or bio copied.\n",
                 encoding="utf-8",
             )
             write_json(
                 source_dir / "source.meta.json",
                 {
                     "url": cand.get("sourceUrl"),
-                    "license": "public_summary",
+                    "license": cand.get("rightsPolicy") or "public_summary",
+                    "termsUrl": cand.get("sourceUrl"),
+                    "usageScope": "discovery" if cand.get("validationOnly") else "factual_reference",
+                    "crawlAllowed": cand.get("crawlAllowed"),
+                    "validationOnly": cand.get("validationOnly"),
                     "domainAllowlisted": True,
                 },
             )

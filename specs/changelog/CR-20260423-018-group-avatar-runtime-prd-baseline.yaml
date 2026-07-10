@@ -43,22 +43,22 @@ entries:
       - path: specs/feature-tree/runtime/runtime-media/group-avatar-server-precompose-and-unified-sync-contract/acceptance.yaml
         sections:
           - all
-      - path: quwoquan_service/specs/runtime/00-runtime-overview.md
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md
         sections:
           - all
-      - path: quwoquan_service/specs/runtime/01-runtime-boundaries.md
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md
         sections:
           - all
-      - path: quwoquan_service/specs/runtime/02-object-identity-and-url-spec.md
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md
         sections:
           - all
-      - path: quwoquan_service/specs/runtime/media/06-avatar-strategy-user-and-group.md
+      - path: specs/feature-tree/runtime/runtime-media/spec.md
         sections:
           - all
-      - path: quwoquan_service/specs/runtime/sync/02-user-sync-stream.md
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md
         sections:
           - all
-      - path: quwoquan_service/specs/runtime/sync/06-message-avatar-roster-sync-flows.md
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md
         sections:
           - all
     impact:

@@ -117,4 +117,4 @@
 | L1a 映射契约 | `test/cloud/integration/location/contract/cloud_code_to_l10n_mapper_contract_test.dart` | 替换原 error_permission_l10n |
 | L1b Widget | `test/ui/create/publish/widgets/publish_location_selector_error_state_test.dart` | 错误态/权限态 UI |
 | L1c Journey | `test/ui/create/publish/journeys/create_location_error_journey_test.dart` | 创作流中的位置错误 |
-| user_acceptance Patrol | `test/patrol/content/location_permission_flow_test.dart` | 真机权限与去设置 |
+| user_acceptance Patrol | `test/user_acceptance/patrol/content/location_permission_flow_test.dart` | 真机权限与去设置 |

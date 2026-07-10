@@ -1,15 +1,163 @@
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_kind_mapping.dart';
 
-/// 交集句式合成器（云侧 G2 模拟，端不在 UI 拼装）。
+/// 交集句式合同工具。
 ///
-/// 从 `intersection_fact_items.dart` 抽出（R03 体量收敛）：按 kind 闭集模板把紧凑事实
-/// 切成「代表人在数字前」的结构化富文本 span。对象类型 / 路由由 codegen 下发的
-/// [IntersectionKindMetadata] / [intersectionRouteIdForObjectKind] 提供，共同数由
-/// [intersectionMutualCountOf] 提供。归一编排仍在 `intersection_fact_items.dart`。
+/// 展示路径只做合同复核和 fail-closed；历史 spans 合成函数仅保留给 alpha
+/// fixture 归一化入口使用，不再被可见 UI 用来补主句。
+
+final RegExp _rawInteractionStatsPattern = RegExp(r'[0-9０-９]+\s*(赞|评|转|转发)');
+final RegExp _countSubjectPattern = RegExp(r'[0-9０-９]+\s*(人|位)');
+
+const Set<String> _bannedDisplayStatementFragments = <String>{
+  '共同好友',
+  '都来这里互动过',
+  '在这里互动过',
+  '同读者',
+  '相近主题',
+  'TA的内容',
+  '相关圈子',
+  '我的'
+      '连接',
+  '我的'
+      '影响'
+      '力',
+  '你和这里',
+  '你和这个圈子',
+  '你们有共同',
+  '为你推荐的相关内容',
+  '最近在看这些',
+};
+
+/// 统一页面展示前，对交集句做一次“只读云侧主句”的收口。
+///
+/// 约束：
+/// - 用户可见主句只认云侧 `primaryText`；
+/// - 不再补 spans、不改写主句；
+/// - 云侧未下发 `primaryText/primarySpans` 或合同不完整时，由
+///   [displayReadyIntersectionReason] fail-closed。
+IntersectionReason normalizeDisplayReason(
+  IntersectionReason reason, {
+  String kind = '',
+  String contextObjectName = '',
+  IntersectionTarget? contextObjectTarget,
+}) {
+  return reason;
+}
+
+/// 返回可展示的云侧交集句；不合格则返回 null。
+IntersectionReason? displayReadyIntersectionReason(IntersectionReason reason) {
+  return isDisplayableIntersectionReason(reason) ? reason : null;
+}
+
+bool isDisplayableIntersectionReason(IntersectionReason reason) {
+  final primary = reason.primaryText.trim();
+  if (!_displayStatementTextAllowed(reason, primary)) {
+    return false;
+  }
+  final spans = reason.primarySpans;
+  if (spans.isEmpty) {
+    return false;
+  }
+  if (spans.map((span) => span.text).join() != primary) {
+    return false;
+  }
+  var hasPrimaryObjectTarget = false;
+  for (final span in spans) {
+    final role = span.role.trim();
+    final target = span.target;
+    if (role == 'count' && target != null) {
+      if (reason.actorEvidenceCompleteness.trim() != 'complete' ||
+          target.routeId.trim() != 'myIntersections') {
+        return false;
+      }
+    }
+    if (role == 'object') {
+      if (!_displayObjectTargetAllowed(target)) {
+        return false;
+      }
+      if (reason.actionTargetId.trim().isEmpty ||
+          target!.objectId.trim() == reason.actionTargetId.trim()) {
+        hasPrimaryObjectTarget = true;
+      }
+    }
+  }
+  return hasPrimaryObjectTarget;
+}
+
+bool _displayStatementTextAllowed(IntersectionReason reason, String text) {
+  final primary = text.trim();
+  if (primary.isEmpty) {
+    return false;
+  }
+  if (_rawInteractionStatsPattern.hasMatch(primary)) {
+    return false;
+  }
+  for (final fragment in _bannedDisplayStatementFragments) {
+    if (primary.contains(fragment)) {
+      return false;
+    }
+  }
+  if (_displayStatementNeedsRepresentative(reason, primary) &&
+      !_hasMeaningfulRepresentativeActor(reason)) {
+    return false;
+  }
+  return true;
+}
+
+bool _displayObjectTargetAllowed(IntersectionTarget? target) {
+  if (target == null || target.objectId.trim().isEmpty) {
+    return false;
+  }
+  switch (target.objectType.trim()) {
+    case 'user':
+    case 'circle':
+    case 'homepage':
+    case 'post':
+    case 'task':
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool _displayStatementNeedsRepresentative(
+  IntersectionReason reason,
+  String text,
+) {
+  if (reason.actorEvidenceTotalCount > 1 || reason.actorEvidence.length > 1) {
+    return true;
+  }
+  return text.contains('等') || _countSubjectPattern.hasMatch(text);
+}
+
+bool _hasMeaningfulRepresentativeActor(IntersectionReason reason) {
+  final actor = reason.representativeActor;
+  if (actor == null) {
+    return false;
+  }
+  final name = actor.displayName.trim();
+  if (name.isEmpty || name.startsWith('一位') || name == '用户') {
+    return false;
+  }
+  if (!_isMeaningfulRelationLabel(actor.relationLabel)) {
+    return false;
+  }
+  final target = actor.target;
+  return target != null &&
+      target.objectType.trim() == 'user' &&
+      target.objectId.trim().isNotEmpty;
+}
+
+/// 交集 kind/sourceRef 的展示级解析顺序：
+/// `reason.kind` -> `reason.source`（仅非维度名）-> `intersectionPoints.sourceRef`。
+/// 仅用于图标/高亮/埋点 fallback，用户可见主句仍以云侧 `primaryText` 为准。
+String resolvedIntersectionReasonKind(IntersectionReason reason) =>
+    _resolvedReasonKind(reason);
 
 /// 按 kind 闭集模板生成「代表人在数字前」结构化富文本（G2 模拟，端不在 UI 拼装）。
 ///
@@ -19,153 +167,492 @@ List<IntersectionTextSpan> buildInboxStatementSpans(
   IntersectionReason reason,
   String kind,
 ) {
-  final n = intersectionMutualCountOf(reason);
-  final objectName = reason.displayName.trim();
-  final objectId = reason.actionTargetId.trim();
-  final objectKind = reason.objectKind.trim().isNotEmpty
-      ? reason.objectKind.trim()
-      : (IntersectionKindMetadata.of(kind)?.objectKind ?? '');
+  return buildDisplayStatementSpans(reason, kind);
+}
+
+/// 面向内容 post / 视频书 / 四主页的统一主句模板。
+///
+/// 设计目标：
+/// - 主语尽量回答“这些人和我是什么关系”；
+/// - 谓语尽量回答“他们具体做了什么”；
+/// - 宾语尽量落到可点击对象；若对象仍是“这里/这些主题/相同内容”等泛词，则宁可不重写。
+List<IntersectionTextSpan> buildDisplayStatementSpans(
+  IntersectionReason reason,
+  String kind, {
+  String contextObjectName = '',
+  IntersectionTarget? contextObjectTarget,
+}) {
+  final resolvedKind = kind.trim().isNotEmpty
+      ? kind.trim()
+      : _resolvedReasonKind(reason);
+  final n = _displayCount(reason);
   final dimension = reason.dimension.trim();
-  final objectSpan = _objectSpanOf(objectName, objectId, objectKind);
+  final relationLabel = _normalizedRelationLabel(reason, resolvedKind);
+  final repActor = _visibleRepresentativeActor(reason);
+  final subject = _subjectSpans(
+    repActor: repActor,
+    relationLabel: relationLabel,
+    count: n,
+    dimension: dimension,
+  );
+  final object = _resolvedDisplayObject(
+    reason,
+    resolvedKind,
+    contextObjectName: contextObjectName,
+    contextObjectTarget: contextObjectTarget,
+  );
+  final actionPhrase = _resolvedActionPhrase(reason, resolvedKind);
+  if (object != null &&
+      subject.isNotEmpty &&
+      contextObjectTarget != null &&
+      actionPhrase.isNotEmpty) {
+    return <IntersectionTextSpan>[...subject, _plain(actionPhrase), object];
+  }
 
-  // 与对象不同的可见 person 代表人（隐私态非 visible 不外显具体名字）。
-  final repActor = reason.representativeActor;
-  final hasDistinctRep =
-      repActor != null &&
-      repActor.actorId.trim().isNotEmpty &&
-      repActor.displayName.trim().isNotEmpty &&
-      repActor.actorId.trim() != objectId &&
-      (repActor.privacyState.trim().isEmpty ||
-          repActor.privacyState.trim() == 'visible');
-  final repName = hasDistinctRep ? repActor.displayName.trim() : '';
-  final repId = hasDistinctRep ? repActor.actorId.trim() : '';
-
-  switch (kind) {
-    // 数字指人、代表人在数字前：[lead][rep 等?][N][verb][object]。
+  switch (resolvedKind) {
     case 'sharedFollowees':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你关注的', verb: '人也关注了');
-    case 'coCommented':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人都讨论过');
-    case 'sharedDiscussion':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人都在', tail: '发言');
-    case 'coSharedContent':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人都转发过');
-    case 'coLiked':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人都赞过');
-    case 'coVisitedEntity':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人都去过');
-    case 'sharedEntityAttention':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人都关注');
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('也关注了'), object];
+    case 'followeeInObject':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('在'), object];
+    case 'followeeVisited':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('来过'), object];
+    case 'followeeViewing':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('正在看'), object];
+    case 'followeeDiscussedThis':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('正在讨论'), object];
     case 'sharedCircle':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人同在');
     case 'coMemberCircle':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人都活跃在');
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('都加入了'), object];
+    case 'sharedEntityAttention':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('也关注了'), object];
+    case 'coVisitedEntity':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('都去过'), object];
+    case 'coWishlistedEntity':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('都想去'), object];
+    case 'coLiked':
+    case 'coCommented':
+    case 'sharedDiscussion':
+    case 'coSharedContent':
+    case 'coCreatedContent':
+      if (object == null || subject.isEmpty || actionPhrase.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain(actionPhrase), object];
     case 'sameSchool':
     case 'sameDepartment':
     case 'sameMajor':
     case 'sameCohort':
     case 'alumni':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '位校友都来自');
+    case 'alumniHere':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('都来自'), object];
     case 'sameCompany':
     case 'sameTeam':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '位同事都在');
-    case 'sameIndustry':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '位同行都做过');
-
-    // 桥接型：你关注的 N 人 {verb} 对象。
-    case 'followeeInObject':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你关注的', verb: '人在');
-    case 'followeeVisited':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你关注的', verb: '人来过');
-    case 'followeeViewing':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你关注的', verb: '人正在看');
-    case 'followeeDiscussedThis':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你关注的', verb: '人在讨论');
-    case 'alumniHere':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你的', verb: '位校友也在');
-    case 'colleagueHere':
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你的', verb: '位同事也在');
-
-    // 对象是人、数字在后：你和 [object-person] 有 N 位共同…。
-    case 'commonFollower':
-      return _objectThenCount(objectSpan, objectName, n, dimension,
-          mid: '有', tail: '位共同关注者');
-    case 'commonContact':
-      return _objectThenCount(objectSpan, objectName, n, dimension,
-          mid: '有', tail: '位共同联系人');
-
-    // 共同兴趣标签：代表人 + 标签（无数字）。
-    case 'sharedTagSample':
-      if (repName.isNotEmpty) {
-        return <IntersectionTextSpan>[
-          _plain('你和'),
-          _personSpan(repName, repId),
-          _plain('都关注'),
-          objectSpan,
-        ];
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
       }
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人都关注');
-
-    // 概率推荐：你可能和 [object] 兴趣相投。
+      return <IntersectionTextSpan>[...subject, _plain('都在'), object];
+    case 'sameIndustry':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('都做过'), object];
+    case 'commonFollower':
+      if (object == null) return const <IntersectionTextSpan>[];
+      return _objectThenCount(
+        object,
+        object.text,
+        n,
+        dimension,
+        mid: '有',
+        tail: '位共同关注者',
+      );
+    case 'commonContact':
+      if (object == null) return const <IntersectionTextSpan>[];
+      return _objectThenCount(
+        object,
+        object.text,
+        n,
+        dimension,
+        mid: '有',
+        tail: '位共同联系人',
+      );
+    case 'sharedTagSample':
+      if (object == null || subject.isEmpty) {
+        return const <IntersectionTextSpan>[];
+      }
+      return <IntersectionTextSpan>[...subject, _plain('都关注'), object];
     case 'affinity':
-      if (objectName.isEmpty) return const <IntersectionTextSpan>[];
-      return <IntersectionTextSpan>[
-        _plain('你可能和'),
-        objectSpan,
-        _plain('兴趣相投'),
-      ];
-
+      if (object == null) return const <IntersectionTextSpan>[];
+      return <IntersectionTextSpan>[_plain('推荐认识：'), object, _plain('和你兴趣相近')];
     default:
-      if (objectName.isEmpty) return const <IntersectionTextSpan>[];
-      return _countLed(repName, repId, n, dimension, objectSpan, objectName,
-          lead: '你和', verb: '人都与', tail: '有关');
+      if (reason.primarySpans.isNotEmpty) {
+        return reason.primarySpans;
+      }
+      return const <IntersectionTextSpan>[];
   }
 }
 
-/// 数字前式：`[lead]([rep]等)?[N][verb][object][tail]`，代表人恒在数字前。
-List<IntersectionTextSpan> _countLed(
-  String repName,
-  String repId,
-  int n,
-  String dimension,
-  IntersectionTextSpan objectSpan,
-  String objectName, {
-  required String lead,
-  required String verb,
-  String tail = '',
-}) {
-  if (objectName.isEmpty) return const <IntersectionTextSpan>[];
-  final spans = <IntersectionTextSpan>[_plain(lead)];
-  if (repName.isNotEmpty) {
-    spans
-      ..add(_personSpan(repName, repId))
-      ..add(_plain('等'));
+int _displayCount(IntersectionReason reason) {
+  if (reason.actorEvidenceTotalCount > 0) {
+    return reason.actorEvidenceTotalCount;
   }
-  spans
-    ..add(_countSpan(n, dimension))
-    ..add(_plain(verb))
-    ..add(objectSpan);
-  if (tail.isNotEmpty) spans.add(_plain(tail));
+  final mutual = intersectionMutualCountOf(reason);
+  if (mutual > 0) {
+    return mutual;
+  }
+  if (reason.actorEvidence.isNotEmpty) {
+    return reason.actorEvidence.length;
+  }
+  return mutual;
+}
+
+String _resolvedReasonKind(IntersectionReason reason) {
+  final candidates = <String>[
+    reason.kind.trim(),
+    reason.source.trim(),
+    for (final point in reason.intersectionPoints) point.sourceRef.trim(),
+  ];
+  for (final candidate in candidates) {
+    if (candidate.isEmpty) continue;
+    if (IntersectionKindMetadata.of(candidate) != null) {
+      return candidate;
+    }
+  }
+  for (final candidate in candidates) {
+    if (candidate.isEmpty) continue;
+    if (candidate != reason.dimension.trim()) {
+      return candidate;
+    }
+  }
+  return '';
+}
+
+IntersectionTarget? _contentContextTarget(
+  String name,
+  IntersectionTarget? target,
+) {
+  if (name.trim().isEmpty || target == null || target.objectId.trim().isEmpty) {
+    return null;
+  }
+  return target;
+}
+
+IntersectionTextSpan? _resolvedDisplayObject(
+  IntersectionReason reason,
+  String kind, {
+  String contextObjectName = '',
+  IntersectionTarget? contextObjectTarget,
+}) {
+  final contextTarget = _contentContextTarget(
+    contextObjectName,
+    contextObjectTarget,
+  );
+  if (_prefersContextObject(kind, reason) && contextTarget != null) {
+    return _objectSpanFromTarget(contextObjectName, contextTarget);
+  }
+
+  final name = _concreteObjectName(reason.displayName);
+  final objectKind = reason.objectKind.trim().isNotEmpty
+      ? reason.objectKind.trim()
+      : (IntersectionKindMetadata.of(kind)?.objectKind ?? '');
+  final objectId = reason.actionTargetId.trim();
+  final objectSpan = _objectSpanOf(name, objectId, objectKind);
+  if (objectSpan.role != 'plain' || objectSpan.text.trim().isNotEmpty) {
+    return objectSpan.text.trim().isEmpty ? null : objectSpan;
+  }
+
+  if (contextTarget != null &&
+      (_prefersContextObject(kind, reason) ||
+          _interactionActionParts(reason).isNotEmpty)) {
+    return _objectSpanFromTarget(contextObjectName, contextTarget);
+  }
+  return null;
+}
+
+bool _prefersContextObject(String kind, IntersectionReason reason) {
+  const contentKinds = <String>{
+    'coLiked',
+    'coCommented',
+    'sharedDiscussion',
+    'coSharedContent',
+    'coCreatedContent',
+    'followeeViewing',
+    'followeeDiscussedThis',
+  };
+  if (!contentKinds.contains(kind)) {
+    return false;
+  }
+  final objectKind = reason.objectKind.trim();
+  if (objectKind == 'content') {
+    return true;
+  }
+  final name = _concreteObjectName(reason.displayName);
+  return name.isEmpty || objectKind == 'person' || objectKind == 'tag';
+}
+
+String _concreteObjectName(String raw) {
+  final name = raw.trim();
+  if (name.isEmpty) return '';
+  switch (name) {
+    case '同游':
+    case '同好':
+    case '同校':
+    case '这里':
+    case '这个对象':
+    case '这些内容':
+    case '这些主题':
+    case '相同内容':
+    case '相同的人':
+      return '';
+    default:
+      return name;
+  }
+}
+
+String _resolvedActionPhrase(IntersectionReason reason, String kind) {
+  final parts = _interactionActionParts(reason);
+  if (parts.isNotEmpty) {
+    if (parts.length == 1) return parts.first;
+    if (parts.length == 2) return '${parts[0]}和${parts[1]}';
+    return '${parts[0]}、${parts[1]}并${parts[2]}';
+  }
+  switch (kind) {
+    case 'coLiked':
+      return '都赞过';
+    case 'coCommented':
+      return '都评论过';
+    case 'sharedDiscussion':
+      return '都讨论过';
+    case 'coSharedContent':
+      return '都转发过';
+    case 'coCreatedContent':
+      return '都共创过';
+    default:
+      return '';
+  }
+}
+
+List<String> _interactionActionParts(IntersectionReason reason) {
+  if (reason.actorEvidence.isEmpty) {
+    return const <String>[];
+  }
+  var hasLike = false;
+  var hasComment = false;
+  var hasShare = false;
+  for (final actor in reason.actorEvidence) {
+    hasLike =
+        hasLike || actor.likeCount > 0 || actor.actionSummaryText.contains('赞');
+    hasComment =
+        hasComment ||
+        actor.commentCount > 0 ||
+        actor.actionSummaryText.contains('评') ||
+        actor.actionSummaryText.contains('讨论');
+    hasShare =
+        hasShare ||
+        actor.shareCount > 0 ||
+        actor.actionSummaryText.contains('转发') ||
+        actor.actionSummaryText.contains('分享');
+  }
+  final parts = <String>[];
+  if (hasLike) parts.add('赞过');
+  if (hasComment) parts.add('评论过');
+  if (hasShare) parts.add('转发过');
+  return parts;
+}
+
+IntersectionTextSpan _objectSpanFromTarget(
+  String objectName,
+  IntersectionTarget target,
+) {
+  final normalizedName = objectName.trim();
+  if (normalizedName.isEmpty) return _plain('');
+  return IntersectionTextSpan(
+    text: _formatObjectName(normalizedName, target.objectKind),
+    role: 'object',
+    target: target,
+  );
+}
+
+String _formatObjectName(String name, String objectKind) {
+  final trimmed = name.trim();
+  if (trimmed.isEmpty) return '';
+  if (objectKind == 'content' &&
+      !trimmed.startsWith('《') &&
+      !trimmed.endsWith('》')) {
+    return '《$trimmed》';
+  }
+  return trimmed;
+}
+
+IntersectionRepresentativeActor? _visibleRepresentativeActor(
+  IntersectionReason reason,
+) {
+  final actor = reason.representativeActor;
+  if (actor != null) {
+    final visible =
+        actor.privacyState.trim().isEmpty ||
+        actor.privacyState.trim() == 'visible';
+    if (visible && actor.displayName.trim().isNotEmpty) {
+      return actor;
+    }
+  }
+  for (final evidence in reason.actorEvidence) {
+    final visible =
+        evidence.privacyState.trim().isEmpty ||
+        evidence.privacyState.trim() == 'visible';
+    if (!visible || evidence.displayName.trim().isEmpty) {
+      continue;
+    }
+    return IntersectionRepresentativeActor(
+      actorId: evidence.actorId,
+      displayName: evidence.displayName,
+      avatarUrl: evidence.avatarUrl,
+      relationLabel: evidence.relationLabel,
+      privacyState: evidence.privacyState,
+      target: evidence.target,
+      evidenceRank: evidence.evidenceRank,
+      snapshotVersion: evidence.snapshotVersion,
+    );
+  }
+  return null;
+}
+
+List<IntersectionTextSpan> _subjectSpans({
+  required IntersectionRepresentativeActor? repActor,
+  required String relationLabel,
+  required int count,
+  required String dimension,
+}) {
+  final repName = repActor?.displayName.trim() ?? '';
+  final repId = repActor?.actorId.trim() ?? '';
+  final repTarget = repActor?.target;
+  final normalizedRelation = relationLabel.trim();
+  final needsViewerPrefix = normalizedRelation.isEmpty;
+  if (repName.isEmpty) {
+    if (count <= 0) return const <IntersectionTextSpan>[];
+    final unit = normalizedRelation.isEmpty ? '人' : '位$normalizedRelation';
+    return <IntersectionTextSpan>[
+      if (needsViewerPrefix) _plain('你和'),
+      _countSpan(count, dimension),
+      _plain(unit),
+    ];
+  }
+  final spans = <IntersectionTextSpan>[];
+  if (needsViewerPrefix) {
+    spans.add(_plain('你和'));
+  }
+  if (!_isAnonymousRepresentative(repName) && normalizedRelation.isNotEmpty) {
+    spans.add(_plain(normalizedRelation));
+  }
+  if (repTarget != null && repTarget.objectId.trim().isNotEmpty) {
+    spans.add(
+      IntersectionTextSpan(text: repName, role: 'object', target: repTarget),
+    );
+  } else {
+    spans.add(_personSpan(repName, repId));
+  }
+  if (count > 1) {
+    spans
+      ..add(_plain('等'))
+      ..add(_countSpan(count, dimension))
+      ..add(_plain('人'));
+  }
   return spans;
+}
+
+bool _isAnonymousRepresentative(String name) => name.trim().startsWith('一位');
+
+String _normalizedRelationLabel(IntersectionReason reason, String kind) {
+  final candidates = <String>[
+    reason.representativeActor?.relationLabel.trim() ?? '',
+    for (final actor in reason.actorEvidence) actor.relationLabel.trim(),
+    _fallbackRelationLabel(kind),
+  ];
+  for (final candidate in candidates) {
+    if (_isMeaningfulRelationLabel(candidate)) {
+      return candidate;
+    }
+  }
+  return _fallbackRelationLabel(kind);
+}
+
+bool _isMeaningfulRelationLabel(String raw) {
+  final label = raw.trim();
+  if (label.isEmpty) return false;
+  const forbidden = <String>{
+    '共同点赞',
+    '共同讨论',
+    '共同传播',
+    '共同关注',
+    '都关注此标签',
+    '同行足迹',
+    '同好',
+  };
+  return !forbidden.contains(label);
+}
+
+String _fallbackRelationLabel(String kind) {
+  switch (kind) {
+    case 'commonContact':
+      return '联系人';
+    case 'sharedFollowees':
+    case 'followeeInObject':
+    case 'followeeVisited':
+    case 'followeeViewing':
+    case 'followeeDiscussedThis':
+      return '你关注的人';
+    case 'sameSchool':
+    case 'sameDepartment':
+    case 'sameMajor':
+    case 'sameCohort':
+    case 'alumni':
+    case 'alumniHere':
+      return '校友';
+    case 'sameCompany':
+    case 'sameTeam':
+    case 'colleagueHere':
+      return '同事';
+    case 'sameIndustry':
+      return '同行';
+    case 'sharedCircle':
+    case 'coMemberCircle':
+      return '同圈成员';
+    case 'coVisitedEntity':
+    case 'coWishlistedEntity':
+      return '同游伙伴';
+    default:
+      return '';
+  }
 }
 
 /// 对象在前式：`你和[object][mid][N][tail]`（对象本身是人、数字落在末尾）。
@@ -193,6 +680,7 @@ IntersectionTextSpan _personSpan(String name, String id) {
     text: name,
     role: 'object',
     target: IntersectionTarget(
+      objectType: 'user',
       objectId: id,
       objectKind: 'person',
       routeId: 'userProfile',
@@ -201,13 +689,21 @@ IntersectionTextSpan _personSpan(String name, String id) {
 }
 
 IntersectionTextSpan _objectSpanOf(String name, String id, String objectKind) {
+  final normalizedName = _formatObjectName(name, objectKind);
   final routeId = intersectionRouteIdForObjectKind(objectKind);
   // 无 id 或无可导航 route（如 tag/content）时渲染纯文本，避免不可点的死蓝字。
-  if (id.isEmpty || routeId.isEmpty) return _plain(name);
+  if (normalizedName.isEmpty) {
+    return IntersectionTextSpan(text: '', role: 'plain');
+  }
+  if (id.isEmpty || routeId.isEmpty) return _plain(normalizedName);
   return IntersectionTextSpan(
-    text: name,
+    text: normalizedName,
     role: 'object',
     target: IntersectionTarget(
+      objectType: _objectTypeForTarget(
+        objectKind: objectKind,
+        routeId: routeId,
+      ),
       objectId: id,
       objectKind: objectKind,
       routeId: routeId,
@@ -219,8 +715,51 @@ IntersectionTextSpan _countSpan(int n, String dimension) {
   return IntersectionTextSpan(
     text: '$n',
     role: 'count',
-    target: IntersectionTarget(objectId: dimension, routeId: 'myIntersections'),
+    target: IntersectionTarget(
+      objectType: 'dimension',
+      objectId: dimension,
+      routeId: 'myIntersections',
+    ),
   );
+}
+
+String _objectTypeForTarget({
+  required String objectKind,
+  required String routeId,
+}) {
+  switch (routeId.trim()) {
+    case 'userProfile':
+      return 'user';
+    case 'circleDetail':
+      return 'circle';
+    case 'homepageDetail':
+      return 'homepage';
+    case 'workBrowser':
+    case 'postDetail':
+    case 'contentDetail':
+      return 'post';
+    case 'myIntersections':
+      return 'dimension';
+  }
+  switch (objectKind.trim()) {
+    case 'person':
+      return 'user';
+    case 'circle':
+      return 'circle';
+    case 'school':
+    case 'place':
+    case 'enterprise':
+    case 'route':
+    case 'photo_spot':
+    case 'gear':
+      return 'homepage';
+    case 'content':
+      return 'post';
+    case 'tag':
+      return 'tag';
+    default:
+      return '';
+  }
 }
 
 IntersectionTextSpan _plain(String text) =>

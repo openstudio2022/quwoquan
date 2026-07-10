@@ -937,7 +937,7 @@ flowchart LR
 |---|---|---|
 | 我的交集 | 共同事实 + 桥接事实 | 聚合入口与按维度分组列表 |
 | 他人主页 | 共同事实 + 桥接事实 | 强调“你们的连接” |
-| 我的主页 | 共同事实 + 桥接事实 + 影响 | 「我的连接」列表入口 +「我的影响力」 |
+| 我的主页 | 共同事实 + 桥接事实 + 影响 | 「我的交集」列表入口 +「我打动的人」 |
 | 实体主页 | 共同事实 + 桥接事实 | 强调“与你的连接” |
 | 圈子主页 | 共同事实 + 桥接事实 | 强调“你关注的人在这里”等 |
 | 全局搜索 | 共同事实 + affinity（发现区） | 「交集」Tab / 激发搜索 / 发现区分组；已连接区不展示交集句 |
@@ -1042,7 +1042,7 @@ flowchart LR
 - [ ] content-service：删 `handleFavoritePost/handleUnfavoritePost`、`post_service.go` 的 `FavoritePost/UnfavoritePost`、counter key、Popularity 中 FavoriteCount 项、`GetReactionState` favorited、`feed_service.go` 的 `SaveCount`、`behavior_service.go` 的 favorite→decision 分支。
 - [ ] codegen 产物（generated_routes.go / contracts.go）经 metadata + `make codegen` 刷新。
 - [ ] 推荐管线：`hotpath.go` 权重表、`feature.go` 的 `TotalFavorites/FavoriteLevel`、`metrics.go`、`recommend_feature.go`、`discovery_projector.go`、`mongo_source.go`、`static_source.go`、`social_infra.go`、`daily_metrics_store.go` 逐项清除。
-- [ ] rec-model-service（Python）与 `scripts/ml/**`：特征、权重、训练样本同步删除。
+- [ ] rec-model-service（Python）与 `services/rec-model-service/scripts/**`：特征、权重、训练样本同步删除。
 - [ ] assistant-service：删 `FavoritedAnswer` 链路。
 - [ ] 信号替代：长期价值信号使用足迹侧既有行为（完读 / 复访 / 转发），不引入新行为类型。
 
@@ -1146,12 +1146,22 @@ flowchart LR
 
 点击分工固定：代表人头像/名字进代表人主页，数字进证据列表，对象名/封面进对象页，行动建议执行该 kind 的主 CTA。四类目标不得混用。
 
+#### 17.1.2 人数下钻逐人证据
+
+首页内容卡等紧凑 surface 若把人数 N 做成可点击入口，云侧必须在同一 `IntersectionReason` 下发完整
+`actorEvidence` 列表；端只消费结构化字段，禁止从 `primaryText` 反解析人名、来源或动作。
+
+- `actorEvidenceTotalCount` = 可打开列表的人数 N；`actorEvidenceCompleteness=complete` 时，`actorEvidence.length` 必须覆盖 N。
+- 每个 `IntersectionActorEvidence` 必须说明 `relationLabel`（如联系人、你关注的人、某圈圈友）与 `actionSummaryText`（如点赞了这条记录、评论了这条记录、转发了这条记录）。
+- `representativeActor` 只代表其中关系最密切的样本，不表示 N 人同属同一来源；N 的完整解释以 `actorEvidence` 为准。
+- 当 `actorEvidenceCompleteness != complete` 或列表被隐私过滤为样本时，端不得把人数 N 渲染成“完整 8 人列表”入口。
+
 ### 17.2 两类 surface 的句式层次（避免误判约束）
 
 | surface 类别 | 典型位置 | 允许句式 |
 |---|---|---|
 | 紧凑 surface | 首页内容卡、spotlight 卡 | **严格一条主谓宾句，无副句** |
-| 列表入口 | 我的连接 / 为什么推荐TA / 我的影响力 | 每行 = **一条主谓宾结论句 + 至多一条灰色辅助说明**（≤2 行/项）+「查看更多」 |
+| 列表入口 | 我的交集 / 为什么推荐TA / 我打动的人 | 每行 = **一条主谓宾结论句 + 至多一条灰色辅助说明**（≤2 行/项）+「查看更多」 |
 
 `secondaryText` / `connectionSummary` **只允许**作为列表入口的灰色辅助说明出现，禁止进入紧凑 surface 与结论句同屏堆叠。
 
@@ -1170,13 +1180,13 @@ flowchart LR
 | 场景 | 页面 / 模块 | 句式 surface | P0/P1 | 本期 |
 |---|---|---|---|---|
 | S1 首页推荐 | 内容卡交集句 / spotlight | 紧凑 | P0 | ✅ |
-| S2 他人主页 | 「为什么推荐TA」/「TA的影响力」 | 列表入口 | P0 | ✅ |
-| S3 我的主页 | 「我的连接」/「我的影响力」 | 列表入口 | P0 | ✅ |
-| S4 圈子主页 | 「我的交集」+「影响力」/ 记录流卡内交集句 | 列表入口 + 紧凑 | P0 | ✅ |
-| S5 实体主页 | 「我的交集」+「影响力」/ 记录流卡内交集句 | 列表入口 + 紧凑 | P0 | ✅ |
-| S6 全局搜索 | 搜索首页「今日交集」/ 结果页「交集」Tab / 发现区分组 | 紧凑 + 列表入口 | P0 | ✅ |
+| S2 他人主页 | 「为什么推荐TA」/「TA打动的人」 | 列表入口 | P0 | ✅ |
+| S3 我的主页 | 「我的交集」/「我打动的人」 | 列表入口 | P0 | ✅ |
+| S4 圈子主页 | 「我的交集」+「圈子打动的人」/ 记录流卡内交集句 | 列表入口 + 紧凑 | P0 | ✅ |
+| S5 实体主页 | 「我的交集」+「这里打动的人」/ 记录流卡内交集句 | 列表入口 + 紧凑 | P0 | ✅ |
+| S6 全局搜索 | 搜索首页「我的交集」/ 结果页「交集」Tab / 发现区分组 | 紧凑 + 列表入口 | P0 | ✅ |
 
-> 圈子/实体/用户主页记录流（瀑布卡）属紧凑 surface，卡内严格一条主谓宾句（同首页内容卡）；实体/圈子列表入口统一为「我的交集」与「影响力」。全局搜索「交集」Tab 每张卡必须携带 `intersectionReason.primaryText`；搜索分组编排消费 `connectionState`，不得端侧推断交集文案。
+> 圈子/实体/用户主页记录流（瀑布卡）属紧凑 surface，卡内严格一条主谓宾句（同首页内容卡）；实体/圈子列表入口统一为「我的交集」与「这里打动的人 / 圈子打动的人」。全局搜索「交集」Tab 每张卡必须携带 `intersectionReason.primaryText`；搜索分组编排消费 `connectionState`，不得端侧推断交集文案。
 
 ### 17.5 高保图文案冲突裁决（2026-06，用户已确认）
 
@@ -1234,16 +1244,16 @@ Tab 内容区
 
 | 页面 | 第一模块标题 | 第二模块标题 | 渲染积木 |
 |---|---|---|---|
-| 我的主页 | 我的交集 | 我的影响力 | `ObjectIntersectionPreviewCard`* / `AuthorImpactCard` |
-| 他人主页 | 我与TA的交集 | TA的影响力 | `ObjectIntersectionPreviewCard`* / `AuthorImpactCard` |
-| 圈子主页 | 我的交集 | 影响力 | `ObjectIntersectionPreviewCard` / `AuthorImpactCard`(circleImpactProvider) |
-| 实体主页 | 我的交集 | 影响力 | `ObjectIntersectionPreviewCard` / `IntersectionStatementCard`(entityImpactProvider) |
+| 我的主页 | 我的交集 | 我打动的人 | `ObjectIntersectionPreviewCard`* / `AuthorImpactCard` |
+| 他人主页 | 我与TA的交集 | TA打动的人 | `ObjectIntersectionPreviewCard`* / `AuthorImpactCard` |
+| 圈子主页 | 我的交集 | 圈子打动的人 | `ObjectIntersectionPreviewCard` / `AuthorImpactCard`(circleImpactProvider) |
+| 实体主页 | 我的交集 | 这里打动的人 | `ObjectIntersectionPreviewCard` / `IntersectionStatementCard`(entityImpactProvider) |
 
 `*` 我的/他人主页保留既有 `MyIntersectionInboxCard` / `OtherProfileIntersectionCard` 入口，统一委托共享 `ObjectIntersectionPreviewCard` 渲染积木，保证四页同壳同 token。
 
 **用户可见用语口径升级**：
 
-- 「我的交集」「影响力」自本节起为**用户可见的模块标题**（合法），不再列入 §17.7 用户可见禁词；§17.7 禁词表对实体/圈子页的「交集/影响力」拦截作废。
+- 「我的交集」「我打动的人 / TA打动的人 / 这里打动的人 / 圈子打动的人」自本节起为**用户可见的模块标题**（合法），不再列入 §17.7 用户可见禁词；前台「影响力」退回 PRD/内部词，机器标识 `impact` 保留。
 - 仍禁用：`实体 / Entity / Circle / 为什么推荐 / 兴趣圈`；圈子「相关圈子」、实体「相关圈子」沿用。
 
 **核心动作（取代 §17.7 结构行的次按钮口径）**：
@@ -1253,9 +1263,9 @@ Tab 内容区
 | 实体主页 | 关注 | 发记录（围绕这里沉淀记录） |
 | 圈子主页 | 加入圈子 | 进入讨论（切换到讨论 tab） |
 
-**实体主页结构（升级）**：封面 → 头部（头像簇 +「N 关注」单计数 + 认证 + 成立年份）→ 关注 / 发记录 →「我的交集」预览卡（单列结论句 + 蓝锚点 + 查看全部）→「影响力」卡（可枚举、句内数字下钻明细）→「关于这里」摘要卡（2~4 行 + 缩略图 + 查看更多介绍）→ 记录 | 讨论 | 相关圈子 → 记录流（双列瀑布，封面→交集句→标题→作者→赞）。**移除首屏常驻「想去·正在去·结伴」入口**。
+**实体主页结构（升级）**：封面 → 头部（头像簇 +「N 关注」单计数 + 认证 + 成立年份）→ 关注 / 发记录 →「我的交集」预览卡（单列结论句 + 蓝锚点 + 查看全部）→「这里打动的人」卡（可枚举、句内数字下钻明细）→「关于这里」摘要卡（2~4 行 + 缩略图 + 查看更多介绍）→ 记录 | 讨论 | 相关圈子 → 记录流（双列瀑布，封面→交集句→标题→作者→赞）。**移除首屏常驻「想去·正在去·结伴」入口**。
 
-**圈子主页结构（升级）**：封面 → 头部（圈子独立头像 + 名称 + 认证 +「N 成员」单计数，**移除成员头像簇**）→ 加入圈子 / 进入讨论 →「我的交集」预览卡 →「影响力」卡（`AuthorImpactCard` 同构，circleImpactProvider）→ 记录 | 讨论 | 成员 → 记录流（双列瀑布，卡内唯一交集句）。圈子里「你认识的人」从头部成员簇收敛进「我的交集」模块表达。
+**圈子主页结构（升级）**：封面 → 头部（圈子独立头像 + 名称 + 认证 +「N 成员」单计数，**移除成员头像簇**）→ 加入圈子 / 进入讨论 →「我的交集」预览卡 →「圈子打动的人」卡（`AuthorImpactCard` 同构，circleImpactProvider）→ 记录 | 讨论 | 成员 → 记录流（双列瀑布，卡内唯一交集句）。圈子里「你认识的人」从头部成员簇收敛进「我的交集」模块表达。
 
 **实体影响力端契约（新增，云侧 Go handler 暂缓）**：实体主页「影响力」模块需要专属契约，定义于 `entity/homepage/projections/entity_impact_item.yaml`、`entity_impact_summary.yaml`、`entity_impact_evidence.yaml`，operation `GetEntityImpact` / `ListEntityImpactEvidence`，与 `author_impact_item` / `circle_impact_item` 单通道（`primaryText` + `primarySpans`，禁 `displayText`）对称。端侧 `entityImpactProvider` + alpha contract-seed mock 驱动高保；云侧实现待 WP-D。
 
@@ -1299,7 +1309,7 @@ affinity 必须分通道（intersectionClass=affinity + confidenceLabel），不
 |---|---|---|---|
 | S1 | `home-recommend-intersection-redesign` | feed 卡 + spotlight 单句 primaryText；去 displayText 回退 | 频道专属 spotlight 数据质量 |
 | S2a | `user-profile-intersection-redesign`（他人） | 「为什么推荐TA」列表入口 + AuthorImpact 去好友化 | 深层 evidence 下钻 |
-| S2b | `user-profile-intersection-redesign`（我的） | 「我的连接」红点 + 「我的影响力」isMine | viewer_object_intersections 读模型 |
+| S2b | `user-profile-intersection-redesign`（我的） | 「我的交集」红点 + 「我打动的人」isMine | viewer_object_intersections 读模型 |
 | S3 | `entity-homepage-intersection-redesign` | ObjectIntersectionSection + 记录流单句 | bundle 云侧真实填充 |
 | S4 | `circle-homepage-intersection-redesign` | 圈子交集列表入口 + 记录流单句 | 成员头像簇桥接 |
 | S5 | `search-intersection-consumption` | 搜索交集 Tab + connectionState 分组 + primaryText | 已连接区稳定读模型 |
@@ -1339,7 +1349,7 @@ affinity 必须分通道（intersectionClass=affinity + confidenceLabel），不
 - `followeeInObjectActive` / `followeeViewingActive`（桥接 freshness）
 - `affinityIntersectionScore`（概率，与 fact 分字段）
 
-`scripts/ml/feature_registry.yaml` 同步登记，供 rec-model-service 训练与在线推理。
+`services/rec-model-service/scripts/feature_registry.yaml` 同步登记，供 rec-model-service 训练与在线推理。
 
 ### 19.4 Ranking Layer
 
@@ -1379,6 +1389,7 @@ affinity 必须分通道（intersectionClass=affinity + confidenceLabel），不
 |---|---|---|---|
 | `IntersectionReason` | `recommendation/rec_model/projections/intersection_reason.yaml` | `recommendation/intersection_reason.g.dart` | 结论句唯一来源 `primaryText`；快照/追踪 id 唯一字段 `pointSummarySnapshotId` |
 | `IntersectionPoint` | `…/projections/intersection_point.yaml` | `recommendation/intersection_point.g.dart` | 证据组结构化字段（`count/sampleText/sampleAvatarUrls/label/displayText`）唯一来源 |
+| `IntersectionActorEvidence` | `…/projections/intersection_actor_evidence.yaml` | `recommendation/intersection_actor_evidence.g.dart` | 人数 N 下钻逐人来源 + 动作证据；端不得反解析 `primaryText` |
 | `IntersectionDimensionTally` | `…/projections/intersection_dimension_tally.yaml` | `recommendation/intersection_dimension_tally.g.dart` | `briefText` 动态简报 + `subtitleText` 证据摘要（端云已对齐） |
 | `IntersectionInboxSummary` | `…/projections/intersection_inbox_summary.yaml` | `recommendation/intersection_inbox_summary.g.dart` | 我的主页聚合入口，最多 3 维度可展开 |
 
@@ -1448,7 +1459,7 @@ maxAffinityPerSurface=3 / cooldownDays=14 / freshnessTtlDaysByDimension`）；fe
    （注册表 `sampleVisualsRequired=true`）。
 4. **主句实例化与点击**：名字 / 数字 / 整行点击优先级：名字 > 数字 > 整行；下钻必须携带
    `intersectionId + sourceRef + dimension + objectKind + objectId`。
-5. **各 surface 密度上限**：feed chip ≤ 1 句（仅 primaryText，不展示 secondaryText）；我的连接默认 3 条可展开；
+5. **各 surface 密度上限**：feed chip ≤ 1 句（仅 primaryText，不展示 secondaryText）；我的交集默认 3 条可展开；
    对象页证据组一屏 ≤ 5 条、超出折叠。
 6. **降级文案链**：具名样本 → 纯计数 → 维度母表达 → 隐藏。
 7. **可解释下钻**：无证据不展示具名主句（G2：无 primaryText 不展示）。
@@ -1524,8 +1535,8 @@ maxAffinityPerSurface=3 / cooldownDays=14 / freshnessTtlDaysByDimension`）；fe
 |---|---|---|
 | `IntersectionReason` | `primarySpans` / `sampleVisuals` | 对象页 / feed chip / 用户主页结论句可点击 + 样本视觉 |
 | `IntersectionPoint` | `sampleVisuals`（升级裸 `sampleAvatarUrls`，旧字段保留过渡） | 证据组样本视觉，禁头像冒充非用户对象 |
-| `IntersectionDimensionTally` | `briefSpans` / `sampleVisuals` / `sourceRef` / `countObjectKind` | 我的连接简报行名字 / 数字点击 + 维度下钻过滤 |
-| `AuthorImpactItem` | `impactId` / `primarySpans` / `sampleVisuals` / `countTarget` / `evidenceSnapshotId` / `countObjectKind` | 我的影响力结论句可点击 + 数字开明细 + 样本视觉 |
+| `IntersectionDimensionTally` | `briefSpans` / `sampleVisuals` / `sourceRef` / `countObjectKind` | 我的交集简报行名字 / 数字点击 + 维度下钻过滤 |
+| `AuthorImpactItem` | `impactId` / `primarySpans` / `sampleVisuals` / `countTarget` / `evidenceSnapshotId` / `countObjectKind` | 我打动的人结论句可点击 + 数字开明细 + 样本视觉 |
 
 #### 20.7.4 端侧统一渲染与导航（共享层 `lib/ui/intersection/`，A–E 复用）
 
@@ -1700,7 +1711,7 @@ iconKey 真相源：交集 kind 在 `intersection_kind_registry.yaml` 声明；�
 #### 21.5.4 其余展示统一要求（沿用并收口 §17/§20.4）
 
 - 结论句唯一来源 `primaryText` / `briefText`（主谓宾、先人后事、一句话）；可交互 = `spans`，不变量 `join(spans.text)==primaryText/briefText`；称谓统一「你们」。
-- 每 surface 密度上限：紧凑（feed / 记录卡）严格 1 句、lifecycle 仅「新」；列表入口（我的连接 / 我的交集 / 我的影响力 / 影响力）1 结论句 + ≤1 灰色辅助 + 可展开；对象页证据组一屏 ≤5。
+- 每 surface 密度上限：紧凑（feed / 记录卡）严格 1 句、lifecycle 仅「新」；列表入口（我的交集 / 我打动的人 / TA打动的人 / 这里打动的人 / 圈子打动的人）1 结论句 + ≤1 灰色辅助 + 可展开；对象页证据组一屏 ≤5。
 - 降级链：具名样本+头像 → 纯计数 → 维度母表达 → 隐藏；无 `primaryText` 不占位不造假。
 - 可点击优先级：代表人 > 数字 > 对象 > 行动建议 > 整行；下钻带 `intersectionId/sourceRef/dimension/objectKind/objectId`。
 
@@ -1708,10 +1719,10 @@ iconKey 真相源：交集 kind 在 `intersection_kind_registry.yaml` 声明；�
 
 | 面 | 主表达 | 具象化要点 |
 |---|---|---|
-| A 我的主页 | 我的连接（lifecycle 分桶弱标）+ 我的影响力（传播视图） | 四槽样板首落；author_impact 路径节点 + secondarySpread 计数 |
-| B 用户主页(他人) | 为什么推荐TA + TA的影响力 | ObjectIntersection 证据组叠 lifecycle 弱标 + 句内头像 |
-| C 实体主页 | 我的交集 + 影响力 + 记录流单句 | 同 B 复用 ObjectIntersectionSection；对象封面缩略图；影响数字可枚举来源 |
-| D 圈子主页 | 我的交集 + 影响力 | circle_impact 接统一三件套（解决 G4）+ 成员/讨论/记录可追溯 |
+| A 我的主页 | 我的交集（lifecycle 分桶弱标）+ 我打动的人（传播视图） | 四槽样板首落；author_impact 路径节点 + secondarySpread 计数 |
+| B 用户主页(他人) | 为什么推荐TA + TA打动的人 | ObjectIntersection 证据组叠 lifecycle 弱标 + 句内头像 |
+| C 实体主页 | 我的交集 + 这里打动的人 + 记录流单句 | 同 B 复用 ObjectIntersectionSection；对象封面缩略图；影响数字可枚举来源 |
+| D 圈子主页 | 我的交集 + 圈子打动的人 | circle_impact 接统一三件套（解决 G4）+ 成员/讨论/记录可追溯 |
 | E 首页 post | post 卡内单句 chip | 紧凑：1 句 + lifecycle 仅「新」，不堆叠、不恢复 spotlight 横滑 |
 
 ### 21.6 统一选择得分（扩展 §20.3，superset 不另起真相源）
@@ -1851,9 +1862,9 @@ propagationInfluence = reach × conversion × secondarySpread   # 仅影响/传�
 
 ### 22.7 验收测试用户「林墨」实例化蓝图 + 覆盖矩阵（ws-acc 真相源）
 
-- 测试用户 `fixture_user_travel_curator`「林墨」：杭州+成都旅行摄影创作者，索尼 A7M4，胶片风格，旅行摄影圈/徒步摄影圈，某高校校友。落点：`content_scenarios.json` `intersection_core.inboxReasons`（我的交集）+ `authorImpact`（我的影响力，按作者 id）。alpha 直出；gamma 需 seed viewer 关系（R-IX05）。
+- 测试用户 `fixture_user_travel_curator`「林墨」：杭州+成都旅行摄影创作者，索尼 A7M4，胶片风格，旅行摄影圈/徒步摄影圈，某高校校友。落点：`content_scenarios.json` `intersection_core.inboxReasons`（我的交集）+ `authorImpact`（我打动的人，按作者 id；内部机器名保留 `authorImpact`）。alpha 直出；gamma 需 seed viewer 关系（R-IX05）。
 - **我的交集 35 条**：按 5 维分组承载 §5.1–5.9 九组语义全集（关系 7 / 身份 5 / 兴趣 5 / 足迹 7 / 内容 6 + 特殊句式专项 5）；每条标 dimension/sourceRef/objectKind/lifecycle/代表人/行动。
-- **我的影响力 14 条**：按 helpType 5 类承载 §6.1–6.8（community/decision/spread/relationship/knowledge + 创作者成长），含实名代表人 + 匿名降级。
+- **我打动的人 14 条**：按 helpType 5 类承载 §6.1–6.8（community/decision/spread/relationship/knowledge + 创作者成长），含实名代表人 + 匿名降级。
 - **覆盖矩阵（测试专家口径）**：
   - 维度全覆盖（5 维 + 9 组语义各 ≥1）；
   - lifecycle 全覆盖（new/stable/strengthened/reactivated/weakened/archived/expired，弱标显隐正确）；
@@ -1971,3 +1982,179 @@ registry/metadata 是真相源，但**「kind→(iconKey,objectKind,countObjectK
 ### 23.6 落地顺序与撞车
 
 - 本章（§23 定稿）不依赖 WIP，已冻结。方案 A-F 的代码落地全部落在当前活跃交集重构 WIP 面（registry/reason/Go/Dart/codegen），按既定协调待该重构收敛后基于本章实施；**WS1 必须先落方案 A（kind 元数据 codegen 下发），再铺垂类数据**，否则继续制造端侧桥接债。
+
+---
+
+## 24. 交集 v3 · 可行动交集实例基线（商用化冻结 2026-07-01）
+
+> 本章是交集系统的 **v3 商用化基线**，在 §21（三层架构）/ §22（旅行摄影垂类）/ §23（去桥接可扩展）之上，回答一个更高层的问题：**交集不只是「解释为什么推荐」，而是「把内容消费与出行意图转化为可证、安全、可沉淀的同趣关系」**。与 §1–§23 冲突时以本章的产品定位与边界为准；契约字段仍以 §21.8 / §23 与 metadata 为准，本章不新造字段真相源。
+
+### 24.0 产品主轴（唯一叙事真相源）
+
+- 主轴一句话：**别人帮你刷内容，我们帮你遇到对的人。**（登记于 `specs/00_GLOBAL_TERMINOLOGY.md` §3「产品主轴」，本章为完整叙事，二者单一真相源。）
+- 主轴与品牌主张关系：品牌情绪 slogan 仍是「遇见同趣，绽放热爱」；产品主轴是对外定位与差异化叙事，二者同源不冲突。
+- 主轴约束：所有交集 / 推荐 / 兴趣配对 / 四主页 / 视频书的取舍，都必须服务「让用户更接近遇到对的人」，而非只提升「刷内容效率」或「下单转化」。偏离主轴的实现需在评审阻断或明确说明。
+
+打动 CEO/投资人（约 55 字）：
+
+> 内容平台停在消费，OTA 停在下单，没人把兴趣变成真实关系——这是品类空白。我们用「可证交集」做安全同趣约伴，先切旅行+摄影。用户越用、行动越多、匹配越准、壁垒越硬。分佣、撮合、会员多路变现，北极星是关系形成而非刷时长。
+
+打动用户/消费者（约 55 字）：
+
+> 这里会告诉你「你俩都去过、都想拍这里」，推荐真诚不忽悠。想搭伴时，基于共同兴趣安全打个招呼、约着一起去。你和谁的交集在慢慢变强，看得见、攒得下。在这儿找到同趣的人，比多刷一条视频更值得。
+
+### 24.1 `IntersectionInstance`（v3 产品心智与契约组织单位）
+
+`IntersectionInstance` 是 v3 统一心智，**不默认新增同名 DTO**：已有 `IntersectionReason` + `IntersectionPoint` + `IntersectionActionHint` + `AuthorImpactItem` / `circle_impact_item` 已能承载，则复用；仅当现有投影无法表达时才 metadata-first 扩字段（遵循 §23、R24 抽象克制）。一个实例由八要素构成：
+
+| 要素 | 含义 | 现有契约承载 |
+|---|---|---|
+| `subject` | viewer / 当前用户视角 | 请求上下文 viewer |
+| `target` | 人 / 圈 / 实体 / 内容 / 路线 /（未来 trip/meetup，deferred） | `objectKind` + `IntersectionTarget` |
+| `evidence` | 可证据据 | `sourceRef` / `dimension` / `primaryText` / `primarySpans` / `sampleVisuals` / `pointSummarySnapshotId` |
+| `strength` | 边强度 | `edgeWeight` / `lifecycleState` / `previousStrength` / `strengthDelta` |
+| `moment` | 时态 | 历史态（已有）/ 当前态、未来态（无稳定源标 deferred） |
+| `actionHints` | 行动阶梯 | `IntersectionActionHint`（轻行动 + 重行动闭集，端只读分发） |
+| `safetyGate` | 安全门禁 | 登录 / 实名 / 青少年 / 拉黑 / 陌生打招呼偏好 / 位置模糊 + 双向同意 |
+| `feedback` | 回流 | 曝光 / span 点击 / 证据展开 / 关注 / 入圈 / 私信 / 打招呼 / 讨论 / 负反馈 / 冷却 |
+
+### 24.2 用户可见语言（收敛）与禁用词
+
+- 允许前台词：「你们的交集」「我的交集」「你认识的人在这」「与你相关的线索」「交集配对」；辐射他人统一用「打动」（打动了 N 人 / 我打动的人 / TA打动的人 / 这里打动的人 / 圈子打动的人）。「今日」只作次级时间窗口说明，不作稳定模块名；「同趣」仅作情感修饰文案，不作入口/维度名。收敛口径见 `00_GLOBAL_TERMINOLOGY.md` §18.7。
+- 禁用前台词：「交集网络」「事实通道 / 概率通道」「实体 / Entity」「同频 / 广场」，以及视频书 / premium_stream 上的「推荐理由」泛标签。
+- G2 不破：结论句唯一来源云侧 `primaryText/primarySpans`，端不拼句；`join(spans.text)==primaryText` 不变量保持。
+
+### 24.3 商用滩头：旅行 + 摄影「同趣搭子」
+
+- 架构横向通用，但商用化先落一个滩头：旅行 + 摄影的「同趣搭子 / 拍摄搭子 / 城市扫街局」。
+- 选择理由：`quwoquan_data` 正在产景区 / 线路内容（天然供给）；旅行 / 摄影是「共同兴趣 → 真实行动」最自然的场景；竞品在此处正好都断链。
+- 与 §22 垂类实例化对齐：滩头即 §22 `vertical=travel_photography`，本章不新增 kind，仅在产品层明确「垂类先行 + 单城密度」的商用定位。
+
+### 24.4 竞品差异化矩阵（赢在哪 / 绝不硬碰哪）
+
+- 头条·抖音：不比分发效率；赢在「刷完之后能和谁建立关系」，把消费效率升级为关系形成效率。
+- 小红书：不比种草 / 搜索；赢在「同趣的人与圈如何沉淀成可追溯关系」。
+- 微信：不碰熟人链；赢在「陌生同趣的安全发现」，不破坏关注 / 互关 / 拉黑门禁。
+- 马蜂窝：内容深度打平即可；赢在「游记之后能约到人」。
+- 携程·去哪儿：不做 OTA 交易正面战；赢在「决定去哪 / 和谁去」的关系前置，交易可后接分佣。
+- 图虫：赢在「摄影同趣的线下化」（拍摄搭子 / 城市扫街局），而非图库授权本身。
+- Pinterest：把「一个人的灵感板」升级为「和你收藏一样的人在这里」（solo intent → social intent）。
+
+### 24.5 安全护城河（不是脚注，是卖点）
+
+- 陌生人线下正是微信 / 小红书刻意回避的高责任区；v3 反过来把它做成卖点：**行动建立在可证交集之上，比纯陌生社交更安全**。
+- 护城河能力位：实名 + 双向同意 + 交集证据（不是看脸）+ 模糊位置（geohash 降精度）+ 风控配额 + 青少年模式关闭附近 / 见面 / 陌生打招呼。
+- 落地遵循 §8 隐私风控默认与 `07-error-permission-semantics` / `10-runtime-error-cutover`，重行动能力位对未实名 / 青少年 / 被拉黑关闭。
+
+### 24.6 北极星、商业模式假设与冷启动集中度
+
+- 北极星：**可行动交集完成数 / 关系形成数**（关注、互关、入圈、约伴发起 / 接受、线下局成行），而非 DAU / 时长。
+- 护栏反指标：打招呼骚扰率、负反馈率、拒绝率、举报率、青少年 / 未实名重行动拦截率。
+- 漏斗：交集曝光 → 证据展开 → 行动点击 → 行动完成 → 关系形成 → 回流复访。
+- 商业模式假设（分期，先不实现，IA / 数据不得堵死）：旅行交易分佣（票务 / 住宿 / 门票后接 OTA）、线下局 / 搭子撮合抽成、摄影垂类变现（付费拍摄局 / 器材 / 授权）、交集配对会员（优先打招呼 / 可信旅伴认证 / 附近能力落地后）、本地向导 / 达人经济。
+- 冷启动集中度：先垂类（旅行+摄影）+ 先地域（单城 / 单热门目的地）做密度；机会来源为内容标签、实体关注、圈子加入、我的交集列表、共同想去清单，全部可解释，不做纯黑盒。
+
+### 24.7 用户价值阶梯与留存环
+
+- 钩子（第一次打开）：可证交集解释——「你和拍这张的人都去过武康路 / 都关注了 XX」，比「为你推荐」真诚，建立信任。
+- 习惯（按活跃节奏回来）：「我的交集」收件箱——新鲜、可行动、不打扰；高频用户可见今日新增，低频用户可见上次登录以来的新增；打开清零、下钻可行动、冷却防打扰。
+- 兑现（愿意换 App 的理由）：安全的「共同想去 → 约伴 / 搭子 / 线下局」，把兴趣变成真实同行。
+- 沉淀（长期黏性）：关系资产可见成长（「你和林清越的交集变强了」），交集从一次性解释变成可累积的社交资本。
+- 诚实边界：若只交付「解释 + 轻行动」，产品仅是「小红书关注 + 一句理由」的好特性，不是能换 App 的产品楔子；故 §24.9 的 C0 最薄闭环是 v3 商用差异化的必做项。
+
+### 24.8 v3 信息架构（七触点，不孤岛）
+
+```mermaid
+flowchart LR
+  Home["首页内容流"] --> WorkBrowser["视频书"]
+  Home --> ObjectHome["四大主页"]
+  WorkBrowser --> ObjectHome
+  InterestMatch["交集配对 Launcher"] --> MyIntersections["我的交集"]
+  InterestMatch --> Search["搜索/网络结果"]
+  ObjectHome --> Actions["关注/打招呼/入圈/讨论/发记录/约伴"]
+  Actions --> Feedback["行为回流"]
+  Feedback --> Recommendation["推荐/交集配对"]
+  Recommendation --> Home
+```
+
+七触点密度与职责（与 §21.5.5 五面矩阵一致并扩展）：
+
+| 触点 | 主表达 | 密度 | 行动重心 |
+|---|---|---|---|
+| 视频书（works immersive） | 底部一句 `primaryText/primarySpans` | 底部单句 + 点击后详情 sheet | 进人 / 圈 / 实体主页；轻行动 |
+| 首页内容卡 | 紧凑 chip 单句 | 1 句 + lifecycle 仅「新」 | 进对象；关注 |
+| 用户主页（他人） | 你们的交集 + TA 打动的人 | 证据组 ≤5 | 关注 / 打招呼 / 私信 |
+| 我的主页 | 我的交集 + 我打动的人 + 我的交集列表 | 收件箱 + 分桶弱标 | 我的交集下钻（窗口按用户节奏动态解释） |
+| 圈子主页 | 我的交集 + 圈子打动的人 | 证据卡 + 成员簇 | 加入 / 讨论 / 看成员 |
+| 实体主页 | 我的交集 + 这里打动的人 + 关于这里 | 证据卡 + 记录单句 | 关注 / 发记录 / 相关圈子 /（C0）约伴 |
+| 交集配对 launcher | 导流卡（不产候选） | launcher | 导流到我的交集 / 搜索 / 网络结果 |
+
+### 24.9 C0 差异化必做切片：共同想去 → 约伴（v3 商用证明）
+
+- 目标：证明 v3 能把「共同兴趣」变成「真实同行意向」的一次安全行动，用**已有信号**落地，不依赖新 LBS / 实时定位。
+- 信号：`coWishlistedEntity`（共同想去）+ 关注边 + 既有交集证据，形成「你们都想去 XX / 都拍过 XX」。
+- 行动：`start_companion`（发起约伴）作为唯一新开放重行动，复用既有建群 / `GreetingRequest` 落点，不新增第二套请求状态机。
+- 边界：不启用 `coPresentHere / nearbyAffinity / meet_nearby`（实时 / 附近仍 deferred）；`start_companion` 走 safetyGate，未满足降级为「查看证据 / 进入对象」，绝不伪造成行；约伴必须有真实承接页（复用既有建群 / 行程页），无目标页不得下发 actionHint；`coWishlistedEntity` / `start_companion` 未在 registry active 则先 metadata-first 登记再实现，无稳定 wishlist 数据源则 GATE_BLOCK 如实上报。
+
+### 24.10 Out of Scope 与 deferred 诚实边界
+
+- deferred：附近 / 实时同趣（`coPresentHere / nearbyAffinity / meet_nearby`）、`trip/meetup` 聚合与线下局、深排平台（per-candidate 关系精排、模型分驱动同趣）、PremiumPoolSource 生产闭环、商业购票 / 预订、prod 发布。
+- 诚实红线：deferred 能力不得出现在正式可执行 UI；`tripDetail/meetupDetail/nearby` 相关 kind/actionKey 只能作为不可执行规划口径或跳转真实替代面，并有测试证明不伪造候选（对应 UAT-8）。
+- C0 只做「共同想去 → 约伴」最薄闭环，**不等于**真实结伴同行聚合，二者边界不得混淆。
+
+### 24.11 与既有章节关系（不推翻，复用）
+
+- §21 三层架构（Graph/Lifecycle/Propagation/Projection）、§22 旅行摄影垂类、§23 去桥接可扩展全部保留；v3 是它们之上的产品化与商用化定位层。
+- 契约字段真相源仍是 §21.8 / §23 与 `contracts/metadata/**`；本章不新增字段真相源，只定义产品主轴、滩头、差异化、北极星、价值阶梯、七触点与 C0 边界。
+
+### 24.12 实现分期与验收意图
+
+- 已完成（工作包 A 规格冻结 + 工作包 B 触点审计 + 工作包 M0 契约模型底座 + 工作包 C 四主页展示与行动闭环，2026-07-01/02）：
+  - A：冻结本章 + 术语表主轴（`00_GLOBAL_TERMINOLOGY.md` §3/§18.7）+ L2 spec 七触点 + acceptance v3 项（SIT5）+ CR-20260701-083。
+  - B：完成 v3 七触点端侧现状审计 + P0 断点清单 + 第二真相源风险清单（见 §24.13），每个断点归属到 M0/C0/C/D/E/F 或 deferred，作为 C0–F 的施工依据；不进入代码修复。
+  - M0：契约模型底座五维一等化——**M0.1** safetyGate（`gateKeys` 闭集 + `requiredGates` + `fuzzyLocation` geohash + 重行动 `errors.yaml`）；**M0.2** moment 意图时态闭集（retrospective/current/prospective，与 lifecycleState 正交，共同想去 prospective deferred 占位）；**M0.3** 行动阶梯 `tier/targetAvailability`（actionKeyMeta 19 全覆盖）；**M0.4** subject/feedback 一等化（reason `subjectId/subjectContext` + `feedbackKinds` 闭集）；**M0.5/M0.6** 契约漂移收敛（actionKey 19 端云对齐、helpType `audience` 已有、无源 kind 均 deferred）；**M0.7** 行动路由类别 `dispatch` 一等化（顶层 `actionDispatch` 闭集 assistant|navigate|message|companion|connect，全链 codegen 下发，端退休手写 `isHeavySocialAction`、`isAssistant/isCompanionAction` 委托 codegen dispatch，首页「有人同行」徽标收敛为精确 `dispatch==companion`）。全部经 `verify_intersection_kind_registry.py` + runtime error cutover + 端 contract 测试验证。
+  - C：四主页展示与行动闭环落地（含 2026-07-02 资深 PM/UX 签字返工）。云侧 `IntersectionActionHintView/actionHintsForReason` 消费生成表下发 `actionTier/requiredGates/targetAvailability/dispatch`；端侧 `IntersectionTargetNavigator.openActionHint` 按 `dispatch + targetAvailability` 结构化分发，`assistant/navigate` 的 `requiredGates`（login 等）**不在通用交集组件内拦截**，而是导航到承接页（userProfile/circleDetail/homepageDetail）由承接页复用既有 gate + `AuthContinuation` 续接完成关注/加入等写操作（§15 登录无死循环），不在交集组件重造第二套登录逻辑（R24）；`message/companion/connect` 端侧无真实卡内 handler 时诚实不显示、`deferred` 不执行（§24.10），死参数 `gateResolver/gated` 已移除（R26）。`ObjectIntersectionPreviewCard` 退化为 `ObjectIntersectionSection` 薄包装，四主页运行时唯一渲染/导航真相源收敛为统一 section/card；关注/加入/进入讨论/看共同来源等 login 门 navigate 行动恢复可见可点，行动 pill 优先取代安静副句、无可执行行动时回落共同证据副句；空态由统一 section 承担标题与行动区语义。返工修复了首版「login 门行动被系统性隐藏、四主页退化为只读+看对象」的 P0。
+- 已完成（工作包 D 视频书交集表达 local_contract，2026-07-02）：
+  - D：视频书底部 `primaryText/primarySpans` 继续只读云侧投影，span/fallback 点击统一经 `IntersectionTargetNavigator` 进对象/目标；fallback 先消费 C 统一 `actionTargetId/objectKind`（`IntersectionTargetNavigator.targetForReason`），再退到 `sampleVisuals` / 维度下钻 / 详情 sheet，不新增视频书专属导航链；`tag_click` 补齐 `feedRequestId/channelId/rankingVersion/reasonVersion` 与 post 级 `recallPath/contentVertical/supplySource`，修复「视频书交集→点击」归因断链。local_contract 覆盖 span 成功路径、fallback sampleVisual 路径、fallback actionTarget 路径、详情 sheet 最小轻行动 UX、首页同族链路与 tracker 序列化。
+- 后续（工作包 E → C0/F 逐包下发，`/plan-next` 单独规划）：E 端云真实数据（R-IX05，基础设施阻塞非模型缺口）；C0 共同想去→约伴最薄闭环；F 推荐与交集配对差异化。
+- 验收意图：A/B 为 `SIT / contract`（文档一致性 + acceptance 路径存在性 + 审计事实与代码一致）；M0 为 `contract`（metadata↔codegen↔端云 DTO 一致，已全绿）；C 为 `local_contract`（云 hydration 契约 + 端 widget/navigation/主页测试 + 横切门禁）；C0/D/F 继承 `local_contract / api_integration / user_acceptance`，UAT-1..9 见 `intersection-unified-experience/acceptance.yaml` 与 v3 CR。
+- CDE 准入结论：行动阶梯（tier）、安全门（gateKeys/requiredGates）、意图时态（moment）、主体反馈（subject/feedbackKinds）、路由类别（dispatch）五维模型一等化且无源诚实 deferred，**模型非妥协**；C 已消费真相源完成四主页展示与行动闭环，后续 C0/D/F 继续消费同一模型，不得回退端侧手写分类或旧预览渲染。
+
+### 24.13 工作包 B：v3 七触点端侧现状审计（2026-07-01）
+
+> 审计口径：只读盘点当前 `quwoquan_app/lib/**` 交集触点的数据源、行动消费、断点，不做代码修复。断点按「先立 M0 再进 CDE」原则归属工作包。P0 = 阻断 v3 差异化/商用主轴；P1 = 影响体验或归因但不阻断主轴。
+
+#### 24.13.1 七触点现状矩阵
+
+| 触点 | 关键文件 | 数据源现状 | 行动消费现状 | 断点 | 归属 |
+|---|---|---|---|---|---|
+| 视频书 | `ui/discovery/widgets/works_immersive_viewer.dart` | 底部 `primaryText/primarySpans` 已渲染；含 `feedRequestId`（6 处） | 点击进对象；轻行动 | 已收敛：span/fallback 点击统一经 `IntersectionTargetNavigator`，`tag_click` 透传 `feedRequestId` 与推荐归因上下文（2026-07-02 local_contract） | D ✅ |
+| 首页内容卡 | `ui/discovery/widgets/home_multi_form_feed_post_cards.dart` | 单句 chip | 进对象/关注 | 已收敛：硬编码中文地名启发式移除，只信云侧 `actionHints` + `dispatch==companion`（2026-07-01/02） | C ✅ |
+| 用户主页(他人) / 我的主页 / 圈子主页 / 实体主页 | `components/object_page/object_intersection_section.dart` | 组件已实现四槽 + 证据组 | 卡点击/证据下钻 | 已收敛：旧 preview 运行时退化为统一 `ObjectIntersectionSection` 薄包装，空态/查看全部/行动分发均走统一 section/card（2026-07-02） | C ✅ |
+| 对象页行动分发 | `components/object_page/intersection_target_navigator.dart` | 消费 `IntersectionTarget` | 仅按 target 类型跳页 | 已收敛：`openActionHint` 按 `dispatch/targetAvailability` 分发，navigate（含 login 门）导航到承接页由承接页续接门（§15），message/companion/connect 无真实 handler 诚实降级、deferred 不执行（2026-07-02，含 PM/UX 返工去 gated） | C ✅ |
+| 影响力预览行动 | `components/object_page/object_impact_preview_card.dart` | `AuthorImpactItem` 等 | `onTap/onPropagationTap` 均落 `_showEvidence` | 已收敛到共同组件侧：`ObjectIntersectionCard/StatementRow` action pill 展示可执行/安全导航 hint（含 login 门 navigate，门交承接页续接），deferred/unsupported 无真实 handler 不显示（2026-07-02，含 PM/UX 返工） | C ✅ |
+| 交集配对 launcher | `ui/interest_match/pages/interest_match_page.dart` | 导流卡 | 导流到我的交集/搜索/网络结果 | 需守「不产候选」；`R-IX01-04` 未闭前不得宣称模型分同趣（P1） | F |
+| 我的交集收件箱 | `ui/user/pages/my_intersection_inbox_page.dart` | 收件箱汇总 | 下钻/清零 | 主标题固定「我的交集」；“今日”仅作最小时间粒度说明，窗口需支持高频/低频用户差异；只读汇总契约待中期（P1） | 术语 + F |
+| 同趣搭子（C0 差异化） | `cloud/runtime/recommendation/intersection_action_keys.dart`（仅常量） | — | — | **`start_companion` 仅 actionKey 常量，无 UI 分发、无 safetyGate、无承接页**（P0，v3 差异化必做） | C0（依赖 M0.1/M0.2 + E） |
+
+#### 24.13.2 第二真相源 / 契约漂移风险清单
+
+| 风险 | 现状 | 影响 | 归属 | 收敛状态（2026-07-01） |
+|---|---|---|---|---|
+| actionKey 端侧闭集 vs registry | 端 `intersection_action_keys.dart` 12 项 ≠ registry 19 项 | 行动阶梯不一致、无法唯一映射 kind→actions | M0.3/M0.5 | ✅ 已收敛（端 19 项 + codegen 闭集一致测试） |
+| safetyGate 缺失 | 无一等 `safetyGate` 结构与 `gateKeys` 闭集 | 重行动（约伴/私信）无统一权限门，易漏拦截/死循环 | M0.1 | ✅ 已收敛（gateKeys 闭集 + requiredGates + errors.yaml 拦截码映射） |
+| moment 意图时态缺一等表达 | 「共同想去」仅 deferred kind，无 `moment(retrospective/current/prospective)` | 无法区分「去过」与「想去」，C0 无模型位 | M0.2 | ✅ 已收敛（moments 闭集 + 每 kind moment，共同想去 prospective deferred 占位） |
+| subject/feedback 未一等化 | 无显式 `subject`、负反馈未驱动降权/冷却 | 归因主体不清、无冷却防打扰 | M0.4 | ✅ 已收敛（reason subjectId/subjectContext + feedbackKinds 闭集，降权/冷却消费归 F） |
+| 行动路由类别第二真相源 | 端手写 `isAssistant/isHeavySocialAction` 枚举、companion badge 用宽集 heavy 误标话题房/语音房/心动为同行 | 端云路由分发漂移 + 徽标语义偏差 | M0.7 | ✅ 已收敛（actionKeyMeta 增 dispatch 闭集，端委托 codegen，退休 isHeavySocialAction，badge 收敛为 dispatch==companion） |
+| 首页硬编码地名 | `home_multi_form_feed_post_cards.dart` 内联地名 | 第二套业务数据、无法端云对齐 | C | ✅ 已收敛（去启发式，徽标只信云侧 actionHint + 防回归契约测试） |
+| actionHint 四字段云侧未下发 | `IntersectionActionHintView` 仅下发 key/label/target/isPrimary/priority | 端只能靠 DTO default 或手写逻辑，无法真正消费 M0 行动阶梯 | C | ✅ 已收敛（云侧 hydration 从 generated 表下发 tier/requiredGates/targetAvailability/dispatch，并有 Go 契约测试） |
+| 四主页旧预览链路 | `ObjectIntersectionPreviewCard` 内部独立行渲染/查看全部/span 导航 | 与 `ObjectIntersectionSection` 形成第二套 UI/导航真相源 | C | ✅ 已收敛（运行时退化为统一 section 薄包装；旧独立渲染/导航函数删除） |
+| feedRequestId 归因断链 | 交集 span/fallback 点击未透传 | 「交集→点击→转化」漏斗断裂 | D | ✅ 已收敛（2026-07-02：视频书 span/fallback `tag_click` 透传 `feedRequestId/channelId/rankingVersion/reasonVersion/sourceRef/evidenceId`） |
+
+#### 24.13.3 审计结论
+
+- v3 三大差异化（安全约伴 / 共同想去→约伴 / 行动阶梯）在端侧均有 P0 断点，且根因在**契约模型缺位**（safetyGate/moment/行动阶梯），非单纯端侧接线；故必须**先立 M0 契约底座再进 C0–F**，否则会用端侧硬编码 / deferred kind 妥协。
+- **更新（2026-07-01 M0 落地）**：M0.1–M0.7 契约模型底座已全部收敛（见 §24.13.2 收敛状态列），行动阶梯/安全门/意图时态/主体反馈/路由类别五维一等化，模型非妥协；四主页 navigator 分发所需的 dispatch/tier 真相源已就绪。
+- **更新（2026-07-02 C/D 落地）**：四主页统一表达与对象页行动分发已消费 M0 真相源完成接线；`ObjectIntersectionSection/ObjectIntersectionCard/IntersectionTargetNavigator` 成为运行时唯一渲染与行动分发路径。D 已补齐视频书 span/fallback 点击 `feedRequestId` 归因与最小 UX local_contract。剩余最高价值未接线点为 C0 约伴（`start_companion` 真实承接与安全门 continuation）、F 推荐/交集配对差异化，以及 E 真实端云数据闭环（R-IX05 runner-blocked）。
+- **更新（2026-07-02 C 资深 PM/UX 签字返工）**：审核发现 C 首版把 `login` 门 navigate 行动一刀切隐藏/判 gated，导致关注/加入/进入讨论/看共同来源等核心轻行动对已登录用户也不显示，四主页退化为「只读 + 看对象」，低于「小红书关注 + 一句理由」下限。返工把 navigate/assistant 的门交承接页 + `AuthContinuation` 续接（§15，不在交集组件重造登录逻辑，R24），恢复 login 门轻行动可见可点，`message/companion/connect` 保持诚实不显示、移除死的 `gateResolver/gated`（R26）。`message_person`（私信）真实承接在 userProfile 页（`openOrCreateDirectConversation` + mutualConsent/blocked/rateLimit 门），交集卡不重复暴露 message dispatch（避免绕过 mutualConsent 门），归后续社交连接工作包。
+- 数据供给侧（作者维度补全防穿帮 / 游记模板图文识别 / 老稿降权）是 `representativeActor` 可信度上游前置，本轮 Out of Scope，另开 `/plan-next`。

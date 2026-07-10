@@ -9,7 +9,7 @@
 - 各领域对“接入完成”的理解不一致，只补 API 或只补测试，无法形成统一验收口径
 - `platform-ops` 与 `product-ops` 接入动作会退化为手写后台接口、手写检查清单和人工对表
 - 三类面虽然在概念上存在，但缺少领域级元数据声明，无法做到低代码标准接入
-- 当前 `deploy/shared/process_domain_mapping.yaml` 只表达 domain -> process，无法支撑 `user-plane / platform-control-plane / product-control-plane` 的任意部署组合
+- 当前 `quwoquan_ops/environments/process_domain_mapping.yaml` 只表达 domain -> process，无法支撑 `user-plane / platform-control-plane / product-control-plane` 的任意部署组合
 - 最终统一验收只能人工阅读大量领域产出，无法通过 metadata、gate 与门户聚合状态自动收口
 
 本节点的目标，是冻结一套**领域统一接入验收矩阵**与其配套的 metadata / command / rule / gate / deploy 上位规格，使后续每个领域都能通过“补元数据 + codegen + 最小 glue code + 测试资产”的方式标准接入，而不是靠大量手写代码才能进入统一控制面体系。
@@ -135,7 +135,7 @@
 
 ### R6：冻结 plane-aware deployment binding
 
-当前 `deploy/shared/process_domain_mapping.yaml` 只表达 `domain -> process`，不能支撑三类面任意组合部署。必须冻结一套面向三类面的部署绑定模型。
+当前 `quwoquan_ops/environments/process_domain_mapping.yaml` 只表达 `domain -> process`，不能支撑三类面任意组合部署。必须冻结一套面向三类面的部署绑定模型。
 
 推荐目标态：
 

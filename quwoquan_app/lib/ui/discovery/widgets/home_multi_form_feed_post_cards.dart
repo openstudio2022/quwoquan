@@ -203,12 +203,10 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
 
                 const SizedBox(height: _feedCardSectionGap),
                 _HomeConnectionBadgesRow(
-                  item: item,
                   sourceCircleName: widget.sourceCircleName,
                   primaryReason: primaryReason,
                 ),
                 if (_HomeConnectionBadgesRow.hasAnyBadge(
-                  item: item,
                   sourceCircleName: widget.sourceCircleName,
                   primaryReason: primaryReason,
                 ))
@@ -554,24 +552,21 @@ class _FollowingArticleCard extends StatelessWidget {
 
 class _HomeConnectionBadgesRow extends StatelessWidget {
   const _HomeConnectionBadgesRow({
-    required this.item,
     required this.sourceCircleName,
     required this.primaryReason,
   });
 
-  final PostBaseDto item;
   final String sourceCircleName;
   final IntersectionReason? primaryReason;
 
   static bool hasAnyBadge({
-    required PostBaseDto item,
     required String sourceCircleName,
     required IntersectionReason? primaryReason,
   }) {
     final hasInlineIntersection = _shouldShowIntersection(primaryReason);
     return (!hasInlineIntersection && _entityLabel(primaryReason) != null) ||
         sourceCircleName.trim().isNotEmpty ||
-        _showCompanionBadge(item, primaryReason);
+        _showCompanionBadge(primaryReason);
   }
 
   static String? _entityLabel(IntersectionReason? reason) {
@@ -594,26 +589,26 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
     return null;
   }
 
-  static bool _showCompanionBadge(
-    PostBaseDto item,
-    IntersectionReason? reason,
-  ) {
-    if (reason != null) {
-      for (final hint in reason.actionHints) {
-        if (IntersectionActionKeys.isHeavySocialAction(hint.actionKey)) {
-          return true;
-        }
+  static bool _showCompanionBadge(IntersectionReason? reason) {
+    // 「有人同行」徽标只由云侧下发的约伴同行类 actionHint 驱动，判定真相源为 codegen
+    // actionKeyMeta.dispatch==companion（start_companion / join_trip / join_meetup / meet_nearby，M0.7）；
+    // 话题房 / 语音房 / 心动（dispatch==connect）与私信（dispatch==message）不再误标为同行。
+    // 端只读 actionKey → dispatch，绝不按标题/正文地名字符串猜测约伴意图
+    // （守元数据驱动 R06 + §24.10 诚实红线，不伪造行动信号）。
+    if (reason == null) {
+      return false;
+    }
+    for (final hint in reason.actionHints) {
+      if (IntersectionActionKeys.isCompanionAction(hint.actionKey)) {
+        return true;
       }
     }
-    final text = '${item.normalizedTitle} ${item.normalizedBody}';
-    const travelHints = <String>['稻城', '峨眉', '川西', '结伴', '同行'];
-    return travelHints.any(text.contains);
+    return false;
   }
 
   @override
   Widget build(BuildContext context) {
     if (!hasAnyBadge(
-      item: item,
       sourceCircleName: sourceCircleName,
       primaryReason: primaryReason,
     )) {
@@ -649,7 +644,7 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
       );
     }
 
-    if (_showCompanionBadge(item, primaryReason)) {
+    if (_showCompanionBadge(primaryReason)) {
       chips.add(
         _badgeChip(
           context,
@@ -792,16 +787,24 @@ class _FollowPillButton extends StatelessWidget {
 class _PostIntersectionLine extends StatelessWidget {
   const _PostIntersectionLine({
     required this.reason,
+    required this.contextObjectName,
+    required this.contextObjectTarget,
     this.onSpanTap,
     this.onFallbackTap,
   });
 
   final IntersectionReason reason;
+  final String contextObjectName;
+  final IntersectionTarget? contextObjectTarget;
   final void Function(IntersectionTextSpan span)? onSpanTap;
   final VoidCallback? onFallbackTap;
 
   @override
   Widget build(BuildContext context) {
+    final displayReason = displayReadyIntersectionReason(reason);
+    if (displayReason == null) {
+      return const SizedBox.shrink();
+    }
     final accent = AppColors.iosAccent(context);
     // 任务 B · 分层强度：事实型交集（共同关注/到访/收藏）视觉强于推测型，
     // 推测型背景/描边更弱、导语颜色向次级文本混合，但仍保留可点击 affordance。
@@ -830,8 +833,8 @@ class _PostIntersectionLine extends StatelessWidget {
           vertical: DiscoveryFeedSpacing.homeFeedIntersectionPadding,
         ),
         child: InteractiveIntersectionText(
-          spans: reason.primarySpans,
-          fallbackText: reason.primaryText,
+          spans: displayReason.primarySpans,
+          fallbackText: displayReason.primaryText,
           maxLines: 1,
           onSpanTap: onSpanTap,
           onFallbackTap: onFallbackTap,
@@ -840,8 +843,8 @@ class _PostIntersectionLine extends StatelessWidget {
           // 字重仍保持常规（见 interactive_intersection_text_test）。
           accentFontWeight: AppTypography.medium,
           baseStyle: TextStyle(
-            fontSize: AppTypography.iosFootnote,
-            height: AppSpacing.textLineHeightFootnote,
+            fontSize: AppTypography.feedBodyResponsive(context),
+            height: AppSpacing.textLineHeightBody,
             color: AppColors.iosLabel(context),
             letterSpacing: 0,
           ),
@@ -863,17 +866,25 @@ bool _isFactIntersection(IntersectionReason reason) {
 
 Widget? _buildPostIntersectionRow({
   required IntersectionReason? reason,
+  required String contextObjectName,
+  required IntersectionTarget? contextObjectTarget,
   required void Function(IntersectionTextSpan span)? onSpanTap,
   required VoidCallback? onFallbackTap,
   Key key = const ValueKey('home-post-inline-intersection'),
 }) {
-  if (!_shouldShowIntersection(reason)) {
+  if (reason == null) {
+    return null;
+  }
+  final displayReason = displayReadyIntersectionReason(reason);
+  if (displayReason == null || !_shouldShowIntersection(displayReason)) {
     return null;
   }
   return KeyedSubtree(
     key: key,
     child: _PostIntersectionLine(
-      reason: reason!,
+      reason: displayReason,
+      contextObjectName: contextObjectName,
+      contextObjectTarget: contextObjectTarget,
       onSpanTap: onSpanTap,
       onFallbackTap: onFallbackTap,
     ),

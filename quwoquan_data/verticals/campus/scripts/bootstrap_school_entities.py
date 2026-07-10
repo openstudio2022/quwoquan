@@ -19,7 +19,7 @@ from _common.paths import NOW_ISO, PUBLISH_ROOT, RUNTIME_ROOT
 
 CATALOG_DIR = RUNTIME_ROOT / "seed" / "school_catalog"
 ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "机构" / "学校"
-ADMIN_REGIONS_PCA_FILE = DATA_ROOT / "data" / "admin_regions" / "pca.json"
+ADMIN_REGIONS_PCA_FILE = DATA_ROOT / "reference" / "admin_regions" / "pca.json"
 MUNICIPALITIES = {"北京市", "天津市", "上海市", "重庆市"}
 
 UNIVERSITY_LEVEL_MAP = {"985": "985高校", "211": "211高校", "双一流": "双一流", "本科": "大学", "专科": "高职院校"}

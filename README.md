@@ -1,144 +1,61 @@
-# 趣我圈 (QuWoQuan) 项目
+# 趣我圈工程目录说明
 
-趣我圈是一个社交内容应用项目，包含多个子模块。
+本仓库按领域自治和 Ops 横切面治理组织。顶层只保留长期工程域；运行产物、日志、报告和本地状态统一进入 `.qwq_output/`，可整体删除重跑。
 
-## 项目结构
-
-```
-quwoquan/
-├── specs/                 # 全栈规范入口（Agent 入口、特性树、契约索引、端云协同）
-├── changes/               # 全量特性目录（特性台账 + 特性实例）
-├── scripts/               # 全栈自动化脚本（gate/verify/模板）
-├── .cursor/               # 全栈 AI 规则与命令
-├── openspec/              # OpenSpec 能力规格与变更（从根目录运行，不依赖子模块）
-├── quwoquan_app/          # Flutter 端侧（子模块）
-│   ├── .cursor/           #   端侧 AI 规则/命令/skills
-│   └── current/            #   归档文档（仅参考）
-├── quwoquan_service/      # Go 云侧
-│   ├── contracts/         #   端云契约（metadata + OpenAPI + 领域契约）
-│   ├── runtime/           #   公共运行时（横切能力统一实现）
-│   ├── specs/             #   各服务 API 规格
-│   └── platform/          #   可观测/配置平台
-└── Makefile               # verify + gate 入口
-```
-
-## 规范导航
-
-- **全局入口**：`specs/README.md`
-- **Agent 入口**：`specs/00_AGENT_MASTER_SPEC.md`
-- **唯一主线**：`specs/00_MASTER_DEVELOPMENT_FLOW.md`
-- **产品概念基线**：`specs/00_PRODUCT_CONCEPT_SYSTEM.md`（品牌定位、身份、主页、群组、群、内容、会话、小趣与跨域对象关系）
-- **全局术语表**：`specs/00_GLOBAL_TERMINOLOGY.md`（用户语言、PRD 语言、技术语言、禁用词与旧词迁移映射）
-- **业务对象设计**：`quwoquan_service/contracts/metadata/DESIGN.md`
-
-## 端云一体化交付（特性粒度）
-
-本仓库以**特性粒度**推进标准主链路：
+## 顶层目录
 
 ```text
-/explore → /prd → /design → /dev → /commit → /deploy
+quwoquan_app/       Flutter App 工程，拥有 App 配置、发布规则、App 自用包和端侧观测片段。
+quwoquan_service/   服务端工程，拥有服务契约、服务配置、服务部署模板和服务观测片段。
+quwoquan_data/      数据工程，拥有数据任务、模板、发布真相源和数据发布规则。
+quwoquan_ops/       Ops 横切控制面，拥有 stackctl、gate、CI、环境拓扑、策略、全局可观测和 Ops Portal。
+specs/              当前产品、架构、特性树、验收与 changelog 的唯一规格体系。
+docs/               长期工程说明、Codex 工作流、外部依赖登记和正式风险 backlog；不承载功能规格真相源。
+.github/            CI 工作流入口。
+.qwq_output/        gitignored，本地运行输出、release package、验证证据、日志、指标和临时状态。
 ```
 
-其中：
+## 本地忽略目录
 
-- `/dev` 负责按 TDD 实施、完成 `T1~T4` 四层自验证、完成 `gray-release ready` 检查，并自动归档
-- `/commit` 读取 `/dev` 自动归档结果后执行提交
-- `/archive` 仅作兼容补归档入口，标准流通常不单独使用
-- `/try → /land` 保留原型链路与基线化/归档语义
-- **创建特性目录（Ask/Plan 输出落盘）**：
+这些目录可能在开发机上出现，但不是工程源码域，不参与职责划分：
+
+```text
+.worktrees/         本地 Git worktree 缓存。
+ref/                外部参考实现或资料，不提交。
+.vscode/            本地 IDE 配置。
+quwoquan_ops/portal/node_modules/ Ops Portal Node 依赖缓存。
+quwoquan_app/build/ Flutter 构建缓存。
+quwoquan_app/.dart_tool/ Dart/Flutter 工具缓存。
+```
+
+禁止恢复这些历史顶层目录：
+
+```text
+agent_ops, deploy, artifacts, releases, apps, packages, state, contracts,
+changes, openspec, app_log, runtime, build, tmp, tools, githooks, social_content_app
+```
+
+## 目录边界
+
+- 领域私有资产归领域：服务 Dockerfile、k8s、compose、release config 位于 `quwoquan_service/services/<service>/`；App 发布资产位于 `quwoquan_app/deploy/`；数据发布资产位于 `quwoquan_data/deploy/`。
+- Ops 只放横切能力：统一调度、环境拓扑、跨域策略、gate、CI/CD、全局可观测、runbook 和 Portal。
+- 根目录不承载工具 workspace：Ops Portal 的 `package.json`、`package-lock.json` 和 `node_modules` 归 `quwoquan_ops/portal/`，根目录不保留 Node workspace。
+- 生成物只进 `.qwq_output/`：环境相关输出按 `.qwq_output/env/<env>/{runs,observability,release,local}` 归位，repo 工具状态按 `.qwq_output/env/repo/local` 归位，数据工程输出按 `.qwq_output/data/{runs,observability,release,local}` 归位。
+
+## 常用入口
 
 ```bash
-bash scripts/new_feature_fullstack.sh "<slug>"
+python3 quwoquan_ops/cli/stackctl.py package --env alpha --kind runtime --include-services
+python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
+cd quwoquan_ops/portal && npm test && npm run build
+bash quwoquan_ops/gate/gate_repo.sh
 ```
 
-- **正式命令入口（Cursor 命令，统一在根目录）**：
-  - `/explore`、`/prd`、`/design`
-  - `/dev`、`/deliver`、`/commit`、`/deploy`
-  - `/verify`、`/audit`
-  - `/try`、`/land`
-  - `/extend`、`/prune`
+## 分支治理
 
-特性目录位于：`specs/feature-tree/<l1-capability>/<l2-story>/`。
-特性树索引位于：`specs/feature-tree/tree_index.yaml`。
-全量变更台账仍位于：`changes/feature_catalog.yaml`。
+- 长期分支只允许 `dev1.0` 与 `main`。
+- `dev1.0` 是唯一开发主线；`main` 只接受从 `dev1.0` 合入的主干发布更新。
+- 未经明确批准，不允许创建、提交或推送其他分支。
+- 本地执行 `bash quwoquan_ops/gate/scaffold/install-hooks.sh` 后，`pre-commit` 和 `pre-push` 会阻断非白名单分支；repo gate 也会对本地/远端分支做同样校验。
 
-全局规范入口：`specs/README.md`。
-
-## 开发指南
-
-### 统一质量门禁（禁止不遵从变更合入）
-
-- **快速门禁（本地必过）**：
-
-```bash
-make gate
-```
-
-- **全量门禁（包含端侧测试；CI/合入必需）**：
-
-```bash
-make gate-full
-```
-
-- **特性与元数据一致性检查（可单独执行）**：
-
-```bash
-bash scripts/verify_feature_traceability.sh
-bash scripts/verify_contract_metadata.sh
-bash scripts/verify_specs_l1_hierarchy.sh
-bash scripts/verify_feature_tree_refactor.sh
-```
-
-### 安装本地提交阻断（可选）
-
-安装 pre-commit hook：当 staged 变更涉及 `quwoquan_app/` 或 `quwoquan_service/` 时自动运行门禁。
-
-```bash
-bash scripts/install-hooks.sh
-```
-
-### 初始化子模块
-
-如果是首次克隆此仓库，需要初始化子模块：
-
-```bash
-git submodule update --init --recursive
-```
-
-### 更新子模块
-
-```bash
-git submodule update --remote
-```
-
-### 在子模块中工作
-
-```bash
-cd quwoquan_app
-# 进行开发工作
-git add .
-git commit -m "Your commit message"
-git push
-```
-
-然后回到主仓库提交子模块的更新：
-
-```bash
-cd ..
-git add quwoquan_app
-git commit -m "Update quwoquan_app submodule"
-git push
-```
-
-## Git 配置
-
-本项目使用 SSH 密钥进行 GitHub 认证。SSH 密钥已配置在 `~/.ssh/id_ed25519_quwoquan`。
-
-## 贡献指南
-
-1. 在主仓库创建功能分支
-2. 在相应的子模块中进行开发
-3. 提交子模块更改
-4. 在主仓库中更新子模块引用
-5. 提交并推送主仓库更改
-
+规格入口见 `specs/README.md`，文档边界见 `docs/README.md`，Codex 执行约束见 `AGENTS.md` 与 `docs/codex_workflow.md`。

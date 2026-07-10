@@ -44,7 +44,15 @@ enum BehaviorAction {
   joinCircle('join_circle'),
   addContact('add_contact'),
   // 小艺对话浮现兴趣回流（P3）：payload 仅带 tagRefs，不绑定具体 post。
-  assistantInterest('assistant_interest');
+  assistantInterest('assistant_interest'),
+  // 交集条目负反馈（F 推荐与交集配对差异化）：不绑定具体 post，
+  // subjectId 为交集主体对象、feedbackKind ∈ registry.feedbackKinds 闭集
+  // （notInterested/dismiss/rejectGreeting/leaveCircle），驱动云侧 rec:ineg 冷却过滤。
+  intersectionFeedback('intersection_feedback'),
+  // 显式「想去 / 收藏 / 计划去」是 coWishlistedEntity 的真实意图源。
+  // 统一走 BehaviorRepository，不新增并行 API。
+  wishlistAdd('wishlist_add'),
+  wishlistRemove('wishlist_remove');
 
   const BehaviorAction(this.wireValue);
 
@@ -125,6 +133,10 @@ class BehaviorEvent {
     this.clientEventId,
     this.state,
     this.contentType,
+    this.objectId,
+    this.objectKind,
+    this.displayName,
+    this.sourceSurface,
     this.tags,
     this.duration,
     this.feedRequestId,
@@ -149,6 +161,13 @@ class BehaviorEvent {
     this.intersectionId,
     this.intersectionClass,
     this.intersectionEvidenceId,
+    this.subjectId,
+    this.feedbackKind,
+    this.motionDirection,
+    this.motionProfile,
+    this.settleMs,
+    this.reducedMotion,
+    this.committed,
   });
 
   final String contentId;
@@ -162,6 +181,18 @@ class BehaviorEvent {
 
   /// Content format: photo, video, article, moment (for ENER type stats)
   final String? contentType;
+
+  /// Wishlist target object id. Defaults to [contentId] for want-to-go events.
+  final String? objectId;
+
+  /// Wishlist target object kind, e.g. homepage/place/route.
+  final String? objectKind;
+
+  /// Human-readable target name for `entity_wishlist_events.displayName`.
+  final String? displayName;
+
+  /// Surface id / page id where the explicit intent was submitted.
+  final String? sourceSurface;
 
   final List<String>? tags;
 
@@ -237,6 +268,22 @@ class BehaviorEvent {
   /// 交集漏斗归因：被点击/曝光的事实证据项标识（intersectionEvidenceId）。
   final String? intersectionEvidenceId;
 
+  /// 交集负反馈主体对象 id（intersection_feedback 专属，F 推荐差异化）：
+  /// 与 reason.subjectId / actionTargetId 同源（person/circle/place…）。
+  /// 不绑定具体 post，云侧据此写 rec:ineg 交集负反馈冷却集。
+  final String? subjectId;
+
+  /// 交集负反馈类型（intersection_feedback 专属）：属于 registry.feedbackKinds 闭集
+  /// （intersectionFeedbackKinds，端云同源），驱动 subject 跨会话降权 / 冷却。
+  final String? feedbackKind;
+
+  /// Client-side pageflip motion telemetry, used by video-book comfort audits.
+  final String? motionDirection;
+  final String? motionProfile;
+  final int? settleMs;
+  final bool? reducedMotion;
+  final bool? committed;
+
   Map<String, dynamic> toJson() => <String, dynamic>{
     'contentId': contentId,
     'action': action.wireValue,
@@ -245,6 +292,12 @@ class BehaviorEvent {
     if (state != null && state!.isNotEmpty) 'state': state,
     if (contentType != null && contentType!.isNotEmpty)
       'contentType': contentType,
+    if (objectId != null && objectId!.isNotEmpty) 'objectId': objectId,
+    if (objectKind != null && objectKind!.isNotEmpty) 'objectKind': objectKind,
+    if (displayName != null && displayName!.isNotEmpty)
+      'displayName': displayName,
+    if (sourceSurface != null && sourceSurface!.isNotEmpty)
+      'sourceSurface': sourceSurface,
     if (tags != null && tags!.isNotEmpty) 'tagRefs': tags,
     if (duration != null && duration! > 0) 'duration': duration,
     if (feedRequestId != null) 'feedRequestId': feedRequestId,
@@ -280,6 +333,16 @@ class BehaviorEvent {
       'intersectionClass': intersectionClass,
     if (intersectionEvidenceId != null && intersectionEvidenceId!.isNotEmpty)
       'intersectionEvidenceId': intersectionEvidenceId,
+    if (subjectId != null && subjectId!.isNotEmpty) 'subjectId': subjectId,
+    if (feedbackKind != null && feedbackKind!.isNotEmpty)
+      'feedbackKind': feedbackKind,
+    if (motionDirection != null && motionDirection!.isNotEmpty)
+      'direction': motionDirection,
+    if (motionProfile != null && motionProfile!.isNotEmpty)
+      'motionProfile': motionProfile,
+    if (settleMs != null) 'settleMs': settleMs,
+    if (reducedMotion != null) 'reducedMotion': reducedMotion,
+    if (committed != null) 'committed': committed,
   };
 }
 
@@ -349,18 +412,16 @@ const int _gzipThreshold = 512;
 class RemoteBehaviorRepository extends BehaviorRepository
     with WidgetsBindingObserver {
   RemoteBehaviorRepository({
-    OpsEventRepository? eventRepository,
+    this._eventRepository,
     String currentUserId = '',
     String experimentBucket = '',
     CloudHttpClient? httpClient,
     String? baseUrl,
-    String Function()? feedSessionIdProvider,
+    this._feedSessionIdProvider,
   }) : _httpClient = httpClient ?? CloudHttpClient(),
        _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
-       _eventRepository = eventRepository,
        _currentUserId = currentUserId.trim(),
-       _experimentBucket = experimentBucket.trim(),
-       _feedSessionIdProvider = feedSessionIdProvider {
+       _experimentBucket = experimentBucket.trim() {
     _bindLifecycle();
   }
 
@@ -651,6 +712,10 @@ class RemoteBehaviorRepository extends BehaviorRepository
       clientEventId: json['clientEventId'] as String?,
       state: json['state'] as String?,
       contentType: json['contentType'] as String?,
+      objectId: json['objectId'] as String?,
+      objectKind: json['objectKind'] as String?,
+      displayName: json['displayName'] as String?,
+      sourceSurface: json['sourceSurface'] as String?,
       tags: (json['tagRefs'] as List?)?.map((item) => item.toString()).toList(),
       duration: (json['duration'] as num?)?.toDouble(),
       feedRequestId: json['feedRequestId'] as String?,
@@ -675,6 +740,13 @@ class RemoteBehaviorRepository extends BehaviorRepository
       intersectionId: json['intersectionId'] as String?,
       intersectionClass: json['intersectionClass'] as String?,
       intersectionEvidenceId: json['intersectionEvidenceId'] as String?,
+      subjectId: json['subjectId'] as String?,
+      feedbackKind: json['feedbackKind'] as String?,
+      motionDirection: json['direction'] as String?,
+      motionProfile: json['motionProfile'] as String?,
+      settleMs: (json['settleMs'] as num?)?.toInt(),
+      reducedMotion: json['reducedMotion'] as bool?,
+      committed: json['committed'] as bool?,
     );
   }
 

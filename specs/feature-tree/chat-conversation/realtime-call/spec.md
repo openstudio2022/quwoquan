@@ -567,8 +567,8 @@ realtime-gateway 是本特性的关键前置依赖。推荐路径：先实现 re
 
 ```bash
 # 规格/验收结构
-bash agent_ops/scaffold/verify_acceptance_standard.sh
-bash agent_ops/scaffold/verify_feature_tree_refactor.sh
+bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
 # 云侧 metadata + 契约
 cd quwoquan_service && go run ./tools/verify_metadata/ contracts/metadata
 cd quwoquan_service && go test ./services/rtc-service/...

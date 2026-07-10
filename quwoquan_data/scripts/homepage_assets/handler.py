@@ -5,11 +5,12 @@ import argparse
 import sys
 from pathlib import Path
 
-from _common.paths import DATA_ROOT
+from _common.paths import RUNTIME_ROOT
 from homepage_assets.repair import repair_homepage, scan_homepages, write_report
 from quality.dirty_data import entity_homepage_dirty_issues
 
-DEFAULT_REPORT = DATA_ROOT / "runtime" / "reports" / "homepage_assets_report.json"
+# 运行期报告落仓外输出根（数据输出规范：仓内不再接收生成输出）。
+DEFAULT_REPORT = RUNTIME_ROOT / "reports" / "homepage_assets_report.json"
 
 
 def handle_homepage_assets(args: argparse.Namespace) -> None:

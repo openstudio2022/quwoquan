@@ -93,6 +93,88 @@ def _asset_closure_issues(entity_dir: Path, manifest_payload: dict[str, Any], la
     return issues
 
 
+_FIGURE_OPEN_RE = re.compile(r"^:::figure\b(?P<attrs>[^\n]*)$", re.M)
+_GALLERY_OPEN_RE = re.compile(r"^:::gallery\b[^\n]*$", re.M)
+_RELATED_HEADING = "## 相关图片"
+_LEFTOVER_PLACEHOLDER_RE = re.compile(r"\[\[IMG:[^\]]*\]\]|asset://source-inline-\d+")
+_ALLOWED_MANIFEST_ROLES = {"cover", "inline", "related"}
+
+
+def homepage_structure_issues(entity_dir: Path, manifest_payload: dict[str, Any], label: str) -> list[str]:
+    """主页三段结构门（封面 frontmatter + 正文块级内嵌图 + 页尾相关图片）。
+
+    契约（百科主页结构化计划 §6/§7）：
+    - frontmatter 声明唯一 coverImage；正文不重复引用封面资产。
+    - 正文 `:::figure` 一律 layout="fullWidth"（禁 wrapLeft/wrapRight）。
+    - `:::gallery` 只允许出现在文末 `## 相关图片` 章节内，且最多一个。
+    - manifest.assets.role 收敛为 cover/inline/related，cover 唯一。
+    - 零 AI 占位符 / IR 占位残留。
+    """
+    page_path = entity_dir / "page.md"
+    if not page_path.is_file():
+        return []
+    text = page_path.read_text(encoding="utf-8")
+    issues: list[str] = []
+
+    # frontmatter 封面唯一。
+    cover_asset_id = ""
+    if text.startswith("---\n"):
+        end = text.find("\n---\n", 4)
+        head = text[:end] if end != -1 else ""
+        covers = re.findall(r"^coverImage:\s*asset://(\S+)\s*$", head, re.M)
+        if len(covers) != 1:
+            issues.append(f"{label}: frontmatter 必须声明唯一 coverImage（实得 {len(covers)}）")
+        else:
+            cover_asset_id = covers[0].split("/")[-1]
+    else:
+        issues.append(f"{label}: page.md 缺 frontmatter（coverImage 必须在 frontmatter 声明）")
+
+    body = text[text.find("\n---\n", 4) + 5 :] if text.startswith("---\n") and "\n---\n" in text[4:] else text
+
+    # 正文不重复展示封面。
+    if cover_asset_id and re.search(rf"^asset://(?:\S*/)?{re.escape(cover_asset_id)}\s*$", body, re.M):
+        issues.append(f"{label}: 封面资产 {cover_asset_id} 不得在正文重复展示（封面只在 frontmatter）")
+
+    # 占位符残留。
+    leftovers = _LEFTOVER_PLACEHOLDER_RE.findall(body)
+    if leftovers:
+        issues.append(f"{label}: page.md 残留占位符 {sorted(set(leftovers))[:3]}（AI 占位/IR 占位不得进入成品）")
+
+    # figure 布局契约。
+    for m in _FIGURE_OPEN_RE.finditer(body):
+        attrs = m.group("attrs")
+        layout_match = re.search(r'layout="([^"]*)"', attrs)
+        layout = layout_match.group(1) if layout_match else ""
+        if layout != "fullWidth":
+            issues.append(f"{label}: 正文 figure 必须块级 fullWidth，实得 layout={layout or '<缺失>'}")
+
+    # gallery 只允许在页尾相关图片章节。
+    related_pos = body.find(_RELATED_HEADING)
+    galleries = list(_GALLERY_OPEN_RE.finditer(body))
+    if len(galleries) > 1:
+        issues.append(f"{label}: 最多一个 :::gallery（页尾相关图片区），实得 {len(galleries)}")
+    for g in galleries:
+        if related_pos < 0 or g.start() < related_pos:
+            issues.append(f"{label}: :::gallery 只允许出现在文末 '{_RELATED_HEADING}' 章节内")
+    if related_pos >= 0:
+        # 相关图片必须是文末章节：其后不得再有其它 H2 章节。
+        rest = body[related_pos + len(_RELATED_HEADING) :]
+        if re.search(r"^##\s", rest, re.M):
+            issues.append(f"{label}: '{_RELATED_HEADING}' 必须是文末最后一个章节")
+
+    # manifest roles 收敛。
+    assets = manifest_payload.get("assets") or []
+    if isinstance(assets, list):
+        roles = [str(a.get("role") or "") for a in assets if isinstance(a, dict)]
+        cover_count = sum(1 for r in roles if r == "cover")
+        if assets and cover_count != 1:
+            issues.append(f"{label}: manifest.assets 必须恰好一个 role=cover（实得 {cover_count}）")
+        for role in roles:
+            if role and role not in _ALLOWED_MANIFEST_ROLES:
+                issues.append(f"{label}: manifest.assets.role 非法值 {role}（允许 cover/inline/related）")
+    return issues
+
+
 def _catalog_keys(catalogs_root: Path, catalog_name: str, root_key: str) -> list[str]:
     path = catalogs_root / f"{catalog_name}.yaml"
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}

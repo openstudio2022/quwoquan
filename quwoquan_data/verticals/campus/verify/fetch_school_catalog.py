@@ -1,7 +1,8 @@
 """学校数据源采集与归一化
 
 从教育部和地方教委官方数据源采集学校名单，归一化为 ndjson 格式。
-采集结果写入 runtime/seed/school_catalog/ 目录。
+采集结果写入数据运行根的 seed/school_catalog/ 目录；默认位于
+.qwq_output/data/local/runtime/seed/school_catalog/。
 
 当前支持数据源：
   - 教育部《全国普通高等学校名单》→ universities_national.ndjson
@@ -141,7 +142,7 @@ def main():
     print("学校数据源采集")
     print("=" * 60)
     print("注意：当前版本使用预置 seed 数据。")
-    print("如需更新，请替换 runtime/seed/school_catalog/*.ndjson 并重新生成 source_manifest.json")
+    print("如需更新，请替换 .qwq_output/data/local/runtime/seed/school_catalog/*.ndjson 并重新生成 source_manifest.json")
     print(f"数据目录: {CATALOG_DIR}")
 
     if not MANIFEST_PATH.exists():

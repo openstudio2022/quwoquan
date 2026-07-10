@@ -26,7 +26,7 @@
 
 调用方（如 `MainAppShell`、`page_access_log_util`）构造 **DTO 实例** 后 `.toMap()` 传入 `AppLogService.writeEvent`（`toMap()` 仅在生成体内含 `Map<String, dynamic>`，业务/shell 源文件不手写该 map 字面量）。
 
-与 [ops/event_record/fields.yaml](../../../quwoquan_service/contracts/metadata/ops/event_record/fields.yaml) 运营入库字段独立：本地 JSONL 为诊断/回放；运营入库走 `OpsEventRecordInput` / `AnalyticsService`。
+与 [ops/event_record/fields.yaml](../../../quwoquan_service/contracts/metadata/ops/event_record/fields.yaml) 运营入库字段独立：本地诊断记录用于排障/回放；运营入库走 `OpsEventRecordInput` / `AnalyticsService`。
 
 ## 3. 创作页埋点（create_*）
 

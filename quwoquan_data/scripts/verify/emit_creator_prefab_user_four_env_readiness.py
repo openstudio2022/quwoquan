@@ -14,9 +14,15 @@ except ImportError:  # pragma: no cover
     yaml = None
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-ARTIFACT = REPO_ROOT / "artifacts" / "creator_prefab_user_four_env_readiness.json"
+SCRIPTS_ROOT = REPO_ROOT / "quwoquan_data" / "scripts"
+if str(SCRIPTS_ROOT) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_ROOT))
+
+from _common.creator_pool.io import artifacts_readiness_path
+
+ARTIFACT = artifacts_readiness_path("creator_prefab_user_four_env_readiness.json")
 CUTOVER = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "prefab_cutover.yaml"
-T2_REPORT = REPO_ROOT / "artifacts" / "creator_prefab_user_t2_stability_report.json"
+T2_REPORT = artifacts_readiness_path("creator_prefab_user_t2_stability_report.json")
 
 
 def main() -> int:

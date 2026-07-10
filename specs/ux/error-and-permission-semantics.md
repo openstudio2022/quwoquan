@@ -281,7 +281,7 @@ networkUnavailable      # 暂时无法加载，请检查网络后重试
 
 #### 1.13.5 回归防护
 
-- 单测守护：`quwoquan_app/test/core/errors/ui_error_semantics_test.dart` 的"错误展示载体决策矩阵"测试组必须逐条断言 1.13.2 的 7 条映射（覆盖每个 `category × scope` 组合到目标 `presentation`），任何对 `_presentationFor` 的改动若未同步本表与测试即失败。
+- 单测守护：`quwoquan_app/test/local_contract/core/errors/ui_error_semantics__local_contract_test.dart` 的"错误展示载体决策矩阵"测试组必须逐条断言 1.13.2 的 7 条映射（覆盖每个 `category × scope` 组合到目标 `presentation`），任何对 `_presentationFor` 的改动若未同步本表与测试即失败。
 - 静态门禁：`quwoquan_app/scripts/runtime/verify_unified_error_semantics_ratchet.py` 继续阻断"页面直接消费 raw 异常字符串 / 失败态裸 `AppToast` 字面量 / 旧式加载失败标题 / 惊叹图标"等回归。
 
 ---
@@ -535,7 +535,7 @@ test/
 | **L1a** | Contract | error code / runtime failure / auth gate → `UiErrorSemantic` 映射 | `test/core/errors/`、`test/cloud/**/contract/` |
 | **L1b** | Widget | 权限拒绝、云端错误、列表首屏失败、分页失败、登录门禁 UI 渲染 | `test/ui/**/widgets/` |
 | **L1c** | Journey | 创作提交流程、选位置失败、未登录续接评论/关注/发消息 | `test/ui/**/journeys/` |
-| **L4** | Patrol | 真机权限弹窗、去设置跳转（advisory） | `test/patrol/content/` |
+| **L4** | Patrol | 真机权限弹窗、去设置跳转（advisory） | `test/user_acceptance/patrol/content/` |
 
 ### 5.3 L1a 契约测试（极简）
 
@@ -576,7 +576,7 @@ test/
 - 真机/模拟器：进入位置选择 → 拒绝权限 → 断言「去设置」按钮可见
 - 点击「去设置」→ 断言能打开系统设置（不断言返回后状态）
 
-路径：`test/patrol/content/` 或 `test/patrol/integration/location/`
+路径：`test/user_acceptance/patrol/content/` 或 `test/user_acceptance/patrol/integration/location/`
 
 ---
 

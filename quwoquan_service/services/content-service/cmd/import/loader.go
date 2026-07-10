@@ -56,6 +56,14 @@ type EntityAssetManifestDoc struct {
 	Assets []AssetManifestItem `json:"assets" bson:"assets"`
 }
 
+type IntersectionHintDoc struct {
+	Dimension      string   `json:"dimension" bson:"dimension"`
+	Source         string   `json:"source" bson:"source"`
+	TagRefs        []string `json:"tagRefs" bson:"tagRefs"`
+	ActionType     string   `json:"actionType" bson:"actionType"`
+	ActionTargetID string   `json:"actionTargetId" bson:"actionTargetId"`
+}
+
 // PostDoc 是灌入运行库的文章文档（与 publish post manifest + article.md 对齐）。
 type PostDoc struct {
 	PostRef               string                   `json:"postRef" bson:"postRef"`
@@ -67,6 +75,7 @@ type PostDoc struct {
 	EntityRefs            []string                 `json:"entityRefs" bson:"entityRefs"`
 	NormalizedEntityRefs  []string                 `json:"normalizedEntityRefs" bson:"normalizedEntityRefs"`
 	TagRefs               []string                 `json:"tagRefs" bson:"tagRefs"`
+	IntersectionHints     []IntersectionHintDoc    `json:"intersectionHints" bson:"intersectionHints"`
 	SemanticMentions      any                      `json:"semanticMentions" bson:"semanticMentions"`
 	AuthorID              string                   `json:"authorId" bson:"authorId"`
 	CreatorProfileID      string                   `json:"creatorProfileId" bson:"creatorProfileId"`
@@ -144,6 +153,7 @@ type postManifest struct {
 	EntityRefs            []string                 `json:"entityRefs"`
 	NormalizedEntityRefs  []string                 `json:"normalizedEntityRefs"`
 	TagRefs               []string                 `json:"tagRefs"`
+	IntersectionHints     []IntersectionHintDoc    `json:"intersectionHints"`
 	SemanticMentions      any                      `json:"semanticMentions"`
 	AuthorID              string                   `json:"authorId"`
 	CreatorProfileID      string                   `json:"creatorProfileId"`
@@ -228,6 +238,63 @@ func validateArticleAssetManifest(manifest *ArticleAssetManifestDoc, ref string)
 	for _, asset := range manifest.Assets {
 		if err := validateAssetItem(asset, ref); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateIntersectionHints(hints []IntersectionHintDoc, entityRefs []string, tagRefs []string, ref string) error {
+	if len(hints) == 0 {
+		return nil
+	}
+	allowedDimensions := map[string]bool{
+		"identity": true, "location": true, "content": true, "interest": true, "relationship": true,
+	}
+	allowedSources := map[string]bool{
+		"tagRef": true, "geoTagRef": true, "entityRef": true, "followEdge": true, "contact": true,
+	}
+	allowedActions := map[string]bool{
+		"follow": true, "join": true, "add_contact": true, "view_object": true,
+	}
+	entitySet := map[string]bool{}
+	for _, entityRef := range entityRefs {
+		entitySet[strings.TrimSpace(entityRef)] = true
+	}
+	tagSet := map[string]bool{}
+	for _, tagRef := range tagRefs {
+		tagSet[strings.TrimSpace(tagRef)] = true
+	}
+	for idx, hint := range hints {
+		label := fmt.Sprintf("%s: intersectionHints[%d]", ref, idx)
+		if !allowedDimensions[strings.TrimSpace(hint.Dimension)] {
+			return fmt.Errorf("%s dimension invalid: %q", label, hint.Dimension)
+		}
+		source := strings.TrimSpace(hint.Source)
+		if !allowedSources[source] {
+			return fmt.Errorf("%s source invalid: %q", label, hint.Source)
+		}
+		if !allowedActions[strings.TrimSpace(hint.ActionType)] {
+			return fmt.Errorf("%s actionType invalid: %q", label, hint.ActionType)
+		}
+		actionTargetID := strings.TrimSpace(hint.ActionTargetID)
+		if actionTargetID == "" {
+			return fmt.Errorf("%s actionTargetId is required", label)
+		}
+		switch source {
+		case "entityRef":
+			if !entitySet[actionTargetID] {
+				return fmt.Errorf("%s entityRef target not in manifest entity refs: %q", label, actionTargetID)
+			}
+		case "tagRef", "geoTagRef":
+			if len(hint.TagRefs) == 0 {
+				return fmt.Errorf("%s %s requires tagRefs", label, source)
+			}
+			for _, tagRef := range hint.TagRefs {
+				tagRef = strings.TrimSpace(tagRef)
+				if !tagSet[tagRef] {
+					return fmt.Errorf("%s tagRef not in manifest tagRefs: %q", label, tagRef)
+				}
+			}
 		}
 	}
 	return nil
@@ -410,6 +477,9 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 				activeTagRefs = projection.TagRefs
 			}
 		}
+		if err := validateIntersectionHints(m.IntersectionHints, normalizedEntityRefs, activeTagRefs, postRef); err != nil {
+			return err
+		}
 		body := m.Body
 		if strings.EqualFold(strings.TrimSpace(m.ContentType), "image") {
 			body = m.Caption
@@ -427,6 +497,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			EntityRefs:            rawEntityRefs,
 			NormalizedEntityRefs:  normalizedEntityRefs,
 			TagRefs:               activeTagRefs,
+			IntersectionHints:     append([]IntersectionHintDoc(nil), m.IntersectionHints...),
 			SemanticMentions:      m.SemanticMentions,
 			AuthorID:              m.AuthorID,
 			CreatorProfileID:      m.CreatorProfileID,

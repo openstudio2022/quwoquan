@@ -1,0 +1,15 @@
+# 本地 Cursor SDK 校准档 runtime profile（Phase 5 并发提参；省级批 recipe 引用）。
+# 与保守档 cursor_local（MAX_WORKERS=1）并存：本档把 managed local 并发提到 4，
+# 配合 fanout_runner 的错峰冷启（COLD_START_MAX_WORKERS）与 per-worker warm bridge。
+# M1 校准批实测安全上限后按证据回写本文件（目标区间 4-8；证据落
+# QWQ_OUTPUT_ROOT/data/local/runtime/** 校准报告）。
+schemaVersion: quwoquan.task.runtime_profile
+profileId: cursor_local_calibrated
+env:
+  QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS: "4"
+  QWQ_MANAGED_AGENT_TIMEOUT_SECONDS: "1200"
+  QWQ_ORCHESTRATE_AGENT_TIMEOUT_SECONDS: "1200"
+  QWQ_CURSOR_WARM_ATTEMPTS: "6"
+  # 冷启错峰：并发提参后同刻冷启上限保持 3，相邻 bridge 冷启间隔 8s。
+  QWQ_FANOUT_COLD_START_MAX_WORKERS: "3"
+  QWQ_FANOUT_WORKER_STAGGER_SECONDS: "8.0"

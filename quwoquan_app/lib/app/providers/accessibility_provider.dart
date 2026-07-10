@@ -18,12 +18,14 @@ class AccessibilityState {
   final AppFontSizePreset fontSizePreset;
   final bool boldText;
   final bool highContrast;
+  final bool disableAnimations;
 
   const AccessibilityState({
     this.textScaleFactor = 1.0,
     this.fontSizePreset = AppFontSizePreset.md,
     this.boldText = false,
     this.highContrast = false,
+    this.disableAnimations = false,
   });
 
   double get actualTextScaleFactor =>
@@ -34,12 +36,14 @@ class AccessibilityState {
     AppFontSizePreset? fontSizePreset,
     bool? boldText,
     bool? highContrast,
+    bool? disableAnimations,
   }) {
     return AccessibilityState(
       textScaleFactor: textScaleFactor ?? this.textScaleFactor,
       fontSizePreset: fontSizePreset ?? this.fontSizePreset,
       boldText: boldText ?? this.boldText,
       highContrast: highContrast ?? this.highContrast,
+      disableAnimations: disableAnimations ?? this.disableAnimations,
     );
   }
 
@@ -49,7 +53,8 @@ class AccessibilityState {
         other.textScaleFactor == textScaleFactor &&
         other.fontSizePreset == fontSizePreset &&
         other.boldText == boldText &&
-        other.highContrast == highContrast;
+        other.highContrast == highContrast &&
+        other.disableAnimations == disableAnimations;
   }
 
   @override
@@ -58,6 +63,7 @@ class AccessibilityState {
     fontSizePreset,
     boldText,
     highContrast,
+    disableAnimations,
   );
 }
 
@@ -97,13 +103,14 @@ class AccessibilityNotifier extends Notifier<AccessibilityState> {
       textScaleFactor: data.textScaler.scale(1.0),
       boldText: data.boldText,
       highContrast: data.highContrast,
+      disableAnimations: data.disableAnimations,
     );
     if (next == state) return;
     state = next;
   }
 }
 
-final accessibilityProvider = NotifierProvider<AccessibilityNotifier, AccessibilityState>(() {
-  return AccessibilityNotifier();
-});
-
+final accessibilityProvider =
+    NotifierProvider<AccessibilityNotifier, AccessibilityState>(() {
+      return AccessibilityNotifier();
+    });

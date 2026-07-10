@@ -111,8 +111,7 @@ class MockChatRepository implements ChatRepository {
 
   /// 联系人头像必须走 avatar 媒体平面；禁止 [media/image] 泄漏进 Mock 收件箱。
   static bool _contactRowHasContractAvatar(Map<String, dynamic> row) {
-    final avatar =
-        (row['avatarUrl'] ?? row['avatar'])?.toString().trim() ?? '';
+    final avatar = (row['avatarUrl'] ?? row['avatar'])?.toString().trim() ?? '';
     if (avatar.isEmpty) {
       return false;
     }
@@ -854,6 +853,7 @@ class MockChatRepository implements ChatRepository {
         joinedAt: DateTime.now().toUtc(),
       ),
     );
+    _bumpMembersRosterAfterMemberChange(conversationId, members.length);
   }
 
   @override
@@ -863,6 +863,7 @@ class MockChatRepository implements ChatRepository {
     if (members.isEmpty) {
       return;
     }
+    _bumpMembersRosterAfterMemberChange(conversationId, members.length);
   }
 
   @override
@@ -1273,6 +1274,9 @@ class MockChatRepository implements ChatRepository {
     final canManage = current.role == 'owner' || current.role == 'admin';
     final canDissolve =
         current.role == 'owner' && conversation.circleId.trim().isEmpty;
+    final resolvedMemberCount = members.isNotEmpty
+        ? members.length
+        : conversation.memberCount;
     return GroupHomeDto(
       conversationId: conversation.id,
       title: conversation.title,
@@ -1281,7 +1285,7 @@ class MockChatRepository implements ChatRepository {
       circleId: conversation.circleId,
       circleGroupId: conversation.circleGroupId ?? '',
       sourceCircleTitle: conversation.circleId,
-      memberCount: conversation.memberCount,
+      memberCount: resolvedMemberCount,
       capabilities: const <String>['album', 'file', 'event', 'member'],
       originType: conversation.originType,
       bindingType: conversation.bindingType,

@@ -1,19 +1,19 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/app/shell/object_detail_global_bottom_nav.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_ui_config.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/components/navigation/tab_navigation.dart';
 import 'package:quwoquan_app/components/object_page/object_action_bar.dart';
 import 'package:quwoquan_app/components/object_page/object_impact_preview_card.dart';
 import 'package:quwoquan_app/components/object_page/object_intersection_preview_card.dart';
+import 'package:quwoquan_app/components/object_page/object_meta_chip.dart';
 import 'package:quwoquan_app/components/object_page/object_chrome_actions.dart';
 import 'package:quwoquan_app/components/object_page/object_page_shell.dart';
 import 'package:quwoquan_app/components/object_page/object_page_sections.dart';
@@ -26,6 +26,7 @@ import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
+import 'package:quwoquan_app/core/utils/tag_ref_label.dart';
 import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
@@ -85,6 +86,11 @@ class HomepageDetailShell extends StatefulWidget {
 
 class _HomepageDetailShellState extends State<HomepageDetailShell> {
   static const double _cardRadius = AppSpacing.radiusTwentyFour;
+  static const double _identityAvatarIntrusion =
+      ObjectIdentityHeader.avatarOuterExtentDefault *
+      ObjectIdentityHeader.avatarOverlapRatioDefault;
+  static const double _identityPinExtent =
+      ObjectIdentityHeader.avatarOuterExtentDefault - _identityAvatarIntrusion;
   static final List<_HomepagePrimaryTabSpec> _tabs = HomepageUIConfig.tabs
       .map(
         (tab) => _HomepagePrimaryTabSpec(
@@ -157,6 +163,20 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       : widget.shell?.contentPreview.isNotEmpty == true
       ? widget.shell!.contentPreview
       : widget.detail?.contentPreview ?? const <HomepageContentPreview>[];
+
+  /// 实体主页展示标签：消费 [ObjectPageBundle.tagRefs]（数据工程 publish/tags
+  /// 契约树全路径，含 Entity 类型 + Topic 地理/主题标签，WP3 统一打标产物），
+  /// 缺省回退 detail.categoryTags（云侧同源投影）。`Format/**` 属内容载体
+  /// 标签，对地点主页无展示价值，滤除；展示名 = 叶子名（tagRefDisplayLabels）。
+  List<String> get _displayTagLabels {
+    final bundleRefs = widget.objectPageBundle?.tagRefs ?? const <String>[];
+    final refs = bundleRefs.isNotEmpty
+        ? bundleRefs
+        : (widget.detail?.categoryTags ?? const <String>[]);
+    return tagRefDisplayLabels(
+      refs.where((ref) => !ref.trimLeft().startsWith('Format/')),
+    );
+  }
 
   List<HomepageQuestionPreview> get _questionPreview =>
       widget.shell?.questionPreview.isNotEmpty == true
@@ -317,14 +337,17 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
               ),
             )
           else
-            MasonryGridView.count(
+            GridView.builder(
               physics: const NeverScrollableScrollPhysics(),
               shrinkWrap: true,
               primary: false,
               padding: EdgeInsets.zero,
-              crossAxisCount: AppSpacing.responsiveGridColumns(context),
-              mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
-              crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: AppSpacing.responsiveGridColumns(context),
+                mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                mainAxisExtent: _contentGridMainAxisExtent(context),
+              ),
               itemCount: filtered.length,
               itemBuilder: (context, index) =>
                   _buildEntityRecordCard(filtered[index], isDark),
@@ -332,6 +355,14 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         ],
       ),
     );
+  }
+
+  double _contentGridMainAxisExtent(BuildContext context) {
+    final columns = AppSpacing.responsiveGridColumns(context);
+    if (columns <= 1) {
+      return AppSpacing.threeHundredTwenty + AppSpacing.twoHundredTwenty;
+    }
+    return AppSpacing.threeHundredTwenty + AppSpacing.buttonHeight * 2;
   }
 
   /// 实体记录卡：封面 + 卡内唯一交集句（[IntersectionReasonChip]）+ 标题 + 类型角标。
@@ -370,6 +401,14 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
         isDark: isDark,
         // N5：实体主页记录卡 → 交集句对象片段点击精确归因为实体主页（非推荐流）。
         referralSource: ReferralSource.entityPage,
+        contextObjectName: item.title.trim().isNotEmpty
+            ? item.title.trim()
+            : (item.summary ?? '').trim(),
+        contextObjectTarget: IntersectionTarget(
+          objectId: item.postId,
+          objectKind: 'content',
+          routeId: 'workBrowser',
+        ),
       ),
       // 高保口径：footer 与圈子记录卡统一为「作者名 + 心形赞数」（PostCardMetric）。
       footer: Row(
@@ -504,11 +543,13 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
       backgroundColor: AppColors.iosPageBackground(context),
       child: ObjectPageShell(
         keyPrefix: 'homepage-shell',
-        pinMode: ObjectPagePinMode.minimal,
+        pinMode: ObjectPagePinMode.standard,
         enablePinnedTabOverlay: false,
-        contentHorizontalPadding: AppSpacing.containerMd,
+        identityPinExtent: _identityPinExtent,
+        identityTransitionDistance: AppSpacing.xs,
+        contentHorizontalPadding: 0,
         surfaceBridgeOverride: 0,
-        tabSurfaceHorizontalPadding: AppSpacing.containerMd,
+        tabSurfaceHorizontalPadding: 0,
         tabSurfaceTopRadius: _cardRadius,
         tabSurfaceBottomPadding: AppSpacing.containerLg,
         scrollViewKey: TestKeys.homepageDetailPage,
@@ -530,8 +571,7 @@ class _HomepageDetailShellState extends State<HomepageDetailShell> {
                   }
                 },
               )
-            // 高保口径：浏览态详情页底部保留全局导航栏（首页/视频书/+/联系/我）。
-            : const ObjectDetailGlobalBottomNav(),
+            : null,
       ),
     );
   }

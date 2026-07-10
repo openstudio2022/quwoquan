@@ -3,6 +3,7 @@ package persistence
 import (
 	"context"
 	"errors"
+	"regexp"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -37,6 +38,31 @@ func (s *MongoObjectTagIndexStore) FindByObject(ctx context.Context, objectID, o
 // FindObjectsByTagRef 反向查询：引用某 tagRef 的对象索引（tagRefs 为数组，走 contains）。
 func (s *MongoObjectTagIndexStore) FindObjectsByTagRef(ctx context.Context, tagRef, objectType string, limit int64) ([]model.ObjectTagIndex, error) {
 	filter := bson.M{"tagRefs": tagRef}
+	if objectType != "" {
+		filter["objectType"] = objectType
+	}
+	opts := options.Find()
+	if limit > 0 {
+		opts.SetLimit(limit)
+	}
+	cur, err := s.coll.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close(ctx)
+	out := make([]model.ObjectTagIndex, 0)
+	if err := cur.All(ctx, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// FindObjectsByTagRefSubtree 子孙展开反查：tagRefs 命中 tagRef 自身或其任意
+// 子孙（锚定前缀正则 ^{tagRef}(/|$)，路径制标签的子孙即 "/" 分隔的更深路径）。
+// 查询侧展开、存储不物化祖先链；锚定前缀正则可走 tagRefs 多键索引。
+func (s *MongoObjectTagIndexStore) FindObjectsByTagRefSubtree(ctx context.Context, tagRef, objectType string, limit int64) ([]model.ObjectTagIndex, error) {
+	pattern := "^" + regexp.QuoteMeta(tagRef) + "(/|$)"
+	filter := bson.M{"tagRefs": bson.M{"$regex": pattern}}
 	if objectType != "" {
 		filter["objectType"] = objectType
 	}

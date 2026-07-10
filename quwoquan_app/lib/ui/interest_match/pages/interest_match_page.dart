@@ -330,7 +330,10 @@ class _InterestMatchPageState extends ConsumerState<InterestMatchPage> {
       padding: EdgeInsets.only(
         left: AppSpacing.md + AppSpacing.smallAvatarSize,
       ),
-      child: Container(height: 0.5, color: AppColors.iosSeparator(context)),
+      child: Container(
+        height: AppSpacing.hairline,
+        color: AppColors.iosSeparator(context),
+      ),
     );
   }
 

@@ -48,19 +48,145 @@ Map<String, dynamic> _omitNullMapValues(Map<String, dynamic> source) {
 /// `MockUserProfileRepository`、`MockUserRepository` 等 mock 链路都必须复用它，
 /// 避免再次出现「主页资料已更新，但 active persona 仍读旧静态 JSON」的双真相源。
 SubAccountProfileWireDto resolveMockUserProfileWire(String userId) {
-  final overrideWire = MockUserProfileRepository._profileOverrides[userId];
-  if (overrideWire != null) {
-    return overrideWire;
+  for (final key in _mockProfileLookupKeys(userId)) {
+    final overrideWire = MockUserProfileRepository._profileOverrides[key];
+    if (overrideWire != null) {
+      return overrideWire;
+    }
   }
-  final contractWire = _contractProfileWireByUserId[userId];
-  if (contractWire != null) {
-    return contractWire;
+  for (final key in _mockProfileLookupKeys(userId)) {
+    final contractWire = _contractProfileWireByUserId[key];
+    if (contractWire != null) {
+      return contractWire;
+    }
   }
   final creatorWire = PrefabUserResolver.creatorProfileWireFor(userId);
   if (creatorWire != null) {
     return SubAccountProfileWireDto.fromMap(creatorWire);
   }
   return SubAccountProfileWireDto.fromMap(_defaultProfile(userId));
+}
+
+ProfileEditSnapshotWireDto? _resolveMockProfileEditSnapshotWire(String userId) {
+  for (final key in _mockProfileLookupKeys(userId)) {
+    final overrideWire =
+        MockUserProfileRepository._profileEditSnapshotOverrides[key];
+    if (overrideWire != null) {
+      return overrideWire;
+    }
+  }
+  return null;
+}
+
+ProfileEditSnapshotWireDto _profileEditSnapshotWireFromProfile(
+  SubAccountProfileWireDto profile,
+) {
+  final occupationTagRef = profile.identityTags
+      .where((tag) => tag.startsWith('Audience/用户/职业/'))
+      .cast<String?>()
+      .firstWhere((tag) => tag != null, orElse: () => null);
+  final interestTagRefs = profile.identityTags
+      .where((tag) => tag.startsWith('Audience/用户/兴趣偏好/'))
+      .toList(growable: false);
+  final nickname = profile.nickname.isNotEmpty
+      ? profile.nickname
+      : profile.displayName;
+  return ProfileEditSnapshotWireDto(
+    ownerUserId: profile.ownerUserId,
+    subAccountId: profile.subAccountId,
+    avatarUrl: profile.avatarUrl,
+    avatarVersion: profile.avatarVersion,
+    backgroundUrl: profile.backgroundUrl,
+    nickname: nickname,
+    displayName: profile.displayName,
+    userHandle: profile.userHandle.isNotEmpty
+        ? profile.userHandle
+        : profile.subAccountId,
+    bio: profile.bio,
+    identityTags: profile.identityTags,
+    occupationTagRef: occupationTagRef ?? '',
+    interestTagRefs: interestTagRefs,
+    updatedAt: profile.updatedAt,
+  );
+}
+
+String _regionDisplayFromTagRef(String tagRef) {
+  final segments = tagRef
+      .split('/')
+      .map((segment) => segment.trim())
+      .where((segment) => segment.isNotEmpty)
+      .toList(growable: false);
+  if (segments.isEmpty) {
+    return '';
+  }
+  final chinaIndex = segments.indexOf('中国');
+  final regionSegments = chinaIndex >= 0
+      ? segments.skip(chinaIndex + 1).toList(growable: false)
+      : segments;
+  if (regionSegments.isEmpty) {
+    return '';
+  }
+  final province = _trimRegionSuffix(regionSegments.first);
+  final city = _trimRegionSuffix(regionSegments.last);
+  if (province.isEmpty || province == city) {
+    return city;
+  }
+  return '$province $city';
+}
+
+String _trimRegionSuffix(String value) {
+  return value.trim().replaceFirst(RegExp(r'(特别行政区|自治区|自治州|地区|盟|省|市|县)$'), '');
+}
+
+List<String> _mockProfileLookupKeys(String userId) {
+  final keys = <String>[];
+  void add(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isNotEmpty && !keys.contains(trimmed)) {
+      keys.add(trimmed);
+    }
+  }
+
+  final trimmed = userId.trim();
+  add(trimmed);
+  if (trimmed.isNotEmpty) {
+    add(PrefabUserResolver.resolveSubAccountId(trimmed));
+    add(PrefabUserResolver.resolveUserId(trimmed));
+  }
+  if (trimmed.isEmpty || PrefabUserResolver.isOwnerLikeSubAccountId(trimmed)) {
+    add(PrefabUserResolver.currentUserVariantSubAccountId);
+    add(PrefabUserResolver.currentUserVariantUserId);
+  }
+  return keys;
+}
+
+extension _ProfileEditSnapshotDataMockMerge on ProfileEditSnapshotData {
+  ProfileEditSnapshotData copyWithPrivateFieldsFromWire(
+    ProfileEditSnapshotWireDto wire,
+  ) {
+    return ProfileEditSnapshotData(
+      ownerUserId: ownerUserId,
+      subAccountId: subAccountId,
+      avatarUrl: avatarUrl,
+      avatarAssetId: wire.avatarAssetId,
+      avatarVersion: avatarVersion,
+      backgroundUrl: backgroundUrl,
+      backgroundAssetId: wire.backgroundAssetId,
+      nickname: nickname,
+      gender: wire.gender,
+      birthDate: wire.birthDate,
+      region: wire.region,
+      regionTagRef: wire.regionTagRef,
+      userHandle: userHandle,
+      bio: bio,
+      occupationTagRef: occupationTagRef,
+      interestTagRefs: interestTagRefs,
+      phoneCredential: phoneCredential,
+      qrCard: wire.qrCard == null
+          ? qrCard
+          : ProfileQrCardData.fromMap(wire.qrCard!),
+    );
+  }
 }
 
 int _decodeCursorOffset(String? cursor) {

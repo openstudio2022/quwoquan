@@ -28,6 +28,7 @@ typedef RemoteRealtimeWebSocketFactory =
 class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   RemoteRealtimeConnectionDelegate({
     required this.read,
+    ChatProviderInvalidate? invalidate,
     required this.currentUserIdResolver,
     this.onStateChanged,
     RealtimeConfig? config,
@@ -36,7 +37,7 @@ class RemoteRealtimeConnectionDelegate implements RealtimeConnectionDelegate {
   }) : _config = config ?? RealtimeConfig.fromGateway(),
        _longPollFactory = longPollFactory ?? _defaultLongPollFactory,
        _webSocketFactory = webSocketFactory ?? _defaultWebSocketFactory {
-    _handler = RealtimeMessageHandler(read);
+    _handler = RealtimeMessageHandler(read, invalidate: invalidate);
   }
 
   static LongPollTransport _defaultLongPollFactory({

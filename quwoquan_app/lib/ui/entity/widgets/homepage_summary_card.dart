@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 import 'package:quwoquan_app/components/media/app_media_image.dart';
+import 'package:quwoquan_app/components/object_page/object_meta_chip.dart';
 import 'package:quwoquan_app/components/object_page/profile_ios_components.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
@@ -54,11 +55,9 @@ class HomepageSummaryCard extends StatelessWidget {
               spacing: AppSpacing.intraGroupXs,
               runSpacing: AppSpacing.intraGroupXs,
               children: <Widget>[
-                _HomepageMetaChip(
-                  label: _homepageTypeLabel(summary.homepageType),
-                ),
-                _HomepageMetaChip(label: _homepageStatusLabel(summary.status)),
-                _HomepageMetaChip(
+                ObjectMetaChip(label: _homepageTypeLabel(summary.homepageType)),
+                ObjectMetaChip(label: _homepageStatusLabel(summary.status)),
+                ObjectMetaChip(
                   label: ratingValue == null ? '待积累口碑' : '$ratingValue 分',
                   accent: ratingValue != null,
                 ),
@@ -250,38 +249,6 @@ class _HomepageCardCover extends StatelessWidget {
                   placeholder: fallback,
                   errorWidget: fallback,
                 ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HomepageMetaChip extends StatelessWidget {
-  const _HomepageMetaChip({required this.label, this.accent = false});
-
-  final String label;
-  final bool accent;
-
-  @override
-  Widget build(BuildContext context) {
-    final accentColor = AppColors.iosAccent(context);
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: AppSpacing.containerSm,
-        vertical: AppSpacing.intraGroupXs,
-      ),
-      decoration: BoxDecoration(
-        color: accent
-            ? accentColor.withValues(alpha: 0.12)
-            : AppColors.iosSecondaryFill(context),
-        borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: AppTypography.iosCaption2,
-          fontWeight: AppTypography.medium,
-          color: accent ? accentColor : AppColors.iosSecondaryLabel(context),
         ),
       ),
     );

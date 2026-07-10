@@ -253,24 +253,16 @@ SearchRepository buildAppSearchRepository({
 
 class AppSearchRepository implements SearchRepository {
   AppSearchRepository({
-    required CircleRepository circleRepository,
-    required ContentRepository contentRepository,
-    required HomepageRepository homepageRepository,
-    required IntegrationRepository integrationRepository,
-    required UserProfileRepository userProfileRepository,
-    required LocalChatSearchStore localChatSearchStore,
-    required LocalChatSearchSyncService localChatSearchSyncService,
-    required LocalCircleGroupSnapshotStore localCircleGroupSnapshotStore,
-    required PersonaContextLoader personaContextLoader,
-  }) : _circleRepository = circleRepository,
-       _contentRepository = contentRepository,
-       _homepageRepository = homepageRepository,
-       _integrationRepository = integrationRepository,
-       _userProfileRepository = userProfileRepository,
-       _localChatSearchStore = localChatSearchStore,
-       _localChatSearchSyncService = localChatSearchSyncService,
-       _localCircleGroupSnapshotStore = localCircleGroupSnapshotStore,
-       _personaContextLoader = personaContextLoader;
+    required this._circleRepository,
+    required this._contentRepository,
+    required this._homepageRepository,
+    required this._integrationRepository,
+    required this._userProfileRepository,
+    required this._localChatSearchStore,
+    required this._localChatSearchSyncService,
+    required this._localCircleGroupSnapshotStore,
+    required this._personaContextLoader,
+  });
 
   final CircleRepository _circleRepository;
   final ContentRepository _contentRepository;
@@ -1018,9 +1010,7 @@ class AppSearchRepository implements SearchRepository {
   // 端云一体下云侧由 content `place_snapshots` 投影；mock/local 扇出复用 integration
   // POI 作为本地近似种子（仅 mock 路径；beta/gamma/prod 走 RemoteSearchRepository 读
   // 真实 place_snapshots，不读此处）。与 entity.homepage（已绑定实体）互为单一真相源。
-  Future<_SectionBuildResult?> _buildPlaceSection(
-    SearchRequest request,
-  ) async {
+  Future<_SectionBuildResult?> _buildPlaceSection(SearchRequest request) async {
     try {
       final items = await _integrationRepository.searchLocations(
         query: request.query,

@@ -164,9 +164,9 @@
             ],
             "relatedObjects": [
               {
-                "circleId": "west_lake_circle_1",
-                "name": "西湖散步兴趣群",
-                "memberCount": 146,
+                "circleId": "fixture_circle_photo",
+                "name": "契约摄影社",
+                "memberCount": 128,
                 "linkedHomepageId": "homepage_sight_west_lake",
                 "linkedHomepageTitle": "西湖景区"
               }
@@ -598,6 +598,7 @@
           "title": "新东方",
           "subtitle": "教育培训 · 语言学习 · 校友网络",
           "summary": "围绕语言学习、考试培训和职业成长沉淀内容、讨论与校友连接。",
+          "coverUrl": "media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png",
           "city": "北京",
           "status": "published",
           "categoryTags": [
@@ -652,6 +653,7 @@
           "title": "横竖影像馆取景地",
           "subtitle": "摄影取景地 · 城市影像 · 胶片旅拍",
           "summary": "横竖影像馆作品中反复出现的城市墙面、光影和胶片取景地。",
+          "coverUrl": "media/image/s/archived-image/post/fixture_photo_001/v1/cover.png",
           "city": "上海",
           "status": "published",
           "categoryTags": [

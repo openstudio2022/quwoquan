@@ -20,10 +20,10 @@ val androidAbiSplitsEnvVar = "QWQ_ANDROID_ABI_SPLITS"
 val androidAbiSplitsEnabled = envFlagEnabled(androidAbiSplitsEnvVar, false)
 val alphaLocalCaCert =
     repoRootDir.resolve(
-        "state/local/alpha_stack/caddy-data/caddy/pki/authorities/local/root.crt",
+        ".qwq_output/env/alpha/local/alpha-local/tls/ca/root.crt",
     )
 val alphaLocalStackScript =
-    repoRootDir.resolve("agent_ops/deploy/alpha/start_alpha_mock_stack.sh")
+    repoRootDir.resolve("quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh")
 val alphaLocalAdbReversePorts = listOf("17000", "17010", "17100")
 val alphaLocalDefaultDartDefines =
     linkedMapOf(

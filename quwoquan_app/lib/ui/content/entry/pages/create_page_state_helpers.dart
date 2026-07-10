@@ -55,7 +55,7 @@ extension _CreatePageStateHelpers on _CreatePageState {
       _doClose();
       return;
     }
-    await showCupertinoDialog<void>(
+    await showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) {
         return CupertinoAlertDialog(
@@ -203,6 +203,39 @@ extension _CreatePageStateHelpers on _CreatePageState {
       }
       return;
     }
+    if (result.openOneTapMovie && result.lockedSingleMedia) {
+      var generated = '';
+      for (final item in result.items) {
+        if (item.source == CreateMediaSource.generated) {
+          generated = item.path;
+          break;
+        }
+      }
+      final sourceImages = result.items
+          .where((item) => item.isImage)
+          .map((item) => item.path)
+          .where((path) => path.trim().isNotEmpty)
+          .toList(growable: false);
+      if (sourceImages.isEmpty) {
+        return;
+      }
+      ref
+          .read(createEditorProvider.notifier)
+          .setOneTapMovie(
+            sourceImagePaths: sourceImages,
+            generatedMediaPath: generated,
+            effectId: result.oneTapMovieEffectId,
+          );
+      await reportCreateEditorSurfaceEvent(
+        ref,
+        'create_media_one_tap_movie_selected',
+        createEditorSurfaceExtrasMediaBatch(
+          count: 1,
+          editorKind: CreateEditorKind.media,
+        ),
+      );
+      return;
+    }
     final paths = result.items
         .where((item) => item.isImage)
         .map((item) => item.path)
@@ -268,27 +301,29 @@ extension _CreatePageStateHelpers on _CreatePageState {
       return;
     }
     final item = result.items.first;
-    await waitForLocalVideoPlayable(item.path);
-    final thumbnail = await _generateVideoThumbnail(item.path);
-    final metadata = await _loadVideoMetadata(item.path);
+    if (!item.isVideo) {
+      AppToast.show(context, UITextConstants.mediaPickerVideoOnly);
+      return;
+    }
+    final prepared = await _prepareVideoForMediaEditor(item.path);
     final preserved = _deriveVideoEditContext(
       previousState: state,
-      nextDurationMs: metadata.durationMs,
+      nextDurationMs: prepared.durationMs,
     );
     ref
         .read(createEditorProvider.notifier)
         .setVideo(
           item.path,
           editorKind: CreateEditorKind.media,
-          thumbnail: thumbnail ?? '',
+          thumbnail: prepared.thumbnailPath,
           originalPath: item.path,
-          durationMs: metadata.durationMs,
+          durationMs: prepared.durationMs,
           trimStartMs: preserved.trimStartMs,
           trimEndMs: preserved.trimEndMs,
           coverTimeMs: preserved.coverTimeMs,
           coverStrategy: preserved.coverTimeMs > 0 ? 'manual' : 'first_frame',
-          width: metadata.width,
-          height: metadata.height,
+          width: prepared.width,
+          height: prepared.height,
           muted: preserved.muted,
         );
     await reportCreateEditorSurfaceEvent(ref, 'create_media_video_selected');
@@ -301,27 +336,25 @@ extension _CreatePageStateHelpers on _CreatePageState {
     String path, {
     required CreateEditorState previousState,
   }) async {
-    await waitForLocalVideoPlayable(path);
-    final thumbnail = await _generateVideoThumbnail(path);
-    final metadata = await _loadVideoMetadata(path);
+    final prepared = await _prepareVideoForMediaEditor(path);
     final preserved = _deriveVideoEditContext(
       previousState: previousState,
-      nextDurationMs: metadata.durationMs,
+      nextDurationMs: prepared.durationMs,
     );
     ref
         .read(createEditorProvider.notifier)
         .setVideo(
           path,
           editorKind: CreateEditorKind.media,
-          thumbnail: thumbnail ?? '',
+          thumbnail: prepared.thumbnailPath,
           originalPath: path,
-          durationMs: metadata.durationMs,
+          durationMs: prepared.durationMs,
           trimStartMs: preserved.trimStartMs,
           trimEndMs: preserved.trimEndMs,
           coverTimeMs: preserved.coverTimeMs,
           coverStrategy: preserved.coverTimeMs > 0 ? 'manual' : 'first_frame',
-          width: metadata.width,
-          height: metadata.height,
+          width: prepared.width,
+          height: prepared.height,
           muted: preserved.muted,
         );
     await reportCreateEditorSurfaceEvent(ref, 'create_media_video_selected');
@@ -418,26 +451,29 @@ extension _CreatePageStateHelpers on _CreatePageState {
     if (!mounted) {
       return;
     }
-    final result = await Navigator.of(context).push<VideoEditorResult>(
-      MaterialPageRoute<VideoEditorResult>(
-        settings: const RouteSettings(
-          name: PageAccessInternalRoutes.createPageVideoEditor,
-        ),
-        fullscreenDialog: true,
-        builder: (_) => VideoEditorPage(
-          sourceVideoPath: state.originalVideoPath.trim().isEmpty
-              ? state.videoPath
-              : state.originalVideoPath,
-          initialVideoPath: state.videoPath,
-          initialThumbnailPath: state.videoThumbnail,
-          initialDurationMs: state.videoDurationMs,
-          initialTrimStartMs: state.videoTrimStartMs,
-          initialTrimEndMs: state.videoTrimEndMs,
-          initialCoverTimeMs: state.videoCoverTimeMs,
-          initialMuted: state.videoMuted,
-        ),
-      ),
-    );
+    final launcher = widget.videoEditorLauncher;
+    final result = launcher != null
+        ? await launcher(context, state: state)
+        : await Navigator.of(context).push<VideoEditorResult>(
+            MaterialPageRoute<VideoEditorResult>(
+              settings: const RouteSettings(
+                name: PageAccessInternalRoutes.createPageVideoEditor,
+              ),
+              fullscreenDialog: true,
+              builder: (_) => VideoEditorPage(
+                sourceVideoPath: state.originalVideoPath.trim().isEmpty
+                    ? state.videoPath
+                    : state.originalVideoPath,
+                initialVideoPath: state.videoPath,
+                initialThumbnailPath: state.videoThumbnail,
+                initialDurationMs: state.videoDurationMs,
+                initialTrimStartMs: state.videoTrimStartMs,
+                initialTrimEndMs: state.videoTrimEndMs,
+                initialCoverTimeMs: state.videoCoverTimeMs,
+                initialMuted: state.videoMuted,
+              ),
+            ),
+          );
     if (!mounted || result == null) {
       return;
     }
@@ -464,6 +500,24 @@ extension _CreatePageStateHelpers on _CreatePageState {
         trimStartMs: result.trimStartMs,
         trimEndMs: result.trimEndMs,
       ),
+    );
+  }
+
+  Future<CreateVideoPreparationResult> _prepareVideoForMediaEditor(
+    String path,
+  ) async {
+    final probe = widget.videoPreparationProbe;
+    if (probe != null) {
+      return probe(path);
+    }
+    await waitForLocalVideoPlayable(path);
+    final thumbnail = await _generateVideoThumbnail(path);
+    final metadata = await _loadVideoMetadata(path);
+    return CreateVideoPreparationResult(
+      durationMs: metadata.durationMs,
+      thumbnailPath: thumbnail ?? '',
+      width: metadata.width,
+      height: metadata.height,
     );
   }
 
@@ -859,6 +913,8 @@ extension _CreatePageStateHelpers on _CreatePageState {
           title: _mediaHeaderHintForState(state),
           trailing: state.hasVideo
               ? UITextConstants.createMediaSingleVideoCaption
+              : state.isOneTapMovie
+              ? UITextConstants.createMediaOneTapMovieSingleCaption
               : '${state.imagePaths.length} / ${_CreatePageState._kMaxMediaImages}',
         ),
         SizedBox(height: AppSpacing.interGroupMd),

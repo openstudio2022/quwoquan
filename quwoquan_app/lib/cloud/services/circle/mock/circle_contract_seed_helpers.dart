@@ -156,11 +156,11 @@ class CircleContractSeedHelpers {
       byId[circle.id] = circle;
     }
 
-    for (final circle in CircleMockData.buildRepositorySeedCircleDtos()) {
-      put(circle);
-    }
     for (final circle in seedCircles() ?? const <CircleDto>[]) {
       put(circle);
+    }
+    for (final circle in CircleMockData.buildRepositorySeedCircleDtos()) {
+      byId.putIfAbsent(circle.id, () => circle);
     }
     return byId.values.toList(growable: true);
   }

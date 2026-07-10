@@ -1,0 +1,435 @@
+# 全国地点主清单 · 浙江省丽水市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 丽水市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 云和县
+  leaves:
+  - name: 云和梯田
+    canonicalName: 云和梯田
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/湿地公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/云和县
+    aliases:
+    - 云和梯田国家湿地公园
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 仙宫湖
+    canonicalName: 云和仙宫湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/云和县
+    aliases:
+    - 云和湖
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 横山周窑址
+    canonicalName: 横山周窑址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/云和县
+    sourceReadiness: pending
+    selectionPriority: 3
+- district: 庆元县
+  leaves:
+  - name: 百山祖
+    canonicalName: 百山祖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/庆元县
+    aliases:
+    - 凤阳山—百山祖国家级自然保护区百山祖园区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 如龙桥
+    canonicalName: 如龙桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/庆元县
+    aliases:
+    - 月山如龙桥
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 庆元廊桥博物馆
+    canonicalName: 庆元廊桥博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/庆元县
+    aliases:
+    - 中国庆元廊桥博物馆
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 月山村
+    canonicalName: 庆元月山村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/庆元县
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 景宁畲族自治县
+  leaves:
+  - name: 云中大漈
+    canonicalName: 云中大漈
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/景宁畲族自治县
+    aliases:
+    - 大漈
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 时思寺
+    canonicalName: 景宁时思寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/景宁畲族自治县
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T13:49:54Z'
+    sourceScreenEvidence: baike.baidu.com:时思寺
+  - name: 畲乡之窗
+    canonicalName: 畲乡之窗
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/民族风情村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/景宁畲族自治县
+    aliases:
+    - 大均村
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 中国畲族博物馆
+    canonicalName: 中国畲族博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/景宁畲族自治县
+    aliases:
+    - 景宁畲族博物馆
+    selectionPriority: 4
+    sourceReadiness: pending
+- district: 松阳县
+  leaves:
+  - name: 松阳老街
+    canonicalName: 松阳老街
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    aliases:
+    - 松阳明清古街
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 杨家堂村
+    canonicalName: 松阳杨家堂村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 陈家铺村
+    canonicalName: 松阳陈家铺村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 箬寮原始林
+    canonicalName: 箬寮原始林
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    aliases:
+    - 箬寮岘
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 延庆寺塔
+    canonicalName: 松阳延庆寺塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 黄家大院
+    canonicalName: 松阳黄家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 何联奎故居
+    canonicalName: 何联奎故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 松阳城隍庙
+    canonicalName: 松阳城隍庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 松阳文庙
+    canonicalName: 松阳文庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    sourceReadiness: pending
+    selectionPriority: 9
+- district: 缙云县
+  leaves:
+  - name: 缙云仙都
+    canonicalName: 缙云仙都
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/缙云县
+    aliases:
+    - 仙都景区
+    - 鼎湖峰
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 河阳古民居
+    canonicalName: 河阳古民居
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/缙云县
+    aliases:
+    - 河阳村
+    selectionPriority: 2
+    sourceReadiness: ready
+- district: 莲都区
+  leaves:
+  - name: 古堰画乡
+    canonicalName: 古堰画乡
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/莲都区
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 通济堰
+    canonicalName: 丽水通济堰
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/莲都区
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:01:32Z'
+    sourceScreenEvidence: zh.wikipedia.org:通济堰 extract=239ch
+  - name: 东西岩
+    canonicalName: 丽水东西岩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/莲都区
+    aliases:
+    - 东西岩景区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 南明山
+    canonicalName: 丽水南明山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/莲都区
+    aliases:
+    - 南明山摩崖石刻
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 丽水市博物馆
+    canonicalName: 丽水市博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/莲都区
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 南明湖
+    canonicalName: 丽水南明湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/莲都区
+    selectionPriority: 6
+    sourceReadiness: pending
+- district: 遂昌县
+  leaves:
+  - name: 南尖岩
+    canonicalName: 南尖岩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/遂昌县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 遂昌金矿国家矿山公园
+    canonicalName: 遂昌金矿国家矿山公园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/遂昌县
+    aliases:
+    - 遂昌金矿
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 神龙谷
+    canonicalName: 遂昌神龙谷
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/遂昌县
+    aliases:
+    - 神龙飞瀑
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 独山村
+    canonicalName: 遂昌独山村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/遂昌县
+    aliases:
+    - 独山古寨
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 奕山朱氏宗祠
+    canonicalName: 奕山朱氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/遂昌县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 鞍山书院
+    canonicalName: 鞍山书院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/遂昌县
+    sourceReadiness: pending
+    selectionPriority: 6
+- district: 青田县
+  leaves:
+  - name: 石门洞
+    canonicalName: 青田石门洞
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/青田县
+    aliases:
+    - 石门洞森林公园
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 青田石雕博物馆
+    canonicalName: 青田石雕博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/青田县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 千丝岩
+    canonicalName: 青田千丝岩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/青田县
+    aliases:
+    - 千丝岩石文化公园
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 龙现村
+    canonicalName: 青田龙现村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/青田县
+    aliases:
+    - 青田稻鱼共生系统核心村
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 陳誠故居
+    canonicalName: 陳誠故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/青田县
+    sourceReadiness: pending
+    selectionPriority: 5
+- district: 龙泉市
+  leaves:
+  - name: 龙泉山
+    canonicalName: 浙江龙泉山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/龙泉市
+    aliases:
+    - 黄茅尖
+    - 凤阳山
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 龙泉青瓷博物馆
+    canonicalName: 龙泉青瓷博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/龙泉市
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 大窑龙泉窑遗址
+    canonicalName: 大窑龙泉窑遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/龙泉市
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 中国青瓷小镇
+    canonicalName: 中国青瓷小镇
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/龙泉市
+    aliases:
+    - 上垟青瓷小镇
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 宝溪乡
+    canonicalName: 宝溪乡
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/龙泉市
+    sourceReadiness: pending
+    selectionPriority: 5

@@ -24,7 +24,7 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 from _common import quality_gates as qg  # noqa: E402
 from _common import rubric_judge as rj  # noqa: E402
 
-GOLDEN_DIR = DATA_ROOT / "tests" / "fixtures" / "golden_set"
+GOLDEN_DIR = DATA_ROOT / "tests" / "support" / "fixtures" / "golden_set"
 INTERCEPT_TARGET = 0.95
 FALSE_POSITIVE_TARGET = 0.05
 # 判官校准门（2026 LLM-as-judge playbook）：门判决 vs 人工标注的一致性。

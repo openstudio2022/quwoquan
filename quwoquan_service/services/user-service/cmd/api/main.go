@@ -613,7 +613,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 		_ = mergeConfigFile(&cfg, defaultFile)
 		_ = mergeConfigFile(&cfg, envFile)
 		if configVersion != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
 			_ = mergeConfigFile(&cfg, versionFile)
 		}
 		return cfg, nil

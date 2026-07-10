@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -10,10 +12,18 @@ import (
 	rtobs "quwoquan_service/runtime/observability"
 )
 
+// 三段结构 asset role 闭集（projections/homepage_introduction_asset.yaml 同源）。
+const (
+	introductionAssetRoleCover   = "cover"
+	introductionAssetRoleInline  = "inline"
+	introductionAssetRoleRelated = "related"
+)
+
 type HomepageIntroductionAsset struct {
 	AssetID   string `json:"assetId"`
 	URL       string `json:"url"`
 	Caption   string `json:"caption,omitempty"`
+	Role      string `json:"role,omitempty"`
 	SourceRef string `json:"sourceRef,omitempty"`
 }
 
@@ -61,6 +71,10 @@ func (s *HomepageService) GetHomepageIntroduction(ctx context.Context, homepageI
 func buildHomepageIntroduction(homepage *Homepage) HomepageIntroduction {
 	if homepage == nil {
 		return HomepageIntroduction{}
+	}
+	// 数据工程 page.md 三段结构投影优先；无正文承载时回退合成 sections。
+	if strings.TrimSpace(homepage.IntroductionMarkdown) != "" {
+		return buildIntroductionFromPageMarkdown(homepage)
 	}
 	sourceRefs := homepageSourceRefs(homepage)
 	summary := introductionSummary(homepage)
@@ -120,6 +134,207 @@ func buildHomepageIntroduction(homepage *Homepage) HomepageIntroduction {
 	}
 }
 
+// buildIntroductionFromPageMarkdown 把数据工程 page.md（固定三段结构：frontmatter
+// 封面 / 正文含 :::figure 块级内嵌图 / 页尾「## 相关图片」gallery）投影为
+// introduction sections：正文章节 kind=body（bodyMarkdown 保留 figure 指令，
+// assets 提供 role=inline 绑定），页尾章节 kind=relatedImages（assets 全部
+// role=related，gallery 指令不下发）。
+func buildIntroductionFromPageMarkdown(homepage *Homepage) HomepageIntroduction {
+	assetByID := map[string]HomepageIntroductionAsset{}
+	for _, asset := range homepage.IntroductionAssets {
+		if strings.TrimSpace(asset.AssetID) != "" {
+			assetByID[strings.TrimSpace(asset.AssetID)] = asset
+		}
+	}
+	frontmatter, body := splitPageFrontmatter(homepage.IntroductionMarkdown)
+	coverURL := strings.TrimSpace(homepage.CoverURL)
+	if coverAssetID := frontmatterCoverAssetID(frontmatter); coverAssetID != "" {
+		if asset, ok := assetByID[coverAssetID]; ok && strings.TrimSpace(asset.URL) != "" {
+			coverURL = strings.TrimSpace(asset.URL)
+		}
+	}
+	if coverURL == "" {
+		coverURL = coverURLFromIntroductionAssets(homepage.IntroductionAssets)
+	}
+
+	lead, chapters := splitPageChapters(body)
+	sections := make([]HomepageIntroductionSection, 0, len(chapters)+1)
+	if strings.TrimSpace(lead) != "" {
+		sections = append(sections, HomepageIntroductionSection{
+			Kind:         "overview",
+			Title:        "概况",
+			BodyMarkdown: strings.TrimSpace(lead),
+			Assets:       introductionSectionAssets(lead, assetByID, introductionAssetRoleInline),
+		})
+	}
+	for _, chapter := range chapters {
+		if chapter.title == relatedImagesHeading {
+			assets := introductionSectionAssets(chapter.body, assetByID, introductionAssetRoleRelated)
+			if len(assets) == 0 {
+				continue
+			}
+			sections = append(sections, HomepageIntroductionSection{
+				Kind:   "relatedImages",
+				Title:  relatedImagesHeading,
+				Assets: assets,
+			})
+			continue
+		}
+		sections = append(sections, HomepageIntroductionSection{
+			Kind:         "body",
+			Title:        chapter.title,
+			BodyMarkdown: strings.TrimSpace(chapter.body),
+			Assets:       introductionSectionAssets(chapter.body, assetByID, introductionAssetRoleInline),
+		})
+	}
+
+	summary := strings.TrimSpace(homepage.Subtitle)
+	if summary == "" {
+		summary = firstParagraphSummary(lead)
+	}
+	if summary == "" {
+		summary = introductionSummary(homepage)
+	}
+	return HomepageIntroduction{
+		HomepageID:     homepage.ID,
+		DisplayName:    homepage.Title,
+		HomepageType:   homepage.HomepageType,
+		CoverURL:       coverURL,
+		Summary:        summary,
+		Sections:       sections,
+		RelatedObjects: cloneObjectSlice(homepage.RelatedGroups),
+		SourceRefs:     homepageSourceRefs(homepage),
+		UpdatedAt:      homepage.UpdatedAt.UTC().Format(time.RFC3339),
+	}
+}
+
+const relatedImagesHeading = "相关图片"
+
+var (
+	assetRefLineRe = regexp.MustCompile(`(?m)^asset://(\S+)\s*$`)
+	// 数据侧 asset_placement 的 gallery 规范形态：`:::gallery ids="a,b" layout="grid"`。
+	galleryIDsAttrRe = regexp.MustCompile(`(?m)^:::gallery\b[^\n]*\bids="([^"]*)"`)
+)
+
+type pageChapter struct {
+	title string
+	body  string
+}
+
+// splitPageFrontmatter 分离 YAML frontmatter（若有），返回 (frontmatter, body)。
+func splitPageFrontmatter(text string) (string, string) {
+	if !strings.HasPrefix(text, "---\n") {
+		return "", text
+	}
+	end := strings.Index(text[4:], "\n---\n")
+	if end < 0 {
+		return "", text
+	}
+	cut := 4 + end + len("\n---\n")
+	return text[:cut], text[cut:]
+}
+
+func frontmatterCoverAssetID(frontmatter string) string {
+	for _, line := range strings.Split(frontmatter, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "coverImage:") {
+			continue
+		}
+		value := strings.TrimSpace(strings.TrimPrefix(trimmed, "coverImage:"))
+		value = strings.Trim(value, `"'`)
+		return strings.TrimPrefix(value, "asset://")
+	}
+	return ""
+}
+
+// splitPageChapters 按 `## ` 标题切分正文；返回导语（首个 `##` 之前，剥掉 H1）与章节列表。
+func splitPageChapters(body string) (string, []pageChapter) {
+	lines := strings.Split(body, "\n")
+	var leadLines []string
+	var chapters []pageChapter
+	var current *pageChapter
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## ") {
+			if current != nil {
+				chapters = append(chapters, *current)
+			}
+			current = &pageChapter{title: strings.TrimSpace(strings.TrimPrefix(trimmed, "## "))}
+			continue
+		}
+		if current != nil {
+			current.body += line + "\n"
+			continue
+		}
+		if strings.HasPrefix(trimmed, "# ") {
+			continue
+		}
+		leadLines = append(leadLines, line)
+	}
+	if current != nil {
+		chapters = append(chapters, *current)
+	}
+	return strings.TrimSpace(strings.Join(leadLines, "\n")), chapters
+}
+
+// introductionSectionAssets 提取章节内资产引用并绑定资产元数据（按出现顺序去重）。
+// 支持两种同源形态：figure 块内 `asset://<id>` 独立行，以及页尾 gallery 指令的
+// `ids="a,b"` 属性（`_common/asset_placement.py` 的规范产物）。
+func introductionSectionAssets(
+	sectionBody string,
+	assetByID map[string]HomepageIntroductionAsset,
+	role string,
+) []HomepageIntroductionAsset {
+	var out []HomepageIntroductionAsset
+	seen := map[string]bool{}
+	appendAsset := func(assetID string) {
+		assetID = strings.TrimSpace(assetID)
+		if assetID == "" || seen[assetID] {
+			return
+		}
+		seen[assetID] = true
+		asset, ok := assetByID[assetID]
+		if !ok || strings.TrimSpace(asset.URL) == "" {
+			return
+		}
+		asset.Role = role
+		out = append(out, asset)
+	}
+	type refGroup struct {
+		index int
+		ids   []string
+	}
+	var groups []refGroup
+	for _, match := range assetRefLineRe.FindAllStringSubmatchIndex(sectionBody, -1) {
+		groups = append(groups, refGroup{index: match[0], ids: []string{sectionBody[match[2]:match[3]]}})
+	}
+	for _, match := range galleryIDsAttrRe.FindAllStringSubmatchIndex(sectionBody, -1) {
+		groups = append(groups, refGroup{index: match[0], ids: strings.Split(sectionBody[match[2]:match[3]], ",")})
+	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i].index < groups[j].index })
+	for _, group := range groups {
+		for _, id := range group.ids {
+			appendAsset(id)
+		}
+	}
+	return out
+}
+
+func firstParagraphSummary(lead string) string {
+	for _, paragraph := range strings.Split(lead, "\n\n") {
+		text := strings.TrimSpace(paragraph)
+		if text == "" || strings.HasPrefix(text, ":::") || strings.HasPrefix(text, "asset://") {
+			continue
+		}
+		runes := []rune(text)
+		if len(runes) > 120 {
+			return string(runes[:120])
+		}
+		return text
+	}
+	return ""
+}
+
 func introductionSummary(homepage *Homepage) string {
 	parts := []string{}
 	if strings.TrimSpace(homepage.Subtitle) != "" {
@@ -156,6 +371,7 @@ func introductionAssets(homepage *Homepage) []HomepageIntroductionAsset {
 			AssetID:   homepage.ID + "_cover",
 			URL:       homepage.CoverURL,
 			Caption:   homepage.Title + " 封面图",
+			Role:      introductionAssetRoleCover,
 			SourceRef: homepageSourceRefs(homepage)[0],
 		},
 	}

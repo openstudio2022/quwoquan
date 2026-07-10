@@ -1,0 +1,53 @@
+id: CR-20260704-086-mafengwo-site-supply-controlled-trial
+title: 马蜂窝站点维度 100 到 1000 内容供给受控试跑
+date: 2026-07-04
+area: Data
+domain: content-supply
+type: additive
+summary: >
+  将马蜂窝旅行游记站点纳入 validation-only 站点评估链路，完成 100 与 1000 对象级
+  controlled trial 的 registry、rights gate、source precheck 和 site-scale-readiness 证据闭环。
+motivation:
+  - 本轮用于评估马蜂窝网站维度的中国旅行与摄影文章/图片候选质量、速度和成功率。
+  - 当前未取得马蜂窝批量抓取或逐资产发布授权，站点评估必须与正式发布链路分开计数。
+changes:
+  - 保持 mafengwo_travelogue 为 crawlAllowed=false、validationOnly=true、publishableAssetsAllowed=false。
+  - controlled trial profile gate 阻断 publishableAssetsAllowed=true，防止 validation-only 站点误入发布素材链路。
+  - source registry 与 catalog 补齐平台参考源、图虫授权源和 lane-specific controlledTrial lint。
+  - audit_managed_batch 并入 sourcePrecheck，百级及以上在 author 前检查主页 baseDraft、文章源数量、图片源集合、来源类别和 off_entity_no_anchor。
+  - trial_review 汇总 sourcePrecheck 失败实体、失败 lane 和阈值，便于百级到千级复盘。
+policy:
+  - 马蜂窝平台正文、图片和视频在未取得逐资产授权前不得计入可发布成功率。
+  - site_supply 只报告候选质量、吞吐和 DAG 稳定性；E2E publish 只报告 release-safe 对象。
+  - 当天 robots、服务协议和 /i/ WAF/captcha 探测必须作为每轮前置证据留档。
+evidence:
+  local_contract:
+    - python3 -m py_compile quwoquan_data/scripts/site_supply/core.py quwoquan_data/scripts/vertical/source_registry.py quwoquan_data/scripts/task/target_selection.py quwoquan_data/scripts/task/trial_review.py
+    - quwoquan_data/.venv/bin/pytest quwoquan_data/tests/local_contract/template/test_source_catalog__local_contract_test.py quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py quwoquan_data/tests/local_contract/site_supply/test_frontier_rollup__local_contract_test.py quwoquan_data/tests/local_contract/task/test_target_selection__local_contract_test.py quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py -q
+  runtime_e2e:
+    - /tmp/qwq_mfw_rollout_20260704/.qwq_output/data/runs/mfw_site100_20260704_site_trial.json
+    - /tmp/qwq_mfw_rollout_20260704/.qwq_output/data/runs/mfw_site100_20260704_site_scale_readiness.json
+    - /tmp/qwq_mfw_rollout_20260704/.qwq_output/data/runs/mfw_site100_20260704_site_scale_readiness_commercial.json
+    - /tmp/qwq_mfw_rollout_20260704/.qwq_output/data/runs/mfw_site100_20260704_site_quality_distribution_report.json
+    - /tmp/qwq_mfw_rollout_20260704/.qwq_output/data/runs/mfw_site1000_20260704_site_trial.json
+    - /tmp/qwq_mfw_rollout_20260704/.qwq_output/data/runs/mfw_site1000_20260704_site_scale_readiness.json
+    - /tmp/qwq_mfw_rollout_20260704/.qwq_output/data/runs/mfw_site1000_20260704_site_scale_readiness_commercial.json
+    - /tmp/qwq_mfw_rollout_20260704/.qwq_output/data/runs/mfw_site1000_20260704_site_quality_distribution_report.json
+runtime:
+  isolatedRoot: /tmp/qwq_mfw_rollout_20260704
+  batches:
+    - id: mfw_site100_20260704
+      targetCount: 100
+      laneCounts:
+        article: 60
+        image: 40
+      decision: go
+    - id: mfw_site1000_20260704
+      targetCount: 1000
+      laneCounts:
+        article: 600
+        image: 400
+      decision: go
+risks:
+  - 100 与 1000 controlled trial 证明的是 validation-only 站点漏斗，不证明马蜂窝 raw crawl 或平台素材发布授权。
+  - production 100/1000 object 必须使用官方、开放许可或授权池素材，并以 release/import/search/recommendation evidence 单独验收。

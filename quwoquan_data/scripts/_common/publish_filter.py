@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
+from _common.article_package import compute_asset_manifest_sha256, compute_document_sha256
 from _common.io import read_json, write_json
 from _common.review_ledger import (
     ReviewLedger,
@@ -137,6 +138,7 @@ class PublishFilterVerdict:
 
     def write_into(self, dst: Path) -> None:
         """把过滤后的 manifest / article.md 写入已复制好的发布目录，并删除 discard 图片文件。"""
+        _sync_release_final_provenance(dst, self.manifest, self.article_md)
         write_json(dst / "manifest.json", self.manifest)
         if self.article_md:
             (dst / "article.md").write_text(self.article_md, encoding="utf-8")
@@ -144,6 +146,40 @@ class PublishFilterVerdict:
             f = dst / "assets" / fname
             if f.is_file():
                 f.unlink()
+
+
+def _sync_release_final_provenance(topic_dir: Path, manifest: dict[str, Any], article_md: str) -> None:
+    """发布过滤会改正文/资产，release 面 provenance 必须指向过滤后的最终交付物。"""
+    review_dir = topic_dir / "5.review"
+    provenance_path = review_dir / "provenance.json"
+    is_image = str(manifest.get("contentType") or "") == "image" or str(
+        manifest.get("carrier") or ""
+    ) in ("image", "gallery")
+    final_digest = (
+        compute_asset_manifest_sha256(list(manifest.get("assets") or []))
+        if is_image
+        else compute_document_sha256(str(article_md or ""))
+    )
+    if is_image:
+        manifest.pop("articleMarkdownDigest", None)
+        manifest.pop("documentSha256", None)
+    else:
+        manifest["articleMarkdownDigest"] = final_digest
+        manifest["documentSha256"] = final_digest
+    if not provenance_path.is_file():
+        return
+    data = read_json(provenance_path)
+    if not isinstance(data, dict):
+        return
+    final = data.get("final")
+    if not isinstance(final, dict):
+        final = {}
+        data["final"] = final
+    if is_image:
+        final["assetDigest"] = final_digest
+    else:
+        final["articleDigest"] = final_digest
+    write_json(provenance_path, data)
 
 
 def _strip_asset_from_markdown(article_md: str, asset_ids: set[str]) -> str:

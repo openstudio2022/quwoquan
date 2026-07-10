@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from typing import Any, Mapping
 
-from _common.fanout_plan import iter_leaves, leaf_partitions
+from _common.fanout_plan import apply_leaf_contract_fields, iter_leaves, leaf_partitions
 from task.store import build_task_id
 
 STRATEGY_BY_PARTITION = "by-partition"
@@ -72,9 +72,14 @@ def expand_units(plan: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "category": partition.get("category") or (plan.get("defaults") or {}).get("category"),
                 "entityTypes": entity_types,
                 "refs": partition_refs(partition),
+                # 主清单契约字段随叶子透传（geoTagRef 等）：分区 task 的 coverageTargets
+                # 与 baseline catalog 依赖它们完成打标与 homepage 物化必填校验。
                 "leaves": [
-                    {"ref": str(l.get("ref")), "name": l.get("name"), "entityType": l.get("entityType"),
-                     "mutexKey": l.get("mutexKey") or l.get("ref")}
+                    apply_leaf_contract_fields(
+                        {"ref": str(l.get("ref")), "name": l.get("name"), "entityType": l.get("entityType"),
+                         "mutexKey": l.get("mutexKey") or l.get("ref")},
+                        l,
+                    )
                     for l in leaves
                 ],
             }

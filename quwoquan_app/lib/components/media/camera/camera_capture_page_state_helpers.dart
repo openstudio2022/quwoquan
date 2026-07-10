@@ -3,7 +3,7 @@ part of 'camera_capture_page.dart';
 extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
   Future<void> _initCamera() async {
     if (mounted) {
-      setState(() {
+      _setMountedState(() {
         _isBusy = true;
         _pageErrorSemantic = null;
         if (_capturedPhotoPath == null && _recordedVideoPath == null) {
@@ -17,7 +17,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
         if (!mounted) {
           return;
         }
-        setState(() {
+        _setMountedState(() {
           _cameraIndex = _cameras.isEmpty ? 0 : _initialCameraIndex();
           _pageErrorSemantic = null;
           _isBusy = false;
@@ -27,7 +27,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       }
       _cameras = await widget.cameraDiscovery();
       if (_cameras.isEmpty) {
-        setState(() {
+        _setMountedState(() {
           if (_capturedPhotoPath == null && _recordedVideoPath == null) {
             _pageErrorSemantic = _cameraUnavailableSemantic();
             _surfaceState = CameraPhotoSurfaceState.error;
@@ -41,7 +41,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       if (!mounted) {
         return;
       }
-      setState(() {
+      _setMountedState(() {
         _pageErrorSemantic = _isPermissionDenied(error)
             ? _cameraPermissionDeniedSemantic()
             : _cameraUnavailableSemantic();
@@ -54,7 +54,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       if (!mounted) {
         return;
       }
-      setState(() {
+      _setMountedState(() {
         _pageErrorSemantic = _cameraUnavailableSemantic();
         _surfaceState = CameraPhotoSurfaceState.error;
         _isBusy = false;
@@ -71,7 +71,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       return;
     }
     await _emitTelemetry('camera_photo_capture_click');
-    setState(() {
+    _setMountedState(() {
       _isBusy = true;
       _surfaceState = CameraPhotoSurfaceState.capturing;
     });
@@ -82,7 +82,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       if (!mounted) {
         return;
       }
-      setState(() {
+      _setMountedState(() {
         _capturedPhotoPath = path;
         _isBusy = false;
         _surfaceState = CameraPhotoSurfaceState.preview;
@@ -92,7 +92,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       if (!mounted) {
         return;
       }
-      setState(() {
+      _setMountedState(() {
         _isBusy = false;
         _surfaceState = CameraPhotoSurfaceState.ready;
       });
@@ -106,7 +106,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       return;
     }
     if (_surfaceState == CameraPhotoSurfaceState.filterOpen) {
-      setState(() => _surfaceState = CameraPhotoSurfaceState.ready);
+      _setMountedState(() => _surfaceState = CameraPhotoSurfaceState.ready);
     }
     final decision = await _ensureMicrophoneForRecording();
     if (!mounted || decision == _MicrophoneDecision.abort) {
@@ -144,7 +144,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
     if (!mounted) {
       return;
     }
-    setState(() {
+    _setMountedState(() {
       _isRecording = true;
       _recordedMs = 0;
       _surfaceState = CameraPhotoSurfaceState.recording;
@@ -153,7 +153,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       if (!mounted) {
         return;
       }
-      setState(
+      _setMountedState(
         () => _recordedMs += _CameraCapturePageState._recordTick.inMilliseconds,
       );
       if (_recordedMs >= widget.maxRecordingMs) {
@@ -186,7 +186,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       if (!mounted) {
         return;
       }
-      setState(() {
+      _setMountedState(() {
         _isRecording = false;
         _recordedMs = 0;
         _surfaceState = CameraPhotoSurfaceState.ready;
@@ -201,7 +201,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
     if (elapsed < widget.minRecordingMs ||
         path == null ||
         path.trim().isEmpty) {
-      setState(() {
+      _setMountedState(() {
         _isRecording = false;
         _recordedMs = 0;
         _surfaceState = CameraPhotoSurfaceState.ready;
@@ -211,7 +211,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
       await _emitVideoTelemetry('camera_video_record_too_short');
       return;
     }
-    setState(() {
+    _setMountedState(() {
       _isRecording = false;
       _recordedVideoPath = path;
       _recordedVideoPreviewFailed = false;
@@ -265,7 +265,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
   }
 
   Future<bool> _confirmDiscardVideo() async {
-    final choice = await showCupertinoModalPopup<bool>(
+    final choice = await showAppBottomModal<bool>(
       context: context,
       builder: (sheetContext) {
         final isDark =
@@ -571,7 +571,10 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
         horizontal: AppSpacing.containerMd,
         vertical: 0,
       ),
-      minSize: AppSpacing.buttonHeightSm - AppSpacing.hairline * 4,
+      minimumSize: Size(
+        AppSpacing.buttonHeightSm - AppSpacing.hairline * 4,
+        AppSpacing.buttonHeightSm - AppSpacing.hairline * 4,
+      ),
       onPressed: selected || _isBusy
           ? null
           : () => unawaited(_switchCaptureMode(mode)),
@@ -605,7 +608,7 @@ extension _CameraCapturePageStateHelpers on _CameraCapturePageState {
         _recordedVideoPath != null) {
       return;
     }
-    setState(() {
+    _setMountedState(() {
       _mode = mode;
       _audioEnabled = _isVideoMode;
       _flashMode = CameraPhotoFlashMode.off;

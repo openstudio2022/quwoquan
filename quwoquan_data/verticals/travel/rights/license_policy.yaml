@@ -3,14 +3,20 @@ vertical: travel
 defaultAction: block
 discoveryPlatformRoles:
   - platform: Pinterest
-    defaultDiscoveryRole: discovery_only
+    defaultDiscoveryRole: publish_candidate
   - platform: pinterest
-    defaultDiscoveryRole: discovery_only
+    defaultDiscoveryRole: publish_candidate
   - platform: 小红书
     defaultDiscoveryRole: reference_only
   - platform: 抖音
     defaultDiscoveryRole: reference_only
   - platform: 微博
+    defaultDiscoveryRole: reference_only
+  - platform: 今日头条
+    defaultDiscoveryRole: reference_only
+  - platform: Toutiao
+    defaultDiscoveryRole: reference_only
+  - platform: 马蜂窝
     defaultDiscoveryRole: reference_only
   - platform: B站
     defaultDiscoveryRole: reference_only
@@ -22,6 +28,20 @@ requiredImageFields:
   - sourceUrl
   - termsUrl
   - usageScope
+  - authorizationProof
+  - modelReleaseStatus
+allowedAuthorizationBases:
+  - attribution_no_watermark
+attributionNoWatermarkRequiredFields:
+  - authorizationBasis
+  - pinUrl
+  - discoveryUrl
+  - originalAssetUrl
+  - sourceAuthor
+  - repostAttribution
+  - watermarkScan
+  - ocrScan
+  - collectedAt
 allowedLicenseKinds:
   - CC0
   - CC0 1.0
@@ -52,6 +72,7 @@ allowedLicenseKinds:
   - scenic_official_authorized
   - photographer_authorized
   - museum_open_access
+  - attribution_no_watermark
 usageScopes:
   - internal_reference
   - app_publish

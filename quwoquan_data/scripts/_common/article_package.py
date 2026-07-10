@@ -6,7 +6,7 @@ import json
 import re
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import yaml
 
@@ -49,7 +49,10 @@ def canonicalize_markdown(markdown: str) -> str:
         return normalized
     front_raw = parts[0][4:]
     body = parts[1]
-    loaded = yaml.safe_load(front_raw) or {}
+    try:
+        loaded = yaml.safe_load(front_raw) or {}
+    except yaml.YAMLError:
+        return normalized
     if not isinstance(loaded, dict):
         return normalized
     canonical_front = yaml.safe_dump(
@@ -59,6 +62,18 @@ def canonicalize_markdown(markdown: str) -> str:
         default_flow_style=False,
     ).strip()
     return f"---\n{canonical_front}\n---\n{body}"
+
+
+def build_markdown_frontmatter(fields: Mapping[str, Any]) -> str:
+    """Return a YAML frontmatter block for Markdown post packages."""
+    cleaned = {str(key): value for key, value in fields.items() if value not in (None, "")}
+    dumped = yaml.safe_dump(
+        cleaned,
+        allow_unicode=True,
+        sort_keys=False,
+        default_flow_style=False,
+    )
+    return f"---\n{dumped}---\n\n"
 
 
 def compute_document_sha256(markdown: str) -> str:
@@ -120,14 +135,20 @@ def compute_post_asset_id(
     global_batch_seq: int | str,
     ref: str = "",
     nonce: int = 0,
+    caption: str = "",
+    section_slug: str = "",
+    ordinal: int = 0,
 ) -> str:
-    """成品图统一命名：实体_角色_全局批次号_hash。"""
+    """成品图统一命名（v2）：实体_角色_图注_全局批次号_hash。"""
     return _compute_post_asset_id(
         entity_name=entity_name,
         role=role,
         global_batch_seq=global_batch_seq,
         ref=ref,
         nonce=nonce,
+        caption=caption,
+        section_slug=section_slug,
+        ordinal=ordinal,
     )
 
 
@@ -138,6 +159,9 @@ def post_asset_id(
     global_batch_seq: int | str,
     ref: str = "",
     nonce: int = 0,
+    caption: str = "",
+    section_slug: str = "",
+    ordinal: int = 0,
 ) -> str:
     return compute_post_asset_id(
         entity_name=entity_name,
@@ -145,6 +169,9 @@ def post_asset_id(
         global_batch_seq=global_batch_seq,
         ref=ref,
         nonce=nonce,
+        caption=caption,
+        section_slug=section_slug,
+        ordinal=ordinal,
     )
 
 

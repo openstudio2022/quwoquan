@@ -11,7 +11,7 @@ scope:
   in_scope:
   - 创作首层三动作菜单、社交动作保留与媒体编辑器双编辑器心智。
   - 照片入口、视频入口、旧相机兼容和图片/视频真实结果分流。
-  - 图片路径不暴露一键成片、拍视频或录像语义。
+  - 图片路径承载一键成片、图片编辑与图片创作三段一致性；视频路径不暴露一键成片。
   - 编辑器顶栏草稿入口、保存状态、本地草稿页、自动保存、继续编辑与清稿时机统一。
   out_of_scope:
   - 重做图片编辑器内部工具。
@@ -36,12 +36,12 @@ gwt_acceptance:
     - "`/create?type=capture` 仅作为旧相机/深链兼容入口，默认拍照且同页可切到录像；拍照返回图片编辑状态，录像返回视频编辑状态。"
     - "`/create?type=write` 直接进入文字为主编辑器。"
     - 相册/相机取消且编辑器无内容时关闭创作页回到来源页。
-    - 图片 entry mode 下，相册选择器和拍摄页只表达图片发布，不展示“一键成片”“拍视频”“录像”等视频语义。
+    - 图片 entry mode 下，相册选择器和拍摄页只表达图片发布；选择页底部为 `一键成片` 与 `下一步(n)`，右上提供 `草稿箱`，不展示 `拍视频` 或录像语义。
     - 图片 flow 的创作页顶栏标题为“图片创作”，并使用主导航标题语义，不在首屏淡化。
     - 图片选择器已选缩略条、图片编辑器缩略条与创作页图片网格共用统一拖拽重排行为：内容不足一屏时左对齐，拖拽悬停时目标区间兄弟项即时前移/后移空出目标位。
-    - 视频 entry mode 下，选择页复用图片选择页的深色三列宫格，第 1 格为 `拍视频`，第 2 格为 `一键成片`，其余格仅展示视频资源。
-    - "`一键成片` 只属于视频入口：用户至少选择 1 张图片并生成本地视频后，直接进入视频编辑状态，不回到视频选择器停留。"
-    - 视频 entry mode 下，不复用图片路径的“编辑图片/完成(n)”按钮语义。
+    - 图片 entry mode 下，`一键成片` 至少选中 2 张图片才可用；点击后进入一键成片页，完成后进入图片创作页并锁定为单素材。
+    - 图片 entry mode 下，点击 `下一步(n)` 进入图片编辑页；图片编辑页底部工具栏下方提供蓝色 `下一步`，点击后进入图片创作页，图片顺序和编辑后路径在选择页、编辑页、创作页三者间保持一致。
+    - 视频 entry mode 下，选择页复用图片选择页的深色三列宫格，第 1 格为 `拍视频`，其余格仅展示视频资源；不展示 `一键成片`，不复用图片路径的 `一键成片` / `下一步(n)` 按钮语义。
     - 图片与视频互斥，切换类型前必须删空当前媒体，不存在图片和视频混合发布草稿。
     done_when:
     - "用户只需要在入口选择开始动作，系统能根据真实媒体结果进入图片或视频编辑状态，且发布 payload 的 `contentType` 与最终媒体类型一致。"
@@ -57,29 +57,29 @@ gwt_acceptance:
     - 入口到媒体工具可交互 warm P95 <= 1.2s。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
-      - file: quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/widgets/create_entry_sheet_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/create_entry_information_architecture_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_video_entry_mode__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_media_mode_split__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_media_picker_dark_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_create_page_surface__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/entry/widgets/create_entry_sheet_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/create_entry_information_architecture_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/create_entry_runtime_flag__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/app/shell/main_app_shell_widget__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_video_entry_mode__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_media_mode_split__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_media_picker_dark_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_create_page_surface__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
     status: completed
     test_evidence:
       primary:
@@ -148,7 +148,7 @@ gwt_acceptance:
     - 2026-06-22 已记录图片/视频 picker 动作互斥与发布 payload contentType 互斥合同。
     - 2026-06-25 补充图片 flow 顶栏标题“图片创作”、缩略条左对齐与悬停即时让位验收口径，三处列表继续共用同一拖拽真相源。
     - 2026-06-28 移动端 `+` 面板保留三条创作动作与三条社交动作；gallery 改为照片入口，新增 video 视频入口，capture 保留为旧相机/深链兼容入口，并以真实返回媒体类型进入图片/视频编辑状态。
-    - 2026-06-29 视频选择页改为与图片选择页一致的三列宫格，第 1 格 `拍视频`、第 2 格 `一键成片`；一键成片从图片选择生成本地视频后直接进入视频编辑状态。
+    - 2026-07-02 一键成片改归图片入口：图片选择页底部为 `一键成片` / `下一步(n)`，一键成片至少 2 张图片可用并进入图片创作页单素材锁定；视频选择页移除一键成片。
   GWT2:
     title: 编辑器顶栏草稿入口与保存状态可靠反映本地草稿
     given:
@@ -183,15 +183,15 @@ gwt_acceptance:
     - 杀进程恢复到可继续编辑 P95 <= 2s。
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_page__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_repository__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_draft_autosave_timing__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/localDrafts/localDrafts_page__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_page__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_repository__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_draft_autosave_timing__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
     status: completed
@@ -230,7 +230,7 @@ gwt_acceptance:
     - 2026-06-28 草稿入口从 sheet 移至编辑器顶栏；保存状态由同一 session controller 驱动，保存成功后 reload 校验再显示 `已保存`，本地草稿页进入/恢复时 reload。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

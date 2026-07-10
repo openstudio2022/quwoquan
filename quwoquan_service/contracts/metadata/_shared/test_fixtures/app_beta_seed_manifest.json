@@ -33,7 +33,7 @@
         "creator_authored_core"
       ],
       "resetScope": "fixture_content_*",
-      "targetStore": "content-service:test_store",
+      "targetStore": "mongodb:content_test.posts",
       "verifiedEndpoints": [
         "/v1/content/feed",
         "/v1/content/posts/fixture_photo_001",
@@ -54,7 +54,7 @@
         "circle_group_chat_link_core"
       ],
       "resetScope": "fixture_circle_*",
-      "targetStore": "circle-service:test_store",
+      "targetStore": "mongodb:circle_test",
       "verifiedEndpoints": [
         "/v1/circles",
         "/v1/circles/fixture_circle_photo"
@@ -71,7 +71,7 @@
         "chat_realtime_mock_core"
       ],
       "resetScope": "fixture_chat_*",
-      "targetStore": "chat-service:test_store",
+      "targetStore": "mongodb:chat_test",
       "verifiedEndpoints": [
         "/v1/chat/inbox",
         "/v1/chat/conversations/fixture_conv_direct/messages"
@@ -89,7 +89,7 @@
         "settings_core"
       ],
       "resetScope": "fixture_user_*",
-      "targetStore": "user-service:test_store",
+      "targetStore": "postgres+mongodb:user_test",
       "verifiedEndpoints": [
         "/v1/user/profile",
         "/v1/user/following-subjects"
@@ -99,11 +99,11 @@
       "domain": "creator_pool",
       "fixturePath": "_shared/test_fixtures/creator_pool/creator_pool_scenarios.json",
       "refs": [
-        "creator_travel_batch100",
-        "creator_travel_travel_batch_100_v1_core"
+        "creator_travel_photo_1k_v1",
+        "creator_travel_photo_1k_v1_core"
       ],
       "resetScope": "fixture_creator_pool_*",
-      "targetStore": "user-service:test_store",
+      "targetStore": "postgres+mongodb:user_test",
       "verifiedEndpoints": [
         "/v1/user/profile",
         "/v1/user/{subAccountId}"
@@ -117,8 +117,9 @@
         "entity_claim_core",
         "entity_picker_core"
       ],
-      "resetScope": "fixture_entity_*",
-      "targetStore": "entity-service:test_store",
+      "resetScope": "homepage_state snapshot in quwoquan_entity (ship/import sync+tombstone 幂等重放)",
+      "targetStore": "mongodb:quwoquan_entity.homepage_state",
+      "seedChannel": "promote→qwq-data ship --import（content import + entity-service homepage-import，与 gamma 同通道、env 参数区分）",
       "verifiedEndpoints": [
         "/v1/homepages/search",
         "/v1/homepages/{homepageId}/object-page-bundle",
@@ -132,7 +133,7 @@
         "location_poi_core"
       ],
       "resetScope": "fixture_integration_*",
-      "targetStore": "integration-service:test_store",
+      "targetStore": "integration-service:memory",
       "verifiedEndpoints": [
         "/v1/integration/locations/pois"
       ]
@@ -144,7 +145,7 @@
         "notification_core"
       ],
       "resetScope": "fixture_notification_*",
-      "targetStore": "notification-service:test_store",
+      "targetStore": "notification-service:memory",
       "verifiedEndpoints": [
         "/v1/app-messages"
       ]
@@ -156,7 +157,7 @@
         "rtc_core"
       ],
       "resetScope": "fixture_rtc_*",
-      "targetStore": "rtc-service:test_store",
+      "targetStore": "mongodb:rtc_test",
       "verifiedEndpoints": [
         "/v1/rtc/calls"
       ]

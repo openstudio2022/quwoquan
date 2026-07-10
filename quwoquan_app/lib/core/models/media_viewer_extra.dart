@@ -18,10 +18,7 @@ class MediaViewerPostWireRow {
     FeedItemDto item, {
     Map<String, dynamic>? extra,
   }) {
-    final merged = <String, dynamic>{
-      ...item.toDiscoveryWireMap(),
-      if (extra != null) ...extra,
-    };
+    final merged = <String, dynamic>{...item.toDiscoveryWireMap(), ...?extra};
     return MediaViewerPostWireRow._(merged);
   }
 

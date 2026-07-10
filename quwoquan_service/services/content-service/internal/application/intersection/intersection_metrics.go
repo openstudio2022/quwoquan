@@ -16,6 +16,10 @@ type IntersectionMetricsRecorder interface {
 	ObserveFeedFiltered(channel, reason string)
 	// ObserveExposureReported 记录写入跨会话冷却记忆窗的对象数（冷却写入量）。
 	ObserveExposureReported(count int)
+	// ObserveNegativeFeedbackReported 记录写入交集负反馈冷却集（rec:ineg）的 subject 数
+	// （F 推荐差异化）。是「负反馈 → 降权/冷却生效」漏斗的写入量真相源，支撑
+	// 「过冷却/保鲜不再重复推荐」验收（ObserveFeedFiltered reason=negative 为消费侧对偶）。
+	ObserveNegativeFeedbackReported(count int)
 	// ObserveInboxVisit 记录一次「我的交集」清零（推进已读水位）按维度计数。
 	ObserveInboxVisit(dimension string)
 	// ObserveInboxFiltered 记录我的交集 summary/list 中被保鲜过滤的交集（触发重算）。
@@ -32,6 +36,7 @@ type noopIntersectionMetrics struct{}
 func (noopIntersectionMetrics) ObserveFeedCandidate(string, string, string) {}
 func (noopIntersectionMetrics) ObserveFeedFiltered(string, string)          {}
 func (noopIntersectionMetrics) ObserveExposureReported(int)                 {}
+func (noopIntersectionMetrics) ObserveNegativeFeedbackReported(int)         {}
 func (noopIntersectionMetrics) ObserveInboxVisit(string)                    {}
 func (noopIntersectionMetrics) ObserveInboxFiltered(string)                 {}
 func (noopIntersectionMetrics) ObserveRedisDegraded(string)                 {}

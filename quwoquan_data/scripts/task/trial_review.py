@@ -35,6 +35,7 @@ from task.trial_review_scale import (
 
 SCHEMA_VERSION = "quwoquan_data.trial_review/1"
 LANES = ("homepage", "article", "image")
+TERMINAL_WORKFLOW_STATUSES = {"succeeded", "completed_with_reasoned_rejects"}
 
 
 def _load_json_if_exists(path: Path) -> dict[str, Any]:
@@ -67,6 +68,16 @@ def _ratio(numerator: int, denominator: int) -> float:
     if denominator <= 0:
         return 0.0
     return round(max(0, numerator) / denominator, 4)
+
+
+def _is_terminal_workflow_state(state: Mapping[str, Any]) -> bool:
+    status = str(state.get("status") or "").strip()
+    if status not in TERMINAL_WORKFLOW_STATUSES:
+        return False
+    if str(state.get("waitingCheckpoint") or "").strip():
+        return False
+    failed = state.get("failedObjects") or []
+    return not (isinstance(failed, list) and failed)
 
 
 def _coverage_target_names(spec: Mapping[str, Any]) -> list[str]:
@@ -106,6 +117,9 @@ def _trial_scope(spec: Mapping[str, Any]) -> dict[str, Any]:
     image_jobs = target_count * image_per_target
     queue_policy = spec.get("queuePolicy") if isinstance(spec.get("queuePolicy"), Mapping) else {}
     research = content.get("research") if isinstance(content.get("research"), Mapping) else {}
+    deterministic_first_stages = ["download_plan_prepare", "content_plan"]
+    if homepage_per_target > 0:
+        deterministic_first_stages.insert(1, "build_homepage")
     return {
         "targetCount": target_count,
         "targets": names,
@@ -125,7 +139,7 @@ def _trial_scope(spec: Mapping[str, Any]) -> dict[str, Any]:
         "agentCallPlan": {
             "creativeAuthorJobs": article_jobs + image_jobs,
             "expectedModelCriticalStage": "produce_author",
-            "deterministicFirstStages": ["download_plan_prepare", "build_homepage", "content_plan"],
+            "deterministicFirstStages": deterministic_first_stages,
         },
         "executionPolicy": {
             "queueBackend": str(queue_policy.get("backend") or ""),
@@ -241,6 +255,16 @@ def _source_readiness_summary(
         if str(item.get("entity") or "").strip() and str(item.get("entity") or "").strip() != "__batch__"
     })
     failed_lane_count = _safe_int(managed_audit.get("failedLaneCount"))
+    source_precheck = managed_audit.get("sourcePrecheck") if isinstance(managed_audit.get("sourcePrecheck"), Mapping) else {}
+    source_precheck_failed_lanes = [
+        item for item in (source_precheck.get("failedLanes") or [])
+        if isinstance(item, Mapping)
+    ] if isinstance(source_precheck, Mapping) else []
+    source_precheck_failed_entities = [
+        str(item).strip()
+        for item in (source_precheck.get("failedEntities") or [])
+        if str(item).strip()
+    ] if isinstance(source_precheck, Mapping) else []
     auto_signal = bool(auto_ready or auto_ineligible)
     if auto_signal:
         target_count = target_count or len(auto_ready) + len(auto_ineligible)
@@ -317,6 +341,13 @@ def _source_readiness_summary(
                 for item in auto_ineligible[:20]
                 if str(item.get("entityId") or "").strip()
             ],
+        },
+        "sourcePrecheck": {
+            "enabled": bool(source_precheck.get("enabled")) if isinstance(source_precheck, Mapping) else False,
+            "failedEntityCount": len(source_precheck_failed_entities),
+            "failedLaneCount": len(source_precheck_failed_lanes),
+            "failedEntitySample": source_precheck_failed_entities[:20],
+            "thresholds": dict(source_precheck.get("thresholds") or {}) if isinstance(source_precheck, Mapping) else {},
         },
     }
 
@@ -453,8 +484,9 @@ def _failure_score(snapshot: Mapping[str, Any], evidence: Mapping[str, Any] | No
         status = str(state.get("status") or "")
         if status in {"repairing", "manual_required", "failed"}:
             score += 10
+    terminal = isinstance(state, Mapping) and _is_terminal_workflow_state(state)
     last_agent = snapshot.get("lastAgentRun") or {}
-    if isinstance(last_agent, Mapping):
+    if isinstance(last_agent, Mapping) and not terminal:
         score += 5 * int(last_agent.get("infrastructureFailures") or 0)
         job_count = int(last_agent.get("jobCount") or 0)
         finished = int(last_agent.get("finishedCount") or 0)
@@ -561,8 +593,9 @@ def _blockers_and_warnings(
             blockers.append(f"workflow status is {status}")
         if isinstance(failed, list) and failed:
             blockers.append(f"workflow has failedObjects={len(failed)}")
+    terminal = isinstance(state, Mapping) and _is_terminal_workflow_state(state)
     last_agent = workflow.get("lastAgentRun") or {}
-    if isinstance(last_agent, Mapping):
+    if isinstance(last_agent, Mapping) and not terminal:
         infra = int(last_agent.get("infrastructureFailures") or 0)
         job_count = int(last_agent.get("jobCount") or 0)
         started = int(last_agent.get("startedCount") or 0)
@@ -573,6 +606,11 @@ def _blockers_and_warnings(
             blockers.append("agent jobs planned but no worker started")
         if job_count and finished < job_count:
             blockers.append(f"agent jobs unfinished: {finished}/{job_count}")
+    elif isinstance(last_agent, Mapping) and terminal and int(last_agent.get("infrastructureFailures") or 0):
+        warnings.append(
+            "terminal workflow ignored stale lastAgentRun infrastructure failures; "
+            "use agentRunHistory for throughput diagnostics"
+        )
     active_scheduler = workflow.get("activeAgentScheduler") or {}
     if isinstance(active_scheduler, Mapping) and active_scheduler:
         warnings.append(
@@ -652,15 +690,20 @@ def _terminal_cause(
     execution_policy = scope.get("executionPolicy") if isinstance(scope.get("executionPolicy"), Mapping) else {}
     allow_partial = bool(execution_policy.get("allowPartialContent", True) is not False)
     env_ready = evidence.get("envReady") if evidence.get("envReadyReportExists") else evidence.get("managedEnvReady")
+    state = workflow.get("workflowState") or {}
+    terminal = isinstance(state, Mapping) and _is_terminal_workflow_state(state)
     last_agent = workflow.get("lastAgentRun") or {}
-    if isinstance(last_agent, Mapping) and int(last_agent.get("infrastructureFailures") or 0):
+    if (
+        isinstance(last_agent, Mapping)
+        and int(last_agent.get("infrastructureFailures") or 0)
+        and not terminal
+    ):
         return {
             "category": "cursor_sdk_infra_failure",
             "stage": str(last_agent.get("stage") or "managed_agent"),
             "reason": f"infrastructureFailures={last_agent.get('infrastructureFailures')}",
             "retryClass": "infra_retry_then_manual",
         }
-    state = workflow.get("workflowState") or {}
     if isinstance(state, Mapping):
         failed = state.get("failedObjects") or []
         next_action = str(state.get("nextAction") or "")

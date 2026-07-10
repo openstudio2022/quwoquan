@@ -4,7 +4,7 @@
 
 当前仓库已形成 4 条并行但未完全打通的事件链路：
 
-1. 页级访问与性能日志：`quwoquan_app/lib/app/navigation/page_access_log_util.dart` 与 `quwoquan_app/lib/assistant/observability/logging/app_log_service.dart` 已提供 `open / return / perf` 与 `sessionId / pageVisitId` 等上下文，但主要写入本地 JSONL。
+1. 页级访问与性能日志：`quwoquan_app/lib/app/navigation/page_access_log_util.dart` 与 `quwoquan_app/lib/assistant/observability/logging/app_log_service.dart` 已提供 `open / return / perf` 与 `sessionId / pageVisitId` 等上下文，但主要写入本地诊断记录。
 2. 内容行为与推荐热链路：`quwoquan_app/lib/core/trackers/content_behavior_tracker.dart` → `quwoquan_service/services/content-service/internal/application/behavior/behavior_service.go` → `quwoquan_service/runtime/recommendation/hotpath.go`，已能把 `impression / click / dwell / dislike / share` 等信号写入 Redis 热状态。
 3. Assistant 学习链路：端侧 `assistant_learning_service.dart` 已有 InteractionEvent / Scorecard 模型，云侧 `assistant_run/service.yaml` 也已定义 `POST /v1/assistant/learning/events` 与 `POST /v1/assistant/learning/scorecards`，但端侧同步仍停留在 `localMock / cloudStub`。
 4. 访问记录与体验标签：本地 visit recorder 与 page context 已可形成 returning/frequent 等语义，但未形成统一上云与分析闭环。

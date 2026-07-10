@@ -5,6 +5,7 @@
 - 署名口吻: {{byline}}
 - 字数区间: {{word_count_min}}–{{word_count_max}} 字（去空白）
 {{creator_lock_line}}
+{{primary_entity_contract_line}}
 
 {{creative_brief_block}}
 

@@ -291,12 +291,12 @@ entries:
           - repository fan-out
           - recent search reconcile
           - assistant handoff prep
-      - path: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      - path: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
         sections:
           - landing history
           - mixed result rendering
           - assistant handoff
-      - path: quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
+      - path: quwoquan_app/test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart
         sections:
           - A2
           - A3

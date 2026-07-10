@@ -19,20 +19,20 @@ import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 import 'package:quwoquan_app/ui/circle/providers/circle_impact_provider.dart';
 import 'package:quwoquan_app/ui/entity/providers/entity_impact_provider.dart';
 
-/// 对象页「影响力」预览卡目标（实体 homepage / 圈子 circle）。
+/// 对象页「打动」预览卡目标（实体 homepage / 圈子 circle）。
 enum ObjectImpactTarget { homepage, circle }
 
-/// 「影响力」预览卡（实体 / 圈子主页共享）。
+/// 「打动」预览卡（实体 / 圈子主页共享）。
 ///
 /// 与 [ObjectIntersectionPreviewCard] 同壳：最多 3 条、只读云侧 [primaryText]、
-/// 数字片段可点开来源说明；无真实影响事实时整卡收起（G2）。
+/// 数字片段可点开来源说明；无真实打动事实时整卡收起（G2）。
 class ObjectImpactPreviewCard extends ConsumerWidget {
   const ObjectImpactPreviewCard({
     super.key,
     required this.objectId,
     required this.target,
     required this.referralSource,
-    this.title = UITextConstants.objectImpactTitle,
+    required this.title,
     this.enumerableHint = UITextConstants.impactEnumerableHintEntity,
     this.maxItems = 3,
     this.topDivider = true,
@@ -68,10 +68,7 @@ class ObjectImpactPreviewCard extends ConsumerWidget {
         },
       );
 
-  Future<void> _showEvidence(
-    BuildContext context,
-    _ObjectImpactLine item,
-  ) {
+  Future<void> _showEvidence(BuildContext context, _ObjectImpactLine item) {
     final source = item.source.trim().isEmpty ? title : item.source.trim();
     final message = item.count > 0
         ? '$enumerableHint\n$source · ${item.count}'
@@ -125,7 +122,11 @@ class ObjectImpactPreviewCard extends ConsumerWidget {
         .toList(growable: false);
   }
 
-  Widget _buildCard(BuildContext context, WidgetRef ref, List<_ObjectImpactLine> lines) {
+  Widget _buildCard(
+    BuildContext context,
+    WidgetRef ref,
+    List<_ObjectImpactLine> lines,
+  ) {
     if (lines.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -177,16 +178,24 @@ class ObjectImpactPreviewCard extends ConsumerWidget {
     }
 
     return switch (target) {
-      ObjectImpactTarget.homepage => ref.watch(entityImpactProvider(trimmedId)).when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-            data: (summary) => _buildCard(context, ref, _linesFromEntity(summary)),
-          ),
-      ObjectImpactTarget.circle => ref.watch(circleImpactProvider(trimmedId)).when(
-            loading: () => const SizedBox.shrink(),
-            error: (_, _) => const SizedBox.shrink(),
-            data: (summary) => _buildCard(context, ref, _linesFromCircle(summary)),
-          ),
+      ObjectImpactTarget.homepage =>
+        ref
+            .watch(entityImpactProvider(trimmedId))
+            .when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
+              data: (summary) =>
+                  _buildCard(context, ref, _linesFromEntity(summary)),
+            ),
+      ObjectImpactTarget.circle =>
+        ref
+            .watch(circleImpactProvider(trimmedId))
+            .when(
+              loading: () => const SizedBox.shrink(),
+              error: (_, _) => const SizedBox.shrink(),
+              data: (summary) =>
+                  _buildCard(context, ref, _linesFromCircle(summary)),
+            ),
     };
   }
 }

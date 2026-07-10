@@ -83,14 +83,14 @@ class AppConceptConstants {
   static const String chat = '消息';
   static const String profile = '我';
 
-  // ==================== 同趣 / 找同趣（兴趣配对发现入口） ====================
-  /// 同趣能力短标签：以交集与亲和力为半径，发现同趣的人 / 圈子 / 地点并行动。
-  static const String interestMatch = '同趣';
+  // ==================== 交集配对（发现启动器入口） ====================
+  /// 交集配对能力短标签：以交集与亲和力为半径，发现同趣的人 / 圈子 / 地点并行动。
+  static const String interestMatch = '交集配对';
 
-  /// 找同趣页标题（兴趣配对发现启动器）
-  static const String interestMatchTitle = '找同趣';
+  /// 交集配对页标题（发现启动器）
+  static const String interestMatchTitle = '交集配对';
 
-  /// 找同趣页副标题：以交集为半径，遇见同趣的人、圈子与地点
+  /// 交集配对页副标题：以交集为半径，遇见同趣的人、圈子与地点
   static const String interestMatchSubtitle = '以交集为半径，遇见同趣的人、圈子与地点';
 
   // ==================== 交集展示（发现流徽章 / 对象页行动区） ====================

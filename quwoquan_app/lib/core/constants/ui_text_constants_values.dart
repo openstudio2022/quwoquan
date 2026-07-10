@@ -318,6 +318,8 @@ class UITextConstants {
   static const String loginAgreementAnd = ' 和 ';
   static const String userAgreement = '用户协议';
   static const String privacyPolicy = '隐私政策';
+  static const String permissionsStatement = '权限说明';
+  static const String thirdPartySdkList = '第三方 SDK 清单';
   static const String loginAgreementRequired = '请先阅读并同意用户协议和隐私政策';
   static const String loginOtherMethods = '其他登录方式';
   static const String loginMethodWechat = '微信';
@@ -563,15 +565,14 @@ class UITextConstants {
   static const String profileReportReasonHarassment = '骚扰辱骂';
   static const String profileReportReasonPornography = '色情低俗';
   static const String profileReportReasonOther = '其他';
-  // 影响力摘要模块（他人 / 我的双视角）
-  static const String profileImpactTitleMine = '我的影响力';
-  // V5 口径（profile-homepage-redesign SIT4 / 主任务 V5 成功标准）：
-  // 他人主页影响力模块统一命名「TA的影响力」，与「我的影响力」对称。
-  static const String profileImpactTitleOther = 'TA的影响力';
+  // 「打动」摘要模块（他人 / 我的双视角）：§18.7.1 前台由「影响力」收敛为「打动的人」列表视角（机器名 impact 字段不变）。
+  static const String profileImpactTitleMine = '我打动的人';
+  // §24.8 他人主页统一「TA打动的人」，与「我打动的人」对称。
+  static const String profileImpactTitleOther = 'TA打动的人';
   static const String profileImpactSubtitleMine = '我的内容真实帮到了谁';
   static const String profileImpactSubtitleOther = 'TA的内容真实帮到了谁';
   static const String profileImpactEmptyMine = profileInteractionEmptyGuidance;
-  static const String profileImpactEmptyOther = 'TA 的公开影响力还在形成中，更多连接与带动会展示在这里';
+  static const String profileImpactEmptyOther = 'TA 打动的人还在形成中，更多连接与带动会展示在这里';
   static const String profileShareHomepage = '分享主页';
   static const String shareComingSoon = '主页分享暂不可用';
   static const String notInterested = '不感兴趣';
@@ -656,24 +657,29 @@ class UITextConstants {
   // Work Browser 文章页码（正文下方、作者工具栏上方）
   static String workArticlePageProgress(int current, int total) =>
       '$current / $total';
-  static const String profileStatementFallbackSubtitle = '新的连接正在生成';
+  static const String profileStatementFallbackSubtitle = '新的交集正在生成';
   static const String objectIntersectionCtaFollowAuthor = '关注作者';
   static const String objectIntersectionCtaJoinCircle = '加入圈子';
   static const String objectIntersectionCtaAddContact = '加为联系人';
   static const String objectIntersectionCtaAskAssistant = '问问小趣';
-  static const String objectIntersectionCtaView = '查看这个连接';
+  static const String objectIntersectionCtaView = '查看这条交集';
 
   /// 对象/圈子主页「我的交集」模块统一标题（与我的主页同语义 token）。
   static const String objectMyIntersectionsTitle = '我的交集';
 
-  /// 对象/圈子主页「影响力」模块统一标题。
-  static const String objectImpactTitle = '影响力';
+  /// 实体主页「打动」模块标题（§24.8「这里打动的人」）。
+  static const String objectImpactTitleEntity = '这里打动的人';
 
-  /// 实体主页「我的交集」空态：你与这里尚无真实连接。
-  static const String objectIntersectionEmptyEntity = '你和这里还没有产生交集';
+  /// 圈子主页「打动」模块标题（§24.8「圈子打动的人」）。
+  static const String objectImpactTitleCircle = '圈子打动的人';
 
-  /// 圈子主页「我的交集」空态：你与这个圈子尚无真实连接。
-  static const String objectIntersectionEmptyCircle = '你和这个圈子还没有产生交集';
+  /// 实体主页「我的交集」空态：你与这里尚无可展示事实交集，行动引导生成真实连接。
+  static const String objectIntersectionEmptyEntity =
+      '你和这里暂时没有可展示交集，发记录或关注相关内容后会在这里沉淀';
+
+  /// 圈子主页「我的交集」空态：不否认圈子本身影响力，只表达 viewer × circle 暂无交集。
+  static const String objectIntersectionEmptyCircle =
+      '你和这个圈子暂时没有可展示交集，进入讨论或关注成员后会在这里沉淀';
 
   /// 实体主页核心动作次按钮：围绕这里沉淀记录。
   static const String entityActionPublishRecord = '发记录';
@@ -681,14 +687,14 @@ class UITextConstants {
   /// 圈子主页核心动作次按钮：进入讨论（切换到讨论 tab）。
   static const String circleActionEnterDiscussion = '进入讨论';
 
-  static const String objectConnectionWithYou = '与你的连接';
+  static const String objectConnectionWithYou = '与你的交集';
   static const String impactEnumerableHintMine = '可查看与你内容相关的连接来源';
   static const String impactEnumerableHintOther = '可查看与TA内容相关的连接来源';
   static const String impactEnumerableHintCircle = '可查看这个影响的连接来源';
   static const String impactEnumerableHintEntity = '可查看这个影响的连接来源';
-  static const String objectIntersectionsTitle = '全部连接';
-  static const String objectIntersectionsEmpty = '暂时还没有可展示的连接';
-  static const String objectIntersectionsUnavailableTitle = '连接暂不可用';
+  static const String objectIntersectionsTitle = '全部交集';
+  static const String objectIntersectionsEmpty = '暂时没有可展示的交集';
+  static const String objectIntersectionsUnavailableTitle = '交集暂不可用';
   static const String objectHomepageDefaultTitle = '这个主页';
   static const String homepageMaintainAction = '维护主页';
   static const String homepageClaimAction = '认领主页';
@@ -1553,9 +1559,8 @@ class UITextConstants {
   static const String profileBrowseHistory = '浏览历史';
   static const String profileDirectMessage = '私信';
   static const String profileTabCreations = '记录';
-  static const String profileIntersectionImpactTitle = '交集与影响力';
   static const String profileTabIntersection = '交集';
-  static const String profileTabImpact = '影响力';
+  static const String profileTabImpact = '打动';
 
   /// 主页统计行列名（记录 / 粉丝）。关注复用 [follow]，获赞复用 [circleLikes]。
   static const String profileStatRecords = '记录';
@@ -1742,7 +1747,7 @@ class UITextConstants {
   static const String createActionAddContactShort = homeObjectActionAddContact;
   static const String createActionCreateGroupShort = '发起群聊';
   static const String createActionCreateCircleShort = createCircle;
-  static const String createActionInterestMatchShort = '兴趣配对';
+  static const String createActionInterestMatchShort = '交集配对';
   static const String createActionInterestMatchSubtitle = '发现同趣的人、圈子与地点';
   static const String createActionPublishGroupTitle = publishAction;
   static const String createActionSocialGroupTitle = profileTabInteraction;
@@ -1852,6 +1857,9 @@ class UITextConstants {
   static const String startGroupChatPickFromGroupSearch = '搜索群聊';
   static const String startGroupChatGroupPickerTitle = '选择群聊';
   static const String startGroupChatGroupPickerEmpty = '暂无可选的群聊';
+  static const String startGroupChatCompanionContextTitle = '正在发起交集结伴';
+  static const String startGroupChatCompanionContextSubtitle =
+      '已带入共同想去对象与交集来源，提交前仍会经过登录、实名、青少年模式和频控等安全门。';
   static String startGroupChatRemovedMember(String name) => '已移除 $name';
   static String startGroupChatFriendsCount(int count) => '$count 个朋友';
   static String startGroupChatGroupMemberTitle(String name, int count) =>
@@ -1881,6 +1889,7 @@ class UITextConstants {
   /// 媒体区提示与操作
   static const String createMediaHintVideoCover = '轻点视频编辑，可设置封面';
   static const String createMediaHintAddFirst = '先添加图片或视频';
+  static const String createMediaOneTapMovieLockedHint = '一键成片作品，仅支持 1 个素材';
   static const String createMediaHintDragReorder = '拖拽排序，轻点编辑';
   static const String createDeleteVideoBeforeImages = '请先删除当前视频，再改为图片';
   static const String createClearImagesBeforeVideo = '请先删空图片，再改为视频';
@@ -1889,10 +1898,11 @@ class UITextConstants {
   static const String createEditorRollbackBanner =
       '当前处于编辑器回退模式，保留双编辑器骨架并关闭增强提示。';
   static const String createMediaSingleVideoCaption = '仅 1 个视频';
+  static const String createMediaOneTapMovieSingleCaption = '仅 1 个素材';
   static const String createMediaBodySectionLabel = '正文';
   static const String createMediaBodyPlaceholder = '补一段配文，让内容更完整';
   static const String createVideoEditFeaturesHint = '轻点视频编辑，支持裁切、静音和精细选帧';
-  static const String createVideoBadgeEditLabel = '编辑视频';
+  static const String createVideoBadgeEditLabel = '视频编辑';
   static const String createVideoKindBadgeLabel = '视频';
   static const String createAddTitleWithOptional = '添加标题（可选）';
   static const String createFieldOptionalTag = '可选';
@@ -2104,6 +2114,34 @@ class UITextConstants {
   static const String videoChangeCover = '更换封面';
   static const String videoNoVideo = '暂无视频';
   static const String videoDurationTooLong = '视频时长超过1小时，请重新选择';
+  static const String videoEditorTitle = '编辑视频';
+  static const String videoEditorPreviewUnavailableTitle = '视频预览暂不可用';
+  static const String videoEditorPreviewUnavailableMessage =
+      '暂时无法加载视频预览，但仍可返回重新选择素材。';
+  static const String videoEditorFramesUnavailableTitle = '时间轴帧暂不可用';
+  static const String videoEditorExportFailedTitle = '视频导出未完成';
+  static const String videoEditorMuted = '已静音';
+  static const String videoEditorKeepSound = '保留原声';
+  static const String videoEditorReset = '恢复初始编辑';
+  static const String videoEditorPreviewTimeline = '播放头预览';
+  static const String videoEditorPreviewTimelineHint = '拖动播放头，边拖边看当前帧';
+  static const String videoEditorCurrentTimePrefix = '当前';
+  static const String videoEditorTrimSegment = '裁切片段';
+  static const String videoEditorDurationSuffix = '时长';
+  static const String videoEditorStartPrefix = '开始';
+  static const String videoEditorEndPrefix = '结束';
+  static const String videoEditorCoverPrefix = '封面';
+  static const String videoEditorCoverTool = '封面';
+  static const String videoEditorCropTool = '裁剪';
+  static const String videoEditorMuteTool = '静音';
+  static const String videoEditorVolumeTool = '音量';
+  static const String videoEditorCoverTimeline = '封面时间轴';
+  static const String videoEditorGenerating = '生成中';
+  static const String videoEditorFrameCountSuffix = '帧';
+  static const String videoEditorPreviewFramesLoading = '正在缓存更细颗粒度视频帧...';
+  static const String videoEditorNoPreviewFrames = '暂无可用预览帧';
+  static const String videoEditorFramesLoading = '正在生成视频帧...';
+  static const String videoEditorNoFrames = '暂无可选封面帧';
   // 媒体选择器（创作）
   static const String mediaPickerAlbumAll = '全部';
   static const String mediaPickerAlbumAllPhotos = '全部照片';
@@ -2123,10 +2161,14 @@ class UITextConstants {
   static const String mediaPickerVideoTitle = '全部视频';
   static const String mediaPickerVideoCameraEntry = '拍视频';
   static const String mediaPickerOneTapMovie = '一键成片';
+  static const String mediaPickerOneTapMovieOriginal = '使用原片';
+  static const String mediaPickerOneTapMovieGentleMotion = '轻动效';
+  static const String mediaPickerOneTapMovieBeat = '卡点';
+  static const String mediaPickerOneTapMovieScenery = '风景';
   static const String mediaPickerOneTapMovieComposing = '生成中...';
   static const String mediaPickerOneTapMovieUnavailable = '当前设备暂不支持一键成片';
   static const String mediaPickerOneTapMovieFailed = '成片失败，请重试';
-  static const String mediaPickerOneTapMovieQueued = '已加入一键成片，请在发视频页继续';
+  static const String mediaPickerOneTapMovieQueued = '已加入一键成片，请在发布页继续';
   static const String mediaPickerNextStep = '下一步';
   static const String mediaPickerPhotoTitle = '图片选择';
   static const String mediaPickerAlbumSelectionTitle = '选择相册';
@@ -2136,6 +2178,7 @@ class UITextConstants {
   static const String mediaPickerOverLimit = '已达到可选数量上限';
   static const String mediaPickerPermissionDenied = '请允许相册访问权限后再选择媒体';
   static const String mediaPickerImageOnly = '当前入口仅支持选择图片';
+  static const String mediaPickerVideoOnly = '当前入口仅支持选择视频';
   static const String desktopPickerChooseFolder = '选择文件夹';
   static const String desktopPickerChangeFolder = '更换文件夹';
   static const String desktopPickerEmptyTitle = '还没有选择图片文件夹';

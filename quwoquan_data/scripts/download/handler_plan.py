@@ -18,6 +18,7 @@ from typing import Any, Mapping
 from _common.paths import ensure_batch_layout, batch_root, source_unit_dir
 from _common.io import read_json, write_json
 from _common.batch_manifest import write_batch_manifest, write_source_catalog
+from _common.content_source_registry import homepage_source_can_seed_base_draft
 from _common.content_evidence import clean_source_markdown, score_source_markdown
 from _common.entity_extract import entity_ref as build_entity_ref, require_domain_etype
 from _common.source_catalog import (
@@ -36,6 +37,7 @@ from _common.source_unit import (
 from _common.image_rules import MIN_ENTITY_IMAGES, pixel_size_issue, relevance_issue
 from _common.image_safety import assess_image, assess_image_cached, dedupe_image_payloads
 from _common.image_variants import image_dimensions
+from _common.qunar_template import QUNAR_PAGE_SEARCH_RESULT, qunar_page_type
 from _common.stage_reports import write_gate_report, write_stage_result
 from download.gate import download_requirements, gate_download
 from download.source_inputs import (
@@ -53,7 +55,7 @@ SOURCE_UNIT_MAX_IMAGES_PER_SOURCE = max(1, int(os.environ.get("QWQ_SOURCE_UNIT_M
 
 SOURCE_UNIT_MAX_IMAGE_BYTES = max(
     0,
-    int(os.environ.get("QWQ_SOURCE_UNIT_MAX_IMAGE_BYTES", str(8 * 1024 * 1024))),
+    int(os.environ.get("QWQ_SOURCE_UNIT_MAX_IMAGE_BYTES", str(24 * 1024 * 1024))),
 )
 
 _DOWNLOAD_PROGRESS_LOCK = Lock()
@@ -77,6 +79,20 @@ def _source_unit_lane_in_scope(lane: str, selected_lanes: set[str] | None) -> bo
     if normalized == "homepage_image":
         return "homepage" in selected_lanes
     return normalized in selected_lanes
+
+def _entity_article_quota(task_id: str) -> int:
+    try:
+        from task import store
+
+        spec = store.load_spec(task_id)
+    except Exception:  # noqa: BLE001
+        return 1
+    content = spec.get("content") if isinstance(spec.get("content"), Mapping) else {}
+    quotas = content.get("quotas") if isinstance(content.get("quotas"), Mapping) else {}
+    try:
+        return max(0, int(quotas.get("entityArticlesPerTarget") or 0))
+    except (TypeError, ValueError):
+        return 0
 
 def _curated_sources_for_lanes(
     task_id: str,
@@ -106,16 +122,12 @@ def _homepage_plan_authority_issues(
     *,
     entity_id: str,
 ) -> list[str]:
-    authority_categories = {"encyclopedia", "official", "official_site"}
-    covered = {
-        str(source.get("category") or "")
-        or (source_category_coverage([source], vertical="travel").get("coveredCategories") or [""])[0]
+    if any(
+        isinstance(source, Mapping) and homepage_source_can_seed_base_draft(source)
         for source in planned_sources
-        if isinstance(source, Mapping)
-    }
-    if covered & authority_categories:
+    ):
         return []
-    return [f"{entity_id}: homepage research needs encyclopedia or official evidence"]
+    return [f"{entity_id}: homepage research needs primary authority encyclopedia evidence"]
 
 _ARTICLE_BASE_CATEGORIES = {
     "travelogue",
@@ -160,6 +172,11 @@ def _article_plan_quality_issues(
                 f"{entity_id}: article source {source.get('source_id')}: "
                 f"base source category must be article-quality, got {category}"
             )
+        if qunar_page_type(str(source.get("url") or "")) == QUNAR_PAGE_SEARCH_RESULT:
+            issues.append(
+                f"{entity_id}: article source {source.get('source_id')}: "
+                "Qunar search result directory cannot be article base"
+            )
     return issues
 
 def _source_plan_gate_issues(
@@ -179,6 +196,7 @@ def _source_plan_gate_issues(
     requirements = download_requirements(task_id)
     plan_issues: list[str] = []
     scoped_lane = next(iter(selected_lanes)) if selected_lanes and len(selected_lanes) == 1 else None
+    article_quota = _entity_article_quota(task_id)
     if scoped_lane == "article":
         plan_issues.extend(
             _article_plan_quality_issues(
@@ -197,10 +215,26 @@ def _source_plan_gate_issues(
             )
         )
     else:
-        if len(planned_sources) < 2:
-            plan_issues.append("sourcePlan: fewer than 2 planned sources")
-        plan_issues.extend(coverage_issues(planned_sources, vertical=vertical, entity_id=entity_id))
+        if article_quota <= 0:
+            homepage_sources = [
+                source for source in planned_sources
+                if str(source.get("researchLane") or "") == "homepage"
+                or str(source.get("expectedContentType") or "") == "entity"
+            ]
+            plan_issues.extend(
+                _homepage_plan_authority_issues(
+                    homepage_sources or planned_sources,
+                    entity_id=entity_id,
+                )
+            )
+        else:
+            if len(planned_sources) < 2:
+                plan_issues.append("sourcePlan: fewer than 2 planned sources")
+            plan_issues.extend(coverage_issues(planned_sources, vertical=vertical, entity_id=entity_id))
 
+    rights_lane = scoped_lane
+    if rights_lane is None and article_quota <= 0:
+        rights_lane = "homepage"
     plan_issues.extend(
         source_plan_rights_issues(
             task_id,
@@ -208,7 +242,7 @@ def _source_plan_gate_issues(
             entity_id,
             entity_type,
             require_explicit=requirements["minSources"] >= 4,
-            research_lane=scoped_lane,
+            research_lane=rights_lane,
         )
     )
     return plan_issues

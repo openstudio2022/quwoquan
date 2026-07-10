@@ -2,141 +2,72 @@
 name: /crawl-topic
 id: crawl-topic
 category: Workflow
-description: quwoquan_data 单个 runtime topic worker
+description: quwoquan_data 单任务/单批次局部复核入口
 ---
 
 ## 目标
 
-`/crawl-topic` 只处理一个 topic_task。它只围绕 `runtime/` 工作，并默认允许在创作 / 审核前后补执行原生抓取。
+`/crawl-topic` 仅用于把一个对象、一个任务或一个批次的缺口带回当前
+`qwq-data task` 编排链。它不是第二套 worker，也不直接写旧
+`quwoquan_data/runtime/**`。
 
-- `quwoquan_data/runtime/specs/{spec_id}.yaml`
-- `quwoquan_data/runtime/runs/{spec_id}/topic_tasks.ndjson`
-- `quwoquan_data/runtime/runs/{spec_id}/topics/{topic_id}/source_pool.ndjson`
-- `pages/{source_id}/page.html` / `pages/{source_id}/source.md` / `pages/{source_id}/asset_manifest.json` / `enrichment.ndjson`
-- `compose_summary.json` / `audit_summary.json`
+## 自然语言等价触发
 
-输出到：
+当用户说“处理这个 topic”“复核这个对象”“重跑这个批次的某阶段”等价于 `/crawl-topic`。
 
-- `quwoquan_data/runtime/publish/{topic_id}/posts/{post_id}`
-- `quwoquan_data/runtime/out/{topic_id}/{alpha|gamma}_projection.json`
+## Spec Entry
 
-## 输入
+- AppRoot Journey/Scenario：`runtime/system-architecture-and-engineering-guide`
+- L1/L2/L3：按当前数据任务或目录治理 Story 绑定。
+- 验收意图：`SIT + contract`
+- 测试证据：`local_contract + api_integration`
 
-```text
-/crawl-topic --spec=quwoquan_data/runtime/specs/real_public_examples_001.yaml --topic=real_west_lake_article_001
-```
+## Pre-work Reflection
 
-## 三角色 Worker 主线
+- metadata-first：对象字段、错误码、服务路径来自 `quwoquan_service/contracts/metadata/**`。
+- data CLI-first：只通过 `python3 quwoquan_data/scripts/cli.py task ...` 回到主编排链。
+- mock 隔离：不得用 fixture 或手写 JSON 冒充真实批次证据。
+- output-first：运行态只能写 `.qwq_output/**`。
 
-```mermaid
-flowchart LR
-  topicTask[topic_tasks.ndjson row] --> sourcePool[source_pool.ndjson]
-  sourcePool --> hydrate[crawl fetch-source / runtime hydrate]
-  hydrate --> scoring[article/image scoring]
-  scoring --> enrichment[enrichment.ndjson]
-  enrichment --> compose[crawl compose-topic]
-  compose --> publishTopic[runtime/publish/{topic_id}/posts/...]
-  publishTopic --> review[crawl audit-topic]
-  review --> gate[真实性 gate + package gate]
-```
+## 当前入口
 
-## 本轮必做步骤
-
-1. 先执行：
+查看任务与批次：
 
 ```bash
-python3 quwoquan_data/scripts/cli.py crawl spec-discovery --spec <spec>
+python3 quwoquan_data/scripts/cli.py task show <task-id>
+python3 quwoquan_data/scripts/cli.py task status <task-id> --batch <batch-id>
+python3 quwoquan_data/scripts/cli.py task trace <task-id> --batch <batch-id>
 ```
 
-2. 在 `runtime/runs/{spec_id}/topic_tasks.ndjson` 中定位 `topic_id`
-3. 读取 `topics/{topic_id}/source_pool.ndjson`，确认：
-   - `taskType` 明确为 `article` 或 `image`
-   - `scoringModel` 与任务类型一致
-   - 如果 `candidateCount < 20`，必须诚实保留 `needs_more_evidence`
-4. 若 source 有真实 URL 但缺少 `pages/*` 证据，先执行：
+重跑可恢复阶段：
 
 ```bash
-python3 quwoquan_data/scripts/cli.py crawl fetch-source --spec <spec> --topic <topic_id> --task-type <article|image> --source-id <source_id> --url <url>
+python3 quwoquan_data/scripts/cli.py task retry-stage \
+  --task <task-id> \
+  --batch <batch-id> \
+  --stage <stage>
 ```
 
-5. article 任务要核对：
-   - 版权 / 水印 / 广告 / 重复门禁
-   - `engagementSum`
-   - `qualityScore`
-   - `hot_top_10pct`、`quality_top_20pct`、`quality_exception` 三类留存
-6. image 任务要核对：
-   - `rightsStatus`
-   - `watermarkStatus`
-   - `imageQualityScore`
-   - Pinterest 只保留 discovery-only，不默认进 publish
-7. 读取 `pages/{source_id}/page.html`、`pages/{source_id}/source.md`、`pages/{source_id}/asset_manifest.json`、`enrichment.ndjson`
-8. 若 `enrichment.ndjson` 仍是默认壳，`compose-topic` 会自动补齐 `selectedCandidateIds`、`sourceUrls`、`coverAssetId`、`figureAssetIds/mediaAssetIds` 与 `publishReady`
-9. 执行：
+补齐对象选择或批次审计：
 
 ```bash
-python3 quwoquan_data/scripts/cli.py crawl compose-topic --spec <spec> --topic <topic_id> --targets alpha,gamma --dry-run
+python3 quwoquan_data/scripts/cli.py task select-targets --help
+python3 quwoquan_data/scripts/cli.py task audit-batch --help
 ```
 
-10. 再执行审核角色：
+## 输出边界
 
-```bash
-python3 quwoquan_data/scripts/cli.py crawl audit-topic --spec <spec> --topic <topic_id>
-```
+- 运行态只允许在 `.qwq_output/local/data-runtime/**`。
+- 发布真相源只允许在 `quwoquan_data/publish/**`。
+- 摘要和报告只允许在 `.qwq_output/runs/data/**`。
+- 禁止回写 `artifacts/**`、`.qwq_sandbox/**` 或顶层 `runtime/**`。
 
-11. 执行真实性 gate 与 package gate：
+## Exit Review
 
-```bash
-python3 quwoquan_data/scripts/verify/verify_quwoquan_data_source_authenticity.py
-python3 quwoquan_data/scripts/cli.py verify --scope current
-```
+- 规格达成：缺口已通过 `trace/status/audit-batch` 回指到当前任务和批次。
+- 测试证据：至少完成 `verify output-root-isolation`，必要时补 `task lint`。
+- 剩余风险：真实下载、创作、ship/import 未执行时必须如实列明。
 
-## 每轮产物
+## 输出
 
-必须至少能追溯到：
-
-- `runtime/runs/{spec_id}/topic_tasks.ndjson`
-- `runtime/runs/{spec_id}/topics/{topic_id}/source_pool.ndjson`
-- `runtime/runs/{spec_id}/topics/{topic_id}/pages/{source_id}/page.html`
-- `runtime/runs/{spec_id}/topics/{topic_id}/pages/{source_id}/source.md`
-- `runtime/runs/{spec_id}/topics/{topic_id}/pages/{source_id}/asset_manifest.json`
-- `runtime/runs/{spec_id}/topics/{topic_id}/enrichment.ndjson`
-- `runtime/runs/{spec_id}/topics/{topic_id}/compose_summary.json`
-- `runtime/runs/{spec_id}/topics/{topic_id}/audit_summary.json`
-- `runtime/downloads/sources/{spec_id}/{topic_id}/{source_id}/page.html`
-- `runtime/downloads/images/{spec_id}/{topic_id}/{source_id}/*`
-- `runtime/publish/{topic_id}/posts/{post_id}/article.md|gallery.md`
-- `runtime/publish/{topic_id}/posts/{post_id}/manifest.json`
-- `runtime/publish/{topic_id}/posts/{post_id}/post.json`
-- `runtime/publish/{topic_id}/posts/{post_id}/review.json`
-
-## 输出口径
-
-worker 摘要必须包含：
-
-- `spec_id`
-- `topic_id`
-- `taskType`
-- `candidateCount / retainedCandidateCount`
-- `verifiedSourceCount / authenticityBlocked`
-- `highValueCandidateCount / qualityExceptionCount`
-- `approvedAssetCount`
-- `manifest.compliance.overallStatus`
-- `review.overallStatus / review.overallScore`
-- 生成的 `runtime/publish/{topic_id}/posts/{post_id}` 路径
-- 真实性 gate 是否通过
-- package gate 是否通过
-
-## 边界
-
-- 不再恢复 `batch/raw/retrieval_plan` 流程
-- 当前唯一有效的 publish 真相源是 `quwoquan_data/runtime/publish/`
-- 不把 Pinterest 默认当作可直接发布来源
-- 不把带平台水印或版权不清图片写入 `images/*`
-- 不把 `publishEligibility != approved` 的资产写入最终 manifest
-- 不在 front matter 重复写 `entity_refs / source_urls`
-- 不把第三方原文整段复制进 `article.md`
-- 不因为数量基线压力，把无真实证据 topic 强行发布
-
-自然语言等价触发：用户说“处理这个 topic”“单个 topic worker”“补抓取并审核 topic”时，也按本命令语义执行。所有调用统一经 `python3 quwoquan_data/scripts/cli.py`。
-
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+输出只允许是 `.qwq_output/**` 报告、当前任务状态摘要和必要的人工复核列表。

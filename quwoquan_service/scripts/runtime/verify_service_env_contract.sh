@@ -13,10 +13,14 @@ ruby -e '
   strict = ARGV[1] == "1"
 
   required = %w[APP_ENV SERVICE_NAME CONFIG_VERSION IMAGE_VERSION CONFIG_ROOT]
-  manifest_dirs = %w[deploy k8s .k8s].map { |d| File.join(root, d) }.select { |d| Dir.exist?(d) }
+  manifest_dirs = []
+  manifest_dirs.concat(Dir[File.join(root, "quwoquan_service/services/*/{deploy,k8s,.k8s}")])
+  manifest_dirs.concat(Dir[File.join(root, "quwoquan_ops/{environments,ci,policies}/**/{deploy,k8s,.k8s}")])
+  manifest_dirs.select! { |d| Dir.exist?(d) }
+  manifest_dirs.uniq!
 
   if manifest_dirs.empty?
-    puts "[verify] WARN: no deploy/k8s manifest directory found (skipped)"
+    puts "[verify] WARN: no service or ops deploy/k8s manifest directory found (skipped)"
     if strict
       abort("[verify] FAIL: strict mode requires manifests to validate env contract")
     end

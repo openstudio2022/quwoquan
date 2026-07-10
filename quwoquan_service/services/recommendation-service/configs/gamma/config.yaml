@@ -1,0 +1,5 @@
+service:
+  name: recommendation-service
+config:
+  env: gamma
+  version: "v2026.02.28.0"

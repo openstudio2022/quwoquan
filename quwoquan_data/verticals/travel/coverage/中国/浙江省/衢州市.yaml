@@ -1,0 +1,520 @@
+# 全国地点主清单 · 浙江省衢州市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 衢州市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 常山县
+  leaves:
+  - name: 常山国家地质公园
+    canonicalName: 常山国家地质公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/地质公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/常山县
+    aliases:
+    - 金钉子剖面
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 三衢石林
+    canonicalName: 三衢石林
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/常山县
+    aliases:
+    - 三衢山
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 傥溪桥
+    canonicalName: 傥溪桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/常山县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 泰安古建筑群
+    canonicalName: 泰安古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/常山县
+    sourceReadiness: pending
+    selectionPriority: 4
+- district: 开化县
+  leaves:
+  - name: 根宫佛国
+    canonicalName: 根宫佛国
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    aliases:
+    - 根宫佛国文化旅游区
+    - 根博园
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 钱江源国家公园
+    canonicalName: 钱江源国家公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/国家公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    aliases:
+    - 钱江源
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:28:24Z'
+    sourceScreenEvidence: zh.wikipedia.org:钱江源国家公园 extract=477ch
+  - name: 古田山自然保护区
+    canonicalName: 开化古田山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    aliases:
+    - 古田山国家级自然保护区
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:28:29Z'
+    sourceScreenEvidence: zh.wikipedia.org:古田山自然保护区 extract=242ch
+  - name: 霞山古村
+    canonicalName: 开化霞山古村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 余村余氏宗祠
+    canonicalName: 余村余氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 余氏鸣凤堂
+    canonicalName: 余氏鸣凤堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    sourceReadiness: pending
+    selectionPriority: 6
+- district: 柯城区
+  leaves:
+  - name: 孔氏南宗家庙
+    canonicalName: 孔氏南宗家庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    aliases:
+    - 衢州孔庙
+    - 南宗孔庙
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 水亭门历史文化街区
+    canonicalName: 衢州水亭门
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    aliases:
+    - 水亭门古城墙
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 衢州市博物馆
+    canonicalName: 衢州市博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 中国儒学馆
+    canonicalName: 中国儒学馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 府山公园
+    canonicalName: 衢州府山公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 信安湖
+    canonicalName: 衢州信安湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 梧桐祖殿
+    canonicalName: 梧桐祖殿
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    aliases:
+    - 九华立春祭
+    selectionPriority: 7
+    sourceReadiness: pending
+  - name: 天皇巷天后宫
+    canonicalName: 天皇巷天后宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 徽州会馆
+    canonicalName: 徽州会馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 达源号钱庄
+    canonicalName: 达源号钱庄
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    sourceReadiness: pending
+    selectionPriority: 10
+- district: 江山市
+  leaves:
+  - name: 江郎山
+    canonicalName: 江郎山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    aliases:
+    - 江郎山·廿八都旅游区
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:28:51Z'
+    sourceScreenEvidence: zh.wikipedia.org:江郎山 extract=239ch
+  - name: 廿八都古镇
+    canonicalName: 廿八都古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    aliases:
+    - 廿八都
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 清漾村
+    canonicalName: 江山清漾村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    aliases:
+    - 清漾毛氏祖居地
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 仙霞关
+    canonicalName: 仙霞关
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    aliases:
+    - 仙霞古道
+    selectionPriority: 4
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:29:10Z'
+    sourceScreenEvidence: zh.wikipedia.org:仙霞关 extract=359ch
+  - name: 戴笠故居
+    canonicalName: 戴笠故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 浮盖山
+    canonicalName: 江山浮盖山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    selectionPriority: 6
+    sourceReadiness: ready
+  - name: 县前粮仓群
+    canonicalName: 县前粮仓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 周氏宗祠 (江山市)
+    canonicalName: 周氏宗祠 (江山市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 和睦陶窑群
+    canonicalName: 和睦陶窑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 峡口大公殿
+    canonicalName: 峡口大公殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 廿八都镇
+    canonicalName: 廿八都镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 新塘边姜氏宗祠
+    canonicalName: 新塘边姜氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 泉井
+    canonicalName: 泉井
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    sourceReadiness: pending
+    selectionPriority: 13
+- district: 衢江区
+  leaves:
+  - name: 烂柯山
+    canonicalName: 衢州烂柯山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    aliases:
+    - 石室山
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 天脊龙门
+    canonicalName: 天脊龙门
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 药王山
+    canonicalName: 衢州药王山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 下埠头天后宫
+    canonicalName: 下埠头天后宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 方氏宗祠 (周家乡)
+    canonicalName: 方氏宗祠 (周家乡)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 涧峰徐氏宗祠及余氏宗祠
+    canonicalName: 涧峰徐氏宗祠及余氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 相对方氏私己厅
+    canonicalName: 相对方氏私己厅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 蒋村张氏宗祠
+    canonicalName: 蒋村张氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 赵抃墓
+    canonicalName: 赵抃墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 黄甲山塔
+    canonicalName: 黄甲山塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    sourceReadiness: pending
+    selectionPriority: 10
+- district: 龙游县
+  leaves:
+  - name: 龙游石窟
+    canonicalName: 龙游石窟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 龙游民居苑
+    canonicalName: 龙游民居苑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    selectionPriority: 2
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:29:36Z'
+    sourceScreenEvidence: zh.wikipedia.org:龙游民居苑 extract=201ch
+  - name: 三门源村
+    canonicalName: 龙游三门源村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    aliases:
+    - 三门源叶氏建筑群
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 丁氏节孝坊
+    canonicalName: 丁氏节孝坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 余端礼墓
+    canonicalName: 余端礼墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 大公朱氏宗祠
+    canonicalName: 大公朱氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 大南门历史街区建筑群
+    canonicalName: 大南门历史街区建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 天池许氏民居
+    canonicalName: 天池许氏民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 志棠建筑群
+    canonicalName: 志棠建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 泽随建筑群
+    canonicalName: 泽随建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 芰塘金金氏宗祠
+    canonicalName: 芰塘金金氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 鸡鸣山民居苑
+    canonicalName: 鸡鸣山民居苑
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 龍游石窟
+    canonicalName: 龍游石窟
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 龙游风水塔
+    canonicalName: 龙游风水塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    sourceReadiness: pending
+    selectionPriority: 14

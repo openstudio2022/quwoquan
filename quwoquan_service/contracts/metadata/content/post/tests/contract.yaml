@@ -432,3 +432,59 @@ scenarios:
     operation: GetAppConfig
     go_func: TestGetAppConfig
     command: GetAppConfig
+  - name: pin_comment_contract
+    operation: PinComment
+    go_func: TestCommentPinContractApiIntegration
+    command: PinComment
+  - name: unpin_comment_contract
+    operation: UnpinComment
+    go_func: TestCommentPinContractApiIntegration
+    command: UnpinComment
+  - name: get_author_impact_contract
+    operation: GetAuthorImpact
+    go_func: TestGetAuthorImpactReturnsBehaviorAggregation
+    command: GetAuthorImpact
+  - name: list_author_impact_evidence_contract
+    operation: ListAuthorImpactEvidence
+    go_func: TestAuthorImpactEvidenceDrilldownIsContentAnchoredAndPrivacySafe
+    command: ListAuthorImpactEvidence
+  - name: share_post_contract
+    operation: SharePost
+    go_func: TestShareCountersStayAuthoritativeAndIdempotent
+    command: SharePost
+  - name: unshare_post_contract
+    operation: UnsharePost
+    go_func: TestCommentCountersStayConsistentAcrossReadModels
+    command: UnsharePost
+  - name: get_comment_counts_delta_contract
+    operation: GetCommentCountsDelta
+    go_func: TestCommentCountsDelta_ExplainableHalfOpenWindow
+    command: GetCommentCountsDelta
+  - name: get_my_footprint_contract
+    operation: GetMyFootprint
+    go_func: TestGetMyFootprintContract
+    command: GetMyFootprint
+  - name: request_original_image_access_contract
+    operation: RequestOriginalImageAccess
+    go_func: TestRequestOriginalImageAccessContract
+    command: RequestOriginalImageAccess
+  - name: bind_media_assets_to_post_contract
+    operation: BindMediaAssetsToPost
+    go_func: TestBindMediaAssetsToPostContract
+    command: BindMediaAssetsToPost
+  - name: get_my_intersection_summary_contract
+    operation: GetMyIntersectionSummary
+    go_func: TestIntersectionService_SummaryNewCountAndVisitClears
+    command: GetMyIntersectionSummary
+  - name: list_my_intersections_contract
+    operation: ListMyIntersections
+    go_func: TestIntersectionService_ListFiltersAndPaginates
+    command: ListMyIntersections
+  - name: mark_intersections_visited_contract
+    operation: MarkIntersectionsVisited
+    go_func: TestIntersectionService_SummaryNewCountAndVisitClears
+    command: MarkIntersectionsVisited
+  - name: get_object_intersections_contract
+    operation: GetObjectIntersections
+    go_func: TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength
+    command: GetObjectIntersections

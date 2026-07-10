@@ -59,8 +59,8 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     verification:
-      - "已执行：flutter test test/local_contract/components/media/media_reorderable_view__local_contract_test.dart test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart test/local_contract/content/create/photo_media_picker_commercial_flow__local_contract_test.dart test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart"
-      - "待执行：flutter test test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart"
+      - "已执行：flutter test test/local_contract/ui/components/media/media_reorderable_view__local_contract_test.dart test/local_contract/ui/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart test/local_contract/ui/content/create/photo_media_picker_commercial_flow__local_contract_test.dart test/local_contract/ui/content/create/photo_create_page_surface__local_contract_test.dart"
+      - "待执行：flutter test test/user_acceptance/journeys/content/entry/photo_picker_reentry_append_journey__user_acceptance_test.dart test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart"
       - "待执行：make verify-app-page-horizontal-quality"
     notes:
       - 本 CR 不新增 metadata 字段或云侧 DTO，仅补齐图片 flow 的页面语义、共享交互口径与本地合同测试。

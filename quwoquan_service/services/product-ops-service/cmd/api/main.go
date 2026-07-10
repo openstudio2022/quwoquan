@@ -148,7 +148,7 @@ func main() {
 
 	ctx := context.Background()
 	repoRoot := resolveRepoRoot()
-	store := controlplane.NewFileStore(filepath.Join(repoRoot, "state", "control-plane", "product-ops-service.json"))
+	store := controlplane.NewFileStore(localControlPlaneStorePath(repoRoot, "product-ops-service"))
 	router := buildRedisRouter(cfg)
 	defer router.Close()
 	if err := router.PingAll(ctx); err != nil {
@@ -461,7 +461,7 @@ func resolveRepoRoot() string {
 	}
 	current := wd
 	for {
-		if _, err := os.Stat(filepath.Join(current, "contracts", "metadata")); err == nil {
+		if _, err := os.Stat(filepath.Join(current, "quwoquan_service", "contracts", "metadata")); err == nil {
 			return current
 		}
 		parent := filepath.Dir(current)
@@ -470,6 +470,10 @@ func resolveRepoRoot() string {
 		}
 		current = parent
 	}
+}
+
+func localControlPlaneStorePath(repoRoot, serviceName string) string {
+	return filepath.Join(repoRoot, ".qwq_output", "env", "repo", "local", "control-plane", serviceName, serviceName+".json")
 }
 
 func actorFromRequest(r *http.Request) string {

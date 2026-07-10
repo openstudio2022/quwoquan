@@ -36,9 +36,35 @@ def _coverage_entity_ids(spec: dict) -> list[str]:
     return out
 
 
+def _coverage_entity_type_map(spec: dict) -> dict[str, str]:
+    """coverageTargets 中 canonical name / alias -> entityType。"""
+    out: dict[str, str] = {}
+    for target in (spec.get("scope") or {}).get("coverageTargets") or []:
+        etype = str(target.get("entityType") or "").strip()
+        if not etype:
+            continue
+        name = str(target.get("name") or "").strip()
+        if name:
+            out[name] = etype
+        for alias in target.get("aliases") or []:
+            alias_name = str(alias or "").strip()
+            if alias_name:
+                out[alias_name] = etype
+    return out
+
+
+def _coverage_entity_type_for_entity(spec: dict, entity_id: str) -> str:
+    """单实体 entityType；优先 coverageTargets，回退 batch 级唯一类型。"""
+    mapped = _coverage_entity_type_map(spec).get(str(entity_id or "").strip(), "")
+    if mapped:
+        require_domain_etype(mapped, context=f"scope.coverageTargets entityType for {entity_id}")
+        return mapped
+    return _coverage_entity_type(spec)
+
+
 # ─── checkpoint 完成度探测（resume 判定 Agent 是否已物化产物）──────────
 def _coverage_entity_type(spec: dict) -> str:
-    """coverageTargets/entityTypes 的唯一类型真相源；显式任务必须给出明确类型。"""
+    """coverageTargets/entityTypes 的 batch 级类型；多类型分区返回空串，由 per-entity 解析。"""
     scope = spec.get("scope") or {}
     targets = scope.get("coverageTargets") or []
     target_types = {
@@ -47,16 +73,15 @@ def _coverage_entity_type(spec: dict) -> str:
         if str(target.get("entityType") or "").strip()
     }
     if len(target_types) > 1:
-        raise ValueError(
-            "workflow currently requires a single entityType across coverageTargets; "
-            f"got {sorted(target_types)}"
-        )
+        return ""
     if target_types:
         only = next(iter(target_types))
         require_domain_etype(only, context="scope.coverageTargets[].entityType")
         return only
     types = [str(item).strip() for item in (scope.get("entityTypes") or []) if str(item).strip()]
     if not types:
+        return ""
+    if len(types) > 1:
         return ""
     require_domain_etype(types[0], context="scope.entityTypes[0]")
     return types[0]

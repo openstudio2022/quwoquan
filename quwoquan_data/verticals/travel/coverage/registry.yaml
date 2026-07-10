@@ -1,15 +1,18 @@
 schemaVersion: quwoquan.vertical_coverage.v1
 vertical: travel
-description: 旅行垂类覆盖边界。当前四川为试点；全国与海外出国游仍需 coverage seed。
+description: 旅行垂类覆盖边界。四川/浙江两试点省已区县级全量枚举；其余 32 省仅目录骨架（未枚举）；海外出国游仍需 coverage seed。
 units:
   - id: travel.china.scenic_spots
     label: 中国景区与自然/人文景点
     entityType: 地点/景区
-    expectedCount: 0
-    source: pending-national-scenic-catalog
+    # WP2 回填：主清单（discovery_seed/2）已枚举 四川省+浙江省 全部 32 市州、1093 地点；
+    # 其余 32 省目录骨架已建（coverage/中国/{省}/ 空目录 = 未枚举，无第二状态真相源），
+    # expectedCount = 当前主清单已枚举规模，全国放量枚举推进时随 vertical master-list-stats 回填。
+    expectedCount: 1093
+    source: verticals/travel/coverage/中国
     requiredSourceCategories: [encyclopedia, official, travelogue, map_geo]
     requiredAngles: [攻略, 体验, 避雷, 盘点]
-    maturity: gap
+    maturity: partial
   - id: travel.china.travel_scenes
     label: 中国旅行场景
     entityType: 场景/旅行
@@ -21,8 +24,18 @@ units:
   - id: travel.sichuan.pilot
     label: 四川旅行试点
     entityType: 地点/景区
-    expectedCount: 0
-    source: tasks/旅行/地域/四川省
+    # WP2 回填：21 市州文件全齐、区县全覆盖，共 678 地点（vertical master-list-stats --provinces 四川省）。
+    expectedCount: 678
+    source: verticals/travel/coverage/中国/四川省
+    requiredSourceCategories: [encyclopedia, official, travelogue]
+    requiredAngles: [攻略, 体验]
+    maturity: partial
+  - id: travel.zhejiang.pilot
+    label: 浙江旅行试点
+    entityType: 地点/景区
+    # WP2 回填：11 市文件全齐、区县全覆盖，共 415 地点（vertical master-list-stats --provinces 浙江省）。
+    expectedCount: 415
+    source: verticals/travel/coverage/中国/浙江省
     requiredSourceCategories: [encyclopedia, official, travelogue]
     requiredAngles: [攻略, 体验]
     maturity: partial

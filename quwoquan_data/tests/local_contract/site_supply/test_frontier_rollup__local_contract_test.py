@@ -79,12 +79,90 @@ def test_ctrip_mafengwo_controlled_trial_frontier_passes_without_batch_crawl():
         assert packet["admissionMode"] == "controlled_trial"
         assert packet["profile"]["fetchable"] is False
         assert packet["profile"]["crawlAllowed"] is False
+        assert packet["profile"]["articleCommercialAdmission"] == "controlled_trial"
         assert packet["profile"]["controlledTrial"]["validationOnly"] is True
         warning_text = "\n".join(packet["gate"]["warnings"])
         assert "does not grant raw batch crawl" in warning_text
 
+def test_controlled_trial_blocks_publishable_asset_escape_hatch():
+    profile = {
+        "rawProfilePresent": True,
+        "fetchable": False,
+        "crawlAllowed": False,
+        "domains": ["www.mafengwo.cn"],
+        "allowedPaths": ["https://www.mafengwo.cn/i/*"],
+        "contentLanes": ["article", "image"],
+        "articleCommercialAdmission": "controlled_trial",
+        "rightsPolicy": "reference_only",
+        "robotsPolicy": "respect_robots_txt",
+        "loginPolicy": "public_only",
+        "termsUrl": "https://www.mafengwo.cn/",
+        "maxPagesPerDay": 0,
+        "controlledTrial": {
+            "allowed": True,
+            "validationOnly": True,
+            "rawFetchAllowed": False,
+            "publishableAssetsAllowed": True,
+        },
+    }
+
+    blockers, _warnings = ss._profile_gate(
+        profile,
+        daily_target=10_000,
+        queue_backend="reliabletask",
+        time_window={"days": 30},
+        admission_mode="controlled_trial",
+    )
+
+    assert "controlledTrial.publishableAssetsAllowed cannot be true" in blockers
+
+def test_expanded_travel_reference_sources_are_validation_only():
+    expected = {
+        "xiaohongshu_travel_reference": "reference_only",
+        "toutiao_article_reference": "reference_only",
+        "weibo_travel_reference": "reference_only",
+        "pinterest_travel_reference": "attribution_no_watermark",
+        "tuchong_community_reference": "licensed_candidate",
+        "tuchong_stock_authorized": "licensed_asset_required",
+    }
+    for site_id, rights_policy in expected.items():
+        blocked = ss.build_site_frontier_packet(
+            vertical="travel",
+            site_id=site_id,
+            batch_id=f"{site_id}_raw_block",
+            daily_target=10_000,
+            queue_backend="reliabletask",
+            end_date="2026-07-04",
+        )
+        assert not blocked["gate"]["passed"], blocked["gate"]
+        assert blocked["profile"]["fetchable"] is False
+        assert blocked["profile"]["crawlAllowed"] is False
+        assert blocked["profile"]["rightsPolicy"] == rights_policy
+        if site_id in {"xiaohongshu_travel_reference", "toutiao_article_reference", "weibo_travel_reference"}:
+            assert blocked["profile"]["articleCommercialAdmission"] == "reference_only"
+            assert blocked["profile"]["discoveryStrategy"]["mode"] == "content_search"
+        text = "\n".join(blocked["gate"]["blockers"])
+        assert "fetchable=false" in text
+        assert "crawlAllowed" in text
+
+        trial = ss.build_site_frontier_packet(
+            vertical="travel",
+            site_id=site_id,
+            batch_id=f"{site_id}_controlled",
+            daily_target=10_000,
+            queue_backend="reliabletask",
+            end_date="2026-07-04",
+            admission_mode="controlled_trial",
+        )
+        assert trial["gate"]["passed"], trial["gate"]
+        assert trial["profile"]["controlledTrial"]["validationOnly"] is True
+        assert trial["profile"]["controlledTrial"]["rawFetchAllowed"] is False
+        assert trial["profile"]["controlledTrial"]["publishableAssetsAllowed"] is False
+        warning_text = "\n".join(trial["gate"]["warnings"])
+        assert "does not grant raw batch crawl" in warning_text
+
 def test_photography_platform_frontier_blocks_raw_crawl_but_allows_controlled_trial():
-    for site_id, rights_policy in (("pinterest", "discovery_only"), ("tuchong", "licensed_candidate")):
+    for site_id, rights_policy in (("pinterest", "attribution_no_watermark"), ("tuchong", "licensed_candidate")):
         blocked = ss.build_site_frontier_packet(
             vertical="photography",
             site_id=site_id,
@@ -97,6 +175,10 @@ def test_photography_platform_frontier_blocks_raw_crawl_but_allows_controlled_tr
         assert blocked["profile"]["fetchable"] is False
         assert blocked["profile"]["crawlAllowed"] is False
         assert blocked["profile"]["rightsPolicy"] == rights_policy
+        if site_id == "pinterest":
+            assert blocked["profile"]["discoveryStrategy"]["mode"] == "content_search"
+        if site_id == "tuchong":
+            assert blocked["profile"]["discoveryStrategy"]["mode"] == "site_listing_scan"
         text = "\n".join(blocked["gate"]["blockers"])
         assert "fetchable=false" in text
         assert "crawlAllowed" in text
@@ -182,7 +264,7 @@ def test_candidate_score_map_rollup_handoff_isolated_from_entity_runtime():
     assert rollup["siteFunnel"]["contentPlanHandoffCount"] == 1
     path = ss.write_site_rollup_report(rollup)
     assert "/site_supply/travel/qunar_guide/pipeline_ok/" in str(path)
-    assert "/runtime/tasks/" not in str(path)
+    assert "/data/local/runtime/tasks/" not in str(path)
     for name in ("stage_result.json", "gate_report.json", "repair_report.json"):
         assert (path.parents[1] / "candidates" / candidate["candidateRef"] / name).is_file()
         assert (path.parents[1] / "scores" / candidate["candidateRef"] / name).is_file()
@@ -290,6 +372,53 @@ def test_quality_distribution_marks_controlled_image_trial_not_publishable():
     text = "\n".join(report["commercialReadiness"]["blockers"])
     assert "controlledTrial.validationOnly=true" in text
     assert "publishableAssetsAllowed=false" in text
+
+def test_controlled_trial_rerollup_uses_candidate_denominator_for_first_pass_rate():
+    batch = "controlled_trial_rerollup_first_pass"
+    frontier = ss.build_site_frontier_packet(
+        vertical="photography",
+        site_id="pinterest",
+        batch_id=batch,
+        daily_target=10_000,
+        queue_backend="reliabletask",
+        end_date="2026-07-04",
+        admission_mode="controlled_trial",
+    )
+    assert frontier["gate"]["passed"], frontier["gate"]
+    ss.write_site_frontier_packet(frontier)
+    url = ss._trial_url(frontier["profile"], batch_id=batch, lane="image", index=1)
+    candidate = ss.build_site_candidate_packet(
+        vertical="photography",
+        site_id="pinterest",
+        batch_id=batch,
+        url=url,
+        lane="image",
+        title="Pinterest 受控图片试跑候选",
+        published_at="2026-07-04",
+        assets=ss._trial_assets(frontier["profile"], url=url, lane="image", index=1),
+        entity_mentions=["地点/景区/结构试跑景区000001"],
+        tag_mentions=["Topic/摄影/旅行影像"],
+    )
+    assert candidate["gate"]["passed"], candidate["gate"]
+    ss.write_site_candidate_packet(candidate)
+    score = ss.build_site_score_packet(candidate)
+    assert score["gate"]["passed"], score["gate"]
+    ss.write_site_score_packet(score)
+    mapped = ss.build_site_map_packet(candidate, score)
+    assert mapped["gate"]["passed"], mapped["gate"]
+    ss.write_site_map_packet(mapped)
+
+    rollup = ss._recomputed_site_rollup_report(
+        vertical="photography",
+        site_id="pinterest",
+        batch_id=batch,
+        objects_per_hour=6000,
+    )
+
+    assert rollup["passed"], rollup
+    assert rollup["siteFunnel"]["fetchCount"] == 0
+    assert rollup["siteFunnel"]["candidateCount"] == 1
+    assert rollup["executionReadiness"]["firstPassRate"] == 1.0
 
 def test_rollup_blocks_missing_score_before_downstream_handoff():
     candidate = _write_candidate("missing_score")
@@ -446,4 +575,3 @@ def test_trial_command_materializes_hundred_level_structural_batch():
     assert payload["siteFunnel"]["candidateCount"] == 100
     assert payload["siteFunnel"]["contentPlanHandoffCount"] == 100
     assert payload["siteFunnel"]["stageFailures"]["missing_score"] == 0
-

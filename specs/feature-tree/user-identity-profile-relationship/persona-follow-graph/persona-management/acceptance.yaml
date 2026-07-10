@@ -52,8 +52,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/user/persona_management__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/persona_management__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/providers/persona_management_provider__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/persona_management_page__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/persona_management_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/persona_contract__api_integration_test.go
     status: completed
     test_evidence:
@@ -94,7 +95,7 @@ gwt_acceptance:
       -count=1'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

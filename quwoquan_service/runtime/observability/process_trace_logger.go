@@ -1,14 +1,11 @@
 package runtimeobservability
 
-import (
-	"encoding/json"
-	"io"
-)
+import "io"
 
 type ProcessTraceLogger struct {
-	router      *SinkRouter
-	level       string
-	kvFilter    *KVMetadataFilter
+	router   *SinkRouter
+	level    string
+	kvFilter *KVMetadataFilter
 }
 
 func NewProcessTraceLogger(standardSink io.Writer, errorSink io.Writer, level string, kvFilter *KVMetadataFilter) (*ProcessTraceLogger, error) {
@@ -20,9 +17,9 @@ func NewProcessTraceLogger(standardSink io.Writer, errorSink io.Writer, level st
 		level = TraceLogLevelInfo
 	}
 	return &ProcessTraceLogger{
-		router:      router,
-		level:       level,
-		kvFilter:    kvFilter,
+		router:   router,
+		level:    level,
+		kvFilter: kvFilter,
 	}, nil
 }
 
@@ -52,10 +49,6 @@ func (l *ProcessTraceLogger) Write(entry ProcessTraceLog, model string, operatio
 	if err := entry.Validate(); err != nil {
 		return err
 	}
-	payload, err := json.Marshal(entry)
-	if err != nil {
-		return err
-	}
-	return l.router.WriteStandard(append(payload, '\n'))
+	payload := formatDelimitedLog("runtime", compactProcessTraceLog(entry))
+	return l.router.WriteStandard([]byte(payload + "\n"))
 }
-

@@ -46,21 +46,21 @@ sit_acceptance:
     - 同 query 稳定数据下 TopN 不无故跳变；真集群多副本需验证 ES preference。
     tests:
       planned:
-      - artifact: artifacts/search-load/<prod-sim-or-real-cluster>/search_capacity_report.json
-      - artifact: artifacts/search-load/<prod-sim-or-real-cluster>/search_repeatability_multi_replica_report.json
-      - artifact: artifacts/stackctl/prod/<run-id>/search_release_verify_report.json
+      - artifact: .qwq_output/env/repo/runs/search-load/<prod-sim-or-real-cluster>/search_capacity_report.json
+      - artifact: .qwq_output/env/repo/runs/search-load/<prod-sim-or-real-cluster>/search_repeatability_multi_replica_report.json
+      - artifact: .qwq_output/env/prod/runs/<run-id>/search_release_verify_report.json
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/post_retrieve__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/searchprojection/place_search_projection__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/search_signal_consumer__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/post/post_retrieve__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/searchprojection/place_search_projection__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/search_signal_consumer__local_contract_test.go
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
       - file: quwoquan_service/services/circle-service/tests/api_integration/circle_search_contract__api_integration_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/tool_coordinator__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/tool/registry_retrieve_contract__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/tool_coordinator__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/tool/registry_retrieve_contract__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
       - file: quwoquan_app/test/local_contract/ui/search/retrieve_request_mapper__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/search/journeys/cross_domain_search_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
     status: partial
     notes:
     - canonical provider routing、local_contract/local_contract/api_integration/user_acceptance
@@ -75,9 +75,9 @@ sit_acceptance:
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/sort_stable_test.go'
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/es/query_builder_test.go'
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/es/indexer_test.go'
-    - '[migrated_from_recorded_artifact] artifacts/local-gamma/search_signal_t3_report.json'
-    - '[migrated_from_recorded_artifact] artifacts/local-gamma/search_repeatability_golden_diff.json'
-    - '[migrated_from_recorded_artifact] artifacts/stackctl/gamma/search_rollback_rehearsal.md'
+    - '[migrated_from_recorded_artifact] .qwq_output/env/gamma/local/gamma-local/search_signal_t3_report.json'
+    - '[migrated_from_recorded_artifact] .qwq_output/env/gamma/local/gamma-local/search_repeatability_golden_diff.json'
+    - '[migrated_from_recorded_artifact] .qwq_output/env/gamma/runs/search_rollback_rehearsal.md'
     test_evidence:
       primary:
       - layer: local_contract
@@ -101,7 +101,7 @@ sit_acceptance:
         envs: *id001
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

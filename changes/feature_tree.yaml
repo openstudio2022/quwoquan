@@ -1,4 +1,0 @@
-version: 2
-status: retired
-canonical: specs/feature-tree/tree_index.yaml
-note: changes/feature_tree.yaml 已退役，不再作为特性树结构、层级或验收分层来源。

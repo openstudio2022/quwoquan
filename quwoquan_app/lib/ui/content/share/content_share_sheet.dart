@@ -5,6 +5,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_actions.dart';
 import 'package:quwoquan_app/ui/content/share/content_share_template.dart';
@@ -29,27 +30,28 @@ class ContentShareSheet extends StatefulWidget {
         const DefaultContentShareActionHandler(),
     Future<void> Function(ContentShareActionResult result)? onActionCompleted,
   }) {
-    return showCupertinoModalPopup<void>(
+    return showAppBottomModal<void>(
       context: context,
-      barrierColor: AppColors.transparent,
       builder: (sheetContext) {
         final isDark =
             CupertinoTheme.of(sheetContext).brightness == Brightness.dark;
         return AppBottomModalSurface(
-        onDismiss: () => Navigator.of(sheetContext).pop(),
-        backgroundColor:
-            SettingsSemanticConstants.conversationSheetPanelBackground(isDark),
-        contentPadding: EdgeInsets.fromLTRB(
-          SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-          0,
-          SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-          SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
-        ),
-        child: ContentShareSheet(
-          template: template,
-          actionHandler: actionHandler,
-          onActionCompleted: onActionCompleted,
-        ),
+          onDismiss: () => Navigator.of(sheetContext).pop(),
+          backgroundColor:
+              SettingsSemanticConstants.conversationSheetPanelBackground(
+                isDark,
+              ),
+          contentPadding: EdgeInsets.fromLTRB(
+            SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+            0,
+            SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+            SettingsSemanticConstants.conversationSheetOuterHorizontalPadding,
+          ),
+          child: ContentShareSheet(
+            template: template,
+            actionHandler: actionHandler,
+            onActionCompleted: onActionCompleted,
+          ),
         );
       },
     );

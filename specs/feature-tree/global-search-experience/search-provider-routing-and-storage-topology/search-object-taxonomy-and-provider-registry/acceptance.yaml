@@ -83,9 +83,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/searchprojection/place_search_projection__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/placeindex/projector__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/placeindex/backfill__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/searchprojection/place_search_projection__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/projector__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/placeindex/backfill__local_contract_test.go
     status: completed
     test_evidence:
       primary:
@@ -148,7 +148,7 @@ gwt_acceptance:
       search-service 集成补录）。'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

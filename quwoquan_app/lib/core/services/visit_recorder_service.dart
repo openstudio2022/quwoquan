@@ -14,10 +14,9 @@ const Duration kVisitDedupWindow = Duration(minutes: 5);
 class VisitRecorderService {
   VisitRecorderService({
     String? boxName,
-    OpsVisitRepository? remoteRepository,
+    this._remoteRepository,
     String currentUserId = '',
   }) : _boxName = boxName ?? kVisitRecordsBoxName,
-       _remoteRepository = remoteRepository,
        _currentUserId = currentUserId.trim();
 
   final String _boxName;

@@ -21,6 +21,13 @@ VALID_EXPERIENCE_CLAIM_MODES = {
     "visual_discovery",
 }
 
+COMPACT_CREATOR_PROFILE_VERSION = "compact_profile_v1"
+DEFAULT_CREATOR_DISCLOSURE = {
+    "type": "platform_virtual_creator",
+    "visible": True,
+    "displayText": "平台预制创作者",
+}
+
 
 def creator_assignment_required(spec: Mapping[str, Any]) -> bool:
     """Whether content objects must carry a frozen creator assignment.
@@ -76,7 +83,9 @@ def _registry_creator(creator_profile_id: str) -> dict[str, Any] | None:
     except Exception:  # noqa: BLE001
         return None
     try:
-        return TemplateRegistry.load().creators.get(creator_profile_id)
+        profile = TemplateRegistry.load().creators.get(creator_profile_id)
+        if profile is not None:
+            return profile
     except Exception:  # noqa: BLE001
         pass
     try:
@@ -84,6 +93,17 @@ def _registry_creator(creator_profile_id: str) -> dict[str, Any] | None:
     except Exception:  # noqa: BLE001
         return None
     for path in iter_yaml_files(CREATORS_ROOT, ".creator.yaml"):
+        try:
+            data = load_yaml(path)
+        except Exception:  # noqa: BLE001
+            continue
+        if str(data.get("creatorProfileId") or "") == creator_profile_id:
+            return data
+    try:
+        from _common.creator_pool.registry_bridge import travel_creator_batches_root
+    except Exception:  # noqa: BLE001
+        return None
+    for path in iter_yaml_files(travel_creator_batches_root(), ".creator.yaml"):
         try:
             data = load_yaml(path)
         except Exception:  # noqa: BLE001
@@ -147,7 +167,7 @@ def _semantic_consistency_issues(
     if content_region or content_tag_refs:
         scope = registered.get("coverageScope")
         kind = str(scope.get("kind") or "") if isinstance(scope, Mapping) else ""
-        if kind in ("regional", "thematic"):
+        if kind in ("regional", "thematic", "regional_topic"):
             try:
                 from template.creator import coverage_range_fit, _tag_overlap
 
@@ -211,11 +231,12 @@ def creator_assignment_issues(
         return issues
     if str(registered.get("status") or "") != "active":
         issues.append(f"{prefix}.creatorProfileId is not active")
-    if str(registered.get("authorId") or "") != str(creator.get("authorId") or ""):
+    registered_author_id = str(registered.get("authorId") or registered.get("subAccountId") or "")
+    if registered_author_id != str(creator.get("authorId") or ""):
         issues.append(f"{prefix}.authorId does not match creator registry")
     if str(registered.get("creatorArchetype") or "") != str(creator.get("creatorArchetype") or ""):
         issues.append(f"{prefix}.creatorArchetype does not match creator registry")
-    if str(registered.get("profileVersion") or "") != str(creator.get("creatorProfileVersion") or ""):
+    if str(_creator_profile_version(registered)) != str(creator.get("creatorProfileVersion") or ""):
         issues.append(f"{prefix}.creatorProfileVersion does not match creator registry")
     if carrier:
         try:
@@ -251,20 +272,27 @@ def creator_assignment_issues(
 def creator_assignment_from_profile(profile: Mapping[str, Any]) -> dict[str, Any]:
     """Project a registry profile into content-object creator assignment fields."""
     return {
-        "authorId": profile.get("authorId"),
+        "authorId": profile.get("authorId") or profile.get("subAccountId"),
         "creatorProfileId": profile.get("creatorProfileId"),
         "creatorArchetype": profile.get("creatorArchetype"),
-        "creatorProfileVersion": profile.get("profileVersion"),
-        "creatorDisclosure": profile.get("disclosure"),
-        "experienceClaimMode": (profile.get("claimPolicy") or {}).get("experienceClaimMode")
-        if isinstance(profile.get("claimPolicy"), Mapping)
-        else None,
+        "creatorProfileVersion": _creator_profile_version(profile),
+        "creatorDisclosure": profile.get("disclosure") if isinstance(profile.get("disclosure"), Mapping) else DEFAULT_CREATOR_DISCLOSURE,
+        "experienceClaimMode": _experience_claim_mode(profile),
         "authorQualitySignals": {
-            "qualityScore": profile.get("qualityScore"),
-            "fatigueScore": profile.get("fatigueScore"),
-            "riskTier": profile.get("riskTier"),
+            "qualityScore": profile.get("qualityScore", 0.8),
+            "fatigueScore": profile.get("fatigueScore", 0.2),
+            "riskTier": profile.get("riskTier") or "low",
         },
     }
+
+
+def _creator_profile_version(profile: Mapping[str, Any]) -> str:
+    return str(profile.get("profileVersion") or COMPACT_CREATOR_PROFILE_VERSION)
+
+
+def _experience_claim_mode(profile: Mapping[str, Any]) -> str:
+    claim_policy = profile.get("claimPolicy") if isinstance(profile.get("claimPolicy"), Mapping) else {}
+    return str(claim_policy.get("experienceClaimMode") or "editorial_synthesis")
 
 
 def resolve_registry_creator_assignment(
@@ -276,6 +304,7 @@ def resolve_registry_creator_assignment(
     tag_refs: list[str] | None = None,
     preferred_archetype: str | None = None,
     seed: str = "",
+    selection_mode: str = "best",
     registry: Any = None,
 ) -> dict[str, Any]:
     """Single source of truth for resolving a registered platform creator.
@@ -311,6 +340,7 @@ def resolve_registry_creator_assignment(
             vertical=vertical,
             seed=seed,
             preferred_archetype=preferred_archetype,
+            selection_mode=selection_mode,
         )
     except Exception:  # noqa: BLE001
         return {}

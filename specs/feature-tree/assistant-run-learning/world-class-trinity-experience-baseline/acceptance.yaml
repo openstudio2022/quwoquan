@@ -19,13 +19,13 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/assistant/widgets/assistant_half_sheet_personalization_provider__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/assistant/personal_content_access_provider__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/service__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/skill_subscription_service__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/skill_subscription_service__local_contract_test.go
     status: partial
     test_evidence:
       primary:
@@ -53,7 +53,7 @@ sit_acceptance:
     - '[migrated_from_recorded_reference] specs/feature-tree/assistant-run-learning/commercial_slo_observability.md'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

@@ -88,12 +88,12 @@ gwt_acceptance:
       quwoquan_app/lib/ui/circle/widgets/section_members.dart quwoquan_app/lib/components/content/record_post_card.dart
       quwoquan_app/lib/ui/search/pages/global_search_page.dart quwoquan_app/lib/ui/search/pages/search_network_results_page.dart
       quwoquan_app/lib/ui/user/pages/login_page.dart quwoquan_app/lib/ui/user/widgets/profile_interaction_tab.dart
-      quwoquan_app/lib/ui/chat/widgets/message/chat_message_bubble.dart quwoquan_app/test/core/services/content_cache_services_test.dart
-      quwoquan_app/test/core/widgets/app_cached_network_image_test.dart quwoquan_app/test/cloud/media/media_download_cache_test.dart'
+      quwoquan_app/lib/ui/chat/widgets/message/chat_message_bubble.dart quwoquan_app/test/local_contract/core/services/content_cache_services__local_contract_test.dart
+      quwoquan_app/test/local_contract/core/widgets/app_cached_network_image__local_contract_test.dart quwoquan_app/test/local_contract/cloud/media/media_download_cache__local_contract_test.dart'
     - '[migrated_from_recorded_command] flutter analyze quwoquan_app/lib/ui/discovery/models/home_feed_video_autoplay_policy.dart
       quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed.dart quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_post_cards.dart
-      quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_media.dart quwoquan_app/test/core/providers/resource_cache_profile_provider_test.dart
-      quwoquan_app/test/ui/discovery/home_feed_video_autoplay_policy_test.dart quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart'
+      quwoquan_app/lib/ui/discovery/widgets/home_multi_form_feed_media.dart quwoquan_app/test/local_contract/core/providers/resource_cache_profile_provider__local_contract_test.dart
+      quwoquan_app/test/local_contract/ui/discovery/home_feed_video_autoplay_policy__local_contract_test.dart quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart'
     - '[migrated_from_recorded_command] flutter test test/core/services/content_cache_services_test.dart
       test/core/widgets/app_cached_network_image_test.dart test/core/providers/resource_cache_profile_provider_test.dart
       test/cloud/media/media_download_cache_test.dart test/ui/user/providers/profile_state_provider_test.dart
@@ -103,7 +103,7 @@ gwt_acceptance:
     - '[migrated_from_recorded_command] python3 quwoquan_app/scripts/runtime/verify_lib_dart_io_budget.py'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

@@ -121,6 +121,28 @@ type PremiumPoolCandidateReader interface {
 	ActivePremiumCandidates(ctx context.Context, now time.Time, limit int) ([]rtrec.ContentCandidate, error)
 }
 
+type premiumStreamGateSource struct {
+	source       rtrec.CandidateSource
+	allowPremium bool
+}
+
+// GatePremiumStreamSource 保持精品流 fail-closed：当 feed route 解析为
+// premium_stream 时，只有 PremiumPoolSource 能贡献候选；其他 feed 仍按原源召回。
+func GatePremiumStreamSource(source rtrec.CandidateSource) rtrec.CandidateSource {
+	if source == nil {
+		return nil
+	}
+	_, allowPremium := source.(*PremiumPoolSource)
+	return premiumStreamGateSource{source: source, allowPremium: allowPremium}
+}
+
+func (s premiumStreamGateSource) Recall(ctx context.Context, req rtrec.RecallRequest) ([]rtrec.ContentCandidate, error) {
+	if premiumPoolRoute(req) && !s.allowPremium {
+		return nil, nil
+	}
+	return s.source.Recall(ctx, req)
+}
+
 type PremiumPoolSource struct {
 	reader PremiumPoolCandidateReader
 	now    func() time.Time

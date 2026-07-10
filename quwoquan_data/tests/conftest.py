@@ -1,5 +1,18 @@
-"""Shared test configuration."""
+"""Shared test configuration.
+
+单元/合约测试落盘隔离契约（数据输出规范）：
+- pytest 进程内所有 data-owned 运行期输出只允许写 tempfile 临时根，跑完即弃；
+- 仓内根（quwoquan_data/runtime、publish 等）与真实 data-owned 输出根
+  在 pytest 全量跑完后不得出现新增文件；
+- conftest 导入期先于一切测试模块执行 → 在这里强制注入隔离根，
+  保证首个导入 `_common.paths` 的模块把常量冻结在临时根上
+  （历史缺陷：不设 env 的测试模块先导入 paths 会把常量冻结在真实根，
+  之后整个 pytest 进程的落盘全部泄漏到真实输出根）。
+显式 opt-out：设 QWQ_PYTEST_ALLOW_ENV_ROOTS=1（仅限人工调试，门禁不放行）。
+"""
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -9,8 +22,95 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-import sys
-from pathlib import Path
+REPO_ROOT = DATA_ROOT.parent
+_REAL_OUTPUT_ROOT = REPO_ROOT / ".qwq_output"
+_REAL_DATA_OUTPUT_ROOTS = (
+    _REAL_OUTPUT_ROOT / "data" / "local" / "runtime",
+    _REAL_OUTPUT_ROOT / "data" / "runs",
+    _REAL_OUTPUT_ROOT / "data" / "release",
+)
 
-SCRIPTS_ROOT = DATA_ROOT / "scripts"
-sys.path.insert(0, str(SCRIPTS_ROOT))
+if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
+    # 清除运行器/外部会话遗留的真实输出根声明，防止测试跟随其落盘。
+    for _key in (
+        "QWQ_OUTPUT_ROOT",
+        "QWQ_RUNTIME_ROOT",
+        "QWQ_PUBLISH_ROOT",
+        "QWQ_RELEASE_ROOT",
+        "QWQ_OUTPUT_ARTIFACTS_ROOT",
+        "QWQ_COMMITTED_TASKS_ROOT",
+        "QWQ_BATCH_PHASE",
+        "QWQ_BATCH_CONTENT_TYPE",
+        "QWQ_BATCH_SUPPLY_MODE",
+        "QWQ_BATCH_SOURCE_KEY",
+    ):
+        os.environ.pop(_key, None)
+    # 强制隔离数据根：即使个别测试模块忘记自建 tempfile 根，
+    # paths 常量也只会冻结在这里，绝不落真实根。
+    _ISOLATED_ROOT = tempfile.mkdtemp(prefix="qwq_pytest_isolated_")
+    os.environ["QWQ_DATA_ROOT"] = _ISOLATED_ROOT
+    os.environ["QWQ_RUNTIME_ROOT"] = str(Path(_ISOLATED_ROOT) / "data" / "local" / "runtime")
+    os.environ["QWQ_PUBLISH_ROOT"] = str(Path(_ISOLATED_ROOT) / "publish")
+    os.environ["QWQ_RELEASE_ROOT"] = str(Path(_ISOLATED_ROOT) / "data" / "release")
+    os.environ["QWQ_OUTPUT_ARTIFACTS_ROOT"] = str(Path(_ISOLATED_ROOT) / "data" / "runs")
+    os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(Path(_ISOLATED_ROOT) / "control_plane" / "tasks")
+    # startup probe cache 是运行期降本缓存；pytest 默认关闭，避免环境预检类测试
+    # 误把 cache 写入真实 .qwq_output/data/local/runtime/env。
+    os.environ.setdefault("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "0")
+
+
+def _snapshot_files(root: Path) -> dict[str, tuple[int, int]]:
+    if not root.exists():
+        return {}
+    snapshot: dict[str, tuple[int, int]] = {}
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        snapshot[path.relative_to(root).as_posix()] = (stat.st_mtime_ns, stat.st_size)
+    return snapshot
+
+
+def pytest_configure(config):
+    config._qwq_output_baseline = {
+        str(root): _snapshot_files(root) for root in _REAL_DATA_OUTPUT_ROOTS
+    }
+    config._qwq_publish_baseline = _snapshot_files(DATA_ROOT / "publish")
+
+
+def pytest_unconfigure(config):
+    """pytest 落盘隔离门：session 结束时真实输出根与仓内 publish 不得新增文件。"""
+    if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") == "1":
+        return
+    leaks: list[str] = []
+    baseline = getattr(config, "_qwq_output_baseline", {})
+    for root in _REAL_DATA_OUTPUT_ROOTS:
+        output_now = _snapshot_files(root)
+        before = baseline.get(str(root), {}) if isinstance(baseline, dict) else {}
+        if not isinstance(before, dict):
+            before = {}
+        added = sorted(set(output_now) - set(before))
+        modified = sorted(key for key in set(output_now) & set(before) if output_now[key] != before[key])
+        if added or modified:
+            details = [f"+{item}" for item in added[:5]] + [f"~{item}" for item in modified[:5]]
+            leaks.append(f"{root} changed files={len(added) + len(modified)} ({', '.join(details)})")
+    publish_now = _snapshot_files(DATA_ROOT / "publish")
+    publish_baseline = getattr(config, "_qwq_publish_baseline", {})
+    if not isinstance(publish_baseline, dict):
+        publish_baseline = {}
+    added = sorted(set(publish_now) - set(publish_baseline))
+    modified = sorted(key for key in set(publish_now) & set(publish_baseline) if publish_now[key] != publish_baseline[key])
+    if added or modified:
+        details = [f"+{item}" for item in added[:5]] + [f"~{item}" for item in modified[:5]]
+        leaks.append(
+            f"{DATA_ROOT / 'publish'} changed files={len(added) + len(modified)} ({', '.join(details)})"
+        )
+    if leaks:
+        raise RuntimeError(
+            "pytest 落盘隔离门 FAIL：测试进程向真实输出根/仓内 publish 泄漏了文件（"
+            + "; ".join(leaks)
+            + "）。单元/合约测试必须只写 tempfile 临时根。"
+        )

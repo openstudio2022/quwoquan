@@ -17,8 +17,8 @@ except ImportError:  # pragma: no cover
 REPO_ROOT = Path(__file__).resolve().parents[4]
 FIXTURES = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures"
 LEGACY = FIXTURES / "user_pool.json"
-CREATOR = FIXTURES / "user_pool.creator_pool.json"
-MANIFEST = FIXTURES / "user_pool.manifest.json"
+CREATOR = FIXTURES / "user_pool.creator_pool.travel_photo_1k_v1.json"
+MANIFEST = FIXTURES / "user_pool.manifest.travel_photo_1k_v1.json"
 CUTOVER = REPO_ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "prefab_cutover.yaml"
 
 
@@ -51,7 +51,7 @@ def run_retire_legacy_prefab_users(*, apply: bool = False) -> int:
     }
 
     if not apply:
-        preview = FIXTURES / "user_pool.t4_merged_preview.json"
+        preview = FIXTURES / "user_pool.archive_retire_preview.travel_photo_1k_v1.json"
         preview.write_text(json.dumps(merged, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"[retire-legacy-prefab] dry-run preview written: {preview}")
         return 0

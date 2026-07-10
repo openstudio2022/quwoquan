@@ -29,9 +29,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "assistant",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Assistant",
     "domain": "assistant",
@@ -106,9 +106,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "chat",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Chat",
     "domain": "chat",
@@ -148,7 +148,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     },
     "rollout_group": "wave_1_copy",
     "service_names": [
-      "chat-service"
+      "seed-box"
     ],
     "template_role": "replica_ready",
     "version": 1
@@ -180,9 +180,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "circle",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Circle",
     "domain": "circle",
@@ -222,7 +222,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     },
     "rollout_group": "wave_1_copy",
     "service_names": [
-      "circle-service"
+      "seed-box"
     ],
     "template_role": "replica_ready",
     "version": 1
@@ -257,9 +257,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "content",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Content",
     "domain": "content",
@@ -309,7 +309,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     },
     "rollout_group": "wave_0_template",
     "service_names": [
-      "content-service"
+      "seed-box"
     ],
     "template_role": "template_seed",
     "version": 1
@@ -342,9 +342,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "entity",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Entity",
     "domain": "entity",
@@ -387,7 +387,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     },
     "rollout_group": "wave_1_copy",
     "service_names": [
-      "entity-service"
+      "seed-box"
     ],
     "template_role": "replica_ready",
     "version": 1
@@ -418,9 +418,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "integration",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Integration",
     "domain": "integration",
@@ -459,7 +459,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     },
     "rollout_group": "wave_2_backfill",
     "service_names": [
-      "integration-service"
+      "seed-box"
     ],
     "template_role": "backlog_candidate",
     "version": 1
@@ -490,9 +490,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "notification",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Notification",
     "domain": "notification",
@@ -567,9 +567,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "ops",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Ops",
     "domain": "ops",
@@ -644,9 +644,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "realtime",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Realtime",
     "domain": "realtime",
@@ -718,9 +718,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "recommendation",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Recommendation",
     "domain": "recommendation",
@@ -791,9 +791,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "rtc",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "RTC",
     "domain": "rtc",
@@ -859,9 +859,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "tag",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "Tag",
     "domain": "tag",
@@ -900,7 +900,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     },
     "rollout_group": "wave_1_copy",
     "service_names": [
-      "tag-service"
+      "seed-box"
     ],
     "template_role": "replica_ready",
     "version": 1
@@ -933,9 +933,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
       }
     },
     "deployment": {
-      "current_binding_source": "deploy/shared/process_domain_mapping.yaml",
+      "current_binding_source": "quwoquan_ops/environments/process_domain_mapping.yaml",
       "plane_binding_domain": "user",
-      "plane_binding_source": "deploy/shared/process_domain_plane_mapping.yaml"
+      "plane_binding_source": "quwoquan_ops/environments/process_domain_plane_mapping.yaml"
     },
     "display_name": "User",
     "domain": "user",
@@ -975,7 +975,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     },
     "rollout_group": "wave_1_copy",
     "service_names": [
-      "user-service"
+      "seed-box"
     ],
     "template_role": "replica_ready",
     "version": 1

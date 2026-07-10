@@ -28,9 +28,9 @@
 ### 1.3 可观测性接入自动化
 
 服务上线即默认具备：
-- 结构化日志字段（`contracts/log_fields.md`）
-- 指标最小集合（`contracts/metrics.md`）与 `endpoint` 归因（`contracts/endpoint_catalog.md`）
-- trace 注入与传播（`contracts/openapi/common.yaml` 与 `contracts/error_codes.md`）
+- 结构化日志字段（`contracts/observability/`）
+- 指标最小集合（`contracts/metrics.md`）与 metadata service operation 归因
+- trace 注入与传播（`contracts/metadata/_shared/request_context.yaml` 与 `contracts/runtime_errors/errors/runtime_failure_codes.yaml`）
 - SLO 与告警模板（参考 `contracts/feedback_and_learning.md` 的 Journey/API SLO）
 
 > 要求：这些接入必须由公共库 `runtime/observability` 与平台模板实现，服务侧不手写。
@@ -82,5 +82,4 @@ CI MUST 自动执行并阻断：
 ## 4. 与公共库/平台模块的关系（强制）
 
 - 运行时横切能力必须通过 `runtime/`：`errors/observability/config/messaging/experiments/learning`
-- 流水线模板与脚本应归档到 `platform/`（后续落地），各服务只通过配置启用
-
+- 流水线模板与脚本归档到 `quwoquan_ops/ci/` 与 `quwoquan_ops/gate/`，各服务只通过配置启用

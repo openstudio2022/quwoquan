@@ -1,17 +1,14 @@
 part of 'create_page.dart';
-
 class _CreatePageState extends ConsumerState<CreatePage>
     with WidgetsBindingObserver, RouteAware {
   static const int _kMaxMediaImages = 20;
   static const int _kMaxBodyLength = 5000;
-
   final CreateCircleService _circleService = const CreateCircleService();
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _bodyController = TextEditingController();
   final FocusNode _titleFocusNode = FocusNode();
   final FocusNode _bodyFocusNode = FocusNode();
   final ScrollController _scrollController = ScrollController();
-
   late final CreateDraftSessionController _draftSessionController;
   bool _didApplyInitialAction = false;
   bool _isPublishing = false;
@@ -19,21 +16,23 @@ class _CreatePageState extends ConsumerState<CreatePage>
   double _heroCollapseProgress = 0;
   String? _pressedMediaPath;
   ModalRoute<dynamic>? _observedRoute;
-
   /// 非 null 时 [ArticleEditor] 在该页展开文内图工具栏（如新插入图片后）。
   final ValueNotifier<String?> _revealArticleImageToolbarForPageId =
       ValueNotifier<String?>(null);
-
   /// 按 asset id 展开工具条（多图同页时优先于 [_revealArticleImageToolbarForPageId]）。
   final ValueNotifier<String?> _revealArticleImageToolbarForAssetId =
       ValueNotifier<String?>(null);
-
   bool get _unifiedCreateEditorEnabled =>
       ref.read(contentFeatureFlagProvider('enable_unified_create_editor'));
-
   bool _useImmersiveArticleExperience(CreateEditorState state) {
     return widget.initialAction == EditorStartAction.write &&
         state.editorKind == CreateEditorKind.text;
+  }
+  void _setMountedState(VoidCallback update) {
+    if (!mounted) {
+      return;
+    }
+    setState(update);
   }
 
   @override
@@ -282,6 +281,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
       state.videoPath,
       state.originalVideoPath,
       state.videoThumbnail,
+      state.isOneTapMovie,
+      state.oneTapMoviePath,
+      state.oneTapMovieEffectId,
       state.videoDurationMs,
       state.videoTrimStartMs,
       state.videoTrimEndMs,
@@ -432,6 +434,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
     if (state.hasVideo) {
       return UITextConstants.createMediaHintVideoCover;
     }
+    if (state.isOneTapMovie) {
+      return UITextConstants.createMediaOneTapMovieLockedHint;
+    }
     if (state.imagePaths.isEmpty) {
       return UITextConstants.createMediaHintAddFirst;
     }
@@ -444,6 +449,9 @@ class _CreatePageState extends ConsumerState<CreatePage>
   }
 
   bool _canAddMoreImages(CreateEditorState state) {
+    if (state.isOneTapMovie) {
+      return false;
+    }
     return !state.hasVideo && state.imagePaths.length < _kMaxMediaImages;
   }
 
@@ -487,10 +495,19 @@ class _CreatePageState extends ConsumerState<CreatePage>
       if (!silent && mounted) {
         AppToast.show(context, UITextConstants.saveDraft);
       }
-    } catch (_) {
+    } catch (error) {
       _draftSessionController.markFailed();
       if (!silent && mounted) {
-        AppToast.show(context, UITextConstants.createDraftSaveFailed);
+        await AppActionErrorFeedback.show(
+          context,
+          semantic: runtimeErrorSemantic(
+            context,
+            error: error,
+            category: UiErrorCategory.backgroundAction,
+            scope: UiErrorScope.global,
+            allowRetry: false,
+          ),
+        );
       }
       rethrow;
     }

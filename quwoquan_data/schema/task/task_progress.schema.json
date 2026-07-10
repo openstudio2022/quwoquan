@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "任务进度断点 — quwoquan_data/tasks/<taskId>/progress.json。重启续跑唯一依据：广度(coverage.entities) + 深度(anglesByEntity)。",
+  "description": "任务进度断点 — quwoquan_data/control_plane/tasks/<taskId>/progress.json（本地进度，不入库）。重启续跑唯一依据：广度(coverage.entities) + 深度(anglesByEntity)。",
   "type": "object",
   "properties": {
     "schemaVersion": { "const": "quwoquan.task.progress" },

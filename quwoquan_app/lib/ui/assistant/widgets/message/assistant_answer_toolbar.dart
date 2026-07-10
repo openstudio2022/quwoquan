@@ -22,8 +22,7 @@ class AssistantAnswerToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark =
-        CupertinoTheme.of(context).brightness == Brightness.dark;
+    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final iconColor = isDark
         ? AppColors.iosToolbarSecondaryIconDark
         : AppColors.iosToolbarSecondaryIconLight;
@@ -110,10 +109,7 @@ class _ToolbarIcon extends StatelessWidget {
 }
 
 class _RegenerateButton extends StatelessWidget {
-  const _RegenerateButton({
-    required this.iconColor,
-    this.onSelected,
-  });
+  const _RegenerateButton({required this.iconColor, this.onSelected});
 
   final Color iconColor;
   final void Function(RegenerateOption option)? onSelected;
@@ -140,12 +136,9 @@ class _RegenerateButton extends StatelessWidget {
     final offset = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
 
-    showGeneralDialog(
+    showAppFloatingModal<void>(
       context: context,
-      barrierDismissible: true,
-      barrierLabel: 'dismiss',
-      barrierColor: AppColors.transparent,
-      pageBuilder: (ctx, anim1, anim2) {
+      builder: (ctx) {
         return RegenerateOptionsPopup(
           anchorRect: Rect.fromLTWH(
             offset.dx,
@@ -157,12 +150,6 @@ class _RegenerateButton extends StatelessWidget {
             Navigator.of(ctx).pop();
             onSelected?.call(option);
           },
-        );
-      },
-      transitionBuilder: (ctx, anim1, anim2, child) {
-        return FadeTransition(
-          opacity: CurvedAnimation(parent: anim1, curve: Curves.easeOut),
-          child: child,
         );
       },
       transitionDuration: const Duration(milliseconds: 200),

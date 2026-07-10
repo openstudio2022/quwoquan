@@ -28,7 +28,7 @@ gwt_acceptance:
     - 干预不能覆盖审核不通过或已下架状态。
     contract_refs:
     - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
-    - deploy/monitoring/alerts/quwoquan_alerts.yaml
+    - quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
     performance_points:
     - policy_takedown_ejection_latency P95 <= 60s
     - ops_intervention_audit_coverage = 1.0
@@ -61,7 +61,7 @@ gwt_acceptance:
     - '[migrated_from_planned] quwoquan_service/services/content-service/tests/recommendation_ops_intervention_contract_test.go'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

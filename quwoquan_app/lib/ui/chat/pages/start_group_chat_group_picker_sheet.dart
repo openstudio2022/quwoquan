@@ -83,9 +83,8 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final rowBackground = SettingsSemanticConstants.conversationSheetCardSurface(
-      isDark,
-    );
+    final rowBackground =
+        SettingsSemanticConstants.conversationSheetCardSurface(isDark);
     final rowDividerColor =
         SettingsSemanticConstants.conversationSheetDividerColor(
           isDark,
@@ -120,8 +119,7 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
           ),
           Expanded(
             child: asyncGroups.when(
-              loading: () =>
-                  const Center(child: CupertinoActivityIndicator()),
+              loading: () => const Center(child: CupertinoActivityIndicator()),
               error: (error, _) => AppPageErrorState(
                 semantic: runtimeErrorSemantic(
                   context,
@@ -140,9 +138,7 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
                 final filtered = normalizedQuery.isEmpty
                     ? allGroups
                     : allGroups
-                          .where(
-                            (g) => pinyinMatches(g.title, normalizedQuery),
-                          )
+                          .where((g) => pinyinMatches(g.title, normalizedQuery))
                           .toList(growable: false);
                 if (filtered.isEmpty) {
                   return Center(
@@ -159,9 +155,7 @@ class _GroupPickerSheetState extends ConsumerState<_GroupPickerSheet> {
                 final indexLetters = <String>['↑', ...grouped.keys];
                 _sectionKeys
                   ..clear()
-                  ..addAll({
-                    for (final k in grouped.keys) k: GlobalKey(),
-                  });
+                  ..addAll({for (final k in grouped.keys) k: GlobalKey()});
                 final listChildren = <Widget>[
                   for (final letter in grouped.keys) ...[
                     _ContactListSectionBand(
@@ -306,7 +300,7 @@ class _GroupPickerRow extends StatelessWidget {
                     ),
                   ),
                   Icon(
-                    CupertinoIcons.chevron_right,
+                    CupertinoIcons.chevron_forward,
                     size: AppSpacing.iconSmall,
                     color: fgPrimary.withValues(alpha: 0.4),
                   ),

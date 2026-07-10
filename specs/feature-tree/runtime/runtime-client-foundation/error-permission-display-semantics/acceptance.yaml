@@ -29,9 +29,9 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - quwoquan_app/test/core/errors/ui_error_semantics_test.dart
-      - quwoquan_app/test/core/widgets/error_states/app_error_states_test.dart
-      - quwoquan_app/test/ui/discovery/pages/work_browser_entry_page_test.dart
+      - quwoquan_app/test/local_contract/core/errors/ui_error_semantics__local_contract_test.dart
+      - quwoquan_app/test/local_contract/core/widgets/error_states/app_error_states__local_contract_test.dart
+      - quwoquan_app/test/local_contract/ui/discovery/pages/work_browser_entry_page__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/core/errors/ui_error_semantics__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/widgets/error_states/app_error_states__local_contract_test.dart
@@ -54,7 +54,7 @@ gwt_acceptance:
     notes: []
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

@@ -990,7 +990,7 @@ packages:
     source: hosted
     version: "0.13.0"
   meta:
-    dependency: "direct overridden"
+    dependency: "direct main"
     description:
       name: meta
       sha256: c82594181e3312f3d0695fc95aaaf7758d75b8d4ae2bbecf223b9fd5109a059d
@@ -1332,14 +1332,14 @@ packages:
   quwoquan_cloud_contracts:
     dependency: "direct main"
     description:
-      path: "../packages/quwoquan_cloud_contracts"
+      path: "packages/quwoquan_cloud_contracts"
       relative: true
     source: path
     version: "0.1.0"
   quwoquan_runtime_errors:
     dependency: "direct main"
     description:
-      path: "../packages/quwoquan_runtime_errors"
+      path: "../quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors"
       relative: true
     source: path
     version: "0.1.0"

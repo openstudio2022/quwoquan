@@ -8,12 +8,13 @@ produce review 阶段：从 draft_meta.extractedEntities 提取专有实体（�
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from _common.entity_object import find_entity_object_dir, sync_entity_object_to_task_mirror, write_entity_object_index
 from _common.io import read_json, write_json
-from _common.paths import PUBLISH_ROOT, RUNTIME_ROOT, task_data
+from _common import paths as _paths
 from _common.review_ledger import entities_path
 from _common.semantic_mentions import (
     DEFAULT_MAX_CANDIDATES,
@@ -42,6 +43,14 @@ TYPE_TO_DOMAIN_ETYPE: dict[str, tuple[str, str]] = {
     "学校": ("机构", "学校"),
 }
 DEFAULT_DOMAIN_ETYPE = ("地点", "打卡地")
+
+
+def _publish_root() -> Path:
+    return Path(os.environ.get("QWQ_PUBLISH_ROOT") or _paths.PUBLISH_ROOT)
+
+
+def _governance_root() -> Path:
+    return _paths.current_runtime_root() / "governance"
 
 
 def resolve_domain_etype(
@@ -128,12 +137,12 @@ def normalize_entity_refs(raw_refs: Sequence[Any] | None, subject_type: str | No
 
 
 def homepage_exists(domain: str, etype: str, name: str, task_id: str, batch_id: str = "") -> bool:
-    if (PUBLISH_ROOT / "entities" / domain / etype / name / "page.md").is_file():
+    if (_publish_root() / "entities" / domain / etype / name / "page.md").is_file():
         return True
     obj = find_entity_object_dir(task_id, domain, etype, name, batch_id=batch_id)
     if obj is not None and (obj / "page.md").is_file():
         return True
-    return task_data(task_id).entity_page(domain, etype, name).is_file()
+    return _paths.task_data(task_id).entity_page(domain, etype, name).is_file()
 
 
 def _existing_homepage_status(
@@ -143,11 +152,11 @@ def _existing_homepage_status(
     task_id: str,
     batch_id: str,
 ) -> str:
-    metadata_paths = [PUBLISH_ROOT / "entities" / domain / etype / name / "_entity.json"]
+    metadata_paths = [_publish_root() / "entities" / domain / etype / name / "_entity.json"]
     obj = find_entity_object_dir(task_id, domain, etype, name, batch_id=batch_id)
     if obj is not None:
         metadata_paths.append(obj / "_entity.json")
-    metadata_paths.append(task_data(task_id).entity_json(domain, etype, name))
+    metadata_paths.append(_paths.task_data(task_id).entity_json(domain, etype, name))
     for path in metadata_paths:
         if not path.is_file():
             continue
@@ -184,7 +193,7 @@ def generate_entity_homepage(
     """Materialize an approved backfill candidate as a minimal entity page."""
     from _common.source_unit import resolve_entity_object_dir
 
-    repository = candidate_repository or CandidateRepository(RUNTIME_ROOT / "governance")
+    repository = candidate_repository or CandidateRepository(_governance_root())
     candidate = repository.get(str(approved_candidate_id).strip()) if approved_candidate_id else None
     expected_ref = entity_ref(domain, etype, name)
     if (
@@ -245,7 +254,7 @@ def build_entities_sidecar(
         from _common.draft_io import read_draft_article
 
         article_text = read_draft_article(task_id, batch_id, ref) or ""
-    repository = candidate_repository or CandidateRepository(RUNTIME_ROOT / "governance")
+    repository = candidate_repository or CandidateRepository(_governance_root())
 
     out_entities: list[dict[str, Any]] = []
     mention_targets: list[dict[str, Any]] = []

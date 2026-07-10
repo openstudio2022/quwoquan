@@ -1,6 +1,6 @@
 # quwoquan_app Codex Guide
 
-在 `quwoquan_app/` 工作时，除仓库根 `AGENTS.md` 外，默认补读以下规则：
+在 `quwoquan_app/` 工作时，除仓库根 `AGENTS.md` 外，默认补读仓库根 `.cursor/rules/` 下的以下规则：
 
 1. `.cursor/rules/02-dart-coding.mdc`
 2. `.cursor/rules/01-arch-constraints.mdc`
@@ -53,6 +53,6 @@
 
 - 改 Dart 文件后读取最近改动文件的 lint。
 - 页面/壳层改动：执行 `make verify-app-page-horizontal-quality`。
-- 改动 runtime error 契约相关代码：执行 `dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart`。
-- 根据触达范围跑对应 `flutter test`，必要时再跑 `bash agent_ops/gate/gate_repo.sh --scope app`。
-- 涉及环境、包纯度或部署验证时，使用 `python3 agent_ops/deploy/stackctl.py package/verify/health/inspect`，不要手写第二套 URL、端口或拓扑。
+- 改动 runtime error 契约相关代码：执行 `dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart`。
+- 根据触达范围跑对应 `flutter test`，必要时再跑 `bash quwoquan_ops/gate/gate_repo.sh --scope app`。
+- 涉及环境、包纯度或部署验证时，使用 `python3 quwoquan_ops/cli/stackctl.py package/verify/health/inspect`，不要手写第二套 URL、端口或拓扑。

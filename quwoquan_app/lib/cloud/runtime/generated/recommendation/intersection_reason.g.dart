@@ -6,6 +6,7 @@ import 'intersection_dimension_tally.g.dart';
 import 'intersection_text_span.g.dart';
 import 'intersection_visual.g.dart';
 import 'intersection_representative_actor.g.dart';
+import 'intersection_actor_evidence.g.dart';
 import 'intersection_action_hint.g.dart';
 
 class IntersectionReason {
@@ -33,6 +34,9 @@ class IntersectionReason {
   final String expiresAt;
   final List<IntersectionPoint> intersectionPoints;
   final String pointSummarySnapshotId;
+  final int actorEvidenceTotalCount;
+  final String actorEvidenceCompleteness;
+  final List<IntersectionActorEvidence> actorEvidence;
   final int factPointCount;
   final int recommendedPointCount;
   final int totalPointCount;
@@ -56,6 +60,9 @@ class IntersectionReason {
   final String dedupeKey;
   final double anchorUserWeight;
   final int mutualCount;
+  final String moment;
+  final String subjectId;
+  final String subjectContext;
 
   IntersectionReason({
     this.kind = '',
@@ -82,6 +89,9 @@ class IntersectionReason {
     this.expiresAt = '',
     this.intersectionPoints = const <IntersectionPoint>[],
     this.pointSummarySnapshotId = '',
+    this.actorEvidenceTotalCount = 0,
+    this.actorEvidenceCompleteness = 'unknown',
+    this.actorEvidence = const <IntersectionActorEvidence>[],
     this.factPointCount = 0,
     this.recommendedPointCount = 0,
     this.totalPointCount = 0,
@@ -105,6 +115,9 @@ class IntersectionReason {
     this.dedupeKey = '',
     this.anchorUserWeight = 0.0,
     this.mutualCount = 0,
+    this.moment = 'current',
+    this.subjectId = '',
+    this.subjectContext = '',
   });
 
   factory IntersectionReason.fromMap(Map<String, dynamic> m) {
@@ -133,6 +146,9 @@ class IntersectionReason {
       expiresAt: m['expiresAt']?.toString() ?? '',
       intersectionPoints: _parseProjectionDtoList(m['intersectionPoints'], IntersectionPoint.fromMap),
       pointSummarySnapshotId: m['pointSummarySnapshotId']?.toString() ?? '',
+      actorEvidenceTotalCount: (m['actorEvidenceTotalCount'] as num?)?.toInt() ?? 0,
+      actorEvidenceCompleteness: m['actorEvidenceCompleteness']?.toString() ?? 'unknown',
+      actorEvidence: _parseProjectionDtoList(m['actorEvidence'], IntersectionActorEvidence.fromMap),
       factPointCount: (m['factPointCount'] as num?)?.toInt() ?? 0,
       recommendedPointCount: (m['recommendedPointCount'] as num?)?.toInt() ?? 0,
       totalPointCount: (m['totalPointCount'] as num?)?.toInt() ?? (m['totalCount'] as num?)?.toInt() ?? (m['total_count'] as num?)?.toInt() ?? 0,
@@ -156,6 +172,9 @@ class IntersectionReason {
       dedupeKey: m['dedupeKey']?.toString() ?? m['dedup_key']?.toString() ?? m['dedupe_key']?.toString() ?? '',
       anchorUserWeight: (m['anchorUserWeight'] as num?)?.toDouble() ?? (m['anchorUserScore'] as num?)?.toDouble() ?? (m['anchor_user_score'] as num?)?.toDouble() ?? 0.0,
       mutualCount: (m['mutualCount'] as num?)?.toInt() ?? (m['mutual_count'] as num?)?.toInt() ?? 0,
+      moment: m['moment']?.toString() ?? 'current',
+      subjectId: m['subjectId']?.toString() ?? '',
+      subjectContext: m['subjectContext']?.toString() ?? '',
     );
   }
 
@@ -185,6 +204,9 @@ class IntersectionReason {
       'expiresAt': expiresAt,
       'intersectionPoints': intersectionPoints,
       'pointSummarySnapshotId': pointSummarySnapshotId,
+      'actorEvidenceTotalCount': actorEvidenceTotalCount,
+      'actorEvidenceCompleteness': actorEvidenceCompleteness,
+      'actorEvidence': actorEvidence,
       'factPointCount': factPointCount,
       'recommendedPointCount': recommendedPointCount,
       'totalPointCount': totalPointCount,
@@ -208,6 +230,9 @@ class IntersectionReason {
       'dedupeKey': dedupeKey,
       'anchorUserWeight': anchorUserWeight,
       'mutualCount': mutualCount,
+      'moment': moment,
+      'subjectId': subjectId,
+      'subjectContext': subjectContext,
     };
   }
 
@@ -236,6 +261,9 @@ class IntersectionReason {
     String? expiresAt,
     List<IntersectionPoint>? intersectionPoints,
     String? pointSummarySnapshotId,
+    int? actorEvidenceTotalCount,
+    String? actorEvidenceCompleteness,
+    List<IntersectionActorEvidence>? actorEvidence,
     int? factPointCount,
     int? recommendedPointCount,
     int? totalPointCount,
@@ -259,6 +287,9 @@ class IntersectionReason {
     String? dedupeKey,
     double? anchorUserWeight,
     int? mutualCount,
+    String? moment,
+    String? subjectId,
+    String? subjectContext,
   }) {
     return IntersectionReason(
       kind: kind ?? this.kind,
@@ -285,6 +316,9 @@ class IntersectionReason {
       expiresAt: expiresAt ?? this.expiresAt,
       intersectionPoints: intersectionPoints ?? this.intersectionPoints,
       pointSummarySnapshotId: pointSummarySnapshotId ?? this.pointSummarySnapshotId,
+      actorEvidenceTotalCount: actorEvidenceTotalCount ?? this.actorEvidenceTotalCount,
+      actorEvidenceCompleteness: actorEvidenceCompleteness ?? this.actorEvidenceCompleteness,
+      actorEvidence: actorEvidence ?? this.actorEvidence,
       factPointCount: factPointCount ?? this.factPointCount,
       recommendedPointCount: recommendedPointCount ?? this.recommendedPointCount,
       totalPointCount: totalPointCount ?? this.totalPointCount,
@@ -308,6 +342,9 @@ class IntersectionReason {
       dedupeKey: dedupeKey ?? this.dedupeKey,
       anchorUserWeight: anchorUserWeight ?? this.anchorUserWeight,
       mutualCount: mutualCount ?? this.mutualCount,
+      moment: moment ?? this.moment,
+      subjectId: subjectId ?? this.subjectId,
+      subjectContext: subjectContext ?? this.subjectContext,
     );
   }
 }

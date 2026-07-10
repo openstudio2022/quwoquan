@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';

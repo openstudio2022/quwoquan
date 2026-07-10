@@ -5,7 +5,7 @@ import 'dart:math' as math;
 import 'package:dart_webrtc/dart_webrtc.dart' show MediaStreamTrackWeb, MediaStreamWeb;
 import 'package:web/web.dart' as web;
 
-import '../../track/local/local.dart' show AudioTrack;
+import '../local/local.dart' show AudioTrack;
 
 // ignore: implementation_imports
 

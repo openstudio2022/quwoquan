@@ -29,15 +29,14 @@ func TestProcessTraceLogger_LevelControl(t *testing.T) {
 	}
 
 	entry := ProcessTraceLog{
-		SchemaVersion:     "v1",
 		Service:           "chat-service",
-		Timestamp:         "2026-02-21T10:10:10Z",
+		TS:                "2026-02-21T10:10:10Z",
 		Origin:            "service.http",
 		Direction:         DirectionInbound,
 		Endpoint:          "chat.message.create",
 		SourceID:          "gateway-service",
-		TraceID:           "SVC.sess.chat.message.create.l9z1y4.2f8k",
-		RequestID:         "SVC.chat.message.create.l9z1y4.2f8k",
+		Trace:             "SVC.sess.chat.message.create.l9z1y4.2f8k",
+		Req:               "SVC.chat.message.create.l9z1y4.2f8k",
 		SessionID:         "run-001",
 		Src:               "service",
 		ServiceName:       "chat-service",
@@ -60,8 +59,19 @@ func TestProcessTraceLogger_LevelControl(t *testing.T) {
 	if err := logger.Write(entry, "Message", "create", map[string]any{"content": "hello"}, map[string]any{"messageId": "m-1"}); err != nil {
 		t.Fatalf("write failed: %v", err)
 	}
-	if !strings.Contains(standard.String(), "\"inputKv\":{\"content\":\"***\"}") {
+	if !strings.Contains(standard.String(), `"inputKv":{"content":"***"}`) {
 		t.Fatalf("expected metadata filtered input kv in payload: %s", standard.String())
 	}
+	if strings.Contains(standard.String(), "schema"+"Version") || strings.Contains(standard.String(), "requestId") {
+		t.Fatalf("process log should use compact fields: %s", standard.String())
+	}
+	if !strings.Contains(standard.String(), ",db_write,ok,") {
+		t.Fatalf("expected delimited runtime event/result fields: %s", standard.String())
+	}
+	if strings.Contains(standard.String(), `"req":`) {
+		t.Fatalf("process log should not use json request field: %s", standard.String())
+	}
+	if !strings.Contains(standard.String(), "persist_message attrs=") {
+		t.Fatalf("expected attrs to be appended to final message field: %s", standard.String())
+	}
 }
-

@@ -22,7 +22,7 @@ pip install -r requirements.txt
 SERVICE_NAME=recommendation-service APP_ENV=dev uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-- POST /v1/score：打分，请求体见 `contracts/openapi/rec-model-service.v1.yaml`
+- POST /v1/score：打分，请求体见 `contracts/metadata/recommendation/rec_model/service.yaml`
 - GET /health：健康检查
 - 配置契约不满足时，服务启动立即失败（fail-fast）
 

@@ -198,15 +198,37 @@ List<String> _localEnvHostBaseCandidates(String base) {
     return const <String>[];
   }
   final uri = Uri.tryParse(normalized);
-  if (uri == null || !_isLocalEnvTestHost(uri.host)) {
+  if (uri == null) {
     return <String>[normalized];
   }
-  return _uniqueNonEmpty(<String>[
-    uri.replace(host: 'localhost').toString().replaceFirst(RegExp(r'/+$'), ''),
-    uri.replace(host: '127.0.0.1').toString().replaceFirst(RegExp(r'/+$'), ''),
-    uri.replace(host: '10.0.2.2').toString().replaceFirst(RegExp(r'/+$'), ''),
-    normalized,
-  ]);
+  final host = uri.host.toLowerCase();
+  if (_isLocalEnvTestHost(host)) {
+    return _uniqueNonEmpty(<String>[
+      uri
+          .replace(host: 'localhost')
+          .toString()
+          .replaceFirst(RegExp(r'/+$'), ''),
+      uri
+          .replace(host: '127.0.0.1')
+          .toString()
+          .replaceFirst(RegExp(r'/+$'), ''),
+      normalized,
+    ]);
+  }
+  if (host == '10.0.2.2' && uri.scheme.toLowerCase() == 'https') {
+    // 10.0.2.2 是 Android emulator 寻址别名；本地 HTTPS 媒体走 adb-reversed loopback。
+    return _uniqueNonEmpty(<String>[
+      uri
+          .replace(host: 'localhost')
+          .toString()
+          .replaceFirst(RegExp(r'/+$'), ''),
+      uri
+          .replace(host: '127.0.0.1')
+          .toString()
+          .replaceFirst(RegExp(r'/+$'), ''),
+    ]);
+  }
+  return <String>[normalized];
 }
 
 List<String> _uniqueNonEmpty(Iterable<String> values) {

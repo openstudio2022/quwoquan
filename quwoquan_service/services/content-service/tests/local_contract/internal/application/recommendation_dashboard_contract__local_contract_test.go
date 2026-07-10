@@ -44,7 +44,8 @@ func TestRecommendationCommercialDashboardLocalContract(t *testing.T) {
 	repoRoot := resolveRepoRoot(t)
 	dashboardPath := filepath.Join(
 		repoRoot,
-		"deploy",
+		"quwoquan_ops",
+		"observability",
 		"monitoring",
 		"dashboards",
 		"l2_recommendation_commercial_maturity.json",
@@ -109,7 +110,7 @@ func TestRecommendationCommercialDashboardLocalContract(t *testing.T) {
 		}
 	}
 
-	if got := slo.Dashboards["recommendation_commercial_maturity"]; got != "deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json" {
+	if got := slo.Dashboards["recommendation_commercial_maturity"]; got != "quwoquan_ops/observability/monitoring/dashboards/l2_recommendation_commercial_maturity.json" {
 		t.Fatalf("recommendation_commercial_maturity dashboard source=%q", got)
 	}
 	if got := slo.Metrics["feed_served_by_attribution_total"]; got != "recommendation_feed_served_by_attribution_total" {

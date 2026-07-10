@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -81,13 +82,28 @@ func (s *MongoPostStore) ListAll(ctx context.Context) []postmodel.Post {
 	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
 	cur, err := s.coll.Find(ctx, bson.M{}, opts)
 	if err != nil {
+		log.Printf("WARN: post ListAll find: %v", err)
 		return nil
 	}
 	defer cur.Close(ctx)
 
+	// 逐条解码：单条脏文档（如 _id 非 string 的迁移前数据）不能让整批
+	// 列表静默返回空，否则 search-backfill 等 reconcile 工具会误报 total=0。
 	var posts []postmodel.Post
-	if err := cur.All(ctx, &posts); err != nil {
-		return nil
+	skipped := 0
+	for cur.Next(ctx) {
+		var post postmodel.Post
+		if err := cur.Decode(&post); err != nil {
+			skipped++
+			continue
+		}
+		posts = append(posts, post)
+	}
+	if err := cur.Err(); err != nil {
+		log.Printf("WARN: post ListAll cursor: %v (decoded=%d)", err, len(posts))
+	}
+	if skipped > 0 {
+		log.Printf("WARN: post ListAll skipped %d undecodable documents", skipped)
 	}
 	return posts
 }

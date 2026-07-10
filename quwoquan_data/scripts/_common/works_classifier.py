@@ -182,7 +182,8 @@ def classify_works(
     affinity_weight = float(affinity_weights.get(affinity, 0.5))
 
     declared = str(declared_carrier or "").strip().lower()
-    is_image_work = declared in ("image", "gallery") or (
+    explicit_image_carrier = declared in ("image", "gallery")
+    is_image_work = explicit_image_carrier or (
         not declared and image_count >= min_images and narrative_volume <= low_narrative
     )
 
@@ -216,9 +217,10 @@ def classify_works(
             return _verdict(ref, decision="abandoned", carrier=None, score=0.0, source_tier=base_tier,
                             signals=base_signals, reasons=reasons + ["image_source_tier5"],
                             abandon_reason="insufficient_evidence", thresholds_version=version)
-        if image_count < min_images:
+        required_image_count = 1 if explicit_image_carrier else min_images
+        if image_count < required_image_count:
             return _verdict(ref, decision="abandoned", carrier=None, score=0.0, source_tier=base_tier,
-                            signals=base_signals, reasons=reasons + [f"image_count={image_count}<min={min_images}"],
+                            signals=base_signals, reasons=reasons + [f"image_count={image_count}<min={required_image_count}"],
                             abandon_reason="insufficient_evidence", thresholds_version=version)
         image_norm = min(1.0, image_count / 8.0)
         works_score = (

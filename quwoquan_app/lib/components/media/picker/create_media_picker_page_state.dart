@@ -291,39 +291,14 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   }
 
   Future<void> _openOneTapMovie() async {
-    if (widget.entryMode == MediaPickerEntryMode.video) {
-      final result = await Navigator.of(context).push<CreateMediaPickerResult>(
-        MaterialPageRoute<CreateMediaPickerResult>(
-          settings: const RouteSettings(
-            name: PageAccessInternalRoutes.createMediaPicker,
-          ),
-          fullscreenDialog: true,
-          builder: (_) => CreateMediaPickerPage(
-            entryMode: MediaPickerEntryMode.image,
-            flowIntent: CreateMediaPickerFlowIntent.oneTapMovieSource,
-            maxSelection: _oneTapMovieMaxImages,
-            mediaPickerService: widget.mediaPickerService,
-            oneTapMovieComposer: widget.oneTapMovieComposer,
-            imageEditorBuilder: widget.imageEditorBuilder,
-            cameraBuilder: widget.cameraBuilder,
-          ),
-        ),
-      );
-      if (!mounted || result == null) {
-        return;
-      }
-      Navigator.of(context).pop(result);
-      return;
-    }
-    if (widget.entryMode != MediaPickerEntryMode.image ||
-        widget.flowIntent != CreateMediaPickerFlowIntent.oneTapMovieSource) {
+    if (widget.entryMode != MediaPickerEntryMode.image) {
       return;
     }
     final images = _selectedItems
         .where((item) => item.isImage)
         .take(_oneTapMovieMaxImages)
         .toList(growable: false);
-    if (images.isEmpty) {
+    if (images.length < 2) {
       return;
     }
     final composed = await Navigator.of(context).push<OneTapMovieComposeResult>(
@@ -341,18 +316,24 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     if (!mounted || composed == null) {
       return;
     }
-    final videoItem = widget.mediaPickerService
-        .fileToMediaItem(
-          filePath: composed.videoPath,
-          source: CreateMediaSource.generated,
-          type: CreateMediaType.video,
-        )
-        .copyWith(durationMs: composed.durationMs);
+    final generatedPath = composed.videoPath.trim();
+    final generatedItems = generatedPath.isEmpty
+        ? const <CreateMediaItem>[]
+        : <CreateMediaItem>[
+            widget.mediaPickerService
+                .fileToMediaItem(
+                  filePath: generatedPath,
+                  source: CreateMediaSource.generated,
+                  type: CreateMediaType.video,
+                )
+                .copyWith(durationMs: composed.durationMs),
+          ];
     Navigator.of(context).pop(
       CreateMediaPickerResult(
-        items: <CreateMediaItem>[videoItem],
+        items: <CreateMediaItem>[...generatedItems, ...images],
         openOneTapMovie: true,
         lockedSingleMedia: true,
+        oneTapMovieEffectId: composed.effectId,
       ),
     );
   }
@@ -431,7 +412,6 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     final picked = await showAppTopAnchoredDropdown<AssetPathEntity>(
       context: context,
       anchorTop: _albumDropdownAnchorTop(),
-      scrimColor: AppColorsFunctional.getColor(true, ColorType.modalScrim),
       barrierLabel: UITextConstants.cancel,
       builder: (dropdownContext) => _buildForcedDarkChrome(
         baseContext: dropdownContext,
@@ -643,10 +623,10 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     );
   }
 
-  Future<void> _editLatestSelectedImage() async {
+  Future<void> _openImageEditorForNextStep() async {
     final index = _selectedItems.lastIndexWhere((item) => item.isImage);
     if (index < 0) return;
-    await _editSelectedImageAt(index);
+    await _editSelectedImageAt(index, continueWhenDone: true);
   }
 
   Future<void> _editSelectedImageAt(
@@ -844,7 +824,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   @override
   Widget build(BuildContext context) {
     const isDark = true;
-    final bg = AppColors.iosGroupedBackgroundDark;
+    final bg = AppColorsFunctional.getColor(true, ColorType.backgroundPrimary);
     final fg = AppColorsFunctional.getColor(
       isDark,
       ColorType.foregroundPrimary,
@@ -984,7 +964,17 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       key: const ValueKey<String>('media-picker-camera-tile'),
       onTap: _openCamera,
       child: Container(
-        color: AppColors.black,
+        decoration: BoxDecoration(
+          color: AppColorsFunctional.getColor(
+            true,
+            ColorType.surfaceElevated,
+          ).withValues(alpha: 0.88),
+          borderRadius: BorderRadius.circular(AppSpacing.smallBorderRadius),
+          border: Border.all(
+            color: AppColors.white.withValues(alpha: 0.10),
+            width: AppSpacing.hairline,
+          ),
+        ),
         alignment: Alignment.center,
         child: FittedBox(
           fit: BoxFit.scaleDown,
@@ -997,7 +987,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                     ? CupertinoIcons.videocam_fill
                     : CupertinoIcons.camera,
                 size: AppSpacing.iconLarge + AppSpacing.intraGroupSm,
-                color: AppColors.white,
+                color: AppColors.white.withValues(alpha: 0.92),
               ),
               SizedBox(height: AppSpacing.intraGroupSm),
               Text(
@@ -1009,42 +999,6 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                   MediaPickerEntryMode.image =>
                     UITextConstants.mediaPickerCameraEntry,
                 },
-                style: TextStyle(
-                  color: AppColorsFunctional.getColor(
-                    isDark,
-                    ColorType.foregroundPrimary,
-                  ),
-                  fontSize: AppTypography.base,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOneTapMovieTile(bool isDark) {
-    return GestureDetector(
-      key: const ValueKey<String>('media-picker-one-tap-movie-tile'),
-      onTap: _openOneTapMovie,
-      child: Container(
-        color: AppColors.black,
-        alignment: Alignment.center,
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                CupertinoIcons.sparkles,
-                size: AppSpacing.iconLarge + AppSpacing.intraGroupSm,
-                color: AppColors.white,
-              ),
-              SizedBox(height: AppSpacing.intraGroupSm),
-              Text(
-                UITextConstants.mediaPickerOneTapMovie,
                 style: TextStyle(
                   color: AppColorsFunctional.getColor(
                     isDark,
@@ -1093,7 +1047,10 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
   }
 
   Widget _buildSelectedStrip(Color sub, bool isDark) {
-    final background = AppColors.iosGroupedBackgroundDark;
+    final background = AppColorsFunctional.getColor(
+      true,
+      ColorType.backgroundPrimary,
+    );
     final thumbSize = AppSpacing.bottomNavHeight;
     return Container(
       height: AppSpacing.bottomNavHeight + AppSpacing.containerMd,
@@ -1138,13 +1095,18 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
       selectionCount: selectionCount,
       flowIntent: widget.flowIntent,
     );
-    final background = AppColors.iosGroupedBackgroundDark;
+    final background = AppColorsFunctional.getColor(
+      true,
+      ColorType.backgroundPrimary,
+    );
     final border = AppColorsFunctional.getColor(
       isDark,
       ColorType.borderSecondary,
     );
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final bottomPadding = bottomInset + AppSpacing.intraGroupSm;
+    final bottomPadding =
+        (bottomInset > 0 ? bottomInset : AppSpacing.containerMd) +
+        AppSpacing.intraGroupSm;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: background,
@@ -1163,7 +1125,7 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
           children: [
             for (var i = 0; i < actions.length; i++) ...[
               if (i > 0) SizedBox(width: AppSpacing.interGroupSm),
-              Expanded(child: _buildBottomActionButton(actions[i], isDark)),
+              Expanded(child: _buildBottomActionButton(actions[i])),
             ],
           ],
         ),
@@ -1171,79 +1133,31 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
     );
   }
 
-  Widget _buildBottomActionButton(
-    CreateMediaPickerBottomActionSpec spec,
-    bool isDark,
-  ) {
+  Widget _buildBottomActionButton(CreateMediaPickerBottomActionSpec spec) {
     final onPressed = spec.enabled
         ? () {
             switch (spec.action) {
               case CreateMediaPickerBottomAction.editImage:
-                unawaited(_editLatestSelectedImage());
+                unawaited(_openOneTapMovie());
                 return;
               case CreateMediaPickerBottomAction.completeImage:
-                _finishSelection();
+                unawaited(_openImageEditorForNextStep());
                 return;
               case CreateMediaPickerBottomAction.nextStep:
-                if (widget.entryMode == MediaPickerEntryMode.image &&
-                    widget.flowIntent ==
-                        CreateMediaPickerFlowIntent.oneTapMovieSource) {
-                  unawaited(_openOneTapMovie());
-                  return;
-                }
                 _finishSelection();
                 return;
             }
           }
         : null;
-    final neutralBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceElevated,
-    );
-    final disabledBackground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.surfaceElevated,
-    );
-    final neutralForeground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundPrimary,
-    );
-    final disabledForeground = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.foregroundTertiary,
-    );
-    final borderColor = AppColorsFunctional.getColor(
-      isDark,
-      ColorType.borderSecondary,
-    );
-    final child = Container(
+    final variant = spec.isPrimary
+        ? MediaCreationBottomButtonVariant.partialPrimary
+        : MediaCreationBottomButtonVariant.secondaryNeutral;
+    return MediaCreationBottomButton(
       key: ValueKey<String>('media-picker-bottom-action-${spec.action.name}'),
-      height: AppSpacing.buttonHeight,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: spec.enabled
-            ? (spec.isPrimary ? AppColors.primaryColor : neutralBackground)
-            : disabledBackground.withValues(alpha: 0.48),
-        borderRadius: BorderRadius.circular(AppSpacing.borderRadius),
-        border: spec.isPrimary || !spec.enabled
-            ? null
-            : Border.all(color: borderColor),
-      ),
-      child: Text(
-        spec.label,
-        style: TextStyle(
-          fontSize: AppTypography.base,
-          fontWeight: spec.isPrimary ? FontWeight.w700 : FontWeight.w600,
-          color: spec.enabled
-              ? (spec.isPrimary ? AppColors.white : neutralForeground)
-              : disabledForeground,
-        ),
-      ),
-    );
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
+      label: spec.label,
+      variant: variant,
+      height: AppSpacing.minInteractiveSize,
       onPressed: onPressed,
-      child: child,
     );
   }
 

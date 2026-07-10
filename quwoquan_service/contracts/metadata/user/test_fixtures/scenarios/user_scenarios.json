@@ -16394,68 +16394,68 @@
         }
       ]
     },
-    "creator_travel_travel_batch_100_v1_core": {
-      "description": "Creator pool travel_batch_100_v1 curated pilot subset",
+    "creator_travel_travel_photo_1k_v1_core": {
+      "description": "Creator pool travel_photo_1k_v1 curated pilot subset",
       "profiles": [
         {
-          "userId": "qwq_creator_travel_casual_tourist_001"
+          "userId": "sys_photo_0001"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_002"
+          "userId": "sys_photo_0002"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_003"
+          "userId": "sys_photo_0003"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_004"
+          "userId": "sys_photo_0004"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_005"
+          "userId": "sys_photo_0005"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_006"
+          "userId": "sys_photo_0006"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_007"
+          "userId": "sys_photo_0007"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_008"
+          "userId": "sys_photo_0008"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_009"
+          "userId": "sys_photo_0009"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_010"
+          "userId": "sys_photo_0010"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_011"
+          "userId": "sys_photo_0011"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_012"
+          "userId": "sys_photo_0012"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_013"
+          "userId": "sys_photo_0013"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_014"
+          "userId": "sys_photo_0014"
         },
         {
-          "userId": "qwq_creator_travel_casual_tourist_015"
+          "userId": "sys_photo_0015"
         },
         {
-          "userId": "qwq_creator_travel_local_walker_016"
+          "userId": "sys_photo_0016"
         },
         {
-          "userId": "qwq_creator_travel_local_walker_017"
+          "userId": "sys_photo_0017"
         },
         {
-          "userId": "qwq_creator_travel_local_walker_018"
+          "userId": "sys_photo_0018"
         },
         {
-          "userId": "qwq_creator_travel_local_walker_019"
+          "userId": "sys_photo_0019"
         },
         {
-          "userId": "qwq_creator_travel_local_walker_020"
+          "userId": "sys_photo_0020"
         }
       ]
     }
@@ -16512,59 +16512,59 @@
       }
     },
     {
-      "id": "creator_travel_travel_batch_100_v1_core",
-      "title": "Creator pool travel_batch_100_v1",
+      "id": "creator_travel_travel_photo_1k_v1_core",
+      "title": "Creator pool travel_photo_1k_v1",
       "type": "user_profile",
       "domainId": "user",
       "seedRefs": [
-        "creator_travel_travel_batch_100_v1_core"
+        "creator_travel_travel_photo_1k_v1_core"
       ],
       "uiExpectations": {
         "userIds": [
-          "qwq_creator_travel_casual_tourist_001",
-          "qwq_creator_travel_casual_tourist_002",
-          "qwq_creator_travel_casual_tourist_003",
-          "qwq_creator_travel_casual_tourist_004",
-          "qwq_creator_travel_casual_tourist_005",
-          "qwq_creator_travel_casual_tourist_006",
-          "qwq_creator_travel_casual_tourist_007",
-          "qwq_creator_travel_casual_tourist_008",
-          "qwq_creator_travel_casual_tourist_009",
-          "qwq_creator_travel_casual_tourist_010",
-          "qwq_creator_travel_casual_tourist_011",
-          "qwq_creator_travel_casual_tourist_012",
-          "qwq_creator_travel_casual_tourist_013",
-          "qwq_creator_travel_casual_tourist_014",
-          "qwq_creator_travel_casual_tourist_015",
-          "qwq_creator_travel_local_walker_016",
-          "qwq_creator_travel_local_walker_017",
-          "qwq_creator_travel_local_walker_018",
-          "qwq_creator_travel_local_walker_019",
-          "qwq_creator_travel_local_walker_020"
+          "sys_photo_0001",
+          "sys_photo_0002",
+          "sys_photo_0003",
+          "sys_photo_0004",
+          "sys_photo_0005",
+          "sys_photo_0006",
+          "sys_photo_0007",
+          "sys_photo_0008",
+          "sys_photo_0009",
+          "sys_photo_0010",
+          "sys_photo_0011",
+          "sys_photo_0012",
+          "sys_photo_0013",
+          "sys_photo_0014",
+          "sys_photo_0015",
+          "sys_photo_0016",
+          "sys_photo_0017",
+          "sys_photo_0018",
+          "sys_photo_0019",
+          "sys_photo_0020"
         ]
       },
       "remoteExpectations": {
         "profileUserIds": [
-          "qwq_creator_travel_casual_tourist_001",
-          "qwq_creator_travel_casual_tourist_002",
-          "qwq_creator_travel_casual_tourist_003",
-          "qwq_creator_travel_casual_tourist_004",
-          "qwq_creator_travel_casual_tourist_005",
-          "qwq_creator_travel_casual_tourist_006",
-          "qwq_creator_travel_casual_tourist_007",
-          "qwq_creator_travel_casual_tourist_008",
-          "qwq_creator_travel_casual_tourist_009",
-          "qwq_creator_travel_casual_tourist_010",
-          "qwq_creator_travel_casual_tourist_011",
-          "qwq_creator_travel_casual_tourist_012",
-          "qwq_creator_travel_casual_tourist_013",
-          "qwq_creator_travel_casual_tourist_014",
-          "qwq_creator_travel_casual_tourist_015",
-          "qwq_creator_travel_local_walker_016",
-          "qwq_creator_travel_local_walker_017",
-          "qwq_creator_travel_local_walker_018",
-          "qwq_creator_travel_local_walker_019",
-          "qwq_creator_travel_local_walker_020"
+          "sys_photo_0001",
+          "sys_photo_0002",
+          "sys_photo_0003",
+          "sys_photo_0004",
+          "sys_photo_0005",
+          "sys_photo_0006",
+          "sys_photo_0007",
+          "sys_photo_0008",
+          "sys_photo_0009",
+          "sys_photo_0010",
+          "sys_photo_0011",
+          "sys_photo_0012",
+          "sys_photo_0013",
+          "sys_photo_0014",
+          "sys_photo_0015",
+          "sys_photo_0016",
+          "sys_photo_0017",
+          "sys_photo_0018",
+          "sys_photo_0019",
+          "sys_photo_0020"
         ],
         "subAccountIds": []
       },

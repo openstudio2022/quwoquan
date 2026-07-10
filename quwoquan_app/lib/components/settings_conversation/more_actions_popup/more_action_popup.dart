@@ -21,9 +21,8 @@ class MoreActionPopup extends StatelessWidget {
     bool isScrollControlled = true,
   }) async {
     if (config is MediaPostMoreActionConfig) {
-      await showCupertinoModalPopup<dynamic>(
+      await showAppBottomModal<dynamic>(
         context: context,
-        barrierColor: AppColors.transparent,
         builder: (context) => _MediaPostMoreActionSheet(
           config: config,
           panelMaxWidth: panelMaxWidth,

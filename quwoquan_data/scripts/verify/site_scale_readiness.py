@@ -13,6 +13,8 @@ DEFAULT_DAILY_TARGET = 100_000
 MIN_FIRST_PASS_RATE = 0.70
 MAX_DEAD_LETTER_RATE = 0.02
 ADMISSION_CONTROLLED_TRIAL = "controlled_trial"
+ADMISSION_LICENSED_ASSET_INGEST = "licensed_asset_ingest"
+ADMISSION_ATTRIBUTION_PUBLISH_INGEST = "attribution_publish_ingest"
 
 
 def _safe_float(value: Any, default: float = 0.0) -> float:
@@ -45,7 +47,12 @@ def _merge_counts(rows: list[Mapping[str, Any]], key: str) -> dict[str, int]:
 
 def _site_raw_daily_capacity(site: Mapping[str, Any]) -> int:
     profile = site.get("profile") if isinstance(site.get("profile"), Mapping) else {}
-    if str(site.get("admissionMode") or "batch_crawl") == ADMISSION_CONTROLLED_TRIAL:
+    admission_mode = str(site.get("admissionMode") or "batch_crawl")
+    if admission_mode in {
+        ADMISSION_CONTROLLED_TRIAL,
+        ADMISSION_LICENSED_ASSET_INGEST,
+        ADMISSION_ATTRIBUTION_PUBLISH_INGEST,
+    }:
         return 0
     if not (profile.get("fetchable") and profile.get("crawlAllowed")):
         return 0
@@ -175,6 +182,24 @@ def _site_report(root: Path) -> dict[str, Any]:
     admission_mode = str(((rollup.get("frontier") or {}).get("admissionMode") or frontier.get("admissionMode") or "batch_crawl"))
     if frontier_passed and admission_mode == ADMISSION_CONTROLLED_TRIAL:
         stages_to_check = ("site_frontier", "site_extract", "site_score", "site_map", "site_rollup")
+    elif frontier_passed and admission_mode == ADMISSION_LICENSED_ASSET_INGEST:
+        stages_to_check = (
+            "site_frontier",
+            "authorized_asset_ingest",
+            "site_extract",
+            "site_score",
+            "site_map",
+            "site_rollup",
+        )
+    elif frontier_passed and admission_mode == ADMISSION_ATTRIBUTION_PUBLISH_INGEST:
+        stages_to_check = (
+            "site_frontier",
+            "attributed_asset_ingest",
+            "site_extract",
+            "site_score",
+            "site_map",
+            "site_rollup",
+        )
     elif frontier_passed:
         stages_to_check = ("site_frontier", "site_fetch", "site_extract", "site_score", "site_map", "site_rollup")
     else:
@@ -201,6 +226,7 @@ def _site_report(root: Path) -> dict[str, Any]:
         "frontierWarnings": list(((frontier.get("gate") or {}).get("warnings")) or []),
         "rollupPassed": bool(rollup.get("passed")),
         "profile": profile,
+        "articleCommercialAdmission": str(profile.get("articleCommercialAdmission") or ""),
         "admissionMode": admission_mode,
         "queueBackend": str(queue.get("backend") or execution.get("queueBackend") or ""),
         "siteFunnel": funnel,
@@ -267,7 +293,13 @@ def build_site_scale_readiness_report(
     raw_capacity_sites = sum(
         1
         for site in sites
-        if site.get("frontierPassed") and str(site.get("admissionMode") or "batch_crawl") != ADMISSION_CONTROLLED_TRIAL
+        if site.get("frontierPassed")
+        and str(site.get("admissionMode") or "batch_crawl")
+        not in {
+            ADMISSION_CONTROLLED_TRIAL,
+            ADMISSION_LICENSED_ASSET_INGEST,
+            ADMISSION_ATTRIBUTION_PUBLISH_INGEST,
+        }
     )
     total_max_pages_per_day = sum(_site_raw_daily_capacity(site) for site in sites if site.get("frontierPassed"))
     required_per_hour = int(daily_target) / 24
@@ -294,10 +326,32 @@ def build_site_scale_readiness_report(
         admission_mode = str(site.get("admissionMode") or "batch_crawl")
         if admission_mode == ADMISSION_CONTROLLED_TRIAL and mode == "commercial":
             blockers.append(prefix + "controlled_trial cannot satisfy commercial source crawl readiness")
-        if admission_mode != ADMISSION_CONTROLLED_TRIAL and (not profile.get("fetchable") or not profile.get("crawlAllowed")):
+        if (
+            admission_mode not in {
+                ADMISSION_CONTROLLED_TRIAL,
+                ADMISSION_LICENSED_ASSET_INGEST,
+                ADMISSION_ATTRIBUTION_PUBLISH_INGEST,
+            }
+            and (not profile.get("fetchable") or not profile.get("crawlAllowed"))
+        ):
             blockers.append(prefix + "site profile is not fetchable+crawlAllowed")
-        if admission_mode != ADMISSION_CONTROLLED_TRIAL and _safe_int(profile.get("maxPagesPerDay")) <= 0:
+        if (
+            admission_mode not in {
+                ADMISSION_CONTROLLED_TRIAL,
+                ADMISSION_LICENSED_ASSET_INGEST,
+                ADMISSION_ATTRIBUTION_PUBLISH_INGEST,
+            }
+            and _safe_int(profile.get("maxPagesPerDay")) <= 0
+        ):
             blockers.append(prefix + "siteCrawlProfile.maxPagesPerDay must be > 0 for batch crawl")
+        if admission_mode == ADMISSION_LICENSED_ASSET_INGEST:
+            rights_policy = str(profile.get("rightsPolicy") or "")
+            if rights_policy not in {"licensed_asset_required", "commercial_license_required"}:
+                blockers.append(prefix + "licensed asset ingest requires authorized asset rights policy")
+        if admission_mode == ADMISSION_ATTRIBUTION_PUBLISH_INGEST:
+            rights_policy = str(profile.get("rightsPolicy") or "")
+            if rights_policy != "attribution_no_watermark":
+                blockers.append(prefix + "attribution publish ingest requires attribution_no_watermark rights policy")
         if site.get("missingStageEvidence"):
             blockers.append(prefix + "missing stage evidence: " + ",".join(site["missingStageEvidence"]))
         dead_letters = _safe_int(site.get("deadLetterCount"))

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
 import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
@@ -13,11 +14,9 @@ import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 /// 类名保留 `ProfileInsight*` 历史命名以零改动收敛；语义上为通用对象交集预览积木。
 
 String profileIntersectionSourceRef(IntersectionReason reason) {
-  for (final point in reason.intersectionPoints) {
-    final sourceRef = point.sourceRef.trim();
-    if (sourceRef.isNotEmpty) {
-      return sourceRef;
-    }
+  final resolved = resolvedIntersectionReasonKind(reason).trim();
+  if (resolved.isNotEmpty) {
+    return resolved;
   }
   return reason.source.trim();
 }
@@ -225,6 +224,10 @@ class ProfileIntersectionPreviewRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final displayReason = displayReadyIntersectionReason(reason);
+    if (displayReason == null) {
+      return const SizedBox.shrink();
+    }
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: Size.square(AppSpacing.minInteractiveSize),
@@ -237,15 +240,15 @@ class ProfileIntersectionPreviewRow extends StatelessWidget {
         child: Row(
           children: <Widget>[
             IntersectionTypeIcon(
-              iconKey: reason.iconKey,
-              sourceRef: profileIntersectionSourceRef(reason),
-              dimension: reason.dimension,
+              iconKey: displayReason.iconKey,
+              sourceRef: profileIntersectionSourceRef(displayReason),
+              dimension: displayReason.dimension,
             ),
             SizedBox(width: AppSpacing.intraGroupSm),
             Expanded(
               child: InteractiveIntersectionText(
-                spans: reason.primarySpans,
-                fallbackText: reason.primaryText,
+                spans: displayReason.primarySpans,
+                fallbackText: displayReason.primaryText,
                 onSpanTap: onSpanTap,
                 onFallbackTap: onTap,
                 accentFontWeight: AppTypography.regular,

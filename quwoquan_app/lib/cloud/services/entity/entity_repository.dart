@@ -336,7 +336,7 @@ class MockHomepageRepository implements HomepageRepository {
     return _entityImpactFromHomepage(homepage);
   }
 
-  /// 由已 contract-seed 的 [HomepageDetail] 真实字段派生「影响力」事实行，
+  /// 由已 contract-seed 的 [HomepageDetail] 真实字段派生「打动」事实行，
   /// 与圈子影响卡同源（从 stats 派生）：关注连接 / 口碑评价 / 相关圈子讨论。
   /// 不伪造数字——无可派生事实（候选主页无口碑/相关圈子）时返回空 items，端侧整卡不展示（G2）。
   static EntityImpactSummary _entityImpactFromHomepage(

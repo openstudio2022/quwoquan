@@ -22,6 +22,7 @@ L2_business_capability：
 L3_story：
 验收意图：UAT / SIT / GWT / contract
 测试证据：local_contract / api_integration / user_acceptance
+质量维度：functional / contract / reliability / availability / observability / experience / security / performance / data_consistency
 风险：
 ```
 
@@ -44,6 +45,7 @@ Pre-work Reflection
 是否跨 App / Service / Data / Ops / Portal：
 是否需要 E2E 证据：
 是否存在第二真相源、旧兼容、allowlist 或测试放宽：
+是否触发异常恢复、性能、安全隐私、埋点/日志/指标、数据一致性等非功能质量维度：
 ```
 
 任一项为“是”时，必须加载对应区域 `AGENTS.md`、`.cursor/rules`、`.cursor/commands` 或 skill。
@@ -145,8 +147,8 @@ user input
 | `quwoquan_app/**` | `quwoquan_app/AGENTS.md`、Dart/Mock/runtime error/page quality rules | 设计系统、Provider、Mock/Remote、错误体验、页面矩阵、四环境数据源 |
 | `quwoquan_service/**` | `quwoquan_service/AGENTS.md`、metadata README、架构/runtime error rules | metadata-first、DDD、RuntimeErrorResponse、`api_integration` 真实存储、metrics/trace/SLO |
 | `quwoquan_data/**` | `quwoquan_data/AGENTS.md`、`quwoquan-data-content` skill | CLI-first、Agent-only 正文、事实/权利/图片/账本、ship/importer、七角色准出 |
-| `agent_ops/**`、环境、部署、门禁 | `agent_ops/AGENTS.md`、`environment-ops` skill | stackctl、四环境、repair 白名单、prod rollout、gate 证据 |
-| `apps/ops-portal/**` | `apps/ops-portal/AGENTS.md` | NodeNext imports、runtime errors、观测页面、test/build |
+| `quwoquan_ops/**`、环境、部署、门禁 | `quwoquan_ops/AGENTS.md`、`environment-ops` skill | stackctl、四环境、repair 白名单、prod rollout、gate 证据 |
+| `quwoquan_ops/portal/**` | `quwoquan_ops/portal/AGENTS.md` | NodeNext imports、runtime errors、观测页面、test/build |
 | 跨多个区域 | 本文 E2E 模式 | 不得局部完成，必须补端到端证据 |
 
 ## 2. 正向规格理解
@@ -166,6 +168,7 @@ L2_business_capability：
 L3_story：
 验收意图：UAT / SIT / GWT / contract
 测试证据：local_contract / api_integration / user_acceptance
+质量维度：functional / contract / reliability / availability / observability / experience / security / performance / data_consistency
 风险：
 ```
 
@@ -176,6 +179,7 @@ L3_story：
 实施前必须确认：
 
 - 是否触发 metadata-first、env-seed-first、mock 隔离、页面质量、runtime error、数据工程 CLI-first、环境部署或推荐/观测规则。
+- 是否触发异常恢复、性能、安全隐私、埋点/日志/指标、数据一致性等非功能质量维度；适用但无测试证据时必须返回 `GATE_BLOCK`。
 - 是否需要更新 `spec.md`、`design.md`、`acceptance.yaml`、`journey_scenario_registry.yaml`、`tree_index.yaml` 或 `specs/changelog/CR-*.yaml`。
 - 是否涉及错误码端云链路：`errors.yaml -> codegen -> RuntimeErrorResponse -> CloudException/runtime mapper -> UI prompt -> telemetry/alert -> local_contract/api_integration/user_acceptance`。
 - 是否会跨 App、Service、Data、Ops 任意两个以上区域。
@@ -222,6 +226,8 @@ E2E 准出：
 | 剩余风险 | 是否存在技术债、旧兼容、allowlist、未挂载脚本、未完成证据 |
 
 不适用项要说明原因。禁止只输出“改了哪些文件”。
+
+非功能质量维度必须单独说明：异常/恢复、性能、安全/隐私、可观测、可靠性/可用性、数据一致性。任何适用项缺少 `local_contract`、`api_integration` 或 `user_acceptance` 的合理证据时，最终结论必须是 `GATE_BLOCK`，不得用“后续补”或单纯人工确认代替。
 
 ## 6. Rules / Commands / Skills / MCP / Gates 分工
 

@@ -54,6 +54,7 @@ def creator_load_report(
                 "published": 0,
                 "tokenLedgerEntries": 0,
                 "objectTypes": {},
+                "plannedByDay": {},
             },
         )
 
@@ -74,6 +75,13 @@ def creator_load_report(
             assignment_issues.append(issue)
         r = row(creator_id)
         r["planned"] += 1
+        schedule = item.get("publishSchedule") if isinstance(item.get("publishSchedule"), Mapping) else {}
+        try:
+            day_offset = int(schedule.get("dayOffset") or 0)
+        except (TypeError, ValueError):
+            day_offset = 0
+        planned_by_day = r.setdefault("plannedByDay", {})
+        planned_by_day[str(day_offset)] = int(planned_by_day.get(str(day_offset)) or 0) + 1
         key = "image" if carrier == "gallery" else carrier
         r["objectTypes"][key] = int(r["objectTypes"].get(key, 0)) + 1
 
@@ -101,13 +109,33 @@ def creator_load_report(
         if creator_id != "<missing>"
     ]
     max_planned = max((int(item.get("planned") or 0) for item in active), default=0)
+    max_planned_per_day = max(
+        (
+            int(count or 0)
+            for item in active
+            for count in (
+                item.get("plannedByDay", {}).values()
+                if isinstance(item.get("plannedByDay"), Mapping)
+                else []
+            )
+        ),
+        default=0,
+    )
     total_planned = sum(int(item.get("planned") or 0) for item in active)
     max_share = round(max_planned / total_planned, 4) if total_planned else 0.0
     max_daily_posts = 1
     overload = [
         item["creatorProfileId"]
         for item in active
-        if int(item.get("planned") or 0) > max_daily_posts and target_goal >= 100
+        if target_goal >= 100
+        and any(
+            int(count or 0) > max_daily_posts
+            for count in (
+                item.get("plannedByDay", {}).values()
+                if isinstance(item.get("plannedByDay"), Mapping)
+                else [item.get("planned") or 0]
+            )
+        )
     ]
     return {
         "schemaVersion": "quwoquan_data.creator_load_report/1",
@@ -116,6 +144,7 @@ def creator_load_report(
         "plannedObjectCount": total_planned,
         "publishedObjectCount": sum(int(item.get("published") or 0) for item in active),
         "maxPlannedPerCreator": max_planned,
+        "maxPlannedPerCreatorDay": max_planned_per_day,
         "maxCreatorShare": max_share,
         "maxDailyPostsPerCreator": max_daily_posts,
         "missingAssignmentRefs": missing_assignments[:50],

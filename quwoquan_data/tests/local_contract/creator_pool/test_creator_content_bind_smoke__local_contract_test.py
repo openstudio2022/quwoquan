@@ -11,7 +11,7 @@ sys.path.insert(0, str(SCRIPTS))
 from _common.creator_assignment import creator_assignment_from_profile
 
 REPO = Path(__file__).resolve().parents[4]
-SEED = REPO / "quwoquan_service/contracts/metadata/_shared/test_fixtures/creator_pool/creator_travel_scale10.seed.json"
+SEED = REPO / "quwoquan_service/contracts/metadata/_shared/test_fixtures/creator_pool/creator_travel_photo_1k_v1.seed.json"
 
 
 def test_creator_assignment_matches_seed_users() -> None:
@@ -21,7 +21,7 @@ def test_creator_assignment_matches_seed_users() -> None:
     for user in users[:3]:
         profile = {
             "creatorProfileId": user["creatorProfileId"],
-            "authorId": user["authorId"],
+            "authorId": user["subAccountId"],
             "creatorArchetype": user["creatorArchetype"],
             "profileVersion": "1.0.0",
             "disclosure": {
@@ -37,5 +37,5 @@ def test_creator_assignment_matches_seed_users() -> None:
             "qualityScore": 0.85,
         }
         assignment = creator_assignment_from_profile(profile)
-        assert assignment["authorId"] == user["authorId"]
+        assert assignment["authorId"] == user["subAccountId"]
         assert assignment["creatorProfileId"] == user["creatorProfileId"]

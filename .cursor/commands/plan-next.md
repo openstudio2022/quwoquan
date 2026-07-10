@@ -13,7 +13,7 @@ description: 任务后多角色自检功能与计划的完成情况，按商用�
 
 对标基线：交互与视觉对标 **微信 / 小红书** 与 **Apple HIG**；功能完备性、可靠性与可运营性对标成熟商用 App。
 
-真相源（不得绕过）：`specs/00_MASTER_DEVELOPMENT_FLOW.md`、特性树 `spec.md/design.md/acceptance.yaml`、`contracts/metadata/**`、`.cursor/rules/**`（尤其 `13-coding-discipline.mdc` 八角色 R01–R32）。
+真相源（不得绕过）：`specs/00_MASTER_DEVELOPMENT_FLOW.md`、特性树 `spec.md/design.md/acceptance.yaml`、`quwoquan_service/contracts/metadata/**`、`.cursor/rules/**`（尤其 `13-coding-discipline.mdc` 八角色 R01–R32）。
 
 ---
 
@@ -28,7 +28,7 @@ description: 任务后多角色自检功能与计划的完成情况，按商用�
 | 架构设计专家 | DDD 边界与依赖方向是否守住；是否新增了旁路分支/第二真相源（R24）；端云 DTO↔struct↔YAML 是否仍一致；**过往兼容与死代码是否已清理、统一到新契约**。 |
 | 代码评审专家 | 是否引入弱类型穿透、硬编码、空 catch、手改 codegen、超大文件；是否留下 TODO/@Deprecated/注释代码等技术债。 |
 | 测试与质量专家 | 三层测试 是否补齐；Mock↔Remote 是否一致；`acceptance.yaml` 声明路径是否在磁盘存在且通过；触发范围门禁是否绿。 |
-| 运维与运营专家 | SLO/告警/TTL/灰度/回滚是否落实；新页面/API/行为信号埋点与归因链是否覆盖；AB 是否可分桶。 |
+| 运维与运营专家 | SLO/告警/TTL/灰度/回滚是否落实；新页面/API/行为信号埋点与归因链是否覆盖；异常、性能、安全、可观测、可靠性/可用性、数据一致性是否按 quality_facet 有证据；AB 是否可分桶。 |
 | 工程能力 / 自动化专家 | metadata→verify→codegen 是否闭环；验证是否可重复、可自动化、不依赖人工记忆。 |
 
 ---
@@ -36,6 +36,7 @@ description: 任务后多角色自检功能与计划的完成情况，按商用�
 ## 2) 证据核对（防漂移）
 
 - `acceptance.yaml` 中每个 `tests[].file` 在磁盘**存在且通过**（防 acceptance↔实现脱节）。
+- `acceptance.yaml` 中每个验收项的 `quality_facets`、`test_object`、SLO/观测/安全引用与 recorded evidence 对齐。
 - 触发范围门禁绿；无新增技术债（过往兼容/死代码/弱类型/空 catch/硬编码/超大文件）。
 - 端云一致：Dart DTO ↔ Go struct ↔ metadata YAML 字段对齐。
 
@@ -55,6 +56,7 @@ description: 任务后多角色自检功能与计划的完成情况，按商用�
 2. **规格**：`spec.md` 增量或新建 Story（含 UX、权限异常语义、并发可靠性、SLO/灰度/回滚/观测）。
 3. **任务清单**：可执行、职责归位、每项含测试与验收，标注触发门禁。
 4. **验收标准**：UAT/SIT/GWT/contract + 三层测试，绑定磁盘测试路径。
+5. **质量门禁**：异常恢复、性能、安全隐私、可观测、可靠性/可用性、数据一致性逐项给出适用性和证据。
 
 ## 出口
 

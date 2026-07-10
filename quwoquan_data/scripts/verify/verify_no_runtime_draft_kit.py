@@ -4,7 +4,7 @@
 亦禁止重新引入「脚本拼实体主页正文」的机械骨架函数。
 
 背景（整改计划第一阶段）：四川 10e20c 批次的文章正文实际由 runtime 批次脚本
-`from helpers.agent_draft_kit import route_article/entity_article` 拼接派生，
+`from support.helpers.agent_draft_kit import route_article/entity_article` 拼接派生，
 以 generator=agent 落盘，绕过"正文只由创作 agent创作"的原则，导致机械模板稿过门；
 实体主页 `page.md` 早期也由脚本按固定模板小标题切句凑字，产出千篇一律的模板主页。
 
@@ -34,7 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 DATA_ROOT = ROOT / "quwoquan_data"
 
-# kit 是测试专用，唯一合法位置是 tests/helpers/agent_draft_kit.py 及 tests/ 内消费者。
+# kit 是测试专用，唯一合法位置是 tests/support/helpers/agent_draft_kit.py 及 tests/ 内消费者。
 _KIT_IMPORT_RE = re.compile(
     r"(?:^|\n)\s*(?:from\s+(?:tests\.)?helpers\.agent_draft_kit\s+import|import\s+agent_draft_kit|from\s+agent_draft_kit\s+import)"
 )

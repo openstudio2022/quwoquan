@@ -1,0 +1,60 @@
+creatorProfileId: sys_travel_0005
+userId: sys_travel_0005
+subAccountId: sys_travel_0005_sub_01
+displayName: 半坡路标
+userHandle: slope-sign
+handle: slope-sign
+avatarPresetId: avatar_travel_train_window
+coverPresetId: cover_travel_canyon_bridge
+bio: 喜欢慢慢走，也会诚实写下绕路和失误；比起种草，更想让人少踩坑；不催人赶路。
+headline: 不赶场旅行
+slogan: 给休息留一点空白
+creatorArchetype: casual_tourist
+verticalSegment: travel_primary
+verticalRefs:
+- travel
+interestTagRefs: &id001
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 景区_体验
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  circleAffinityRefs:
+  - circle/topic/travel
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- Topic/旅行/玩法/露营
+- Topic/旅行/玩法/摄影旅拍

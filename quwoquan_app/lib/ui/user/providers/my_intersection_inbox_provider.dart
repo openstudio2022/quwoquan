@@ -56,13 +56,13 @@ class MyIntersectionSummaryNotifier
   Future<void> load() async {
     if (state.isLoading) return;
     state = state.copyWith(isLoading: true, rawError: () => null);
+    final repo = ref.read(intersectionRepositoryProvider);
     try {
-      final summary = await ref
-          .read(intersectionRepositoryProvider)
-          .getMyIntersectionSummary();
+      final summary = await repo.getMyIntersectionSummary();
       if (!ref.mounted) return;
       state = state.copyWith(summary: summary, isLoading: false);
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, rawError: () => e);
     }
   }
@@ -106,7 +106,10 @@ class MyIntersectionPreviewNotifier
     // 经 _loadedAt 守卫短路，避免长列表回收 / 路由往返触发重复 listMyIntersections。
     final hit = ref
         .read(_myIntersectionPreviewCacheProvider)
-        .readFresh(_myIntersectionPreviewCacheKey, _myIntersectionPreviewCacheTtl);
+        .readFresh(
+          _myIntersectionPreviewCacheKey,
+          _myIntersectionPreviewCacheTtl,
+        );
     if (hit != null) {
       _loadedAt = hit.storedAt;
       return MyIntersectionPreviewState(items: hit.value);
@@ -125,16 +128,17 @@ class MyIntersectionPreviewNotifier
       return;
     }
     state = state.copyWith(isLoading: true, rawError: () => null);
+    final repo = ref.read(intersectionRepositoryProvider);
     try {
-      final items = await ref
-          .read(intersectionRepositoryProvider)
-          .listMyIntersections(filter: 'fact');
+      final items = await repo.listMyIntersections(filter: 'fact');
+      if (!ref.mounted) return;
       _loadedAt = DateTime.now();
       ref
           .read(_myIntersectionPreviewCacheProvider)
           .write(_myIntersectionPreviewCacheKey, items);
       state = state.copyWith(items: items, isLoading: false);
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, rawError: () => e);
     }
   }
@@ -219,6 +223,7 @@ class MyIntersectionListNotifier extends Notifier<MyIntersectionListState> {
       if (!ref.mounted) return;
       ref.read(myIntersectionSummaryProvider.notifier).load();
     } catch (e) {
+      if (!ref.mounted) return;
       state = state.copyWith(isLoading: false, rawError: () => e);
     }
   }

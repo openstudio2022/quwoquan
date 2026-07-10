@@ -566,12 +566,42 @@ def _html_meta_plain_text(html: str) -> str:
     return _join_unique_text_chunks(chunks)
 
 
-def _baike_html_plaintext(url: str) -> str:
-    try:
-        html = _curl_get_text(url)
-    except Exception:
-        return ""
-    return _html_to_plain_text(html)[:50000]
+def _baike_extractor_source_kind(extractor: str) -> str:
+    return {
+        "baidu_baike_html": "home_baidu_baike",
+        "sogou_baike_html": "home_sogou_baike",
+    }.get(extractor, extractor)
+
+
+def _baike_layout_and_text(
+    html_bytes: bytes, url: str, *, extractor: str
+) -> tuple[str, dict[str, Any]]:
+    """百度/搜狗百科结构前端：HTML → 统一 IR + 从 IR 渲染的正文。
+
+    禁止静默降级纯文本：解析失败返回空文本 + `parseStatus=rejected` 的 IR
+    （含结构化 rejectReason），由质量门按真实正文快照裁决 retained/rejected。
+    """
+    from download.baike_layout import parse_baike_layout, render_layout_markdown
+
+    body = html_bytes
+    if not body:
+        try:
+            body = _curl_get_text(url).encode("utf-8")
+        except Exception:
+            body = b""
+    layout = parse_baike_layout(
+        body,
+        source_kind=_baike_extractor_source_kind(extractor),
+        extractor=extractor,
+    )
+    if layout.get("parseStatus") != "ok":
+        return "", layout
+    return render_layout_markdown(layout)[:50000], layout
+
+
+def _baike_html_plaintext(url: str, *, extractor: str = "baidu_baike_html", html_bytes: bytes = b"") -> str:
+    text, _layout = _baike_layout_and_text(html_bytes, url, extractor=extractor)
+    return text
 
 
 def _join_unique_text_chunks(chunks: list[str]) -> str:
@@ -789,7 +819,7 @@ def _extract_text_by_extractor(extractor: str, html_bytes: bytes, url: str = "")
     if extractor == "wikipedia_api":
         return _wikipedia_api_plaintext(url)[:50000]
     if extractor in {"baidu_baike_html", "sogou_baike_html"}:
-        return _baike_html_plaintext(url)
+        return _baike_html_plaintext(url, extractor=extractor, html_bytes=html_bytes)
     if extractor == "qunar_html":
         return _qunar_html_plaintext(html_bytes, url)
     if extractor == "static_official_html":
@@ -965,6 +995,27 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
         if not body:
             raise RuntimeError(f"fetch failed for {url} (wikipedia_api empty response)")
         assets = _wikipedia_api_image_assets(url)
+        # 统一结构化 IR：wikitext 前端产出 source.layout.json 真相源
+        # （表格降维列表项 + 行图/宫格连续 figure 占位，infobox factRow + 封面候选）。
+        layout: dict[str, Any] | None = None
+        wikitext = fetch_wikipedia_wikitext(url)
+        if wikitext:
+            from _common.source_layout import render_source_markdown
+            from _common.wiki_wikitext import parse_wikitext_layout
+
+            _host, wiki_title = _wikipedia_title_from_url(url)
+            layout = parse_wikitext_layout(
+                wikitext,
+                source_kind="home_wikivoyage" if "wikivoyage" in (_host or "") else "home_wikipedia",
+                title=wiki_title,
+            )
+            if layout.get("parseStatus") == "ok":
+                # source.md 底稿忠实还原：章节结构 + 图片原位 :::figure 占位（仅原图注）。
+                # 占位编号与 plan imageUrls 的 placeholderId 同口径，下载成功后由
+                # write_source_unit 绑定为真实 sourceAssetId，失败占位整块剥离。
+                structured_text = render_source_markdown(layout)
+                if structured_text:
+                    text = structured_text
         return {
             "url": url,
             "statusCode": 200,
@@ -972,12 +1023,27 @@ def fetch_source_payload(url: str, *, source: Mapping[str, Any] | None = None) -
             "text": text[:50000],
             "assets": assets,
             "inlineImages": [],
+            "layout": layout,
             "sha256": hashlib.sha256(body).hexdigest(),
             "runtime": {**runtime, "rawFormat": "mediawiki_api_json"},
         }
     status, body, _ = _http_get_bytes(url, timeout=20, max_redirects=4, max_retries=4)
     if status != 200 or not body:
         raise RuntimeError(f"fetch failed for {url} (status={status})")
+    if extractor in {"baidu_baike_html", "sogou_baike_html"}:
+        # 百科结构前端：HTML → 统一 IR + IR 渲染正文；解析失败落结构化 reject，
+        # 禁止静默降级纯文本（rejected IR 仍随 payload 落盘可审计）。
+        text, layout = _baike_layout_and_text(body, url, extractor=extractor)
+        return {
+            "url": url,
+            "statusCode": status,
+            "htmlBytes": body,
+            "text": text,
+            "inlineImages": [],
+            "layout": layout,
+            "sha256": hashlib.sha256(body).hexdigest(),
+            "runtime": runtime,
+        }
     # RC3：图文混排游记（qunar/generic）返回同源内联图清单（绝对 URL，与正文
     # asset://source-inline-NNN 占位同序），供来源单元写入器就地下载并锚定。
     text, inline_images = extract_page_text_with_inline_images(body, url, extractor=extractor)
@@ -1015,7 +1081,7 @@ def _curl_get_bytes(
     with tempfile.NamedTemporaryFile() as body_file:
         proc = subprocess.run(
             [
-                "curl", "-sS", "-L", "-A", _USER_AGENT,
+                "curl", "-sS", "-L", "--compressed", "-A", _USER_AGENT,
                 "--retry", str(DOWNLOAD_CURL_RETRIES), "--retry-delay", "1", "--retry-all-errors",
                 "--max-time", str(timeout),
                 *size_guard,

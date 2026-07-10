@@ -31,8 +31,11 @@ import 'package:quwoquan_app/components/pageflip/geometry.dart';
 import 'package:quwoquan_app/components/pageflip/page_surface_snapshot.dart';
 import 'package:quwoquan_app/components/pageflip/pointer_bridge.dart';
 import 'package:quwoquan_app/components/pageflip/render_frame.dart';
+import 'package:quwoquan_app/components/pageflip/release_policy.dart';
 import 'package:quwoquan_app/components/pageflip/spread_model.dart';
 import 'package:quwoquan_app/components/pageflip/types.dart';
+import 'package:quwoquan_app/components/media/shared/gesture/immersive_gesture_intent_controller.dart';
+import 'package:quwoquan_app/components/media/shared/gesture/immersive_pointer_gesture_layer.dart';
 
 enum ArticleReaderFallbackReason {
   forcedDegradedPager,
@@ -613,6 +616,7 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
     this.onSceneChanged,
     this.onDebugStateChanged,
     this.onEntityTap,
+    this.gestureIntentController,
     this.headerLabel,
     this.showFooterPageLabel = true,
     this.paperTexture,
@@ -642,6 +646,7 @@ class ArticleReadOnlyBookDeck extends StatefulWidget {
   final ValueChanged<StPageFlipScene>? onSceneChanged;
   final ValueChanged<ArticleReadOnlyBookDebugState>? onDebugStateChanged;
   final ValueChanged<ArticleInlineSpan>? onEntityTap;
+  final ImmersiveGestureIntentController? gestureIntentController;
   final String? headerLabel;
   final bool showFooterPageLabel;
   final ArticlePaperTexture? paperTexture;
@@ -873,6 +878,9 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       1.0,
       stageSize.height - widget.pagePadding.vertical,
     );
+    if (_usesImmersivePresentation) {
+      return Size(availableWidth, availableHeight);
+    }
     final pageWidth = math.min(
       availableWidth,
       availableHeight * widget.metrics.aspectRatio,
@@ -2669,42 +2677,6 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     );
   }
 
-  bool _shouldCommitPageFlip({
-    required StPageFlipController controller,
-    required StPageFlipDirection direction,
-    required double progress,
-    required Velocity velocity,
-    Offset? dragStart,
-    Offset? dragLatest,
-    DateTime? dragStartedAt,
-  }) {
-    final directionSign = direction == StPageFlipDirection.forward ? -1.0 : 1.0;
-    final directionalVelocity = velocity.pixelsPerSecond.dx * directionSign;
-    final directionalDistance = dragStart != null && dragLatest != null
-        ? (dragLatest.dx - dragStart.dx) * directionSign
-        : 0.0;
-    final dragRatio = (directionalDistance / controller.layout.bounds.pageWidth)
-        .clamp(0.0, 1.0)
-        .toDouble();
-    final elapsedMs = dragStartedAt == null
-        ? 0
-        : DateTime.now().difference(dragStartedAt).inMilliseconds;
-    final crossedMidpoint = progress > 0.44;
-    final sustainedPull = dragRatio > 0.24;
-    final deliberateCornerLift = progress > 0.14 && dragRatio > 0.08;
-    final deliberateDrag = progress > 0.2 && dragRatio > 0.16;
-    final decisiveVelocity = directionalVelocity > 260;
-    final quickLift =
-        elapsedMs > 0 && elapsedMs < 420 && dragRatio > 0.06 && progress > 0.12;
-    final assistedSnap = deliberateCornerLift && directionalVelocity > 120;
-    return crossedMidpoint ||
-        sustainedPull ||
-        deliberateDrag ||
-        decisiveVelocity ||
-        quickLift ||
-        assistedSnap;
-  }
-
   String _cornerNameFromPageFlip(
     StPageFlipCorner corner,
     StPageFlipDirection direction,
@@ -3038,6 +3010,121 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     _runPageFlipAnimation(plan);
   }
 
+  bool _isPageFlipIntentForDirection(
+    ImmersiveGestureIntent? intent,
+    StPageFlipDirection direction,
+  ) {
+    return switch (direction) {
+      StPageFlipDirection.forward =>
+        intent == ImmersiveGestureIntent.pageFlipForward,
+      StPageFlipDirection.back => intent == ImmersiveGestureIntent.pageFlipBack,
+    };
+  }
+
+  StPageFlipDirection? _directionFromGestureIntent(
+    ImmersiveGestureIntent? intent,
+  ) {
+    return switch (intent) {
+      ImmersiveGestureIntent.pageFlipForward => StPageFlipDirection.forward,
+      ImmersiveGestureIntent.pageFlipBack => StPageFlipDirection.back,
+      _ => null,
+    };
+  }
+
+  ImmersiveGestureIntent? _currentGestureIntent(
+    ImmersiveGestureIntentController controller,
+  ) {
+    if (!controller.isTracking) {
+      return null;
+    }
+    if (controller.lockedIntent != ImmersiveGestureIntent.undecided) {
+      return controller.lockedIntent;
+    }
+    return controller.previewIntent;
+  }
+
+  StPageFlipDirection? _directionFromDragDelta(Offset delta) {
+    if (delta.dx < 0) {
+      return StPageFlipDirection.forward;
+    }
+    if (delta.dx > 0) {
+      return StPageFlipDirection.back;
+    }
+    return null;
+  }
+
+  Offset _syntheticStagePageCurlStartPoint(
+    StPageFlipLayout layout, {
+    required StPageFlipDirection direction,
+    required StPageFlipCorner corner,
+    required double touchY,
+  }) {
+    final bounds = layout.bounds;
+    final y = _viewportYForStageTouch(bounds, touchY, corner: corner);
+    final x = switch (direction) {
+      StPageFlipDirection.forward =>
+        bounds.left + bounds.width - AppSpacing.hairline,
+      StPageFlipDirection.back => bounds.left + AppSpacing.hairline,
+    };
+    return Offset(x, y);
+  }
+
+  double _viewportYForStageTouch(
+    StPageFlipBoundsRect bounds,
+    double touchY, {
+    required StPageFlipCorner corner,
+  }) {
+    final clamped = touchY.clamp(
+      bounds.top + AppSpacing.hairline,
+      bounds.top + bounds.height - AppSpacing.hairline,
+    );
+    if (clamped.isFinite) {
+      return clamped.toDouble();
+    }
+    return bounds.top +
+        (corner == StPageFlipCorner.bottom
+            ? bounds.height - AppSpacing.hairline
+            : AppSpacing.hairline);
+  }
+
+  bool _beginStagePageCurl(
+    StPageFlipController controller,
+    StPageFlipDirection direction,
+    Offset startPosition,
+    Offset localPosition,
+  ) {
+    if (!controller.canFlipDirection(direction)) {
+      return false;
+    }
+    if (!_ensureBackTextureReadyForDirection(
+      direction,
+      blockCurrentGesture: true,
+    )) {
+      return false;
+    }
+    final corner = controller.cornerForGlobalPoint(startPosition);
+    final startPoint = _syntheticStagePageCurlStartPoint(
+      controller.layout,
+      direction: direction,
+      corner: corner,
+      touchY: startPosition.dy,
+    );
+    if (!controller.start(startPoint)) {
+      return false;
+    }
+    _activeDragDirection = direction;
+    _resetBoundaryRubberBand(animate: false);
+    _startPageTransition('page_curl');
+    _startPageFlipTextureSession(direction);
+    if ((localPosition - startPosition).distance > 0) {
+      controller.fold(localPosition);
+    } else {
+      controller.fold(startPoint);
+    }
+    setState(() {});
+    return true;
+  }
+
   void _handleStagePanStart(Offset localPosition) {
     if (!_showsPageCurl || _hasActivePageCurlAnimation) {
       return;
@@ -3048,6 +3135,13 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     _dragStartedAt = DateTime.now();
     final controller = _pageFlipController;
     if (controller == null) {
+      return;
+    }
+    final intentController = widget.gestureIntentController;
+    if (intentController != null) {
+      if (intentController.shouldIgnorePageFlipInput) {
+        return;
+      }
       return;
     }
     final direction = controller.directionForGlobalPoint(startPosition);
@@ -3090,6 +3184,41 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return;
     }
     _latestDragGlobalPosition = localPosition;
+    final intentController = widget.gestureIntentController;
+    if (intentController != null) {
+      final intent = _currentGestureIntent(intentController);
+      if (intentController.shouldIgnorePageFlipInput) {
+        return;
+      }
+      final start = _dragStartGlobalPosition ?? localPosition;
+      final direction =
+          _directionFromGestureIntent(intent) ??
+          _directionFromDragDelta(localPosition - start) ??
+          _activeDragDirection ??
+          controller.scene.direction ??
+          controller.directionForGlobalPoint(start);
+      if (intent == ImmersiveGestureIntent.boundaryRubberBand) {
+        final stageSize = _lastInteractiveStageSize;
+        if (stageSize != null && _boundaryDragStartLocalPosition == null) {
+          _handleBoundaryPanStart(start, direction: direction);
+          _pendingOverflowDirection = direction;
+        }
+      } else if ((intent == ImmersiveGestureIntent.pageFlipForward ||
+              intent == ImmersiveGestureIntent.pageFlipBack) &&
+          !_isPageFlipIntentForDirection(intent, direction)) {
+        return;
+      }
+      if (intentController.isPageFlipLocked &&
+          controller.scene.direction == null &&
+          !_beginStagePageCurl(controller, direction, start, localPosition)) {
+        return;
+      }
+      if (!intentController.isPageFlipLocked &&
+          controller.scene.direction == null &&
+          _boundaryDragStartLocalPosition == null) {
+        return;
+      }
+    }
     final stageSize = _lastInteractiveStageSize;
     if (_boundaryDragStartLocalPosition != null && stageSize != null) {
       final boundaryDirection =
@@ -3126,6 +3255,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     _activeDragDirection = null;
     _textureWarmupBlockedGesture = false;
     _resetBoundaryTracking(animate: true);
+    widget.gestureIntentController?.cancel();
     final controller = _pageFlipController;
     if (controller == null) {
       return;
@@ -3137,6 +3267,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
   }
 
   void _handleStagePanEnd(Velocity velocity) {
+    var committed = false;
     final controller = _pageFlipController;
     final dragStart = _dragStartGlobalPosition;
     final dragLatest = _latestDragGlobalPosition;
@@ -3152,24 +3283,32 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     final stageSize = _lastInteractiveStageSize;
     if (controller == null) {
       _resetBoundaryTracking(animate: true);
+      widget.gestureIntentController?.finish();
       return;
     }
     if (_boundaryDragStartLocalPosition != null && stageSize != null) {
       _finishBoundaryPan(velocity, stageSize);
+      widget.gestureIntentController?.finish();
       return;
     }
     if (textureWarmupBlockedGesture) {
       _resetBoundaryTracking(animate: true);
+      widget.gestureIntentController?.finish();
       return;
     }
     if (dragStart != null) {
       final direction =
-          dragDirection ?? controller.directionForGlobalPoint(dragStart);
+          dragDirection ??
+          (dragLatest != null
+              ? _directionFromDragDelta(dragLatest - dragStart)
+              : null) ??
+          controller.directionForGlobalPoint(dragStart);
       if (!controller.canFlipDirection(direction)) {
         _resetBoundaryTracking(animate: true);
         controller.cancelInteraction();
         _clearPageFlipTextureSession();
         setState(() {});
+        widget.gestureIntentController?.finish();
         return;
       }
     }
@@ -3180,35 +3319,39 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       controller.cancelInteraction();
       _clearPageFlipTextureSession();
       setState(() {});
+      widget.gestureIntentController?.finish();
       return;
     }
-    if (!plan.isTurned) {
-      final direction =
-          controller.scene.direction ??
-          dragDirection ??
-          (dragStart != null
-              ? controller.directionForGlobalPoint(dragStart)
-              : StPageFlipDirection.forward);
-      final corner =
-          controller.scene.corner ??
-          (dragStart != null
-              ? controller.cornerForGlobalPoint(dragStart)
-              : StPageFlipCorner.bottom);
-      final progress =
-          controller.scene.renderFrame?.progress ??
-          ((controller.scene.calculation?.getFlippingProgress() ?? 0) / 100)
-              .clamp(0.0, 1.0)
-              .toDouble();
-      final shouldCommit = _shouldCommitPageFlip(
-        controller: controller,
-        direction: direction,
-        progress: progress,
-        velocity: velocity,
-        dragStart: dragStart,
-        dragLatest: dragLatest,
-        dragStartedAt: dragStartedAt,
-      );
-      if (shouldCommit) {
+    final direction =
+        controller.scene.direction ??
+        dragDirection ??
+        (dragStart != null && dragLatest != null
+            ? _directionFromDragDelta(dragLatest - dragStart)
+            : null) ??
+        (dragStart != null
+            ? controller.directionForGlobalPoint(dragStart)
+            : StPageFlipDirection.forward);
+    final corner =
+        controller.scene.corner ??
+        (dragStart != null
+            ? controller.cornerForGlobalPoint(dragStart)
+            : StPageFlipCorner.bottom);
+    final progress =
+        controller.scene.renderFrame?.progress ??
+        ((controller.scene.calculation?.getFlippingProgress() ?? 0) / 100)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    final releaseDecision = resolvePageflipReleaseDecision(
+      isForwardDirection: direction == StPageFlipDirection.forward,
+      progress: progress,
+      pageWidth: controller.layout.bounds.pageWidth,
+      velocityDx: velocity.pixelsPerSecond.dx,
+      dragStart: dragStart,
+      dragLatest: dragLatest,
+      dragStartedAt: dragStartedAt,
+    );
+    if (!plan.isTurned && releaseDecision.commitsTurn) {
+      if (controller.canFlipDirection(direction)) {
         plan = direction == StPageFlipDirection.forward
             ? controller.flipNext(corner)
             : controller.flipPrev(corner);
@@ -3217,13 +3360,17 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     if (plan == null) {
       controller.cancelInteraction();
       setState(() {});
+      widget.gestureIntentController?.finish();
       return;
     }
+    plan = plan.copyWith(duration: releaseDecision.settleDuration);
+    committed = plan.isTurned;
     if (!plan.isTurned) {
       _runPageFlipAnimation(plan, reportAbort: true);
     } else {
       _runPageFlipAnimation(plan);
     }
+    widget.gestureIntentController?.finish(committed: committed);
   }
 
   void _handleStageMouseHover(PointerHoverEvent event) {
@@ -3264,22 +3411,22 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     setState(() {});
   }
 
-  void _handleStagePointerDown(PointerDownEvent event) {
+  void _handleStagePointerDownPosition(Offset localPosition) {
     if (!_showsPageCurl) {
       return;
     }
-    _pointerDownLocalPosition = event.localPosition;
-    _pointerBridge.handleTouchStart(event.localPosition, () {});
+    _pointerDownLocalPosition = localPosition;
+    _pointerBridge.handleTouchStart(localPosition, () {});
   }
 
-  void _handleStagePointerMove(PointerMoveEvent event) {
+  void _handleStagePointerMovePosition(Offset localPosition) {
     if (!_showsPageCurl || _dragStartGlobalPosition != null) {
       return;
     }
-    _pointerBridge.handleTouchMove(event.localPosition, () {});
+    _pointerBridge.handleTouchMove(localPosition, () {});
   }
 
-  void _handleStagePointerUp(PointerUpEvent event) {
+  void _handleStagePointerUpPosition(Offset localPosition) {
     final pointerDownPosition = _pointerDownLocalPosition;
     _pointerDownLocalPosition = null;
     if (!_showsPageCurl || _dragStartGlobalPosition != null) {
@@ -3292,7 +3439,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       return;
     }
     final swipe = _pointerBridge.handleTouchEnd(
-      event.localPosition,
+      localPosition,
       pageHeight: controller.layout.bounds.height,
     );
     if (swipe == null) {
@@ -3318,7 +3465,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     _runPageFlipAnimation(plan);
   }
 
-  void _handleStagePointerCancel(PointerCancelEvent event) {
+  void _handleStagePointerCancelPosition() {
     _pointerDownLocalPosition = null;
     _textureWarmupBlockedGesture = false;
     _pointerBridge.cancel();
@@ -3402,6 +3549,14 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       1.0,
       stageSize.height - widget.pagePadding.vertical,
     );
+    if (_usesImmersivePresentation) {
+      return Rect.fromLTWH(
+        widget.pagePadding.left,
+        widget.pagePadding.top,
+        availableWidth,
+        availableHeight,
+      );
+    }
     final pageWidth = math.min(
       availableWidth,
       availableHeight * widget.metrics.aspectRatio,
@@ -3439,6 +3594,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
     }
     final page = widget.pages[index];
     return ArticlePageShell(
+      key: ValueKey<String>('article-reader-page-surface-$index'),
       template: widget.template,
       fontPreset: widget.fontPreset,
       pageIndex: index,
@@ -3449,7 +3605,7 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
       headerReservedHeight: widget.metrics.headerReservedHeight,
       footerReservedHeight: widget.metrics.footerReservedHeight,
       variant: _usesImmersivePresentation
-          ? ArticlePageShellVariant.plainEdit
+          ? ArticlePageShellVariant.immersiveEdgeToEdge
           : ArticlePageShellVariant.readerSheet,
       showIndicator: false,
       headerLabel: widget.headerLabel,
@@ -4420,7 +4576,10 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
   }) {
     final palette = resolveArticleTemplatePalette(context, widget.template);
     if (_usesImmersivePresentation) {
-      return ColoredBox(color: palette.stageBackground);
+      final paperPalette = widget.paperTexture != null
+          ? resolveArticlePaperPalette(context, widget.paperTexture!)
+          : palette;
+      return ColoredBox(color: paperPalette.paperColor);
     }
     return RepaintBoundary(
       child: CustomPaint(
@@ -4546,23 +4705,46 @@ class _ArticleReadOnlyBookDeckState extends State<ArticleReadOnlyBookDeck>
   }
 
   Widget _wrapInteractiveStageLayers(List<Widget> layers) {
-    return Listener(
+    return ImmersivePointerGestureLayer(
       behavior: HitTestBehavior.translucent,
-      onPointerDown: _handleStagePointerDown,
-      onPointerMove: _handleStagePointerMove,
-      onPointerUp: _handleStagePointerUp,
-      onPointerCancel: _handleStagePointerCancel,
+      onStart: (event) => _handleStagePointerDownPosition(event.localPosition),
+      onUpdate: (event) {
+        _handleStagePointerMovePosition(event.localPosition);
+        if (_dragStartGlobalPosition == null &&
+            _boundaryDragStartLocalPosition == null &&
+            event.totalDelta.distance > 0) {
+          _handleStagePanStart(event.startLocalPosition);
+        }
+        _handleStagePanUpdate(event.localPosition, event.delta);
+      },
+      onEnd: (event) {
+        final hadPan =
+            _dragStartGlobalPosition != null ||
+            _boundaryDragStartLocalPosition != null ||
+            _textureWarmupBlockedGesture;
+        _handleStagePointerUpPosition(event.localPosition);
+        if (hadPan) {
+          _handleStagePanEnd(
+            Velocity(pixelsPerSecond: Offset(event.velocityDx, 0)),
+          );
+        }
+      },
+      onCancel: (_) {
+        final hadPan =
+            _dragStartGlobalPosition != null ||
+            _boundaryDragStartLocalPosition != null ||
+            _textureWarmupBlockedGesture;
+        _handleStagePointerCancelPosition();
+        if (hadPan) {
+          _handleStagePanCancel();
+        }
+      },
       child: MouseRegion(
         onHover: _handleStageMouseHover,
         onExit: _handleStageMouseExit,
         child: GestureDetector(
           behavior: HitTestBehavior.translucent,
           onTapUp: _handleStageTapUp,
-          onPanStart: (details) => _handleStagePanStart(details.localPosition),
-          onPanUpdate: (details) =>
-              _handleStagePanUpdate(details.localPosition, details.delta),
-          onPanCancel: _handleStagePanCancel,
-          onPanEnd: (details) => _handleStagePanEnd(details.velocity),
           child: AnimatedContainer(
             key: const ValueKey<String>('article-boundary-stage'),
             duration: _shouldAnimateBoundaryRubberBandReset

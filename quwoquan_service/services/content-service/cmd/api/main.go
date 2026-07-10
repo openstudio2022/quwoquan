@@ -192,6 +192,7 @@ func main() {
 	var mongoCandidateSources []rtrec.CandidateSource
 	var bulkImportService *importerapp.BulkImportService
 	var behaviorEventStore persistence.BehaviorEventStore = persistence.NoopBehaviorEventStore{}
+	var wishlistEventStore ports.WishlistEventStore = persistence.NoopWishlistEventStore{}
 	var dailyMetricsStore *persistence.DailyMetricsStore
 	var authorImpactStore *persistence.AuthorImpactStore
 	var authorImpactEvidenceStore *persistence.AuthorImpactEvidenceStore
@@ -401,6 +402,9 @@ func main() {
 		if intersectionPolicy.CooldownDays > 0 {
 			intersectionOpts = append(intersectionOpts, intersectionapp.WithIntersectionCooldownDays(intersectionPolicy.CooldownDays))
 		}
+		if intersectionPolicy.NegativeFeedbackCooldownDays > 0 {
+			intersectionOpts = append(intersectionOpts, intersectionapp.WithIntersectionNegativeFeedbackCooldownDays(intersectionPolicy.NegativeFeedbackCooldownDays))
+		}
 		if intersectionPolicy.MaxCandidateWindow > 0 {
 			intersectionOpts = append(intersectionOpts, intersectionapp.WithIntersectionMaxCandidateWindow(intersectionPolicy.MaxCandidateWindow))
 		}
@@ -409,6 +413,7 @@ func main() {
 
 		bulkImportService = importerapp.NewBulkImportService(recinfra.NewMongoBulkImportStore(db))
 		behaviorEventStore = persistence.NewMongoBehaviorEventStore(db, logger)
+		wishlistEventStore = persistence.NewMongoWishlistEventStore(db, logger)
 		dailyMetricsStore = persistence.NewDailyMetricsStore(db, logger)
 		authorImpactStore = persistence.NewAuthorImpactStore(db, logger)
 		authorImpactEvidenceStore = persistence.NewAuthorImpactEvidenceStore(db, logger)
@@ -490,7 +495,13 @@ func main() {
 	}
 
 	source := recinfra.NewPostRepositorySource(store)
-	candidateSources := append(mongoCandidateSources, source)
+	rawCandidateSources := append(mongoCandidateSources, source)
+	candidateSources := make([]rtrec.CandidateSource, 0, len(rawCandidateSources))
+	for _, candidateSource := range rawCandidateSources {
+		if gated := recinfra.GatePremiumStreamSource(candidateSource); gated != nil {
+			candidateSources = append(candidateSources, gated)
+		}
+	}
 
 	if cfg.RecModelService.Enabled && cfg.RecModelService.URL != "" {
 		timeout := time.Duration(cfg.RecModelService.TimeoutMs) * time.Millisecond
@@ -541,19 +552,25 @@ func main() {
 		router.Scene("realtime"),
 		rtrec.WithFeedPatchLogger(logger),
 	)
-	behaviorService := behaviorapp.NewBehaviorService(
-		bufferedWriter,
-		store,
+	behaviorOpts := []behaviorapp.BehaviorServiceOption{
 		behaviorapp.WithBehaviorEventPublisher(eventPub),
 		behaviorapp.WithBehaviorProjector(sharedProjector),
 		behaviorapp.WithBehaviorFeedbackRecorder(recFeedback),
 		behaviorapp.WithSessionCacheInvalidator(sessionCache.Invalidate),
 		behaviorapp.WithBehaviorEventStore(behaviorEventStore),
+		behaviorapp.WithWishlistEventStore(wishlistEventStore),
 		behaviorapp.WithDailyMetricsStore(dailyMetricsStore),
 		behaviorapp.WithAuthorImpactStore(authorImpactStore),
 		behaviorapp.WithAuthorImpactEvidenceStore(authorImpactEvidenceStore),
 		behaviorapp.WithFeedPatchEmitter(feedPatchEmitter),
-	)
+	}
+	// 交集负反馈冷却下沉（F 推荐差异化）：intersection_feedback 事件经 behavior 批处理
+	// 调 IntersectionService.ReportNegativeFeedback 写 rec:ineg。仅在交集服务启用时注入，
+	// 避免 typed-nil interface 陷阱（nil 指针包成非 nil 接口会导致方法调用 panic）。
+	if intersectionService != nil {
+		behaviorOpts = append(behaviorOpts, behaviorapp.WithIntersectionFeedbackSink(intersectionService))
+	}
+	behaviorService := behaviorapp.NewBehaviorService(bufferedWriter, store, behaviorOpts...)
 
 	var handlerOpts []httpadapter.ContentHandlerOption
 	handlerOpts = append(handlerOpts, httpadapter.WithHealthChecker(healthChecker))
@@ -677,7 +694,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 	// External mounted config root mode:
 	//   <root>/configs/<service>/default/config.yaml
 	//   <root>/configs/<service>/<env>/config.yaml
-	//   <root>/releases/config/<service>/<version>.yaml
+	//   <root>/quwoquan_service/services/<service>/configs/releases/<version>.yaml
 	if strings.TrimSpace(configRoot) != "" {
 		defaultFile := filepath.Join(configRoot, "configs", serviceName, "default", "config.yaml")
 		envFile := filepath.Join(configRoot, "configs", serviceName, appEnv, "config.yaml")
@@ -689,7 +706,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 			return config{}, fmt.Errorf("read env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join(configRoot, "releases", "config", serviceName, configVersion+".yaml")
+			versionFile := filepath.Join(configRoot, "quwoquan_service", "services", serviceName, "configs", "releases", configVersion+".yaml")
 			if err := mergeConfigFile(&cfg, versionFile); err != nil {
 				return config{}, fmt.Errorf("read version config: %w", err)
 			}
@@ -709,7 +726,7 @@ func loadRuntimeConfig(serviceName, appEnv, configRoot, configVersion string) (c
 			return config{}, fmt.Errorf("read local env config: %w", err)
 		}
 		if strings.TrimSpace(configVersion) != "" {
-			versionFile := filepath.Join("..", "..", "..", "releases", "config", serviceName, configVersion+".yaml")
+			versionFile := filepath.Join("configs", "releases", configVersion+".yaml")
 			if _, err := os.Stat(versionFile); err == nil {
 				if err := mergeConfigFile(&cfg, versionFile); err != nil {
 					return config{}, fmt.Errorf("read local version config: %w", err)

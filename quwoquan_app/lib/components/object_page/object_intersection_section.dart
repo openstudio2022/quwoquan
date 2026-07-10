@@ -27,6 +27,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
     required this.query,
     required this.title,
     required this.isDark,
+    this.emptyText,
     this.bottomPadding = 0,
     this.onReasonTap,
   });
@@ -36,6 +37,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
   final ObjectIntersectionQuery query;
   final String title;
   final bool isDark;
+  final String? emptyText;
   final double bottomPadding;
   final void Function(IntersectionReason reason)? onReasonTap;
 
@@ -85,7 +87,7 @@ class ObjectIntersectionSection extends ConsumerWidget {
       inlineExpandCount: ref
           .watch(intersectionDisplayConfigProvider)
           .inlineExpandCount,
-      moreLabel: DiscoveryFeedText.intersectionMoreLabel,
+      moreLabel: DiscoveryFeedText.intersectionViewAll,
       highlightKind: highlightKind,
       onMoreTap: () => context.push(
         AppRoutePaths.objectIntersections(
@@ -138,8 +140,11 @@ class ObjectIntersectionSection extends ConsumerWidget {
     return card ?? _buildEmptyActionZone(context);
   }
 
-  /// 无交集事实时仍保留行动区占位，引导用户成为第一个留下交集的人（同频原型 · 常驻行动区）。
+  /// 无交集事实时仍保留行动区占位，引导用户用真实互动生成可解释交集。
   Widget _buildEmptyActionZone(BuildContext context) {
+    final message = emptyText?.trim().isNotEmpty == true
+        ? emptyText!.trim()
+        : UITextConstants.objectIntersectionsEmpty;
     return Container(
       key: const ValueKey<String>('object-intersection-empty-action-zone'),
       width: double.infinity,
@@ -148,22 +153,37 @@ class ObjectIntersectionSection extends ConsumerWidget {
         color: AppColors.iosSecondaryFill(context),
         borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          Icon(
-            CupertinoIcons.sparkles,
-            size: AppSpacing.iconSmall,
-            color: AppColors.iosAccent(context),
-          ),
-          SizedBox(width: AppSpacing.intraGroupSm),
-          Expanded(
-            child: Text(
-              AppConceptConstants.objectActionZoneEmptyHint,
-              style: TextStyle(
-                fontSize: AppTypography.iosFootnote,
-                color: AppColors.iosSecondaryLabel(context),
-              ),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: AppTypography.iosSubheadline,
+              fontWeight: AppTypography.semiBold,
+              color: AppColors.iosLabel(context),
             ),
+          ),
+          SizedBox(height: AppSpacing.intraGroupSm),
+          Row(
+            children: <Widget>[
+              Icon(
+                CupertinoIcons.sparkles,
+                size: AppSpacing.iconSmall,
+                color: AppColors.iosAccent(context),
+              ),
+              SizedBox(width: AppSpacing.intraGroupSm),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    fontSize: AppTypography.iosFootnote,
+                    color: AppColors.iosSecondaryLabel(context),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -212,12 +232,14 @@ class ObjectIntersectionSection extends ConsumerWidget {
     IntersectionReason reason,
     IntersectionActionHint hint,
   ) {
-    return const IntersectionTargetNavigator().open(
-      context,
-      hint.target,
-      sourceRef: reason.source,
-      attribution: _attributionFor(reason),
-    );
+    return const IntersectionTargetNavigator()
+        .openActionHint(
+          context,
+          hint,
+          sourceRef: reason.source,
+          attribution: _attributionFor(reason),
+        )
+        .didOpen;
   }
 
   IntersectionNavAttribution _attributionFor(IntersectionReason reason) {

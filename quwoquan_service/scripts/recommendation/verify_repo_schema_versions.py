@@ -34,7 +34,6 @@ _SUFFIXES = (".yaml", ".yml", ".json")
 _JSON_ALWAYS_SKIP_PREFIXES = (
     "tmp/",
     ".cursor/",
-    "app_log/",
     "specs/",
 )
 _JSON_SKIP_SUBSTR = "/node_modules/"
@@ -87,7 +86,7 @@ def _should_scan_yaml(prefixes: list[str] | None, rel: str) -> bool:
         if rel.startswith("specs/"):
             return False
         return True
-    bad_roots = ("specs/", "tmp/", ".cursor/", "app_log/")
+    bad_roots = ("specs/", "tmp/", ".cursor/")
     if rel.startswith(bad_roots):
         return False
     if "/feature-tree/" in rel or "/changelog/" in rel:
@@ -95,9 +94,10 @@ def _should_scan_yaml(prefixes: list[str] | None, rel: str) -> bool:
 
     yaml_ok_prefix = (
         "quwoquan_app/configs/",
-        "artifacts/",
-        "deploy/",
+        "quwoquan_ops/environments/",
+        "quwoquan_ops/policies/",
         "quwoquan_data/",
+        "quwoquan_service/services/",
         ".github/workflows/",
     )
     if rel.startswith(yaml_ok_prefix):

@@ -4,6 +4,7 @@ import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/cloud/user/generated/user_profile_ui_config.g.dart';
@@ -91,15 +92,18 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                   AppSpacing.feedContentHorizontal(context),
                   AppSpacing.interGroupLg,
                 ),
-                child: MasonryGridView.count(
-                  crossAxisCount: AppSpacing.responsiveGridColumns(context),
-                  mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
-                  crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
-                  itemCount: filtered.length,
+                child: GridView.builder(
                   shrinkWrap: true,
                   primary: false,
                   padding: EdgeInsets.zero,
                   physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: AppSpacing.responsiveGridColumns(context),
+                    mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                    crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
+                    mainAxisExtent: _inlineGridMainAxisExtent(context),
+                  ),
+                  itemCount: filtered.length,
                   itemBuilder: (context, index) {
                     final post = filtered[index];
                     return _WorksPostCard(
@@ -171,6 +175,14 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         ),
       ],
     );
+  }
+
+  double _inlineGridMainAxisExtent(BuildContext context) {
+    final columns = AppSpacing.responsiveGridColumns(context);
+    if (columns <= 1) {
+      return AppSpacing.threeHundredTwenty + AppSpacing.twoHundredTwenty;
+    }
+    return AppSpacing.threeHundredTwenty + AppSpacing.buttonHeight * 2;
   }
 
   /// 二级过滤（全部/图片/视频/长文）：与互动页同源的横滑二级页签，
@@ -435,6 +447,14 @@ class _WorksPostCard extends ConsumerWidget {
         isDark: isDark,
         // N5：用户主页作品卡 → 交集句对象片段点击精确归因为作者主页（非推荐流）。
         referralSource: ReferralSource.authorProfile,
+        contextObjectName: _headlineText.trim().isNotEmpty
+            ? _headlineText.trim()
+            : _supportingText.trim(),
+        contextObjectTarget: IntersectionTarget(
+          objectId: post.id,
+          objectKind: 'content',
+          routeId: 'workBrowser',
+        ),
       ),
       footer: Row(
         children: [

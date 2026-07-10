@@ -63,11 +63,11 @@
 | 页面数据链路审计 | 找清 `flutter run` 首页、趣信、主页、圈子显示数据来自哪个 Provider/Repository/API | 本文档 `flutter run 页面真实数据链路` 表完整覆盖 |
 | Remote 空桩清理 | beta 不得在关键页面返回空桩 | `listHomeCircleDiscoveryFeed`、趣信联系人圈子/趣群 tab 均有远端派生数据 |
 | beta 预置网关补齐 | 人工 beta 启动时主要页面路径都有 fixture 响应 | `scripts/start_app_beta_manual.sh --skip-app` 健康检查覆盖上述路径 |
-| 三环境共用测试 | alpha mock 与 beta remote 使用同一 fixture ID；gamma 暂缓远端执行但保留 manifest 与路径约束 | `make test-app-alpha-seed`、`python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/services/business_beta_remote_repository_test.dart`、`python3 quwoquan_app/scripts/env/run_app_alpha_beta_seed_matrix.py` |
+| 三环境共用测试 | alpha mock 与 beta remote 使用同一 fixture ID；gamma 暂缓远端执行但保留 manifest 与路径约束 | `make test-app-alpha-seed`、`python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/cloud/services/business_beta_remote_repository__local_contract_test.dart`、`python3 quwoquan_app/scripts/env/run_app_alpha_beta_seed_matrix.py` |
 
 ## 内容飞轮 ship 与环境数据分层（alpha 豁免决策）
 
-内容飞轮（`quwoquan_data` 产线 + `ship`）按 [`content_sampling_manifest.yaml`](../../deploy/shared/content_sampling_manifest.yaml) 把审核通过的真实内容采样回填各环境**服务侧运行库**。其中 `alpha` 的处理需明确两层区分，避免与 [08-mock-data-isolation](../../.cursor/rules/08-mock-data-isolation.mdc) / 编码军规 R30 冲突：
+内容飞轮（`quwoquan_data` 产线 + `ship`）按 [`content_sampling_manifest.yaml`](../../quwoquan_ops/environments/content_sampling_manifest.yaml) 把审核通过的真实内容采样回填各环境**服务侧运行库**。其中 `alpha` 的处理需明确两层区分，避免与 [08-mock-data-isolation](../../.cursor/rules/08-mock-data-isolation.mdc) / 编码军规 R30 冲突：
 
 | 层 | alpha 含义 | 数据源 | 约束来源 |
 |---|---|---|---|

@@ -259,7 +259,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}
 		cursor = nextCursor
 	}
-	if len(views) < limit {
+	if len(views) < limit && route.Surface != "premium_stream" {
 		if publishedReader, ok := s.postReader.(publishedPostReader); ok {
 			fallbackCursor := repositoryCursor
 			for attempt := 0; attempt < 4 && len(views) < limit; attempt++ {

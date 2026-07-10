@@ -9,6 +9,11 @@ licensePolicies:
   - factual_citation_only
   - cc_or_pd_only
   - official_terms_required
+  - reference_only
+  - discovery_only
+  - attribution_no_watermark
+  - licensed_candidate
+  - licensed_asset_required
 extractors:
   - wikipedia_api
   - baidu_baike_html
@@ -16,6 +21,11 @@ extractors:
   - static_official_html
   - qunar_html
   - generic_html
+articleCommercialAdmissions:
+  - commercial_release
+  - controlled_trial
+  - reference_only
+  - blocked
 sites:
   - siteId: wikipedia_zh
     platform: 维基百科
@@ -40,7 +50,8 @@ sites:
     qualityTier: B
     siteCrawlProfile:
       crawlAllowed: true
-      contentLanes: [article]
+      contentLanes: [homepage, article]
+      articleCommercialAdmission: commercial_release
       allowedPaths:
         - https://zh.wikivoyage.org/wiki/*
       fetchMode: mediawiki_api
@@ -54,11 +65,16 @@ sites:
         mode: conservative
         maxRequestsPerSecond: 0.5
         backoffOnStatus: [403, 429]
+      discoveryStrategy:
+        mode: entity_seeded_scan
+        seedAxes: [entity, topic, time_window]
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
+        notes: 以目的地/主题/时间片检索可读指南页；不按作者维度扩展。
       maxDepth: 2
       maxPagesPerDay: 5000
       timeWindowDays: 730
-      notes: 维基导游站点线仅作为事实与目的地指南候选来源；正文生产仍须经 content_plan/produce/review，不复现原文。
-    notes: 中文维基导游旅行指南，可抓取目的地攻略/交通/游览分区；仅作事实与决策参考，不复现原文。
+      notes: 维基导游站点线可为 homepage/article 提供事实与目的地指南候选来源；正文生产仍须经 content_plan/produce/review，不复现原文。
+    notes: 中文维基导游旅行指南；可作 travel homepage/article 的权威参考候选，但最终是否成为主页主锚仍由 homepage authority gate 择优裁定。
   - siteId: baidu_baike
     platform: 百度百科
     category: encyclopedia
@@ -199,6 +215,7 @@ sites:
     siteCrawlProfile:
       crawlAllowed: false
       contentLanes: [article, image, video]
+      articleCommercialAdmission: controlled_trial
       allowedPaths:
         - https://www.mafengwo.cn/i/*
       fetchMode: platform_reference
@@ -208,6 +225,11 @@ sites:
       loginPolicy: public_only
       watermarkPolicy: reject_watermarked_publish_assets
       termsUrl: https://bigfile.mafengwo.net/s18/M00/91/9E/CoUBYGCbqRKABoiVAALoDVTSgVE139.pdf
+      discoveryStrategy:
+        mode: site_listing_scan
+        seedAxes: [topic, time_window, site_listing]
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
+        notes: 旅行类站点先轻量巡检公开游记/攻略候选页，再做风景摄影分类与质量门；不按作者扩源。
       maxDepth: 0
       maxPagesPerDay: 0
       controlledTrial:
@@ -235,6 +257,7 @@ sites:
     siteCrawlProfile:
       crawlAllowed: false
       contentLanes: [article, image, video]
+      articleCommercialAdmission: controlled_trial
       allowedPaths:
         - https://you.ctrip.com/*
       fetchMode: platform_reference
@@ -244,6 +267,11 @@ sites:
       loginPolicy: public_only
       watermarkPolicy: reject_watermarked_publish_assets
       termsUrl: https://pages.ctrip.com/webhome/purehtml/cn/memberCenter/regTerm.html
+      discoveryStrategy:
+        mode: site_listing_scan
+        seedAxes: [topic, time_window, site_listing]
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
+        notes: 旅行类站点先轻量巡检公开攻略/游记候选页，再做风景摄影分类与质量门；不按作者扩源。
       maxDepth: 0
       maxPagesPerDay: 0
       controlledTrial:
@@ -258,6 +286,290 @@ sites:
         notes: 仅用于站点维度 DAG、门禁、并发与准出稳定性验证；不声明真实批量抓取授权，不发布平台素材。
       notes: 未实现专用抽取器与站点级稳定正文准入前，只可作为 discovery/reference；controlled trial 仅验证 DAG/门禁/准出稳定性。
     notes: 当前未实现专用抽取器，站点级不作为稳定正文源；已逐条验证的 knownArticleSources 可显式 fetchable=true 进入 source_screen，受控试跑不发布平台素材。
+  - siteId: xiaohongshu_travel_reference
+    platform: 小红书
+    category: travelogue
+    domains: [www.xiaohongshu.com, xiaohongshu.com]
+    urlPatterns:
+      - https://www.xiaohongshu.com/explore/*
+      - https://www.xiaohongshu.com/search_result*
+      - https://www.xiaohongshu.com/*
+    fetchable: false
+    extractor: generic_html
+    licensePolicy: reference_only
+    qualityTier: C
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [article, image, video]
+      articleCommercialAdmission: reference_only
+      allowedPaths:
+        - https://www.xiaohongshu.com/explore/*
+        - https://www.xiaohongshu.com/search_result*
+        - https://www.xiaohongshu.com/*
+      fetchMode: platform_reference
+      extractor: generic_html
+      rightsPolicy: reference_only
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://agree.xiaohongshu.com/h5/terms/ZXXY20220331001/-1
+      discoveryStrategy:
+        mode: content_search
+        seedAxes: [topic, time_window, theme, geo]
+        queryTemplates:
+          - "{topic} {geo} 风景 摄影"
+          - "{topic} {geo} 旅行 拍照"
+          - "{theme} {geo} 日出 日落 雪山 云海"
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor, rights_gate]
+        notes: 综合内容平台按主题/时间片/地域检索候选内容；仅用于发现、互证和质量分布，不抓原文，不发布平台图片或视频。
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          article: 500
+          image: 500
+          video: 50
+        notes: 仅用于链接发现、实体互证、质量分布和 DAG/并发验证；不得抓原文，不发布平台图片或视频。
+      notes: 小红书默认仅作 reference/discovery；逐条授权或开放平台合同缺失时不得进入 release。
+    notes: 综合内容平台参考源；按内容检索发现风景/摄影候选，不作为默认正文抓取源，不把平台素材计入可发布成功率。
+  - siteId: toutiao_article_reference
+    platform: 今日头条
+    category: platform_article
+    domains: [www.toutiao.com, toutiao.com]
+    urlPatterns:
+      - https://www.toutiao.com/article/*
+      - https://www.toutiao.com/*
+    fetchable: false
+    extractor: generic_html
+    licensePolicy: reference_only
+    qualityTier: C
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [article, image, video]
+      articleCommercialAdmission: reference_only
+      allowedPaths:
+        - https://www.toutiao.com/article/*
+        - https://www.toutiao.com/*
+      fetchMode: platform_reference
+      extractor: generic_html
+      rightsPolicy: reference_only
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://www.toutiao.com/user_agreement/
+      discoveryStrategy:
+        mode: content_search
+        seedAxes: [topic, time_window, theme, geo]
+        queryTemplates:
+          - "{topic} {geo} 风景 摄影"
+          - "{topic} {geo} 旅游 攻略"
+          - "{theme} {geo} 雪山 云海 日出 日落"
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor, rights_gate]
+        notes: 综合内容平台按主题/时间片/地域检索候选内容；仅用于发现、互证和质量分布，不抓原文，不发布平台图片或视频。
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          article: 500
+          image: 100
+          video: 50
+        notes: 仅用于链接发现、实体互证、质量分布和 DAG/并发验证；不得抓原文，不发布平台图片或视频。
+      notes: 今日头条默认仅作 reference/discovery；逐条授权或开放平台合同缺失时不得进入 release。
+    notes: 平台文章/资讯参考源；不作为默认正文抓取源，不把平台素材计入可发布成功率。
+  - siteId: weibo_travel_reference
+    platform: 微博
+    category: community_post
+    domains: [weibo.com, www.weibo.com]
+    urlPatterns:
+      - https://weibo.com/*
+      - https://www.weibo.com/*
+    fetchable: false
+    extractor: generic_html
+    licensePolicy: reference_only
+    qualityTier: C
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [article, image, video]
+      articleCommercialAdmission: reference_only
+      allowedPaths:
+        - https://weibo.com/*
+        - https://www.weibo.com/*
+      fetchMode: platform_reference
+      extractor: generic_html
+      rightsPolicy: reference_only
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://www.weibo.com/signup/v5/protocol
+      discoveryStrategy:
+        mode: content_search
+        seedAxes: [topic, time_window, theme, geo]
+        queryTemplates:
+          - "#{geo}旅行# 风景 摄影"
+          - "{geo} {topic} 摄影"
+          - "{theme} {geo} 风光"
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor, rights_gate]
+        notes: 微博按话题/时间片/地域检索热度和候选链接；只做发现、互证和质量分布，不自动化抓取内容或发布素材。
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          article: 500
+          image: 100
+          video: 50
+        notes: 仅用于链接发现、实体互证、质量分布和 DAG/并发验证；不得自动化抓取微博内容，不发布平台图片或视频。
+      notes: 微博默认仅作 reference/discovery；逐资产授权不完整时不得进入 release。
+    notes: 社交参考源；不作为默认正文抓取源，不把平台素材计入可发布成功率。
+  - siteId: pinterest_travel_reference
+    platform: Pinterest
+    category: editorial_reference_only
+    domains: [www.pinterest.com, pinterest.com]
+    urlPatterns:
+      - https://www.pinterest.com/*
+      - https://pinterest.com/*
+      - https://*.pinterest.com/*
+    fetchable: false
+    extractor: generic_html
+    licensePolicy: attribution_no_watermark
+    qualityTier: C
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [image]
+      allowedPaths:
+        - https://www.pinterest.com/*
+        - https://pinterest.com/*
+        - https://*.pinterest.com/*
+      fetchMode: attribution_manifest
+      extractor: generic_html
+      rightsPolicy: attribution_no_watermark
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://policy.pinterest.com/en/terms-of-service
+      attributionPublish:
+        allowed: true
+        downloadAllowed: true
+        authorizationBasis: attribution_no_watermark
+        evidenceFields: [pinUrl, discoveryUrl, originalAssetUrl, sourceAuthor, repostAttribution, watermarkScan, ocrScan, modelReleaseStatus, collectedAt]
+        minimumLaneCounts:
+          image: 500
+        notes: 只接受公开图归因 manifest；逐图必须补齐 pin/source/作者/转载出处/无水印扫描证据并落原图字节。
+      discoveryStrategy:
+        mode: content_search
+        seedAxes: [topic, time_window, theme, geo]
+        queryTemplates:
+          - "{geo} landscape photography"
+          - "{geo} travel photography"
+          - "{theme} {geo} scenery"
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, rights_gate]
+        notes: Pinterest 做视觉发现与 pin 候选归因；发布必须走 attribution_no_watermark manifest，并回链到原始作者/原图出处。
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          image: 500
+        notes: 受控试跑仍只做发现/质量分布验证；真实发布改走 attribution_publish_ingest，不能把 controlledTrial 当发布通道。
+      notes: Pinterest 可作为 attribution_no_watermark 图片发布候选，但必须逐图保留作者、转载出处、原图链接、无水印/OCR 扫描与下载字节证据。
+    notes: 图片发现/归因发布候选源；不做平台正文抓取，真实发布只走 attribution manifest 与单源图片作品链路。
+  - siteId: tuchong_community_reference
+    platform: 图虫社区
+    category: photography_platform
+    domains: [tuchong.com, www.tuchong.com]
+    urlPatterns:
+      - https://tuchong.com/*
+      - https://www.tuchong.com/*
+    fetchable: false
+    extractor: generic_html
+    licensePolicy: licensed_candidate
+    qualityTier: B
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [image]
+      allowedPaths:
+        - https://tuchong.com/*
+        - https://www.tuchong.com/*
+      fetchMode: platform_reference
+      extractor: generic_html
+      rightsPolicy: licensed_candidate
+      robotsPolicy: respect_robots_txt
+      loginPolicy: public_only
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://tuchong.com/terms/
+      discoveryStrategy:
+        mode: site_listing_scan
+        seedAxes: [topic, time_window, site_listing, collection]
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor, rights_gate]
+        notes: 摄影社区按作品页/专题页/集合页轻量巡检，不以摄影师主页为主轴；授权字段不完整不得发布。
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          image: 500
+        notes: 仅用于摄影供给线容量、质量分布和 DAG/并发验证；逐资产授权不明时不得发布。
+      notes: 图虫社区只作为 licensed_candidate 线索源；授权字段不完整不得进入 release。
+    notes: 摄影社区参考源，不作为默认真实批量下载或自动发布图片来源。
+  - siteId: tuchong_stock_authorized
+    platform: 图虫创意
+    category: stock_authorized
+    domains: [stock.tuchong.com, open.tuchong.com]
+    urlPatterns:
+      - https://stock.tuchong.com/*
+      - https://open.tuchong.com/*
+    fetchable: false
+    extractor: generic_html
+    licensePolicy: licensed_asset_required
+    qualityTier: B
+    siteCrawlProfile:
+      crawlAllowed: false
+      contentLanes: [image, video]
+      allowedPaths:
+        - https://stock.tuchong.com/*
+        - https://open.tuchong.com/*
+      fetchMode: licensed_api
+      extractor: generic_html
+      rightsPolicy: licensed_asset_required
+      robotsPolicy: respect_robots_txt
+      loginPolicy: manual_authorization_required
+      watermarkPolicy: reject_watermarked_publish_assets
+      termsUrl: https://stock.tuchong.com/
+      discoveryStrategy:
+        mode: licensed_asset_manifest
+        seedAxes: [topic, time_window, license_manifest, geo]
+        precheckGates: [asset_rights_manifest, scenery_or_photography_classification, quality_gate, entity_anchor]
+        notes: 只消费 API/订单/授权 manifest 中的逐资产条目；不按摄影师维度扩源。
+      maxDepth: 0
+      maxPagesPerDay: 0
+      controlledTrial:
+        allowed: true
+        validationOnly: true
+        rawFetchAllowed: false
+        publishableAssetsAllowed: false
+        minimumLaneCounts:
+          image: 500
+          video: 50
+        notes: 授权升级源候选；只有 API/订单/授权凭证和逐资产 rights 字段完整后，资产层 gate 才能放行。
+      notes: 图虫创意/OpenAPI 只在授权合同与逐资产凭证完整时进入发布资产池。
+    notes: 授权图库候选源；站点注册不等于可发布，release 仍以逐资产 license/credit/sourceUrl/termsUrl/usageScope/authorizationProof/modelReleaseStatus 为准。
   - siteId: qunar_guide
     platform: 去哪儿攻略
     category: travelogue
@@ -272,6 +584,7 @@ sites:
     siteCrawlProfile:
       crawlAllowed: true
       contentLanes: [article, image]
+      articleCommercialAdmission: commercial_release
       allowedPaths:
         - https://touch.travel.qunar.com/*
         - https://travel.qunar.com/*
@@ -286,6 +599,11 @@ sites:
         mode: conservative
         maxRequestsPerSecond: 0.2
         backoffOnStatus: [403, 429]
+      discoveryStrategy:
+        mode: site_listing_scan
+        seedAxes: [topic, time_window, site_listing]
+        precheckGates: [light_fetch, scenery_or_photography_classification, quality_gate, entity_anchor]
+        notes: 去哪儿等旅行类站点按公开攻略/景点/游记页轻量巡检候选内容，再进入 source quality 与实体锚点门；不按作者扩源。
       maxDepth: 3
       maxPagesPerDay: 5000
       timeWindowDays: 730
@@ -372,6 +690,10 @@ knownOfficialSites:
     url: http://www.hnzjj.com/index.php/Product/list/9.html
     platform: 景区官网
     category: official
+  - entity: 蛇蟠岛
+    url: http://www.smspd.com/h-col-110.html
+    platform: 景区官网
+    category: official
 knownHomepageSupportSites:
   - entity: 南京市夫子庙－秦淮风光带
     sourceId: home_wikipedia_fuzimiao
@@ -388,6 +710,16 @@ knownHomepageSupportSites:
     url: https://www.ixsw.cn/xsw/about/about-142.html
     platform: 景区官网
     category: official
+  - entity: 蛇蟠岛
+    sourceId: home_official_smspd
+    url: http://www.smspd.com/h-col-110.html
+    platform: 景区官网
+    category: official
+  - entity: 蛇蟠岛
+    sourceId: home_360baike
+    url: https://baike.so.com/doc/5378261-5614441.html
+    platform: 360百科
+    category: encyclopedia
   - entity: 大足石刻景区
     sourceId: home_wikipedia_dazu_rock_carvings
     url: https://zh.wikipedia.org/wiki/%E5%A4%A7%E8%B6%B3%E7%9F%B3%E5%88%BB
@@ -638,6 +970,81 @@ knownHomepageSupportSites:
     url: https://www.news.cn/20241208/69ad6fdf9b10488b8d47e25efa16ad61/c.html
     platform: 权威媒体
     category: authoritative_reference
+  - entity: 黄龙
+    sourceId: home_wikipedia_huanglong_scenic_area
+    url: https://zh.wikipedia.org/wiki/%E9%BB%84%E9%BE%99%E9%A3%8E%E6%99%AF%E5%90%8D%E8%83%9C%E5%8C%BA
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 西岭雪山
+    sourceId: home_wikipedia_xiling_snow_mountain
+    url: https://zh.wikipedia.org/wiki/%E8%A5%BF%E5%B2%AD%E9%9B%AA%E5%B1%B1
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 木格措
+    sourceId: home_wikipedia_mugecuo
+    url: https://zh.wikipedia.org/wiki/%E6%9C%A8%E6%A0%BC%E6%8E%AA
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 瓦屋山
+    sourceId: home_wikipedia_wawu_mountain
+    url: https://zh.wikipedia.org/wiki/%E7%93%A6%E5%B1%8B%E5%B1%B1
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 三星堆博物馆
+    sourceId: home_wikipedia_sanxingdui_museum
+    url: https://zh.wikipedia.org/wiki/%E4%B8%89%E6%98%9F%E5%A0%86%E5%8D%9A%E7%89%A9%E9%A4%A8
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 自贡恐龙博物馆
+    sourceId: home_wikipedia_zigong_dinosaur_museum
+    url: https://zh.wikipedia.org/wiki/%E8%87%AA%E8%B2%A2%E6%81%90%E9%BE%8D%E5%8D%9A%E7%89%A9%E9%A4%A8
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 武侯祠
+    sourceId: home_wikipedia_chengdu_wuhou_shrine
+    url: https://zh.wikipedia.org/wiki/%E6%88%90%E9%83%BD%E6%AD%A6%E4%BE%AF%E7%A5%A0
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 杜甫草堂
+    sourceId: home_wikipedia_dufu_thatched_cottage
+    url: https://zh.wikipedia.org/wiki/%E6%9D%9C%E7%94%AB%E8%8D%89%E5%A0%82
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 三苏祠
+    sourceId: home_wikipedia_sansu_temple
+    url: https://zh.wikipedia.org/wiki/%E4%B8%89%E8%8B%8F%E7%A5%A0
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 宽窄巷子
+    sourceId: home_wikipedia_kuanzhai_alley
+    url: https://zh.wikipedia.org/wiki/%E5%AE%BD%E7%AA%84%E5%B7%B7%E5%AD%90
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 黄龙溪古镇
+    sourceId: home_wikipedia_huanglongxi_town
+    url: https://zh.wikipedia.org/wiki/%E9%BB%84%E9%BE%99%E6%BA%AA%E9%95%87
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 上里古镇
+    sourceId: home_wikipedia_shangli_town
+    url: https://zh.wikipedia.org/wiki/%E4%B8%8A%E9%87%8C%E9%95%87
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 贡嘎山
+    sourceId: home_wikipedia_gongga_mountain
+    url: https://zh.wikipedia.org/wiki/%E8%B4%A1%E5%98%8E%E5%B1%B1
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 蒙顶山
+    sourceId: home_wikipedia_mengding_mountain
+    url: https://zh.wikipedia.org/wiki/%E8%92%99%E9%A0%82%E5%B1%B1
+    platform: 维基百科
+    category: encyclopedia
+  - entity: 卧龙自然保护区
+    sourceId: home_wikipedia_wolong_nature_reserve
+    url: https://zh.wikipedia.org/wiki/%E5%8D%A7%E9%BE%99%E5%9B%BD%E5%AE%B6%E7%BA%A7%E8%87%AA%E7%84%B6%E4%BF%9D%E6%8A%A4%E5%8C%BA
+    platform: 维基百科
+    category: encyclopedia
 knownEntityAliases:
   - entity: 世界雕塑公园景区
     aliases:
@@ -763,6 +1170,20 @@ knownImageRejectTerms:
       - 国立故宫博物院
       - 臺北故宮
       - 台北故宫
+  - entity: 剑门关
+    rejectTerms:
+      - 杭州
+      - 临安
+      - 臨安
+      - 浙西大峡谷
+      - 浙西大峽谷
+      - 剑门关水库
+      - 劍門關水庫
+  - entity: 墨石公园
+    rejectTerms:
+      - Vlokia
+      - South Africa
+      - iNaturalist
 knownArticleSources:
   - entity: 南京市夫子庙－秦淮风光带
     sourceId: article_registry_fuzimiao_qinhuai_route

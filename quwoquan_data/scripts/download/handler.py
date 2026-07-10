@@ -10,10 +10,94 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
+from download.gate import active_download_lanes
 from download.handler_plan import *  # noqa: F403
 from download.handler_images import *  # noqa: F403
 from download.handler_fetch import *  # noqa: F403
 from download.source_inputs import content_type_for_lane
+
+
+def _write_fetch_result_screen_outputs(
+    *,
+    task_id: str,
+    batch_id: str,
+    entity_id: str,
+    entity_type: str,
+    selected_lanes: set[str] | None,
+    text_lane_selected: bool,
+    fetched_sources: list[dict[str, Any]],
+    quality_rows: list[dict[str, Any]],
+) -> None:
+    """Persist per-entity source_screen evidence as soon as fetch finishes."""
+    if fetched_sources:
+        prepare_source_screen(task_id, batch_id, fetched_sources)
+    for source in fetched_sources:
+        issues: list[str] = []
+        if source["quality"] == "Reject":
+            issues.append("sourceScreen: source scored Reject")
+        report_ref = _source_screen_report_ref(source["entityId"], source["sourceId"])
+        write_stage_result(
+            task_id,
+            batch_id,
+            "download",
+            "source_screen",
+            report_ref,
+            {
+                "sourceId": source["sourceId"],
+                "decision": "retain" if source["quality"] != "Reject" else "reject",
+                "qualityScore": source["score"],
+                "relevanceScore": source["score"],
+                "copyrightStatus": "internal_reference",
+                "reason": "quality gate auto-screen",
+                "entityId": source["entityId"],
+            },
+        )
+        write_gate_report(
+            task_id=task_id,
+            batch_id=batch_id,
+            command="download",
+            step="source_screen",
+            ref=report_ref,
+            passed=not issues,
+            issues=issues,
+            evidence_summary={
+                "entityId": source["entityId"],
+                "sourceId": source["sourceId"],
+                "quality": source["quality"],
+                "score": source["score"],
+            },
+            next_step="quality_analysis",
+            fallback_stage="fetch" if issues else None,
+        )
+    retained = [row for row in quality_rows if row["quality"] != "Reject"]
+    issues: list[str] = []
+    if text_lane_selected and len(retained) < 1:
+        issues.append("sourceScreen: no retained source for entity")
+    for source in _curated_sources_for_lanes(
+        task_id,
+        batch_id,
+        entity_id,
+        entity_type,
+        selected_lanes,
+    ):
+        issues.extend(source_unit_category_issues(source["source_id"], source.get("platform") or ""))
+    write_gate_report(
+        task_id=task_id,
+        batch_id=batch_id,
+        command="download",
+        step="entity_source_bundle",
+        ref=entity_id,
+        passed=not issues,
+        issues=issues,
+        evidence_summary={
+            "sourceCount": len(quality_rows),
+            "retainedCount": len(retained),
+            "qualities": [row["quality"] for row in quality_rows],
+        },
+        next_step="quality_analysis",
+        fallback_stage="source_plan" if issues else None,
+    )
+
 
 def handle_download(args: argparse.Namespace) -> None:
     """Orchestrate download: source_plan → fetch → source_screen.
@@ -47,7 +131,22 @@ def handle_download(args: argparse.Namespace) -> None:
 
     entity_type = getattr(args, "entity_type", "") or ""
     vertical = vertical_from_task_id(task_id)
-    entities = [{"entityId": entity_id, "canonicalName": entity_id, "entityType": entity_type} for entity_id in entity_ids]
+    effective_lanes = selected_lanes
+    if effective_lanes is None:
+        effective_lanes = active_download_lanes(task_id)
+    text_lane_selected = effective_lanes is None or bool(effective_lanes & {"homepage", "article"})
+    # 类型以 coverageTargets canonical 为真相源校正（WP5 漂移修复）；
+    # 全体同类型时同步收敛单值 entity_type，避免 CLI 传错类型造成目录/后续步骤分叉。
+    from download.prepare import resolve_research_entity_types
+
+    resolved_types = resolve_research_entity_types(task_id, entity_ids, fallback_type=entity_type)
+    unique_types = sorted(set(resolved_types.values()))
+    if len(unique_types) == 1:
+        entity_type = unique_types[0]
+    entities = [
+        {"entityId": entity_id, "canonicalName": entity_id, "entityType": resolved_types[entity_id]}
+        for entity_id in entity_ids
+    ]
     prepare_source_plan(task_id, batch_id, entities)
     for entity in entities:
         planned_sources = [
@@ -140,8 +239,20 @@ def handle_download(args: argparse.Namespace) -> None:
 
     def _merge_fetch_result(result: Mapping[str, Any]) -> None:
         entity_id = str(result.get("entityId") or "")
-        fetched_sources.extend(result.get("fetchedSources") or [])
-        quality_by_entity[entity_id].extend(result.get("qualityRows") or [])
+        entity_sources = list(result.get("fetchedSources") or [])
+        entity_quality_rows = list(result.get("qualityRows") or [])
+        fetched_sources.extend(entity_sources)
+        quality_by_entity[entity_id].extend(entity_quality_rows)
+        _write_fetch_result_screen_outputs(
+            task_id=task_id,
+            batch_id=batch_id,
+            entity_id=entity_id,
+            entity_type=entity_type,
+            selected_lanes=selected_lanes,
+            text_lane_selected=text_lane_selected,
+            fetched_sources=entity_sources,
+            quality_rows=entity_quality_rows,
+        )
         if result.get("failedImage"):
             failed_image_entities.append(entity_id)
 
@@ -285,7 +396,7 @@ def handle_download(args: argparse.Namespace) -> None:
     for entity_id, rows in quality_by_entity.items():
         retained = [row for row in rows if row["quality"] != "Reject"]
         issues: list[str] = []
-        if len(retained) < 1:
+        if text_lane_selected and len(retained) < 1:
             issues.append("sourceScreen: no retained source for entity")
         # 受控类目门：阻断无类别的 weather_* 散来源（天气应作为百科/官方/攻略来源内事实）。
         for source in _curated_sources_for_lanes(

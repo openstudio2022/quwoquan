@@ -17,7 +17,7 @@ from typing import Any, Mapping
 import yaml
 
 from _common.io import read_json, write_json
-from _common.paths import DATA_ROOT, RUNTIME_ROOT, now_iso
+from _common.paths import _REPO_DATA_ROOT, RUNTIME_ROOT, now_iso
 from download.fetch import fetch_image_payload, fetch_source_payload
 
 FRONTIER_SCHEMA = "quwoquan.site_supply.site_frontier_packet/1"
@@ -76,7 +76,16 @@ ADMISSION_BATCH_CRAWL = "batch_crawl"
 
 ADMISSION_CONTROLLED_TRIAL = "controlled_trial"
 
-ADMISSION_MODES = (ADMISSION_BATCH_CRAWL, ADMISSION_CONTROLLED_TRIAL)
+ADMISSION_LICENSED_ASSET_INGEST = "licensed_asset_ingest"
+
+ADMISSION_ATTRIBUTION_PUBLISH_INGEST = "attribution_publish_ingest"
+
+ADMISSION_MODES = (
+    ADMISSION_BATCH_CRAWL,
+    ADMISSION_CONTROLLED_TRIAL,
+    ADMISSION_LICENSED_ASSET_INGEST,
+    ADMISSION_ATTRIBUTION_PUBLISH_INGEST,
+)
 
 QUERY_STRATEGY_MANUAL = "manual"
 
@@ -132,7 +141,7 @@ def site_supply_root(vertical: str, site_id: str, batch_id: str) -> Path:
     return RUNTIME_ROOT / "site_supply" / vertical / site_id / batch_id
 
 def _site_registry_path(vertical: str) -> Path:
-    return DATA_ROOT / "verticals" / vertical / "sources" / "source_registry.yaml"
+    return _REPO_DATA_ROOT / "verticals" / vertical / "sources" / "source_registry.yaml"
 
 def _load_vertical_source_registry(vertical: str) -> dict[str, Any]:
     path = _site_registry_path(vertical)
@@ -195,7 +204,10 @@ def _profile_from_site(site: Mapping[str, Any], *, overrides: Mapping[str, Any] 
         "fetchable": bool(site.get("fetchable")),
         "sourceCategory": str(site.get("category") or ""),
         "qualityTier": str(site.get("qualityTier") or ""),
+        "articleCommercialAdmission": str(profile.get("articleCommercialAdmission") or ""),
         "controlledTrial": dict(profile.get("controlledTrial") or {}),
+        "attributionPublish": dict(profile.get("attributionPublish") or {}),
+        "discoveryStrategy": dict(profile.get("discoveryStrategy") or {}),
         "rawProfilePresent": bool(site.get("siteCrawlProfile")),
     }
 
@@ -210,9 +222,18 @@ def _profile_gate(
     blockers: list[str] = []
     warnings: list[str] = []
     controlled = profile.get("controlledTrial") if isinstance(profile.get("controlledTrial"), Mapping) else {}
+    content_lanes = {str(x).strip() for x in (profile.get("contentLanes") or []) if str(x).strip()}
+    article_admission = str(profile.get("articleCommercialAdmission") or "").strip()
     admission_mode = admission_mode if admission_mode in ADMISSION_MODES else ADMISSION_BATCH_CRAWL
     if not profile.get("rawProfilePresent"):
         blockers.append("siteCrawlProfile missing from source registry")
+    if "article" in content_lanes:
+        if not article_admission:
+            blockers.append("articleCommercialAdmission is required for article-capable sites")
+        elif admission_mode == ADMISSION_BATCH_CRAWL and article_admission != "commercial_release":
+            blockers.append(
+                f"articleCommercialAdmission={article_admission} cannot enter commercial article batch crawl"
+            )
     if admission_mode == ADMISSION_CONTROLLED_TRIAL:
         if not (bool(controlled.get("allowed")) or (profile.get("fetchable") and profile.get("crawlAllowed"))):
             blockers.append("controlledTrial.allowed must be true or site must be fetchable+crawlAllowed")
@@ -220,10 +241,54 @@ def _profile_gate(
             blockers.append("controlledTrial.validationOnly must remain true")
         if bool(controlled.get("rawFetchAllowed")):
             blockers.append("controlledTrial.rawFetchAllowed cannot be true")
+        if bool(controlled.get("publishableAssetsAllowed")):
+            blockers.append("controlledTrial.publishableAssetsAllowed cannot be true")
         if not str(profile.get("termsUrl") or "").strip():
             blockers.append("siteCrawlProfile.termsUrl is required for controlled trial")
         if not (profile.get("fetchable") and profile.get("crawlAllowed")):
             warnings.append("controlled trial does not grant raw batch crawl; generated candidates are validation-only")
+    elif admission_mode == ADMISSION_LICENSED_ASSET_INGEST:
+        rights_policy = str(profile.get("rightsPolicy") or "")
+        if rights_policy not in {"licensed_asset_required", "commercial_license_required"}:
+            blockers.append(
+                "licensed_asset_ingest requires rightsPolicy=licensed_asset_required "
+                "or commercial_license_required"
+            )
+        if str(profile.get("fetchMode") or "") not in {"licensed_api", "manual_authorization"}:
+            blockers.append("licensed_asset_ingest requires fetchMode=licensed_api or manual_authorization")
+        if str(profile.get("loginPolicy") or "") != "manual_authorization_required":
+            blockers.append("licensed_asset_ingest requires loginPolicy=manual_authorization_required")
+        if not str(profile.get("termsUrl") or "").strip():
+            blockers.append("siteCrawlProfile.termsUrl is required for licensed asset ingest")
+        warnings.append("licensed asset ingest must use an authorization manifest; raw site crawl is disabled")
+    elif admission_mode == ADMISSION_ATTRIBUTION_PUBLISH_INGEST:
+        rights_policy = str(profile.get("rightsPolicy") or "")
+        attribution = (
+            profile.get("attributionPublish")
+            if isinstance(profile.get("attributionPublish"), Mapping)
+            else {}
+        )
+        evidence_fields = [
+            str(item).strip()
+            for item in (attribution.get("evidenceFields") or [])
+            if str(item).strip()
+        ]
+        if rights_policy != "attribution_no_watermark":
+            blockers.append("attribution_publish_ingest requires rightsPolicy=attribution_no_watermark")
+        if str(profile.get("fetchMode") or "") != "attribution_manifest":
+            blockers.append("attribution_publish_ingest requires fetchMode=attribution_manifest")
+        if str(profile.get("loginPolicy") or "") != "public_only":
+            blockers.append("attribution_publish_ingest requires loginPolicy=public_only")
+        if not str(profile.get("termsUrl") or "").strip():
+            blockers.append("siteCrawlProfile.termsUrl is required for attribution publish ingest")
+        if not bool(attribution.get("allowed")):
+            blockers.append("siteCrawlProfile.attributionPublish.allowed must be true for attribution publish ingest")
+        if not evidence_fields:
+            blockers.append("siteCrawlProfile.attributionPublish.evidenceFields must not be empty")
+        warnings.append(
+            "attribution publish ingest must use a per-asset attribution manifest and original image bytes; "
+            "raw site crawl is disabled"
+        )
     else:
         if not profile.get("fetchable"):
             blockers.append("fetchable=false sites cannot enter batch site crawl")
@@ -248,6 +313,8 @@ def _profile_gate(
     if int(profile.get("maxPagesPerDay") or 0) <= 0:
         if admission_mode == ADMISSION_CONTROLLED_TRIAL:
             warnings.append("maxPagesPerDay=0; controlled trial must not perform raw fetch")
+        elif admission_mode == ADMISSION_LICENSED_ASSET_INGEST:
+            warnings.append("maxPagesPerDay=0; licensed asset ingest must not perform raw fetch")
         else:
             warnings.append("maxPagesPerDay=0; crawler must run in discovery-only dry mode")
     return blockers, warnings
@@ -354,7 +421,7 @@ def build_site_frontier_packet(
         "siteId": site_id,
         "batchId": batch_id,
         "workspaceRoot": str(site_supply_root(vertical, site_id, batch_id)),
-        "sourceRegistryRef": str(_site_registry_path(vertical).relative_to(DATA_ROOT)),
+        "sourceRegistryRef": str(_site_registry_path(vertical).relative_to(_REPO_DATA_ROOT)),
         "admissionMode": admission_mode,
         "profile": profile,
         "timeWindow": window,

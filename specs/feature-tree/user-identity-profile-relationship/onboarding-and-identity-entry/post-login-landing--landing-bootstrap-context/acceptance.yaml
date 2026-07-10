@@ -40,9 +40,9 @@ gwt_acceptance:
     - 登录成功后 session bootstrap + 导航切换 P95 <= 2s。
     tests:
       planned:
-      - file: quwoquan_app/test/core/auth/auth_session_store_test.dart
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - file: quwoquan_app/test/core/auth/required_route_gate_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/required_route_gate__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/core/auth/auth_session_controller__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
@@ -65,7 +65,7 @@ gwt_acceptance:
     notes: []
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

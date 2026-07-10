@@ -1,6 +1,8 @@
-"""P3 三类解耦契约：实体主页主源【只来自百科】+ 文章【含视频则放弃】检测。
+"""P3 三类解耦契约（R-HSE06 扩源后口径）：主页主源两级权威 + 文章【含视频则放弃】检测。
 
-- 实体主页 base draft 主源只授予百科（wiki/百度/搜狗百科）primary 资格；官网/官方/政务/媒体降为 supporting。
+- 实体主页 base draft 主源 = 第一权威百科（wiki/维基导游/百度/搜狗）优先 +
+  第二权威（官网/政务文旅）兜底；权威媒体/知识图谱仍 supporting，头条百科 reference_only。
+- 排序恒为百科在前、第二权威在后（homepage_primary_authority_rank）。
 - 文章来源含内联视频（原生 <video> / 主流视频站嵌入）即标记 hasVideo，内容计划据此弃稿。
 
 可直接运行：python3 quwoquan_data/tests/local_contract/common/test_three_class_decouple__local_contract_test.py
@@ -43,31 +45,67 @@ def test_article_video_detection_positive_and_negative():
     assert not html_has_inline_video("")
 
 
-def test_homepage_primary_source_is_encyclopedia_only():
-    # 百科类授予 primary（priority > 0）。
+def test_homepage_primary_source_two_tier_authority():
+    # 第一权威百科授予 primary（priority > 0）。
+    encyclopedia_priorities = []
     for meta in (
         {"researchLane": "homepage", "platform": "维基百科", "category": "encyclopedia"},
+        {"researchLane": "homepage", "platform": "维基导游", "category": "encyclopedia"},
         {"researchLane": "homepage", "platform": "百度百科", "category": "encyclopedia"},
         {"researchLane": "homepage", "platform": "搜狗百科", "category": "encyclopedia"},
     ):
-        assert _homepage_source_priority(meta) > 0, meta
+        priority = _homepage_source_priority(meta)
+        assert priority > 0, meta
+        encyclopedia_priorities.append(priority)
 
-    # 官网/官方不再是 primary（降为 supporting，priority <= 0）。
-    official = {"researchLane": "homepage", "platform": "九寨沟景区官网", "category": "official_site"}
-    assert _homepage_source_priority(official) <= 0, official
+    # 头条百科只允许 reference_only，不得作为 primary。
+    toutiao = {"researchLane": "homepage", "platform": "头条百科", "category": "encyclopedia"}
+    assert _homepage_source_priority(toutiao) <= 0, toutiao
 
-    # 政务/文旅仍为 supporting。
-    gov = {"researchLane": "homepage", "platform": "四川省文旅厅", "category": "government_tourism"}
-    assert _homepage_source_priority(gov) <= 0, gov
+    # R-HSE06：官网/政务文旅是第二权威主源（priority > 0），但恒排在全部百科之后。
+    official = {"researchLane": "homepage", "platform": "官方网站", "category": "official_site"}
+    gov = {"researchLane": "homepage", "platform": "政务文旅", "category": "government_tourism"}
+    official_priority = _homepage_source_priority(official)
+    gov_priority = _homepage_source_priority(gov)
+    assert official_priority > 0, official
+    assert gov_priority > 0, gov
+    assert min(encyclopedia_priorities) > max(official_priority, gov_priority)
+
+    # 权威媒体仍不具备主源资格。
+    media = {"researchLane": "homepage", "platform": "权威媒体", "category": "authoritative_media"}
+    assert _homepage_source_priority(media) <= 0, media
 
 
-def test_homepage_base_draft_seed_only_encyclopedia():
-    # 只有百科可作主页 base draft 主源。
+def test_homepage_base_draft_seed_two_tier_authority():
+    # 第一权威百科可作主页 base draft 主源。
     assert _homepage_can_seed_base_draft({"platform": "维基百科", "category": "encyclopedia"})
+    assert _homepage_can_seed_base_draft({"platform": "维基导游", "category": "encyclopedia"})
     assert _homepage_can_seed_base_draft({"platform": "百度百科", "category": "encyclopedia"})
-    # 官网/政务不可作主页 base draft 主源。
-    assert not _homepage_can_seed_base_draft({"platform": "景区官网", "category": "official_site"})
-    assert not _homepage_can_seed_base_draft({"platform": "文旅厅", "category": "government_tourism"})
+    assert not _homepage_can_seed_base_draft({"platform": "头条百科", "category": "encyclopedia"})
+    # R-HSE06：官网/政务文旅（第二权威）可作主页 base draft 主源。
+    assert _homepage_can_seed_base_draft({"platform": "景区官网", "category": "official_site"})
+    assert _homepage_can_seed_base_draft({"platform": "文旅厅", "category": "government_tourism"})
+    # 权威媒体与攻略/UGC 仍不可。
+    assert not _homepage_can_seed_base_draft({"platform": "权威媒体", "category": "authoritative_media"})
+    assert not _homepage_can_seed_base_draft({"platform": "小红书", "category": "community_post"})
+
+
+def test_secondary_authority_requires_factual_compression():
+    """R-HSE06：第二权威源（官网/政务文旅）与百度/搜狗百科一样必须走事实化压缩。"""
+    from download.handler_fetch import _requires_factual_compression
+
+    assert _requires_factual_compression({"url": "https://baike.baidu.com/item/x"})
+    assert _requires_factual_compression({"url": "https://baike.sogou.com/v?query=x"})
+    assert _requires_factual_compression(
+        {"platform": "官方网站", "category": "official_site", "url": "https://www.example-scenic.cn/"}
+    )
+    assert _requires_factual_compression(
+        {"platform": "政务文旅", "url": "https://wlt.sc.gov.cn/scwlt/gsgg/notice.shtml"}
+    )
+    # 第一权威维基（开放许可）不压缩。
+    assert not _requires_factual_compression(
+        {"platform": "维基百科", "category": "encyclopedia", "url": "https://zh.wikipedia.org/wiki/x"}
+    )
 
 
 def test_write_source_unit_persists_has_video_flag():

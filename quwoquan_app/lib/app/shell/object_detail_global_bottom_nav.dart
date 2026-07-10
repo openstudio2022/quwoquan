@@ -26,7 +26,7 @@ class ObjectDetailGlobalBottomNav extends ConsumerWidget {
       onTap: (index) {
         final tab = mainTabFromBottomNavIndex(index);
         if (tab == MainTabDestination.create) {
-          unawaited(GlobalQuickActionSheet.show(context));
+          unawaited(GlobalQuickActionSheet.show(context, ref));
           return;
         }
         context.go(tab.routePath);

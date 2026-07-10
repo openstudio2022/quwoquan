@@ -3,18 +3,14 @@ import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 
 /// 麦克风权限预检结果（兼容聊天/RTC 既有 API）。
-enum MicrophonePermissionOutcome {
-  granted,
-  denied,
-  permanentlyDenied,
-}
+enum MicrophonePermissionOutcome { granted, denied, permanentlyDenied }
 
 /// 麦克风权限统一预检：委托 [AppPermissionCoordinator]。
 class MicrophonePermissionGuard {
   const MicrophonePermissionGuard._();
 
   static AppPermissionCoordinator get _coordinator =>
-      AppPermissionCoordinator.testable;
+      AppPermissionCoordinator.current;
 
   static Future<bool> isGranted() =>
       _coordinator.isGranted(AppPermissionKind.microphone);
@@ -44,7 +40,7 @@ class MicrophonePermissionGuard {
     required String message,
     required bool openSettings,
   }) {
-    final base = AppPermissionCoordinator.testable.permissionSemantic(
+    final base = AppPermissionCoordinator.current.permissionSemantic(
       AppPermissionKind.microphone,
       openSettings: openSettings,
     );
@@ -70,8 +66,7 @@ class MicrophonePermissionGuard {
       AppPermissionEnsureOutcome.softDenied =>
         MicrophonePermissionOutcome.permanentlyDenied,
       AppPermissionEnsureOutcome.restricted ||
-      AppPermissionEnsureOutcome.denied =>
-        MicrophonePermissionOutcome.denied,
+      AppPermissionEnsureOutcome.denied => MicrophonePermissionOutcome.denied,
     };
   }
 }

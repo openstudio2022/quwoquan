@@ -27,15 +27,15 @@
 - 配置中心（Nacos）、Secrets 管理、服务发现
 - SLO、容量、应急演练与 oncall 流程
 
-### 2.2 `platform/observability`（可观测性平台模块）
+### 2.2 可观测性横切能力
 
 **包含**：
-- 统一日志字段（`contracts/log_fields.md`）
+- 统一日志字段（`contracts/observability/`）
 - 统一指标规范（`contracts/metrics.md`）
-- 异步链路 envelope（`contracts/messages/envelope.schema.json`）
-- 接入脚本/模板、看板与告警模板（后续补齐）
+- 异步链路 envelope（`contracts/metadata/_shared/envelope.schema.json`）
+- 接入脚本、看板、告警和采集策略归 `quwoquan_ops/observability/`
 
-### 2.3 `platform/config`（系统配置平台模块）
+### 2.3 系统配置横切能力
 
 **包含**：
 - 运维/系统配置的来源分层与治理（env/secrets/config-center/file）
@@ -53,5 +53,5 @@
 ## 3. 统一归档位置
 
 - 配置分层与治理：`contracts/configuration.md`
-- 可观测性字段/指标/异步 envelope：`contracts/log_fields.md`、`contracts/metrics.md`、`contracts/messages/envelope.schema.json`
-- 平台模块入口：`platform/observability/`、`platform/config/`
+- 可观测性字段/指标/异步 envelope：`contracts/observability/`、`contracts/metrics.md`、`contracts/metadata/_shared/envelope.schema.json`
+- 横切控制面入口：`quwoquan_ops/observability/`、`quwoquan_ops/environments/`

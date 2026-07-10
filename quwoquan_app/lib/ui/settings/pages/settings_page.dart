@@ -216,7 +216,7 @@ class SettingsPage extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
   ) async {
-    final choice = await showCupertinoDialog<_LogoutChoice>(
+    final choice = await showAppCupertinoDialog<_LogoutChoice>(
       context: context,
       builder: (ctx) => CupertinoAlertDialog(
         title: const Text(UITextConstants.logoutDialogTitle),

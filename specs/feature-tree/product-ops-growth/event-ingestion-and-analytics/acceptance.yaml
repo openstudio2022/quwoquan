@@ -19,10 +19,10 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_service/services/product-ops-service/cmd/api/main_test.go
+      - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
       - file: quwoquan_service/scripts/runtime/observability/test_es_cli.py
       recorded:
-      - file: quwoquan_service/services/product-ops-service/tests/local_contract/cmd/api/main__local_contract_test.go
+      - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
       - file: quwoquan_service/services/product-ops-service/tests/api_integration/visit_event_contract__api_integration_test.go
     status: implemented
     test_evidence:
@@ -50,7 +50,7 @@ sit_acceptance:
     - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/runtime/observability/test_es_cli.py'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

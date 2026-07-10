@@ -25,17 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 准备 personal_assistant/.env（CI 无 .gitignore 的 .env）
-        run: |
-          if [ -d quwoquan_app/personal_assistant ]; then
-            mkdir -p quwoquan_app/personal_assistant
-            if [ -f quwoquan_app/personal_assistant/.env.example ]; then
-              cp quwoquan_app/personal_assistant/.env.example quwoquan_app/personal_assistant/.env
-            else
-              : > quwoquan_app/personal_assistant/.env
-            fi
-          fi
-
       - name: 缓存 Flutter 依赖
         uses: actions/cache@v4
         with:

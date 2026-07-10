@@ -53,8 +53,7 @@ class _ContentSession {
 /// Unified content engagement tracker that handles all content types with
 /// differentiated depth calculation and referral source attribution.
 class ContentEngagementTracker {
-  ContentEngagementTracker({required BehaviorRepository repository})
-    : _repository = repository;
+  ContentEngagementTracker({required this._repository});
 
   final BehaviorRepository _repository;
   final Map<String, _ContentSession> _activeSessions = {};

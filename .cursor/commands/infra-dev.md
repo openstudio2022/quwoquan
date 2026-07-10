@@ -101,7 +101,7 @@ cd quwoquan_service && go test ./... -v -count=1
 cd quwoquan_app && dart analyze
 
 # 配置一致性
-diff <(yq '.redis' services/*/configs/default/config.yaml) <(cat contracts/metadata/_shared/redis_keyspace.yaml)
+diff <(yq '.redis' quwoquan_service/services/*/configs/default/config.yaml) <(cat quwoquan_service/contracts/metadata/_shared/redis_keyspace.yaml)
 
 # 全量门禁
 make gate

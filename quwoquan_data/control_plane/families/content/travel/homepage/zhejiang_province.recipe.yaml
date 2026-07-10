@@ -1,0 +1,71 @@
+# 浙江省级参数化主页批（Phase 6：省全量 ready 分层 + 市州/区县 fanout + 两段流水线）。
+# 三档运行（同一 recipe，--limit 运行时覆盖，不建第二套配方）：
+#   M1 校准档: qwq-data task run-recipe content/travel/homepage/zhejiang_province --limit 100 ...
+#   M2 放量档: qwq-data task run-recipe content/travel/homepage/zhejiang_province --limit 500 ...
+#   M3 全量档: qwq-data task run-recipe content/travel/homepage/zhejiang_province --limit 0 ...
+# 运行步骤与试点批一致（generate-only → decompose init/load/freeze → run-recipe --batch --plan）。
+# pending 扩源批独立：pending 项先走 `qwq-data vertical source-screen` 深核验转 ready，
+# 不与本 ready 批混跑（sourceReadiness: ready 硬过滤）。
+# 断点续跑：同 --batch 重跑即 resume（fanout_partition 幂等 + author resume 主循环）。
+# 失败归因：failure ledger（_shared/failure_ledger.jsonl）+ no-progress watchdog fail-fast。
+schemaVersion: quwoquan.task.recipe
+recipeId: content/travel/homepage/zhejiang_province
+title: 浙江旅行地点主页省级放量批（fanout by-partition）
+presetRef: content/travel/homepage/base
+batchAxes:
+  phase: e2e
+  contentType: homepage
+  supplyMode: site_primary
+# Phase 5 校准档：managed local 并发 4（M1 实测后按证据调整）。
+runtimeProfile: cursor_local_calibrated
+env:
+  QWQ_HOMEPAGE_ONLY_EXECUTION_BRANCH: feature/homepage-commercial-lane
+  QWQ_CONTENT_SUPPLY_EXECUTION_BRANCH: feature/homepage-commercial-lane
+task:
+  generate:
+    name: 浙江省主页省级放量批
+    title: 浙江省主页省级放量批
+    intentLabel: 浙江主页省级放量
+    # 省目录 discovery：walk 全部市州 YAML，区县分组即 fanout partition。
+    discovery: quwoquan_data/verticals/travel/coverage/中国/浙江省
+    region: 中国/浙江省
+    # M1 校准档缺省 100；M2/M3 用 --limit 500 / --limit 0 运行时覆盖。
+    limit: 100
+    reserveRatio: 0
+    entityHomepagesPerTarget: 1
+    entityArticlesPerTarget: 0
+    imageWorksPerTarget: 0
+    # ready 分层硬过滤：pending/no_primary_source 不进本批（扩源批独立）。
+    sourceReadiness: ready
+    mandatory: ""
+    allowQuotaShortfall: true
+contract:
+  requireActiveStatus: true
+  executionBranch: feature/homepage-commercial-lane
+  targetObjectCount: 100
+  # dedup 账本排除历史已成稿地点后 selected < limit 是诚实缺口而非失败。
+  allowSelectionShortfall: true
+execution:
+  mode: fanout_partition
+  strategy: by-partition
+  # Phase 5 校准并发：fanout 4 worker × managed 并发 4（cursor_local_calibrated）。
+  concurrency: 4
+  maxWorkers: 4
+  cycles: 6
+  runtime: local
+  model: composer
+  startupTimeoutSeconds: 240
+  # 两段流水线第一段：author cycle 前对已物化分区 8 并发预跑 download 段。
+  downloadPrefetchConcurrency: 8
+  # key 生命周期与 watchdog（Phase 5 内置能力）。
+  authRetryLimit: 12
+  authRetryDelaySeconds: 300
+  noProgressRoundLimit: 6
+readiness:
+  dailyTarget: 100
+  target: 100
+  # M2 准入门 ≥85% 首过率（非放弃口径）在 acceptance 层裁决；readiness 出证据。
+  minPassRate: 0.0
+  mode: trial
+  failOnNoGo: false
+  acceptEstimatedTokenLedger: true

@@ -1,32 +1,48 @@
-# Environment Test Layout Inventory
+# Environment Test Layout Contract
 
-## 目标
+环境不参与测试目录分层。测试对象按三层目录组织，环境只进入 runner 参数、`.qwq_output/env/<env>/runs/**` 报告和 recorded artifact。
 
-端侧测试入口统一放在 `quwoquan_app/test/` 下，新增测试按 `local_contract`、`api_integration`、`user_acceptance` 三层分层。`integration_test/` 不再作为测试分层概念保留。
+## App
 
-## 迁移结果
+```text
+quwoquan_app/test/
+  local_contract/{ui,cloud,core,app,quality}/
+  api_integration/{ui,cloud,observability,security,performance}/
+  user_acceptance/{journeys,pages,patrol,quality}/
+  support/
+```
 
-| 原路径 | 新路径 / 处理 | 状态 |
-|---|---|---|
-| `quwoquan_app/integration_test/assistant_alpha_beta_simulator_test.dart` | `quwoquan_app/test/gamma/assistant_alpha_beta_simulator_test.dart` | 已迁移 |
-| `quwoquan_app/integration_test/assistant_eval_scenario_fixtures.dart` | `quwoquan_app/test/common/assistant/assistant_eval_scenario_fixtures.dart` | 已迁移 |
-| `quwoquan_app/integration_test/assistant_skill_comparison_test.dart` | `quwoquan_app/test/gamma/assistant_skill_comparison_test.dart` | 已迁移 |
-| `quwoquan_app/integration_test/assistant_answer_protocol_leak_regression_test.dart` | `quwoquan_app/test/common/assistant/protocol/assistant_answer_protocol_leak_regression_test.dart` | 已迁移 |
-| `quwoquan_app/integration_test/assistant_skill_matrix_validation_test.dart` | `quwoquan_app/test/common/assistant/skills/assistant_skill_matrix_validation_test.dart` | 已迁移 |
-| `quwoquan_app/integration_test/pageflip_diagnostics_visual_test.dart` | `quwoquan_app/test/common/pageflip/pageflip_diagnostics_visual_test.dart` | 已迁移 |
-| `quwoquan_app/integration_test/patrol_test_main.dart` | `quwoquan_app/test/patrol/patrol_test_main.dart` | 已迁移 |
-| `quwoquan_app/integration_test/assistant_manual_replay_test.dart` | 由 `assistant_scenarios.json` 的 stock/weather/travel 场景承接 | 已删除 |
-| `quwoquan_app/integration_test/support/assistant_replay_baseline.dart` | 旧 replay baseline 私有支撑 | 已删除 |
-| `quwoquan_app/integration_test/assistant_native_weather_query_test.dart` | 由环境 smoke + contracts scenario 覆盖，不保留天气业务旧入口 | 已删除 |
+禁止出现 App 旧测试根：`ui`、`cloud`、`components`、`core`、`app`、`common`、`beta`、`gamma`、`patrol`、`smoke`。这些名称只能作为 canonical 根下的测试对象子目录存在。
 
-## 规则
+## Service
 
-- 新增端侧测试只能放在 `quwoquan_app/test/local_contract`、`test/api_integration` 或 `test/user_acceptance`。
-- 存量 `common`、`alpha`、`beta`、`gamma`、`patrol` 目录只作为迁移映射，不作为新增目录标准。
-- 是否跑设备/模拟器由 runner 的 `-d <device>` 参数和 `APP_RUNTIME_ENV` 决定，不通过目录名表达。
-- alpha/beta/gamma 的业务对象和断言数据必须来自 `contracts/metadata/**/test_fixtures`。
-- `quwoquan_app/pubspec.yaml` 不得挂载 contracts `test_fixtures` 为生产 assets。
-- `app-alpha` 可随包携带 seed manifest allowlist 中的精简 fixture；`app-beta/app-gamma` 只能通过 remote/gateway 读取云侧 seed 数据。
-- App 只构建 `alpha/beta/gamma/prod` 四类环境包；生产灰度不通过独立 App 包承载。
-- 人工 beta 数据必须来自 `app_beta_seed_manifest.json`，不得在启动脚本或数据库中临时造数。
-- 环境包、seed manifest 与 gateway smoke 使用统一命令面：`make build-app-env`、`make verify-app-seed-manifest`、`make test-local-contract`、`make test-api-integration`、`make test-user-acceptance`。
+```text
+quwoquan_service/services/<service>/tests/
+  local_contract/
+  api_integration/
+  support/
+```
+
+服务包内白盒 Go 测试必须使用 `__local_contract_test.go` 后缀。跨环境 smoke/gate/CI 归 `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/<service>/`。
+
+## Data
+
+```text
+quwoquan_data/tests/{local_contract,api_integration,user_acceptance,support}/
+```
+
+## Ops
+
+```text
+quwoquan_ops/tests/
+  local_contract/
+  acceptance/{api_integration,user_acceptance}/
+  support/
+```
+
+## Environment Runner
+
+- `ENV=beta|gamma|prod make test-api-integration`
+- `TARGET=local|gamma-local|prod-hosted make test-user-acceptance`
+- 运行报告只写 `.qwq_output/env/<env>/runs/**` 或 `.qwq_output/env/repo/runs/tests/**`
+- 测试 fixture 来自 `contracts/metadata/**/test_fixtures` 或 `test/support/**`，不通过环境目录复制。

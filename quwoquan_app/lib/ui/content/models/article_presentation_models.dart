@@ -719,7 +719,13 @@ enum ArticleCanvasVariant { editor, preview, detail, immersive, thumbnail }
 /// [book]：过往版本卡片式纸面，仅保留给缩略卡和兼容场景。
 /// [plainEdit]：编辑纸页（连续白纸页，仅保留页眉页脚，不显示卡片相框）。
 /// [readerSheet]：阅读纸页（真正沉浸效果由舞台层承担，单页本体不再自带相框）。
-enum ArticlePageShellVariant { book, plainEdit, readerSheet }
+/// [immersiveEdgeToEdge]：侵入式阅读纸页，纸张填满宿主内容区，正文只在纸张内部留白。
+enum ArticlePageShellVariant {
+  book,
+  plainEdit,
+  readerSheet,
+  immersiveEdgeToEdge,
+}
 
 @immutable
 class ArticlePaperSpec {
@@ -898,6 +904,35 @@ class ArticleCanvasMetrics {
     final effectiveMax = wrapImageMaxWidth < half ? half : wrapImageMaxWidth;
     return math.min(half, effectiveMax);
   }
+
+  @override
+  bool operator ==(Object other) {
+    return other is ArticleCanvasMetrics &&
+        other.aspectRatio == aspectRatio &&
+        other.outerPadding == outerPadding &&
+        other.contentPadding == contentPadding &&
+        other.headerReservedHeight == headerReservedHeight &&
+        other.footerReservedHeight == footerReservedHeight &&
+        other.wrapImageGap == wrapImageGap &&
+        other.wrapImageMaxWidth == wrapImageMaxWidth &&
+        other.fullWidthImageAspectRatio == fullWidthImageAspectRatio &&
+        other.journalImageAspectRatio == journalImageAspectRatio &&
+        other.inlineImageSpacing == inlineImageSpacing;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    aspectRatio,
+    outerPadding,
+    contentPadding,
+    headerReservedHeight,
+    footerReservedHeight,
+    wrapImageGap,
+    wrapImageMaxWidth,
+    fullWidthImageAspectRatio,
+    journalImageAspectRatio,
+    inlineImageSpacing,
+  );
 }
 
 /// 与 [ArticleCanvasMetrics.snapshot] 的环绕宽度算法一致（无 BuildContext 时的回退）。

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from _common.paths import batch_root
 from _common.io import read_json
+from _common.workflow_abandonment import ABANDON_SCOPE_ENTITY, abandoned_entity_ids
 from _common.image_asset_strategy import (
     image_count_is_hard_quota,
     image_strategy_requires_publishable_images,
@@ -89,6 +90,33 @@ def _download_allows_partial_content(task_id: str) -> bool:
     return bool(policy.get("allowPartialContent"))
 
 
+def active_download_lanes(task_id: str) -> set[str] | None:
+    """Return quota-enabled separated download lanes, or None for legacy/all-lane tasks."""
+    try:
+        from task import store
+
+        spec = store.load_spec(task_id)
+    except Exception:  # noqa: BLE001
+        return None
+    content = spec.get("content") if isinstance(spec.get("content"), dict) else {}
+    if str(content.get("modalityContract") or "") != "separated_research":
+        return None
+    quotas = content.get("quotas") if isinstance(content.get("quotas"), dict) else {}
+    lanes: set[str] = set()
+    if int(quotas.get("entityHomepagesPerTarget") or 0) > 0:
+        lanes.add("homepage")
+    if int(quotas.get("entityArticlesPerTarget") or 0) > 0 or int(quotas.get("routeArticles") or 0) > 0:
+        lanes.add("article")
+    if int(quotas.get("imageWorksPerTarget") or 0) > 0:
+        lanes.add("image")
+    return lanes or None
+
+
+def _text_lanes_required(task_id: str) -> bool:
+    lanes = active_download_lanes(task_id)
+    return lanes is None or bool(lanes & {"homepage", "article"})
+
+
 def _lane_plan_has_payload(download_dir: Path, lane: str) -> bool:
     path = download_dir / f"{lane}_source_plan.json"
     if not path.is_file():
@@ -144,13 +172,10 @@ def _abandoned_entities(task_id: str, batch_id: str) -> set[str]:
         state = read_json(state_path)
     except Exception:  # noqa: BLE001
         return set()
-    out: set[str] = set()
-    for item in state.get("abandonedObjects") or []:
-        if isinstance(item, dict):
-            entity = str(item.get("entityId") or "").strip()
-            if entity:
-                out.add(entity)
-    return out
+    return abandoned_entity_ids(
+        state.get("abandonedObjects") or [],
+        scope=ABANDON_SCOPE_ENTITY,
+    )
 
 
 def _entity_from_sources_dir(root: Path, sources_dir: Path) -> str:
@@ -201,7 +226,11 @@ def _homepage_base_ready(
     try:
         from build.homepage import homepage_base_draft_readiness
 
-        verdict = homepage_base_draft_readiness(meta, text, entity_name=entity)
+        # source_dir 即 source unit 目录：传 unit_dir 让 homepage_source_judge
+        # 消费已写回的 source.judge.json（灰区无 verdict 时 fail-closed）。
+        verdict = homepage_base_draft_readiness(
+            meta, text, entity_name=entity, unit_dir=source_dir
+        )
     except Exception:  # noqa: BLE001
         return False
     return bool(verdict.get("ready"))
@@ -215,6 +244,7 @@ def _stage_gate_report_issues(
     target_entities: set[str] | None = None,
     allow_partial_content: bool = False,
     requirements: dict[str, int] | None = None,
+    text_lanes_required: bool = True,
 ) -> list[str]:
     result_root = batch_root(task_id, batch_id) / "task_download" / "results"
     issues: list[str] = []
@@ -245,6 +275,12 @@ def _stage_gate_report_issues(
             if raw_issues:
                 for issue in raw_issues:
                     text = str(issue)
+                    if (
+                        step == "entity_source_bundle_gate"
+                        and not text_lanes_required
+                        and _entity_source_bundle_text_issue(text)
+                    ):
+                        continue
                     if _partial_content_soft_stage_issue(
                         step,
                         text,
@@ -306,6 +342,18 @@ def _partial_content_soft_stage_issue(
     return False
 
 
+def _entity_source_bundle_text_issue(issue: str) -> bool:
+    text = issue.lower()
+    markers = (
+        "retained source",
+        "retained sources",
+        "sourcesscreen: no retained source",
+        "sources directory missing",
+        "baseDraft-ready".lower(),
+    )
+    return any(marker in text for marker in markers)
+
+
 def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | None = None) -> list[str]:
     """Check download exit criteria.
 
@@ -314,6 +362,8 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
     issues: list[str] = []
     requirements = download_requirements(task_id)
     allow_partial_content = _download_allows_partial_content(task_id)
+    active_lanes = active_download_lanes(task_id)
+    text_lanes_required = _text_lanes_required(task_id)
     root, sources_dirs = _source_roots(task_id, batch_id)
     if not sources_dirs:
         if allow_partial_content:
@@ -397,9 +447,9 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
                         )
         rel_obj = sources_dir.relative_to(root).as_posix() if sources_dir.is_relative_to(root) else sources_dir.name
         rel = f"{rel_obj}/1.download/source_refs.json"
-        if not allow_partial_content and md_count < requirements["minSources"]:
+        if text_lanes_required and not allow_partial_content and md_count < requirements["minSources"]:
             issues.append(f"{rel}: only {md_count} sources (need >= {requirements['minSources']})")
-        if not allow_partial_content and retained_count < requirements["minSources"]:
+        if text_lanes_required and not allow_partial_content and retained_count < requirements["minSources"]:
             issues.append(
                 f"{rel}: only {retained_count} retained sources "
                 f"(need >= {requirements['minSources']}; Reject/manual probe sources do not count)"
@@ -407,27 +457,37 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
         if lane_contract:
             download_dir = sources_dir / "1.download"
             homepage_required = (
-                int(requirements.get("minHomepageSources") or 0) > 0
-                or _lane_plan_has_payload(download_dir, "homepage")
-                or lane_md_count["homepage"] > 0
+                (
+                    active_lanes is None
+                    and (
+                        int(requirements.get("minHomepageSources") or 0) > 0
+                        or _lane_plan_has_payload(download_dir, "homepage")
+                        or lane_md_count["homepage"] > 0
+                    )
+                )
+                or (active_lanes is not None and "homepage" in active_lanes)
             )
             if not allow_partial_content and homepage_required and lane_retained_count["homepage"] < 1:
                 issues.append(
                     f"{rel}: homepage retained sources={lane_retained_count['homepage']} need>=1 "
-                    "(homepage lane must yield a readable encyclopedia/wiki/official source unit)"
+                    "(homepage lane must yield a readable primary-authority encyclopedia source unit)"
                 )
             elif not allow_partial_content and homepage_required and homepage_base_ready_count < 1:
                 issues.append(
                     f"{rel}: homepage baseDraft-ready sources={homepage_base_ready_count} need>=1 "
-                    "(homepage lane must yield an encyclopedia/wiki/official source with >=4 usable facts)"
+                    "(homepage lane must yield a primary-authority encyclopedia source with >=4 usable facts)"
                 )
             min_article_sources = int(requirements.get("minArticleBaseSources") or requirements["minSources"])
             article_required = (
-                min_article_sources > 0
-                and (
-                    _lane_plan_has_payload(download_dir, "article")
-                    or lane_md_count["article"] > 0
+                (
+                    active_lanes is None
+                    and min_article_sources > 0
+                    and (
+                        _lane_plan_has_payload(download_dir, "article")
+                        or lane_md_count["article"] > 0
+                    )
                 )
+                or (active_lanes is not None and "article" in active_lanes and min_article_sources > 0)
             )
             if not allow_partial_content and article_required and lane_retained_count["article"] < min_article_sources:
                 issues.append(
@@ -449,6 +509,7 @@ def gate_download(task_id: str, batch_id: str, *, target_entities: set[str] | No
         target_entities=target_entities,
         allow_partial_content=allow_partial_content,
         requirements=requirements,
+        text_lanes_required=text_lanes_required,
     ):
         if str(issue) not in seen:
             issues.append(str(issue))

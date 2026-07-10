@@ -84,6 +84,9 @@ def _issues_from_summary(ref: str, summary: dict, allow_needs_review: bool) -> l
 
 
 def handle_media(args: argparse.Namespace) -> None:
+    if args.media_command == "sync":
+        _handle_media_sync(args)
+        return
     if args.media_command != "check-images":
         print(f"[media] ERROR: unknown subcommand {args.media_command}", file=sys.stderr)
         raise SystemExit(2)
@@ -111,6 +114,29 @@ def handle_media(args: argparse.Namespace) -> None:
     print(f"[media] image safety gate passed for {len(statuses)} ref(s).")
 
 
+def _handle_media_sync(args: argparse.Namespace) -> None:
+    """CAS 媒体库 → 环境媒体根增量同步（WP5 环境通路，sha256 校验）。"""
+    from pathlib import Path
+
+    from _common.io import write_json
+    from _common.media_library_sync import sync_media_library
+    from _common.paths import PUBLISH_ROOT
+
+    source = Path(args.source) if args.source else PUBLISH_ROOT / "media" / "library"
+    report = sync_media_library(source, Path(args.dest))
+    if args.report:
+        write_json(Path(args.report), report)
+    print(
+        f"[media] sync {source} -> {args.dest}: objects={report['objects']} "
+        f"copied={report['copied']} skipped={report['skipped']} "
+        f"repaired={report['repaired']} failed={report['failed']}"
+    )
+    for issue in report["issues"][:20]:
+        print(f"[media] FAIL {issue}", file=sys.stderr)
+    if report["failed"] or report["issues"]:
+        raise SystemExit(1)
+
+
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("media", help="Media asset safety / aesthetic checks")
     media_sub = p.add_subparsers(dest="media_command", required=True)
@@ -123,4 +149,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         action="store_true",
         help="Do not fail the gate on needs_review (faces/backend) images",
     )
+    p_sync = media_sub.add_parser("sync", help="CAS 媒体库增量同步到环境媒体根（sha256 校验）")
+    p_sync.add_argument("--dest", required=True, help="环境媒体根（如 .qwq_output/env/gamma/local/gamma-local/media 或 /srv/media）")
+    p_sync.add_argument("--source", help="CAS 库根（默认 publish/media/library）")
+    p_sync.add_argument("--report", help="同步报告 JSON 输出路径（可选）")
     p.set_defaults(handler=handle_media)

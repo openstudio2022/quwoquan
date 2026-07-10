@@ -18,10 +18,12 @@ retryable 反复重试耗尽 infra 预算后硬停。
 from __future__ import annotations
 
 import os
+import subprocess
 from pathlib import Path
 
 CURSOR_API_KEY_ENV = "CURSOR_API_KEY"
 CURSOR_API_KEY_FILE_ENV = "QWQ_CURSOR_API_KEY_FILE"
+CURSOR_CLOUD_API_ME_URL = "https://api.cursor.com/v1/me"
 
 # 明确的凭据失效信号。刻意避免裸 "auth" 子串，以免误判 bridge 的
 # "tool-callback-auth-token" argv 噪声（那是 retryable bridge 启动问题，不是凭据失效）。
@@ -106,3 +108,28 @@ def is_cursor_auth_error(
     if code_lower and any(code_lower == marker for marker in _AUTH_CODE_MARKERS):
         return True
     return any(marker in lowered for marker in _AUTH_MESSAGE_MARKERS)
+
+
+def probe_cursor_key_ready(*, timeout_seconds: float = 20.0) -> bool:
+    """探测当前单一真相源 key 是否已恢复可用（HTTP 200 on /v1/me）。
+
+    key 生命周期内置能力（替代家目录守护脚本）：403/limit 暂停后由调用方
+    轮询本函数；keyfile 被运营原子轮换出新 key 时立即返回 True，长跑进程
+    据此自动续跑。探测失败（网络/非 200）一律返回 False，由调用方退避。
+    """
+    key = resolve_cursor_api_key()
+    if not key:
+        return False
+    proc = subprocess.run(
+        [
+            "curl", "-sS", "-o", "/dev/null", "-w", "%{http_code}",
+            "--max-time", str(max(1, int(timeout_seconds))),
+            "-H", f"Authorization: Bearer {key}",
+            "-H", "Accept: application/json",
+            CURSOR_CLOUD_API_ME_URL,
+        ],
+        capture_output=True,
+        check=False,
+    )
+    code = (proc.stdout or b"").decode("utf-8", errors="replace").strip()
+    return proc.returncode == 0 and code == "200"

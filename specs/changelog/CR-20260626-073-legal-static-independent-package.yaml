@@ -30,18 +30,18 @@ entries:
         sections:
           - SIT1
     changed_code:
-      - path: agent_ops/deploy/lib/mock_public_plane.py
-      - path: agent_ops/deploy/lib/dev_up.py
-      - path: agent_ops/deploy/alpha/start_alpha_mock_stack.sh
-      - path: agent_ops/gate/verify_dev_up_cli_surface.py
+      - path: quwoquan_ops/cli/lib/mock_public_plane.py
+      - path: quwoquan_ops/cli/lib/dev_up.py
+      - path: quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh
+      - path: quwoquan_ops/gate/verify_dev_up_cli_surface.py
       - path: quwoquan_app/scripts/env/print_app_env_dart_defines.py
       - path: quwoquan_app/scripts/device/start_app_instance.sh
       - path: quwoquan_app/run.sh
       - path: quwoquan_app/android/app/build.gradle.kts
       - path: quwoquan_app/lib/ui/user/pages/legal_document_page.dart
       - path: quwoquan_app/lib/core/constants/ui_text_constants_values.dart
-      - path: agent_ops/tests/test_dev_up.py
-      - path: quwoquan_app/test/ui/user/legal_document_page_test.dart
+      - path: quwoquan_ops/tests/acceptance/user_acceptance/test_dev_up__user_acceptance_test.py
+      - path: quwoquan_app/test/local_contract/ui/user/legal_document_page__local_contract_test.dart
     impact:
       replan_required: false
       redesign_required: false
@@ -52,21 +52,21 @@ entries:
       rollout_impact: low
       breaking_contract: false
     verification:
-      - "通过：python3 -m unittest agent_ops.tests.test_dev_up"
-      - "通过：python3 agent_ops/gate/verify_dev_up_cli_surface.py"
+      - "通过：python3 -m unittest quwoquan_ops.tests.test_dev_up"
+      - "通过：python3 quwoquan_ops/gate/verify_dev_up_cli_surface.py"
       - "通过：cd quwoquan_app && flutter analyze lib/ui/user/pages/legal_document_page.dart test/ui/user/legal_document_page_test.dart"
       - "通过：cd quwoquan_app && flutter test test/ui/user/legal_document_page_test.dart"
-      - "通过：python3 agent_ops/deploy/stackctl.py package --env alpha --kind legal-static"
-      - "通过：python3 agent_ops/deploy/stackctl.py verify --env alpha --kind legal-static"
-      - "通过：python3 agent_ops/deploy/stackctl.py verify --env gamma --kind legal-static"
-      - "通过：QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP=skip QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip bash agent_ops/deploy/alpha/start_alpha_mock_stack.sh up，随后 curl https://localhost:17000/legal/user-agreement 返回 200 text/html 且正文包含“趣我圈用户协议”，未包含 mock 404 文案；验证后已执行 down"
-      - "已执行但存在既有阻断：bash agent_ops/scaffold/verify_acceptance_standard.sh 仍因 runtime-client-foundation/error-permission-display-semantics--permission-card-display-contract 缺 test_evidence 失败，与本 CR 无关"
+      - "通过：python3 quwoquan_ops/cli/stackctl.py package --env alpha --kind legal-static"
+      - "通过：python3 quwoquan_ops/cli/stackctl.py verify --env alpha --kind legal-static"
+      - "通过：python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind legal-static"
+      - "通过：QWQ_ALPHA_LOCAL_PUBLIC_HOST_SETUP=skip QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip bash quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh up，随后 curl https://localhost:17000/legal/user-agreement 返回 200 text/html 且正文包含“趣我圈用户协议”，未包含 mock 404 文案；验证后已执行 down"
+      - "已执行但存在既有阻断：bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh 仍因 runtime-client-foundation/error-permission-display-semantics--permission-card-display-contract 缺 test_evidence 失败，与本 CR 无关"
     notes:
       - App 不内置协议 HTML；legal-static 仍是唯一正文来源。
       - prod 法务主体/备案/联系方式占位未清理前，legal-static prod 包继续按预期 GATE_BLOCK。
   - timestamp: "2026-06-26T14:30:00+08:00"
     summary: |
-      新增 `deploy/legal` 法律协议源目录和 `legal-static` 独立静态资源发布单元，首版包含用户协议、隐私政策、权限说明、第三方 SDK 清单。
+      新增 `quwoquan_service/services/legal-static` 法律协议源目录和 `legal-static` 独立静态资源发布单元，首版包含用户协议、隐私政策、权限说明、第三方 SDK 清单。
       `stackctl package --env <env> --kind legal-static` 与 `stackctl verify --env <env> --kind legal-static` 独立于 App、service、内容页和数据工程包运行；发布包生成 manifest、checksums、release metadata 与 `current` 指针。
       App 增加 `APP_LEGAL_BASE_URL`，保留单文档 URL override；关于页新增用户协议/隐私政策入口；user-service 继续只保存 consent version，不承载正文。
     reason: |
@@ -79,10 +79,10 @@ entries:
       - local-contract
       - user-acceptance
     changed_documents:
-      - path: deploy/legal/manifest.yaml
+      - path: quwoquan_service/services/legal-static/source/manifest.yaml
         sections:
           - legal-static/v1 manifest
-      - path: deploy/legal/versions/2026-06
+      - path: quwoquan_service/services/legal-static/source/versions/2026-06
         sections:
           - user-agreement
           - privacy-policy
@@ -100,17 +100,17 @@ entries:
         sections:
           - R-LEGAL-001
     changed_code:
-      - path: agent_ops/deploy/legal_static.py
-      - path: agent_ops/deploy/stackctl.py
+      - path: quwoquan_ops/cli/legal_static.py
+      - path: quwoquan_ops/cli/stackctl.py
       - path: quwoquan_app/lib/core/auth/auth_legal_config.dart
       - path: quwoquan_app/lib/ui/settings/pages/settings_about_page.dart
       - path: quwoquan_app/scripts/env/print_app_env_dart_defines.py
       - path: quwoquan_app/scripts/env/build_app_env_package.sh
       - path: quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
       - path: quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
-      - path: quwoquan_service/docker-compose.gamma-local.yaml
-      - path: deploy/local-gamma/Caddyfile
-      - path: agent_ops/deploy/prod/render_prod_plane_stack.py
+      - path: quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml
+      - path: quwoquan_ops/environments/local-gamma/Caddyfile
+      - path: quwoquan_ops/cli/prod/render_prod_plane_stack.py
     impact:
       replan_required: false
       redesign_required: false
@@ -121,10 +121,10 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     verification:
-      - "通过：python3 agent_ops/deploy/legal_static.py validate --env alpha"
-      - "通过：python3 agent_ops/deploy/stackctl.py package --env alpha --kind legal-static"
-      - "通过：python3 agent_ops/deploy/stackctl.py verify --env alpha --kind legal-static"
-      - "通过：python3 agent_ops/deploy/stackctl.py verify --env gamma --kind legal-static"
+      - "通过：python3 quwoquan_ops/cli/legal_static.py validate --env alpha"
+      - "通过：python3 quwoquan_ops/cli/stackctl.py package --env alpha --kind legal-static"
+      - "通过：python3 quwoquan_ops/cli/stackctl.py verify --env alpha --kind legal-static"
+      - "通过：python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind legal-static"
       - "通过：cd quwoquan_app && flutter test test/ui/settings/pages/settings_page_appearance_test.dart"
       - "通过：python3 quwoquan_app/scripts/settings/verify_settings_canonical.py"
       - "通过：python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py"

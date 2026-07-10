@@ -7,7 +7,7 @@ extension CreateEditorNotifierArticleHelpers on CreateEditorNotifier {
     if (id.isEmpty) {
       return;
     }
-    final document = state.articleDocument;
+    final document = _currentState.articleDocument;
     final sorted = _documentSortedImageAssets(document);
     final index = sorted.indexWhere((a) => a.id == id);
     if (index < 0 || index + 1 >= sorted.length) {
@@ -53,7 +53,7 @@ extension CreateEditorNotifierArticleHelpers on CreateEditorNotifier {
     if (id.isEmpty) {
       return kArticleEditorStartAnchorId;
     }
-    final doc = state.articleDocument;
+    final doc = _currentState.articleDocument;
     final index = doc.nodes.indexWhere((node) => node.id == id);
     if (index < 0) {
       return kArticleEditorStartAnchorId;

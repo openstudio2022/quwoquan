@@ -35,11 +35,13 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
       mode,
       remote: () => RemoteRealtimeConnectionDelegate(
         read: ref.read,
+        invalidate: ref.invalidate,
         currentUserIdResolver: () => _currentUserIdResolver(ref),
         onStateChanged: _syncDelegateState,
       ),
       mock: () => MockRealtimeConnectionDelegate(
         read: ref.read,
+        invalidate: ref.invalidate,
         onStateChanged: _syncDelegateState,
       ),
     );

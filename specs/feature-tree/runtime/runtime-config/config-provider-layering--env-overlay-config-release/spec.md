@@ -6,7 +6,7 @@
 - 配置目录统一：default/alpha/beta/gamma/prod
 - 覆盖规则统一：default -> APP_ENV -> env var
 - 生产挂载统一：`CONFIG_ROOT=/etc/qwq-config`
-- 版本快照路径：`${CONFIG_ROOT}/releases/config/<service>/<config_version>.yaml`
+- 版本快照路径：`${CONFIG_ROOT}/quwoquan_service/services/<service>/<config_version>.yaml`
 - 版本约束：CONFIG_VERSION 与 IMAGE_VERSION 兼容校验
 - 运行校验：关键配置合法性与依赖连通性检查
 

@@ -1,0 +1,530 @@
+# 全国地点主清单 · 浙江省湖州市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 湖州市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 南浔区
+  leaves:
+  - name: 南浔古镇
+    canonicalName: 南浔古镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    aliases:
+    - 南浔
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 小莲庄
+    canonicalName: 南浔小莲庄
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 嘉业堂藏书楼
+    canonicalName: 嘉业堂藏书楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    aliases:
+    - 嘉业藏书楼
+    selectionPriority: 3
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:19:18Z'
+    sourceScreenEvidence: zh.wikipedia.org:嘉业堂藏书楼 extract=524ch
+  - name: 百间楼
+    canonicalName: 南浔百间楼
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 荻港古村
+    canonicalName: 湖州荻港古村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    aliases:
+    - 荻港村
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 东马干遗址
+    canonicalName: 东马干遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 南浔镇
+    canonicalName: 南浔镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 博成桥
+    canonicalName: 博成桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 安澜桥 (南浔)
+    canonicalName: 安澜桥 (南浔)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 苏鲁桥
+    canonicalName: 苏鲁桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 通津桥 (湖州市)
+    canonicalName: 通津桥 (湖州市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 长发桥
+    canonicalName: 长发桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    sourceReadiness: pending
+    selectionPriority: 12
+- district: 吴兴区
+  leaves:
+  - name: 飞英塔
+    canonicalName: 飞英塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 铁佛寺
+    canonicalName: 湖州铁佛寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 莲花庄公园
+    canonicalName: 湖州莲花庄公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    aliases:
+    - 莲花庄
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 湖州博物馆
+    canonicalName: 湖州博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 仁皇山
+    canonicalName: 湖州仁皇山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    aliases:
+    - 仁皇山景区
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 南太湖旅游度假区
+    canonicalName: 湖州南太湖旅游度假区
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    aliases:
+    - 湖州太湖旅游度假区
+    - 南太湖
+    selectionPriority: 6
+    sourceReadiness: ready
+  - name: 西塞山
+    canonicalName: 湖州西塞山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    selectionPriority: 7
+    sourceReadiness: ready
+  - name: 原乡小镇
+    canonicalName: 原乡小镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 太湖溇港
+    canonicalName: 太湖溇港
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 妙济桥
+    canonicalName: 妙济桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 本仁堂
+    canonicalName: 本仁堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 永安桥 (吴兴)
+    canonicalName: 永安桥 (吴兴)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 邱城遗址
+    canonicalName: 邱城遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 锦峰塔
+    canonicalName: 锦峰塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    sourceReadiness: pending
+    selectionPriority: 14
+- district: 安吉县
+  leaves:
+  - name: 中南百草原
+    canonicalName: 中南百草原
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/主题乐园/综合主题乐园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 安吉竹博园
+    canonicalName: 安吉竹博园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    aliases:
+    - 中国竹子博览园
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 安吉Hello Kitty乐园
+    canonicalName: 安吉Hello Kitty乐园
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/儿童乐园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    aliases:
+    - 凯蒂猫家园
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 中国大竹海
+    canonicalName: 中国大竹海
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    aliases:
+    - 安吉大竹海
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 藏龙百瀑
+    canonicalName: 藏龙百瀑
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 江南天池
+    canonicalName: 安吉江南天池
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    aliases:
+    - 天荒坪江南天池
+    selectionPriority: 6
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:21:23Z'
+    sourceScreenEvidence: zh.wikipedia.org:江南天池 extract=299ch
+  - name: 余村
+    canonicalName: 安吉余村
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    selectionPriority: 7
+    sourceReadiness: pending
+  - name: 云上草原
+    canonicalName: 安吉云上草原
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/森林草原
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    selectionPriority: 8
+    sourceReadiness: pending
+  - name: 灵峰寺
+    canonicalName: 安吉灵峰寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    selectionPriority: 9
+    sourceReadiness: pending
+  - name: 万埭桥
+    canonicalName: 万埭桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 余村“两山”会址
+    canonicalName: 余村“两山”会址
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 吴昌硕故居 (安吉县)
+    canonicalName: 吴昌硕故居 (安吉县)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 窑山遗址
+    canonicalName: 窑山遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    sourceReadiness: pending
+    selectionPriority: 13
+- district: 德清县
+  leaves:
+  - name: 莫干山
+    canonicalName: 莫干山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    aliases:
+    - 莫干山风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:21:24Z'
+    sourceScreenEvidence: zh.wikipedia.org:莫干山 extract=229ch
+  - name: 下渚湖国家湿地公园
+    canonicalName: 下渚湖国家湿地公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/湿地公园
+    - Entity/地点/自然景观/湿地荒漠
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    aliases:
+    - 下渚湖
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 新市古镇
+    canonicalName: 德清新市古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 云岫寺
+    canonicalName: 德清云岫寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    selectionPriority: 4
+    sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:21:33Z'
+    sourceScreenEvidence: zh.wikipedia.org:云岫寺 extract=220ch
+  - name: 僧家桥
+    canonicalName: 僧家桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 刘王庙
+    canonicalName: 刘王庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 德清古桥群
+    canonicalName: 德清古桥群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 新市河埠群
+    canonicalName: 新市河埠群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 清河桥
+    canonicalName: 清河桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    sourceReadiness: pending
+    selectionPriority: 9
+- district: 长兴县
+  leaves:
+  - name: 大唐贡茶院
+    canonicalName: 大唐贡茶院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/长兴县
+    aliases:
+    - 顾渚山大唐贡茶院
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 太湖龙之梦乐园
+    canonicalName: 太湖龙之梦乐园
+    entityType: 地点/主题乐园
+    typeTagRefs:
+    - Entity/地点/主题乐园/综合主题乐园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/长兴县
+    aliases:
+    - 龙之梦
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 金钉子远古世界
+    canonicalName: 长兴金钉子远古世界
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/长兴县
+    aliases:
+    - 长兴金钉子地质遗迹保护区
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 仙山湖
+    canonicalName: 长兴仙山湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    - Entity/地点/自然景观/湿地荒漠
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/长兴县
+    aliases:
+    - 仙山湖风景区
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 图影湿地文化园
+    canonicalName: 长兴图影湿地文化园
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/湿地荒漠
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/长兴县
+    selectionPriority: 5
+    sourceReadiness: pending
+  - name: 新四军苏浙军区纪念馆
+    canonicalName: 新四军苏浙军区纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/长兴县
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 天居寺
+    canonicalName: 天居寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/长兴县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 白溪朱氏宗祠
+    canonicalName: 白溪朱氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/长兴县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 长兴孔庙
+    canonicalName: 长兴孔庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/长兴县
+    sourceReadiness: pending
+    selectionPriority: 9

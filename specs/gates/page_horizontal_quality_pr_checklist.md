@@ -9,8 +9,8 @@
 |------|------|
 | **规则** | 仓库 [.cursor/rules/09-page-horizontal-quality.mdc](../../.cursor/rules/09-page-horizontal-quality.mdc)（`alwaysApply`）：改页面路径即须矩阵 + 清单。 |
 | **架构约束** | [.cursor/rules/01-arch-constraints.mdc](../../.cursor/rules/01-arch-constraints.mdc) §2.4 表内「横向质量矩阵」行。 |
-| **命令** | `make verify-app-page-horizontal-quality`（矩阵 + 漏页/清单）；全量 `bash agent_ops/gate/gate_repo.sh --scope app` 或根目录 `make gate`。 |
-| **门禁** | `agent_ops/gate/gate_repo.sh` → `verify_page_horizontal_quality_matrix.py`、`verify_page_matrix_scan_complete.py`、`verify_metadata_driven_ui_gate.py` 等与 P2 同向脚本。 |
+| **命令** | `make verify-app-page-horizontal-quality`（矩阵 + 漏页/清单）；全量 `bash quwoquan_ops/gate/gate_repo.sh --scope app` 或根目录 `make gate`。 |
+| **门禁** | `quwoquan_ops/gate/gate_repo.sh` → `verify_page_horizontal_quality_matrix.py`、`verify_page_matrix_scan_complete.py`、`verify_metadata_driven_ui_gate.py` 等与 P2 同向脚本。 |
 | **流程** | 九会话规划见 `specs/.../page-horizontal-quality/nine-session-rollout-plan.md`；**新增页**不等待 S1–S8 重跑，但须 **当 PR 满足 P1–P8 当前列** 或标 `○` 并备注债/Story。 |
 
 ## 矩阵更新

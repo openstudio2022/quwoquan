@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:quwoquan_app/cloud/media/cdn_image_url_builder.dart';
 import 'package:quwoquan_app/components/media/image/book/image_book_page_surface.dart';
+import 'package:quwoquan_app/components/media/shared/gesture/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
 import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
@@ -21,15 +22,19 @@ class ImageBookCanvas extends StatefulWidget {
     required this.imageUrls,
     required this.onImageChanged,
     this.initialIndex = 0,
+    this.onPageflipMotion,
     this.onOverflowPrevious,
     this.onOverflowNext,
+    this.gestureIntentController,
   });
 
   final List<String> imageUrls;
   final int initialIndex;
   final ValueChanged<int> onImageChanged;
+  final ValueChanged<MediaPageFlipMotionEvent>? onPageflipMotion;
   final VoidCallback? onOverflowPrevious;
   final VoidCallback? onOverflowNext;
+  final ImmersiveGestureIntentController? gestureIntentController;
 
   @override
   State<ImageBookCanvas> createState() => _ImageBookCanvasState();
@@ -141,8 +146,10 @@ class _ImageBookCanvasState extends State<ImageBookCanvas> {
         _precacheNeighborImages(index);
         widget.onImageChanged(index);
       },
+      onMotionEvent: widget.onPageflipMotion,
       onOverflowPrevious: widget.onOverflowPrevious,
       onOverflowNext: widget.onOverflowNext,
+      gestureIntentController: widget.gestureIntentController,
       pageBuilder: (context, index) {
         return _ImageBookPage(
           imageUrl: images[index],
@@ -433,7 +440,9 @@ class _ImageBookPlaceholderSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: isFailure ? const Color(0xFF18202C) : const Color(0xFF141B25),
+        color: isFailure
+            ? AppColors.imageBookFailurePlaceholderBackdrop
+            : AppColors.imageBookPlaceholderBackdrop,
       ),
       child: const SizedBox.expand(),
     );

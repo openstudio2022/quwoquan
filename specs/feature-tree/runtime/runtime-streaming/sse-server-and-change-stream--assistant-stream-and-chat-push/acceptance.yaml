@@ -26,12 +26,12 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
       recorded:
       - file: quwoquan_service/services/chat-service/tests/api_integration/event_publish_contract__api_integration_test.go
       - file: quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/chat_mention_service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/chat_mention_service__local_contract_test.go
       - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
     status: partial
     test_evidence:
@@ -51,7 +51,7 @@ gwt_acceptance:
     notes: []
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

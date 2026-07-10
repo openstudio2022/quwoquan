@@ -21,13 +21,14 @@ from typing import Any, Mapping
 
 from _common.article_package import (
     MARKDOWN_VERSION,
+    build_markdown_frontmatter,
     compute_asset_manifest_sha256,
     compute_document_sha256,
     copy_asset_files,
 )
 from _common.batch_asset_registry import allocate_post_asset_id, load_batch_asset_registry
 from _common.batch_manifest import load_batch_manifest
-from _common.paths import DATA_ROOT, RUNTIME_ROOT, batch_root, relative_batch_ref
+from _common.paths import RUNTIME_ROOT, batch_root, relative_batch_ref
 from _common.io import read_json, write_json
 from _common.review_ledger import entities_path
 from _common.draft_io import is_placeholder, read_draft_article, read_draft_meta, read_writing_pack
@@ -199,8 +200,6 @@ def _relativize_ref(value: str, task_id: str, batch_id: str) -> str:
     if not p.is_absolute():
         runtime_candidates = []
         normalized = s.lstrip("./")
-        if normalized.startswith("quwoquan_data/runtime/"):
-            runtime_candidates.append(DATA_ROOT.parent / normalized)
         runtime_candidates.append(RUNTIME_ROOT / normalized)
         for candidate in runtime_candidates:
             try:
@@ -354,7 +353,7 @@ def _materialized_manifest_times(
 
 _IMAGE_SOURCE_ALIASES = {
     "sourceCollectionId": ("sourceCollectionId", "collectionId", "sourceId"),
-    "creator": ("creator", "credit"),
+    "creator": ("creator", "credit", "sourceAuthor"),
     "collectionPageUrl": (
         "collectionPageUrl",
         "page",
@@ -677,7 +676,11 @@ def materialize_posts(
         template = compose_payload.get("template") or "journal"
         # 对象坐标（angle/title/seq）= 路由真相，与 promote/publish 发布面同名。
         angle = str(coords.get("angle") or "")
-        publish_title = str(coords.get("title") or compose_payload.get("publishTitle") or title)
+        publish_title = (
+            str(compose_payload.get("publishTitle") or title or "")
+            if is_image
+            else str(coords.get("title") or compose_payload.get("publishTitle") or title)
+        )
         seq = int(coords.get("seq") or 1)
         post_dir = content_object.content_object_dir(task_id, batch_id, ref)
         from _common.paths import STAGE_REVIEW, ensure_object_stages
@@ -729,6 +732,9 @@ def materialize_posts(
                 ref=ref,
                 global_batch_seq=global_batch_seq,
                 registry=asset_registry,
+                # 冷启动封面图注：文章标题优先（与下方 raw_assets caption 同源语义）。
+                caption=str(title or ""),
+                ordinal=1,
             )
             raw_assets = [
                 {
@@ -764,16 +770,14 @@ def materialize_posts(
             had_frontmatter = article_md.lstrip().startswith("---")
             if article_md and "articleMarkdownVersion" not in article_md[:200]:
                 if not article_md.lstrip().startswith("---"):
-                    front = (
-                        f"---\n"
-                        f"title: {title}\n"
-                        f"template: {template}\n"
-                        f"articleMarkdownVersion: {MARKDOWN_VERSION}\n"
-                    )
+                    frontmatter = {
+                        "title": title,
+                        "template": template,
+                        "articleMarkdownVersion": MARKDOWN_VERSION,
+                    }
                     if assets:
-                        front += f"coverImage: asset://{assets[0]['assetId']}\n"
-                    front += "---\n\n"
-                    article_md = front + article_md
+                        frontmatter["coverImage"] = f"asset://{assets[0]['assetId']}"
+                    article_md = build_markdown_frontmatter(frontmatter) + article_md
             if not had_frontmatter and article_md.lstrip().startswith("---"):
                 normalization_actions.append("frontmatter_injected")
             article_path.write_text(article_md, encoding="utf-8")
@@ -821,12 +825,21 @@ def materialize_posts(
                     "alignmentEvidence": _materialized_alignment_evidence(a),
                     "sourceCollectionId": a.get("sourceCollectionId", ""),
                     "creator": a.get("creator", ""),
+        "sourceAuthor": a.get("sourceAuthor", ""),
                     "collectionPageUrl": a.get("collectionPageUrl", ""),
                     "license": a.get("license", ""),
                     "termsUrl": a.get("termsUrl", ""),
                     "licenseSnapshot": a.get("licenseSnapshot", ""),
                     "authorizationProof": a.get("authorizationProof", ""),
+        "authorizationBasis": a.get("authorizationBasis", ""),
                     "usageScope": a.get("usageScope", ""),
+        "pinUrl": a.get("pinUrl", ""),
+        "discoveryUrl": a.get("discoveryUrl", ""),
+        "originalAssetUrl": a.get("originalAssetUrl", ""),
+        "repostAttribution": a.get("repostAttribution", ""),
+        "watermarkScan": a.get("watermarkScan", ""),
+        "ocrScan": a.get("ocrScan", ""),
+        "collectedAt": a.get("collectedAt", ""),
                 }
                 for a in assets
             ],

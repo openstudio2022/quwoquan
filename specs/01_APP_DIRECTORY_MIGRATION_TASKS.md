@@ -32,7 +32,7 @@
 | M1.6 | `create-entry-location-visibility-circle/acceptance.yaml` | `lib/features/create/` → `lib/ui/content/entry/` |
 | M1.7 | `error-permission-display-semantics/acceptance.yaml` | `local_gate` 中 `lib/features/create/` → `lib/ui/content/entry/` |
 | M1.7 | `page-layout-semantics/acceptance.yaml` | `local_gate` 中 `lib/features/create/` → `lib/ui/content/entry/` |
-| M1.8 | `quwoquan_app/.cursor/rules/06-semantic-consistency-audit.mdc` | 审计路径 `lib/features/` → `lib/ui/` |
+| M1.8 | `.cursor/rules/06-semantic-consistency-audit.mdc` | 审计路径 `lib/features/` → `lib/ui/` |
 
 ### 收尾
 

@@ -3,7 +3,7 @@ aggregate: Circle
 layer: app_side
 
 description: |
-  端侧独立测试场景。执行：flutter test test/cloud/social/
+  端侧独立测试场景。执行：flutter test test/local_contract/cloud/social/
 
 scenarios:
   - name: circle_feed_dto_parse

@@ -23,6 +23,12 @@ class AppRoutePaths {
   static const String legalPrivacyPolicy = '/legal/privacy-policy';
   static const String legalPrivacyPolicySegment = 'privacy-policy';
 
+  static const String legalPermissions = '/legal/permissions';
+  static const String legalPermissionsSegment = 'permissions';
+
+  static const String legalThirdPartySdkList = '/legal/third-party-sdk-list';
+  static const String legalThirdPartySdkListSegment = 'third-party-sdk-list';
+
   static const String home = '/';
 
   static const String circles = '/circles';

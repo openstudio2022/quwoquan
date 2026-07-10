@@ -657,6 +657,7 @@ def _classify_fetch_packet(packet: Mapping[str, Any]) -> tuple[int, int, int, in
 
 def _rollup_observed_counts(root: Path) -> dict[str, int | float]:
     fetch_paths = sorted((root / "fetches").glob("*/site_fetch_packet.json"))
+    candidate_paths = sorted((root / "candidates").glob("*/site_candidate_packet.json"))
     map_paths = sorted((root / "map").glob("*/site_map_packet.json"))
     http_429 = http_403 = probe_pages = empty_extract = dead_letters = 0
     for path in fetch_paths:
@@ -674,6 +675,7 @@ def _rollup_observed_counts(root: Path) -> dict[str, int | float]:
         packet = read_json(path)
         if ((packet.get("contentPlanHandoff") or {}).get("eligible")):
             handoff_count += 1
+    first_pass_denominator = len(fetch_paths) or len(candidate_paths)
     return {
         "http429Count": http_429,
         "http403Count": http_403,
@@ -682,7 +684,7 @@ def _rollup_observed_counts(root: Path) -> dict[str, int | float]:
         "deadLetterCount": dead_letters,
         "handoffCount": handoff_count,
         "fetchCount": len(fetch_paths),
-        "firstPassRate": (handoff_count / len(fetch_paths)) if fetch_paths else 0.0,
+        "firstPassRate": (handoff_count / first_pass_denominator) if first_pass_denominator else 0.0,
     }
 
 def _observed_objects_per_hour_from_stage_results(root: Path) -> float:

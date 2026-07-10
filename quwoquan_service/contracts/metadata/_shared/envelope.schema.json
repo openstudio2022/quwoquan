@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://quwoquan/contracts/messages/envelope.schema.json",
+  "$id": "https://quwoquan/contracts/metadata/_shared/envelope.schema.json",
   "title": "MessageEnvelope",
   "type": "object",
   "additionalProperties": false,

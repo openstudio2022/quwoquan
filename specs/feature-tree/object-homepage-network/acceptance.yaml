@@ -29,18 +29,18 @@ domain_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_section__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_page_shell__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_section__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_page_shell__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/author_impact_card__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
       - file: quwoquan_data/tests/local_contract/produce/test_homepage_introduction_seed__local_contract_test.py
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/pages/user/userProfile/userProfile_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/user/user_profile/user_profile_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/circle/circle_detail/circle_detail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -75,7 +75,7 @@ domain_acceptance:
     - '[migrated_from_planned] quwoquan_app/test/ui/user/profile_object_homepage_widget_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/ui/circle/circle_object_homepage_widget_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/ui/entity/entity_object_homepage_widget_test.dart'
-    - '[migrated_from_planned] quwoquan_app/test/patrol/object_homepage_network_journey_test.dart'
+    - '[migrated_from_planned] quwoquan_app/test/user_acceptance/patrol/object_homepage_network_journey_test.dart'
   DA2:
     title: 对象关系契约与硬债验收
     done_when:
@@ -90,8 +90,8 @@ domain_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/cloud/services/content/intersection_object_evidence__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/services/content/intersection_inbox_synthesis__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
       - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: implemented
@@ -235,8 +235,8 @@ domain_acceptance:
     - '[migrated_from_planned] quwoquan_service/tests/assistant/object_page_assistant_context_contract_test.go'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   - make verify-app-page-horizontal-quality
   full_gate:
   - make gate-full

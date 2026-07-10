@@ -1,0 +1,320 @@
+# 存量 H100 实体标签回填映射（WP3-5 一次性治理输入，受版本控制）。
+# 消费方：qwq-data quality backfill-entity-tags --map <本文件>
+# 契约：geoTagRef 必须命中 publish/tags/Topic/地理/行政区/** 真实树节点（区县级优先，
+# 港澳台行政区树暂无区县叶子时落省级节点）；typeTagRefs 必须命中 Entity/地点/** 树节点。
+# 不新增第二真相源：本文件只补存量债务，新增实体的标签一律走主清单 → coverageTargets 通路。
+schemaVersion: quwoquan_data.entity_tag_backfill/1
+entities:
+  - entityRef: 地点/景区/中央大街
+    geoTagRef: Topic/地理/行政区/中国/黑龙江省/哈尔滨市/道里区
+    typeTagRefs:
+      - Entity/地点/景区/4A景区
+      - Entity/地点/打卡地
+  - entityRef: 地点/景区/丹霞山
+    geoTagRef: Topic/地理/行政区/中国/广东省/韶关市/仁化县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/乐山大佛
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+  - entityRef: 地点/景区/九寨沟
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/自然景观/水体
+  - entityRef: 地点/景区/五大连池
+    geoTagRef: Topic/地理/行政区/中国/黑龙江省/黑河市/五大连池市
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/地质公园
+  - entityRef: 地点/景区/八达岭长城
+    geoTagRef: Topic/地理/行政区/中国/北京市/延庆区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/遗址/文化遗产
+  - entityRef: 地点/景区/净月潭
+    geoTagRef: Topic/地理/行政区/中国/吉林省/长春市/南关区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/自然景观/森林草原
+  - entityRef: 地点/景区/凤凰古城
+    geoTagRef: Topic/地理/行政区/中国/湖南省/湘西土家族苗族自治州/凤凰县
+    typeTagRefs:
+      - Entity/地点/景区/4A景区
+      - Entity/地点/古镇/历史古镇
+  - entityRef: 地点/景区/千岛湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/淳安县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/自然景观/水体
+  - entityRef: 地点/景区/华山
+    geoTagRef: Topic/地理/行政区/中国/陕西省/渭南市/华阴市
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/台北101
+    geoTagRef: Topic/地理/行政区/中国/台湾省
+    typeTagRefs:
+      - Entity/地点/景区
+      - Entity/地点/打卡地
+  - entityRef: 地点/景区/四姑娘山
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/小金县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/圆明园
+    geoTagRef: Topic/地理/行政区/中国/北京市/海淀区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/遗址/考古遗址
+      - Entity/地点/公园
+  - entityRef: 地点/景区/大雁塔
+    geoTagRef: Topic/地理/行政区/中国/陕西省/西安市/雁塔区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/宗教场所
+      - Entity/地点/遗址/历史建筑
+  - entityRef: 地点/景区/天坛
+    geoTagRef: Topic/地理/行政区/中国/北京市/东城区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/公园
+      - Entity/地点/遗址/历史建筑
+  - entityRef: 地点/景区/天门山
+    geoTagRef: Topic/地理/行政区/中国/湖南省/张家界市/永定区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/太白山
+    geoTagRef: Topic/地理/行政区/中国/陕西省/宝鸡市/眉县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/山海关
+    geoTagRef: Topic/地理/行政区/中国/河北省/秦皇岛市/山海关区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/遗址/历史建筑
+  - entityRef: 地点/景区/岳阳楼
+    geoTagRef: Topic/地理/行政区/中国/湖南省/岳阳市/岳阳楼区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/遗址/历史建筑
+  - entityRef: 地点/景区/岳麓山
+    geoTagRef: Topic/地理/行政区/中国/湖南省/长沙市/岳麓区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/峨眉山
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/宗教场所
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/崆峒山
+    geoTagRef: Topic/地理/行政区/中国/甘肃省/平凉市/崆峒区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/宗教场所
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/广州塔
+    geoTagRef: Topic/地理/行政区/中国/广东省/广州市/海珠区
+    typeTagRefs:
+      - Entity/地点/景区/4A景区
+      - Entity/地点/打卡地
+  - entityRef: 地点/景区/恭王府
+    geoTagRef: Topic/地理/行政区/中国/北京市/西城区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/博物馆
+      - Entity/地点/遗址/历史建筑
+  - entityRef: 地点/景区/故宫
+    geoTagRef: Topic/地理/行政区/中国/北京市/东城区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/博物馆
+      - Entity/地点/遗址/历史建筑
+  - entityRef: 地点/景区/普陀山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/宗教场所
+      - Entity/地点/自然景观/海岸海岛
+  - entityRef: 地点/景区/景山公园
+    geoTagRef: Topic/地理/行政区/中国/北京市/西城区
+    typeTagRefs:
+      - Entity/地点/景区/4A景区
+      - Entity/地点/公园
+  - entityRef: 地点/景区/本溪水洞
+    geoTagRef: Topic/地理/行政区/中国/辽宁省/本溪市/本溪满族自治县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/自然景观/水体
+  - entityRef: 地点/景区/松花湖
+    geoTagRef: Topic/地理/行政区/中国/吉林省/吉林市/丰满区
+    typeTagRefs:
+      - Entity/地点/景区/4A景区
+      - Entity/地点/自然景观/水体
+  - entityRef: 地点/景区/查干湖
+    geoTagRef: Topic/地理/行政区/中国/吉林省/松原市/前郭尔罗斯蒙古族自治县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/自然景观/水体
+  - entityRef: 地点/景区/横店影视城
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/东阳市
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/主题乐园/影视主题乐园
+  - entityRef: 地点/景区/武侯祠
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/武侯区
+    typeTagRefs:
+      - Entity/地点/景区/4A景区
+      - Entity/地点/博物馆
+      - Entity/地点/遗址/文化遗产
+  - entityRef: 地点/景区/武夷山
+    geoTagRef: Topic/地理/行政区/中国/福建省/南平市/武夷山市
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/武当山
+    geoTagRef: Topic/地理/行政区/中国/湖北省/十堰市/丹江口市
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/宗教场所
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/海螺沟
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/泸定县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/地质公园
+      - Entity/地点/自然景观/冰雪带
+  - entityRef: 地点/景区/涠洲岛
+    geoTagRef: Topic/地理/行政区/中国/广西壮族自治区/北海市/海城区
+    typeTagRefs:
+      - Entity/地点/景区/4A景区
+      - Entity/地点/景区/地质公园
+      - Entity/地点/自然景观/海岸海岛
+  - entityRef: 地点/景区/澳门威尼斯人
+    geoTagRef: Topic/地理/行政区/中国/澳门特别行政区
+    typeTagRefs:
+      - Entity/地点/景区
+      - Entity/地点/打卡地
+      - Entity/地点/购物中心
+  - entityRef: 地点/景区/秦始皇兵马俑
+    geoTagRef: Topic/地理/行政区/中国/陕西省/西安市/临潼区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/博物馆
+      - Entity/地点/遗址/考古遗址
+  - entityRef: 地点/景区/稻城亚丁
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/稻城县
+    typeTagRefs:
+      - Entity/地点/景区/4A景区
+      - Entity/地点/景区/自然保护区
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/衡山
+    geoTagRef: Topic/地理/行政区/中国/湖南省/衡阳市/南岳区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/宗教场所
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/西湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/自然景观/水体
+  - entityRef: 地点/景区/镜泊湖
+    geoTagRef: Topic/地理/行政区/中国/黑龙江省/牡丹江市/宁安市
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/地质公园
+      - Entity/地点/自然景观/水体
+  - entityRef: 地点/景区/长白山
+    geoTagRef: Topic/地理/行政区/中国/吉林省/延边朝鲜族自治州/安图县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/自然保护区
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/阳朔西街
+    geoTagRef: Topic/地理/行政区/中国/广西壮族自治区/桂林市/阳朔县
+    typeTagRefs:
+      - Entity/地点/景区
+      - Entity/地点/打卡地
+      - Entity/地点/美食街
+  - entityRef: 地点/景区/阿里山
+    geoTagRef: Topic/地理/行政区/中国/台湾省
+    typeTagRefs:
+      - Entity/地点/景区
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/雁荡山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/地质公园
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/青城山
+    geoTagRef: Topic/地理/行政区/中国/四川省/成都市/都江堰市
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/宗教场所
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/青秀山
+    geoTagRef: Topic/地理/行政区/中国/广西壮族自治区/南宁市/青秀区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/公园
+      - Entity/地点/自然景观/山岳
+  - entityRef: 地点/景区/颐和园
+    geoTagRef: Topic/地理/行政区/中国/北京市/海淀区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/公园
+      - Entity/地点/遗址/历史建筑
+  - entityRef: 地点/景区/香港海洋公园
+    geoTagRef: Topic/地理/行政区/中国/香港特别行政区
+    typeTagRefs:
+      - Entity/地点/景区
+      - Entity/地点/主题乐园/综合主题乐园
+  - entityRef: 地点/景区/麦积山石窟
+    geoTagRef: Topic/地理/行政区/中国/甘肃省/天水市/麦积区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/宗教场所
+      - Entity/地点/遗址/考古遗址
+  - entityRef: 地点/景区/黄鹤楼
+    geoTagRef: Topic/地理/行政区/中国/湖北省/武汉市/武昌区
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/遗址/历史建筑
+      - Entity/地点/打卡地
+  - entityRef: 地点/景区/黄龙
+    geoTagRef: Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/松潘县
+    typeTagRefs:
+      - Entity/地点/景区/5A景区
+      - Entity/地点/景区/世界遗产
+      - Entity/地点/自然景观/水体
+  - entityRef: 地点/景区/龙脊梯田
+    geoTagRef: Topic/地理/行政区/中国/广西壮族自治区/桂林市/龙胜各族自治县
+    typeTagRefs:
+      - Entity/地点/景区/4A景区
+      - Entity/地点/自然景观/山岳
+      - Entity/地点/打卡地

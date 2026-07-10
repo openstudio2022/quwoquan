@@ -5,14 +5,14 @@ import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.d
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 
-/// 「我的交集」/「我的影响力」详情页共用的展示支撑：时间桶时间线脚手架 + 详情页错误语义归一。
+/// 「我的交集」/「打动」详情页共用的展示支撑：时间桶时间线脚手架 + 详情页错误语义归一。
 ///
 /// 从 `my_intersection_inbox_page.dart` 抽出（R03 文件体量收敛 + R25 重复构造收敛）：
 /// 页面只保留筛选 / 数据装配 / 导航业务逻辑，时间桶归一、时间线渲染、错误语义构造由本文件承载。
-/// 交集 tab 与影响力 tab 复用同一套 5 年时间桶顺序、「空桶隐藏」不变量与错误语义，
+/// 交集 tab 与打动 tab 复用同一套 5 年时间桶顺序、「空桶隐藏」不变量与错误语义，
 /// 避免维护第二套时间线/错误构造实现。
 
-/// 详情页错误语义归一（交集 / 影响力共用）：在 `runtimeErrorSemantic` 结果上仅覆盖标题，
+/// 详情页错误语义归一（交集 / 打动共用）：在 `runtimeErrorSemantic` 结果上仅覆盖标题，
 /// 并在缺省主动作时补「重试」，其余字段（恢复动作 / 展示形态 / tone）原样透传。
 UiErrorSemantic resolveIntersectionDetailErrorSemantic(
   BuildContext context, {
@@ -47,7 +47,7 @@ UiErrorSemantic resolveIntersectionDetailErrorSemantic(
   );
 }
 
-/// 时间桶归一（交集 / 影响力共用）：服务端 [timeBucket] 优先；缺省按 [freshAt] 推导。
+/// 时间桶归一（交集 / 打动共用）：服务端 [timeBucket] 优先；缺省按 [freshAt] 推导。
 /// 详情页只展示 today/yesterday/last7Days/thisMonth/lastMonth 五个互斥桶。
 String resolveIntersectionTimeBucket(String timeBucket, String freshAt) {
   final explicit = timeBucket.trim();
@@ -104,7 +104,7 @@ String _bucketLabel(String bucket) {
 String _bucketCountLabel(int count) =>
     DiscoveryFeedText.intersectionTimelineBucketCount(count);
 
-/// 时间桶条目：bucket key + 已构建好的行 widget（交集/影响力共用）。
+/// 时间桶条目：bucket key + 已构建好的行 widget（交集/打动共用）。
 class IntersectionTimelineEntry {
   const IntersectionTimelineEntry({required this.bucket, required this.child});
 
@@ -112,7 +112,7 @@ class IntersectionTimelineEntry {
   final Widget child;
 }
 
-/// 交集 / 影响力详情页专用紧凑行：类型图标 + 单句 primaryText + chevron。
+/// 交集 / 打动详情页专用紧凑行：类型图标 + 单句 primaryText + chevron。
 class IntersectionCompactTimelineRow extends StatelessWidget {
   const IntersectionCompactTimelineRow({
     super.key,
@@ -121,8 +121,10 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
     this.iconKey = '',
     this.sourceRef = '',
     this.dimension = '',
+    this.lifecycleState = '',
     this.onTap,
     this.onSpanTap,
+    this.onNegativeFeedback,
   });
 
   final String primaryText;
@@ -130,11 +132,24 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
   final String iconKey;
   final String sourceRef;
   final String dimension;
+
+  /// 生命周期弱标状态（§21.3/§21.6 ④）：真相源为服务端 `lifecycleState` 枚举。
+  /// 仅 new/strengthened/reactivated/archived 有短标（见 [DiscoveryFeedText]），
+  /// stable/weakened/expired 返回空串不渲染。弱标只作提示，绝不进入结论句（G2）。
+  final String lifecycleState;
+
   final VoidCallback? onTap;
   final void Function(IntersectionTextSpan span)? onSpanTap;
 
+  /// 交集条目负反馈手势（F 推荐差异化）：长按触发「不感兴趣」入口，
+  /// 由页面弹出 action sheet 并 trackIntersectionFeedback（端云同源 feedbackKinds）。
+  final VoidCallback? onNegativeFeedback;
+
   @override
   Widget build(BuildContext context) {
+    final lifecycleLabel = DiscoveryFeedText.intersectionLifecycleLabel(
+      lifecycleState,
+    );
     final row = ConstrainedBox(
       constraints: BoxConstraints(
         minHeight: AppSpacing.minInteractiveSize + AppSpacing.twenty,
@@ -143,10 +158,11 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
         padding: EdgeInsets.symmetric(horizontal: AppSpacing.containerSm),
         child: Row(
           children: <Widget>[
-            _CompactTimelineTypeIcon(
+            IntersectionTypeIcon(
               iconKey: iconKey,
               sourceRef: sourceRef,
               dimension: dimension,
+              size: AppSpacing.forty,
             ),
             SizedBox(width: AppSpacing.intraGroupSm),
             Expanded(
@@ -164,6 +180,10 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
                 accentFontWeight: AppTypography.regular,
               ),
             ),
+            if (lifecycleLabel.isNotEmpty) ...<Widget>[
+              SizedBox(width: AppSpacing.intraGroupSm),
+              _LifecycleWeakBadge(label: lifecycleLabel),
+            ],
             SizedBox(width: AppSpacing.intraGroupSm),
             Icon(
               CupertinoIcons.chevron_forward,
@@ -174,50 +194,54 @@ class IntersectionCompactTimelineRow extends StatelessWidget {
         ),
       ),
     );
-    if (onTap == null) return row;
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.square(AppSpacing.minInteractiveSize),
-      onPressed: onTap,
-      child: row,
-    );
+    Widget tappable = onTap == null
+        ? row
+        : CupertinoButton(
+            padding: EdgeInsets.zero,
+            minimumSize: Size.square(AppSpacing.minInteractiveSize),
+            onPressed: onTap,
+            child: row,
+          );
+    if (onNegativeFeedback != null) {
+      // 长按 = 负反馈入口（点击仍走导航 onTap）：GestureDetector.onLongPress 与
+      // CupertinoButton 的 tap 手势不冲突，opaque 命中保证空白区域也能长按。
+      tappable = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onLongPress: onNegativeFeedback,
+        child: tappable,
+      );
+    }
+    return tappable;
   }
 }
 
-class _CompactTimelineTypeIcon extends StatelessWidget {
-  const _CompactTimelineTypeIcon({
-    required this.iconKey,
-    required this.sourceRef,
-    required this.dimension,
-  });
+/// 生命周期弱标（§21.3/§21.6 ④）：紧凑的次要色短标，位于结论句尾、chevron 前，
+/// 只作提示不进结论句（G2）。真相源为 [DiscoveryFeedText.intersectionLifecycleLabel]。
+class _LifecycleWeakBadge extends StatelessWidget {
+  const _LifecycleWeakBadge({required this.label});
 
-  final String iconKey;
-  final String sourceRef;
-  final String dimension;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     final accent = AppColors.iosAccent(context);
     return Container(
-      width: AppSpacing.forty,
-      height: AppSpacing.forty,
-      alignment: Alignment.center,
+      padding: EdgeInsets.symmetric(
+        horizontal: AppSpacing.intraGroupSm,
+        vertical: AppSpacing.two,
+      ),
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.10),
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: accent.withValues(alpha: 0.12),
-          width: AppSpacing.hairline,
-        ),
+        borderRadius: BorderRadius.circular(AppSpacing.radiusTen),
       ),
-      child: Icon(
-        IntersectionIconResolver.resolve(
-          iconKey: iconKey,
-          sourceRef: sourceRef,
-          dimension: dimension,
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: AppTypography.iosCaption2,
+          height: AppSpacing.textLineHeightFootnote,
+          fontWeight: AppTypography.medium,
+          color: accent,
         ),
-        size: AppSpacing.twenty,
-        color: accent,
       ),
     );
   }

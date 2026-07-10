@@ -51,7 +51,7 @@ type UserFeatureVector struct {
 	// outrank the affinity channel in ranking fusion; AffinityIntersectionScore
 	// is advisory only and never overrides a confirmed fact intersection.
 	// Sourced from rm_recommend_feature.socialFeatures.intersection.* and kept
-	// in lockstep with scripts/ml/feature_registry.yaml content_feed.user_features.
+	// in lockstep with services/rec-model-service/scripts/feature_registry.yaml content_feed.user_features.
 	SharedFolloweesCount      int     `json:"sharedFolloweesCount"`
 	SharedCircleCount         int     `json:"sharedCircleCount"`
 	CoCommentedCount          int     `json:"coCommentedCount"`

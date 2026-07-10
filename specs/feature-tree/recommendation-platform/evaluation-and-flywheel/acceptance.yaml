@@ -41,10 +41,10 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - quwoquan_service/services/content-service/tests/local_contract/internal/application/recommendation_dashboard_contract__local_contract_test.go
-      - quwoquan_service/services/content-service/tests/local_contract/internal/application/recommendation_alerts_contract__local_contract_test.go
-      - quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/offline_replay_evaluation__local_contract_test.go
-      - quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/online_ab_significance__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/recommendation_dashboard_contract__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/recommendation_alerts_contract__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/offline_replay_evaluation__local_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/online_ab_significance__local_contract_test.go
     status: partial
     test_evidence:
       primary:
@@ -68,15 +68,18 @@ sit_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_planned] quwoquan_service/scripts/ml/tests/test_training_promotion_gate.py'
-    - P0 已在 local_contract 覆盖质量分、协同召回、旅行/精品路由和 primaryText 显示；线上指标仍需按首页/旅行/精品/UGC/数据工程/recallPath/intersectionClass 分桶验收。
+    - '[migrated_from_planned] quwoquan_service/services/rec-model-service/scripts/tests/test_training_promotion_gate.py'
+    - P0 已在 local_contract 覆盖质量分、协同召回、旅行/精品路由和 primaryText 显示；线上指标仍需按首页/旅行/精品/UGC/数据工程/recallPath/intersectionClass
+      分桶验收。
     - P1 已新增 recommendation-observability-dashboard 覆盖 P0+ 真实 emitter 分桶指标。
-    - P1a 已新增 recommendation-commercial-alerting 覆盖 P0+ 真实 emitter 告警；低流量分桶仍不能替代 AB 显著性。
+    - P1a 已新增 recommendation-commercial-alerting 覆盖 P0+ 真实 emitter 告警；低流量分桶仍不能替代 AB
+      显著性。
     - P1b/P1c 已新增 offline replay 与 online AB 本地报告契约；真实流量训练晋升仍为独立未完成能力。
-    - 2026-06-25 continue-dev 下一轮 P1d-2 要求 `premium_pool` recall_path 进入 replay/AB/report/dashboard/alert 分桶；本 L2 不新增数据仓库 replay 平台或线上 AB 框架。
+    - 2026-06-25 continue-dev 下一轮 P1d-2 要求 `premium_pool` recall_path 进入 replay/AB/report/dashboard/alert
+      分桶；本 L2 不新增数据仓库 replay 平台或线上 AB 框架。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

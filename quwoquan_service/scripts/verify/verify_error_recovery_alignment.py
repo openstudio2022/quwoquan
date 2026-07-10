@@ -11,7 +11,7 @@ internal/generated/errors.go 必含同一 code 对应的 .WithRecovery("<action>
 目的：锁定 recovery_action / recovery_after_seconds 从 errors.yaml -> 生成 Go ->
 随 ErrorResponse 下发的链路不被回退（如有人误删 codegen 的 goErrorRecoveryCall、
 手改生成产物、或某服务未重新 codegen）。客户端消费 recovery 由
-packages/quwoquan_runtime_errors 的 codec/policy 测试单独锁定。
+quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors 的 codec/policy 测试单独锁定。
 
 content 域已纳入强约束；客户端可见域不得再登记 sentinel-only 豁免。
 

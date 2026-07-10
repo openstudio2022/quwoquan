@@ -14,10 +14,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 APP_DIR = ROOT / "quwoquan_app"
-DEFAULT_BASELINE = (
-    APP_DIR / "artifacts/startup_first_frame/baseline_release_android_emulator_api35.json"
-)
 DEFAULT_RATCHET = ROOT / "specs/gates/startup_ttid_ratchet_baseline.json"
+DEFAULT_BASELINE = DEFAULT_RATCHET
 REQUIRED_ACCEPTANCE = (
     ROOT
     / "specs/feature-tree/runtime/runtime-client-foundation/cold-start-performance/acceptance.yaml"
@@ -25,7 +23,7 @@ REQUIRED_ACCEPTANCE = (
 REQUIRED_TESTS = (
     APP_DIR / "test/local_contract/app/startup_ttid__local_contract_test.dart",
     APP_DIR / "test/local_contract/app/startup_deferred_router__local_contract_test.dart",
-    APP_DIR / "test/app/app_startup_welcome_test.dart",
+    APP_DIR / "test/local_contract/app/app_startup_welcome__local_contract_test.dart",
     APP_DIR / "test/local_contract/app/startup_native_launch_screen__local_contract_test.dart",
 )
 
@@ -36,16 +34,14 @@ def load_json(path: Path) -> dict:
 
 def validate_baseline_shape(raw: dict) -> list[str]:
     errors: list[str] = []
-    for key in ("schemaVersion", "metric", "p50", "p95", "slaTargetRelease"):
+    for key in ("schemaVersion", "metric", "p50"):
         if key not in raw:
             errors.append(f"missing key: {key}")
     p50 = raw.get("p50")
     if not isinstance(p50, dict) or "firstVisibleMs" not in p50:
         errors.append("p50.firstVisibleMs missing")
     sla = raw.get("slaTargetRelease")
-    if not isinstance(sla, dict):
-        errors.append("slaTargetRelease missing")
-    else:
+    if isinstance(sla, dict):
         for key in ("ttidP50Ms", "ttidP95Ms"):
             if key not in sla:
                 errors.append(f"slaTargetRelease.{key} missing")

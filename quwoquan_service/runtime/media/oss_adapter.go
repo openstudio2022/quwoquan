@@ -89,18 +89,18 @@ func (s *OSSMediaStore) InitUpload(ctx context.Context, opts InitUploadOpts) (*U
 	}
 
 	session := &UploadSession{
-		SessionID:   sessionID,
-		Category:    opts.Category,
-		OwnerID:     opts.OwnerID,
-		FileName:    opts.FileName,
-		ContentType: opts.ContentType,
-		FileSize:    opts.FileSize,
-		PresignURL:  presignURL,
-		OSSKey:      ossKey,
+		SessionID:       sessionID,
+		Category:        opts.Category,
+		OwnerID:         opts.OwnerID,
+		FileName:        opts.FileName,
+		ContentType:     opts.ContentType,
+		FileSize:        opts.FileSize,
+		PresignURL:      presignURL,
+		OSSKey:          ossKey,
 		TemporaryOSSKey: ossKey,
-		Status:      "pending",
-		CreatedAt:   now,
-		ExpiresAt:   now.Add(s.config.PresignTTL),
+		Status:          "pending",
+		CreatedAt:       now,
+		ExpiresAt:       now.Add(s.config.PresignTTL),
 	}
 
 	if err := s.sessions.Create(ctx, session); err != nil {
@@ -163,22 +163,22 @@ func (s *OSSMediaStore) CompleteUpload(ctx context.Context, sessionID string, op
 	cdnURL := s.buildCDNURL(finalOSSKey)
 
 	asset := &MediaAsset{
-		AssetID:     fmt.Sprintf("ma_%d", time.Now().UnixNano()),
-		SessionID:   sessionID,
-		Category:    session.Category,
-		OwnerID:     session.OwnerID,
-		FileName:    session.FileName,
-		ContentType: session.ContentType,
-		FileSize:    maxInt64(session.FileSize, objectInfo.Size),
-		OSSKey:      finalOSSKey,
+		AssetID:         fmt.Sprintf("ma_%d", time.Now().UnixNano()),
+		SessionID:       sessionID,
+		Category:        session.Category,
+		OwnerID:         session.OwnerID,
+		FileName:        session.FileName,
+		ContentType:     session.ContentType,
+		FileSize:        maxInt64(session.FileSize, objectInfo.Size),
+		OSSKey:          finalOSSKey,
 		TemporaryOSSKey: session.OSSKey,
-		CDNURL:      cdnURL,
-		Sha256:      sha256Digest,
-		DurationMs:  opts.DurationMs,
-		Width:       opts.Width,
-		Height:      opts.Height,
-		Metadata:    opts.Metadata,
-		CreatedAt:   time.Now(),
+		CDNURL:          cdnURL,
+		Sha256:          sha256Digest,
+		DurationMs:      opts.DurationMs,
+		Width:           opts.Width,
+		Height:          opts.Height,
+		Metadata:        opts.Metadata,
+		CreatedAt:       time.Now(),
 	}
 
 	if err := s.assets.Create(ctx, asset); err != nil {
@@ -255,16 +255,15 @@ func (s *OSSMediaStore) logAccess(endpoint, status, userID string, durationMs in
 		return
 	}
 	_ = s.logger.Write(runtimeobservability.IOAccessLog{
-		SchemaVersion: "1.0",
-		Service:       "media",
-		Timestamp:     time.Now().Format(time.RFC3339Nano),
-		Origin:        "service.http",
-		Direction:     "outbound",
-		Endpoint:      endpoint,
-		Status:        status,
-		DurationMs:    durationMs,
-		ErrorCode:     errCode,
-		UserID:        userID,
+		Service:    "media",
+		TS:         time.Now().Format(time.RFC3339Nano),
+		Origin:     "service.http",
+		Direction:  "outbound",
+		Endpoint:   endpoint,
+		Status:     status,
+		DurationMs: durationMs,
+		ErrorCode:  errCode,
+		UserID:     userID,
 	})
 }
 

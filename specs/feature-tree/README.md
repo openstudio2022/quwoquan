@@ -82,7 +82,7 @@ specs/feature-tree/
 
 - 新增节点：使用新脚手架创建 `domain-service / business-capability / story`。
 - 重建索引：`go run ./quwoquan_service/tools/gen_tree_index specs/feature-tree specs/feature-tree/tree_index.yaml`（生成器迁移前，禁止手动把旧层级作为新增节点标准）。
-- 校验：`bash agent_ops/scaffold/verify_feature_tree_refactor.sh`、`bash agent_ops/scaffold/verify_acceptance_standard.sh`。
+- 校验：`bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh`、`bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh`。
 
 ---
 

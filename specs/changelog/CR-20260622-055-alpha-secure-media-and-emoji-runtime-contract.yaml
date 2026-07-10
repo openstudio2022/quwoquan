@@ -5,13 +5,13 @@ revision: 3
 status: implemented
 
 affected_nodes:
-  - deploy/shared/environment_topology_manifest.yaml
-  - agent_ops/deploy/lib/environment_topology.py
-  - agent_ops/deploy/alpha/start_alpha_mock_stack.sh
-  - agent_ops/deploy/beta/start_beta_stack.sh
-  - agent_ops/gate/gate_repo.sh
-  - agent_ops/gate/verify_local_dependency_purity.py
-  - agent_ops/deploy/prod_sim/start_prod_sim_stack.sh
+  - quwoquan_ops/environments/environment_topology_manifest.yaml
+  - quwoquan_ops/cli/lib/environment_topology.py
+  - quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh
+  - quwoquan_ops/cli/beta/start_beta_stack.sh
+  - quwoquan_ops/gate/gate_repo.sh
+  - quwoquan_ops/gate/verify_local_dependency_purity.py
+  - quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh
   - quwoquan_app/pubspec.yaml
   - quwoquan_app/run.sh
   - quwoquan_app/scripts/env/run_flutter_test_guarded.py
@@ -93,14 +93,14 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     verification:
-      - "python3 agent_ops/gate/verify_environment_topology_manifest.py"
+      - "python3 quwoquan_ops/gate/verify_environment_topology_manifest.py"
       - "python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py"
       - "bash quwoquan_app/scripts/env/build_app_env_package.sh --env alpha|beta|gamma|prod"
-      - "python3 agent_ops/gate/verify_local_dependency_purity.py"
+      - "python3 quwoquan_ops/gate/verify_local_dependency_purity.py"
       - "flutter test --no-pub test/cloud/runtime/cloud_runtime_config_test.dart test/core/media/content_media_url_test.dart test/core/platform/app_font_families_test.dart test/core/widgets/app_cached_network_image_test.dart test/components/avatar/rounded_square_avatar_test.dart test/core/links/app_public_content_links_test.dart test/components/input/customizable_chat_input_bar_test.dart test/ui/chat/widgets/chat_message_bubble_widget_test.dart"
       - "flutter test --no-pub test/core/media/avatar_image_url_test.dart"
-      - "python3 -m unittest agent_ops.tests.test_dev_up agent_ops.tests.test_stackctl_up_runtime"
-      - "`bash agent_ops/deploy/alpha/start_alpha_mock_stack.sh up` 返回 `[alpha] mock public plane ready: https://alpha-api.quwoquan-env.test:17000, https://alpha-image.quwoquan-env.test:17100`"
+      - "python3 -m unittest quwoquan_ops.tests.test_dev_up quwoquan_ops.tests.test_stackctl_up_runtime"
+      - "`bash quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh up` 返回 `[alpha] mock public plane ready: https://alpha-api.quwoquan-env.test:17000, https://alpha-image.quwoquan-env.test:17100`"
       - "cd quwoquan_app && flutter pub get --offline"
       - "flutter test --no-pub test/core/services/local_chat_search_store_test.dart test/core/services/local_chat_search_sync_service_test.dart test/core/services/local_circle_group_snapshot_store_test.dart test/core/services/conversation_avatar_sync_contract_test.dart test/ui/search/search_repository_test.dart test/core/media/content_media_url_test.dart"
       - "`bash quwoquan_app/run.sh -d AC42B9A5-AA79-4D4F-88A3-98AA37102CE7` 冷启动通过；输出 `A Dart VM Service on iPhone 15 is available at: http://127.0.0.1:8889/...`"

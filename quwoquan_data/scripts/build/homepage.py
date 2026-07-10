@@ -1,5 +1,4 @@
 """实体主页 build 真实链路：prepare 下发产出契约 + validate 采纳门。
-
 与现行「三层目录实体」模型一致（entities/{领域}/{类型}/{名称}/）：
 - prepare：读 effective task spec 的 scope.coverageTargets，为每个实体写
   3.compose/entity_page_input.json（含 SOP 模板路径、字数下限、底稿）+ 人读 4.draft/prompt.md
@@ -13,26 +12,26 @@
   作为 promote 发布门之前的采纳门。
 """
 from __future__ import annotations
-
 import os
 import shutil
 import re
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
-
 import yaml
-
 from _common.io import read_json, write_assistant_task, write_json
 from _common.article_package import compute_document_sha256, sha256_file, sha256_text
 from _common.batch_asset_registry import allocate_post_asset_id, load_batch_asset_registry
 from _common.batch_manifest import load_batch_manifest
 from _common.draft_io import PLACEHOLDER_MARKER, is_placeholder
 from _common.entity_page_quality import entity_page_quality_issues
+from _common.localization import fold_to_simplified
 from _common.prompt_render import render
 from _common.template_fingerprints import template_fingerprint_issues
 from _common.entity_object import sync_entity_object_to_task_mirror, write_entity_object_index
 from _common.post_evidence_chain import build_finalization_report
 from _common.provenance import build_provenance
+from _common.workflow_abandonment import ABANDON_SCOPE_HOMEPAGE, abandoned_entity_ids
 from _common.paths import (
     STAGE_COMPOSE,
     STAGE_DRAFT,
@@ -61,7 +60,6 @@ from build.homepage_text import (
     homepage_base_draft_readiness,
 )
 from build.homepage_validation import _asset_closure_issues, _condition_profile_issues
-
 MIN_PAGE_CHARS = 350
 HOMEPAGE_FIDELITY_MAX = 0.92
 # 实体主页底稿下发上限：取消旧的 4000 截断（旧值会把维基百科页在中段截断，
@@ -70,46 +68,89 @@ HOMEPAGE_FIDELITY_MAX = 0.92
 HOMEPAGE_BASE_DRAFT_MAX_CHARS = max(4000, int(os.environ.get("QWQ_HOMEPAGE_BASE_DRAFT_MAX_CHARS", "12000")))
 # 计入 sectionOutline 的关键章节最小去空白正文字数（短于此视为占位/导语碎片）。
 HOMEPAGE_SECTION_MIN_CHARS = 120
-_REQUIRED_ENTITY_FIELDS = ("label", "domain", "type", "sourceTaskId")
+# 发布态 _entity.json 必填集（结构契约唯一定义 = schema/publish/entity.schema.json）。
+# geoTagRef 为区县级主归属行政区标签（裁决 7：单值主归属 + 可选 geoTagRefs 全量数组），
+# 自 discovery_seed/2 起为物化必填；geoTagRefs 仅跨省/跨市地点提供。
+_REQUIRED_ENTITY_FIELDS = ("label", "domain", "type", "sourceTaskId", "geoTagRef")
+_GEO_TAG_REF_PREFIX = "Topic/地理/行政区/"
 _REPO_DATA_ROOT = Path(__file__).resolve().parents[2]
 _CONDITION_CATALOGS_ROOT = _REPO_DATA_ROOT / "templates" / "_registry" / "catalogs"
-
-
+_WIKI_FILE_INLINE_RE = re.compile(r"\[\[(?:File|文件):[^\]]+\]\]", re.IGNORECASE)
 def _dedupe_nonempty(values: list[str]) -> list[str]:
     """保序去重并丢弃空串，供 sourceRefs 等列表收敛。"""
     return [v for v in dict.fromkeys(v for v in values if v)]
-
-
 def _source_unit_from_ref(ref: str) -> str:
     raw = str(ref or "").replace("\\", "/").strip()
     if raw.endswith("/source.md"):
         return raw.rsplit("/", 1)[0]
     return raw
-
-
 def _same_source_unit(a: str, b: str) -> bool:
     left = _source_unit_from_ref(a)
     right = _source_unit_from_ref(b)
     return bool(left and right and left == right)
-
 def _safe_ref(domain: str, etype: str, name: str) -> str:
     return f"{domain}__{etype}__{name}".replace("/", "_")
-
-
-def _coverage_targets(spec: dict[str, Any]) -> list[dict[str, str]]:
-    out: list[dict[str, str]] = []
+def _suppressed_homepage_entities(task_id: str, batch_id: str) -> set[str]:
+    state_path = batch_root(task_id, batch_id) / "_shared" / "task_workflow_state.json"
+    if not state_path.is_file():
+        return set()
+    try:
+        state = read_json(state_path)
+    except Exception:  # noqa: BLE001
+        return set()
+    return abandoned_entity_ids(
+        state.get("abandonedObjects") or [],
+        scope=ABANDON_SCOPE_HOMEPAGE,
+    )
+def _coverage_targets(
+    spec: dict[str, Any],
+    *,
+    task_id: str = "",
+    batch_id: str = "",
+) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    suppressed = _suppressed_homepage_entities(task_id, batch_id) if task_id and batch_id else set()
     for target in (spec.get("scope") or {}).get("coverageTargets") or []:
         name = str(target.get("name") or "").strip()
         if not name:
+            continue
+        if name in suppressed:
             continue
         domain, etype = require_domain_etype(
             target.get("entityType"),
             context=f"coverageTargets[{name}]",
         )
-        out.append({"name": name, "domain": domain, "etype": etype})
+        row: dict[str, Any] = {"name": name, "domain": domain, "etype": etype}
+        # 主清单（discovery_seed/2）契约字段透传：geo 主/全量归属、全量类型、别名。
+        geo_tag_ref = str(target.get("geoTagRef") or "").strip()
+        if geo_tag_ref:
+            row["geoTagRef"] = geo_tag_ref
+        for list_field in ("geoTagRefs", "typeTagRefs", "aliases"):
+            values = [str(v).strip() for v in (target.get(list_field) or []) if str(v).strip()]
+            if values:
+                row[list_field] = values
+        out.append(row)
     return out
-
-
+def homepage_runtime_spec(task_id: str, batch_id: str, spec: dict[str, Any]) -> dict[str, Any]:
+    """Filter spec coverageTargets to the homepage-admitted subset for this batch."""
+    active = dict(spec or {})
+    scope = active.get("scope")
+    if not isinstance(scope, dict):
+        return active
+    suppressed = _suppressed_homepage_entities(task_id, batch_id)
+    if not suppressed:
+        return active
+    filtered = []
+    for target in (scope.get("coverageTargets") or []):
+        if not isinstance(target, dict):
+            continue
+        name = str(target.get("name") or "").strip()
+        if name and name in suppressed:
+            continue
+        filtered.append(dict(target))
+    next_scope = dict(scope)
+    next_scope["coverageTargets"] = filtered
+    return {**active, "scope": next_scope}
 def _catalog_keys(catalog_name: str, root_key: str) -> list[str]:
     path = _CONDITION_CATALOGS_ROOT / f"{catalog_name}.yaml"
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -117,8 +158,6 @@ def _catalog_keys(catalog_name: str, root_key: str) -> list[str]:
     if not isinstance(rows, dict):
         return []
     return [str(key) for key in rows.keys() if str(key).strip()]
-
-
 def _condition_menu(spec: dict[str, Any], axis: str, catalog_name: str, root_key: str) -> list[str]:
     axes = spec.get("conditionAxes") if isinstance(spec.get("conditionAxes"), dict) else {}
     axis_cfg = axes.get(axis) if isinstance(axes, dict) else None
@@ -129,23 +168,49 @@ def _condition_menu(spec: dict[str, Any], axis: str, catalog_name: str, root_key
     if isinstance(explicit, list) and explicit:
         return [str(item) for item in explicit if str(item).strip()]
     return _catalog_keys(catalog_name, root_key)
-
-
-def _entity_base_draft(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> dict[str, Any]:
+def _entity_base_draft(
+    task_id: str,
+    batch_id: str,
+    domain: str,
+    etype: str,
+    name: str,
+    *,
+    aliases: tuple[str, ...] = (),
+) -> dict[str, Any]:
     """Select the strongest homepage-lane evidence as the primary reference."""
     from _common.base_draft import base_draft_candidates, load_base_draft_text
-
+    from _common.homepage_source_judge import (
+        ADMISSION_PENDING_JUDGE,
+        build_judge_request,
+        write_judge_request,
+    )
     brief = {"entityRefs": [entity_ref(domain, etype, name)]}
     candidates = base_draft_candidates(task_id, batch_id, brief)
     if not candidates:
         return {}
     homepage_candidates = []
     for candidate in candidates:
-        meta_path = Path(candidate["unitDir"]) / "meta.json"
+        unit_dir = Path(candidate["unitDir"])
+        meta_path = unit_dir / "meta.json"
         meta = read_json(meta_path) if meta_path.is_file() else {}
         readiness = homepage_base_draft_readiness(meta, candidate_text := load_base_draft_text(
             task_id, batch_id, candidate["sourceRef"]
-        ).strip(), entity_name=name)
+        ).strip(), entity_name=name, aliases=aliases, unit_dir=unit_dir)
+        judge = readiness.get("judge") if isinstance(readiness.get("judge"), dict) else {}
+        if str(judge.get("decision") or "") == ADMISSION_PENDING_JUDGE:
+            # 灰区来源：落判别请求（幂等），等待 Agent 写回 source.judge.json。
+            write_judge_request(
+                unit_dir,
+                build_judge_request(
+                    entity_name=name,
+                    entity_type=f"{domain}/{etype}",
+                    aliases=aliases,
+                    meta=meta,
+                    source_text=candidate_text,
+                    unit_ref=str(candidate.get("sourceRef") or ""),
+                    prescreen=judge.get("prescreen") or {},
+                ),
+            )
         priority = int(readiness.get("priority") or 0)
         if priority > 0:
             homepage_candidates.append(
@@ -181,18 +246,27 @@ def _entity_base_draft(task_id: str, batch_id: str, domain: str, etype: str, nam
     unit_dir = Path(best["unitDir"])
     meta_path = unit_dir / "meta.json"
     meta = read_json(meta_path) if meta_path.is_file() else {}
+    outline = _homepage_section_outline(unit_dir, meta)
+    structured_text = _homepage_structured_source_text(unit_dir, text, outline)
+    from _common.content_source_registry import homepage_primary_authority_rank
     return {
         "sourceRef": best["sourceRef"],
         "primaryEvidenceRef": best["sourceRef"],
         "sourceUseMode": str(meta.get("sourceUseMode") or "factual_reference_only"),
-        "text": text[:HOMEPAGE_BASE_DRAFT_MAX_CHARS],
-        "sectionOutline": _homepage_section_outline(unit_dir, meta),
+        "text": structured_text[:HOMEPAGE_BASE_DRAFT_MAX_CHARS],
+        "plainText": text[:HOMEPAGE_BASE_DRAFT_MAX_CHARS],
+        "sectionOutline": outline,
+        # publish 质量元数据真相源：promote 时汇总进 publish 实体 manifest.quality。
+        "primarySource": {
+            "platform": str(meta.get("platform") or ""),
+            "sourceKind": str(meta.get("sourceKind") or ""),
+            "authorityRank": homepage_primary_authority_rank(str(meta.get("platform") or "")),
+            "factCount": int(best.get("_factCount") or 0),
+            "fetchScore": float(best.get("score") or 0.0),
+        },
     }
-
-
 def _homepage_section_outline(unit_dir: Path, meta: dict[str, Any]) -> list[dict[str, Any]]:
     """从来源 `source.md`（保留 wiki `==/===`）解析关键章节，供 prompt 保留多级目录。
-
     优先复用下载阶段已写入 meta.sectionOutline（P1 联网解析）；缺省时离线从原文解析。
     `source.clean.md` 已把标题压成无标记纯文本会丢层级，故必须读 `source.md` 原文。
     """
@@ -201,7 +275,6 @@ def _homepage_section_outline(unit_dir: Path, meta: dict[str, Any]) -> list[dict
         outline_to_dicts,
         parse_section_outline,
     )
-
     cached = meta.get("sectionOutline")
     if isinstance(cached, list) and cached:
         return [row for row in cached if isinstance(row, dict)]
@@ -216,8 +289,67 @@ def _homepage_section_outline(unit_dir: Path, meta: dict[str, Any]) -> list[dict
         parse_section_outline(raw_text), min_body_chars=HOMEPAGE_SECTION_MIN_CHARS
     )
     return outline_to_dicts(nodes)
-
-
+def _homepage_structured_base_text(base_text: str, outline_rows: list[dict[str, Any]]) -> str:
+    """把来源 outline 还原进底稿正文，确保 Agent 看到的是带 `##/###` 的轻改底稿。
+    旧契约只把 outline 放在底稿外侧，`baseDraft.text` 本体是无标题纯段落；
+    Agent 很容易把章节拍平或静默丢掉。这里按 `charStart` 从后往前插入标题，
+    只补结构标记，不改事实文本。
+    """
+    text = str(base_text or "").strip()
+    if not text or not outline_rows:
+        return text
+    if any(line.lstrip().startswith("##") for line in text.splitlines()):
+        return text
+    inserts: list[tuple[int, str]] = []
+    for row in outline_rows:
+        if not isinstance(row, dict):
+            continue
+        title = str(row.get("title") or "").strip()
+        if not title:
+            continue
+        try:
+            pos = int(row.get("charStart") or 0)
+            level = int(row.get("level") or 2)
+        except (TypeError, ValueError):
+            continue
+        if pos <= 0 or pos >= len(text):
+            continue
+        marker = "#" * min(max(level, 2), 6)
+        inserts.append((pos, f"\n\n{marker} {title}\n\n"))
+    if not inserts:
+        return text
+    out = text
+    for pos, heading in sorted(inserts, key=lambda item: item[0], reverse=True):
+        out = out[:pos].rstrip() + heading + out[pos:].lstrip()
+    return re.sub(r"\n{3,}", "\n\n", out).strip()
+def _strip_frontmatter_block(text: str) -> str:
+    body = str(text or "")
+    if body.startswith("---\n"):
+        end = body.find("\n---\n", 4)
+        if end != -1:
+            return body[end + len("\n---\n"):].strip()
+    return body.strip()
+def _homepage_structured_source_text(unit_dir: Path, fallback_text: str, outline_rows: list[dict[str, Any]]) -> str:
+    """优先从原始 source.md 转出带 Markdown 标题的底稿，避免 clean 文本 charStart 错位。"""
+    from _common.section_outline import match_heading
+    raw_path = unit_dir / "source.md"
+    if raw_path.is_file():
+        try:
+            raw_body = _strip_frontmatter_block(raw_path.read_text(encoding="utf-8"))
+        except OSError:
+            raw_body = ""
+        if raw_body and any(match_heading(line) for line in raw_body.splitlines()):
+            lines: list[str] = []
+            for line in raw_body.splitlines():
+                heading = match_heading(line)
+                if heading is not None:
+                    level, title = heading
+                    lines.append(f"{'#' * min(max(level, 1), 6)} {title}")
+                    continue
+                cleaned = _WIKI_FILE_INLINE_RE.sub("", line).strip()
+                lines.append(cleaned)
+            return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    return _homepage_structured_base_text(fallback_text, outline_rows)
 def _homepage_base_source_issues(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> list[str]:
     label = f"{domain}/{etype}/{name}"
     quality_path = batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_QUALITY) / "quality_analysis.json"
@@ -243,15 +375,13 @@ def _homepage_base_source_issues(task_id: str, batch_id: str, domain: str, etype
     source_kind, is_primary, is_author_experience = _homepage_base_source_issue_text(meta)
     if not is_primary:
         issues.append(
-            f"{label}: entity homepage base draft must be encyclopedia/wiki/official-site source, got {source_kind or '<empty>'}"
+            f"{label}: entity homepage base draft must be homepage primary authority source, got {source_kind or '<empty>'}"
         )
     if is_author_experience:
         issues.append(
             f"{label}: entity homepage base draft must not be author travelogue/guide/comment source, got {source_kind or '<empty>'}"
         )
     return issues
-
-
 def _entity_base_source_line(base_ref: str, base_mode: str) -> str:
     if base_ref:
         return (
@@ -260,14 +390,11 @@ def _entity_base_source_line(base_ref: str, base_mode: str) -> str:
             "licensed_adaptation 与 factual_reference_only 同等以底稿为骨架轻改。"
         )
     return "- 当前无可用底稿（source 不足）；不要凭空编造，先回退到 source 修复。"
-
-
 def _entity_section_outline_block(base: dict[str, Any]) -> str:
     outline_rows = base.get("sectionOutline") if isinstance(base.get("sectionOutline"), list) else []
     if not outline_rows:
         return ""
     from _common.section_outline import render_outline_tree_from_dicts
-
     tree = render_outline_tree_from_dicts(outline_rows)
     if not tree:
         return ""
@@ -277,61 +404,132 @@ def _entity_section_outline_block(base: dict[str, Any]) -> str:
         "可微调标题措辞，但不得静默丢弃、不得拍平为单层、不得并入其它段落：\n\n"
         + tree
     )
-
-
 def _entity_base_draft_block(base_text: str) -> str:
     if not base_text:
         return "## 底稿材料\n\n（无可用底稿材料；先回退 source 修复，不要凭空编造）"
     return "## 底稿材料（在此基础上轻改）\n\n```\n" + base_text + "\n```"
 
+# 实体类型 → 读者关注点提示（仅选材优先级提示，不是必写章节清单；一切以底稿为准）。
+_ENTITY_TYPE_FOCUS_HINTS: dict[str, str] = {
+    "自然景观": "地理位置与成因地貌、生态与季节景致、游览方式与安全提示",
+    "古镇": "历史沿革与聚落格局、街巷建筑与人文遗存、物产民俗与到访体验",
+    "景区": "范围与核心景点构成、历史与文化背景、游览动线与实用信息",
+    "场馆": "定位与馆藏 / 功能、建筑与历史、开放与参观信息",
+    "博物馆": "馆藏与陈列脉络、建筑与历史、开放与参观信息",
+    "寺庙": "宗教渊源与历史沿革、建筑与文物、参访礼仪与开放信息",
+    "公园": "区位与园林格局、景观与设施、季节与游览建议",
+    "水利工程": "工程规模与功能、建设历程、周边景观与参观方式",
+}
 
-def _entity_available_images_block(payload: dict[str, Any]) -> str:
-    available = payload.get("availableImages") if isinstance(payload.get("availableImages"), list) else []
-    if not available:
+def _entity_type_focus_block(etype: str) -> str:
+    """按实体类型给出读者关注点提示；不命中类型则返回空（完全遵从底稿）。"""
+    hint = _ENTITY_TYPE_FOCUS_HINTS.get(str(etype or "").strip())
+    if not hint:
         return ""
-    lines = [
-        "## 同源配图清单（finalize 按章节/段落自动注入正文 figure 块）",
-        "",
-        "以下图片均来自与底稿**同一** source unit。finalize 会按章节/段落锚点把它们注入正文"
-        "（封面=第一张 fullWidth，其余 wrapLeft/wrapRight 环绕，无法定位的进文末『图集』）。"
-        "你专注写**带多级小标题的正文**即可；了解配图语义有助于组织章节，但不要为塞图硬拆章。",
-        "",
-    ]
+    return (
+        f"- 类型关注点（选材优先级提示，非必写章节）：该实体类型为「{etype}」，"
+        f"读者通常关注：{hint}。**一切以底稿真实内容为准**：底稿没有的关注点"
+        "不得虚构、不得硬凑章节。"
+    )
+def _entity_available_images_block(payload: dict[str, Any]) -> str:
+    """AI 最小干扰协议：图片元数据不进 prompt，只声明占位符纪律（plan §11）。"""
+    bindings = (
+        payload.get("imagePlaceholderBindings")
+        if isinstance(payload.get("imagePlaceholderBindings"), list)
+        else []
+    )
+    if not bindings:
+        return ""
+    return (
+        "## 图片占位符纪律\n\n"
+        f"「底稿材料」中共有 {len(bindings)} 行形如 `[[IMG:fig_NN]]` 的系统图片占位符。"
+        "每一行都必须**原样带回**：不改 id、不移动位置、不复制、不删除、不新增，"
+        "行尾不得追加任何文字（图注由系统注入）；也不得书写任何 `asset://` 或 `:::figure`。"
+        "封面与相关图片由系统在 finalize 阶段注入。"
+    )
+def _homepage_image_placeholder_bindings(available: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """AI 协议 bindings：只为「非封面 + 有原图注 + 有章节锚点」的同源图生成占位符。
+    封面裁决与相关图片区完全不进 prompt（plan §11）；无原图注或无锚点的图由
+    finalize 的 place_homepage_assets_in_markdown 代码侧裁决归置，也不进 prompt。
+    figId 按 available 序号稳定命名。
+    """
+    bindings: list[dict[str, Any]] = []
     for index, row in enumerate(available):
-        if not isinstance(row, dict):
+        if not isinstance(row, dict) or index == 0:
             continue
-        caption = str(row.get("caption") or row.get("relevance") or "").strip() or "配图"
-        layout = str(row.get("suggestedLayout") or "").strip()
-        role = "封面" if index == 0 else "配图"
-        suffix = f"（建议 {layout}）" if layout else ""
-        lines.append(f"- [{role}] {caption}{suffix}")
-    return "\n".join(lines)
-
-
+        source_asset_id = str(row.get("sourceAssetId") or "").strip()
+        caption = str(row.get("caption") or "").strip()
+        anchor = str(row.get("sectionAnchor") or "").strip()
+        if not source_asset_id or not caption or not anchor:
+            continue
+        bindings.append({
+            "figId": f"fig_{index + 1:02d}",
+            "sourceAssetId": source_asset_id,
+            "caption": re.sub(r"\s+", " ", caption),
+            "sectionAnchor": str(row.get("sectionAnchor") or ""),
+        })
+    return bindings
+def _homepage_base_text_with_image_placeholders(
+    base_text: str,
+    bindings: list[dict[str, Any]],
+) -> str:
+    """把极简图片占位符行插入底稿正文原位（章节锚点优先），供模型原样带回。
+    模型只见 `[[IMG:fig_NN]]` 单行（不含图注，图注真相源在 bindings）；
+    :::figure 展开、封面与相关图片区全部收回代码侧（_common.ai_refine_protocol）。
+    """
+    from _common.ai_refine_protocol import image_placeholder_line
+    text = str(base_text or "").strip()
+    if not text or not bindings:
+        return text
+    lines = text.splitlines()
+    section_line_by_slug: dict[str, int] = {}
+    from _common.section_outline import match_heading, slugify_section
+    for idx, line in enumerate(lines):
+        heading = match_heading(line)
+        if heading is None:
+            continue
+        section_line_by_slug.setdefault(slugify_section(heading[1]), idx)
+    inserts: dict[int, list[str]] = {}
+    trailing: list[str] = []
+    for row in bindings:
+        block = image_placeholder_line(str(row.get("figId") or ""))
+        anchor = slugify_section(str(row.get("sectionAnchor") or ""))
+        line_no = -1
+        if anchor:
+            for slug, idx in section_line_by_slug.items():
+                if slug and (slug == anchor or slug.startswith(anchor) or anchor.startswith(slug)):
+                    line_no = idx
+                    break
+        if line_no >= 0:
+            inserts.setdefault(line_no, []).append(block)
+        else:
+            trailing.append(block)
+    for line_no in sorted(inserts.keys(), reverse=True):
+        lines[line_no + 1:line_no + 1] = ["", *inserts[line_no], ""]
+    if trailing:
+        lines = [*lines, "", *trailing]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
 def _render_entity_page_prompt(payload: dict[str, Any]) -> str:
     """人读写作指令：与文章 prompt 同构（指令区来自 entity_homepage 模板），写回目标是 4.draft/page.md。"""
     name = str(payload.get("name") or "")
     base = payload.get("baseDraft") if isinstance(payload.get("baseDraft"), dict) else {}
     base_ref = str(base.get("sourceRef") or base.get("primaryEvidenceRef") or "")
     base_mode = str(base.get("sourceUseMode") or "factual_reference_only")
-    base_text = str(base.get("text") or "").strip()
+    base_text = str(base.get("markdown") or base.get("text") or "").strip()
     return render(
         "entity_homepage",
         system_vars={"min_page_chars": MIN_PAGE_CHARS},
         task_vars={
             "name": name,
             "base_source_line": _entity_base_source_line(base_ref, base_mode),
+            "type_focus_block": _entity_type_focus_block(str(payload.get("etype") or "")),
             "section_outline_block": _entity_section_outline_block(base),
             "base_draft_block": _entity_base_draft_block(base_text),
             "available_images_block": _entity_available_images_block(payload),
         },
     )
-
-
 def _entity_draft_dir(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> Path:
     return batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_DRAFT)
-
-
 def _write_entity_page_prompt_and_placeholder(
     task_id: str,
     batch_id: str,
@@ -341,7 +539,6 @@ def _write_entity_page_prompt_and_placeholder(
     payload: dict[str, Any],
 ) -> None:
     """下发人读 prompt.md + 占位 page.md：创作 agent在 4.draft/page.md 创作正文。
-
     与文章一致：占位草稿用 PLACEHOLDER_MARKER 标记『尚未创作』，但绝不覆盖
     创作 agent已写回的真实正文（非占位则保留）。
     """
@@ -356,10 +553,8 @@ def _write_entity_page_prompt_and_placeholder(
         encoding="utf-8",
     )
 
-
 def _homepage_available_images(images: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """配图清单（供 prompt 了解配图语境）：首图为封面 fullWidth，其余交替环绕建议。
-
     实体主页 assetId 在 finalize 才分配，Agent 阶段无法内联最终 id；故配图由 finalize
     的 placement 确定性按章节 / 段落锚点注入。此清单只用于让 Agent 知道有哪些图、其语义
     说明与建议版面，避免为塞图硬拆章节。
@@ -378,15 +573,16 @@ def _homepage_available_images(images: list[dict[str, Any]]) -> list[dict[str, A
             wrap_index += 1
         out.append(
             {
+                "sourceAssetId": str(img.get("sourceAssetId") or ""),
                 "sourceAssetRef": str(img.get("sourceAssetRef") or ""),
                 "caption": str(img.get("caption") or img.get("relevance") or ""),
                 "license": str(img.get("license") or ""),
                 "suggestedLayout": layout,
                 "sectionAnchor": str(img.get("sectionAnchor") or ""),
+                "paragraphIndex": int(img.get("paragraphIndex") or 0),
             }
         )
     return out
-
 
 def _entity_creator_assignment(
     domain: str,
@@ -399,7 +595,6 @@ def _entity_creator_assignment(
     from _common.creator_assignment import creator_assignment_from_profile
     from template.creator import match_creator
     from template.registry import TemplateRegistry
-
     try:
         registry = TemplateRegistry.load()
     except Exception:  # noqa: BLE001
@@ -420,24 +615,39 @@ def _entity_creator_assignment(
     )
     return creator_assignment_from_profile(profile)
 
-
 def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> tuple[Path, list[str]]:
     """为 coverage 实体下发实体主页产出契约（inputs + prompt + 占位草稿 + assistant_tasks）。"""
     from _common.paths import ensure_object_stages
-
     inputs_root = batch_root(task_id, batch_id) / "entities"
     inputs_root.mkdir(parents=True, exist_ok=True)
     data = task_data(task_id)
     refs: list[str] = []
     active_input_paths: set[Path] = set()
-    for target in _coverage_targets(spec):
+    for target in _coverage_targets(spec, task_id=task_id, batch_id=batch_id):
         domain, etype, name = target["domain"], target["etype"], target["name"]
         obj_dir = resolve_entity_object_dir(task_id, batch_id, name, etype_hint=f"{domain}/{etype}")
         ensure_object_stages(obj_dir)
         ref = _safe_ref(domain, etype, name)
         sop_dir = data.sop_dir(domain, etype)
-        base_draft = _entity_base_draft(task_id, batch_id, domain, etype, name)
+        target_aliases = tuple(
+            str(a) for a in (target.get("aliases") or []) if str(a).strip()
+        )
+        base_draft = _entity_base_draft(
+            task_id, batch_id, domain, etype, name, aliases=target_aliases
+        )
         creator_assignment = _entity_creator_assignment(domain, etype, name, spec=spec)
+        available_images = _homepage_available_images(
+            _pick_homepage_assets(
+                task_id, batch_id, domain, etype, name, limit=HOMEPAGE_MAX_ASSETS
+            )
+        )
+        image_placeholder_bindings = _homepage_image_placeholder_bindings(available_images)
+        if base_draft:
+            base_draft = dict(base_draft)
+            base_draft["markdown"] = _homepage_base_text_with_image_placeholders(
+                str(base_draft.get("text") or ""),
+                image_placeholder_bindings,
+            )
         input_path = batch_entity_page_input_path(task_id, batch_id, domain, etype, name)
         active_input_paths.add(input_path)
         page_payload = {
@@ -445,6 +655,13 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
             "domain": domain,
             "etype": etype,
             "entityRef": entity_ref(domain, etype, name),
+            # 主清单契约字段（discovery_seed/2）：物化时写入 _entity.json。
+            # geoTagRef 是物化必填（_REQUIRED_ENTITY_FIELDS），typeTagRefs 供打标物化消费（WP3）。
+            **{
+                key: target[key]
+                for key in ("geoTagRef", "geoTagRefs", "typeTagRefs", "aliases")
+                if target.get(key)
+            },
             **creator_assignment,
             "sopDir": str(sop_dir),
             "sopTemplate": str(sop_dir / "template.md"),
@@ -452,11 +669,8 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
             "sopExample": str(sop_dir / "example.md"),
             "minChars": MIN_PAGE_CHARS,
             "baseDraft": base_draft,
-            "availableImages": _homepage_available_images(
-                _pick_homepage_assets(
-                    task_id, batch_id, domain, etype, name, limit=HOMEPAGE_MAX_ASSETS
-                )
-            ),
+            "availableImages": available_images,
+            "imagePlaceholderBindings": image_placeholder_bindings,
             "regionMenu": _condition_menu(spec, "region", "region_catalog", "regions"),
             "seasonMenu": _condition_menu(spec, "season", "season_catalog", "seasons"),
             "editingInstruction": (
@@ -477,13 +691,11 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
                 "禁止首尾拼接造成时间倒错，同章节年份应大致单调推进。"
             ),
             "imageRequirement": (
-                "正文以**纯文字 + 多级标题**为主，**不必**手写 asset:// 或 manifest.json："
-                "实体主页图片 assetId 在 finalize 阶段才分配，finalize 会从 primaryEvidenceRef "
-                "**同一 source unit** 的已授权图片中，按章节/段落锚点把图片自动注入正文 figure 块"
-                "（封面=第一张同源图 fullWidth，其余按章节就近 wrapLeft/wrapRight 环绕，"
-                "无法定位的进文末『图集』）。"
-                "你只需写好带多级小标题的正文；「同源配图清单」用于了解有哪些图及其语义，"
-                "勿为塞图硬拆章节。"
+                "正文只写文字与多级标题：底稿材料中形如 `[[IMG:fig_NN]]` 的整行"
+                "是系统图片占位符，必须**原样带回**（不改 id、不移动、不复制、不删除、"
+                "不新增，行尾不追加文字；图注由系统注入）。封面、图片展开、相关图片区与"
+                " manifest.json 全部由 finalize 代码侧生成；Agent 不得书写任何"
+                " `asset://` 或 `:::figure`。"
             ),
             "draftPage": "4.draft/page.md",
             "outputDir": str(batch_entity_object_dir(task_id, batch_id, domain, etype, name)),
@@ -508,19 +720,17 @@ def prepare_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> t
     write_assistant_task(manifest_path, step="entity_page", input_dir=inputs_root, result_dir=results_dir, refs=refs)
     return inputs_root, refs
 
-
 def validate_entity_page_inputs(task_id: str, batch_id: str, spec: dict[str, Any]) -> list[str]:
     """Pre-Agent admission gate for homepage contracts.
-
     `build_prepare` is the last deterministic point before Cursor/Codex writes
     entity pages. A homepage input is admissible only when the homepage lane has
-    already produced a readable encyclopedia/wiki/official base draft; the
+    already produced a readable homepage primary-authority base draft; the
     Agent must not be asked to invent or repair missing upstream facts.
     """
     issues: list[str] = []
     seen: set[str] = set()
     root = batch_root(task_id, batch_id)
-    for target in _coverage_targets(spec):
+    for target in _coverage_targets(spec, task_id=task_id, batch_id=batch_id):
         domain, etype, name = target["domain"], target["etype"], target["name"]
         label = f"{domain}/{etype}/{name}"
         input_path = batch_entity_page_input_path(task_id, batch_id, domain, etype, name)
@@ -560,16 +770,18 @@ def validate_entity_page_inputs(task_id: str, batch_id: str, spec: dict[str, Any
                 issue = f"{label}: homepage baseDraft 可用事实不足"
                 issues.append(issue)
                 seen.add(issue)
+        if source_ref and text and not _pick_homepage_assets(task_id, batch_id, domain, etype, name):
+            issue = f"{label}: homepage lane 无可发布图片资产"
+            issues.append(issue)
+            seen.add(issue)
         for issue in _homepage_base_source_issues(task_id, batch_id, domain, etype, name):
             if issue not in seen:
                 issues.append(issue)
                 seen.add(issue)
     return issues
 
-
 def _entity_source_paths(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> list[str]:
     from _common.source_unit import iter_source_units
-
     obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
     refs: list[str] = []
     for unit in iter_source_units(obj):
@@ -577,7 +789,6 @@ def _entity_source_paths(task_id: str, batch_id: str, domain: str, etype: str, n
         if source_md.is_file():
             refs.append(relative_batch_ref(source_md, task_id, batch_id))
     return refs
-
 
 def _write_entity_quality_stage(
     task_id: str,
@@ -590,7 +801,6 @@ def _write_entity_quality_stage(
 ) -> None:
     """实体对象 `2.quality/quality_analysis.json`：显式落底稿优先选择结果。"""
     from _common.base_draft import base_draft_candidates
-
     brief = {"entityRefs": [entity_ref(domain, etype, name)]}
     candidates = base_draft_candidates(task_id, batch_id, brief)
     payload = {
@@ -614,16 +824,53 @@ def _write_entity_quality_stage(
         payload,
     )
 
-
 def _page_char_count(page: Path) -> int:
     text = page.read_text(encoding="utf-8")
     return len("".join(text.split()))
-
 
 # 主页正文最多注入的配图数量：封面 + 若干章节内图。维基页常有 5-8 张同源图，
 # 旧值 3 会丢掉「相关古迹」等章节对应的真实图；放量到 8 并可经环境变量调节。
 HOMEPAGE_MAX_ASSETS = max(1, int(os.environ.get("QWQ_HOMEPAGE_MAX_ASSETS", "8")))
 
+def _normalize_wiki_filename(value: str) -> str:
+    """把 wiki 文件名规范化：unquote、空格/下划线归一、小写，供精确等值匹配。
+    MediaWiki 视空格与下划线等价，故统一折叠；不做子串包含（避免实体名污染）。
+    """
+    from urllib.parse import unquote
+    text = unquote(str(value or "")).strip()
+    if not text:
+        return ""
+    text = text.replace("_", " ")
+    text = re.sub(r"\s+", " ", text)
+    return text.lower()
+
+def _asset_wiki_filename(asset: Mapping[str, Any]) -> str:
+    """从下载资产还原其原始 wiki 文件名（供与 imagePlacements.fileName 精确匹配）。
+    优先 ``authorizationProof`` / ``sourceUrl`` 里的 ``File:<name>``，其次末段路径。
+    绝不使用 sourceAssetRef 的批次路径（含实体名会污染子串匹配）。
+    """
+    from urllib.parse import unquote
+    for key in ("authorizationProof", "sourceUrl", "collectionPageUrl", "url", "requestedUrl"):
+        raw = unquote(str(asset.get(key) or "")).strip()
+        if not raw:
+            continue
+        match = re.search(r"[Ff]ile:([^/?#]+)", raw)
+        candidate = match.group(1) if match else raw.rsplit("/", 1)[-1]
+        norm = _normalize_wiki_filename(candidate)
+        if norm and re.search(r"\.(?:jpe?g|png|gif|svg|webp|tif?f)$", norm):
+            return norm
+    return ""
+
+def _placement_is_map_like(placement: Mapping[str, Any]) -> bool:
+    """imagePlacements 行是否为地图/位置图（不可做封面，也不进正文内嵌）。"""
+    if str(placement.get("placementType") or "") == "locatorMap":
+        return True
+    try:
+        if int(placement.get("coverCandidateRank") or 0) < 0:
+            return True
+    except (TypeError, ValueError):
+        pass
+    return False
 
 def _pick_homepage_assets(
     task_id: str,
@@ -637,7 +884,6 @@ def _pick_homepage_assets(
 ) -> list[dict[str, Any]]:
     """主页可发布图片：仅 primaryEvidenceRef 所属 source unit 的已授权 assets。"""
     from _common.source_unit import object_image_candidates
-
     base = _entity_base_draft(task_id, batch_id, domain, etype, name)
     unit_ref = primary_ref or str(
         (base or {}).get("primaryEvidenceRef") or (base or {}).get("sourceRef") or ""
@@ -645,6 +891,31 @@ def _pick_homepage_assets(
     if not unit_ref:
         return []
     obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
+    placements: list[dict[str, Any]] = []
+    meta_path = batch_root(task_id, batch_id) / Path(unit_ref).parent / "meta.json"
+    if meta_path.is_file():
+        meta = read_json(meta_path)
+        raw_placements = meta.get("imagePlacements") if isinstance(meta, dict) else []
+        if isinstance(raw_placements, list):
+            placements = [row for row in raw_placements if isinstance(row, dict)]
+    # imagePlacements 按规范化后的原始 wiki 文件名精确索引（禁止实体名子串污染）。
+    # 同名多行时优先保留「有原图注」的行（如 infobox 空图注 vs 正文原图注）。
+    placement_by_name: dict[str, dict[str, Any]] = {}
+    for row in placements:
+        key = _normalize_wiki_filename(str(row.get("fileName") or ""))
+        if not key:
+            continue
+        existing = placement_by_name.get(key)
+        if existing is None or (
+            not str(existing.get("caption") or "").strip()
+            and str(row.get("caption") or "").strip()
+        ):
+            placement_by_name[key] = row
+    def _placement_for(image: dict[str, Any]) -> dict[str, Any]:
+        key = _asset_wiki_filename(image)
+        if key:
+            return placement_by_name.get(key, {})
+        return {}
     candidates: list[dict[str, Any]] = []
     for image in object_image_candidates(obj, task_id, batch_id):
         if not _same_source_unit(str(image.get("sourceRef") or ""), unit_ref):
@@ -655,9 +926,23 @@ def _pick_homepage_assets(
             continue
         if not (str(image.get("authorizationProof") or "").strip() or str(image.get("termsUrl") or "").strip()):
             continue
+        placement = _placement_for(image)
+        # 地图/位置图（locatorMap / coverCandidateRank<0）不可做封面，也不进正文内嵌：
+        # 直接从主页可发布集合剔除（IR 已在 add_figure 标注，此处按真相源过滤）。
+        if placement and _placement_is_map_like(placement):
+            continue
+        if placement:
+            image = {
+                **image,
+                "caption": str(placement.get("caption") or image.get("caption") or image.get("relevance") or ""),
+                "sectionAnchor": str(placement.get("sectionSlug") or ""),
+                "paragraphIndex": int(placement.get("paragraphIndex") or 0),
+                "sourceOrder": int(placement.get("sourceOrder") or 0),
+            }
         candidates.append(image)
     candidates.sort(
         key=lambda item: (
+            int(item["sourceOrder"]) if "sourceOrder" in item else 9999,
             str(item.get("sourceAssetRef") or ""),
             str(item.get("caption") or ""),
         )
@@ -673,7 +958,6 @@ def _pick_homepage_assets(
         if len(picked) >= max(1, limit):
             break
     return picked
-
 
 def _copy_homepage_asset(
     task_id: str,
@@ -701,6 +985,9 @@ def _copy_homepage_asset(
         ref=str(image.get("sourceAssetRef") or image.get("sourceRef") or entity_dir.as_posix()),
         global_batch_seq=global_batch_seq,
         registry=registry,
+        caption=str(image.get("caption") or image.get("relevance") or ""),
+        section_slug=str(image.get("sectionAnchor") or ""),
+        ordinal=int(image.get("sourceOrder") or 0) + 1,
     )
     assets_dir = entity_dir / "assets"
     assets_dir.mkdir(parents=True, exist_ok=True)
@@ -716,15 +1003,14 @@ def _copy_homepage_asset(
         "credit": str(image.get("creator") or "").strip(),
         "relevance": str(image.get("relevance") or "").strip(),
         "sourceRef": str(image.get("sourceRef") or "").strip(),
+        "sourceAssetId": str(image.get("sourceAssetId") or "").strip(),
         "sourceAssetRef": str(image.get("sourceAssetRef") or "").strip(),
         "termsUrl": str(image.get("termsUrl") or "").strip(),
         "authorizationProof": str(image.get("authorizationProof") or "").strip(),
     }
 
-
 def _homepage_gate_body(page_text: str) -> str:
     """剥掉 frontmatter / figure 块 / asset:// 指令 / 标题井号，得到贴合度+模板指纹门用正文。
-
     门禁在配图注入**之前**对 Agent 原始正文运行；此处同时剥离 `:::figure` 块与文末
     `## 图集`，使得即便 Agent 自行内联了图片，也不会污染字符贴合度与模板指纹度量。
     """
@@ -735,6 +1021,64 @@ def _homepage_gate_body(page_text: str) -> str:
     body = re.sub(r"^#{1,6}\s*", "", body, flags=re.MULTILINE)
     return body.strip()
 
+def _homepage_outline_issues(outline_rows: list[dict[str, Any]], page_text: str, label: str) -> list[str]:
+    """校验关键章节在 Agent 正文中按原 `##/###` 层级保留。"""
+    if not outline_rows:
+        return []
+    from _common.localization import fold_to_simplified
+    from _common.section_outline import match_heading, slugify_section
+    headings: list[tuple[int, str]] = []
+    for line in str(page_text or "").splitlines():
+        heading = match_heading(line)
+        if heading is None:
+            continue
+        headings.append((int(heading[0]), slugify_section(heading[1])))
+    issues: list[str] = []
+    for row in outline_rows:
+        if not isinstance(row, dict):
+            continue
+        title = str(row.get("title") or "").strip()
+        if not title:
+            continue
+        try:
+            level = int(row.get("level") or 2)
+        except (TypeError, ValueError):
+            level = 2
+        slug = slugify_section(fold_to_simplified(title))
+        matched = False
+        for page_level, page_slug in headings:
+            if page_level != level:
+                continue
+            if page_slug == slug or page_slug.startswith(slug) or slug.startswith(page_slug):
+                matched = True
+                break
+        if not matched:
+            marker = "#" * min(max(level, 1), 6)
+            issues.append(f"{label}: 关键章节「{title}」未按 `{marker}` 层级保留为小标题")
+    return issues
+
+def _homepage_source_figure_issues(base: dict[str, Any], draft_text: str, label: str) -> list[str]:
+    """Agent 必须带回 prompt 底稿中的 source-stage asset:// 占位（landscape 兜底）。
+    AI 协议主线（[[IMG:]] 占位符）由 placeholder_consistency_issues 单独校验；
+    本函数只兜底旧式 asset:// 直引（base markdown 无占位符时自动为空）。
+    """
+    from _common.asset_placement import referenced_asset_ids
+    expected = referenced_asset_ids(str(base.get("markdown") or ""))
+    if not expected:
+        return []
+    actual = referenced_asset_ids(draft_text)
+    missing = sorted(expected - actual)
+    return [f"{label}: homepage figure placeholder missing asset://{asset_id}" for asset_id in missing]
+
+def _replace_homepage_source_asset_refs(page_text: str, assets: list[dict[str, Any]]) -> str:
+    """把 prompt 中 source 阶段 `asset://sourceAssetId` 替换为发布态 assetId。"""
+    out = str(page_text or "")
+    for asset in assets:
+        source_asset_id = str(asset.get("sourceAssetId") or "").strip()
+        final_asset_id = str(asset.get("assetId") or "").strip()
+        if source_asset_id and final_asset_id:
+            out = out.replace(f"asset://{source_asset_id}", f"asset://{final_asset_id}")
+    return out
 
 def _ensure_homepage_cover_frontmatter(page_text: str, cover_asset_id: str) -> str:
     """实体主页与文章一致：frontmatter 标 coverImage，供 feed/卡片封面取图。"""
@@ -751,44 +1095,80 @@ def _ensure_homepage_cover_frontmatter(page_text: str, cover_asset_id: str) -> s
             return head + "\n" + cover_line + page_text[end:]
     return f"---\n{cover_line}\n---\n\n" + page_text
 
+def _fold_homepage_manifest_assets(
+    assets: list[dict[str, Any]],
+    assets_dir: Path,
+    *,
+    task_id: str = "",
+    batch_id: str = "",
+) -> None:
+    """fold_to_simplified 会折叠 page.md 内 asset:// id；manifest、磁盘文件名与
+    asset_id_registry 三者须同步折叠，避免图文闭环门/目录证据链门误杀。"""
+    registry = None
+    if task_id and batch_id:
+        registry = load_batch_asset_registry(task_id, batch_id, 0)
+    for asset in assets:
+        old_id = str(asset.get("assetId") or "").strip()
+        if not old_id:
+            continue
+        new_id = fold_to_simplified(old_id)
+        if new_id == old_id:
+            continue
+        if registry is not None:
+            registry.rename_asset_id(old_id, new_id)
+        old_file = str(asset.get("fileName") or "").strip()
+        suffix = Path(old_file).suffix if old_file else ".jpg"
+        new_file = f"{new_id}{suffix}"
+        src = assets_dir / old_file if old_file else assets_dir / f"{old_id}{suffix}"
+        dst = assets_dir / new_file
+        if src.is_file() and src != dst:
+            if dst.is_file():
+                src.unlink()
+            else:
+                src.rename(dst)
+        asset["assetId"] = new_id
+        asset["fileName"] = new_file
+        for field in ("caption", "relevance"):
+            if asset.get(field):
+                asset[field] = fold_to_simplified(str(asset[field]))
 
 def _homepage_layout_assets(assets: list[dict[str, Any]]) -> None:
-    """就地为 manifest 资产标注建议版面：封面 fullWidth，其余章节图交替环绕。
-
-    与正文 figure 块由 place_assets_in_markdown 注入时保持同一规则（封面 fullWidth、
-    其余 wrapRight/wrapLeft 交替），让 manifest.imageLayout 与正文版面一致。
+    """就地为 manifest 资产标注版面：主页三段契约下正文图一律块级 fullWidth。
+    禁 wrapLeft/wrapRight 文字环绕（移动端拥挤且与主页契约冲突）；related 资产的
+    grid 版面由 place_homepage_assets_in_markdown 在归入相关图片区时覆盖。
     """
-    wrap_cycle = ("wrapRight", "wrapLeft")
-    wrap_index = 0
-    for index, asset in enumerate(assets):
-        if asset.get("role") == "cover" or index == 0:
-            asset["imageLayout"] = "fullWidth"
-        else:
-            asset["imageLayout"] = wrap_cycle[wrap_index % len(wrap_cycle)]
-            wrap_index += 1
+    for asset in assets:
+        asset["imageLayout"] = "fullWidth"
         asset.setdefault("sectionAnchor", str(asset.get("sectionAnchor") or ""))
 
-
 def _homepage_tag_refs(domain: str, etype: str, name: str, payload: dict[str, Any]) -> list[str]:
-    """主页确定性标签：复用 compose/agent 透传的 tagRefs，并补足 Topic/Format 最小集。
-
-    保证 manifest.tagRefs >= 2 个合法 ref（关闭“主页零标签”缺口）。区域/季节等更丰富的
-    证据型标签依赖 compose/agent 产出，作为后续增强（见 backlog），此处不编造区域 ref。
+    """主页确定性标签：主清单契约来源的类型 + 地理标签，加 compose/agent 透传 tagRefs。
+    WP3 统一打标：`typeTagRefs`（Entity/地点/** 全量类型）、`geoTagRef` 主归属与
+    `geoTagRefs` 全量地理归属（Topic/地理/行政区/**）全部并进 tagRefs
+    → ObjectTagIndex 多值反查（「按博物馆浏览」「四川的景区」均命中）。
+    仍不编造：主清单/上游没提供的维度不打。最后补 Topic/Format 最小集，
+    保证 manifest.tagRefs >= 2 个合法 ref（关闭「主页零标签」缺口）。
     """
     from _common.content_tags import resolved_content_tag_refs
-
-    brief: dict[str, Any] = {}
-    candidate = payload.get("tagRefs") if isinstance(payload, dict) else None
-    if isinstance(candidate, list):
-        provided = [str(item) for item in candidate if str(item).strip()]
-        if provided:
-            brief["tagRefs"] = provided
+    provided: list[str] = []
+    if isinstance(payload, dict):
+        provided.extend(
+            str(item).strip() for item in (payload.get("typeTagRefs") or []) if str(item).strip()
+        )
+        geo_tag_ref = str(payload.get("geoTagRef") or "").strip()
+        if geo_tag_ref:
+            provided.append(geo_tag_ref)
+        provided.extend(
+            str(item).strip() for item in (payload.get("geoTagRefs") or []) if str(item).strip()
+        )
+        candidate = payload.get("tagRefs")
+        if isinstance(candidate, list):
+            provided.extend(str(item) for item in candidate if str(item).strip())
+    brief: dict[str, Any] = {"tagRefs": list(dict.fromkeys(provided))} if provided else {}
     return resolved_content_tag_refs(brief, "article")
-
 
 def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> list[str]:
     """把创作 agent写回的 `4.draft/page.md` 正文终态化为实体主页三件套。
-
     不再脚本拼正文/切句/凑字：正文必须由创作 agent在底稿基础上轻改创作（generator=agent）。
     finalize 只做：① 贴合度门 + 模板指纹门把关 Agent 正文；② 从同源 unit 选封面/图库写入 manifest；
     ③ 据正文事实确定性映射 summary；④ 写 generator=agent 与真实 agentRunId provenance。
@@ -806,33 +1186,66 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
     base_text = str(base.get("text") or "").strip()
     if not base_text:
         return [f"{label}: homepage baseDraft.text 缺失（先回退 source 修复，再创作主页）"]
-
-    draft_page = _entity_draft_dir(task_id, batch_id, domain, etype, name) / "page.md"
+    draft_dir = _entity_draft_dir(task_id, batch_id, domain, etype, name)
+    # 失败协议：Agent 判定底稿与实体不一致/不足以支撑主页时写 failure.json，
+    # finalize 结构化阻断并指回 source 修复，绝不带病物化。
+    from _common.homepage_source_judge import entity_page_failure_issues, read_entity_page_failure
+    failure = read_entity_page_failure(draft_dir)
+    if failure is not None:
+        failure_problems = entity_page_failure_issues(failure, entity_name=name)
+        if failure_problems:
+            return [f"{label}: 4.draft/failure.json 不合法: {p}" for p in failure_problems]
+        failure_reasons = "; ".join(
+            str(r).strip() for r in (failure.get("reasons") or []) if str(r).strip()
+        )
+        return [
+            f"{label}: Agent 失败协议（{failure.get('failureKind')}）：{failure_reasons or '底稿与实体不一致'}"
+            "；已阻断 finalize，请回退 source 修复/更换底稿后删除 failure.json 重跑"
+        ]
+    draft_page = draft_dir / "page.md"
     if not draft_page.is_file():
         return [f"{label}: 等待创作 agent写回 4.draft/page.md（generator=agent 正文）"]
     draft_text = draft_page.read_text(encoding="utf-8")
     if is_placeholder(draft_text):
         return [f"{label}: 4.draft/page.md 仍是占位，等待创作 agent按底稿创作正文"]
-
     from _common.figure_groups import expand_figure_groups, figure_group_integrity_issues
-
     # 连续图组带回完整性（P2 / R-CS10）：先对【原始正文】判 figuregroup 是否按原 id/张数带回。
     group_issues = figure_group_integrity_issues(draft_text, base_text)
     if group_issues:
         return [f"{label}: figuregroup integrity: {issue}" for issue in group_issues]
     # 通过后回填：把连续图组占位展开为 N 个同源单图块，下游门禁/配图注入统一消费单图形态。
-    draft_text = expand_figure_groups(draft_text)
-
+    draft_text = fold_to_simplified(expand_figure_groups(draft_text))
+    structure_issues = _homepage_outline_issues(
+        [row for row in (base.get("sectionOutline") or []) if isinstance(row, dict)],
+        draft_text,
+        label,
+    )
+    structure_issues.extend(_homepage_source_figure_issues(base, draft_text, label))
+    # AI 最小干扰协议：占位符一致性校验（缺失/新增/重复/行尾追加文字 → 结构化 reject），
+    # 通过后代码侧把 [[IMG:fig_NN]] 展开为块级 fullWidth figure（caption 只用 bindings 原图注）。
+    from _common.ai_refine_protocol import expand_image_placeholders, placeholder_consistency_issues
+    # draft_text 已做繁简折叠，bindings caption 同步折叠避免繁体图注误判「被改写」。
+    placeholder_bindings = [
+        {**row, "caption": fold_to_simplified(str(row.get("caption") or ""))}
+        for row in (payload.get("imagePlaceholderBindings") or [])
+        if isinstance(row, dict)
+    ]
+    structure_issues.extend(
+        placeholder_consistency_issues(draft_text, placeholder_bindings, label=label)
+    )
+    if structure_issues:
+        return structure_issues
+    draft_text = expand_image_placeholders(draft_text, placeholder_bindings)
     gate_body = _homepage_gate_body(draft_text)
+    base_text_for_gate = fold_to_simplified(base_text)
     gate_issues: list[str] = []
     gate_issues.extend(f"{label}: {msg}" for msg in template_fingerprint_issues(gate_body))
     from _common.base_draft import base_draft_fidelity_issues
-
     gate_issues.extend(
         f"{label}: {msg}"
         for msg in base_draft_fidelity_issues(
             gate_body,
-            base_text,
+            base_text_for_gate,
             carrier="article",
             max_ratio=HOMEPAGE_FIDELITY_MAX,
             source_use_mode=str(base.get("sourceUseMode") or "factual_reference_only"),
@@ -840,19 +1253,19 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
     )
     if gate_issues:
         return gate_issues
-
     images = _pick_homepage_assets(task_id, batch_id, domain, etype, name)
     if not images:
         return [f"{label}: homepage lane 无可发布图片资产"]
     obj = batch_entity_object_dir(task_id, batch_id, domain, etype, name)
     obj.mkdir(parents=True, exist_ok=True)
     from _common.paths import STAGE_REVIEW, ensure_object_stages
-
     ensure_object_stages(obj, through_stage=STAGE_REVIEW)
     assets: list[dict[str, Any]] = []
     for index, image in enumerate(images):
-        manifest_role = "cover" if index == 0 else "gallery"
-        # assetId 仅接受 cover/closing/detail；gallery 语义写入 manifest.role。
+        # 三段角色契约（cover/inline/related）：初始非封面图默认 related，
+        # place_homepage_assets_in_markdown 按锚点+原图注裁决是否提升为 inline。
+        manifest_role = "cover" if index == 0 else "related"
+        # assetId 仅接受 cover/closing/detail；inline/related 语义写入 manifest.role。
         asset_role = "cover" if index == 0 else "detail"
         asset = _copy_homepage_asset(
             task_id,
@@ -867,13 +1280,12 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
             assets.append(asset)
     if not assets:
         return [f"{label}: homepage asset copy failed"]
-
-    # 配图确定性注入：在门禁通过后，把同源真实图按章节锚点注入正文 figure 块
-    # （封面=第一图 fullWidth、其余按章节就近 wrapLeft/wrapRight、无法定位进文末『图集』）。
+    draft_text = _replace_homepage_source_asset_refs(draft_text, assets)
+    # 配图确定性注入（主页三段契约）：封面只进 frontmatter；有原图注的图按章节锚点
+    # 注入正文块级 fullWidth figure（每章节最多 1 张）；其余进文末『## 相关图片』gallery。
     # 幂等：Agent 已内联的 asset:// 不重复注入。
-    from _common.asset_placement import place_assets_in_markdown
+    from _common.asset_placement import place_homepage_assets_in_markdown
     from _common.creator_assignment import creator_from_payload
-
     creator_fields = creator_from_payload(payload)
     image_placements: list[dict[str, Any]] = []
     unit_ref = str(base.get("primaryEvidenceRef") or base.get("sourceRef") or "").strip()
@@ -887,70 +1299,51 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
                     image_placements = [row for row in raw_placements if isinstance(row, dict)]
         except (OSError, ValueError, TypeError):
             image_placements = []
-
     _homepage_layout_assets(assets)
     # 把 meta.imagePlacements 的 caption 回填到 manifest assets（wikitext 语义 caption）。
+    # 用规范化原始 wiki 文件名精确等值匹配；禁止子串匹配（实体名会污染批次路径）。
     placement_caption_by_file = {
-        str(p.get("fileName") or "").lower(): str(p.get("caption") or "")
+        _normalize_wiki_filename(str(p.get("fileName") or "")): str(p.get("caption") or "")
         for p in image_placements
-        if str(p.get("caption") or "").strip()
+        if str(p.get("fileName") or "").strip() and str(p.get("caption") or "").strip()
     }
     if placement_caption_by_file:
-        from urllib.parse import unquote
-
         for asset in assets:
-            hay = unquote(
-                " ".join(
-                    [
-                        str(asset.get("sourceAssetRef") or ""),
-                        str(asset.get("fileName") or ""),
-                        str(asset.get("authorizationProof") or ""),
-                    ]
-                )
-            ).lower().replace("%20", " ")
-            for file_key, cap in placement_caption_by_file.items():
-                stem = Path(file_key).stem.lower()
-                if file_key and (file_key in hay or stem in hay):
-                    asset["caption"] = cap
-                    break
-
+            key = _asset_wiki_filename(asset)
+            cap = placement_caption_by_file.get(key) if key else None
+            if cap:
+                asset["caption"] = fold_to_simplified(cap)
     from _common.asset_placement import _caption_is_degraded
-
     for asset in assets:
-        if str(asset.get("role") or "") != "cover":
-            continue
         caption = str(asset.get("caption") or "")
         file_name = str(asset.get("fileName") or "")
-        if _caption_is_degraded(caption, file_name=file_name):
-            # 退化 caption 一律回退到原文标题（实体名），禁止任何领域硬编码补全。
-            asset["caption"] = name
-
+        if str(asset.get("role") or "") == "cover":
+            if _caption_is_degraded(caption, file_name=file_name):
+                # 封面退化 caption 回退到原文标题（实体名），禁止任何领域硬编码补全。
+                asset["caption"] = name
+            else:
+                asset["caption"] = fold_to_simplified(caption)
+        elif _caption_is_degraded(caption, file_name=file_name):
+            # 非封面图退化 caption 一律清空：无原图注不加说明、禁止虚构或文件名占位。
+            asset["caption"] = ""
+        else:
+            asset["caption"] = fold_to_simplified(caption)
     # wikitext imagePlacements 用 fileName 锚点；finalize 已分配 assetId，在此对齐。
+    # 同样用原始 wiki 文件名精确等值匹配，杜绝实体名子串误命中。
+    asset_id_by_wiki_name: dict[str, str] = {}
+    for asset in assets:
+        key = _asset_wiki_filename(asset)
+        if key and key not in asset_id_by_wiki_name:
+            asset_id_by_wiki_name[key] = str(asset.get("assetId") or "")
     resolved_placements: list[dict[str, Any]] = []
     for row in image_placements:
         if not isinstance(row, dict):
             continue
-        file_name = str(row.get("fileName") or "").lower()
-        matched_id = ""
-        for asset in assets:
-            from urllib.parse import unquote
-
-            hay = unquote(
-                " ".join(
-                    [
-                        str(asset.get("sourceAssetRef") or ""),
-                        str(asset.get("fileName") or ""),
-                        str(asset.get("authorizationProof") or ""),
-                    ]
-                )
-            ).lower().replace("%20", " ")
-            if file_name and (file_name in hay or Path(file_name).stem in hay):
-                matched_id = str(asset.get("assetId") or "")
-                break
+        key = _normalize_wiki_filename(str(row.get("fileName") or ""))
+        matched_id = asset_id_by_wiki_name.get(key, "") if key else ""
         if matched_id:
             resolved_placements.append({**row, "assetId": matched_id})
-
-    final_text = place_assets_in_markdown(
+    final_text = place_homepage_assets_in_markdown(
         draft_text,
         assets,
         placements=resolved_placements or image_placements,
@@ -960,14 +1353,28 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
         str((assets[0] or {}).get("assetId") or ""),
     )
     final_text = _ensure_homepage_cover_frontmatter(final_text, cover_asset_id)
+    final_text = fold_to_simplified(final_text)
+    _fold_homepage_manifest_assets(assets, obj / "assets", task_id=task_id, batch_id=batch_id)
     (obj / "page.md").write_text(final_text, encoding="utf-8")
-
-    facts = _split_fact_sentences(gate_body, entity_name=name) or _split_fact_sentences(base_text, entity_name=name)
+    facts = _split_fact_sentences(gate_body, entity_name=name) or _split_fact_sentences(base_text_for_gate, entity_name=name)
     single_source = str(base.get("primaryEvidenceRef") or base.get("sourceRef") or "").strip()
     text_source_refs = _dedupe_nonempty([single_source])
     image_source_refs = list(text_source_refs)
     source_refs = list(text_source_refs)
     tag_refs = _homepage_tag_refs(domain, etype, name, payload)
+    # 地理归属写入通路（裁决 7 / schema/publish/entity.schema.json）：
+    # geoTagRef 单值主归属为物化必填（缺失由 validate_entity_page 阻断），
+    # geoTagRefs 全量数组与 aliases 仅在上游（主清单→coverageTargets→payload）提供时写入。
+    geo_tag_ref = str(payload.get("geoTagRef") or "").strip()
+    geo_tag_refs = _dedupe_nonempty([str(g).strip() for g in (payload.get("geoTagRefs") or [])])
+    entity_aliases = _dedupe_nonempty([str(a).strip() for a in (payload.get("aliases") or [])])
+    geo_fields: dict[str, Any] = {}
+    if geo_tag_ref:
+        geo_fields["geoTagRef"] = geo_tag_ref
+    if geo_tag_refs:
+        geo_fields["geoTagRefs"] = geo_tag_refs
+    if entity_aliases:
+        geo_fields["aliases"] = entity_aliases
     write_json(
         obj / "_entity.json",
         {
@@ -981,6 +1388,7 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
             "textSourceRefs": text_source_refs,
             "imageSourceRefs": image_source_refs,
             "tagRefs": tag_refs,
+            **geo_fields,
             **creator_fields,
         },
     )
@@ -998,13 +1406,27 @@ def materialize_entity_page(task_id: str, batch_id: str, domain: str, etype: str
             **creator_fields,
         },
     )
+    source_paths = _entity_source_paths(task_id, batch_id, domain, etype, name)
+    review_payload = _entity_review_payload(
+        issues=[],
+        source_paths=source_paths,
+        base_draft_exists=bool(source_paths),
+    )
+    _write_entity_review_sidecars(
+        task_id,
+        batch_id,
+        domain,
+        etype,
+        name,
+        source_paths=source_paths,
+        review_payload=review_payload,
+    )
     return []
-
 
 def materialize_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> list[str]:
     """物化所有缺失或未过门的 coverage 实体主页，返回剩余物化问题。"""
     issues: list[str] = []
-    for target in _coverage_targets(spec):
+    for target in _coverage_targets(spec, task_id=task_id, batch_id=batch_id):
         domain, etype, name = target["domain"], target["etype"], target["name"]
         current_issues = validate_entity_page(
             task_id,
@@ -1018,14 +1440,11 @@ def materialize_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) 
         issues.extend(materialize_entity_page(task_id, batch_id, domain, etype, name))
     return issues
 
-
 def _entity_draft_path(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> Path:
     return batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_DRAFT) / "page.md"
 
-
 def _write_entity_draft(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> Path:
     """返回创作 agent创作的 4.draft/page.md；不得用 finalize 终稿覆盖 Agent 正文。
-
     主页正文已由创作 agent在 4.draft/page.md 创作，finalize 只把它注入封面后写到 page.md。
     这里只在草稿意外缺失时，用终稿做一次性补写兜底，否则保留 Agent 原始草稿用于
     finalization_report 的 draft↔final 归一化对照。
@@ -1038,7 +1457,6 @@ def _write_entity_draft(task_id: str, batch_id: str, domain: str, etype: str, na
         draft_page.write_text(final_page.read_text(encoding="utf-8"), encoding="utf-8")
     return draft_page
 
-
 def _entity_review_paths(task_id: str, batch_id: str, domain: str, etype: str, name: str) -> tuple[Path, Path, Path]:
     review_dir = batch_entity_stage_dir(task_id, batch_id, domain, etype, name, STAGE_REVIEW)
     return (
@@ -1046,7 +1464,6 @@ def _entity_review_paths(task_id: str, batch_id: str, domain: str, etype: str, n
         review_dir / "provenance.json",
         review_dir / "finalization_report.json",
     )
-
 
 def _entity_homepage_agent_run_id(
     task_id: str, batch_id: str, domain: str, etype: str, name: str
@@ -1059,7 +1476,6 @@ def _entity_homepage_agent_run_id(
             return run_id
     try:
         from task.run import load_workflow_state
-
         state = load_workflow_state(task_id, batch_id)
     except (ImportError, OSError, ValueError, TypeError):
         return ""
@@ -1082,7 +1498,6 @@ def _entity_homepage_agent_run_id(
             if run_id:
                 return run_id
     return ""
-
 
 def _build_entity_provenance(
     *,
@@ -1150,7 +1565,6 @@ def _build_entity_provenance(
     provenance["final"]["articleDigest"] = compute_document_sha256(final_text)
     return provenance
 
-
 def _write_entity_review_sidecars(
     task_id: str,
     batch_id: str,
@@ -1196,7 +1610,6 @@ def _write_entity_review_sidecars(
     write_entity_object_index(task_id, batch_id, domain, etype, name)
     sync_entity_object_to_task_mirror(task_id, batch_id, domain, etype, name)
 
-
 def _entity_review_payload(
     *,
     issues: list[str],
@@ -1221,7 +1634,6 @@ def _entity_review_payload(
         },
     }
 
-
 def _homepage_authenticity_issues(
     task_id: str,
     batch_id: str,
@@ -1232,7 +1644,6 @@ def _homepage_authenticity_issues(
     label: str,
 ) -> list[str]:
     """实体主页正文真实性门：模板指纹 + 底稿贴合度（作用在最终 page.md 正文上）。
-
     与文章同源：finalize 已在生成时把关，这里在校验侧做防御纵深，确保任何
     手改/回归都无法把机械模板或脱离底稿的从零另写蒙混过门。
     """
@@ -1244,10 +1655,9 @@ def _homepage_authenticity_issues(
     gate_body = _homepage_gate_body(page_text)
     issues.extend(f"{label}: {msg}" for msg in template_fingerprint_issues(gate_body))
     base = _entity_base_draft(task_id, batch_id, domain, etype, name)
-    base_text = str((base or {}).get("text") or "").strip()
+    base_text = fold_to_simplified(str((base or {}).get("text") or "").strip())
     if base_text:
         from _common.base_draft import base_draft_fidelity_issues
-
         issues.extend(
             f"{label}: {msg}"
             for msg in base_draft_fidelity_issues(
@@ -1259,7 +1669,6 @@ def _homepage_authenticity_issues(
             )
         )
     return issues
-
 
 def validate_entity_page(
     task_id: str,
@@ -1276,7 +1685,6 @@ def validate_entity_page(
     manifest = obj / "manifest.json"
     label = f"{domain}/{etype}/{name}"
     issues: list[str] = []
-
     if not page.is_file():
         issues.append(f"{label}: page.md 缺失")
     else:
@@ -1306,13 +1714,11 @@ def validate_entity_page(
     if not ejson.is_file():
         issues.append(f"{label}: _entity.json 缺失")
         return issues
-
     try:
         payload = read_json(ejson)
     except Exception as exc:
         issues.append(f"{label}: _entity.json 不可解析: {exc}")
         return issues
-
     for field in _REQUIRED_ENTITY_FIELDS:
         if not payload.get(field):
             issues.append(f"{label}: _entity.json 缺字段 {field}")
@@ -1320,10 +1726,23 @@ def validate_entity_page(
         issues.append(f"{label}: _entity.json domain={payload['domain']} 与目录不一致")
     if payload.get("type") and payload["type"] != etype:
         issues.append(f"{label}: _entity.json type={payload['type']} 与目录不一致")
+    # 地理归属契约（schema/publish/entity.schema.json）：主归属须为行政区树路径；
+    # 全量数组存在时必须包含主归属（geoTagRef ∈ geoTagRefs）。
+    geo_tag_ref = str(payload.get("geoTagRef") or "").strip()
+    if geo_tag_ref and not geo_tag_ref.startswith(_GEO_TAG_REF_PREFIX):
+        issues.append(f"{label}: _entity.json geoTagRef '{geo_tag_ref}' 必须以 {_GEO_TAG_REF_PREFIX} 开头")
+    geo_tag_refs = [str(g).strip() for g in (payload.get("geoTagRefs") or []) if str(g).strip()]
+    if geo_tag_refs:
+        if geo_tag_ref and geo_tag_ref not in geo_tag_refs:
+            issues.append(f"{label}: _entity.json geoTagRefs 必须包含主归属 geoTagRef '{geo_tag_ref}'")
+        for ref in geo_tag_refs:
+            if not ref.startswith(_GEO_TAG_REF_PREFIX):
+                issues.append(f"{label}: _entity.json geoTagRefs 项 '{ref}' 必须以 {_GEO_TAG_REF_PREFIX} 开头")
     issues.extend(_condition_profile_issues(payload, label, catalogs_root=_CONDITION_CATALOGS_ROOT))
     issues.extend(_homepage_base_source_issues(task_id, batch_id, domain, etype, name))
-
     issues.extend(_asset_closure_issues(obj, manifest_payload, label))
+    from build.homepage_validation import homepage_structure_issues
+    issues.extend(homepage_structure_issues(obj, manifest_payload, label))
     primary_ref = ""
     base = _entity_base_draft(task_id, batch_id, domain, etype, name)
     primary_ref = str((base or {}).get("primaryEvidenceRef") or (base or {}).get("sourceRef") or "")
@@ -1336,27 +1755,21 @@ def validate_entity_page(
                 f"{label}: asset {raw.get('assetId') or raw.get('fileName')} "
                 f"sourceRef must match primaryEvidenceRef unit"
             )
-    source_paths = _entity_source_paths(task_id, batch_id, domain, etype, name)
-    review_payload = _entity_review_payload(
-        issues=issues,
-        source_paths=source_paths,
-        base_draft_exists=bool(source_paths),
-    )
-    _write_entity_review_sidecars(
+    review_path, provenance_path, finalization_path = _entity_review_paths(
         task_id,
         batch_id,
         domain,
         etype,
         name,
-        source_paths=source_paths,
-        review_payload=review_payload,
     )
+    for sidecar in (review_path, provenance_path, finalization_path):
+        if not sidecar.is_file():
+            issues.append(f"{label}: {relative_batch_ref(sidecar, task_id, batch_id)} 缺失")
     return issues
-
 
 def validate_entity_pages(task_id: str, batch_id: str, spec: dict[str, Any]) -> list[str]:
     """校验全部 coverage 实体主页，返回阻断问题列表（空=采纳通过）。"""
-    targets = _coverage_targets(spec)
+    targets = _coverage_targets(spec, task_id=task_id, batch_id=batch_id)
     if not targets:
         return ["build validate: scope.coverageTargets 为空，无可校验实体"]
     issues: list[str] = []

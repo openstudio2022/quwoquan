@@ -1,0 +1,305 @@
+# 全国地点主清单 · 浙江省舟山市（discovery_seed/2，WP2 区县级全量枚举）
+# schema: quwoquan_data/schema/coverage/master_list.schema.json
+# 门禁: qwq-data verify coverage-master-list
+schemaVersion: quwoquan_data.discovery_seed/2
+country: 中国
+province: 浙江省
+city: 舟山市
+generatedBy: wp2_enumeration_20260708
+districts:
+- district: 定海区
+  leaves:
+  - name: 舟山鸦片战争遗址公园
+    canonicalName: 舟山鸦片战争遗址公园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/定海区
+    aliases:
+    - 竹山公园
+    selectionPriority: 1
+    sourceReadiness: pending
+  - name: 定海古城
+    canonicalName: 定海古城
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/定海区
+    aliases:
+    - 定海老城
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 舟山博物馆
+    canonicalName: 舟山博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/定海区
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 三毛祖居
+    canonicalName: 三毛祖居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/定海区
+    aliases:
+    - 三毛文化村
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 马岙博物馆
+    canonicalName: 马岙博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/定海区
+    selectionPriority: 5
+    sourceReadiness: pending
+- district: 岱山县
+  leaves:
+  - name: 东沙古镇
+    canonicalName: 东沙古镇
+    entityType: 地点/古镇
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/岱山县
+    aliases:
+    - 东沙古渔镇
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 鹿栏晴沙
+    canonicalName: 鹿栏晴沙
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/岱山县
+    aliases:
+    - 鹿栏晴沙景区
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 中国海洋渔业博物馆
+    canonicalName: 中国海洋渔业博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/岱山县
+    selectionPriority: 3
+    sourceReadiness: pending
+  - name: 秀山岛
+    canonicalName: 秀山岛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/岱山县
+    aliases:
+    - 秀山岛滑泥主题公园
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 摩星山
+    canonicalName: 摩星山（岱山）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/岱山县
+    aliases:
+    - 摩星山景区
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 东沙菜市场
+    canonicalName: 东沙菜市场
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/岱山县
+    sourceReadiness: pending
+    selectionPriority: 6
+- district: 嵊泗县
+  leaves:
+  - name: 嵊泗列岛
+    canonicalName: 嵊泗列岛
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/嵊泗县
+    aliases:
+    - 嵊泗列岛风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 基湖沙滩
+    canonicalName: 基湖沙滩
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/嵊泗县
+    selectionPriority: 2
+    sourceReadiness: pending
+  - name: 枸杞岛
+    canonicalName: 枸杞岛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/嵊泗县
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 嵊山岛
+    canonicalName: 嵊山岛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/嵊泗县
+    aliases:
+    - 嵊山无人村
+    - 后头湾村
+    selectionPriority: 4
+    sourceReadiness: ready
+  - name: 花鸟岛
+    canonicalName: 花鸟岛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/嵊泗县
+    aliases:
+    - 花鸟灯塔
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 花鸟山岛
+    canonicalName: 花鸟山岛
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/嵊泗县
+    sourceReadiness: pending
+    selectionPriority: 6
+- district: 普陀区
+  leaves:
+  - name: 普陀山
+    canonicalName: 普陀山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/宗教场所
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 普陀山风景名胜区
+    selectionPriority: 1
+    sourceReadiness: ready
+  - name: 普济禅寺
+    canonicalName: 普济禅寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 前寺
+    selectionPriority: 2
+    sourceReadiness: ready
+  - name: 法雨禅寺
+    canonicalName: 法雨禅寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 后寺
+    selectionPriority: 3
+    sourceReadiness: ready
+  - name: 南海观音大佛
+    canonicalName: 南海观音大佛
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 南海观音立像
+    selectionPriority: 4
+    sourceReadiness: pending
+  - name: 朱家尖
+    canonicalName: 朱家尖
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 朱家尖岛
+    selectionPriority: 5
+    sourceReadiness: ready
+  - name: 南沙海滨浴场
+    canonicalName: 南沙海滨浴场（朱家尖）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 朱家尖南沙
+    selectionPriority: 6
+    sourceReadiness: pending
+  - name: 桃花岛
+    canonicalName: 桃花岛（舟山）
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 桃花岛风景区
+    selectionPriority: 7
+    sourceReadiness: pending
+  - name: 东极岛
+    canonicalName: 东极岛
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 东极诸岛
+    - 庙子湖岛
+    selectionPriority: 8
+    sourceReadiness: ready
+  - name: 沈家门渔港
+    canonicalName: 沈家门渔港
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 沈家门海鲜夜排档
+    selectionPriority: 9
+    sourceReadiness: pending
+  - name: 白沙岛
+    canonicalName: 白沙岛（舟山）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    selectionPriority: 10
+    sourceReadiness: pending
+  - name: 乌石塘
+    canonicalName: 乌石塘（朱家尖）
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    aliases:
+    - 朱家尖乌石塘
+    selectionPriority: 11
+    sourceReadiness: pending
+  - name: 沈家门街道
+    canonicalName: 沈家门街道
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 蚂蚁岛人民公社旧址
+    canonicalName: 蚂蚁岛人民公社旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    sourceReadiness: pending
+    selectionPriority: 13

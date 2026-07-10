@@ -48,7 +48,7 @@
 ### 2.3 术语门禁（新增）
 
 - 新增 `quwoquan_app/scripts/runtime/verify_concept_naming.py`：扫描 `lib/**` 用户可见文案常量中的禁用词（`空间/频道/论坛/群组/趣群/群聊` 作为群概念语境；「频道」放行首页内容频道语境，用 allowlist 区分），基线只减不增。
-- 串入 `agent_ops/gate/gate_repo.sh` 的 `run_app` 与 `Makefile`（`verify-app-concept-naming`）。
+- 串入 `quwoquan_ops/gate/gate_repo.sh` 的 `run_app` 与 `Makefile`（`verify-app-concept-naming`）。
 - 门禁首发强拦截范围为 App 用户可见文案 + search metadata 展示 label；service/codegen/seed 中 `favorite` 真实残留登记为 WP1 阻塞项，不由 WP5 直接修复。
 
 ### 2.4 spec 修订
@@ -78,7 +78,7 @@
 2. T2：chat 双 Tab + 二级胶囊 widget 测试更新后全绿（两行布局、索引、星标回归）。
 3. T2：搜索结果分组显示「讨论」；搜索契约测试绿。
 4. codegen 产物经 metadata 再生成（hash 比对绿），无手改。
-5. `bash agent_ops/gate/gate_repo.sh --scope app` 全绿；spec 修订完成。
+5. `bash quwoquan_ops/gate/gate_repo.sh --scope app` 全绿；spec 修订完成。
 6. `聊天记录 / 聊天消息 / 聊天会话` 作为消息能力词仍可正常出现；`群主 / 群管` 仅可在深层管理权限语境过渡保留。
 7. WP1 防回归扫描在 App 用户可见层生效：不得新增 `收藏 / 稍后看 / 关注内容 / 共同关注内容`；旧 kind 不回流。
 

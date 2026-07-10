@@ -187,7 +187,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--out",
-        default="artifacts/local-gamma/search_rollback_rehearsal_report.json",
+        default=".qwq_output/env/gamma/local/gamma-local/search_rollback_rehearsal_report.json",
     )
     parser.add_argument(
         "--only",

@@ -1,4 +1,4 @@
-"""3× creator content bind smoke for commercial batch-100."""
+"""3× creator content bind smoke for the canonical travel-photo 1k pool."""
 from __future__ import annotations
 
 import json
@@ -8,8 +8,8 @@ from _common.creator_assignment import creator_assignment_from_profile
 from _common.creator_pool.registry_bridge import load_travel_batch_creators
 
 REPO = Path(__file__).resolve().parents[4]
-SEED = REPO / "quwoquan_service/contracts/metadata/_shared/test_fixtures/creator_pool/creator_travel_batch100.seed.json"
-BATCH = "travel_batch_100_v1"
+SEED = REPO / "quwoquan_service/contracts/metadata/_shared/test_fixtures/creator_pool/creator_travel_photo_1k_v1.seed.json"
+BATCH = "travel_photo_1k_v1"
 
 
 def _carrier_pick(users: list[dict], carrier: str) -> dict:
@@ -29,7 +29,7 @@ def _carrier_pick(users: list[dict], carrier: str) -> dict:
     return best
 
 
-def test_batch100_content_bind_smoke_article_image_video() -> None:
+def test_travel_photo_1k_content_bind_smoke_article_image_video() -> None:
     data = json.loads(SEED.read_text(encoding="utf-8"))
     users = data.get("users") or []
     assert len(users) >= 3
@@ -41,9 +41,8 @@ def test_batch100_content_bind_smoke_article_image_video() -> None:
     for user in picks:
         profile = {
             "creatorProfileId": user["creatorProfileId"],
-            "authorId": user["authorId"],
+            "subAccountId": user["subAccountId"],
             "creatorArchetype": user["creatorArchetype"],
-            "profileVersion": "1.0.0",
             "disclosure": {
                 "type": "platform_virtual_creator",
                 "displayText": "平台虚拟创作者",
@@ -57,6 +56,6 @@ def test_batch100_content_bind_smoke_article_image_video() -> None:
             "qualityScore": 0.85,
         }
         assignment = creator_assignment_from_profile(profile)
-        assert assignment["authorId"] == user["authorId"]
+        assert assignment["authorId"] == user["subAccountId"]
         assert assignment["creatorProfileId"] == user["creatorProfileId"]
         assert user["cohortId"] == BATCH

@@ -20,7 +20,7 @@
   L3_story / GWT / contract
 
 工程实现层
-  quwoquan_app / quwoquan_service / quwoquan_data / agent_ops
+  quwoquan_app / quwoquan_service / quwoquan_data / quwoquan_ops
 
 契约与测试层
   contracts/metadata / local_contract / api_integration / user_acceptance
@@ -41,7 +41,7 @@
 - App cloud：`quwoquan_app/lib/cloud/services/{domain}` 与 generated runtime。
 - Metadata：`quwoquan_service/contracts/metadata/{domain}`。
 - Service：`quwoquan_service/services/*-service`。
-- Deploy：`deploy/shared/process_domain_mapping.yaml` 等部署映射。
+- Deploy：`quwoquan_ops/environments/process_domain_mapping.yaml` 等部署映射。
 - Test：`quwoquan_app/test/**`、`quwoquan_service/services/*/tests`、metadata tests。
 
 ## 技术约束

@@ -45,16 +45,16 @@
 
 ```bash
 # 与基线比较（回归则 exit 1）
-python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py
 
 # 当前快照 JSON（含 buckets；可选 informational 辅助计数，见脚本 --json）
-python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py --json
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py --json
 
 # 有意放宽或收口后更新基线（应用专用提交说明）
-python3 agent_ops/avatar/verify_assistant_search_weak_typing_ratchet.py --write-baseline
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py --write-baseline
 ```
 
-- **根门禁**：[`agent_ops/gate/gate_repo.sh`](../../agent_ops/gate/gate_repo.sh) 的 `run_app` 段在可用 `python3` 时执行本脚本。
+- **根门禁**：[`quwoquan_ops/gate/gate_repo.sh`](../../quwoquan_ops/gate/gate_repo.sh) 的 `run_app` 段在可用 `python3` 时执行本脚本。
 - **Make**：`make verify-app-assistant-search-weak-typing-ratchet`（若已写入 [Makefile](../../Makefile)）。
 
 ## 5. 更新基线约定

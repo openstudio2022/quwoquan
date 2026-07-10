@@ -23,7 +23,7 @@ gwt_acceptance:
     when:
     - 修改 quwoquan_service/services/*/configs/*.yaml 或 search-service configs。
     then:
-    - releases/config/search-service/v2026.06.16.0.yaml 存在，含 config.version/min_image_version/max_image_version。
+    - quwoquan_service/services/search-service/v2026.06.16.0.yaml 存在，含 config.version/min_image_version/max_image_version。
     - release config 不含真实 endpoints/password/token；端点凭据由环境 secret 注入。
     - config release version mapping、image compatibility、config PR policy 全绿。
     done_when:
@@ -33,20 +33,20 @@ gwt_acceptance:
     - 只改文档不改服务配置时不要求 release config。
     - 高风险 key 变更但无本 story acceptance/spec 更新时必须 fail。
     contract_refs:
-    - releases/config/search-service/v2026.06.16.0.yaml
+    - quwoquan_service/services/search-service/v2026.06.16.0.yaml
     - quwoquan_service/services/search-service/configs/default/config.yaml
     - quwoquan_service/services/search-service/configs/gamma/config.yaml
     performance_points:
     - release config 只冻结配置合同，不代表真集群 measured 性能；性能准出仍归 R-S06-S-1。
     tests:
       planned:
-      - artifact: artifacts/stackctl/prod/search_config_gray_release_report.json
+      - artifact: .qwq_output/env/prod/runs/search_config_gray_release_report.json
       recorded: []
     status: partial
     notes:
     - 本地 release config 与风险灰度文档已补齐；真实 prod-hosted rollout 需用户确认后执行。
-    - '[migrated_from_recorded_reference] releases/config/search-service/v2026.06.16.0.yaml'
-    - '[migrated_from_recorded_artifact] artifacts/stackctl/gamma/search_rollback_rehearsal.md'
+    - '[migrated_from_recorded_reference] quwoquan_service/services/search-service/v2026.06.16.0.yaml'
+    - '[migrated_from_recorded_artifact] .qwq_output/env/gamma/runs/search_rollback_rehearsal.md'
     test_evidence:
       primary:
       - layer: local_contract
@@ -65,9 +65,9 @@ gwt_acceptance:
         - gamma
 execution:
   local_gate:
-  - bash quwoquan_service/scripts/deploy/verify_config_release_version_mapping.sh
-  - bash quwoquan_service/scripts/deploy/verify_config_image_compat.sh
-  - bash quwoquan_service/scripts/deploy/verify_config_pr_policy.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/environments/verify/verify_config_release_version_mapping.sh
+  - bash quwoquan_ops/environments/verify/verify_config_image_compat.sh
+  - bash quwoquan_ops/environments/verify/verify_config_pr_policy.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
-  - bash agent_ops/gate/gate_repo.sh --scope service
+  - bash quwoquan_ops/gate/gate_repo.sh --scope service

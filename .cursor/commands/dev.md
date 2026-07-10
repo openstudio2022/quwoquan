@@ -12,13 +12,14 @@
 2. 按 `docs/agent_context_contract.md` 做正向规格理解与执行前自检反思。
 3. 对照 `docs/agent_command_simulation_matrix.md` 确认自然语言输入对应的命令阶段、禁止事项和出口证据。
 4. 审视 metadata/codegen、seed、mock、权限、生命周期、观测、回滚。
-5. 从 Story acceptance 与当前会话计划派生 todo。
+5. 从 Story acceptance 与当前会话计划派生 todo；每个 todo 必须绑定测试对象、测试层和 `quality_facet`。
 6. Red → Green → Refactor。
-7. 回填测试证据并运行触发范围门禁。
-8. 完成后按测试、E2E、产品/UX、运营观测、自动化/门禁、剩余风险复盘，不得只列改动文件。
+7. 回填测试证据并运行触发范围门禁；异常、性能、安全、可观测、可靠性/可用性、数据一致性适用时必须有证据。
+8. 完成后按测试、E2E、产品/UX、非功能质量、运营观测、自动化/门禁、剩余风险复盘，不得只列改动文件。
 
 出口：
 - 输出 `Exit Review`：规格达成、测试证据、E2E、产品/UX、运营观测、自动化/门禁、剩余风险。
+- `Exit Review` 必须说明异常/恢复、性能、安全/隐私、可观测、可靠性/可用性、数据一致性是否适用；适用但无证据即 `GATE_BLOCK`。
 - 明确未跑验证的原因。
 - 若发现规格/验收缺口，停止并退回 `/prd`、`/design` 或 `/plan-review`。
 

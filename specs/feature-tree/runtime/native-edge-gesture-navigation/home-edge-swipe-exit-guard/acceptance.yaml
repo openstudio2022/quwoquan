@@ -74,10 +74,10 @@ gwt_acceptance:
         - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_app/test/app/navigation/home_edge_swipe_exit_guard_test.dart'
-    - '[migrated_from_planned] quwoquan_app/test/patrol/edge_swipe_navigation_e2e_test.dart'
+    - '[migrated_from_planned] quwoquan_app/test/user_acceptance/patrol/edge_swipe_navigation_e2e_test.dart'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

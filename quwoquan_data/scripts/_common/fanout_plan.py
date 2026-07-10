@@ -121,6 +121,26 @@ def add_partition(
     return partition
 
 
+# 主清单 leaf → 计划叶子契约字段透传集（与 task_spec coverageTargets 同口径，WP5）：
+# geoTagRef 是 homepage 物化必填（build/homepage._REQUIRED_ENTITY_FIELDS），
+# 丢失会让 fanout 分区 task 在 build_validate 硬阻断。
+LEAF_CONTRACT_SCALAR_FIELDS = ("geoTagRef",)
+LEAF_CONTRACT_LIST_FIELDS = ("geoTagRefs", "typeTagRefs", "aliases")
+
+
+def apply_leaf_contract_fields(row: dict[str, Any], leaf: Mapping[str, Any]) -> dict[str, Any]:
+    """把主清单契约字段（存在才写）从 leaf 透传到目标 row（计划叶子 / coverageTarget）。"""
+    for field in LEAF_CONTRACT_SCALAR_FIELDS:
+        value = str(leaf.get(field) or "").strip()
+        if value:
+            row[field] = value
+    for field in LEAF_CONTRACT_LIST_FIELDS:
+        values = [str(v).strip() for v in (leaf.get(field) or []) if str(v).strip()]
+        if values:
+            row[field] = values
+    return row
+
+
 def add_leaves(
     plan: dict[str, Any],
     partition_path: list[str],
@@ -129,6 +149,8 @@ def add_leaves(
     """向分区追加叶子对象（幂等去重：同 ref 不重复加入本分区）。
 
     leaves 每条 {name, entityType?, ref?, mutexKey?}；缺省 ref 由 leaf_ref 派生。
+    主清单契约字段（geoTagRef/geoTagRefs/typeTagRefs/aliases）存在即透传，
+    供 fanout 分区 task 的 coverageTargets/baseline 消费（打标 + 物化必填）。
     """
     partition = _find_partition(plan["partitions"], partition_path)
     if partition is None:
@@ -143,12 +165,15 @@ def add_leaves(
         ref = str(raw.get("ref") or "").strip() or leaf_ref(etype, name)
         if ref in existing_refs:
             continue
-        leaf = {
-            "name": name,
-            "entityType": etype,
-            "ref": ref,
-            "mutexKey": str(raw.get("mutexKey") or "") or ref,
-        }
+        leaf = apply_leaf_contract_fields(
+            {
+                "name": name,
+                "entityType": etype,
+                "ref": ref,
+                "mutexKey": str(raw.get("mutexKey") or "") or ref,
+            },
+            raw,
+        )
         partition.setdefault("leaves", []).append(leaf)
         existing_refs.add(ref)
         added.append(leaf)
@@ -265,7 +290,25 @@ def discovery_gate_issues(plan: Mapping[str, Any]) -> list[str]:
     issues += leaf_dedup_issues(plan)
     issues += partition_mutex_issues(plan)
     issues += coverage_issues(plan)
+    issues += geo_coverage_gate_issues(plan)
     return issues
+
+
+def geo_coverage_gate_issues(plan: Mapping[str, Any]) -> list[str]:
+    """地理覆盖发现门（枚举产线 SOP）：plan 声明 geoCoverage 时才校验。
+
+    `decompose load --master-list` 写入 geoCoverage = {country, provinces[]}，
+    冻结前要求声明省份的主清单市州文件齐全、每文件覆盖行政区树全部区县
+    （唯一实现在 _common.coverage_master_list.geo_coverage_issues；此处仅接线，
+    延迟 import 保持本模块对未声明 geoCoverage 的计划零文件系统依赖）。
+    """
+    geo = plan.get("geoCoverage") or {}
+    provinces = [str(p) for p in (geo.get("provinces") or []) if str(p).strip()]
+    if not provinces:
+        return []
+    from _common.coverage_master_list import geo_coverage_issues
+
+    return geo_coverage_issues(provinces, country=str(geo.get("country") or "中国"))
 
 
 def freeze_plan(plan: dict[str, Any], *, confirmed: bool) -> dict[str, Any]:

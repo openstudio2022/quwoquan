@@ -1,6 +1,6 @@
 # workflow 目录与资产证据链规格（对象优先 · 来源内聚 · 阶段编号 · 公共上提 · 路径单一真相源）
 
-本规格冻结 `runtime/tasks/{task}/` 工程过程目录的组织方式，使其**与 `publish/` 发布主线同构**，
+本规格冻结 `data/local/runtime/tasks/{task}/` 工程过程目录的组织方式，使其**与 `publish/` 发布主线同构**，
 并保证「单个对象（实体/内容）可集中查证」「来源与图片内聚」「`asset://` 可直查物理文件」「内部引用全为相对路径」。
 
 `task_workflow` 是任务级编排根，`task_download` 是任务级下载规划工作区；两者只承载编排和中间态，不承载对象最终成品。
@@ -8,7 +8,7 @@
 > 与 [`content_pipeline_spec.md`](content_pipeline_spec.md) 不冲突：该文是端到端管线主线，本文只补「目录与资产证据链」这一层契约。冲突以本文为准。
 >
 > **本规格是目录与路径的唯一真相源**。不得在别处维护第二套目录定义、命名约定或路径生成规则；
-> 历史实现偏差已并入 `quwoquan_data/tasks/旅行/地域/四川省/景区/景区精选/notes.md`，本文只保留最新目录契约与验收门。
+> 本文只保留最新目录契约与验收门（历史实现偏差记录已随旧测试任务一并清理）。
 
 ---
 
@@ -29,6 +29,97 @@
 
 ---
 
+## 0.5 输出根与批次三轴（数据输出规范，实施后生效）
+
+> 唯一真相源：`_common/paths.py`。本节冻结「仓内 vs 仓外」与批次三级主键。
+
+**仓内（版本控制）只保留两类长期真相源：**
+
+- 输入契约（可复用）：任务控制面 `quwoquan_data/control_plane/**`（见下）、长期参考数据 `reference/**`、`schema/**`、`templates/**`、`prompts/**`、`sop/**`、`verticals/**`、`scripts/**`；
+- 发布主线（唯一入库生成输出）：`quwoquan_data/publish/**`（含 `publish/creators/**` 池成品）。
+
+**任务控制面（`control_plane/`，任务输入契约唯一真相源）：**
+
+```
+quwoquan_data/control_plane/
+  tasks/<taskId>/task.yaml            # 任务实例注册表（task.yaml 入库；progress/runs/notes 只留本地）
+  families/<家族路径>/                 # 家族包：同族 preset/recipe/instructions/repair 同目录扁平共存
+    *.preset.yaml                     #   任务默认值唯一真相源（task.yaml.presetRef 指向）
+    *.recipe.yaml                     #   命名运行配方（qwq-data task run-recipe <ref> 执行）
+    *.instructions.md                 #   家族运行说明/agent 指令
+  _shared/*.runtime.yaml              # 跨家族共享运行环境 profile（recipe.runtimeProfile 引用）
+```
+
+**长期参考数据（`reference/`）：**
+
+```
+quwoquan_data/reference/
+  admin_regions/                         # 行政区划等稳定参考数据
+```
+
+- `reference/` 只放可复用、低频更新、非运行期生成的基础参考数据；
+- 运行批次中间态、临时报表、下载缓存、清洗结果不得进入 `reference/`；
+- 旧 `quwoquan_data/data/` 根已退役，新增根层数据资产必须先落入本规格和 `verify_no_flat_roots.py`。
+
+- 家族路径按「域/垂类/内容形态」组织（如 `content/travel/homepage/`），禁止平铺；
+- preset/recipe 引用 = families/ 下相对路径去类型后缀（`presetId`/`recipeId` 必须与之相等）；
+- 默认值机制唯一真相源 = `task.yaml.presetRef → families/<ref>.preset.yaml`（旧 `_defaults.yaml`
+  路径继承链已退役，禁止回归）；
+- 运行编排唯一主干 = `qwq-data task run-recipe`（`ensure-task → contract-gate →
+  execute → readiness` 四段），禁止脚本级第二编排真相源（旧 `quwoquan_ops/runners/*.sh` 已退役）；
+- schema：`schema/task/task_spec.schema.json`、`task_preset.schema.json`、`task_recipe.schema.json`。
+
+**其余一切运行期输出统一落 `QWQ_OUTPUT_ROOT`（默认 `<repo>/.qwq_output/`，gitignore 隔离、工程目录内）：**
+
+```
+QWQ_OUTPUT_ROOT/
+  data/local/runtime/e2e/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/        # 端到端试跑
+  data/local/runtime/operations/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/ # 自动化运营
+  data/local/runtime/site_supply/{vertical}/{siteId}/{batchId}/                               # 站点前半段工作区
+  data/local/runtime/creator_pools/{vertical}/{batchId}/                                      # creator 生成过程
+  data/local/runtime/user_pools/{batchId}/                                                    # user-pool 生成过程
+  data/local/runtime/tasks/{taskId}/                                                          # task snapshot（最小）
+  data/runs/{content_runs|pools|app}/**                                                       # 摘要索引（只回指不承载真相）
+  data/release/{releaseId}/                                                                   # 发布包过程
+```
+
+**批次三轴（一批次唯一，缺一即门禁 BLOCK）：**
+
+| 轴 | 取值 | 声明方式 |
+|---|---|---|
+| `phase` | `e2e` / `operations` | env `QWQ_BATCH_PHASE`（runner 显式声明） |
+| `contentType` | `homepage` / `article` / `image` / `video` | env `QWQ_BATCH_CONTENT_TYPE`；content_plan 可按候选 lane 显式覆盖 |
+| `supplyMode` | `site_primary` / `search_supplement` | env `QWQ_BATCH_SUPPLY_MODE`；site 主线由 content_plan 固定 `site_primary` |
+
+- 三轴 + `sourceKey`（siteId / 检索键）固化进 `batch_manifest.json`，初次写入后不可变；
+- **单元/合约测试无批次概念**：pytest 一律跑 tempfile 临时根（conftest 导入期守卫强制），跑完即弃，绝不写仓内根与 `QWQ_OUTPUT_ROOT`；
+- 旧平铺运行根、sandbox 根与 `.qwq_output/env/repo/runs/` 根级 data 临时报表已退役；reader 不做 fallback，不建索引回指，不落只读标记；缺历史证据时按 canonical 目录重跑/重生；
+- data 运行报告只写 `QWQ_OUTPUT_ROOT/data/runs/**`，权威批次证据只写 `QWQ_OUTPUT_ROOT/data/local/runtime/**/_shared/**`，发布真相源只写 `quwoquan_data/publish/**`；
+- 搜索补全必须单独批次执行（`search_supplement`），不得与站点主线共用 batchId、readiness 口径或 summary 路径；
+- 门禁：`verify_output_root_isolation.py`（repo allowlist / 仓内阶段树 / 批次轴与 committed 回指 / artifacts index-first）。
+
+**batch/_shared 证据面分层（§2.2 补充，真相源 `paths.BATCH_SHARED_*_ENTRIES`）：**
+
+- authoritative（不可重算真相源）：`content_plan_packet.json`、`content_object_index.json`、`env_ready_report.json`、`task_workflow_state.json`、`token_ledger.json`、`managed_batch_audit.json`、`sdk_monitoring_report.json`、`scale_readiness.json`、`ship_report.json`、`failure_ledger.jsonl` 等（完整清单见 paths）；readiness / monitoring / ship 消费方只认这些 canonical 条目。
+- reclaimable（调试/过程层，可随时清理）：`assistant_tasks/`、`workflow_packets/`、`object_queue/`、`image_safety_cache/`、`download_source_screen/`、`tmp_*` 等；不得被审计当作真相源引用。
+- 未登记条目由证据面门 BLOCK（`verify_directory_evidence_chain.py` 第 9 门）。
+
+**artifacts 摘要索引层（index-first）：** 任何 summary 目录必须有 `index.json`，回指
+`runtimeBatchRoot / taskId / publishRoot / releaseId / phase / contentType / supplyMode / sourceKey / maturity`
+（真相源 `_common/artifacts_index.py`）；artifacts 只做镜像索引，不承载权威证据。
+
+**5 处同名 release 概念对照（消歧表，禁止混用）：**
+
+| 位置 | 概念 | 内容 | 生命周期 |
+|---|---|---|---|
+| `QWQ_OUTPUT_ROOT/data/release/{releaseId}/` | 装配包过程区 | ship 装配时对 publish 成品的**真拷贝**（可独立分发的发布包） | 运行期输出，可清理重建 |
+| `quwoquan_data/publish/env_releases/{env}/{releaseId}/` | 发布审计主线 | 各环境导入报告/审计记录（谁在何时把哪些实体/post 导入了哪个环境） | publish 主线，长期保留 |
+| `quwoquan_data/publish/media/releases/` | 媒体引用清单 | 发布态媒体资产的引用列表（媒体去重/引用计数真相源） | publish 主线，长期保留 |
+| 仓库根 `quwoquan_service/services/` | 服务配置快照 | 云侧服务发布配置（**与数据工程无关**，属 deploy/ops 域） | 版本控制 |
+| rollout 的 `releaseRef` | 发布引用标识 | 指向 `env_releases` 的同一 releaseId（不是第五套目录，只是引用） | 随 rollout 记录 |
+
+---
+
 ## 1. 五条原则 + 第六条（路径真相源）
 
 1. **对象优先**：批次内一切过程产物都挂在「最终对象」目录下，不再按阶段平铺所有对象。对象 = 实体 / 内容（文章、图片、视频）。
@@ -42,7 +133,7 @@
 
 | 序号阶段 | 适用对象 | 含义 | 该阶段产物 |
 |---|---|---|---|
-| `1.download/` | 实体 / 内容 | 来源拉取与来源单元落盘 | `source_plan.json`、`sources/{NN}.{kind}/`（内容若引用实体来源则为 `source_refs.json`） |
+| `1.download/` | 实体 / 内容 | 来源拉取与来源单元落盘 | `{homepage,article,image}_source_plan.json`、`sources/{NN}.{kind}/`（内容若引用实体来源则为 `source_refs.json`） |
 | `2.quality/` | 实体 / 内容 | 来源质量分析 | `quality_analysis.json` |
 | `3.compose/` | 内容 / 实体 | 内容创作契约 / 实体主页输入证据 | `writing_pack.json` / `entity_page_input.json` |
 | `4.draft/` | 内容 / 实体 | 会话模型草稿 | `prompt.md`、`draft.article.md`、`page.md`、`draft_meta.json` |
@@ -58,7 +149,7 @@
 ### 2.1 任务根（公共，跨批次唯一）
 
 ```
-runtime/tasks/{task}/                  # {task} = taskId 斜杠路径（committed 分类树同构，受版本控制的规格在 tasks/{task}/）
+data/local/runtime/tasks/{task}/       # {task} = taskId 斜杠路径（committed 分类树同构，受版本控制的规格在 control_plane/tasks/{task}/）
   task_manifest.json          # [处理] task 定义快照：intentLabel/垂类/organizeBy/scope/目标对象口径（由 task run 写，来源 committed task.yaml）
   notes.md                    # [处理] 人写任务说明（可选）
   catalog.ndjson              # [处理] 任务级对象台账（可选，assemble 消费）
@@ -67,12 +158,12 @@ runtime/tasks/{task}/                  # {task} = taskId 斜杠路径（committe
   _shared/                    # [处理] 任务级共享（dedup_ledger.json / catalog.ndjson / entities.ndjson …）
 ```
 
-> **批次工作区不再挂在任务根下**（消除「批次埋在 `旅行/地域/四川省/景区/…` 分类树深处、无法在顶层找到批次」的问题）。批次统一上提到顶层 `runtime/batches/{intentLabel}-{taskHash}__{batch}/`（见 2.2），通过 `batch_manifest.json.taskId` 反指所属任务。任务根只保留跨批次唯一的实体成品、任务定义快照与任务级共享账本。
+> **批次工作区不再挂在任务根下**（消除「批次埋在 `旅行/地域/四川省/景区/…` 分类树深处、无法在顶层找到批次」的问题）。批次统一落在 `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`（见 2.2），通过 `batch_manifest.json.taskId` 反指所属任务。任务根只保留跨批次唯一的实体成品、任务定义快照与任务级共享账本。
 
-### 2.2 批次根（顶层 `runtime/batches/`，批次级公共）
+### 2.2 批次根（canonical `data/local/runtime/{phase}/{contentType}/{supplyMode}/`）
 
 ```
-runtime/batches/{intentLabel}-{taskHash}__{batch}/   # intentLabel = 任务意图标签（≤16 字，源自 task.yaml.intentLabel）；taskHash = 归一 taskId 短哈希（8 hex），消歧同名任务
+data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/   # phase/contentType/supplyMode 见 §0.5；intentLabel = 任务意图标签（≤16 字，源自 task.yaml.intentLabel）；taskHash = 归一 taskId 短哈希（8 hex），消歧同名任务
   batch_manifest.json         # [处理] 批次公共：taskId（反指任务，反查唯一依据）、目标对象、参数快照、env、salt、命令链、globalBatchSeq、时间戳、schemaVersion（新布局标识）
   _shared/                    # [处理] 批次级跨对象共享产物（不属于任一对象）
     source_catalog.json       #   受控来源类目白名单（限定 sourceKind，挡散文来源）
@@ -107,7 +198,9 @@ entities/{domain}/{type}/{name}/
 entities/{domain}/{type}/{name}/
   _object.json                # [处理] 对象索引：publish 目标相对路径 + 各阶段状态 + 成品 task 根相对路径
   1.download/
-    source_plan.json          #   该实体来源计划（离线复跑入口）
+    homepage_source_plan.json #   主页来源计划（离线复跑入口）
+    article_source_plan.json  #   文章来源计划（离线复跑入口）
+    image_source_plan.json    #   图片来源计划（离线复跑入口）
     sources/{NN}.{sourceKind}/  #   来源单元，见 §3
   2.quality/
     quality_analysis.json     #   该实体来源质量分析（最小契约）
@@ -161,23 +254,71 @@ posts/{contentType}/{angle}/{title}/{seq}/
 
 ---
 
+## 2.6 载体扩展契约（lane adapter 边界，代码真相源 `_common/carrier_contract.py`）
+
+多载体（homepage / article / image / video）统一框架的冻结口径。**代码级唯一真相源是
+`quwoquan_data/scripts/_common/carrier_contract.py`（`CARRIER_LANES` / `COMMON_LAYER_STAGES` /
+`CONTENT_MIX_TO_LANE`）**；本节是其成文镜像，两处不一致时以代码契约 + 合同测试
+（`tests/local_contract/common/test_carrier_contract__local_contract_test.py`）为准。
+
+**共同层（载体无关，禁止 per-lane 分叉）：**
+`target_selection → source_unit（§3）→ asset_index（§4）→ review_ledger（§2.4 5.review）→
+publish（§8）→ ship → coverage/env import`。任一载体不得绕开共同层另建来源、资产、
+review 或发布通道。
+
+**lane adapter 边界（载体差异只允许出现在以下产物/阶段差异）：**
+
+| lane | download 计划 | 成品必备 | agent 写作段 | 放量状态 |
+|---|---|---|---|---|
+| `homepage` | `homepage_source_plan.json` | `page.md` + `_entity.json` + `manifest.json`（task 根 entities/，跨批次唯一） | 有 | scaled |
+| `article` | `article_source_plan.json` | `article.md` + `manifest.json` + `provenance.json`（§2.4 对象根） | 有（`writing_pack` → `draft.article.md`） | scaled |
+| `image` | `image_source_plan.json` | `manifest.json` + `provenance.json`（单源图片作品，图必须归属来源单元 assets/ 且带 relevance） | 无 | scaled |
+| `video` | 无（不建下载计划） | `manifest.json`（schema：`post_manifest.schema.json` contentType=video + `videoBindings`） | 无 | **smoke_only（排产放量必须 BLOCK）** |
+
+**命名分层（防第二套枚举）：**
+
+- 批次三轴 `contentType`（§0.5）与 lane 同名：`homepage/article/image/video`（`paths.BATCH_CONTENT_TYPES`）。
+- 排产层（任务规格 content mix）命名 `imagePost/videoPost/knowledgeCard` 通过
+  `carrier_contract.CONTENT_MIX_TO_LANE` 唯一映射到 lane（`knowledgeCard` 是 article 载体的
+  排产变体，不占独立 lane）；`content_supply.VALID_CONTENT_TYPES` 从该表派生，
+  site_supply packet 的 lane→排产命名反查用 `LANE_TO_CANONICAL_CONTENT_MIX`。
+  禁止再写内联映射 dict。
+
+**多代理跑批保护协议（长批运行约定，与 §0.5 输出根规则并行生效）：**
+
+- 长批（省级 fanout / M1+）的 runtime root 必须落**家目录受保护路径**
+  （如 `~/.qwq_m1_<province>_runtime`，经 `QWQ_RUNTIME_ROOT` 显式声明），
+  不得落仓内 `.qwq_output/**`——外部治理/gate 进程只允许清理仓内可再生区，
+  受保护 root 下的批次证据（`task_workflow_state.json`、成品树）任何非批属进程不得删改。
+- 批属进程以 `run-recipe --batch <batchId>` 的 batch 声明为 lease 语义：同一
+  `(RUNTIME_ROOT, taskId, batchId)` 同时至多一个 run-recipe 驱动进程；接管前必须
+  确认原进程已退出（`pgrep -lf "run-recipe .*<batchId>"`）。
+- 批次中断恢复走 resume 协议（同 batch/plan 原样重跑 = 整体幂等 resume；
+  单分区 `manual_required` 用 `task retry-stage` 重置后 resume），禁止绕过 workflow
+  状态机直接改 `task_workflow_state.json`。
+- 报告类产物（审计包、readiness 汇总）固化到 `publish/env_releases/**`（长期保留区），
+  不依赖 runtime 区存活。
+
+---
+
 ## 3. 来源单元内聚契约（source unit）
 
 每个来源是一个**稳定 sourceUnitId** 的批次级自包含单元，实体/内容对象只保留 `1.download/source_refs.json` 软引用索引，替代旧「实体目录承载来源 + 图片与来源分离」布局：
 
 ```
 sources/{sourceUnitId}/
-  source.md            # 原文
+  source.md            # 原文（章节结构 + 图片原位 :::figure 占位，仅原图注）
   source.clean.md      # 清洗后正文
+  source.layout.json   # 统一结构化 IR（heading/paragraph/listItem/figure/factRow，机器消费真相源）
   source.quality.json  # 来源质量评分（score / retained / 信号命中）
   meta.json            # 来源说明：{url, title, sourceKind, relevance, credit, license, fetchedAt}
   assets/{assetId}.{ext}        # 该来源自带图片，文件名 = assetId
   assets/{assetId}.variants/{profile}.webp   # 多变体（thumbnail/display/cover/full）
-  assets/index.json    # 每图：{assetId, fileName, url, sha256, bytes, width, height, license, credit, relevance, sourceUnitRef, variants[]}
+  assets/index.json    # 每图：{assetId, fileName, url, sha256, bytes, width, height, license, credit, relevance, placementType, coverCandidateRank, isMapLike, groupId, sourceUnitRef, variants[]}
 ```
 
 约束：
-- `sourceUnitId` 由 canonical URL、source snapshot hash 与原始 source key 稳定派生；同一底稿内容跨对象只物理存一份。
+- **`sourceUnitId` = 目录名 = `{实体名}__{sourceKind}__{hash8}` 可读命名**（如 `黄龙风景名胜区__home_wikipedia__ab12cd34`）。`实体名` 保留中文原文（仅替换路径危险字符）；`hash8` 由 canonical URL、source snapshot hash 与原始 source key 稳定派生（sha1 前 8 位），同一底稿内容跨对象只物理存一份。禁止回归纯哈希目录名（`su_{hash20}` 为已废弃历史格式，命名门阻断新增）。
 - 对象级 `1.download/source_refs.json` 记录 `sourceRef`、`metaRef`、`sourceId`、`ordinal`、`researchLane`、`sourceUseMode`、`publishMediaMode` 与 `targetRefs`。
 - `sourceKind` 取自 `_shared/source_catalog.json` 白名单（§7）。
 - **禁止对象级散落 `images/`**：任何图片必须归属某来源单元 `assets/`，并在 `assets/index.json` 标注 `relevance`（与对象相关性，便于人审）。
@@ -196,7 +337,7 @@ sources/{sourceUnitId}/
 
 ### 4.1 成品资产命名与批次稳定性（新增）
 
-- 成品 `assetId` 统一采用 `实体_角色_全局批次号_hash`，其中 `globalBatchSeq` 为十进制原样输出，不补零；解析时从右锚定 `digest8`、`globalBatchSeq` 与 `role`。
+- 成品 `assetId` 统一采用 `实体_角色_图注_全局批次号_hash`（v2），其中图注 token 段经 `asset_token()` 清洗并截断 ≤16 字符，退化时按 `sectionSlug→图{序号}→实体名` 降级（详见 [`asset_id_zero_collision_spec.md`](asset_id_zero_collision_spec.md) §3.1）；`globalBatchSeq` 为十进制原样输出，不补零；解析时从右锚定 `digest8`、`globalBatchSeq`，再取 `role` 与图注段。旧 `实体_角色_批次号_hash`（v1）仅作历史产物解析兼容，新批次成品 assets 由批次级命名门强制 v2。
 - `globalBatchSeq` 的唯一真相源是 `batches/{batch}/batch_manifest.json`，每个批次工作区首次创建时分配一次，同 `batch_id` resume/重跑沿用原号。
 - 批内唯一性只在本批内用 `asset_id_registry.json` 约束；冲突时通过 `nonce` 重算 hash，不做全局 asset 注册表或全仓扫描。
 - 双批真实联网 E2E 稳定性验证见 [`asset_id_zero_collision_spec.md`](asset_id_zero_collision_spec.md) 与 [`batch_stability_e2e_spec.md`](batch_stability_e2e_spec.md)。
@@ -207,13 +348,13 @@ sources/{sourceUnitId}/
 
 | 信息 | 唯一位置 | 禁止 |
 |---|---|---|
-| 任务定义/口径/intentLabel | `runtime/tasks/{task}/task_manifest.json`、committed `tasks/{task}/task.yaml` | 在对象目录重复 |
-| 批次归属任务（反查唯一依据） | `runtime/batches/{intentLabel}-{taskHash}__{batch}/batch_manifest.json.taskId` | 用目录名 intentLabel 当反查真相 |
-| 批次参数/env/salt/命令链/globalBatchSeq/时间/schemaVersion | `runtime/batches/{intentLabel}-{taskHash}__{batch}/batch_manifest.json` | 在对象目录重复 |
-| 受控来源类目 | `runtime/batches/{intentLabel}-{taskHash}__{batch}/_shared/source_catalog.json` | 每对象各存一份 |
+| 任务定义/口径/intentLabel | `data/local/runtime/tasks/{task}/task_manifest.json`、committed `control_plane/tasks/{task}/task.yaml` | 在对象目录重复 |
+| 批次归属任务（反查唯一依据） | `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/batch_manifest.json.taskId` | 用目录名 intentLabel 当反查真相 |
+| 批次参数/env/salt/命令链/globalBatchSeq/时间/schemaVersion | `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/batch_manifest.json` | 在对象目录重复 |
+| 受控来源类目 | `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/_shared/source_catalog.json` | 每对象各存一份 |
 | 批次级共享 brief | `…/_shared/compose_brief.json` | 复制进每个内容对象 |
 | workflow 状态 | `…/_shared/task_workflow_state.json` | 上提到对象根 |
-| 实体成品（事实/主页/资产） | `runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一，不随批次上提） | 在每个 batch 重复生产 |
+| 实体成品（事实/主页/资产） | `data/local/runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一，不随批次上提） | 在每个 batch 重复生产 |
 | 对象自身来源/质量/草稿/审校/内容成品 | 对象目录 `N.xxx/` 与对象根 | 上提到批次根 |
 
 ---
@@ -272,9 +413,9 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 
 | 门 | 校验内容（对照本规格章节） | 处置 | 状态 |
 |---|---|---|---|
-| **批次顶层归属门**（`verify_directory_evidence_chain.py`） | 批次工作区只能落顶层 `runtime/batches/{intentLabel}-{taskHash}__{batch}/`，**不得**再出现在 `runtime/tasks/{task}/batches/`；`batch_manifest.json.taskId` 必填且与 intentLabel 自洽 | BLOCK | ◑ 本版落地 |
+| **批次顶层归属门**（`verify_directory_evidence_chain.py`） | 批次工作区只能落 `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`，**不得**再出现在 `data/local/runtime/tasks/{task}/batches/` 或旧 `data/local/runtime/batches/`；`batch_manifest.json.taskId` 必填且与 intentLabel 自洽 | BLOCK | ◑ 本版落地 |
 | **顶层结构门**（新增 `verify_directory_layout_structure.py`） | §2.2 batch 顶层只允许 4 项；出现 `download/build/produce/pipeline/` BLOCK；内容对象路径 = `posts/{type}/{angle}/{title}/{seq}`；阶段名 ∈ §1.5 枚举且带序号 | BLOCK | ❌ 待建 |
-| **去 stage-first 豁免**（改 `verify_directory_evidence_chain.py`） | 删除「stage-first 不在扫描范围」，新布局批次全量纳入（scan 遍历顶层 `runtime/batches/`，taskId 取自 `batch_manifest.taskId`）；按 `batch_manifest.schemaVersion` 区分新旧 | BLOCK | ◑ 本版落地 |
+| **去 stage-first 豁免**（改 `verify_directory_evidence_chain.py`） | 删除「stage-first 不在扫描范围」，canonical 批次全量纳入（scan 遍历 `data/local/runtime/{phase}/{contentType}/{supplyMode}/`，taskId 取自 `batch_manifest.taskId`） | BLOCK | ◑ 本版落地 |
 | **批次号/资产零碰撞门**（新增 `verify_asset_id_zero_collision.py`） | §4.1/§14.2 `globalBatchSeq` 单调；批内 registry + `parse_post_asset_id` 零碰撞 | BLOCK | ❌ 待建 |
 | **命名一致门** | §0/§3：来源单元 `{NN}.{kind}`、`meta.json`、`assets/index.json`、阶段枚举 | BLOCK | ❌ 待建 |
 | **散落 images 门** | §3 无对象级 `images/` | BLOCK | ✅ 已有 |
@@ -311,10 +452,10 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 ### 执行分步（里程碑 M1–M7，每步以「该步测试绿 + §10 对应门绿」收口；M7 收口端到端重跑）
 
 - **M1 地基（✅ 已完成）**：`paths.py` 阶段常量/枚举对齐（去 `3.compose`/`6.materialize`，引入 `3.brief`/`3.build`）+ `relative_task_ref/object_index_path/batch_source_catalog_path/batch_pipeline_state_path/batch_assistant_tasks_dir` 新增；`source_unit.py` 命名 `{NN}.{kind}`/`meta.json`/`assets/index.json`/`sourceKind`；`verify_directory_evidence_chain.py` 同步；`test_batch_object_paths`/`test_source_unit_evidence_chain`/`test_directory_evidence_gate`/`test_image_download_gates`/`test_download_images` 全绿。
-- **M2 download 对象化（✅ 已完成）**：`prepare.py`/`source_inputs.py`(curated_sources/images, 含旧布局历史读取)/`run.py`(download_plan checkpoint + 启动写 batch_manifest/source_catalog)/`evidence_contract.py` 把 `source_plan` 从 `download/inputs/source_plan/{eid}.json` 切到 `entities/{d}/{t}/{name}/1.download/source_plan.json`；新增 `_common/batch_manifest.py` 产出 `_shared/source_catalog.json`（投影 committed catalog）与 `batch_manifest.json`（对象优先定义快照，幂等）；assistant_tasks 投递落 `_shared/assistant_tasks`；`prepare` 迁移安全（对象/旧计划任一存在即不覆盖）；新增 `test_batch_shared_artifacts`，并更新 `test_download_source_plan`/`test_download_images`/`test_task_run_pipeline` 到对象优先；`verify_quwoquan_data.sh` 全绿。注：download gate/stage report（`download/results/*`）仍 stage-first，连同 produce 一并在 M6 迁 `_shared/` 后启用顶层结构门。
-- **M3 produce 过程对象化（✅ 已完成）**：`entity_workflow.py`/`route_workflow.py`/`draft_io.py`/`produce/handler.py`/`stage_reports.py` 把 compose/draft/review 从 `produce/{inputs,drafts,results}/{ref}` 扁平面切到内容对象 `3.brief/4.draft/5.review`（M3a 路由 + M3b 草稿 + M3c brief 输入 + M3d 阶段报告/账本对象化，读取端经 `read_stage_envelope`/`iter_stage_envelopes` + `iter_ledgers` 对象优先 + legacy 回退去重）。
+- **M2 download 对象化（✅ 已完成）**：`prepare.py`/`source_inputs.py`(curated_sources/images，旧 `source_plan.json` 只允许检测 stale，不再作为消费真相源)/`run.py`(download_plan checkpoint + 启动写 batch_manifest/source_catalog)/`evidence_contract.py` 把 `source_plan` 从 `download/inputs/source_plan/{eid}.json` 切到 `entities/{d}/{t}/{name}/1.download/{homepage,article,image}_source_plan.json`；新增 `_common/batch_manifest.py` 产出 `_shared/source_catalog.json`（投影 committed catalog）与 `batch_manifest.json`（对象优先定义快照，幂等）；assistant_tasks 投递落 `_shared/assistant_tasks`；`prepare` 迁移安全（对象/旧计划任一存在即不覆盖）；新增 `test_batch_shared_artifacts`，并更新 `test_download_source_plan`/`test_download_images`/`test_task_run_pipeline` 到对象优先；`verify_quwoquan_data.sh` 全绿。注：download gate/stage report（`download/results/*`）仍 stage-first，连同 produce 一并在 M6 迁 `_shared/` 后启用顶层结构门。
+- **M3 produce 过程对象化（✅ 已完成）**：`entity_workflow.py`/`route_workflow.py`/`draft_io.py`/`produce/handler.py`/`stage_reports.py` 把 compose/draft/review 从 `produce/{inputs,drafts,results}/{ref}` 扁平面切到内容对象 `3.brief/4.draft/5.review`（M3a 路由 + M3b 草稿 + M3c brief 输入 + M3d 阶段报告/账本对象化，读取端经 `read_stage_envelope`/`iter_stage_envelopes` + `iter_ledgers` 对象优先去重）。
 - **M4 materialize 对象根+angle（✅ 已完成）**：`materialize.py` 成品（article/manifest/provenance/gallery/assets）落内容对象根 `posts/{type}/{angle}/{title}/{seq}/`，angle/title/seq 以 `content_object_index.json` 路由为唯一坐标真相（删 `_build_title_seq_index` 自算序号），并写 `_object.json`（§14.3）；过程阶段证据保留同处对象根（只清成品 assets/，不再 `rmtree` 整 posts）。`run.py` 启动写 `task_manifest.json`（任务定义快照 §14.1，去重账本改名 `dedup_ledger.json`）+ `task_workflow_state.json` 落 `_shared/`。`promote_to_publish.py` 改为成品白名单拷贝（过程阶段目录 `1.download/2.quality/3.brief/3.build/4.draft/5.review` 不进发布包）+ 读 `batch/posts`；`publish_filter.py` 账本/实体边车读 `5.review/`。`post_verify.resolve_posts_roots` 对象优先。
-- **M5 读取端 + 历史读取（✅ 已完成）**：新增 `paths.batch_posts_root`/`batch_post_roots`（对象优先 + 旧 `produce/posts` 历史读取）；produce/posts 读取端（`produce/gate.py` 重写为四层叶子发现 + 阶段报告对象优先、`media/handler.py` 回退经路由定位、`verify_content_semantics.py`/`verify_content_quality.py` 默认根、`quality/dirty_data.py` 脏数据扫描、`reconcile/diff.py` 漂移扫描、`publish/assemble.py` release 拼装成品白名单、`task/ops.py latest_post_outputs`）全部切到 `batch/posts` 对象根；`_common/evidence_contract.py` materialize 输出串改对象根；`_common/content_evidence.py` 仅涉 download 来源（已 M2 落地，无需改）。
+- **M5 读取端归一（✅ 已完成）**：新增 `paths.batch_posts_root`/`batch_post_roots`（对象优先）；produce/posts 读取端（`produce/gate.py` 重写为四层叶子发现 + 阶段报告对象优先、`media/handler.py` 经路由定位、`verify_content_semantics.py`/`verify_content_quality.py` 默认根、`quality/dirty_data.py` 脏数据扫描、`reconcile/diff.py` 漂移扫描、`publish/assemble.py` release 拼装成品白名单、`task/ops.py latest_post_outputs`）全部切到 `batch/posts` 对象根；`_common/evidence_contract.py` materialize 输出串改对象根；`_common/content_evidence.py` 仅涉 download 来源（已 M2 落地，无需改）。
 - **M6 门禁（✅ 已完成）**：`verify_directory_evidence_chain.py` 在原有 5 项（散落 images/绝对路径/机械标题/无类别 weather/资产闭环）之上新增 4 门——**命名门**（posts=type/angle/title/seq、entities=domain/type/name、阶段子目录 ⊆ 编号阶段∪assets、来源单元 NN.kind）、**顶层结构门**（批次根条目 ⊆ {entities,posts,_shared,batch_manifest.json} ∪ 受控 workspace 命令目录）、**回退门**（produce 已迁对象根的 posts/inputs/drafts/results/review 扁平面被重写即 BLOCK）、**同步门**（盘上成品对象 ⊆ `content_object_index` 路由，防漂移）。已经 `verify/gate.py(gate_verify→scan_batch)` 接入 `qwq-data verify`，并由 `test_directory_evidence_gate`（红/绿全覆盖）随 `verify_quwoquan_data.sh` 执行。路径真相源门(A8)以「回退门(runtime) + 样例与产线共用 `_common.paths`/`content_object` 路由」落实（`rebuild_directory_layout_sample.py` 已改为经路由解析 post 目录，不再自构路径）。
 - **M7 清理 + 重跑 + 自检（✅ 已完成）**：清理 runtime 旧 stage-first 产物（gitignored 的 `runtime/tasks` 旧 `e2e_1`：含 `produce/posts`、`produce/drafts`、`pipeline/` 等扁平面）；确定性重建 `layout_sample`（无网络，`rebuild_directory_layout_sample.py` 经路由登记内容对象 + 写 `_object.json` + 修正纹理尺寸至像素门 960×640）；`scan_all` 全 runtime 绿；48 项数据测试全绿（含真实管线 e2e：`test_task_run_pipeline`/`test_entity_composer`/`test_verify_pilot_gwt`/`test_hitl_pipeline` 走 produce→materialize→verify 对象优先链路）。逐条对照 §2/§12：A1–A7、A9 由样例 + 门 + 对应测试覆盖；A8 见 M6；A10（App/Web 渲染）属端侧合约测试，不在本数据工程门内。注：真实网络内容重跑需在 download_plan/produce_author 等 checkpoint 由会话 agent 介入检索与成文，非确定性、需人参与，单列后续动作。
 
@@ -349,12 +490,13 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 
 > 仅列最小必填；可加字段但不得少。所有路径字段为相对引用（§4/§5）。
 
-### 14.1 `runtime/tasks/{task}/task_manifest.json`
+### 14.1 `data/local/runtime/tasks/{task}/task_manifest.json`
 `{ schemaVersion:"quwoquan.task.manifest", taskId, intentLabel, vertical, organizeBy, scope{region?, entityTypes[], coverageTargets[]}, content{angles[]}, createdAt }`
-（`intentLabel` = ≤16 字人类可读任务意图标签，来源 committed `task.yaml.intentLabel`；它是顶层批次目录前缀 `runtime/batches/{intentLabel}-{taskHash}__{batch}/` 的唯一标签真相源。）
+（`intentLabel` = ≤16 字人类可读任务意图标签，来源 committed `task.yaml.intentLabel`；它是批次目录名 `{intentLabel}-{taskHash}__{batch}` 的唯一标签真相源。）
 
-### 14.2 `runtime/batches/{intentLabel}-{taskHash}__{batch}/batch_manifest.json`
-`{ schemaVersion:"quwoquan_data.batch_manifest", taskId, batchId, layout:"object-first", env, salt, params{}, coverageTargets[], commandChain[], globalBatchSeq, createdAt, updatedAt }`
+### 14.2 `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/batch_manifest.json`
+`{ schemaVersion:"quwoquan_data.batch_manifest", taskId, batchId, layout:"object-first", phase, contentType, supplyMode, sourceKey, env, salt, params{}, coverageTargets[], commandChain[], globalBatchSeq, createdAt, updatedAt }`
+（`phase/contentType/supplyMode/sourceKey` 为批次三轴 + 来源键（§0.5），初次写入后不可变；目录层级与 manifest 轴漂移即被 `verify_output_root_isolation.py` BLOCK。）
 （`taskId` 是 **batch→task 反查的唯一依据**（目录名 intentLabel 仅用于人读定位与候选过滤，可被多任务复用）；`layout` 与 `schemaVersion` 是新旧布局判定依据；§10 去豁免门与 §13 旧布局历史说明据此区分新旧批次。）
 
 ### 14.3 对象 `_object.json`（实体过程根 / 内容对象根各一份）
@@ -376,11 +518,11 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 
 > 编排器是薄壳，stage 间流转改为「写对象阶段目录」；`task_workflow_state.json` 与 `assistant_tasks/` 属批次工作区，落 `_shared/`（不进对象目录、不进 publish）。
 >
-> 批次工作区根 = 顶层 `runtime/batches/{intentLabel}-{taskHash}__{batch}/`（不再挂任务根）；`build_homepage` 仍把实体**成品**落任务根 `runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一），批次内只放实体过程对象。
+> 批次工作区根 = `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`（不再挂任务根）；`build_homepage` 仍把实体**成品**落任务根 `data/local/runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一），批次内只放实体过程对象。
 
 | stage | 类型 | 对象 | 写入位置（对象优先） |
 |---|---|---|---|
-| download_plan | checkpoint | 实体 | `entities/{d}/{t}/{name}/1.download/source_plan.json` |
+| download_plan | checkpoint | 实体 | `entities/{d}/{t}/{name}/1.download/{homepage,article,image}_source_plan.json` |
 | download_fetch | auto | 实体 | `sources/{sourceUnitId}/` + `entities/{d}/{t}/{name}/1.download/source_refs.json` |
 | build_prepare | auto | 实体 | `entities/{d}/{t}/{name}/3.build/entity_page_input.json` |
 | build_homepage | checkpoint | 实体 | 成品落 task 根 `entities/{d}/{t}/{name}/`（page.md/_entity.json/manifest.json/assets/） |
@@ -414,8 +556,8 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 ### 15.2 M3 实施子步（每步保持 produce 测试 + verify 门全绿）
 
 - **M3a（✅ 已完成）**：`_common/content_object.py` 路由 + `_shared/content_object_index.json` + `test_content_object_router`，接入 verify。
-- **M3b（✅ 已完成）**：草稿三件套（writing_pack→`3.brief`，prompt/draft.article/draft_meta→`4.draft`）经路由落对象；`build_*_writing_pack` 登记路由；`draft_io` 路径解析 + 旧布局只读回退；草稿正文改名 `draft.article.md`；`batch_orchestration` 写回路径经路由相对化；`_drafts_authored`/跨篇相似度扫描切 `iter_draft_articles`；测试同步全绿。
-- **M3c（✅ 已完成）**：compose brief 输入落对象 `3.brief/brief.json`（`content_object.write_brief_object/read_brief_object/iter_briefs/has_briefs`）；`run.py _run_produce_plan` 写对象 brief；`iter_route_briefs/iter_entity_briefs`、`load_compose_brief`、produce handler 入口守卫、`content_review`、`verify_content_semantics` 全部经路由读 brief + 旧扁平面只读回退；测试全绿。
-- **M3d（✅ 已完成）**：produce 阶段报告对象化——`stage_reports` 新增 produce step→对象阶段映射（quality_analysis(+gate)→`2.quality`、compose_brief(+gate)→`3.brief`、compose/review/media_check(+gate)/repair_report→`5.review`），对象目录内文件名为 `{step}.json`；统一读取端 `read_stage_envelope`/`iter_stage_envelopes`（对象优先 + legacy 去重回退）；`review_ledger` 账本/实体边车落 `5.review/{review_ledger.json,review_entities.json}`（`load_ledger`/`iter_ledgers` 双源去重）；读取端 `media/handler`、`media/gate`、`produce/validate`、`verify/gate`、`task/run` review_gate 聚合、`materialize`（review+compose 读取与序号索引）全部切换；`evidence_contract` 路径串同步对象树；48/48 数据测试全绿（含全链路 e2e）。顺带修复历史遗漏：`build_writing_pack` 现输出 `publishLayout`。
+- **M3b（✅ 已完成）**：草稿三件套（writing_pack→`3.brief`，prompt/draft.article/draft_meta→`4.draft`）经路由落对象；`build_*_writing_pack` 登记路由；`draft_io` 路径解析归一；草稿正文改名 `draft.article.md`；`batch_orchestration` 写回路径经路由相对化；`_drafts_authored`/跨篇相似度扫描切 `iter_draft_articles`；测试同步全绿。
+- **M3c（✅ 已完成）**：compose brief 输入落对象 `3.brief/brief.json`（`content_object.write_brief_object/read_brief_object/iter_briefs/has_briefs`）；`run.py _run_produce_plan` 写对象 brief；`iter_route_briefs/iter_entity_briefs`、`load_compose_brief`、produce handler 入口守卫、`content_review`、`verify_content_semantics` 全部经路由读 brief；测试全绿。
+- **M3d（✅ 已完成）**：produce 阶段报告对象化——`stage_reports` 新增 produce step→对象阶段映射（quality_analysis(+gate)→`2.quality`、compose_brief(+gate)→`3.brief`、compose/review/media_check(+gate)/repair_report→`5.review`），对象目录内文件名为 `{step}.json`；统一读取端 `read_stage_envelope`/`iter_stage_envelopes`（对象优先去重）；`review_ledger` 账本/实体边车落 `5.review/{review_ledger.json,review_entities.json}`（`load_ledger`/`iter_ledgers` 双源去重）；读取端 `media/handler`、`media/gate`、`produce/validate`、`verify/gate`、`task/run` review_gate 聚合、`materialize`（review+compose 读取与序号索引）全部切换；`evidence_contract` 路径串同步对象树；48/48 数据测试全绿（含全链路 e2e）。顺带修复历史遗漏：`build_writing_pack` 现输出 `publishLayout`。
 - **M3c**：brief 输入落 `3.brief/brief.json`；`iter_*_briefs` 经路由枚举；`run.py _run_produce_plan` / `plan.write_brief` 切换；`content_review`/handler 的 compose-inputs 读取同步。
 - **M3d**：produce stage 报告（quality_analysis/compose/review/gate/repair/ledger）经 `object_stage_reports` 落 `2.quality`/`5.review`；同步 `gate`/`validate`/`media`/`review_ledger`/`materialize` 读取端；`evidence_contract` produce 段更新。

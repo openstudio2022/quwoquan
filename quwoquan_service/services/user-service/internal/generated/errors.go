@@ -17,6 +17,8 @@ var (
 	ErrGreetingTargetBlockedSender = errors.New("USER.GREETING.target_blocked_sender")
 	ErrGreetingDuplicatePending = errors.New("USER.GREETING.duplicate_pending")
 	ErrGreetingRateLimited = errors.New("USER.GREETING.rate_limited")
+	ErrGreetingSenderRealnameRequired = errors.New("USER.GREETING.sender_realname_required")
+	ErrGreetingMinorRestricted = errors.New("USER.GREETING.minor_restricted")
 	ErrGreetingAlreadyContact = errors.New("USER.GREETING.already_contact")
 	ErrGreetingNotFound = errors.New("USER.GREETING.not_found")
 	ErrGreetingInvalidStatusTransition = errors.New("USER.GREETING.invalid_status_transition")
@@ -108,6 +110,18 @@ func AppErrorFromGreetingDuplicatePending(debugMessage string) *rerrors.AppError
 func AppErrorFromGreetingRateLimited(debugMessage string) *rerrors.AppError {
 	code, _ := rerrors.ParseCode(string(ErrGreetingRateLimited.Error()))
 	return rerrors.NewAppError(code, "打招呼发送频率超限，请稍后再试", debugMessage).WithRecovery("retry", 86400)
+}
+
+// AppErrorFromGreetingSenderRealnameRequired returns *AppError for USER.GREETING.sender_realname_required (user_message from errors.yaml).
+func AppErrorFromGreetingSenderRealnameRequired(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGreetingSenderRealnameRequired.Error()))
+	return rerrors.NewAppError(code, "完成实名认证后才能发起打招呼或约伴", debugMessage).WithRecovery("surface", 0)
+}
+
+// AppErrorFromGreetingMinorRestricted returns *AppError for USER.GREETING.minor_restricted (user_message from errors.yaml).
+func AppErrorFromGreetingMinorRestricted(debugMessage string) *rerrors.AppError {
+	code, _ := rerrors.ParseCode(string(ErrGreetingMinorRestricted.Error()))
+	return rerrors.NewAppError(code, "青少年模式下暂不支持向陌生人打招呼或约伴", debugMessage).WithRecovery("surface", 0)
 }
 
 // AppErrorFromGreetingAlreadyContact returns *AppError for USER.GREETING.already_contact (user_message from errors.yaml).

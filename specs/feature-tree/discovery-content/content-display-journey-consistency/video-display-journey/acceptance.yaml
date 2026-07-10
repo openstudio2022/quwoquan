@@ -47,10 +47,10 @@ gwt_acceptance:
     - 点击到播放器首帧或错误态 P95 <= 2.0s。
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/video_display_cover_priority__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/video_display_cover_priority__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/video_feed_cover_playback__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/video_display_cover_priority__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/video_display_cover_priority__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
@@ -91,10 +91,10 @@ gwt_acceptance:
     - quwoquan_app/lib/ui/content/providers/comment_provider.dart
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/video_display_state_sync__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/video_display_state_sync__local_contract_test.dart
       - file: quwoquan_app/test/api_integration/gamma/video_feed_state_roundtrip__api_integration_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/video_display_state_sync__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/video_display_state_sync__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
@@ -140,11 +140,11 @@ gwt_acceptance:
     - quwoquan_app/lib/cloud/runtime/generated/content/post_base_dto.dart
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/video_display_imported_uploaded_parity__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/video_display_imported_uploaded_parity__local_contract_test.dart
       - file: quwoquan_app/test/api_integration/gamma/video_import_feed_cover_roundtrip__api_integration_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/video_imported_uploaded_display_parity__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/video_display_imported_uploaded_parity__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/video_display_imported_uploaded_parity__local_contract_test.dart
     status: pending
     test_evidence:
       primary:
@@ -170,7 +170,7 @@ gwt_acceptance:
     - 2026-06-22 已通过 local_contract 证明导入视频与用户上传视频在 DTO/display mapper 上共享同一封面展示合同；gamma import feed roundtrip 与 UAT 尚未落盘，状态保持 pending。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/core/emoji/emoji_analytics.dart';
 import 'package:quwoquan_app/core/emoji/emoji_repository.dart';
+import 'package:quwoquan_app/core/platform/startup_native_bridge.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 typedef ProviderReader = Object? Function(dynamic provider);
@@ -31,9 +31,8 @@ final class AppStartupRuntime {
   int? _androidActivityOnCreateMs;
   int? _androidFlutterEngineConfiguredMs;
 
-  static const MethodChannel _nativeTimingsChannel = MethodChannel(
-    'quwoquan/startup/timings',
-  );
+  static const StartupTimingsNativeBridge _nativeTimingsBridge =
+      MethodChannelStartupTimingsNativeBridge();
 
   void markBootstrapStarted() {
     if (_bootstrapStarted) {
@@ -59,29 +58,13 @@ final class AppStartupRuntime {
     if (_androidFlutterEngineConfiguredMs != null) {
       return;
     }
-    try {
-      final raw = await _nativeTimingsChannel.invokeMethod<Object?>(
-        'readProcessSegments',
-      );
-      if (raw is Map) {
-        final activity = raw['androidActivityOnCreateMs'];
-        final engine = raw['androidFlutterEngineConfiguredMs'];
-        if (activity is int) {
-          _androidActivityOnCreateMs = activity;
-        } else if (activity is num) {
-          _androidActivityOnCreateMs = activity.round();
-        }
-        if (engine is int) {
-          _androidFlutterEngineConfiguredMs = engine;
-        } else if (engine is num) {
-          _androidFlutterEngineConfiguredMs = engine.round();
-        }
-      }
-    } on MissingPluginException {
-      // iOS / Web 无 native 分段通道。
-    } on PlatformException {
-      // best effort
+    final segments = await _nativeTimingsBridge.readProcessSegments();
+    if (segments == null) {
+      return;
     }
+    _androidActivityOnCreateMs = segments.androidActivityOnCreateMs;
+    _androidFlutterEngineConfiguredMs =
+        segments.androidFlutterEngineConfiguredMs;
   }
 
   void markWelcomeWindowInitStarted() {
@@ -191,7 +174,8 @@ final class AppStartupRuntime {
       if (_welcomeShownMs != null) 'welcomeShownMs': _welcomeShownMs,
       if (_welcomeWindowInitMs != null)
         'welcomeWindowInitMs': _welcomeWindowInitMs,
-      if (_welcomeCompletedMs != null) 'welcomeCompletedMs': _welcomeCompletedMs,
+      if (_welcomeCompletedMs != null)
+        'welcomeCompletedMs': _welcomeCompletedMs,
       if (_androidActivityOnCreateMs != null)
         'androidActivityOnCreateMs': _androidActivityOnCreateMs,
       if (_androidFlutterEngineConfiguredMs != null)

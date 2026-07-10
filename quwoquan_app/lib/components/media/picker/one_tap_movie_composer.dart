@@ -1,18 +1,18 @@
-import 'dart:io';
-
-import 'package:flutter/services.dart';
 import 'package:quwoquan_app/core/models/create_media_models.dart';
+import 'package:quwoquan_app/core/platform/one_tap_movie_native_bridge.dart';
 
 class OneTapMovieComposeResult {
   const OneTapMovieComposeResult({
     required this.videoPath,
     required this.durationMs,
     this.coverPath = '',
+    this.effectId = 'original',
   });
 
   final String videoPath;
   final int durationMs;
   final String coverPath;
+  final String effectId;
 }
 
 abstract class OneTapMovieComposer {
@@ -22,14 +22,15 @@ abstract class OneTapMovieComposer {
 }
 
 class MethodChannelOneTapMovieComposer implements OneTapMovieComposer {
-  const MethodChannelOneTapMovieComposer()
-    : _channel = const MethodChannel('quwoquan/video_editing');
+  const MethodChannelOneTapMovieComposer({
+    this._nativeBridge = const MethodChannelOneTapMovieNativeBridge(),
+  });
 
   static const int secondsPerImage = 3;
   static const int outputWidth = 1080;
   static const int outputHeight = 1920;
 
-  final MethodChannel _channel;
+  final OneTapMovieNativeBridge _nativeBridge;
 
   @override
   Future<OneTapMovieComposeResult> compose({
@@ -43,36 +44,16 @@ class MethodChannelOneTapMovieComposer implements OneTapMovieComposer {
     if (imagePaths.isEmpty) {
       throw ArgumentError.value(imagePaths, 'images', 'No images selected.');
     }
-    if (!Platform.isIOS) {
-      throw UnsupportedError(
-        'One-tap movie composition is only available on iOS.',
-      );
-    }
-    try {
-      final response = await _channel.invokeMapMethod<String, dynamic>(
-        'composeOneTapMovie',
-        <String, dynamic>{
-          'imagePaths': imagePaths,
-          'secondsPerImage': secondsPerImage,
-          'outputWidth': outputWidth,
-          'outputHeight': outputHeight,
-        },
-      );
-      final videoPath = (response?['videoPath'] ?? '').toString().trim();
-      if (videoPath.isEmpty) {
-        throw StateError(
-          'One-tap movie composer returned an empty video path.',
-        );
-      }
-      return OneTapMovieComposeResult(
-        videoPath: videoPath,
-        coverPath: (response?['coverPath'] ?? '').toString(),
-        durationMs:
-            (response?['durationMs'] as num?)?.toInt() ??
-            imagePaths.length * secondsPerImage * 1000,
-      );
-    } on MissingPluginException {
-      throw UnsupportedError('One-tap movie composition is not available.');
-    }
+    final response = await _nativeBridge.compose(
+      imagePaths: imagePaths,
+      secondsPerImage: secondsPerImage,
+      outputWidth: outputWidth,
+      outputHeight: outputHeight,
+    );
+    return OneTapMovieComposeResult(
+      videoPath: response.videoPath,
+      coverPath: response.coverPath,
+      durationMs: response.durationMs,
+    );
   }
 }

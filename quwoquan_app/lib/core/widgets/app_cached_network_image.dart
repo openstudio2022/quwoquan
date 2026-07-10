@@ -13,6 +13,10 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 
+const int appImageDecodeMaxPhysicalExtent = 2048;
+const double _compactFeedCacheExtentViewportMultiplier = 0.5;
+const double _comfortableFeedCacheExtentViewportMultiplier = 1.0;
+
 final _avatarImageCacheManager = _AppImageCacheManager(
   Config(
     'appImageAvatarCache',
@@ -129,6 +133,19 @@ class AppResourceCacheProfile {
   final int maxMediaDownloadCacheSizeMb;
   final int maxConcurrentMediaDownloads;
   final int maxPostObjectCacheEntries;
+
+  bool get usesCompactScrollMediaPolicy => name == compact.name;
+
+  double get feedCacheExtentViewportMultiplier => usesCompactScrollMediaPolicy
+      ? _compactFeedCacheExtentViewportMultiplier
+      : _comfortableFeedCacheExtentViewportMultiplier;
+
+  double feedCacheExtentForViewport(double viewportDimension) {
+    if (viewportDimension <= 0 || viewportDimension == double.infinity) {
+      return 0;
+    }
+    return viewportDimension * feedCacheExtentViewportMultiplier;
+  }
 
   static const compact = AppResourceCacheProfile(
     name: 'compact',
@@ -296,66 +313,97 @@ class AppCachedNetworkImage extends ConsumerWidget {
     final cacheManager = AppImageCacheController.cacheManagerForPreset(
       cdnPreset,
     );
-    return CachedNetworkImage(
-      imageUrl: candidates[index],
-      cacheManager: cacheManager,
-      fit: fit,
-      width: width,
-      height: height,
-      memCacheWidth: _decodeExtentFor(width, context),
-      memCacheHeight: _decodeExtentFor(height, context),
-      maxWidthDiskCache: _diskCacheExtentFor(cacheManager, width, context),
-      maxHeightDiskCache: _diskCacheExtentFor(cacheManager, height, context),
-      imageBuilder: (context, imageProvider) {
-        ref
-            .read(pageLifecycleObservabilityProvider)
-            .recordMediaLoad(
-              mediaType: 'image',
-              result: 'success',
-              candidatesTried: index + 1,
-            );
-        final builder = imageBuilder;
-        if (builder != null) {
-          return builder(context, imageProvider);
-        }
-        return Image(
-          image: imageProvider,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final logicalWidth = _effectiveLogicalExtent(
+          width,
+          constraints.maxWidth,
+        );
+        final logicalHeight = _effectiveLogicalExtent(
+          height,
+          constraints.maxHeight,
+        );
+        return CachedNetworkImage(
+          imageUrl: candidates[index],
+          cacheManager: cacheManager,
           fit: fit,
           width: width,
           height: height,
-        );
-      },
-      placeholder: (context, url) =>
-          placeholder ?? Container(color: AppColors.light.backgroundSecondary),
-      errorWidget: (context, url, error) {
-        final nextIndex = index + 1;
-        if (nextIndex < candidates.length) {
-          return _buildCandidateImage(context, ref, candidates, nextIndex);
-        }
-        developer.log(
-          'image load failed after ${candidates.length} candidate(s): $url',
-          name: 'AppCachedNetworkImage',
-          error: error,
-        );
-        debugPrint(
-          '[AppCachedNetworkImage] image load failed after '
-          '${candidates.length} candidate(s); '
-          'last=${_summarizeImageUrl(url)}; '
-          'errorType=${error.runtimeType}',
-        );
-        ref
-            .read(pageLifecycleObservabilityProvider)
-            .recordMediaLoad(
-              mediaType: 'image',
-              result: 'failure',
-              copyKey: 'imageLoadFailed',
-              error: error,
-              candidatesTried: candidates.length,
+          memCacheWidth: _decodeExtentFor(logicalWidth, context),
+          memCacheHeight: _decodeExtentFor(logicalHeight, context),
+          maxWidthDiskCache: _diskCacheExtentFor(
+            cacheManager,
+            logicalWidth,
+            context,
+          ),
+          maxHeightDiskCache: _diskCacheExtentFor(
+            cacheManager,
+            logicalHeight,
+            context,
+          ),
+          imageBuilder: (context, imageProvider) {
+            ref
+                .read(pageLifecycleObservabilityProvider)
+                .recordMediaLoad(
+                  mediaType: 'image',
+                  result: 'success',
+                  candidatesTried: index + 1,
+                );
+            final builder = imageBuilder;
+            if (builder != null) {
+              return builder(context, imageProvider);
+            }
+            return Image(
+              image: imageProvider,
+              fit: fit,
+              width: width,
+              height: height,
             );
-        onLoadFailed?.call(error);
-        return errorWidget ?? _buildErrorWidget(context);
+          },
+          placeholder: (context, url) =>
+              placeholder ??
+              Container(color: AppColors.light.backgroundSecondary),
+          errorWidget: (context, url, error) {
+            final nextIndex = index + 1;
+            if (nextIndex < candidates.length) {
+              return _buildCandidateImage(context, ref, candidates, nextIndex);
+            }
+            developer.log(
+              'image load failed after ${candidates.length} candidate(s): $url',
+              name: 'AppCachedNetworkImage',
+              error: error,
+            );
+            debugPrint(
+              '[AppCachedNetworkImage] image load failed after '
+              '${candidates.length} candidate(s); '
+              'last=${_summarizeImageUrl(url)}; '
+              'errorType=${error.runtimeType}',
+            );
+            ref
+                .read(pageLifecycleObservabilityProvider)
+                .recordMediaLoad(
+                  mediaType: 'image',
+                  result: 'failure',
+                  copyKey: 'imageLoadFailed',
+                  error: error,
+                  candidatesTried: candidates.length,
+                );
+            onLoadFailed?.call(error);
+            return errorWidget ?? _buildErrorWidget(context);
+          },
+        );
       },
     );
+  }
+
+  double? _effectiveLogicalExtent(double? explicit, double constrained) {
+    if (explicit != null && explicit > 0 && explicit != double.infinity) {
+      return explicit;
+    }
+    if (constrained > 0 && constrained != double.infinity) {
+      return constrained;
+    }
+    return null;
   }
 
   int? _decodeExtentFor(double? logicalExtent, BuildContext context) {
@@ -369,8 +417,8 @@ class AppCachedNetworkImage extends ConsumerWidget {
     if (value < 1) {
       return 1;
     }
-    if (value > 4096) {
-      return 4096;
+    if (value > appImageDecodeMaxPhysicalExtent) {
+      return appImageDecodeMaxPhysicalExtent;
     }
     return value;
   }
@@ -387,7 +435,7 @@ class AppCachedNetworkImage extends ConsumerWidget {
     if (decoded == null) {
       return null;
     }
-    return decoded > 2048 ? 2048 : decoded;
+    return decoded;
   }
 
   String _summarizeImageUrl(String raw) {
@@ -399,30 +447,44 @@ class AppCachedNetworkImage extends ConsumerWidget {
   }
 
   Widget _buildErrorWidget(BuildContext context) {
-    return Container(
-      color: AppColors.light.backgroundSecondary,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.image_not_supported_outlined,
-              color: AppColors.iosSecondaryLabel(context),
-              size: AppSpacing.twenty,
-            ),
-            SizedBox(height: AppSpacing.xs),
-            Text(
-              UITextConstants.imageLoadFailed,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: AppColors.iosSecondaryLabel(context),
-                fontSize: AppTypography.iosCaption1,
-              ),
-            ),
-          ],
-        ),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact =
+            constraints.maxHeight.isFinite &&
+            constraints.maxHeight < AppSpacing.forty;
+        final iconSize = isCompact ? AppSpacing.iconSmall : AppSpacing.twenty;
+        return Container(
+          color: AppColors.light.backgroundSecondary,
+          child: Center(
+            child: isCompact
+                ? Icon(
+                    Icons.image_not_supported_outlined,
+                    color: AppColors.iosSecondaryLabel(context),
+                    size: iconSize,
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.image_not_supported_outlined,
+                        color: AppColors.iosSecondaryLabel(context),
+                        size: iconSize,
+                      ),
+                      SizedBox(height: AppSpacing.xs),
+                      Text(
+                        UITextConstants.imageLoadFailed,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: AppColors.iosSecondaryLabel(context),
+                          fontSize: AppTypography.iosCaption1,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        );
+      },
     );
   }
 }

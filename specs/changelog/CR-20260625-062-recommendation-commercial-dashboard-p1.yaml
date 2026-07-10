@@ -8,7 +8,7 @@ affected_nodes:
   - specs/feature-tree/recommendation-platform/evaluation-and-flywheel
   - specs/feature-tree/recommendation-platform/evaluation-and-flywheel/recommendation-observability-dashboard
   - quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
-  - deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json
+  - quwoquan_ops/observability/monitoring/dashboards/l2_recommendation_commercial_maturity.json
 
 entries:
   - timestamp: "2026-06-25T00:30:00+08:00"
@@ -47,7 +47,7 @@ entries:
       - path: quwoquan_service/services/content-service/configs/observability/recommendation_slo.yaml
         sections:
           - dashboards
-      - path: deploy/monitoring/dashboards/l2_recommendation_commercial_maturity.json
+      - path: quwoquan_ops/observability/monitoring/dashboards/l2_recommendation_commercial_maturity.json
         sections:
           - dashboard
     impact:

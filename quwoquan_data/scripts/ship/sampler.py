@@ -21,7 +21,7 @@ from _common.paths import PUBLISH_ROOT, REPO_ROOT
 
 # content_sampling_manifest.yaml 是受版本控制的跨工程部署契约，必须挂 code-anchored 的
 # REPO_ROOT；禁止用 DATA_ROOT.parent 推导（隔离根/沙箱下会漂移到 $HOME/deploy 而丢失契约）。
-SAMPLING_MANIFEST = REPO_ROOT / "deploy" / "shared" / "content_sampling_manifest.yaml"
+SAMPLING_MANIFEST = REPO_ROOT / "quwoquan_ops" / "environments" / "content_sampling_manifest.yaml"
 SAMPLE_BUNDLE_DIR = PUBLISH_ROOT / "sample_bundles"
 
 

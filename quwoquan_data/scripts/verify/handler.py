@@ -51,6 +51,22 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_works_classification import main as works_classification_main
 
         raise SystemExit(works_classification_main())
+    if cmd == "output-root-isolation":
+        from verify.verify_output_root_isolation import main as output_root_isolation_main
+
+        raise SystemExit(output_root_isolation_main())
+    if cmd == "active-runtime-preflight":
+        from verify.verify_no_active_data_runtime import main as active_runtime_preflight_main
+
+        raise SystemExit(active_runtime_preflight_main())
+    if cmd == "data-layout":
+        from verify.verify_data_layout import main as data_layout_main
+
+        raise SystemExit(data_layout_main())
+    if cmd == "coverage-master-list":
+        from verify.verify_coverage_master_list import main as coverage_master_list_main
+
+        raise SystemExit(coverage_master_list_main())
     if cmd == "release-integrity":
         from _common.release_integrity import scan_release_integrity
 
@@ -73,11 +89,22 @@ def handle_verify(args: argparse.Namespace) -> None:
             min_pass_rate=float(getattr(args, "min_pass_rate", 0.0) or 0.0),
             source_ready_goal=int(getattr(args, "source_ready_goal", 0) or 0) or None,
             release_id=getattr(args, "release", None),
-            require_import=not bool(getattr(args, "allow_missing_import", False)),
+            require_import=True,
             mode=str(getattr(args, "mode", "commercial") or "commercial"),
+            accept_estimated_token_ledger=bool(getattr(args, "accept_estimated_token_ledger", False)),
+            accept_text_only_articles=bool(getattr(args, "accept_text_only_articles", False)),
         )
         if getattr(args, "report_out", None):
+            from _common.artifacts_index import register_artifact_report
+
             write_scale_readiness_report(Path(args.report_out), report)
+            register_artifact_report(
+                Path(args.report_out),
+                task_id=str(args.task),
+                batch_id=str(args.batch),
+                report_kind="scale_readiness",
+                release_id=str(getattr(args, "release", "") or ""),
+            )
         print(json.dumps(report, ensure_ascii=False, indent=2))
         if not report.get("passed"):
             raise SystemExit(1)
@@ -128,7 +155,7 @@ def handle_verify(args: argparse.Namespace) -> None:
             batch_ids=[str(x).strip() for x in str(getattr(args, "batches", "") or "").split(",") if str(x).strip()] or None,
             site_id=getattr(args, "site_id", None),
             daily_target=int(args.daily_target),
-            require_import=not bool(getattr(args, "allow_missing_import", False)),
+            require_import=True,
             mode=str(getattr(args, "mode", "commercial") or "commercial"),
             min_lane_counts={
                 "article": int(getattr(args, "min_article_count", 0) or 0),
@@ -140,6 +167,35 @@ def handle_verify(args: argparse.Namespace) -> None:
             write_site_scale_readiness_report(Path(args.report_out), report)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         if not report.get("passed"):
+            raise SystemExit(1)
+        return
+    if cmd == "sdk-monitoring":
+        from verify.sdk_monitoring import build_sdk_monitoring_report, write_sdk_monitoring_report
+
+        if not args.task or not args.batch:
+            print("[verify sdk-monitoring] --task and --batch are required", file=sys.stderr)
+            raise SystemExit(2)
+        report = build_sdk_monitoring_report(
+            str(args.task),
+            str(args.batch),
+            plan_id=getattr(args, "plan", None),
+            startup_probe_path=getattr(args, "startup_probe_file", None),
+            watchdog_log_path=getattr(args, "watchdog_log", None),
+            run_matrix_path=getattr(args, "run_matrix", None),
+            accept_estimated_token_ledger=bool(getattr(args, "accept_estimated_token_ledger", False)),
+        )
+        if getattr(args, "report_out", None):
+            from _common.artifacts_index import register_artifact_report
+
+            write_sdk_monitoring_report(Path(args.report_out), report)
+            register_artifact_report(
+                Path(args.report_out),
+                task_id=str(args.task),
+                batch_id=str(args.batch),
+                report_kind="sdk_monitoring",
+            )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if getattr(args, "strict", False) and not report.get("passed"):
             raise SystemExit(1)
         return
     if getattr(args, "data_release_file", None):
@@ -359,6 +415,10 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("single-contract-source", help="校验内容供给生产契约只有一个无版本真源")
     sub.add_parser("content-supply-production", help="校验生产级内容供给 current 契约与队列/envelope/账本闭环")
     sub.add_parser("works-classification", help="校验作品 vs 随记判定 schema/config/registry 一致性 + 判定 smoke")
+    sub.add_parser("output-root-isolation", help="仓外输出根隔离门：repo allowlist/阶段树/批次轴/摘要索引")
+    sub.add_parser("active-runtime-preflight", help="校验 data runtime 工作区已静默，无活跃 run-recipe/scaled-e2e/workflow 进程")
+    sub.add_parser("data-layout", help="校验数据工程源码目录归一化与退休路径")
+    sub.add_parser("coverage-master-list", help="全国地点主清单门禁：目录归属/schema/类型 scope/行政区叶子/canonicalName 全局唯一")
     pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用与跨作品资产溯源完整性")
     pri.add_argument("--release", required=True, help="Release ID under release/")
     psr = sub.add_parser("scale-readiness", help="校验批次是否具备日产万级/商用放量证据")
@@ -370,7 +430,16 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     psr.add_argument("--source-ready-goal", type=int, default=0, help="source-ready 对象容量门槛；不传时按 target*1.2")
     psr.add_argument("--mode", choices=["trial", "commercial"], default="commercial", help="trial 允许已替补 abandoned；commercial 要求零未替补失败")
     psr.add_argument("--release", help="可选 isolated release ID，用于证明 release verify 入口存在")
-    psr.add_argument("--allow-missing-import", action="store_true", help="仅本地试跑时允许缺少 staging/gamma import 证据")
+    psr.add_argument(
+        "--accept-estimated-token-ledger",
+        action="store_true",
+        help="显式接受 estimated_from_artifacts 账本（H100 口径，2026-07-06 裁定）；默认严格阻断",
+    )
+    psr.add_argument(
+        "--accept-text-only-articles",
+        action="store_true",
+        help="显式接受 text_only 文章准出（R-CS10 收口口径，图文同源为后续升级）；默认严格阻断",
+    )
     psr.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
     pcsr = sub.add_parser("creator-scale-readiness", help="校验创作者池 Scale-10/100 放量证据")
     pcsr.add_argument("--vertical", default="travel")
@@ -386,11 +455,28 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pss.add_argument("--batches", help="逗号分隔多个 site_supply batchId；用于同垂类多站点真实放量聚合")
     pss.add_argument("--daily-target", type=int, default=100000, help="目标日产内容对象数，默认 100000")
     pss.add_argument("--mode", choices=["trial", "commercial"], default="commercial", help="trial 只验结构/吞吐/账本，commercial 要求 release/import/search/rec 证据")
-    pss.add_argument("--allow-missing-import", action="store_true", help="仅本地试跑时允许缺少 import 证据")
     pss.add_argument("--min-article-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计文章最低数")
     pss.add_argument("--min-image-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计图片作品最低数")
     pss.add_argument("--min-video-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计视频作品最低数")
     pss.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
+
+    psm = sub.add_parser("sdk-monitoring", help="聚合 managed/local/fanout/supervisor 的 Cursor SDK 运行证据")
+    psm.add_argument("--task", required=True, help="Task ID")
+    psm.add_argument("--batch", required=True, help="Batch ID")
+    psm.add_argument("--plan", help="可选：fanout planId，用于读取 run_matrix.json")
+    psm.add_argument(
+        "--startup-probe-file",
+        help="可选：额外记录批外 startup probe JSON 作为诊断；batch 准入仍只认 _shared/env_ready_report.json",
+    )
+    psm.add_argument("--watchdog-log", help="可选：watchdog 逗号分隔日志")
+    psm.add_argument("--run-matrix", help="可选：显式 run_matrix.json 路径")
+    psm.add_argument(
+        "--accept-estimated-token-ledger",
+        action="store_true",
+        help="显式接受 estimated_from_artifacts 账本（H100 口径，2026-07-06 裁定）；默认仍计为 issue",
+    )
+    psm.add_argument("--report-out", help="可选：写出 SDK 监控 JSON 报告")
+    psm.add_argument("--strict", action="store_true", help="发现 issues 时返回非 0")
 
     ppur = sub.add_parser("prefab-user-readiness", help="T4 四环境 prefab user readiness 报告")
     ppur.add_argument("--mode", choices=["four_env", "t2"], default="four_env")

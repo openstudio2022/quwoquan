@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import fcntl
 import os
+import selectors
 import subprocess
 import sys
 import tempfile
@@ -39,10 +40,75 @@ void main() {
   print('sqlite3-prewarm-ok ${sqlite3.version}');
 }
 """
+DEFAULT_TEST_TIMEOUT_SECONDS = int(
+  os.environ.get("FLUTTER_TEST_GUARD_TIMEOUT_SECONDS", "1200")
+)
 
 
 def _run_checked(cmd: list[str], *, cwd: Path = APP_ROOT) -> int:
   return subprocess.run(cmd, cwd=str(cwd)).returncode
+
+
+def _terminate_process(proc: subprocess.Popen[bytes]) -> None:
+  proc.terminate()
+  try:
+    proc.wait(timeout=5)
+  except subprocess.TimeoutExpired:
+    proc.kill()
+    proc.wait(timeout=5)
+
+
+def _stream_command(
+  cmd: list[str],
+  *,
+  cwd: Path,
+  timeout_seconds: int,
+) -> tuple[int, str, bool]:
+  proc = subprocess.Popen(
+    cmd,
+    cwd=str(cwd),
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+  )
+  assert proc.stdout is not None
+  selector = selectors.DefaultSelector()
+  selector.register(proc.stdout, selectors.EVENT_READ)
+  output_parts: list[str] = []
+  started_at = time.monotonic()
+  last_output_at = started_at
+  timed_out = False
+  try:
+    while proc.poll() is None:
+      now = time.monotonic()
+      if now - started_at >= timeout_seconds:
+        timed_out = True
+        _terminate_process(proc)
+        break
+      events = selector.select(timeout=1.0)
+      if events:
+        chunk = os.read(proc.stdout.fileno(), 4096)
+        if chunk:
+          text = chunk.decode("utf-8", errors="replace")
+          output_parts.append(text)
+          print(text, end="", flush=True)
+          last_output_at = now
+      elif now - last_output_at >= 30:
+        print(
+          f"[flutter-test-guard] waiting for flutter test output "
+          f"({int(now - started_at)}s elapsed)",
+          flush=True,
+        )
+        last_output_at = now
+    remaining = proc.stdout.read()
+    if remaining:
+      text = remaining.decode("utf-8", errors="replace")
+      output_parts.append(text)
+      print(text, end="", flush=True)
+  finally:
+    selector.close()
+  if timed_out:
+    return 124, "".join(output_parts), True
+  return proc.returncode or 0, "".join(output_parts), False
 
 
 def _run_flutter_test_with_retries(
@@ -50,26 +116,28 @@ def _run_flutter_test_with_retries(
   *,
   cwd: Path = APP_ROOT,
   max_attempts: int = 3,
+  timeout_seconds: int = DEFAULT_TEST_TIMEOUT_SECONDS,
 ) -> int:
   for attempt in range(1, max_attempts + 1):
-    result = subprocess.run(
+    returncode, output, timed_out = _stream_command(
       cmd,
-      cwd=str(cwd),
-      stdout=subprocess.PIPE,
-      stderr=subprocess.STDOUT,
-      text=True,
-      errors="replace",
+      cwd=cwd,
+      timeout_seconds=timeout_seconds,
     )
-    output = result.stdout or ""
-    if output:
-      print(output, end="" if output.endswith("\n") else "\n")
-    if result.returncode == 0:
+    if timed_out:
+      print(
+        f"[flutter-test-guard] FAIL: command timed out after {timeout_seconds}s: "
+        + " ".join(cmd),
+        file=sys.stderr,
+      )
+      return 124
+    if returncode == 0:
       return 0
     if attempt >= max_attempts:
-      return result.returncode
+      return returncode
     matched_markers = [marker for marker in RETRY_MARKERS if marker in output]
     if not matched_markers:
-      return result.returncode
+      return returncode
     wait_seconds = attempt * 5
     print(
       f"[flutter-test-guard] transient flutter failure, retry {attempt}/{max_attempts - 1} "
@@ -77,6 +145,15 @@ def _run_flutter_test_with_retries(
     )
     time.sleep(wait_seconds)
   return 1
+
+
+def _needs_serial_local_contract_run(args: list[str]) -> bool:
+  if any(arg == "--concurrency=1" or arg == "--concurrency" for arg in args):
+    return False
+  return any(
+    arg.rstrip("/") == "test/local_contract" or arg.startswith("test/local_contract/")
+    for arg in args
+  )
 
 
 def _ensure_flutter_pub_get() -> None:
@@ -141,6 +218,8 @@ def main(argv: list[str]) -> int:
     _ensure_flutter_pub_get()
     _prewarm_sqlite3()
     flutter_args = [arg for arg in args if arg != "--no-pub"]
+    if _needs_serial_local_contract_run(flutter_args):
+      flutter_args = ["--concurrency=1", *flutter_args]
     cmd = ["flutter", "test", "--no-pub", *flutter_args]
     print(f"[flutter-test-guard] {' '.join(cmd)}")
     return _run_flutter_test_with_retries(cmd)

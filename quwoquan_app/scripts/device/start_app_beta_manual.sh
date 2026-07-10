@@ -5,12 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 APP_DIR="$ROOT_DIR/quwoquan_app"
 ASSISTANT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/assistant-service"
 CHAT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/chat-service"
-LOG_DIR="$ROOT_DIR/state/local/app_beta_manual"
+LOG_DIR="$ROOT_DIR/.qwq_output/env/beta/local/beta-local"
 MANIFEST="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json"
-ASSISTANT_APP_CONFIG="$ROOT_DIR/quwoquan_app/assistant/config.json"
 
-eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
-eval "$(python3 "$ROOT_DIR/agent_ops/deploy/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
+eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
+eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
 
 ASSISTANT_PORT="${ASSISTANT_PORT}"
 CHAT_PORT="${CHAT_PORT}"
@@ -37,7 +36,8 @@ CHAT_SEED_REFS="${CHAT_SEED_REFS:-chat_core,chat_settings_core,chat_contacts_cor
 CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017/?directConnection=true}"
 CHAT_MONGO_DATABASE="${CHAT_MONGO_DATABASE:-quwoquan_chat_local}"
 CHAT_REDIS_ADDR="${CHAT_REDIS_ADDR:-localhost:6379}"
-LOCAL_GAMMA_COMPOSE_FILE="$ROOT_DIR/quwoquan_service/docker-compose.gamma-local.yaml"
+LOCAL_GAMMA_COMPOSE_FILE="$ROOT_DIR/quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+LOCAL_GAMMA_COMPOSE_PROJECT_NAME="${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-quwoquan_service}"
 LOCAL_GAMMA_MONGO_PORT="${LOCAL_GAMMA_MONGO_PORT}"
 LOCAL_GAMMA_REDIS_PORT="${LOCAL_GAMMA_REDIS_PORT}"
 GATEWAY_BASE_URL_EXPLICIT=0
@@ -57,7 +57,7 @@ INTERNAL_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}"
 APP_CURRENT_USER_ID="${APP_CURRENT_USER_ID:-fixture_user_current}"
 ASSISTANT_SEED_REFS="${ASSISTANT_SEED_REFS:-assistant_p0_core}"
 FLUTTER_DEVICE_ID="${FLUTTER_DEVICE_ID:-}"
-DEV_UP_HELPER="$ROOT_DIR/agent_ops/deploy/lib/dev_up.py"
+DEV_UP_HELPER="$ROOT_DIR/quwoquan_ops/cli/lib/dev_up.py"
 SKIP_APP=0
 KILL_EXISTING=1
 RESTART_STACK=1
@@ -66,16 +66,16 @@ VERIFY_MODE="${BETA_SEED_VERIFY_MODE:-fast}"
 MEDIA_PREP_MODE="${BETA_MEDIA_PREP_MODE:-symlink}"
 
 BETA_MANUAL_LABEL="app-beta-manual"
-BETA_MANUAL_STACK_NAME="app_beta_manual"
+BETA_MANUAL_STACK_NAME="beta-local"
 BETA_MANUAL_LOG_DIR="$LOG_DIR"
-INSTANCE_NAMESPACE="${INSTANCE_NAMESPACE:-app-beta-manual}"
+INSTANCE_NAMESPACE="${INSTANCE_NAMESPACE:-beta-local}"
 BETA_MANUAL_OWNER_ID="${BETA_MANUAL_STACK_NAME}-$$-$(date +%s)"
 export BETA_MANUAL_OWNER_ID
-source "$ROOT_DIR/agent_ops/lib/beta_manual_lifecycle.sh"
+source "$ROOT_DIR/quwoquan_ops/cli/lib/beta_manual_lifecycle.sh"
 TLS_PROXY_NAME="quwoquan_beta_tls_proxy"
 TLS_PROXY_CADDYFILE="$LOG_DIR/beta-public-plane.Caddyfile"
-TLS_PROXY_DATA_DIR="$LOG_DIR/caddy-data"
-TLS_PROXY_CONFIG_DIR="$LOG_DIR/caddy-config"
+TLS_PROXY_DATA_DIR="$LOG_DIR/caddy/data"
+TLS_PROXY_CONFIG_DIR="$LOG_DIR/caddy/config"
 CONTAINER_RUNTIME=""
 CONTAINER_HOST_ALIAS=""
 
@@ -270,7 +270,7 @@ beta_manual_compose_up_chat_backing_services() {
     return 1
   fi
   echo "[app-beta-manual] starting fallback mongodb/redis via local gamma compose"
-  docker compose -f "$LOCAL_GAMMA_COMPOSE_FILE" up -d mongodb mongo-init redis >/dev/null
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$LOCAL_GAMMA_COMPOSE_FILE" up -d mongodb mongo-init redis >/dev/null
 }
 
 beta_manual_ensure_docker_daemon() {
@@ -337,149 +337,34 @@ beta_manual_ensure_chat_backing_services() {
 }
 
 resolve_assistant_model_env() {
-  python3 - "$ROOT_DIR" "$ASSISTANT_APP_CONFIG" <<'PY'
-import json
+  python3 - <<'PY'
 import os
-import re
 import shlex
-import sys
-from pathlib import Path
-
-root = Path(sys.argv[1])
-config_path = Path(sys.argv[2])
-home = Path(os.environ.get("HOME", ""))
-
-def parse_dotenv(path: Path) -> dict[str, str]:
-    if not path.is_file():
-        return {}
-    out: dict[str, str] = {}
-    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        if key and value:
-            out[key] = value
-    return out
-
-def merge_envs() -> dict[str, str]:
-    merged: dict[str, str] = {}
-    for candidate in [
-        home / ".moltbot" / ".env",
-        home / ".clawdbot" / ".env",
-        root / "quwoquan_app" / "assistant" / ".env",
-        root / "quwoquan_app" / "assistant" / "config" / ".env",
-    ]:
-        merged.update(parse_dotenv(candidate))
-    for key, value in os.environ.items():
-        if value.strip():
-            merged[key] = value.strip()
-    return merged
-
-def aliases(name: str) -> list[str]:
-    if name == "MIMO_API_KEY":
-        return ["MIMO_API_KEY", "PERSONAL_ASSISTANT_MIMO_API_KEY"]
-    if name == "PERSONAL_ASSISTANT_MIMO_API_KEY":
-        return ["PERSONAL_ASSISTANT_MIMO_API_KEY", "MIMO_API_KEY"]
-    return [name]
-
-def resolve_from_moltbot(env_name: str) -> str:
-    if env_name not in {"MIMO_API_KEY", "PERSONAL_ASSISTANT_MIMO_API_KEY"}:
-        return ""
-    for candidate in [
-        home / ".moltbot" / "moltbot.json",
-        home / ".moltbot" / "clawdbot.json",
-        home / ".moltbot" / "agents" / "main" / "agent" / "models.json",
-        home / ".clawdbot" / "moltbot.json",
-        home / ".clawdbot" / "clawdbot.json",
-        home / ".clawdbot" / "agents" / "main" / "agent" / "models.json",
-    ]:
-        if not candidate.is_file():
-            continue
-        try:
-            decoded = json.loads(candidate.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        for path in [
-            ("skills", "mimo", "apiKey"),
-            ("models", "providers", "mimo", "apiKey"),
-        ]:
-            value = decoded
-            for part in path:
-                value = value.get(part) if isinstance(value, dict) else None
-            if isinstance(value, str) and value.strip() and not value.strip().startswith("${"):
-                return value.strip()
-    return ""
-
-def resolve_key(raw: str, env: dict[str, str]) -> str:
-    raw = (raw or "").strip()
-    if not raw:
-        return ""
-    match = re.fullmatch(r"\$\{([A-Z0-9_]+)\}", raw)
-    if not match:
-        return raw
-    env_name = match.group(1)
-    for name in aliases(env_name):
-        value = env.get(name, "").strip()
-        if value:
-            return value
-    return resolve_from_moltbot(env_name)
-
-if not config_path.is_file():
-    print(f"echo 'GATE_BLOCK: assistant model config not found: {config_path}' >&2")
+provider = os.environ.get("ASSISTANT_MODEL_PROVIDER", "deterministic").strip() or "deterministic"
+base_url = os.environ.get("ASSISTANT_MODEL_BASE_URL", "").strip()
+model_id = os.environ.get("ASSISTANT_MODEL_MODEL", "").strip()
+api_key = os.environ.get("ASSISTANT_MODEL_API_KEY", "").strip()
+if not api_key:
+    api_key = os.environ.get("PERSONAL_ASSISTANT_MIMO_API_KEY", "").strip()
+if provider not in {"deterministic", "fake"} and (not base_url or not model_id or not api_key):
+    print("echo 'GATE_BLOCK: real assistant model requires ASSISTANT_MODEL_BASE_URL, ASSISTANT_MODEL_MODEL and ASSISTANT_MODEL_API_KEY' >&2")
     print("exit 2")
     raise SystemExit(0)
-
-config = json.loads(config_path.read_text(encoding="utf-8"))
-env = merge_envs()
-providers = (((config.get("models") or {}).get("providers")) or {})
-model_pref = (((config.get("agents") or {}).get("defaults") or {}).get("model") or {})
-preferred_refs = []
-primary = str(model_pref.get("primary") or "").strip()
-if primary:
-    preferred_refs.append(primary)
-preferred_refs.extend(str(item).strip() for item in model_pref.get("fallbacks") or [] if str(item).strip())
-rank = {ref: idx for idx, ref in enumerate(preferred_refs)}
-
-configs = []
-for provider_id, provider in providers.items():
-    if not isinstance(provider, dict):
-        continue
-    base_url = str(provider.get("baseUrl") or "").strip()
-    api_key = resolve_key(str(provider.get("apiKey") or ""), env)
-    if not base_url or not api_key:
-        continue
-    for model in provider.get("models") or []:
-        if not isinstance(model, dict):
-            continue
-        model_id = str(model.get("id") or "").strip()
-        if not model_id:
-            continue
-        ref = f"{provider_id}/{model_id}"
-        configs.append((rank.get(ref, 9999), ref, str(provider_id), model_id, base_url, api_key))
-
-if not configs:
-    print("echo 'GATE_BLOCK: no usable assistant model config resolved from quwoquan_app/assistant/config.json' >&2")
-    print("exit 2")
-    raise SystemExit(0)
-
-_, ref, provider_id, model_id, base_url, api_key = sorted(configs, key=lambda item: (item[0], item[1]))[0]
-print(f"ASSISTANT_MODEL_PROVIDER={shlex.quote('openai_compatible')}")
+ref = os.environ.get("ASSISTANT_BETA_MODEL_REF", provider if provider in {"deterministic", "fake"} else f"{provider}/{model_id}")
+print(f"ASSISTANT_MODEL_PROVIDER={shlex.quote(provider)}")
 print(f"ASSISTANT_MODEL_BASE_URL={shlex.quote(base_url)}")
 print(f"ASSISTANT_MODEL_MODEL={shlex.quote(model_id)}")
 print("ASSISTANT_MODEL_API_KEY_ENV=ASSISTANT_BETA_RESOLVED_MODEL_API_KEY")
 print(f"ASSISTANT_BETA_RESOLVED_MODEL_API_KEY={shlex.quote(api_key)}")
 print(f"ASSISTANT_BETA_MODEL_REF={shlex.quote(ref)}")
-print(f"ASSISTANT_BETA_MODEL_SOURCE_PROVIDER={shlex.quote(provider_id)}")
+print(f"ASSISTANT_BETA_MODEL_SOURCE_PROVIDER={shlex.quote(provider)}")
 PY
 }
 
 eval "$(resolve_assistant_model_env)"
 
-if [[ -z "${ASSISTANT_BETA_RESOLVED_MODEL_API_KEY:-}" ]]; then
-  echo "GATE_BLOCK: no assistant beta model key resolved from environment config." >&2
+if [[ "${ASSISTANT_MODEL_PROVIDER}" != "deterministic" && "${ASSISTANT_MODEL_PROVIDER}" != "fake" && -z "${ASSISTANT_BETA_RESOLVED_MODEL_API_KEY:-}" ]]; then
+  echo "GATE_BLOCK: no assistant beta model key resolved from environment." >&2
   exit 2
 fi
 
@@ -755,7 +640,7 @@ echo "[app-beta-manual] model: ${ASSISTANT_BETA_MODEL_REF:-unknown} (${ASSISTANT
 echo "[app-beta-manual] verify mode: $VERIFY_MODE"
 echo "[app-beta-manual] media mode: $MEDIA_PREP_MODE"
 if [[ "$VERIFY_MODE" == "full" ]]; then
-  python3 agent_ops/avatar/verify_avatar_user_pool_consistency.py >/dev/null
+  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_avatar_user_pool_consistency.py >/dev/null
 else
   echo "[app-beta-manual] fast mode: skip full shared-pool consistency verification"
 fi
@@ -766,14 +651,10 @@ case "$MEDIA_PREP_MODE" in
     cp -R "$CANONICAL_SOURCE_MEDIA_ROOT/." "$MEDIA_DIR/media/"
     ;;
   symlink)
-    ln -s "$CANONICAL_SOURCE_MEDIA_ROOT/avatar" "$MEDIA_DIR/media/avatar"
-    ln -s "$CANONICAL_SOURCE_MEDIA_ROOT/image" "$MEDIA_DIR/media/image"
-    if [[ -d "$CANONICAL_SOURCE_MEDIA_ROOT/background" ]]; then
-      ln -s "$CANONICAL_SOURCE_MEDIA_ROOT/background" "$MEDIA_DIR/media/background"
-    fi
-    if [[ -d "$CANONICAL_SOURCE_MEDIA_ROOT/video" ]]; then
-      ln -s "$CANONICAL_SOURCE_MEDIA_ROOT/video" "$MEDIA_DIR/media/video"
-    fi
+    while IFS= read -r source_child; do
+      child_name="$(basename "$source_child")"
+      ln -s "$source_child" "$MEDIA_DIR/media/$child_name"
+    done < <(find "$CANONICAL_SOURCE_MEDIA_ROOT" -mindepth 1 -maxdepth 1 -type d | sort)
     ;;
 esac
 mkdir -p "$MEDIA_DIR/media/video"
@@ -794,7 +675,7 @@ beta_manual_start_process \
   "media-origin" \
   "$MEDIA_LOG" \
   "$ROOT_DIR" \
-  python3 agent_ops/deploy/lib/local_media_origin.py \
+  python3 quwoquan_ops/cli/lib/local_media_origin.py \
     --listen-host 127.0.0.1 \
     --listen-port "$MEDIA_ORIGIN_PORT" \
     --root-dir "$MEDIA_DIR" \
@@ -810,7 +691,7 @@ beta_manual_start_process \
   "media-edge" \
   "$MEDIA_EDGE_LOG" \
   "$ROOT_DIR" \
-  python3 agent_ops/deploy/lib/http_reverse_proxy.py \
+  python3 quwoquan_ops/cli/lib/http_reverse_proxy.py \
     --listen-host 127.0.0.1 \
     --listen-port "$MEDIA_PROCESSOR_PORT" \
     --target-base-url "http://127.0.0.1:${MEDIA_ORIGIN_PORT}"
@@ -837,6 +718,7 @@ beta_manual_start_process \
     ASSISTANT_MODEL_MODEL="$ASSISTANT_MODEL_MODEL" \
     ASSISTANT_MODEL_API_KEY_ENV="$ASSISTANT_MODEL_API_KEY_ENV" \
     ASSISTANT_BETA_RESOLVED_MODEL_API_KEY="$ASSISTANT_BETA_RESOLVED_MODEL_API_KEY" \
+    ALLOW_DETERMINISTIC_BETA="${ALLOW_DETERMINISTIC_BETA:-1}" \
     go run ./cmd/api
 
 beta_manual_wait_http_ok "http://127.0.0.1:${ASSISTANT_PORT}/healthz" "assistant-service" 60 || {
@@ -883,8 +765,8 @@ beta_manual_start_process \
     CHAT_GROUP_AVATAR_CDN_BASE_URL="$MEDIA_AVATAR_CDN_BASE_URL" \
     CHAT_GROUP_AVATAR_LOCAL_MEDIA_ROOT="$MEDIA_DIR" \
     USER_SERVICE_BASE_URL="$INTERNAL_GATEWAY_BASE_URL" \
-    RELIABLE_TASK_CATALOG_PATH="$ROOT_DIR/deploy/shared/reliable_task_module_catalog.yaml" \
-    RELIABLE_TASK_RETENTION_POLICY_PATH="$ROOT_DIR/deploy/shared/reliable_task_retention_policy.yaml" \
+    RELIABLE_TASK_CATALOG_PATH="$ROOT_DIR/quwoquan_ops/environments/reliable_task_module_catalog.yaml" \
+    RELIABLE_TASK_RETENTION_POLICY_PATH="$ROOT_DIR/quwoquan_ops/environments/reliable_task_retention_policy.yaml" \
     go run ./cmd/api
 
 beta_manual_wait_http_ok "http://127.0.0.1:${CHAT_PORT}/healthz" "chat-service" 60 || {
@@ -898,7 +780,7 @@ beta_manual_start_process \
   "gateway" \
   "$GATEWAY_LOG" \
   "$ROOT_DIR" \
-  python3 agent_ops/assistant/dev_assistant_beta_gateway.py \
+  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py \
     --listen-host 127.0.0.1 \
     --listen-port "$CONTENT_PORT" \
     --assistant-upstream-host 127.0.0.1 \

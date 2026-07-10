@@ -6,6 +6,10 @@ description: |
   user/user_life_item 独立 aggregate，供 user_profile 主页生活 Tab
   作为跨 metadata 响应模型引用。
 
+client_projection:
+  dart_class: UserLifeItemDto
+  output_path: cloud/runtime/generated/user/user_life_item_dto.g.dart
+
 source_entities:
   - UserLifeItem
 

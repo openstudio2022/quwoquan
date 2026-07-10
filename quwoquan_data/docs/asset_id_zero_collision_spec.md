@@ -15,23 +15,43 @@
 - 批次绑定：`batches/{batch}/batch_manifest.json.globalBatchSeq`
 - 批内登记：`batches/{batch}/_shared/asset_id_registry.json`
 
-## 3. 命名格式
+## 3. 命名格式（v2：实体_角色_图注_批次号_hash）
 
 ```
-{entity}_{role}_{globalBatchSeq}_{digest8}
+{entity}_{role}_{caption}_{globalBatchSeq}_{digest8}
 ```
 
 - `entity`：实体 token，保留中文与英文数字，折叠其它字符。
 - `role`：`cover` / `closing` / `detail`
+- `caption`：图注 token 段（人可读的语义段，见 §3.1）。
 - `globalBatchSeq`：十进制原样输出，不补零。
 - `digest8`：`SHA-1(seed)` 前 8 位十六进制。
 
 示例：
 
 ```
-峨眉山_cover_42_a1b2c3d4
-稻城亚丁_detail_10000000_fedcba98
+峨眉山_cover_金顶云海_42_a1b2c3d4
+稻城亚丁_detail_牛奶海秋色_10000000_fedcba98
 ```
+
+### 3.1 caption token 规则与退化降级链
+
+- 清洗：`asset_token()`（保留中文/英文/数字，折叠其它字符）。
+- 截断：清洗后 ≤16 字符（超长从左保留 16 字符）。
+- 退化判定 `_caption_is_degraded`：清洗后为空、长度 <2、纯数字、
+  通用占位词（图/图片/配图/封面/image/img/photo/picture/cover 等）、
+  或与实体 token 相同，均视为退化。
+- 降级链（依次）：图注 → `sectionSlug`（章节锚）→ `图{ordinal}`（正整数序号）→ 实体 token。
+- caption 段永远非空、永远非纯数字（保证与旧 v1 四段格式的解析可区分）。
+- caption **不进入** hash seed：图注文案微调不改变 digest；同批幂等由
+  registry 的 owner key 复用保证。
+
+### 3.2 旧格式（v1）兼容
+
+- v1 四段格式 `{entity}_{role}_{globalBatchSeq}_{digest8}` 仅作历史产物解析兼容。
+- `parse_post_asset_id()` 同时接受 v1/v2，并在返回值中给出 `format` 字段。
+- 新产线（build/produce/publish）一律生成 v2；batch 级 assets 命名门
+  （`verify_directory_evidence_chain.py`）对新批次成品 assets 强制 v2。
 
 ## 4. hash seed
 
@@ -42,6 +62,7 @@ seed = globalBatchSeq | ref | entity | role | nonce
 - `ref` 为对象内稳定引用，不进入文件名。
 - `nonce` 默认 `0`，仅在批内发生撞车时递增重算。
 - 不再使用 `batchCreatedAt`、`position/seq` 进入 seed。
+- caption 不进 seed（见 §3.1）。
 
 ## 5. 分配流程
 
@@ -69,10 +90,11 @@ owner key 由以下稳定字段构成：
 - 必须从右向左解析 `assetId`。
 - 最右 8 位是 `digest8`。
 - 倒数第二段是 `globalBatchSeq`。
-- 倒数第三段是 `role`。
-- 剩余左侧全部视为 `entity`。
+- v2：`role` 与 `globalBatchSeq` 之间为 `caption` token 段（可含下划线）；
+  v1：`role` 直接邻接 `globalBatchSeq`。
+- 剩余左侧全部视为 `entity`（可含下划线）。
 
-推荐使用 `parse_post_asset_id()`，禁止按固定宽度截断 entity。
+推荐使用 `parse_post_asset_id()`，禁止按固定宽度截断 entity 或 caption。
 
 ## 8. 兼容边界
 

@@ -123,14 +123,14 @@ dev_log:
       - make -C quwoquan_service verify-metadata
       - make -C quwoquan_service codegen-app
       - cd quwoquan_service/services/entity-service && go test ./...
-      - python3 -m py_compile quwoquan_data/scripts/build/homepage.py quwoquan_data/tests/produce/test_homepage_introduction_seed.py
+      - python3 -m py_compile quwoquan_data/scripts/build/homepage.py quwoquan_data/tests/local_contract/produce/test_homepage_introduction_seed__local_contract_test.py
       - make verify-app-seed-manifest
       - dart format quwoquan_app/lib/cloud/services/entity/entity_repository.dart quwoquan_app/lib/core/providers/app_providers.dart quwoquan_app/lib/ui/entity/pages/homepage_introduction_page.dart quwoquan_app/lib/ui/entity/pages/homepage_detail_page.dart quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell.dart quwoquan_app/lib/ui/entity/widgets/homepage_detail_shell_builders.dart quwoquan_app/lib/app/navigation/app_router.dart
       - cd quwoquan_app && flutter analyze lib/cloud/services/entity/entity_repository.dart lib/core/providers/app_providers.dart lib/ui/entity/pages/homepage_introduction_page.dart lib/ui/entity/pages/homepage_detail_page.dart lib/ui/entity/providers/homepage_introduction_provider.dart lib/ui/entity/widgets/homepage_detail_shell.dart lib/ui/entity/widgets/homepage_detail_shell_builders.dart lib/app/navigation/app_router.dart test/ui/entity/pages/homepage_detail_page_widget_test.dart
       - cd quwoquan_app && flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart
       - make verify-app-page-horizontal-quality
     notes:
-      - 当前 shell Python 未安装 pytest，数据 helper 已通过 py_compile 与直接 smoke 调用；后续 CI 可跑 quwoquan_data/tests/produce/test_homepage_introduction_seed.py。
+      - 当前 shell Python 未安装 pytest，数据 helper 已通过 py_compile 与直接 smoke 调用；后续 CI 可跑 quwoquan_data/tests/local_contract/produce/test_homepage_introduction_seed__local_contract_test.py。
   - date: "2026-06-12"
     change: |
       WP1 当前状态核验：content-service 已具备 sharedFollowees / coCommented / coVisitedEntity / followeeVisited
@@ -138,7 +138,7 @@ dev_log:
       当前仍按 WP1 文档约束在集成验收中继续守护 spotlight 非空窗、足迹只读且不产出交集 reason。
     verify:
       - rg -n "sharedFollowees|coCommented|coVisitedEntity|followeeVisited" quwoquan_service/services/content-service/internal quwoquan_service/services/content-service/tests quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json
-      - rg -n "TestFavoriteRouteRetired|/favorite" quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
+      - rg -n "TestFavoriteRouteRetired|/favorite" quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
   - date: "2026-06-12"
     change: |
       WP6 长文编辑与发布富语义闭环落地：修正 CreatePostRequestWire tagRefs/entityRefs 为 List 语义；
@@ -216,15 +216,15 @@ dev_log:
     verify:
       - python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --skip-flutter-contracts
       - python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py
-      - python3 agent_ops/deploy/stackctl.py verify --env gamma --kind all --tier all
-      - python3 agent_ops/deploy/stackctl.py health --target gamma-hosted --scope full
-      - python3 agent_ops/deploy/stackctl.py inspect --target gamma-hosted --kind all
-      - python3 agent_ops/deploy/stackctl.py doctor --target gamma-hosted
-      - python3 agent_ops/deploy/stackctl.py roll --target gamma-hosted --mode restart --stage pre
+      - python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
+      - python3 quwoquan_ops/cli/stackctl.py health --target gamma-hosted --scope full
+      - python3 quwoquan_ops/cli/stackctl.py inspect --target gamma-hosted --kind all
+      - python3 quwoquan_ops/cli/stackctl.py doctor --target gamma-hosted
+      - python3 quwoquan_ops/cli/stackctl.py roll --target gamma-hosted --mode restart --stage pre
       - gh run list --limit 5 --json databaseId,name,status,conclusion,createdAt,headBranch,event
     notes:
-      - 本地 gamma `stackctl verify` 通过，报告 `artifacts/stackctl/gamma/20260612T162426Z-verify-gamma-local`。
-      - hosted gamma 仍 BLOCK：`health --scope full` 为 1/7 healthy，gateway/product-ops/media/chat probes 失败，核心 healthz 显示 Mongo `ReplicaSetNoPrimary`；报告 `artifacts/stackctl/gamma/20260612T161458Z-health-gamma-hosted`。
-      - hosted doctor 仍 BLOCK：`health checks are failing`，报告 `artifacts/stackctl/gamma/20260612T162504Z-doctor-gamma-hosted`。
-      - hosted restart 仍 BLOCK：`roll --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`；报告 `artifacts/stackctl/gamma/20260612T163152Z-roll-gamma-hosted`。
+      - 本地 gamma `stackctl verify` 通过，报告 `.qwq_output/env/gamma/runs/20260612T162426Z-verify-gamma-local`。
+      - hosted gamma 仍 BLOCK：`health --scope full` 为 1/7 healthy，gateway/product-ops/media/chat probes 失败，核心 healthz 显示 Mongo `ReplicaSetNoPrimary`；报告 `.qwq_output/env/gamma/runs/20260612T161458Z-health-gamma-hosted`。
+      - hosted doctor 仍 BLOCK：`health checks are failing`，报告 `.qwq_output/env/gamma/runs/20260612T162504Z-doctor-gamma-hosted`。
+      - hosted restart 仍 BLOCK：`roll --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`；报告 `.qwq_output/env/gamma/runs/20260612T163152Z-roll-gamma-hosted`。
       - 最近 5 个 GHA run 均 failure；真实 hosted T3/T4 与 CR status=implemented 需等待 hosted gamma 恢复后执行。

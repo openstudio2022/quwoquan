@@ -14,7 +14,7 @@ affected_nodes:
   - specs/feature-tree/discovery-content/exposure-governance
   - specs/feature-tree/recommendation-platform/evaluation-and-flywheel
   - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
-  - quwoquan_service/scripts/ml/feature_registry.yaml
+  - quwoquan_service/services/rec-model-service/scripts/feature_registry.yaml
 
 entries:
   - timestamp: "2026-06-24T20:00:00+08:00"
@@ -53,7 +53,7 @@ entries:
         sections:
           - scorer
           - exposureGovernance.collaborativeRecall
-      - path: quwoquan_service/scripts/ml/feature_registry.yaml
+      - path: quwoquan_service/services/rec-model-service/scripts/feature_registry.yaml
         sections:
           - content_feed.item_features
     impact:

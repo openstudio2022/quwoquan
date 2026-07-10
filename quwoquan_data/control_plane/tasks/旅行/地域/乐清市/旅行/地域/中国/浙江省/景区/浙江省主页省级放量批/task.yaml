@@ -1,0 +1,77 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/乐清市/旅行/地域/中国/浙江省/景区/浙江省主页省级放量批
+title: 乐清市旅行/地域/中国/浙江省/景区/浙江省主页省级放量批
+intentLabel: 旅行地域中国浙江省景区浙江省主页
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 乐清市
+entityCategory: null
+parentTaskId: null
+status: active
+scope:
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 雁荡山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 北雁荡山
+    - 雁荡山风景名胜区
+  entityTypes:
+  - 地点/景区
+  region: 乐清市
+provenance:
+  createdAt: '2026-07-09T16:01:53.353116+00:00'
+  createdBy: task run --mode fanout
+presetRef: content/travel/homepage/base
+content:
+  angles:
+  - 体验
+  - 美图
+  - 攻略
+  audiences:
+  - 通用
+  carriers:
+  - article
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+    allowAiImages: false
+    imageAssetStrategy: open_license_publish
+    imageCountPolicy: score_bonus
+  quotas:
+    entityHomepagesPerTarget: 1
+    entityArticlesPerTarget: 0
+    imageWorksPerTarget: 0
+    routeArticles: 0
+acceptance:
+  minEntities: 100
+  minPostsPerEntity: 1
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+  maxReplacementWaves: 3
+  maxReplacementCandidatesPerWave: 25
+  maxReplacementScreenedPerRun: 25
+  elasticOverfetch: false
+  overfetchMultiplier: 2.0
+  targetEntityCount: 100
+  targetObjectCount: 100
+  allowQuotaShortfall: true
+  allowContentQuotaShortfall: true
+  allowMinEntityShortfall: true
+  allowOverProduction: false
+  minBatchCompletionMode: best_effort_with_reasoned_rejects
+  publishCadence:
+    mode: deterministic_creator_day_spread
+    targetDailyObjects: 100
+    maxDailyPostsPerCreator: 1
+  executionBranch: feature/homepage-commercial-lane
+sourceTaskId: 旅行/地域/中国/景区/景区全覆盖

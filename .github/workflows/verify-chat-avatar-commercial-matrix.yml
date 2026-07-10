@@ -8,7 +8,7 @@ on:
       manifest_path:
         description: 仓库内 manifest 相对路径（YAML/JSON）
         required: true
-        default: artifacts/commercial-matrix/chat-avatar/manifest.yaml
+        default: .qwq_output/runs/gamma/commercial-matrix-chat-avatar/manifest.yaml
 
 jobs:
   verify:
@@ -21,5 +21,5 @@ jobs:
         run: pip install pyyaml
       - name: Verify manifest
         run: |
-          python3 agent_ops/avatar/verify_chat_avatar_commercial_matrix_evidence.py \
+          python3 quwoquan_service/services/chat-service/tests/ops/gate/verify_chat_avatar_commercial_matrix_evidence.py \
             --manifest "${{ inputs.manifest_path }}"

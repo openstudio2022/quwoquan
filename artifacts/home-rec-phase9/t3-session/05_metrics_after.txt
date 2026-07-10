@@ -1,5 +1,0 @@
-recommendation_feed_negative_feedback_total 5
-recommendation_feed_patch_emitted_total{patch_type="negative_feedback_removal",reason="negative_dislike"} 2
-recommendation_feed_patch_emitted_total{patch_type="negative_feedback_removal",reason="negative_hide_author"} 2
-recommendation_feed_patch_emitted_total{patch_type="negative_feedback_removal",reason="negative_hide_content_type"} 1
-recommendation_feed_patch_emitted_total{patch_type="refresh_suggestion",reason="session_fatigue"} 1

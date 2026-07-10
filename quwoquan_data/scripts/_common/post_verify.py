@@ -3,9 +3,9 @@
 审计语义（标准 CI 模型）：
 - scope='current'（门禁默认）：校验 release/ 中的当前 posts 根；
 - scope='all'：校验 release/ 下全部 posts 根；
-- 显式 task+batch / release：精确校验该目标 posts（runtime 中间批次仅在此显式入口校验）。
+- 显式 task+batch / release：精确校验该目标 posts（data/local/runtime 中间批次仅在此显式入口校验）。
 
-注：runtime/tasks/**/batches/**/posts 是临时中间产物，质量由 `produce` 的 review
+注：data/local/runtime/tasks/**/batches/**/posts 是临时中间产物，质量由 `produce` 的 review
 门禁在产出时强制（不达标即 fail，不落地），不纳入批量审计；需要时用 `--task/--batch` 显式校验。
 """
 from __future__ import annotations
@@ -38,7 +38,7 @@ def _import_verifiers():
 
 
 def _all_posts_roots(scope: str) -> list[Path]:
-    """批量审计只针对交付面 release/；runtime/tasks 中间产物仅显式校验。"""
+    """批量审计只针对交付面 release/；data/local/runtime/tasks 中间产物仅显式校验。"""
     roots: list[Path] = []
     if RELEASE_ROOT.exists():
         roots.extend(p for p in sorted(RELEASE_ROOT.rglob("posts")) if p.is_dir())

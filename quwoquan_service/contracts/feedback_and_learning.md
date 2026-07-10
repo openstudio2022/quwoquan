@@ -20,7 +20,7 @@
 ## 2. 用户体验指标（RUM SLIs）
 
 > 体验指标建议用业内常见术语表达（SLI/SLO/SLA、RUM、Crash-free、ANR、p95/p99）。
-> 指标应以 `pageId`（端侧来源）+ `traceId/requestId`（端云链路）为主键做关联（见 `contracts/openapi/common.yaml` 与 `contracts/error_codes.md`）。
+> 指标应以 `pageId`（端侧来源）+ `traceId/requestId`（端云链路）为主键做关联（见 `contracts/metadata/_shared/request_context.yaml` 与 `contracts/runtime_errors/errors/runtime_failure_codes.yaml`）。
 
 ### 2.1 指标分层（从用户视角到系统分解）
 
@@ -64,7 +64,7 @@
 ## 3. 体验埋点与监控事件（RUM Events）
 
 > 体验事件也是“反馈”，建议统一走 Ops（运营）事件接收与平台可观测性体系（日志/指标）双写或可互相导出。
-> 事件字段复用 `contracts/openapi/common.yaml` 里的端侧 headers（pageId/sessionId/sentAt/device/appVersion/traceId/requestId）。
+> 事件字段复用 `contracts/metadata/_shared/request_context.yaml` 里的端侧 headers（pageId/sessionId/sentAt/device/appVersion/traceId/requestId）。
 
 ### 3.1 事件类型（建议）
 
@@ -82,7 +82,7 @@
 - `networkType`：wifi/5g/4g/3g/unknown
 - `durationMs`：耗时（如 TTFF/TTCR/API latency）
 - `result`：ok/error/cancel
-- `errorCode`：如有（复用 `contracts/error_codes.md` 的 `MODULE.KIND.REASON`）
+- `errorCode`：如有（复用 `contracts/runtime_errors/errors/runtime_failure_codes.yaml` 的 `MODULE.KIND.REASON`）
 - `endpoint`：规范化路由名（如 `orch.discovery.feed.get`，避免把 path 参数直接当 label）
 
 ---
@@ -248,13 +248,13 @@ SLA 建议策略：
 - `eventType`：稳定枚举（如 `content.like` / `assistant.scorecard`）
 - `occurredAt`：事件发生时间（ISO8601）
 - `userId` / `personaId`（可空，取决于事件）
-- `pageId`：三段式（见 `contracts/openapi/common.yaml`）
-- `traceId` / `parentTraceId` / `causationId`：追踪与因果链（见 `contracts/error_codes.md` 与 `contracts/messages/envelope.schema.json`）
+- `pageId`：三段式（见 `contracts/metadata/_shared/request_context.yaml`）
+- `traceId` / `parentTraceId` / `causationId`：追踪与因果链（见 `contracts/runtime_errors/errors/runtime_failure_codes.yaml` 与 `contracts/metadata/_shared/envelope.schema.json`）
 - `target`：被作用对象（如 postId/circleId/conversationId/runId 等）
 - `context`：可选上下文（脱敏，避免高基数爆炸；大对象用引用）
 - `labels`：可选（如 experimentId/bucket/modelVersion/policyVersion）
 
-> 事件 envelope（异步）必须遵从 `contracts/messages/envelope.schema.json`。
+> 事件 envelope（异步）必须遵从 `contracts/metadata/_shared/envelope.schema.json`。
 
 ---
 

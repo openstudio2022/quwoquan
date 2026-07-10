@@ -325,6 +325,12 @@ String pageNameFromRouteLocation(String location) {
   if (path.startsWith('/user/')) return 'user_profile';
   if (path == AppRoutePaths.assistantManagement) return 'assistant_management';
   if (path == AppRoutePaths.assistantSkills) return 'assistant_skills';
+  if (path == AppRoutePaths.legalUserAgreement) return 'legal_user_agreement';
+  if (path == AppRoutePaths.legalPrivacyPolicy) return 'legal_privacy_policy';
+  if (path == AppRoutePaths.legalPermissions) return 'legal_permissions';
+  if (path == AppRoutePaths.legalThirdPartySdkList) {
+    return 'legal_third_party_sdk_list';
+  }
   if (path == AppRoutePaths.settings) return 'settings';
   if (path == AppRoutePaths.settingsPermissions) return 'settings_permissions';
   if (path == AppRoutePaths.settingsDarkMode) return 'settings_dark_mode';

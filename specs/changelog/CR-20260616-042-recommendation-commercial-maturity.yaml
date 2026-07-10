@@ -58,7 +58,7 @@ entries:
           - slis
           - rollback_layers
           - ab
-      - path: deploy/monitoring/alerts/quwoquan_alerts.yaml
+      - path: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
         sections:
           - quwoquan_rec_model
     impact:

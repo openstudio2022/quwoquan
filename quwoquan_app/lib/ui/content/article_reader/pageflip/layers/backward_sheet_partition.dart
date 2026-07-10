@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:quwoquan_app/ui/content/article_reader/pageflip/layers/article_reader_soft_page_geometry.dart';
 
@@ -140,10 +139,11 @@ BackwardCanonicalSheetFaces resolveBackwardCanonicalSheetFaces(
     return BackwardCanonicalSheetFaces(
       sheetLocalPolygon: const <Offset>[],
       sheetAreaPolygon: const <Offset>[],
-      previousFrontRevealPagePolygon: resolveBackwardPreviousFrontRevealPagePolygon(
-        pageSize: input.pageSize,
-        currentResidualPagePolygon: currentResidualPagePolygon,
-      ),
+      previousFrontRevealPagePolygon:
+          resolveBackwardPreviousFrontRevealPagePolygon(
+            pageSize: input.pageSize,
+            currentResidualPagePolygon: currentResidualPagePolygon,
+          ),
       previousBackVersoSheetPolygon: const <Offset>[],
       previousBackVersoSheetAreaPolygon: const <Offset>[],
       previousFrontRectoLocalPolygon: const <Offset>[],
@@ -231,10 +231,11 @@ BackwardCanonicalSheetFaces resolveBackwardCanonicalSheetFaces(
   return BackwardCanonicalSheetFaces(
     sheetLocalPolygon: sheetLocalPolygon,
     sheetAreaPolygon: sheetAreaPolygon,
-    previousFrontRevealPagePolygon: resolveBackwardPreviousFrontRevealPagePolygon(
-      pageSize: input.pageSize,
-      currentResidualPagePolygon: currentResidualPagePolygon,
-    ),
+    previousFrontRevealPagePolygon:
+        resolveBackwardPreviousFrontRevealPagePolygon(
+          pageSize: input.pageSize,
+          currentResidualPagePolygon: currentResidualPagePolygon,
+        ),
     previousBackVersoSheetPolygon: List<Offset>.unmodifiable(
       verso.localPolygon,
     ),
@@ -481,16 +482,6 @@ List<Offset> _safePolygon(List<Offset> polygon) {
 
 bool _isVisibleFace(List<Offset> polygon) {
   return polygon.length >= 3 && polygonHasVisibleArea(polygon);
-}
-
-bool _looksLikeWholeSheet(List<Offset> polygon, List<Offset> sheet) {
-  final polygonBoundsValue = polygonBounds(polygon);
-  final sheetBounds = polygonBounds(sheet);
-  if (polygonBoundsValue == null || sheetBounds == null) {
-    return false;
-  }
-  return polygonBoundsValue.width >= sheetBounds.width * 0.92 &&
-      polygonBoundsValue.height >= sheetBounds.height * 0.92;
 }
 
 Offset _midPoint(BackwardPageLine line) {

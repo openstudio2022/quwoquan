@@ -305,11 +305,11 @@ func main() {
 
 | 产物 | 路径 | 说明 |
 |------|------|------|
-| chat-service Dockerfile | `deploy/service/chat-service/Dockerfile` | dev 独立部署 |
-| seed-box Dockerfile | `deploy/service/seed-box/Dockerfile`（已有） | integration/prod 合并部署 |
-| k8s base | `deploy/service/chat-service/kustomize/base/` | deployment + service |
-| k8s overlays | `deploy/service/chat-service/kustomize/overlays/{dev,integration,prod}/` | 环境差异化 |
-| process_domain_mapping | `deploy/shared/process_domain_mapping.yaml`（已有） | 已包含 chat 域映射 |
+| chat-service Dockerfile | `quwoquan_service/services/chat-service/deploy/Dockerfile` | dev 独立部署 |
+| seed-box Dockerfile | `quwoquan_service/services/seed-box/deploy/Dockerfile`（已有） | integration/prod 合并部署 |
+| k8s base | `quwoquan_service/services/chat-service/deploy/kustomize/base/` | deployment + service |
+| k8s overlays | `quwoquan_service/services/chat-service/deploy/kustomize/overlays/{dev,integration,prod}/` | 环境差异化 |
+| process_domain_mapping | `quwoquan_ops/environments/process_domain_mapping.yaml`（已有） | 已包含 chat 域映射 |
 
 **灰度发布策略**：
 
@@ -328,7 +328,7 @@ chat-service 需完整纳入 `make gate` 流水线：
 | chat-service L2 | `go test ./services/chat-service/... -count=1` | 云侧契约测试 |
 | chat L1 | `flutter test test/cloud/chat/ test/ui/chat/` | 端侧 local_contract+local_contract+user_acceptance(L1c) |
 | chat L3 | `make test-api-contract-chat` | gamma HTTP 契约 |
-| chat L4 | `patrol test test/patrol/chat/` | Patrol 真实设备 |
+| chat L4 | `patrol test test/user_acceptance/patrol/chat/` | Patrol 真实设备 |
 
 **需新增**：
 

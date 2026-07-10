@@ -124,7 +124,15 @@ extension _ImageEditorPagePreviewLayers on _ImageEditorPageState {
   Widget _buildThumbnailImage(String path, Color fgSecondary) {
     final isFile = path.startsWith('/') || (path.length > 1 && path[1] == ':');
     if (isFile && File(path).existsSync()) {
-      return Image.file(File(path), fit: BoxFit.cover);
+      return Image.file(
+        File(path),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Icon(
+          Icons.broken_image_outlined,
+          size: AppSpacing.iconMedium,
+          color: fgSecondary,
+        ),
+      );
     }
     if (!isFile) {
       return AppCachedNetworkImage(

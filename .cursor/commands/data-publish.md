@@ -2,63 +2,65 @@
 name: /data-publish
 id: data-publish
 category: Workflow
-description: 数据工程 · 版本化发布阶段
+description: 数据工程 · 发布真相源与发布包生成
 ---
 
 # data-publish
 
 ## 命令目的
-将 task 产出合入版本化 publish 基线。
 
-## 输入
-- `--task {taskId}`
-- task_manifest.json（含 operationType: add|update）
-- changeset/（entities.txt, tags.txt, posts.txt）
+将当前 task/batch 产物组装为 data release，并保持 `quwoquan_data/publish/**`
+作为唯一可提交发布真相源。
 
-## 版本管理
-- `publish_meta.json` 记录 activeVersion
-- 新版本 = activeVersion + 1
-- 目录结构与 runtime/tasks 同构
+## 自然语言等价触发
 
-## publish 目录结构（三层实体路径）
-```
-publish/v{N}/
-  entities/{领域}/{类型}/{名称}/_entity.json + page.md + manifest.json
-  tags/{dim}/{path}/_definition.json
-  posts/{type}/内容角度/{angle}/{title}/{seq}/article.md + manifest.json + assets/
-```
+用户说“发布这个数据批次”“把任务产物合入 publish”“生成 data release”时，按 `/data-publish` 语义执行。
 
-示例：
-```
-publish/v1/
-  entities/
-    地点/景区/峨眉山/_entity.json + page.md + manifest.json
-    地点/遗址/东风堰/...
-    地点/打卡地/成都太古里/...
-    机构/学校/四川大学/...
-    活动/赛事/成都马拉松/...
-  tags/
-    实体类型/地点/景区/_definition.json
-    地理/行政区/四川省/成都市/_definition.json
-    主题/佛教文化/_definition.json
-    内容角度/攻略/_definition.json
-    ...
-  posts/
-    article/内容角度/攻略/峨眉山攻略指南/1/article.md + manifest.json
-    article/内容角度/探店/锦里小吃街探店指南/1/...
-    ...
+## Spec Entry
+
+- AppRoot Journey/Scenario：`runtime/system-architecture-and-engineering-guide`
+- L1/L2/L3：按当前数据任务绑定。
+- 验收意图：`SIT + contract`
+- 测试证据：`local_contract + api_integration`
+
+## Pre-work Reflection
+
+- publish-first：发布真相源只写 `quwoquan_data/publish/**`。
+- release output：发布包只写 `.qwq_output/release/data/**`。
+- service import：只有显式 `--push-to-service` 时才触发服务导入。
+
+## 当前实现
+
+```bash
+python3 quwoquan_data/scripts/cli.py data publish \
+  --task "<task-id>" \
+  --batch "<batch-id>" \
+  --release-id "<release-id>"
 ```
 
-## changeset 格式
-- `entities.txt`：每行 `{领域}/{类型}/{名称}`（三层路径）
-- `tags.txt`：每行 tag 路径
-- `posts.txt`：每行 post 相对路径
+可选服务导入：
+
+```bash
+python3 quwoquan_data/scripts/cli.py data publish \
+  --task "<task-id>" \
+  --batch "<batch-id>" \
+  --release-id "<release-id>" \
+  --push-to-service "http://localhost:18080"
+```
+
+## 输出
+
+- `quwoquan_data/publish/**`
+- `.qwq_output/release/data/<release-id>/**`
 
 ## 准出
-- publish/v{N}/ 引用 100% 可解析
-- publish_meta.json 更新
-- task status = published
 
-自然语言等价触发：用户直接描述与本命令目标相同的需求时，也按 `/data-publish` 语义执行；执行前仍需按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection，完成后按 Exit Review 收口。
+- publish 引用 100% 可解析。
+- release manifest 指向当前 task/batch。
+- 如触发服务导入，必须补 importer 幂等性或 API integration 证据。
 
-协议补充：执行前按 `docs/agent_context_contract.md` 完成 Spec Entry / Pre-work Reflection；完成后按 Exit Review 输出证据、门禁结果与剩余风险。
+## Exit Review
+
+- 说明 task、batch、releaseId、是否 push-to-service。
+- 运行 `python3 quwoquan_data/scripts/cli.py verify output-root-isolation`。
+- 未执行真实服务导入时如实说明，不冒充端到端完成。

@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import os
 import shutil
 from pathlib import Path
 from typing import Any
 
+from _common import paths as _paths
 from _common.io import read_json
 from _common.paths import (
     PUBLISH_ROOT,
@@ -36,6 +38,10 @@ from task.store import (
 
 def _entity_ref(target: dict[str, Any]) -> str:
     return f"{target.get('entityType')}/{target.get('name')}"
+
+
+def _publish_root() -> Path:
+    return Path(os.environ.get("QWQ_PUBLISH_ROOT") or _paths.PUBLISH_ROOT)
 
 
 # ─── list / tree ────────────────────────────────────────────────────
@@ -73,7 +79,7 @@ def collect_rows(vertical: str | None = None) -> list[dict[str, Any]]:
 def print_list(vertical: str | None = None) -> None:
     rows = collect_rows(vertical)
     if not rows:
-        print("[task] 无任务（quwoquan_data/tasks/ 为空）")
+        print("[task] 无任务（quwoquan_data/control_plane/tasks/ 为空）")
         return
     print(f"{'taskId':<46} {'arch':<24} {'status':<8} {'cov(done/rem)':<14} lock")
     print("-" * 104)
@@ -337,14 +343,15 @@ def record_run(
 # ─── trace / hydrate（溯源反查 / 拉回工作区）─────────────────────────
 def _iter_publish_manifests() -> list[tuple[Path, dict[str, Any]]]:
     out: list[tuple[Path, dict[str, Any]]] = []
-    posts_root = PUBLISH_ROOT / "posts"
+    publish_root = _publish_root()
+    posts_root = publish_root / "posts"
     if posts_root.is_dir():
         for mf in posts_root.rglob("manifest.json"):
             try:
                 out.append((mf, read_json(mf)))
             except Exception:  # noqa: BLE001
                 continue
-    ents_root = PUBLISH_ROOT / "entities"
+    ents_root = publish_root / "entities"
     if ents_root.is_dir():
         for ef in ents_root.rglob("_entity.json"):
             try:
@@ -357,9 +364,10 @@ def _iter_publish_manifests() -> list[tuple[Path, dict[str, Any]]]:
 def trace(*, ref: str | None = None, task_id: str | None = None) -> None:
     """ref 模式：查某 publish 路径片段来自哪个任务；task_id 模式：列任务在 publish 的全部产物。"""
     hits = 0
+    publish_root = _publish_root()
     for path, data in _iter_publish_manifests():
         src = data.get("sourceTaskId")
-        rel = str(path.relative_to(PUBLISH_ROOT))
+        rel = str(path.relative_to(publish_root))
         if ref and ref in rel:
             print(f"  {rel}  <- sourceTaskId={src}")
             hits += 1
@@ -390,7 +398,8 @@ def adopt_publish(task_id: str, entity_type_prefixes: list[str], *, batch_id: st
     ents_done = 0
     adopted_entities: list[str] = []
 
-    posts_root = PUBLISH_ROOT / "posts"
+    publish_root = _publish_root()
+    posts_root = publish_root / "posts"
     if posts_root.is_dir():
         for mf in posts_root.rglob("manifest.json"):
             try:
@@ -407,7 +416,7 @@ def adopt_publish(task_id: str, entity_type_prefixes: list[str], *, batch_id: st
             _wj(mf, data)
             posts_done += 1
 
-    ents_root = PUBLISH_ROOT / "entities"
+    ents_root = publish_root / "entities"
     for prefix in entity_type_prefixes:
         base = ents_root / prefix
         if not base.is_dir():
@@ -446,7 +455,8 @@ def prune_publish(*, orphans_only: bool = True) -> dict:
     removed_posts = 0
     removed_entities = 0
 
-    posts_root = PUBLISH_ROOT / "posts"
+    publish_root = _publish_root()
+    posts_root = publish_root / "posts"
     if posts_root.is_dir():
         victims = []
         for mf in posts_root.rglob("manifest.json"):
@@ -460,7 +470,7 @@ def prune_publish(*, orphans_only: bool = True) -> dict:
             shutil.rmtree(d, ignore_errors=True)
             removed_posts += 1
 
-    ents_root = PUBLISH_ROOT / "entities"
+    ents_root = publish_root / "entities"
     if ents_root.is_dir():
         victims = []
         for ef in ents_root.rglob("_entity.json"):
@@ -484,10 +494,11 @@ def hydrate(task_id: str) -> None:
     """按 sourceTaskId 把该任务在 publish 的 posts/entities 拉回 runtime 工作区以修改重 promote。"""
     dst_root = runtime_task_root(task_id)
     copied = 0
+    publish_root = _publish_root()
     for path, data in _iter_publish_manifests():
         if data.get("sourceTaskId") != task_id:
             continue
-        rel = path.parent.relative_to(PUBLISH_ROOT)
+        rel = path.parent.relative_to(publish_root)
         dst = dst_root / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         if dst.exists():

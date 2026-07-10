@@ -9,6 +9,7 @@ import 'package:quwoquan_app/core/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 
 typedef UiErrorActionCallback = Future<void> Function(UiErrorAction action);
@@ -277,7 +278,7 @@ class AppActionErrorFeedback {
     if (!context.mounted) {
       return;
     }
-    await showCupertinoDialog<void>(
+    await showAppCupertinoDialog<void>(
       context: context,
       builder: (dialogContext) => CupertinoAlertDialog(
         title: Text(semantic.title),

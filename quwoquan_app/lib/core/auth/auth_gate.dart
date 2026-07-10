@@ -294,10 +294,9 @@ String buildLoginRouteLocation({
   final redirectLocation = _trimmedOrNull(redirect);
   final fallbackLocation = _trimmedOrNull(dismissFallback);
   final query = <String, String>{
-    if (reason != null) 'reason': reason,
-    if (redirectLocation != null) 'redirect': redirectLocation,
-    if (fallbackLocation != null)
-      loginDismissFallbackQueryParam: fallbackLocation,
+    'reason': ?reason,
+    'redirect': ?redirectLocation,
+    loginDismissFallbackQueryParam: ?fallbackLocation,
     loginGuestDismissPopQueryParam: allowGuestDismissPop ? '1' : '0',
   };
   return Uri(

@@ -135,9 +135,9 @@ entries:
       - "flutter build apk --debug --no-pub：Built build/app/outputs/flutter-apk/app-debug.apk"
       - "flutter build ios --simulator --debug --no-pub：Built build/ios/iphonesimulator/Runner.app"
       - "flutter build web --no-pub：Built build/web；仅保留现有 wasm dry-run 与 icon font warnings"
-      - "Android emulator-5554 profile probe：passed=true；activityDisplayedMs=1738；firstVisibleMs=2130；nativeWelcomeDetected=false；blueScreenDetected=false；artifact quwoquan_app/artifacts/startup_first_frame/probe/20260626T023704/startup_first_frame_report.json"
-      - "Android emulator-5554 debug probe：passed=true；activityDisplayedMs=2896；nativeWelcomeDetected=false；blueScreenDetected=false；密集采样 2800ms 已见 Flutter WelcomeScreen；artifact quwoquan_app/artifacts/startup_first_frame/probe/20260626T024630/startup_first_frame_report.json 与 20260626T024653/android-2800ms.png"
-      - "iPhone 17 clean simulator probe：passed=true；firstVisibleMs=2265；blueScreenDetected=false；artifact quwoquan_app/artifacts/startup_first_frame/probe/20260626T024455/startup_first_frame_report.json"
+      - "Android emulator-5554 profile probe：passed=true；activityDisplayedMs=1738；firstVisibleMs=2130；nativeWelcomeDetected=false；blueScreenDetected=false；artifact quwoquan_app/.qwq_output/env/repo/runs/startup_first_frame/probe/20260626T023704/startup_first_frame_report.json"
+      - "Android emulator-5554 debug probe：passed=true；activityDisplayedMs=2896；nativeWelcomeDetected=false；blueScreenDetected=false；密集采样 2800ms 已见 Flutter WelcomeScreen；artifact quwoquan_app/.qwq_output/env/repo/runs/startup_first_frame/probe/20260626T024630/startup_first_frame_report.json 与 20260626T024653/android-2800ms.png"
+      - "iPhone 17 clean simulator probe：passed=true；firstVisibleMs=2265；blueScreenDetected=false；artifact quwoquan_app/.qwq_output/env/repo/runs/startup_first_frame/probe/20260626T024455/startup_first_frame_report.json"
     notes:
       - 旧 iPhone 17 Pro simulator 曾因 SpringBoard/LaunchScreen 快照缓存继续显示旧亮蓝，换干净 iPhone 17 simulator 后无旧蓝；probe 现在会把这类旧缓存识别为失败，避免误报通过。
       - iOS simulator 只能验证 debug/simulator 首帧；iOS release/profile 启动性能仍需真机或 TestFlight/Ad Hoc 包复测。

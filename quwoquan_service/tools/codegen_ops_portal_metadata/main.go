@@ -161,7 +161,7 @@ func main() {
 	var portalDir string
 
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
-	flag.StringVar(&portalDir, "portal-dir", "../apps/ops-portal", "ops portal root directory")
+	flag.StringVar(&portalDir, "portal-dir", "../quwoquan_ops/portal", "ops portal root directory")
 	flag.Parse()
 
 	controlPlaneRoot := filepath.Join(metadataDir, "_control_plane")

@@ -63,7 +63,7 @@
 
 ## A3 一键入口口径
 
-- 开发者一键启动统一入口为 `python3 agent_ops/deploy/stackctl.py up --env <env> [--device-id <id>]`。
+- 开发者一键启动统一入口为 `python3 quwoquan_ops/cli/stackctl.py up --env <env> [--device-id <id>]`。
 - `make dev-up ENV=<env> [DEVICE_ID=<id>]` 只是 `stackctl up --env` 的 Makefile 薄包装，不得演化出第二套启动逻辑。
 - `--env` 只暴露 `alpha / beta / gamma / prod-sim / prod`；`--target` 保留给 CI、runbook 与高级调试，二者互斥。
 - `prod` 一键启动语义是“连接已部署 prod-hosted 云端 + 本地启动 App/浏览器”，不是在本地再起一套 prod 服务栈。

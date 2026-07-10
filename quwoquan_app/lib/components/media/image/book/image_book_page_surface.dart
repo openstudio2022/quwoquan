@@ -142,7 +142,6 @@ class ImageBookPageSurfaceFactory {
     canvas.scale(safePixelRatio, safePixelRatio);
     canvas.drawRect(logicalRect, ui.Paint()..color = AppColors.worksBackground);
     paint(canvas, logicalRect);
-    _paintChrome(canvas, logicalRect);
     final picture = recorder.endRecording();
     final raster = await picture.toImage(
       math.max(1, (safeSize.width * safePixelRatio).round()),
@@ -164,8 +163,8 @@ class ImageBookPageSurfaceFactory {
     bool isBackFace = false,
   }) {
     final base = status == ImageBookPageSurfaceStatus.failure
-        ? const Color(0xFF18202C)
-        : const Color(0xFF141B25);
+        ? AppColors.imageBookFailurePlaceholderBackdrop
+        : AppColors.imageBookPlaceholderBackdrop;
     canvas.drawRect(logicalRect, ui.Paint()..color = base);
     canvas.drawRect(
       logicalRect,
@@ -267,25 +266,25 @@ class ImageBookPageSurfaceFactory {
         ..isAntiAlias = false
         ..filterQuality = FilterQuality.medium
         ..colorFilter = const ui.ColorFilter.matrix(<double>[
-          0.84,
+          0.44,
+          0.14,
+          0.14,
+          0,
+          0,
+          0.14,
+          0.44,
+          0.14,
+          0,
+          0,
+          0.14,
+          0.14,
+          0.44,
           0,
           0,
           0,
           0,
           0,
-          0.84,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0.84,
-          0,
-          0,
-          0,
-          0,
-          0,
-          1,
+          0.88,
           0,
         ]),
     );
@@ -296,7 +295,8 @@ class ImageBookPageSurfaceFactory {
   void _paintBackFaceWash(ui.Canvas canvas, Rect logicalRect) {
     canvas.drawRect(
       logicalRect,
-      ui.Paint()..color = const Color(0xFF111821).withValues(alpha: 0.10),
+      ui.Paint()
+        ..color = AppColors.imageBookBackFaceWash.withValues(alpha: 0.08),
     );
     canvas.drawRect(
       logicalRect,
@@ -305,36 +305,12 @@ class ImageBookPageSurfaceFactory {
           logicalRect.centerLeft,
           logicalRect.centerRight,
           <Color>[
-            AppColors.black.withValues(alpha: 0.08),
-            AppColors.white.withValues(alpha: 0.035),
-            AppColors.black.withValues(alpha: 0.06),
+            AppColors.black.withValues(alpha: 0.055),
+            AppColors.white.withValues(alpha: 0.032),
+            AppColors.black.withValues(alpha: 0.05),
           ],
           const <double>[0.0, 0.52, 1.0],
         ),
-    );
-  }
-
-  void _paintChrome(ui.Canvas canvas, Rect logicalRect) {
-    canvas.drawRect(
-      logicalRect,
-      ui.Paint()
-        ..shader = ui.Gradient.linear(
-          logicalRect.topCenter,
-          logicalRect.bottomCenter,
-          <Color>[
-            AppColors.black.withValues(alpha: 0.06),
-            AppColors.black.withValues(alpha: 0.58),
-          ],
-        ),
-    );
-    canvas.drawRect(
-      Rect.fromLTWH(
-        AppSpacing.zero,
-        math.max(AppSpacing.zero, logicalRect.height - AppSpacing.hairline),
-        logicalRect.width,
-        AppSpacing.hairline,
-      ),
-      ui.Paint()..color = AppColors.black.withValues(alpha: 0.18),
     );
   }
 

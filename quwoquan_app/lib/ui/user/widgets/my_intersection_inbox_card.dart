@@ -5,6 +5,7 @@ import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -95,6 +96,8 @@ class _MyIntersectionInboxCardState
     final state = ref.watch(myIntersectionPreviewProvider);
     final visible = state.items
         .where((item) => item.intersectionClass == 'fact')
+        .map(displayReadyIntersectionReason)
+        .whereType<IntersectionReason>()
         .take(3)
         .toList(growable: false);
     return ProfileInsightSectionCard(

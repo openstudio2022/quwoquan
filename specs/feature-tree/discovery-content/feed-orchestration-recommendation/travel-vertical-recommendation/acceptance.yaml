@@ -36,7 +36,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed/feed_service_negative_fallback__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/feed/feed_service_negative_fallback__local_contract_test.go
     status: partial
     test_evidence:
       primary:
@@ -58,7 +58,7 @@ gwt_acceptance:
     - P0 已覆盖 FeedService 路由与 fallback vertical 过滤；gamma 行为分桶仍需联调验收。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

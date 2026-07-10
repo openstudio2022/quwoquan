@@ -291,7 +291,16 @@ def test_produce_review_rewind_invalidates_failed_ref_outputs():
     assert "produce_compose" not in completed
     assert "produce_author" not in completed
     assert run_mod._drafts_authored(ctx) == (False, ["ref_bad"])
-    assert "<!-- QWQ_AWAITING_AGENT_DRAFT -->" in draft_article_path(task_id, batch_id, "ref_bad").read_text(encoding="utf-8")
+    # 进度持久化（失败不销毁）：失败对象 4.draft 已写正文保留，靠 repair_report 触发就地修订，
+    # 不再 wipe 成占位；只清理已物化成品面与陈旧 review 侧车。
+    bad_draft = draft_article_path(task_id, batch_id, "ref_bad").read_text(encoding="utf-8")
+    assert "需要重写" in bad_draft
+    assert "<!-- QWQ_AWAITING_AGENT_DRAFT -->" not in bad_draft
+    assert (bad_obj / "5.review" / "repair_report.json").is_file()
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    assert state["produceReviewRetryHistory"][-1]["refs"] == ["ref_bad"]
+    (bad_obj / "5.review" / "repair_report.json").unlink()
+    assert run_mod._review_repaired_refs(ctx) == {"ref_bad"}
     assert not (bad_obj / "article.md").exists()
     assert not (bad_obj / "manifest.json").exists()
     assert not (bad_obj / "5.review" / "ref_review_gate.json").exists()
@@ -299,6 +308,137 @@ def test_produce_review_rewind_invalidates_failed_ref_outputs():
     assert draft_article_path(task_id, batch_id, "ref_ok").read_text(encoding="utf-8") == "# 已完成\n\n正文。"
     queue = oq.queue_summary(task_id, batch_id)
     assert "ref_bad" in queue["byState"]["queued"], queue
+
+def test_produce_review_retry_never_invalidates_passed_objects(monkeypatch):
+    # 单点失败隔离（防塌方）：即便 retry 集合误含已通过 review gate 的绿对象，
+    # _prepare_produce_review_retry 也必须把它过滤掉，绝不销毁绿对象的已写正文。
+    task_id = _make_task()
+    batch_id = "review_retry_isolation"
+    ensure_batch_layout(task_id, batch_id, "produce")
+    ctx = _ctx(task_id, batch_id)
+
+    green_ref = "ref_green"
+    bad_ref = "ref_bad"
+    for ref, passed in ((green_ref, True), (bad_ref, False)):
+        content_object.register_content_object(
+            task_id, batch_id, ref, content_type="article", angle="攻略", title=ref
+        )
+        review_dir = content_object.content_object_dir(task_id, batch_id, ref) / "5.review"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        write_json(review_dir / "review_gate.json", {"passed": passed, "issues": [] if passed else ["x"]})
+
+    invalidated: list[str] = []
+    monkeypatch.setattr(
+        "task.run._produce_review_retry_refs",
+        lambda *_args, **_kwargs: ([green_ref, bad_ref], {green_ref: ["spurious"], bad_ref: ["real"]}),
+    )
+    monkeypatch.setattr("task.run._write_retry_reports_for_refs", lambda *_a, **_k: None)
+    monkeypatch.setattr("task.run._purge_author_queue_for_stale_workflow", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "task.run._invalidate_ref_for_retry",
+        lambda _ctx, ref, **_kw: invalidated.append(ref) or True,
+    )
+    monkeypatch.setattr(
+        "task.object_queue.requeue_refs",
+        lambda _task, _batch, reset, _stage, reason=None: list(reset),
+    )
+
+    prepared = run_mod._prepare_produce_review_retry(
+        ctx,
+        run_mod.StageResult(
+            "produce_review",
+            run_mod.AUTO,
+            "failed",
+            "发布门未过",
+            fallback_stage="produce_compose",
+            issues=["mixed"],
+        ),
+        "produce_compose",
+    )
+
+    assert prepared is True
+    assert invalidated == [bad_ref]
+    assert green_ref not in invalidated
+
+
+def test_produce_review_retry_allows_direct_batch_issue_for_passed_object(monkeypatch):
+    task_id = _make_task()
+    batch_id = "review_retry_direct_batch_issue"
+    ensure_batch_layout(task_id, batch_id, "produce")
+    ctx = _ctx(task_id, batch_id)
+
+    target_ref = "ref_batch_target"
+    peer_ref = "ref_peer_green"
+    for ref in (target_ref, peer_ref):
+        content_object.register_content_object(
+            task_id, batch_id, ref, content_type="article", angle="攻略", title=ref
+        )
+        review_dir = content_object.content_object_dir(task_id, batch_id, ref) / "5.review"
+        review_dir.mkdir(parents=True, exist_ok=True)
+        write_json(review_dir / "review_gate.json", {"passed": True, "issues": []})
+
+    invalidated: list[str] = []
+    monkeypatch.setattr("task.run._write_retry_reports_for_refs", lambda *_a, **_k: None)
+    monkeypatch.setattr("task.run._purge_author_queue_for_stale_workflow", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "task.run._invalidate_ref_for_retry",
+        lambda _ctx, ref, **_kw: invalidated.append(ref) or True,
+    )
+    monkeypatch.setattr(
+        "task.object_queue.requeue_refs",
+        lambda _task, _batch, reset, _stage, reason=None: list(reset),
+    )
+
+    prepared = run_mod._prepare_produce_review_retry(
+        ctx,
+        run_mod.StageResult(
+            "produce_review",
+            run_mod.AUTO,
+            "failed",
+            "发布门未过",
+            fallback_stage="produce_compose",
+            issues=[
+                f"{content_object.content_object_rel(task_id, batch_id, target_ref)}: "
+                "skeletonSimilarity: heading sequence too similar to a peer (0.82)"
+            ],
+        ),
+        "produce_compose",
+    )
+
+    assert prepared is True
+    assert invalidated == [target_ref]
+
+
+def test_invalidate_ref_preserve_draft_keeps_authored_body():
+    # 失败不销毁：preserve_draft=True 保留 4.draft 已写正文与 draft_meta，
+    # 只清理已物化成品面，让 agent 在原稿上就地修订。
+    from _common.draft_io import is_placeholder
+
+    task_id = _make_task()
+    batch_id = "invalidate_preserve_draft"
+    ctx = _ctx(task_id, batch_id)
+    ref = "需就地修订的文章"
+    content_object.register_content_object(task_id, batch_id, ref, content_type="article", angle="攻略", title=ref)
+    write_writing_pack(task_id, batch_id, ref, {"carrier": "article", "baseDraftText": _long_base_text(ref)})
+    draft_article_path(task_id, batch_id, ref).parent.mkdir(parents=True, exist_ok=True)
+    draft_article_path(task_id, batch_id, ref).write_text("# 已写正文\n\n这是 agent 写过的正文，需修订但不应销毁。", encoding="utf-8")
+    write_json(draft_meta_path(task_id, batch_id, ref), {"generator": "agent", "model": "cursor"})
+
+    obj_dir = content_object.content_object_dir(task_id, batch_id, ref)
+    obj_dir.mkdir(parents=True, exist_ok=True)
+    (obj_dir / "article.md").write_text("# 旧成品\n\n旧正文。", encoding="utf-8")
+    write_json(obj_dir / "manifest.json", {"reviewDecision": "approved"})
+
+    assert run_mod._invalidate_ref_for_retry(ctx, ref, preserve_draft=True) is True
+
+    body = draft_article_path(task_id, batch_id, ref).read_text(encoding="utf-8")
+    assert "agent 写过的正文" in body
+    assert not is_placeholder(body)
+    assert read_json(draft_meta_path(task_id, batch_id, ref))["generator"] == "agent"
+    # 已物化成品面仍被清理（避免陈旧成品漂移）。
+    assert not (obj_dir / "article.md").exists()
+    assert not (obj_dir / "manifest.json").exists()
+
 
 def test_produce_review_rewind_to_download_purges_stale_author_queue():
     task_id = _make_task()
@@ -337,10 +477,11 @@ def test_produce_review_rewind_to_download_purges_stale_author_queue():
     queue = oq.queue_summary(task_id, batch_id)
     assert queue["total"] == 0, queue
 
-def test_produce_author_skips_image_carrier_placeholders_without_repair_request():
+def test_managed_produce_author_requires_image_agent_run_and_finalizes_metadata():
     task_id = _make_task()
     batch_id = "image_author_prompt"
     ctx = _ctx(task_id, batch_id)
+    ctx.managed = True
     ref = f"{_EID}_image_1"
     content_object.register_content_object(
         task_id,
@@ -350,15 +491,156 @@ def test_produce_author_skips_image_carrier_placeholders_without_repair_request(
         angle="攻略",
         title=f"{_EID} 图像作品",
     )
-    write_writing_pack(task_id, batch_id, ref, {"carrier": "image"})
-    write_placeholder_draft(task_id, batch_id, ref)
+    source_path = batch_root(task_id, batch_id) / "entities/地点/景区/测试景区甲/1.download/sources/01/source.md"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("测试景区甲图片作品的可核验来源。", encoding="utf-8")
+    source_rel = source_path.relative_to(batch_root(task_id, batch_id)).as_posix()
+    write_writing_pack(
+        task_id,
+        batch_id,
+        ref,
+        {
+            "carrier": "image",
+            "title": "测试景区甲·雾林坡面",
+            "caption": "原始素材说明",
+            "sourcePaths": [source_rel],
+            "assets": [{"assetId": "a1", "caption": "原始素材说明"}],
+        },
+    )
+    prompt_path(task_id, batch_id, ref).parent.mkdir(parents=True, exist_ok=True)
+    prompt_path(task_id, batch_id, ref).write_text("# image prompt", encoding="utf-8")
+    write_image_evidence_draft(task_id, batch_id, ref, selected_asset_ids=["a1"], cited_source_paths=[source_rel])
 
     ok, pending = run_mod._drafts_authored(ctx)
     prompts = run_mod._checkpoint_prompts(ctx, "produce_author")
 
+    assert ok is False
+    assert pending == [ref]
+    assert len(prompts) == 1
+    assert "[AGENT_LANE:image]" in prompts[0]
+
+    meta = read_json(draft_meta_path(task_id, batch_id, ref))
+    meta.update(
+        {
+            "title": "测试景区甲·雾林坡面",
+            "caption": "保留原图氛围，只补一句轻量说明。",
+            "creativePlan": {
+                "concepts": [
+                    {"id": "plan_a", "summary": "保留原题"},
+                    {"id": "plan_b", "summary": "突出雾林层次"},
+                ],
+                "selectedPlanId": "plan_b",
+                "selectionReason": "更贴合画报首图气质",
+            },
+            "selfCritique": {
+                "readerPromise": "让读者快速理解图像主题，不扩写成长文。",
+                "titlePromise": "标题只做轻润色，不夸大未出现的信息。",
+                "informationDensity": "配文只补充观看重点，不外推事实。",
+                "evidenceBoundary": "仅使用已锁定素材和 sourcePath。",
+                "personaBoundary": "保持编辑口吻，不伪装亲历。",
+            },
+        }
+    )
+    write_json(draft_meta_path(task_id, batch_id, ref), meta)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["agentRunHistory"] = [
+        {
+            "stage": "produce_author",
+            "outcomes": [
+                {
+                    "status": "finished",
+                    "ref": ref,
+                    "runId": "run-image-managed",
+                    "agentId": "agent-image-managed",
+                }
+            ],
+        }
+    ]
+    run_mod.save_workflow_state(state)
+
+    ok, pending = run_mod._drafts_authored(ctx)
     assert ok is True
     assert pending == []
-    assert prompts == []
+    meta = read_json(draft_meta_path(task_id, batch_id, ref))
+    assert meta["generator"] == "image_evidence_pack"
+    assert meta["agentRunId"] == "run-image-managed"
+    assert meta["agentId"] == "agent-image-managed"
+    assert meta["promptSha256"].startswith("sha256:")
+    assert meta["writingPackSha256"].startswith("sha256:")
+    assert meta["draftSha256"].startswith("sha256:")
+    assert meta["finalizedFromAgentRunHistory"] is True
+
+
+def test_managed_image_author_contract_allows_double_empty_only_when_source_is_empty():
+    from _common.draft_io import read_writing_pack
+
+    task_id = _make_task()
+    batch_id = "image_author_empty_source_text"
+    ctx = _ctx(task_id, batch_id)
+    ref = f"{_EID}_image_empty"
+    content_object.write_brief_object(
+        task_id,
+        batch_id,
+        ref,
+        {
+            "carrier": "image",
+            "titleHint": "",
+        },
+        content_type="image",
+    )
+    source_path = batch_root(task_id, batch_id) / "entities/地点/景区/测试景区甲/1.download/sources/01/source.md"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_text("测试景区甲图片作品的可核验来源。", encoding="utf-8")
+    source_rel = source_path.relative_to(batch_root(task_id, batch_id)).as_posix()
+    write_writing_pack(
+        task_id,
+        batch_id,
+        ref,
+        {
+            "carrier": "image",
+            "title": "",
+            "caption": "",
+            "sourcePaths": [source_rel],
+            "assets": [{"assetId": "a1", "caption": ""}],
+        },
+    )
+    write_image_evidence_draft(task_id, batch_id, ref, selected_asset_ids=["a1"], cited_source_paths=[source_rel])
+    meta = read_json(draft_meta_path(task_id, batch_id, ref))
+    meta.update(
+        {
+            "title": "",
+            "caption": "",
+            "creativePlan": {
+                "concepts": [
+                    {"id": "plan_a", "summary": "保持无标题无配文"},
+                    {"id": "plan_b", "summary": "仅整理图片顺序"},
+                ],
+                "selectedPlanId": "plan_a",
+                "selectionReason": "底稿没有可保真的公开文字字段",
+            },
+            "selfCritique": {
+                "readerPromise": "如实呈现图片作品，不补写不存在的文字。",
+                "titlePromise": "底稿无标题时保持为空。",
+                "informationDensity": "不把图片说明扩写成新配文。",
+                "evidenceBoundary": "仅使用已锁定素材和 sourcePath。",
+                "personaBoundary": "保持编辑口吻，不伪装亲历。",
+            },
+        }
+    )
+    issues = run_mod._managed_image_author_meta_issues(
+        meta,
+        writing_pack=read_writing_pack(task_id, batch_id, ref),
+        require_agent_run=False,
+    )
+    assert issues == [], issues
+
+    meta["title"] = "不应补出的标题"
+    title_issues = run_mod._managed_image_author_meta_issues(
+        meta,
+        writing_pack=read_writing_pack(task_id, batch_id, ref),
+        require_agent_run=False,
+    )
+    assert any("title must stay empty" in issue for issue in title_issues), title_issues
 
 def test_reset_stage_retries_to_compose_invalidates_authored_drafts():
     from _common.draft_io import is_placeholder
@@ -923,7 +1205,7 @@ def test_produce_review_bulk_failure_retries_within_bounded_budget(monkeypatch):
     )
     monkeypatch.setattr(
         "task.run._invalidate_ref_for_retry",
-        lambda _ctx, ref: invalidated.append(ref) or True,
+        lambda _ctx, ref, **_kw: invalidated.append(ref) or True,
     )
     monkeypatch.setattr(
         "task.run._purge_author_queue_for_stale_workflow",
@@ -1023,4 +1305,3 @@ def test_produce_review_budget_exhaustion_manual_when_partial_disallowed(monkeyp
         for row in run_mod.load_workflow_state(task_id, batch_id).get("abandonedContentObjects", [])
     }
     assert bad_ref not in abandoned
-

@@ -1,0 +1,56 @@
+# 四川省级主页批（WP5 拓扑 B：第二 worktree 双省并行；缺省乐山市全量 ready）。
+# 运行方式同 content/travel/homepage/zhejiang_pilot（generate-only → decompose freeze → run）。
+schemaVersion: quwoquan.task.recipe
+recipeId: content/travel/homepage/sichuan_pilot
+title: 四川景区主页省级批（fanout by-partition，trial）
+presetRef: content/travel/homepage/base
+batchAxes:
+  phase: e2e
+  contentType: homepage
+  supplyMode: site_primary
+runtimeProfile: cursor_local
+env:
+  QWQ_HOMEPAGE_ONLY_EXECUTION_BRANCH: feature/homepage-commercial-lane
+  QWQ_CONTENT_SUPPLY_EXECUTION_BRANCH: feature/homepage-commercial-lane
+task:
+  generate:
+    name: 乐山市主页省级批0708
+    title: 乐山市主页省级批0708
+    intentLabel: 四川主页省级0708
+    discovery: quwoquan_data/verticals/travel/coverage/中国/四川省/乐山市.yaml
+    region: 中国/四川省/乐山市
+    limit: 12
+    reserveRatio: 0
+    entityHomepagesPerTarget: 1
+    entityArticlesPerTarget: 0
+    imageWorksPerTarget: 0
+    # 本轮只跑主清单 sourceReadiness=ready 地点（WP5 硬约束）。
+    sourceReadiness: ready
+    # 省级批次 discovery 不含川西五景缺省实体，显式空 mandatory。
+    mandatory: ""
+    allowQuotaShortfall: true
+contract:
+  requireActiveStatus: true
+  executionBranch: feature/homepage-commercial-lane
+  targetObjectCount: 12
+  # dedup 账本可能排除历史批次已成稿地点，selected < limit 是诚实缺口而非失败。
+  allowSelectionShortfall: true
+execution:
+  mode: fanout_partition
+  strategy: by-partition
+  # 单机 bridge 安全并发 2：fanout 双 worker，各 worker 内 managed 并发 1（cursor_local）。
+  concurrency: 2
+  maxWorkers: 2
+  cycles: 4
+  runtime: local
+  model: composer
+  startupTimeoutSeconds: 240
+readiness:
+  dailyTarget: 12
+  target: 12
+  minPassRate: 0.0
+  # trial 口径：WP5 只 promote 进 publish，环境导入证据留 WP6，不因 require_import 阻断。
+  mode: trial
+  failOnNoGo: false
+  # 2026-07-06 裁定：本地 cursor_sdk bridge 不回传 usage，estimated 账本可准出。
+  acceptEstimatedTokenLedger: true

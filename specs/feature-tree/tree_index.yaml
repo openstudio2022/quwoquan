@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-06-29T01:45:00.000000Z
+updated_at: 2026-07-09T10:17:47.734302Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -1226,6 +1226,21 @@ features:
               name: media-status-pipeline--media-processing-state-machine
               level: L3_story
               path: discovery-content/media-processing-helper-read/media-status-pipeline--media-processing-state-machine
+              domain: ""
+              status: specified
+              tags: []
+        - id: object-homepage-coverage-scaling
+          name: object-homepage-coverage-scaling
+          level: L2_business_capability
+          path: discovery-content/object-homepage-coverage-scaling
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: zhejiang-sichuan-province-coverage
+              name: zhejiang-sichuan-province-coverage
+              level: L3_story
+              path: discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage
               domain: ""
               status: specified
               tags: []
@@ -2479,6 +2494,13 @@ features:
           status: specified
           tags: []
           children:
+            - id: article-commercial-scale-closure
+              name: article-commercial-scale-closure
+              level: L3_story
+              path: runtime/runtime-data-engineering/article-commercial-scale-closure
+              domain: ""
+              status: specified
+              tags: []
             - id: geo-content-trinity
               name: geo-content-trinity
               level: L3_story
@@ -2988,6 +3010,13 @@ features:
               domain: ""
               status: specified
               tags: []
+        - id: system-architecture-and-engineering-guide
+          name: system-architecture-and-engineering-guide
+          level: L2_business_capability
+          path: runtime/system-architecture-and-engineering-guide
+          domain: ""
+          status: specified
+          tags: []
     - id: shared-homepage-network
       name: shared-homepage-network
       level: L1_domain_service

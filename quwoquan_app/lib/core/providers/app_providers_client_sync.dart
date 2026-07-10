@@ -680,17 +680,18 @@ final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
 });
 
 /// ContactDiscovery Repository（通讯录批量哈希匹配）
-final contactDiscoveryRepositoryProvider =
-    Provider<ContactDiscoveryRepository>((ref) {
-      final mode = ref.watch(appDataSourceModeProvider);
-      return cloudRepositoryImplForMode(
-        mode,
-        remote: () => RemoteContactDiscoveryRepository(
-          httpClient: ref.watch(cloudHttpClientProvider),
-        ),
-        mock: MockContactDiscoveryRepository.new,
-      );
-    });
+final contactDiscoveryRepositoryProvider = Provider<ContactDiscoveryRepository>(
+  (ref) {
+    final mode = ref.watch(appDataSourceModeProvider);
+    return cloudRepositoryImplForMode(
+      mode,
+      remote: () => RemoteContactDiscoveryRepository(
+        httpClient: ref.watch(cloudHttpClientProvider),
+      ),
+      mock: MockContactDiscoveryRepository.new,
+    );
+  },
+);
 
 /// Behavior Repository（行为上报，驱动实时推荐）
 final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
@@ -769,6 +770,7 @@ final intersectionRepositoryProvider = Provider<IntersectionRepository>(
     ref.watch(appDataSourceModeProvider),
     remote: () => RemoteIntersectionRepository(
       httpClient: ref.watch(cloudHttpClientProvider),
+      currentUserId: ref.watch(currentUserIdProvider),
     ),
     mock: MockIntersectionRepository.new,
   ),

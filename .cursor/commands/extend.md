@@ -29,7 +29,7 @@ description: 实施阶段增量扩展（在已有基线上新增字段/事件/�
 
 | # | 检查项 | 判定方式 |
 |---|--------|----------|
-| 1 | 基线已存在 | 目标实体/聚合的 `contracts/metadata/` 目录已存在，且 `/baseline` 或 `/design` 已完成 |
+| 1 | 基线已存在 | 目标实体/聚合的 `quwoquan_service/contracts/metadata/` 目录已存在，且 `/baseline` 或 `/design` 已完成 |
 | 2 | 扩展目标明确 | 能写出要扩展的实体/字段/事件/端点名称 |
 | 3 | 扩展类型已选定 | 能对应到 S01~S25 中的某一场景 |
 | 4 | 归属特性已识别 | 明确此扩展属于哪个特性树节点 |
@@ -58,7 +58,7 @@ description: 实施阶段增量扩展（在已有基线上新增字段/事件/�
 /extend new-aggregate --name=<AggName> --domain=<domain> --service=<svc> --storage=<postgres|mongodb>
 ```
 自动执行：
-1. 创建 `contracts/metadata/{domain}/{agg}/` + 5 个 YAML 骨架（aggregate/fields/storage/events/service）
+1. 创建 `quwoquan_service/contracts/metadata/{domain}/{agg}/` + 5 个 YAML 骨架（aggregate/fields/storage/events/service）
 2. `make verify-metadata`
 3. `make codegen --target={agg}` → Go struct/repo/handler/migration/test 骨架
 4. `make codegen-app --target={agg}` → Dart DTO/repository 骨架
@@ -79,9 +79,9 @@ description: 实施阶段增量扩展（在已有基线上新增字段/事件/�
 /extend new-service --name=<service-name> --port=<port>
 ```
 自动执行：
-1. `agent_ops/scaffold/new_service_fullstack.sh --name {name}-service --port {port}` 创建服务骨架
+1. `quwoquan_ops/gate/scaffold/new_service_fullstack.sh --name {name}-service --port {port}` 创建服务骨架
 2. `quwoquan_service/scripts/runtime/bootstrap_service_config_layout.sh` 生成环境配置目录
-3. 创建 `contracts/metadata/{domain}/` 目录
+3. 创建 `quwoquan_service/contracts/metadata/{domain}/` 目录
 4. `make verify-metadata` + `make codegen --service={name}`
 
 ### S05: 新建 API 端点

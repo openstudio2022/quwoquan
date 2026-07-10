@@ -392,7 +392,8 @@ class _Avatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // objectKind 一等字段为真相源（codegen UnifiedObjectKind）；未知/缺省按 person 头像形状降级。
-    final kind = UnifiedObjectKind.fromWire(objectKind) ?? UnifiedObjectKind.person;
+    final kind =
+        UnifiedObjectKind.fromWire(objectKind) ?? UnifiedObjectKind.person;
     final accent = AppColors.iosAccent(context);
     final radius = kind == UnifiedObjectKind.person
         ? BorderRadius.circular(size)
@@ -440,6 +441,8 @@ class _Avatar extends StatelessWidget {
         return CupertinoIcons.camera_fill;
       case UnifiedObjectKind.gear:
         return CupertinoIcons.bag_fill;
+      case UnifiedObjectKind.content:
+        return CupertinoIcons.doc_text_fill;
       // §22.2 行程/活动 objectKind（结构就位，保持图标语义可辨识）。
       case UnifiedObjectKind.trip:
         return CupertinoIcons.map_fill;

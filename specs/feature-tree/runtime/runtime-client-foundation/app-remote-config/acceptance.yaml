@@ -45,7 +45,7 @@ gwt_acceptance:
     - 冷启动期间配置拉取只能后台进行
     tests:
       planned:
-      - file: quwoquan_app/test/core/providers/app_remote_config_provider_test.dart
+      - file: quwoquan_app/test/local_contract/core/providers/app_remote_config_provider__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/core/providers/app_remote_config_provider__local_contract_test.dart
     status: implemented
@@ -90,7 +90,7 @@ gwt_acceptance:
     - 后台刷新不应阻塞页面构建
     tests:
       planned:
-      - file: quwoquan_app/test/core/providers/app_remote_config_provider_test.dart
+      - file: quwoquan_app/test/local_contract/core/providers/app_remote_config_provider__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/core/providers/app_remote_config_provider__local_contract_test.dart
     status: implemented
@@ -175,7 +175,7 @@ gwt_acceptance:
     - 快照投影与缓存命中不应拉高 p95
     tests:
       planned:
-      - file: quwoquan_service/services/content-service/tests/post_comment_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
       recorded:
       - file: quwoquan_app/test/local_contract/core/providers/app_remote_config_provider__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go

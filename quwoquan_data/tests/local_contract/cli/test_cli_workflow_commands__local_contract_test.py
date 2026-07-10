@@ -6,6 +6,108 @@ from support.data_cli_fixtures import *  # noqa: F401,F403
 
 
 
+def _real_jpeg(seed: int) -> bytes:
+    from io import BytesIO
+
+    from PIL import Image
+
+    image = Image.new("RGB", (960, 640), (60 + seed, 120, 180))
+    buf = BytesIO()
+    image.save(buf, format="JPEG", quality=90)
+    return buf.getvalue()
+
+
+def _seed_homepage_only_source_plans(task_id: str, batch_id: str) -> None:
+    ensure_batch_layout(task_id, batch_id, "workflow_test")
+    for name in ("峨眉山", "乐山大佛"):
+        dl = batch_entity_object_dir(task_id, batch_id, "地点", "景区", name) / "1.download"
+        dl.mkdir(parents=True, exist_ok=True)
+        write_json(
+            dl / "homepage_source_plan.json",
+            {
+                "payload": {
+                    "sources": [
+                        {
+                            "source_id": f"homepage_baike_{name}",
+                            "title": name,
+                            "platform": "百度百科",
+                            "sourceKind": "encyclopedia",
+                            "sourceRole": "primary",
+                            "category": "encyclopedia",
+                            "url": f"https://fixture.invalid/{name}/baike",
+                            "sourceUseMode": "factual_reference_only",
+                            "body": f"{name}景区基础事实来源，仅用于本地 contract 测试。",
+                            "imageUrls": [
+                                {
+                                    "url": f"https://fixture.invalid/{name}/cover.jpg",
+                                    "platform": "Wikimedia Commons",
+                                    "license": "CC-BY-SA 4.0",
+                                    "credit": f"{name} fixture photographer",
+                                    "sourceUrl": f"https://fixture.invalid/{name}/cover.jpg",
+                                    "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+                                    "licenseSnapshot": "CC-BY-SA 4.0 fixture",
+                                    "authorizationProof": f"fixture homepage image rights {name}",
+                                    "usageScope": "app_publish",
+                                    "modelReleaseStatus": "not_required",
+                                    "width": 960,
+                                    "height": 640,
+                                    "contentType": "image/jpeg",
+                                    "caption": f"{name}核心景区实拍",
+                                    "relevance": f"直接呈现{name}核心景区景观",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            },
+        )
+
+
+def _stub_download_fetch(monkeypatch):
+    from types import SimpleNamespace
+    import hashlib
+
+    import download.handler as download_handler_mod
+
+    def _fake_source_fetch(url: str, **_kwargs):
+        entity = "峨眉山" if "峨眉山" in url else "乐山大佛"
+        fetched_text = "\n\n".join(
+            [
+                f"{entity}位于四川省，是面向游客开放的著名景区。",
+                f"{entity}游览需要关注开放时间、交通接驳、门票预约、天气变化和返程安排。",
+                f"{entity}核心游线包含自然或人文景观，适合以实体主页底稿方式整理基础事实。",
+                f"{entity}相关行程应根据季节、客流和现场管理要求调整停留时间。",
+            ]
+            * 4
+        )
+        return {
+            "url": url,
+            "statusCode": 200,
+            "htmlBytes": b"<html><body>fixture</body></html>",
+            "text": fetched_text,
+            "sha256": "fixture-source",
+        }
+
+    def _fake_image_fetch(url: str, **_kwargs):
+        seed = 11 if "峨眉山" in url else 29
+        body = _real_jpeg(seed)
+        return {
+            "url": url,
+            "ext": ".jpg",
+            "bytes": body,
+            "contentType": "image/jpeg",
+            "sha256": hashlib.sha256(body).hexdigest(),
+        }
+
+    def _safe_image(*_args, **_kwargs):
+        return SimpleNamespace(blocks_image_publish=False, status="passed", reasons=[])
+
+    monkeypatch.setattr(download_handler_mod, "fetch_source_payload", _fake_source_fetch)
+    monkeypatch.setattr(download_handler_mod, "fetch_image_payload", _fake_image_fetch)
+    monkeypatch.setattr(download_handler_mod, "assess_image", _safe_image)
+    monkeypatch.setattr(download_handler_mod, "assess_image_cached", _safe_image)
+
+
 def test_explore_writes_catalog_and_packet():
     task_id = _make_task(with_baseline=False)
     handle_explore(
@@ -115,8 +217,10 @@ def test_workflow_run_requires_baseline_packet():
     else:
         raise AssertionError("workflow run should require baseline packet")
 
-def test_workflow_run_records_baseline_packet_when_present():
+def test_workflow_run_records_baseline_packet_when_present(monkeypatch):
     task_id = _make_task()
+    _seed_homepage_only_source_plans(task_id, "b1")
+    _stub_download_fetch(monkeypatch)
     code = None
     try:
         run_mod.handle_run(
@@ -172,8 +276,14 @@ def test_task_new_persists_explicit_content_quotas():
     quotas = ((spec.get("content") or {}).get("quotas") or {})
     assert quotas == {"entityArticles": 3, "routeArticles": 0, "galleryPosts": 3}, quotas
 
-def test_task_scaled_e2e_prepare_enters_standard_checkpointed_workflow():
+def test_task_scaled_e2e_prepare_enters_standard_checkpointed_workflow(monkeypatch):
     task_id = _make_task(with_baseline=False)
+    spec = store.load_spec(task_id)
+    spec["status"] = "active"
+    store.save_spec(spec)
+    _seed_homepage_only_source_plans(task_id, "se1")
+    _stub_download_fetch(monkeypatch)
+    monkeypatch.setattr(run_mod, "_managed_local_workspace_conflicts", lambda _workspace: [])
     try:
         task_handler_mod.handle_scaled_e2e(
             argparse.Namespace(
@@ -183,6 +293,7 @@ def test_task_scaled_e2e_prepare_enters_standard_checkpointed_workflow():
                 plan="dummy_plan",
                 catalog=None,
                 reset_state=False,
+                max_workers=1,
             )
         )
     except SystemExit as exc:

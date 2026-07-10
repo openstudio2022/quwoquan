@@ -94,6 +94,39 @@ class ContentBehaviorTracker {
     });
   }
 
+  static void trackIntersectionFeedback(String subjectId, String feedbackKind, {String intersectionId = '', String intersectionDimension = '', String intersectionClass = '', String intersectionSourceRef = ''}) {
+    _enqueue(<String, dynamic>{
+      'type': 'intersection_feedback',
+      'subjectId': subjectId,
+      'feedbackKind': feedbackKind,
+      'intersectionId': intersectionId,
+      'intersectionDimension': intersectionDimension,
+      'intersectionClass': intersectionClass,
+      'intersectionSourceRef': intersectionSourceRef,
+    });
+  }
+
+  static void trackWishlistAdd(String objectId, String objectKind, List<String> entityRefs, {String displayName = '', String sourceSurface = ''}) {
+    _enqueue(<String, dynamic>{
+      'type': 'wishlist_add',
+      'objectId': objectId,
+      'objectKind': objectKind,
+      'displayName': displayName,
+      'sourceSurface': sourceSurface,
+      'entityRefs': entityRefs,
+    });
+  }
+
+  static void trackWishlistRemove(String objectId, String objectKind, List<String> entityRefs, {String sourceSurface = ''}) {
+    _enqueue(<String, dynamic>{
+      'type': 'wishlist_remove',
+      'objectId': objectId,
+      'objectKind': objectKind,
+      'sourceSurface': sourceSurface,
+      'entityRefs': entityRefs,
+    });
+  }
+
   static void trackShare(String postId, {String contentType = '', String shareTarget = ''}) {
     _enqueue(<String, dynamic>{
       'type': 'share',

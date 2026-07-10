@@ -10,7 +10,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
     return OtherProfileIntersectionCard(userId: widget.userId);
   }
 
-  /// 影响力摘要模块（他人主页 / 我的主页双视角）。
+  /// 打动摘要模块（他人主页 / 我的主页双视角）。
   ///
   /// async 三态：loading / error 不占位；data 由 [AuthorImpactCard] 决定
   /// （other 无事实收起，mine 空态展示鼓励发布文案）。

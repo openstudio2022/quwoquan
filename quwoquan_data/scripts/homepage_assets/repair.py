@@ -6,15 +6,17 @@ must be reproducible across alpha/beta/gamma/prod sample builds.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from _common import paths
 from _common.entity_page_quality import entity_page_quality_issues
 from _common.image_safety import STATUS_UNSAFE, assess_image, is_low_texture_placeholder_graphic
 from _common.io import read_json, write_json
-from _common.paths import NOW_ISO, PUBLISH_ROOT, RUNTIME_ROOT
+from _common.paths import NOW_ISO
 
 _ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
 _ZH_RE = re.compile(r"[\u4e00-\u9fff]")
@@ -64,10 +66,18 @@ def _runtime_task_id(entity_dir: Path) -> str:
 
 def _root_kind(entity_dir: Path) -> str:
     try:
-        entity_dir.relative_to(PUBLISH_ROOT)
+        entity_dir.relative_to(_publish_root())
         return "publish"
     except ValueError:
         return "runtime"
+
+
+def _runtime_root() -> Path:
+    return Path(os.environ.get("QWQ_RUNTIME_ROOT") or paths.current_runtime_root())
+
+
+def _publish_root() -> Path:
+    return Path(os.environ.get("QWQ_PUBLISH_ROOT") or paths.PUBLISH_ROOT)
 
 
 def _iter_entity_dirs(roots: Iterable[Path]) -> list[Path]:
@@ -150,9 +160,9 @@ def _asset_issues(entity_dir: Path) -> list[str]:
 def scan_homepages(*, include_runtime: bool = True, include_publish: bool = True) -> list[HomepageIssue]:
     roots: list[Path] = []
     if include_runtime:
-        roots.append(RUNTIME_ROOT / "tasks")
+        roots.append(_runtime_root() / "tasks")
     if include_publish:
-        roots.append(PUBLISH_ROOT)
+        roots.append(_publish_root())
     issues: list[HomepageIssue] = []
     for entity_dir in _iter_entity_dirs(roots):
         entity_ref = _entity_ref_from_dir(entity_dir)

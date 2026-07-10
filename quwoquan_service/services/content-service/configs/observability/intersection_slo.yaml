@@ -4,7 +4,7 @@ version: 1
 #      route 自动产出，无需服务自埋；分位数取自 histogram（禁止算术平均代替分位数）。
 #   2) 业务漏斗（重复曝光/冷却/保鲜/清零/展示完备）：content-service
 #      infrastructure/intersectionmetrics 产出的 intersection_* 计数器。
-# 告警规则落在单一源 deploy/monitoring/alerts/quwoquan_alerts.yaml 的
+# 告警规则落在单一源 quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml 的
 # quwoquan_intersection 组，expr 直接消费下列指标，阈值与本文件 objective 对齐。
 service: content-service
 domain: content
@@ -90,4 +90,4 @@ rollback_layers:
 ab:
   segmentation_label: channel
 
-alerts_source: deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_intersection
+alerts_source: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_intersection

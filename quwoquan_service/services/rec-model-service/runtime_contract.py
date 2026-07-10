@@ -63,9 +63,11 @@ def _runtime_paths(
         if config_version:
             paths.append(
                 root
-                / "releases"
-                / "config"
+                / "quwoquan_service"
+                / "services"
                 / service_name
+                / "configs"
+                / "releases"
                 / f"{config_version}.yaml"
             )
         return paths
@@ -74,10 +76,7 @@ def _runtime_paths(
     paths.append(service_dir / "configs" / "default" / "config.yaml")
     paths.append(service_dir / "configs" / env_name / "config.yaml")
     if config_version:
-        repo_root = service_dir.parents[3]
-        paths.append(
-            repo_root / "releases" / "config" / service_name / f"{config_version}.yaml"
-        )
+        paths.append(service_dir / "configs" / "releases" / f"{config_version}.yaml")
     return paths
 
 

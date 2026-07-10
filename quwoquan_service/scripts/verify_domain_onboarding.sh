@@ -17,7 +17,7 @@ ruby -ryaml -e '
   repo_root = ARGV[1]
   schema_file = File.join(root, "contracts/metadata/_control_plane/domain_onboarding_schema.yaml")
   domains_dir = File.join(root, "contracts/metadata/_control_plane/domains")
-  plane_file = File.join(repo_root, "deploy/shared/process_domain_plane_mapping.yaml")
+  plane_file = File.join(repo_root, "quwoquan_ops/environments/process_domain_plane_mapping.yaml")
 
   fail("missing #{schema_file}") unless File.exist?(schema_file)
   fail("missing #{domains_dir}") unless Dir.exist?(domains_dir)

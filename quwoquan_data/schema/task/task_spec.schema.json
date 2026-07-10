@@ -1,10 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "任务规格 — quwoquan_data/tasks/<taskId>/task.yaml。taskId 由目录路径派生：<vertical>/<organizeBy>/<key>[/<category>]/<name>。",
+  "description": "任务规格 — quwoquan_data/control_plane/tasks/<taskId>/task.yaml。taskId 由目录路径派生：<vertical>/<organizeBy>/<key>[/<category>]/<name>。默认值唯一真相源 = presetRef 指向的家族包 preset。",
   "type": "object",
   "properties": {
     "schemaVersion": { "const": "quwoquan.task.spec" },
     "taskId": { "type": "string", "description": "斜杠路径式 id，与 committed/runtime 目录同名，如 旅行/地域/四川省/景区/景区全覆盖" },
+    "presetRef": { "type": "string", "description": "家族包 preset 引用（control_plane/families/<ref>.preset.yaml，去后缀相对路径），如 content/travel/homepage/base；task 未显式声明的字段由 preset.defaults 补齐" },
+    "intentLabel": { "type": "string", "maxLength": 16, "description": "≤16 字人类可读任务意图标签（顶层批次目录前缀真相源）" },
     "title": { "type": "string", "description": "人读任务名，如 四川省景区全覆盖" },
     "taskArchetype": {
       "type": "string",
@@ -37,12 +39,28 @@
         "entityTypes": { "type": "array", "items": { "type": "string" }, "description": "实体类型路径，如 地点/景区" },
         "coverageTargets": {
           "type": "array",
-          "description": "广度目标实体清单（重生成的种子）",
+          "description": "广度目标实体清单（重生成的种子；discovery_seed/2 主清单经 select-targets 带入时附带 geo/类型契约字段）",
           "items": {
             "type": "object",
             "properties": {
-              "entityType": { "type": "string", "description": "如 地点/景区" },
-              "name": { "type": "string", "description": "实体名，如 九寨沟" }
+              "entityType": { "type": "string", "description": "主类型单值 `地点/{Entity地点一级节点}`，如 地点/景区" },
+              "name": { "type": "string", "description": "实体名，如 九寨沟" },
+              "geoTagRef": { "type": "string", "description": "可选：区县级主归属行政区标签（Topic/地理/行政区/**；物化写入 _entity.json，homepage 物化必填）" },
+              "geoTagRefs": { "type": "array", "items": { "type": "string" }, "description": "可选：跨省/跨市全量地理归属（必须包含 geoTagRef）" },
+              "typeTagRefs": { "type": "array", "items": { "type": "string" }, "description": "可选：全量类型标签叶子（Entity/地点/**，主类型叶子必须在内）" },
+              "aliases": { "type": "array", "items": { "type": "string" }, "description": "可选：别名" }
+            },
+            "required": ["entityType", "name"]
+          }
+        },
+        "reserveCoverageTargets": {
+          "type": "array",
+          "description": "备选替补实体清单（partial replacement 消费；与 coverageTargets 同构）",
+          "items": {
+            "type": "object",
+            "properties": {
+              "entityType": { "type": "string" },
+              "name": { "type": "string" }
             },
             "required": ["entityType", "name"]
           }
@@ -57,7 +75,7 @@
     },
     "content": {
       "type": "object",
-      "description": "深度维度（驱动 produce 的 10D 矩阵）。未声明的字段沿 _defaults.yaml 继承链取值；显式声明则整体覆盖（list 替换语义）。只写与继承默认不同的特有 override。",
+      "description": "深度维度（驱动 produce 的 10D 矩阵）。未声明的字段由 presetRef 指向的家族 preset defaults 补齐；显式声明则整体覆盖（list 替换语义）。只写与 preset 默认不同的特有 override。",
       "properties": {
         "angles": { "type": "array", "items": { "type": "string" }, "description": "内容角度/意图，如 行前指南/路线推荐/探店。多数 task 继承垂类默认，仅实体类别特化时 override" },
         "audiences": { "type": "array", "items": { "type": "string" }, "description": "受众人格 id（默认继承垂类）" },
@@ -108,6 +126,32 @@
         "minPostsPerEntity": { "type": "integer", "description": "深度下限：每实体文章数" },
         "requiredAngles": { "type": "array", "items": { "type": "string" } }
       }
+    },
+    "workflowPolicy": {
+      "type": "object",
+      "description": "无人值守 workflow 策略（partial 交付 / 替补波次 / 弹性超采 / 发布节奏 / 执行分支）",
+      "properties": {
+        "allowPartialContent": { "type": "boolean" },
+        "deliveryMode": { "type": "string" },
+        "maxReplacementWaves": { "type": "integer", "minimum": 0 },
+        "maxReplacementCandidatesPerWave": { "type": "integer", "minimum": 0 },
+        "maxReplacementScreenedPerRun": { "type": "integer", "minimum": 0 },
+        "elasticOverfetch": { "type": "boolean" },
+        "overfetchMultiplier": { "type": "number", "minimum": 1.0 },
+        "targetEntityCount": { "type": "integer", "minimum": 0 },
+        "targetObjectCount": { "type": "integer", "minimum": 0 },
+        "allowQuotaShortfall": { "type": "boolean" },
+        "allowContentQuotaShortfall": { "type": "boolean" },
+        "allowMinEntityShortfall": { "type": "boolean" },
+        "allowOverProduction": { "type": "boolean" },
+        "minBatchCompletionMode": { "type": "string" },
+        "executionBranch": { "type": "string" },
+        "publishCadence": { "type": "object" }
+      }
+    },
+    "queuePolicy": {
+      "type": "object",
+      "description": "object-queue 后端策略（reliabletask backend / lease / dead-letter）"
     },
     "provenance": {
       "type": "object",

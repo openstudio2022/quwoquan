@@ -34,6 +34,18 @@ categories:
     description: 真实第一人称体验、社区攻略或可抓旅行指南，提供 emotionEvidence、mainline 与决策线。
     evidenceFocus: [emotion, mainline, decision]
     examplePlatforms: [马蜂窝, 携程, 携程攻略, 携程游记, 去哪儿攻略, 小红书, 穷游, 知乎, 游记, 蚂蜂窝, 维基导游, Wikivoyage]
+  - id: platform_article
+    label: 平台文章/资讯
+    verticals: [travel]
+    description: 今日头条、头条号、百家号等平台文章或资讯页；默认仅作发现、互证和质量分布验证，未经授权不得抓原文或发布平台素材。
+    evidenceFocus: [fact, emotion, decision]
+    examplePlatforms: [今日头条, 头条号, Toutiao, toutiao, 百家号, 腾讯新闻]
+  - id: community_post
+    label: 社交/社区帖子
+    verticals: [travel]
+    description: 微博、超话等社区短内容；适合作为实体热度、别名和线索互证，默认不作为可改编底稿或发布素材来源。
+    evidenceFocus: [emotion, decision, reference]
+    examplePlatforms: [微博, 微博超话, weibo, 社区帖子, 社交媒体]
   - id: video
     label: 短视频/中视频
     verticals: [travel, campus]
@@ -133,7 +145,7 @@ categories:
   - id: editorial_reference_only
     label: 仅编辑参考
     verticals: [photography]
-    description: 可作为选题/事实参考，不得直接下载入库作为可发布图片。
+    description: 主要作为选题/事实参考；若 content_source_registry 明确声明逐图归因发布路径，仍必须额外满足该权利模型与下载证据门。
     evidenceFocus: [reference]
     examplePlatforms: [Pinterest, 小红书摄影灵感, Behance参考, editorial reference]
 # 平台别名 → categoryId（examplePlatforms 之外的常见英文/拼写，值为 null 表示通用兜底不计覆盖）。
@@ -146,6 +158,11 @@ platformAliases:
   wikivoyage: travelogue
   xiaohongshu: travelogue
   rednote: travelogue
+  toutiao: platform_article
+  今日头条: platform_article
+  头条号: platform_article
+  weibo: community_post
+  微博: community_post
   douyin: video
   amap: map_geo
   2bulu: outdoor_route
@@ -158,6 +175,11 @@ platformAliases:
   vecteezy: open_license
   泼辣有图: open_license
   tuchong: photography_platform
+  图虫社区: photography_platform
+  摄影师授权池: photography_platform
+  photographer_authorized_pool: photography_platform
+  图虫创意: stock_authorized
+  tuchong stock: stock_authorized
   500px: photography_platform
   behance: photography_platform
   flickr: photography_platform

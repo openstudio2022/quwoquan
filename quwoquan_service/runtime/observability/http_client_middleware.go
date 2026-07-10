@@ -86,15 +86,14 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	otel.GetTextMapPropagator().Inject(req.Context(), propagation.HeaderCarrier(req.Header))
 
 	_ = rt.processLogger.Write(ProcessTraceLog{
-		SchemaVersion:     defaultSchemaVersion,
 		Service:           rt.cfg.Service,
-		Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+		TS:                time.Now().UTC().Format(time.RFC3339Nano),
 		Origin:            rt.cfg.Origin,
 		Direction:         rt.cfg.Direction,
 		Endpoint:          endpoint,
 		SourceID:          rt.cfg.SourceID,
-		TraceID:           meta.TraceID,
-		RequestID:         meta.RequestID,
+		Trace:             meta.TraceID,
+		Req:               meta.RequestID,
 		SessionID:         meta.SessionID,
 		Src:               rt.cfg.Src,
 		UserID:            meta.UserID,
@@ -126,15 +125,14 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			errorCode = "UNKNOWN.NETWORK.timeout"
 		}
 		_ = rt.exceptionLogger.Write(ExceptionLog{
-			SchemaVersion:     defaultSchemaVersion,
 			Service:           rt.cfg.Service,
-			Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+			TS:                time.Now().UTC().Format(time.RFC3339Nano),
 			Origin:            rt.cfg.Origin,
 			Direction:         rt.cfg.Direction,
 			Endpoint:          endpoint,
 			SourceID:          rt.cfg.SourceID,
-			TraceID:           meta.TraceID,
-			RequestID:         meta.RequestID,
+			Trace:             meta.TraceID,
+			Req:               meta.RequestID,
 			SessionID:         meta.SessionID,
 			Src:               rt.cfg.Src,
 			UserID:            meta.UserID,
@@ -156,15 +154,14 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		status = "failed"
 		errorCode = "UNKNOWN.SYSTEM.internal_error"
 		_ = rt.exceptionLogger.Write(ExceptionLog{
-			SchemaVersion:     defaultSchemaVersion,
 			Service:           rt.cfg.Service,
-			Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+			TS:                time.Now().UTC().Format(time.RFC3339Nano),
 			Origin:            rt.cfg.Origin,
 			Direction:         rt.cfg.Direction,
 			Endpoint:          endpoint,
 			SourceID:          rt.cfg.SourceID,
-			TraceID:           meta.TraceID,
-			RequestID:         meta.RequestID,
+			Trace:             meta.TraceID,
+			Req:               meta.RequestID,
 			SessionID:         meta.SessionID,
 			Src:               rt.cfg.Src,
 			UserID:            meta.UserID,
@@ -185,15 +182,14 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	}
 
 	_ = rt.processLogger.Write(ProcessTraceLog{
-		SchemaVersion:     defaultSchemaVersion,
 		Service:           rt.cfg.Service,
-		Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+		TS:                time.Now().UTC().Format(time.RFC3339Nano),
 		Origin:            rt.cfg.Origin,
 		Direction:         rt.cfg.Direction,
 		Endpoint:          endpoint,
 		SourceID:          rt.cfg.SourceID,
-		TraceID:           meta.TraceID,
-		RequestID:         meta.RequestID,
+		Trace:             meta.TraceID,
+		Req:               meta.RequestID,
 		SessionID:         meta.SessionID,
 		Src:               rt.cfg.Src,
 		UserID:            meta.UserID,
@@ -210,15 +206,15 @@ func (rt *LoggedRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 	}, "", "", nil, nil)
 
 	_ = rt.ioLogger.Write(IOAccessLog{
-		SchemaVersion:     defaultSchemaVersion,
 		Service:           rt.cfg.Service,
-		Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+		TS:                time.Now().UTC().Format(time.RFC3339Nano),
 		Origin:            rt.cfg.Origin,
 		Direction:         rt.cfg.Direction,
+		Method:            req.Method,
 		Endpoint:          endpoint,
 		SourceID:          rt.cfg.SourceID,
-		TraceID:           meta.TraceID,
-		RequestID:         meta.RequestID,
+		Trace:             meta.TraceID,
+		Req:               meta.RequestID,
 		SessionID:         meta.SessionID,
 		Src:               rt.cfg.Src,
 		UserID:            meta.UserID,

@@ -117,8 +117,8 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         _pageErrorSemantic = UiErrorSemantic(
           category: UiErrorCategory.pageLoad,
           scope: UiErrorScope.page,
-          title: '视频预览暂不可用',
-          message: '暂时无法加载视频预览，但仍可返回重新选择素材。',
+          title: UITextConstants.videoEditorPreviewUnavailableTitle,
+          message: UITextConstants.videoEditorPreviewUnavailableMessage,
           primaryAction: const UiErrorAction(
             type: UiErrorActionType.retry,
             label: UITextConstants.tryAgain,
@@ -167,7 +167,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         _sectionErrorSemantic = UiErrorSemantic(
           category: UiErrorCategory.sectionLoad,
           scope: UiErrorScope.section,
-          title: '时间轴帧暂不可用',
+          title: UITextConstants.videoEditorFramesUnavailableTitle,
           message: UITextConstants.contentLoadSoftFailed,
           primaryAction: const UiErrorAction(
             type: UiErrorActionType.retry,
@@ -304,29 +304,6 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
     unawaited(_seekPreviewTo(frame.timeMs, immediate: true));
   }
 
-  Future<void> _resetEditing() async {
-    final initialEnd = _normalizedInitialEndMs.toDouble();
-    setState(() {
-      _trimStartMs = widget.initialTrimStartMs.toDouble();
-      _trimEndMs = initialEnd;
-      _coverTimeMs =
-          (widget.initialCoverTimeMs > 0
-                  ? widget.initialCoverTimeMs
-                  : ((widget.initialTrimStartMs + initialEnd) / 2).round())
-              .clamp(widget.initialTrimStartMs, initialEnd)
-              .toDouble();
-      _previewTimeMs = widget.initialTrimStartMs.toDouble();
-      _muted = widget.initialMuted;
-      _selectedCoverPath = widget.initialThumbnailPath.trim();
-    });
-    final controller = _controller;
-    if (controller != null && controller.value.isInitialized) {
-      await controller.setVolume(_muted ? 0 : 1);
-      await controller.seekTo(Duration(milliseconds: _trimStartMs.round()));
-    }
-    await _loadFrames();
-  }
-
   Future<void> _saveEditing() async {
     if (_saving) {
       return;
@@ -388,7 +365,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       final semantic = UiErrorSemantic(
         category: resolved.category,
         scope: resolved.scope,
-        title: '视频导出未完成',
+        title: UITextConstants.videoEditorExportFailedTitle,
         message: resolved.message,
         secondaryMessage: resolved.secondaryMessage,
         primaryAction: const UiErrorAction(
@@ -622,7 +599,10 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                     ),
                     if (_muted) ...<Widget>[
                       SizedBox(width: AppSpacing.intraGroupXs),
-                      _buildHeaderBadge(context, '已静音'),
+                      _buildHeaderBadge(
+                        context,
+                        UITextConstants.videoEditorMuted,
+                      ),
                     ],
                   ],
                 ),
@@ -635,7 +615,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
                   alignment: Alignment.centerLeft,
                   child: _buildHeaderBadge(
                     context,
-                    '封面 ${_formatMs(_coverTimeMs.round())}',
+                    '${UITextConstants.videoEditorCoverPrefix} ${_formatMs(_coverTimeMs.round())}',
                   ),
                 ),
               ),
@@ -651,10 +631,29 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
       children: <Widget>[
         Expanded(
           child: _EditorToggleChip(
-            label: _muted ? '已静音' : '保留原声',
+            label: UITextConstants.videoEditorCoverTool,
+            icon: CupertinoIcons.photo,
+            selected: false,
+            onPressed: () => _handleCoverChanged(_coverTimeMs),
+          ),
+        ),
+        SizedBox(width: AppSpacing.intraGroupSm),
+        Expanded(
+          child: _EditorToggleChip(
+            label: UITextConstants.videoEditorCropTool,
+            icon: CupertinoIcons.crop,
+            selected: false,
+            onPressed: () =>
+                _handleTrimChanged(RangeValues(_trimStartMs, _trimEndMs)),
+          ),
+        ),
+        SizedBox(width: AppSpacing.intraGroupSm),
+        Expanded(
+          child: _EditorToggleChip(
+            label: UITextConstants.videoEditorMuteTool,
             icon: _muted
-                ? CupertinoIcons.speaker_slash
-                : CupertinoIcons.speaker_2,
+                ? CupertinoIcons.speaker_slash_fill
+                : CupertinoIcons.speaker_slash,
             selected: _muted,
             onPressed: () => _toggleMuted(!_muted),
           ),
@@ -662,10 +661,10 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
         SizedBox(width: AppSpacing.intraGroupSm),
         Expanded(
           child: _EditorToggleChip(
-            label: '恢复初始编辑',
-            icon: CupertinoIcons.arrow_counterclockwise,
-            selected: false,
-            onPressed: _resetEditing,
+            label: UITextConstants.videoEditorVolumeTool,
+            icon: CupertinoIcons.speaker_2,
+            selected: !_muted,
+            onPressed: () => _toggleMuted(false),
           ),
         ),
       ],
@@ -674,13 +673,13 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
 
   Widget _buildPreviewTimelineSection() {
     return _EditorSection(
-      title: '播放头预览',
+      title: UITextConstants.videoEditorPreviewTimeline,
       trailing: _formatMs(_previewTimeMs.round()),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            '拖动播放头，边拖边看当前帧',
+            UITextConstants.videoEditorPreviewTimelineHint,
             style: TextStyle(
               color: CupertinoColors.secondaryLabel.resolveFrom(context),
               fontSize: AppTypography.sm,
@@ -710,7 +709,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
               ),
               const Spacer(),
               Text(
-                '当前 ${_formatMs(_previewTimeMs.round())}',
+                '${UITextConstants.videoEditorCurrentTimePrefix} ${_formatMs(_previewTimeMs.round())}',
                 style: TextStyle(
                   color: AppColors.iosAccentLight,
                   fontSize: AppTypography.sm,
@@ -735,8 +734,9 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
   Widget _buildTrimSection() {
     final maxValue = math.max(_durationMs.toDouble(), 1000.0).toDouble();
     return _EditorSection(
-      title: '裁切片段',
-      trailing: '${_formatMs((_trimEndMs - _trimStartMs).round())} 时长',
+      title: UITextConstants.videoEditorTrimSegment,
+      trailing:
+          '${_formatMs((_trimEndMs - _trimStartMs).round())} ${UITextConstants.videoEditorDurationSuffix}',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
@@ -754,7 +754,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
           Row(
             children: <Widget>[
               Text(
-                '开始 ${_formatMs(_trimStartMs.round())}',
+                '${UITextConstants.videoEditorStartPrefix} ${_formatMs(_trimStartMs.round())}',
                 style: TextStyle(
                   color: CupertinoColors.secondaryLabel.resolveFrom(context),
                   fontSize: AppTypography.sm,
@@ -762,7 +762,7 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
               ),
               const Spacer(),
               Text(
-                '结束 ${_formatMs(_trimEndMs.round())}',
+                '${UITextConstants.videoEditorEndPrefix} ${_formatMs(_trimEndMs.round())}',
                 style: TextStyle(
                   color: CupertinoColors.secondaryLabel.resolveFrom(context),
                   fontSize: AppTypography.sm,
@@ -777,77 +777,86 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
 
   @override
   Widget build(BuildContext context) {
-    final background = CupertinoColors.systemGroupedBackground.resolveFrom(
-      context,
+    const isDark = true;
+    final background = AppColorsFunctional.getColor(
+      isDark,
+      ColorType.backgroundPrimary,
     );
-    final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
     final showPageError = _pageErrorSemantic != null && !_loading;
-    return AppScaffold(
-      backgroundColor: background,
-      navigationBar: AppNavigationBar(
+    final theme = CupertinoTheme.of(context).copyWith(
+      brightness: Brightness.dark,
+      scaffoldBackgroundColor: background,
+      barBackgroundColor: background,
+    );
+    return CupertinoTheme(
+      data: theme,
+      child: AppScaffold(
         backgroundColor: background,
-        middle: Text(
-          '视频编辑',
-          style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+        navigationBar: AppNavigationBar(
+          backgroundColor: background,
+          middle: Text(
+            UITextConstants.videoEditorTitle,
+            style: AppNavigationSemanticConstants.barTitleTextStyle(isDark),
+          ),
+          leading: AppNavigationBarIconButton(
+            icon: CupertinoIcons.chevron_left,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          trailing: null,
         ),
-        leading: AppNavigationBarIconButton(
-          icon: CupertinoIcons.xmark,
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        trailing: showPageError
-            ? null
-            : CupertinoButton(
-                padding: EdgeInsets.zero,
-                onPressed: (_loading || _saving) ? null : _saveEditing,
-                child: _saving
-                    ? const CupertinoActivityIndicator()
-                    : const Text('完成'),
-              ),
-      ),
-      child: SafeArea(
-        child: showPageError
-            ? AppPageErrorState(
-                semantic: _pageErrorSemantic!,
-                onAction: (action) async {
-                  if (action.type == UiErrorActionType.retry ||
-                      action.type == UiErrorActionType.resubmit) {
-                    await _bootstrap();
-                  }
-                },
-              )
-            : _loading
-            ? const Center(child: CupertinoActivityIndicator())
-            : ListView(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.containerMd,
-                  AppSpacing.containerMd,
-                  AppSpacing.containerMd,
-                  AppSpacing.containerLg,
-                ),
-                children: <Widget>[
-                  _buildPreview(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildActionBar(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildPreviewTimelineSection(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildTrimSection(),
-                  SizedBox(height: AppSpacing.interGroupMd),
-                  _buildCoverSection(),
-                  if (_sectionErrorSemantic != null) ...<Widget>[
-                    SizedBox(height: AppSpacing.interGroupSm),
-                    AppSectionErrorCard(
-                      semantic: _sectionErrorSemantic!,
-                      onAction: (action) async {
-                        if (action.type == UiErrorActionType.retry ||
-                            action.type == UiErrorActionType.resubmit) {
-                          await _loadFrames();
-                        }
-                      },
+        child: SafeArea(
+          child: showPageError
+              ? AppPageErrorState(
+                  semantic: _pageErrorSemantic!,
+                  onAction: (action) async {
+                    if (action.type == UiErrorActionType.retry ||
+                        action.type == UiErrorActionType.resubmit) {
+                      await _bootstrap();
+                    }
+                  },
+                )
+              : _loading
+              ? const Center(child: CupertinoActivityIndicator())
+              : ListView(
+                  padding: EdgeInsets.fromLTRB(
+                    AppSpacing.containerMd,
+                    AppSpacing.containerMd,
+                    AppSpacing.containerMd,
+                    AppSpacing.containerLg,
+                  ),
+                  children: <Widget>[
+                    _buildPreview(),
+                    SizedBox(height: AppSpacing.interGroupMd),
+                    _buildActionBar(),
+                    SizedBox(height: AppSpacing.interGroupMd),
+                    _buildPreviewTimelineSection(),
+                    SizedBox(height: AppSpacing.interGroupMd),
+                    _buildTrimSection(),
+                    SizedBox(height: AppSpacing.interGroupMd),
+                    _buildCoverSection(),
+                    if (_sectionErrorSemantic != null) ...<Widget>[
+                      SizedBox(height: AppSpacing.interGroupSm),
+                      AppSectionErrorCard(
+                        semantic: _sectionErrorSemantic!,
+                        onAction: (action) async {
+                          if (action.type == UiErrorActionType.retry ||
+                              action.type == UiErrorActionType.resubmit) {
+                            await _loadFrames();
+                          }
+                        },
+                      ),
+                    ],
+                    SizedBox(height: AppSpacing.interGroupMd),
+                    MediaCreationBottomButton(
+                      label: UITextConstants.mediaPickerNextStep,
+                      variant:
+                          MediaCreationBottomButtonVariant.fullWidthNeutral,
+                      isLoading: _saving,
+                      onPressed: (_loading || _saving) ? null : _saveEditing,
                     ),
                   ],
-                ],
-              ),
+                ),
+        ),
       ),
     );
   }

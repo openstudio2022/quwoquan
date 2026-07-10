@@ -41,10 +41,10 @@ gwt_acceptance:
     - 登录门触发后的重定向决策不得引入额外异步等待；关闭或成功跳转在一次导航内完成。
     tests:
       planned:
-      - file: quwoquan_app/test/core/auth/required_route_gate_test.dart
-      - file: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
-      - file: quwoquan_app/test/app/shell/main_app_shell_widget_test.dart
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/required_route_gate__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/shell/main_app_shell_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/core/auth/required_route_gate__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart
@@ -68,7 +68,7 @@ gwt_acceptance:
     - '[migrated_from_recorded_command] make verify-app-login-entry-loop-contract'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

@@ -1,32 +1,32 @@
 {
   "schemaVersion": "creator_pool.scenario-fixtures",
-  "description": "creator pool 四环境 seed manifest 包装层，指向 canonical travel_batch_100_v1 batch seed。",
+  "description": "creator pool 四环境 seed manifest 包装层，唯一指向 canonical travel_photo_1k_v1（1200 unique -> travel/photo 双 1k view）主线。",
   "repositoryExpectations": {
     "alpha": "mock",
     "beta": "remote",
     "gamma": "remote"
   },
   "seedSets": {
-    "creator_travel_batch100": {
-      "description": "travel_batch_100_v1 全量 100 作者 seed",
-      "seedFixture": "creator_travel_batch100.seed.json",
-      "userCount": 100
+    "creator_travel_photo_1k_v1": {
+      "description": "travel_photo_1k_v1 全量 1200 作者 seed",
+      "seedFixture": "creator_travel_photo_1k_v1.seed.json",
+      "userCount": 1200
     },
-    "creator_travel_travel_batch_100_v1_core": {
-      "description": "20 人 curated pilot 子集",
-      "seedFixture": "creator_travel_batch100.seed.json",
-      "sampleSize": 20
+    "creator_travel_photo_1k_v1_core": {
+      "description": "travel_photo_1k_v1 curated import 子集",
+      "seedFixture": "creator_travel_photo_1k_v1.seed.json",
+      "sampleSize": 100
     }
   },
   "scenarios": [
     {
-      "id": "creator_travel_travel_batch_100_v1_core",
-      "title": "Creator pool travel_batch_100_v1 20-user pilot",
+      "id": "creator_travel_photo_1k_v1_core",
+      "title": "Creator pool travel_photo_1k_v1",
       "type": "creator_pool",
       "domainId": "creator_pool",
       "seedRefs": [
-        "creator_travel_batch100",
-        "creator_travel_travel_batch_100_v1_core"
+        "creator_travel_photo_1k_v1",
+        "creator_travel_photo_1k_v1_core"
       ],
       "environments": {
         "alpha": {

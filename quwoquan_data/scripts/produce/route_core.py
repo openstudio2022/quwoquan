@@ -234,9 +234,16 @@ def _image_caption_from_article(article: str) -> str:
 def _image_caption_from_brief(
     brief: Mapping[str, Any],
     pack: Mapping[str, Any],
+    draft_meta: Mapping[str, Any] | None = None,
     article: str = "",
 ) -> str:
-    candidates: list[Any] = [brief.get("caption"), _image_caption_from_article(article)]
+    meta = draft_meta or {}
+    candidates: list[Any] = [
+        meta.get("caption"),
+        pack.get("caption"),
+        brief.get("caption"),
+        _image_caption_from_article(article),
+    ]
     for asset in (pack.get("assets") or []):
         if isinstance(asset, Mapping):
             candidates.append(asset.get("caption"))

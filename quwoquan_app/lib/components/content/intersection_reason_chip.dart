@@ -1,9 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
-import 'package:quwoquan_app/components/object_page/evidence_group.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/components/object_page/intersection_icon_resolver.dart';
 import 'package:quwoquan_app/components/object_page/intersection_target_navigator.dart';
 import 'package:quwoquan_app/components/object_page/interactive_intersection_text.dart';
@@ -35,6 +36,8 @@ class IntersectionReasonChip extends ConsumerWidget {
     this.reason,
     this.weightTier = '',
     this.referralSource,
+    this.contextObjectName = '',
+    this.contextObjectTarget,
   });
 
   static const Key chipKey = ValueKey<String>('intersection-reason-chip');
@@ -47,6 +50,8 @@ class IntersectionReasonChip extends ConsumerWidget {
   /// 最强证据组（导航 target / spans / 图标语义 / 归因的同一真相源），缺省时纯展示降级。
   final IntersectionReason? reason;
   final String weightTier;
+  final String contextObjectName;
+  final IntersectionTarget? contextObjectTarget;
 
   /// 展示面来源渠道（用户主页 / 圈子 / 实体）；span 点击埋点按此精确归因（N10）。
   final ReferralSource? referralSource;
@@ -54,9 +59,14 @@ class IntersectionReasonChip extends ConsumerWidget {
   /// 交集理由位口径真相源：云侧主交集结论句 [IntersectionReason.primaryText] 直出。
   /// 无来源 / 无可展示结论句 → null（不展示）。
   /// 所有承载交集理由位的 surface 必须经此函数解析（四口径一致）。
-  static String? primaryText(List<IntersectionReason>? reasons) {
+  static String? primaryText(
+    List<IntersectionReason>? reasons, {
+    String contextObjectName = '',
+    IntersectionTarget? contextObjectTarget,
+  }) {
     if (reasons == null || reasons.isEmpty) return null;
-    final first = reasons.first;
+    final first = displayReadyIntersectionReason(reasons.first);
+    if (first == null) return null;
     final primary = first.primaryText.trim();
     if (primary.isNotEmpty) return primary;
     return null;
@@ -66,9 +76,9 @@ class IntersectionReasonChip extends ConsumerWidget {
   /// 对象页据此自动展开并高亮同一证据组，旅程无断点。
   static String? primaryKind(List<IntersectionReason>? reasons) {
     if (reasons == null || reasons.isEmpty) return null;
-    final groups = EvidenceGroup.fromReason(reasons.first);
-    if (groups.isEmpty) return null;
-    final kind = groups.first.kind.trim();
+    final first = displayReadyIntersectionReason(reasons.first);
+    if (first == null) return null;
+    final kind = resolvedIntersectionReasonKind(first).trim();
     return kind.isEmpty ? null : kind;
   }
 
@@ -78,27 +88,45 @@ class IntersectionReasonChip extends ConsumerWidget {
     required bool isDark,
     ReferralSource? referralSource,
     Key? key,
+    String contextObjectName = '',
+    IntersectionTarget? contextObjectTarget,
   }) {
-    final text = primaryText(reasons);
+    final text = primaryText(
+      reasons,
+      contextObjectName: contextObjectName,
+      contextObjectTarget: contextObjectTarget,
+    );
     if (text == null) return null;
-    final first = reasons?.isNotEmpty == true ? reasons!.first : null;
+    final first = reasons?.isNotEmpty == true
+        ? displayReadyIntersectionReason(reasons!.first)
+        : null;
+    if (first == null) return null;
     return IntersectionReasonChip(
       key: key,
       text: text,
       isDark: isDark,
       reason: first,
-      weightTier: first?.weightTier ?? '',
+      weightTier: first.weightTier,
       referralSource: referralSource,
+      contextObjectName: contextObjectName,
+      contextObjectTarget: contextObjectTarget,
     );
   }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final resolvedTier = _resolveWeightTier(weightTier);
+    final displayReason = reason == null
+        ? null
+        : displayReadyIntersectionReason(reason!);
+    if (displayReason == null) {
+      return const SizedBox.shrink();
+    }
+    final resolvedTier = _resolveWeightTier(displayReason.weightTier);
     final isLight = resolvedTier == _IntersectionReasonWeightTier.light;
     final accent = AppColors.iosAccent(context);
     final foreground = isLight ? AppColors.iosSecondaryLabel(context) : accent;
-    final spans = reason?.primarySpans ?? const <IntersectionTextSpan>[];
+    final spans = displayReason.primarySpans;
+    final displayText = displayReason.primaryText;
     final fontWeight = isLight ? AppTypography.regular : AppTypography.medium;
     return Row(
       key: chipKey,
@@ -107,9 +135,9 @@ class IntersectionReasonChip extends ConsumerWidget {
       children: <Widget>[
         IntersectionTypeIcon(
           key: iconKey,
-          iconKey: reason?.iconKey ?? '',
-          sourceRef: reason?.source ?? '',
-          dimension: reason?.dimension ?? '',
+          iconKey: displayReason.iconKey,
+          sourceRef: displayReason.source,
+          dimension: displayReason.dimension,
           size: AppSpacing.iconSmall,
         ),
         SizedBox(width: AppSpacing.intraGroupXs),
@@ -117,18 +145,16 @@ class IntersectionReasonChip extends ConsumerWidget {
           child: InteractiveIntersectionText(
             key: textKey,
             spans: spans,
-            fallbackText: text,
+            fallbackText: displayText,
             maxLines: 1,
             accentFontWeight: fontWeight,
             baseStyle: TextStyle(
-              fontSize: AppTypography.iosCaption1,
+              fontSize: AppTypography.feedBodyResponsive(context),
               fontWeight: fontWeight,
               color: foreground,
-              letterSpacing: -0.04,
+              letterSpacing: 0,
             ),
-            onSpanTap: reason == null
-                ? null
-                : (span) => _onSpanTap(context, ref, span),
+            onSpanTap: (span) => _onSpanTap(context, ref, span),
           ),
         ),
       ],
@@ -141,7 +167,9 @@ class IntersectionReasonChip extends ConsumerWidget {
     WidgetRef ref,
     IntersectionTextSpan span,
   ) {
-    final current = reason;
+    final current = reason == null
+        ? null
+        : displayReadyIntersectionReason(reason!);
     if (current == null) {
       return;
     }

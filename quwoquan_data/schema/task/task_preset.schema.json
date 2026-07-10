@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "任务 preset — quwoquan_data/control_plane/families/<presetId>.preset.yaml。任务默认值唯一真相源：task.yaml 未显式声明的字段由 defaults deep-merge 补齐（list 替换语义）。presetId 必须等于 families/ 下去 `.preset.yaml` 后缀的相对路径。",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": "quwoquan.task.preset" },
+    "presetId": { "type": "string", "description": "家族包内引用路径，如 content/travel/homepage/base" },
+    "title": { "type": "string", "description": "人读 preset 名" },
+    "defaults": {
+      "type": "object",
+      "description": "与 task.yaml 同构的可继承默认子集（content/acceptance/workflowPolicy 等；禁止身份字段 taskId/vertical/organizeBy/key）",
+      "properties": {
+        "content": { "type": "object" },
+        "acceptance": { "type": "object" },
+        "workflowPolicy": { "type": "object" },
+        "queuePolicy": { "type": "object" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["schemaVersion", "presetId", "title", "defaults"],
+  "additionalProperties": false
+}

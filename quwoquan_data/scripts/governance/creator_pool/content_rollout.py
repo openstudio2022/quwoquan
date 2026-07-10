@@ -1,4 +1,4 @@
-"""Prod rollout dry-run evidence for batch-100 creator-authored content.
+"""Prod rollout dry-run evidence for travel-photo creator-authored content.
 
 There is a single ``prod`` package (no ``prod-gray``); prod rollout is a staged
 attribute of that one package. This emitter records the deterministic rollout plan
@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from _common.creator_pool.batch_policy import CANONICAL_BATCH_ID
 from _common.creator_pool.io import artifacts_readiness_path
 from _common.io import write_json
 from _common.paths import now_iso
-from governance.creator_pool.content_bind import build_creator_content
+from governance.creator_pool.content_bind import CARRIERS, WORKLOAD_LANES, build_creator_content
 
-ROLLOUT_ARTIFACT_NAME = "creator_content_prod_rollout_dryrun.json"
+ROLLOUT_ARTIFACT_NAME = "creator_content_prod_rollout_dryrun.travel_photo_1k_v1.json"
 
 # Single prod package, staged rollout (no prod-gray package).
 ROLLOUT_STAGES = [
@@ -26,7 +27,7 @@ ROLLOUT_STAGES = [
 ]
 
 
-def build_prod_rollout_dryrun(*, batch_id: str = "travel_batch_100_v1") -> dict[str, Any]:
+def build_prod_rollout_dryrun(*, batch_id: str = CANONICAL_BATCH_ID) -> dict[str, Any]:
     binding = build_creator_content(batch_id=batch_id)
     posts = binding["posts"]
     purity = {
@@ -41,9 +42,12 @@ def build_prod_rollout_dryrun(*, batch_id: str = "travel_batch_100_v1") -> dict[
     issues: list[str] = []
     if len({p["authorId"] for p in posts}) != len(posts):
         issues.append("creator content authors not distinct")
-    carriers = sorted(p["carrier"] for p in posts)
-    if carriers != ["article", "image", "video"]:
-        issues.append(f"carriers {carriers} != article/image/video")
+    carriers = {str(p["carrier"]) for p in posts}
+    if carriers != set(CARRIERS):
+        issues.append(f"carriers {sorted(carriers)} != {list(CARRIERS)}")
+    lanes = {str(p.get("workloadLane") or "") for p in posts}
+    if lanes != set(WORKLOAD_LANES):
+        issues.append(f"workload lanes {sorted(lanes)} != {list(WORKLOAD_LANES)}")
     if binding.get("previewOnly") is not False:
         issues.append("binding must be production (previewOnly=false)")
     return {
@@ -63,8 +67,13 @@ def build_prod_rollout_dryrun(*, batch_id: str = "travel_batch_100_v1") -> dict[
     }
 
 
-def write_prod_rollout_dryrun(*, batch_id: str = "travel_batch_100_v1") -> str:
+def write_prod_rollout_dryrun(*, batch_id: str = CANONICAL_BATCH_ID) -> str:
     report = build_prod_rollout_dryrun(batch_id=batch_id)
-    path = artifacts_readiness_path(ROLLOUT_ARTIFACT_NAME)
+    artifact_name = (
+        ROLLOUT_ARTIFACT_NAME
+        if batch_id == CANONICAL_BATCH_ID
+        else f"creator_content_prod_rollout_dryrun.{batch_id}.json"
+    )
+    path = artifacts_readiness_path(artifact_name)
     write_json(path, report)
     return str(path)

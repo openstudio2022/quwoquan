@@ -69,7 +69,7 @@
 1. T2：筛选项渲染与 metadata 一致性测试（codegen 常量驱动）。
 2. T2：Web 精品按定稿规格渲染测试；移动端四画布回归。
 3. WP7 Core 不要求专题/精选卡位测试；若启用 WP7 Plus，必须补配置驱动测试（配置开→显示，关→不显示，点击→既有对象页 route）。
-4. `works_immersive_viewer.dart` 行数不增加；`bash agent_ops/gate/gate_repo.sh --scope app` 全绿。
+4. `works_immersive_viewer.dart` 行数不增加；`bash quwoquan_ops/gate/gate_repo.sh --scope app` 全绿。
 5. `content-display-journey-consistency` spec、`works-immersive-viewer/acceptance.yaml`、`90-integration-acceptance.md` 与 CR dev_log 同步修订。
 
 ## 6. 验收标准（GWT 样例）

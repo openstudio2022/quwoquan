@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from agent_ops.deploy.lib.port_manifest import load_port_manifest, profile_ports
+from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
 
 def parse_args() -> argparse.Namespace:
@@ -30,17 +30,17 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--state-root",
-        default=str(ROOT / "state/app-instances"),
+        default=str(ROOT / ".qwq_output/local/app-instances"),
         help="App instance state root.",
     )
     parser.add_argument(
         "--beta-report",
-        default=str(ROOT / "state/local/app_beta_manual/app-beta-manual-report.json"),
+        default=str(ROOT / ".qwq_output/local/app_beta_manual/app-beta-manual-report.json"),
         help="Beta manual report path.",
     )
     parser.add_argument(
         "--gamma-stack-report",
-        default=str(ROOT / "state/local/gamma/stack_state.json"),
+        default=str(ROOT / ".qwq_output/local/gamma/stack_state.json"),
         help="local-gamma stack report path.",
     )
     parser.add_argument(

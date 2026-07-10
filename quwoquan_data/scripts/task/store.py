@@ -1,7 +1,8 @@
 """任务规格/进度/run 存取 + 脚手架 + 锁。
 
-committed: quwoquan_data/tasks/<taskId>/ {task.yaml, progress.json, runs/, notes.md}
-runtime  : quwoquan_data/runtime/tasks/<taskId>/ {.lock, 生成产物}
+committed: quwoquan_data/control_plane/tasks/<taskId>/ {task.yaml(入库), progress.json, runs/, notes.md(本地)}
+preset   : quwoquan_data/control_plane/families/<presetRef>.preset.yaml（受版本控制，默认值唯一真相源）
+runtime  : QWQ_OUTPUT_ROOT/data/local/runtime/tasks/<taskId>/ {.lock, 生成产物}
 taskId    : 斜杠路径 <vertical>/<organizeBy>/<key>[/<category>]/<name>
 """
 from __future__ import annotations
@@ -16,14 +17,15 @@ import yaml
 
 from _common.io import read_json, write_json
 from _common.paths import (
-    COMMITTED_TASKS_ROOT,
     clear_intent_label_cache,
     committed_task_notes,
     committed_task_progress,
     committed_task_root,
     committed_task_runs_dir,
     committed_task_spec,
+    normalize_family_ref,
     normalize_task_id,
+    preset_path,
     sanitize_intent_label,
     task_lock_path,
     task_root,
@@ -32,8 +34,8 @@ from _common.paths import (
 SPEC_VERSION = "quwoquan.task.spec"
 PROGRESS_VERSION = "quwoquan.task.progress"
 RUN_VERSION = "quwoquan.task.run"
-DEFAULTS_VERSION = "quwoquan.task.defaults"
-DEFAULTS_FILENAME = "_defaults.yaml"
+PRESET_VERSION = "quwoquan.task.preset"
+RECIPE_VERSION = "quwoquan.task.recipe"
 
 # vertical(英文 id，供 --vertical/采样) ↔ 路径顶层中文标签（对齐 app home channel 显示名）
 VERTICAL_LABEL = {
@@ -75,7 +77,7 @@ def now_iso() -> str:
 
 
 def _prune_empty(value: Any) -> Any:
-    """去掉空 dict/list/None，使省略字段沿 _defaults.yaml 继承（不以空值覆盖默认）。"""
+    """去掉空 dict/list/None，使省略字段沿 presetRef 默认继承（不以空值覆盖默认）。"""
     if isinstance(value, dict):
         out = {}
         for k, v in value.items():
@@ -84,6 +86,12 @@ def _prune_empty(value: Any) -> Any:
                 out[k] = pruned
         return out
     return value
+
+
+def default_preset_ref(vertical: str) -> str | None:
+    """按垂类解析默认 presetRef（家族包存在才返回；不产生指向空文件的引用）。"""
+    ref = f"content/{vertical}/article/base"
+    return ref if preset_path(ref).is_file() else None
 
 
 def scaffold_spec(
@@ -97,14 +105,16 @@ def scaffold_spec(
     title: str | None = None,
     intent_label: str | None = None,
     parent_task_id: str | None = None,
+    preset_ref: str | None = None,
     scope: dict[str, Any] | None = None,
     content: dict[str, Any] | None = None,
     acceptance: dict[str, Any] | None = None,
     created_by: str = "task new",
 ) -> dict[str, Any]:
-    """脚手架最小化 spec：只写身份 + scope + 非空 content/acceptance override。
+    """脚手架最小化 spec：只写身份 + presetRef + scope + 非空 content/acceptance override。
 
-    空的 content 等不写出，运行期由 _defaults.yaml 继承链补齐。
+    默认值唯一真相源 = presetRef 指向的家族包 preset；未显式给出时按垂类解析
+    `content/<vertical>/article/base`（存在才写入，不做运行期隐式回退）。
     intentLabel = ≤16 字人类可读任务意图标签（顶层批次目录前缀真相源），
     缺省由任务名清洗截断；用户指令/对话应给出更精炼的意图标签。
     """
@@ -125,6 +135,9 @@ def scaffold_spec(
         "scope": scope or {},
         "provenance": {"createdAt": now_iso(), "createdBy": created_by},
     }
+    resolved_preset = normalize_family_ref(preset_ref or "") or default_preset_ref(vertical)
+    if resolved_preset:
+        spec["presetRef"] = resolved_preset
     pruned_content = _prune_empty(content or {})
     if pruned_content:
         spec["content"] = pruned_content
@@ -176,10 +189,10 @@ def load_raw_spec(task_id: str) -> dict[str, Any]:
 
 
 def load_spec(task_id: str) -> dict[str, Any]:
-    """读取合并继承默认后的 effective spec（ops/produce 消费）。
+    """读取合并 preset 默认后的 effective spec（ops/produce 消费）。
 
-    沿 taskId 路径前缀就近收集 _defaults.yaml（全局→垂类→组织轴→地域键），
-    deep-merge 后再叠加原始 task.yaml（task 显式声明覆盖默认，list 替换语义）。
+    raw task.yaml 的 presetRef 指向家族包 preset；preset.defaults deep-merge 后
+    再叠加原始 task.yaml（task 显式声明覆盖默认，list 替换语义）。
     """
     return resolve_spec(load_raw_spec(task_id), task_id)
 
@@ -188,7 +201,7 @@ def spec_exists(task_id: str) -> bool:
     return committed_task_spec(task_id).exists()
 
 
-# ─── 继承 resolver ──────────────────────────────────────────────────
+# ─── preset resolver（默认值唯一真相源）──────────────────────────────
 def _deep_merge(base: Any, override: Any) -> Any:
     """dict 递归合并；list/标量由 override 整体替换。"""
     if isinstance(base, dict) and isinstance(override, dict):
@@ -199,39 +212,36 @@ def _deep_merge(base: Any, override: Any) -> Any:
     return override
 
 
-def defaults_chain(task_id: str) -> list[dict[str, Any]]:
-    """返回 taskId 路径前缀上的 _defaults.yaml 文档（根→叶父级，不含 task 自身目录）。"""
-    parts = normalize_task_id(task_id).split("/")
-    docs: list[dict[str, Any]] = []
-    acc = COMMITTED_TASKS_ROOT
-    for seg in [None, *parts[:-1]]:  # None=全局根，其余=各级前缀（排除叶 task 目录）
-        if seg is not None:
-            acc = acc / seg
-        path = acc / DEFAULTS_FILENAME
-        if path.exists():
-            doc = read_yaml(path)
-            if isinstance(doc, dict):
-                docs.append(doc)
-    return docs
+def spec_preset_ref(spec: dict[str, Any]) -> str:
+    """读取 spec 声明的 presetRef（归一化；未声明返回空串）。"""
+    return normalize_family_ref(str(spec.get("presetRef") or ""))
 
 
-def defaults_merged(task_id: str) -> dict[str, Any]:
-    """合并继承默认链（不含 task 自身），即某 task 的「继承菜单」（list 替换语义）。
+def load_preset(preset_ref: str) -> dict[str, Any]:
+    """读取家族包 preset 文档（schemaVersion 必须是 quwoquan.task.preset）。"""
+    ref = normalize_family_ref(preset_ref)
+    path = preset_path(ref)
+    if not path.is_file():
+        raise FileNotFoundError(f"presetRef '{ref}' 不存在: {path}")
+    doc = read_yaml(path)
+    if not isinstance(doc, dict) or doc.get("schemaVersion") != PRESET_VERSION:
+        raise ValueError(f"preset '{ref}' schemaVersion 必须为 {PRESET_VERSION}")
+    return doc
 
-    供 lint 检测冗余 content 复用。
-    """
-    merged: dict[str, Any] = {}
-    for doc in defaults_chain(task_id):
-        d = dict(doc)
-        d.pop("schemaVersion", None)  # 默认文件的 schemaVersion 不污染 task spec
-        merged = _deep_merge(merged, d)
-    return merged
+
+def preset_defaults(preset_ref: str) -> dict[str, Any]:
+    """某 preset 的默认值菜单（task 未显式声明的字段由此补齐；list 替换语义）。"""
+    ref = normalize_family_ref(preset_ref)
+    if not ref:
+        return {}
+    defaults = load_preset(ref).get("defaults") or {}
+    return defaults if isinstance(defaults, dict) else {}
 
 
 def resolve_spec(raw_spec: dict[str, Any], task_id: str | None = None) -> dict[str, Any]:
-    """合并继承默认链 + 原始 spec。身份字段始终来自 raw_spec。"""
-    tid = task_id or raw_spec.get("taskId", "")
-    return _deep_merge(defaults_merged(tid), raw_spec)
+    """合并 presetRef 默认 + 原始 spec。身份字段始终来自 raw_spec；无 presetRef 则原样返回。"""
+    del task_id  # 默认值只由 presetRef 决定，与 taskId 路径无关（旧路径继承链已退役）
+    return _deep_merge(preset_defaults(spec_preset_ref(raw_spec)), raw_spec)
 
 
 def save_progress(progress: dict[str, Any]) -> Path:

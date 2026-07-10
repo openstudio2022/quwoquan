@@ -120,19 +120,20 @@
 
 ### 4.4 贴底对话态 Sheet（强制）
 
-与 **§4.3 全屏 Inset** 区分：贴底半屏、保留上层 scrim/上下文的 **选项表 / 说明列表 / 更多功能** 等，必须走统一底壳与语义 Token。
+与 **§4.3 全屏 Inset** 区分：贴底半屏、保留下层页面上下文的 **选项表 / 说明列表 / 更多功能** 等，必须走统一 presenter、底壳与语义 Token。下层页面变暗必须由统一亮度层原地 fade 完成，不允许 route barrier 或 sheet 自绘可见蒙皮随面板方向运动。
 
 | 项 | 要求 |
 |----|------|
-| **底壳** | `AppBottomModalSurface`（`lib/core/widgets/app_modal_surface.dart`）；`barrierColor` 与现有实现一致（通常透明，由底壳绘制 scrim） |
+| **呈现层** | `showAppBottomModal` / `showAppCupertinoDialog` / `showAppTopAnchoredDropdown`（`lib/core/widgets/app_modal_presenter.dart` + `app_top_anchored_dropdown.dart`）；route `barrierColor` 固定透明，统一亮度层只原地 fade，点击外部关闭由透明 hit target / route barrier 承担 |
+| **底壳** | `AppBottomModalSurface`（`lib/core/widgets/app_modal_surface.dart`）；只负责面板容器、圆角、安全区和内容，不绘制全屏 `ColorType.modalScrim` |
 | **面板灰底** | `SettingsSemanticConstants.conversationSheetPanelBackground(isDark)`（与 `ColorType.pageBackground` 同源） |
 | **内容区左右缩进** | `conversationSheetOuterHorizontalPadding` |
 | **标准列表 + 取消** | 优先 `showAppActionSheet`；或组合 `ConversationSheetHeader` / `ConversationSheetListCard` / `ConversationSheetDivider` / `ConversationSheetSingleSelectRow` / `ConversationSheetCancelBar`（`lib/core/widgets/conversation_sheet.dart`，设置域可 `import .../settings_conversation/sheet/conversation_sheet.dart`） |
 | **深浅色** | 禁止 Sheet 内未文档化的 `Color(0x…)`；颜色经 `AppColorsFunctional` / `SettingsSemanticConstants.conversationSheet*` |
 
-**禁止**：业务页新建 `showCupertinoModalPopup` + 自绘 `Container(color: Colors.white…` 等第二套「白卡 + 灰底」且无登记。
+**禁止**：业务页直接新增 `showCupertinoModalPopup` / `showCupertinoDialog` / `showGeneralDialog`，或自绘 `ColorType.modalScrim` / `Container(color: Colors.white…` 等第二套「可见蒙皮 + 白卡 + 灰底」；贴底面板必须登记 `scripts/chat/conversation_sheet_manifest.yaml`。
 
-**门禁**：`quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py` + `scripts/conversation_sheet_manifest.yaml`（随 `gate_repo.sh` app 阶段执行）。
+**门禁**：`quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py` + `scripts/chat/conversation_sheet_manifest.yaml`（随 `gate_repo.sh` app 阶段执行）。
 
 **与 §4.3 选用关系**：全屏设置/表单 → `SettingsInsetFormPageScaffold`；贴底选项/说明 → 本节 + `AppBottomModalSurface`。
 
@@ -240,4 +241,4 @@
 | 聊天选择器 | StartGroupChatPage | 多选选择态改为 iOS 语义图标（替换 Material Checkbox） |
 | 圈子频道管理 | CirclesPage | 一级 tab 下方滑出频道管理面板；我的频道支持拖拽排序；+/- 互转；动作色为蓝色主色 |
 
-> 门禁：`quwoquan_app/scripts/runtime/verify_dart_semantic.py`、`quwoquan_app/scripts/settings/verify_settings_canonical.py`、`quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py` 由 `agent_ops/gate/gate_repo.sh` 在 app gate 阶段执行。
+> 门禁：`quwoquan_app/scripts/runtime/verify_dart_semantic.py`、`quwoquan_app/scripts/settings/verify_settings_canonical.py`、`quwoquan_app/scripts/chat/verify_conversation_sheet_canonical.py` 由 `quwoquan_ops/gate/gate_repo.sh` 在 app gate 阶段执行。

@@ -36,7 +36,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/chat/providers/chat_contacts_rows_provider_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/providers/chat_contacts_rows_provider__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -61,7 +61,7 @@ gwt_acceptance:
         - local_contract.chat_conversation.commercial_message_system.contact_home_relationship_projection.gwt1_local_contract
         envs: *id001
     notes:
-    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/contact_home_projection_contract_test.go'
+    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/api_integration/contact_home_projection_contract__api_integration_test.go'
 contract_acceptance:
   CONTRACT1:
     title: 联系首页关系投影与交集摘要契约一致
@@ -90,7 +90,7 @@ contract_acceptance:
     notes: []
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

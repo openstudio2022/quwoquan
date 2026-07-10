@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 
 class AppPerfProbe {

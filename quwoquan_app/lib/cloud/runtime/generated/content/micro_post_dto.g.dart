@@ -14,22 +14,22 @@ class MicroPostDto extends PostBaseDto {
   @override final String displayName;
   @override final String avatarUrl;
   @override final String? authorBackgroundUrl;
-  final String authorRoleLabel;
-  final List<String> authorIdentityTags;
-  final bool authorVerified;
-  final String body;
-  final List<String> imageUrls;
-  final String? videoUrl;
-  final int? durationMs;
+  @override final String authorRoleLabel;
+  @override final List<String> authorIdentityTags;
+  @override final bool authorVerified;
+  @override final String body;
+  @override final List<String> imageUrls;
+  @override final String? videoUrl;
+  @override final int? durationMs;
   @override final int likeCount;
   @override final int commentCount;
   @override final int shareCount;
   @override final DateTime createdAt;
   @override final DateTime? updatedAt;
   @override final DateTime? publishedAt;
-  final String? contentVertical;
-  final String? recallPath;
-  final String? supplySource;
+  @override final String? contentVertical;
+  @override final String? recallPath;
+  @override final String? supplySource;
   @override final List<IntersectionReason>? intersectionReasons;
 
   const MicroPostDto({
@@ -185,10 +185,12 @@ class MicroPostDto extends PostBaseDto {
     return 'note';
   }
   /// 是否包含图片（图文帖）。
+  @override
   bool get hasImages {
     return imageUrls.isNotEmpty;
   }
   /// 是否包含视频（视频帖）。
+  @override
   bool get hasVideo {
     return videoUrl != null;
   }

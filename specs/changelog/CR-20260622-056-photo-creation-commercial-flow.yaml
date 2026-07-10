@@ -50,7 +50,7 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     verification:
-      - "待执行：bash agent_ops/scaffold/verify_acceptance_standard.sh"
+      - "待执行：bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh"
       - "待执行：图片选择器、拍照确认流、图片发布远端媒体引用 local_contract"
       - "待执行：图片上传绑定发布回读 api_integration"
       - "待执行：gamma_local 图片创作 user_acceptance"

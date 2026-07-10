@@ -52,7 +52,8 @@ func TestExposureObservabilityCapacityLocalContract(t *testing.T) {
 	)
 	alertsPath := filepath.Join(
 		repoRoot,
-		"deploy",
+		"quwoquan_ops",
+		"observability",
 		"monitoring",
 		"alerts",
 		"quwoquan_alerts.yaml",
@@ -107,7 +108,7 @@ func TestExposureObservabilityCapacityLocalContract(t *testing.T) {
 			t.Fatalf("rollback_layers missing %q: %#v", required, slo.RollbackLayers)
 		}
 	}
-	if got := slo.AlertsSource; got != "deploy/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model" {
+	if got := slo.AlertsSource; got != "quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml#quwoquan_rec_model" {
 		t.Fatalf("alerts_source=%q drifted", got)
 	}
 

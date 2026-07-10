@@ -1,0 +1,60 @@
+creatorProfileId: sys_photo_0186
+userId: sys_photo_0186
+subAccountId: sys_photo_0186_sub_01
+displayName: 晚晴游记
+userHandle: clear-notes
+handle: clear-notes
+avatarPresetId: avatar_photo_film_grain
+coverPresetId: cover_photo_night_tripod
+bio: 会从屋檐高光里练习观察，拍摄记录偏短、偏诚实，也允许照片不完美；也记录修图前后。
+headline: 日常影像练习
+slogan: 一段阴影比参数更动人
+creatorArchetype: street_photographer
+verticalSegment: photography_primary
+verticalRefs:
+- photography
+interestTagRefs: &id001
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+publicProfileTagRefs:
+- Topic/摄影
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 图片_专题
+- 摄影_教程
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  entityAffinityRefs:
+  - homepage/topic/photography
+  - homepage/tag/Topic_摄影_旅行摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  circleAffinityRefs:
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- photography
+- Topic/摄影/旅行摄影
+- Topic/摄影/摄影教程

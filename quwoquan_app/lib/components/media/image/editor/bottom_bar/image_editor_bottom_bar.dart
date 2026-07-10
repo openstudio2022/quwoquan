@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/components/media/image/editor/icons/image_editor_semantic_icon.dart';
 import 'package:quwoquan_app/components/media/image/editor/tool_list/image_editor_tool_entry_chip.dart';
+import 'package:quwoquan_app/components/media/shared/media_creation_bottom_button.dart';
 
 class ImageEditorBottomBar extends StatelessWidget {
   const ImageEditorBottomBar({
@@ -12,6 +13,7 @@ class ImageEditorBottomBar extends StatelessWidget {
     required this.bottomPadding,
     required this.selectedToolIndex,
     required this.onToolSelected,
+    required this.onNextStep,
   });
 
   final Color backgroundColor;
@@ -20,6 +22,7 @@ class ImageEditorBottomBar extends StatelessWidget {
   final double bottomPadding;
   final int? selectedToolIndex;
   final ValueChanged<int> onToolSelected;
+  final VoidCallback onNextStep;
 
   @override
   Widget build(BuildContext context) {
@@ -60,14 +63,19 @@ class ImageEditorBottomBar extends StatelessWidget {
         labelKey: UITextConstants.imageEditorMosaic,
       ),
     ];
-    final barHeight = AppSpacing.bottomNavHeight;
+    final barHeight = AppSpacing.bottomNavHeight - AppSpacing.xs;
+    final nextButtonHeight = AppSpacing.minInteractiveSize;
     final borderColor = AppColorsFunctional.getColor(
       true,
       ColorType.borderPrimary,
     ).withValues(alpha: 0.3);
 
     return Container(
-      height: bottomPadding + barHeight + AppSpacing.xs,
+      height:
+          bottomPadding +
+          barHeight +
+          nextButtonHeight +
+          AppSpacing.intraGroupSm,
       padding: EdgeInsets.only(bottom: bottomPadding),
       decoration: BoxDecoration(
         color: backgroundColor,
@@ -77,37 +85,49 @@ class ImageEditorBottomBar extends StatelessWidget {
         builder: (context, constraints) {
           final sidePadding = AppSpacing.containerSm;
           final gap = AppSpacing.interGroupSm;
-          final itemWidth = AppSpacing.buttonHeight * 1.5;
-          final contentHeight =
-              (constraints.maxHeight - 2 * AppSpacing.xs)
-                  .clamp(AppSpacing.minInteractiveSize, 84.0);
-          return SizedBox(
-            height: constraints.maxHeight,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.symmetric(
-                horizontal: sidePadding,
-                vertical: AppSpacing.xs,
+          final itemWidth = AppSpacing.buttonHeight * 1.32;
+          return Column(
+            children: [
+              SizedBox(
+                height: barHeight,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: EdgeInsets.symmetric(horizontal: sidePadding),
+                  itemCount: toolEntries.length,
+                  separatorBuilder: (context, index) => SizedBox(width: gap),
+                  itemBuilder: (context, index) {
+                    final entry = toolEntries[index];
+                    return SizedBox(
+                      width: itemWidth,
+                      height: barHeight,
+                      child: Center(
+                        child: ImageEditorToolEntryChip(
+                          icon: entry.icon,
+                          semanticIconKey: entry.semanticIconKey,
+                          label: entry.labelKey,
+                          isSelected: selectedToolIndex == index,
+                          onTap: () => onToolSelected(index),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
-              itemCount: toolEntries.length,
-              separatorBuilder: (context, index) => SizedBox(width: gap),
-              itemBuilder: (context, index) {
-                final entry = toolEntries[index];
-                return SizedBox(
-                  width: itemWidth,
-                  height: contentHeight,
-                  child: Center(
-                    child: ImageEditorToolEntryChip(
-                      icon: entry.icon,
-                      semanticIconKey: entry.semanticIconKey,
-                      label: entry.labelKey,
-                      isSelected: selectedToolIndex == index,
-                      onTap: () => onToolSelected(index),
-                    ),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppSpacing.containerMd,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: MediaCreationBottomButton(
+                    label: UITextConstants.mediaPickerNextStep,
+                    variant: MediaCreationBottomButtonVariant.fullWidthNeutral,
+                    height: nextButtonHeight,
+                    onPressed: onNextStep,
                   ),
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           );
         },
       ),

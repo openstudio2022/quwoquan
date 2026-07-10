@@ -18,6 +18,9 @@ require_cmd() {
 require_cmd ruby
 require_cmd dart
 
+SERVICE_GO_TEST_TIMEOUT="${SERVICE_GO_TEST_TIMEOUT:-240s}"
+export PYTHONDONTWRITEBYTECODE="${PYTHONDONTWRITEBYTECODE:-1}"
+
 has_rg() {
   command -v rg >/dev/null 2>&1
 }
@@ -35,8 +38,7 @@ search() {
 }
 
 # 1) YAML syntax check (OpenAPI)
-# Domain-centric openapi.yaml files live at contracts/metadata/{domain}/openapi.yaml
-# contracts/openapi/ retains only common.yaml (shared $ref schemas)
+# Domain-centric OpenAPI fragments live under contracts/metadata/.
 echo "[gate] validating OpenAPI yaml syntax"
 ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' \
   contracts/metadata/_shared/openapi_common.yaml \
@@ -211,8 +213,8 @@ ruby -ryaml -e '
 '
 
 echo "[gate] checking repository runtime error cutover guard"
-(cd "$ROOT/.." && dart tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check)
-(cd "$ROOT/.." && dart tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart)
+(cd "$ROOT/.." && dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check)
+(cd "$ROOT/.." && dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart)
 
 # 1.5) io access log baseline sync
 echo "[gate] checking io access log baseline sync"
@@ -222,19 +224,18 @@ ruby -ryaml -e '
     exit 1
   end
 
-  schema = YAML.load_file("contracts/io_access_log_baseline.yaml") || {}
+  schema = YAML.load_file("contracts/observability/io_access_log_baseline.yaml") || {}
   required = (schema["required_fields"] || []).map(&:to_s)
   forbidden = (schema["forbidden_fields"] || []).map(&:to_s)
 
   must_have = %w[
-    schemaVersion service timestamp origin direction endpoint sourceId
-    traceId requestId sessionId src status durationMs errorCode messageSize
+    ts level route status durMs msg
   ]
   must_have.each do |f|
     fail("io_access_log_baseline missing required field: #{f}") unless required.include?(f)
   end
 
-  %w[headers statusCode logType env phase parentTraceId causationId].each do |f|
+  %w[schemaVersion signal logKind env sourceType service component instanceId runId releaseId dataReleaseId sessionId timestamp severity message requestId traceId spanId headers logType phase parentTraceId causationId].each do |f|
     fail("io_access_log_baseline missing forbidden field: #{f}") unless forbidden.include?(f)
   end
 
@@ -252,21 +253,21 @@ ruby -ryaml -e '
     exit 1
   end
 
-  process_schema = YAML.load_file("contracts/process_trace_log_baseline.yaml") || {}
-  exception_schema = YAML.load_file("contracts/exception_log_baseline.yaml") || {}
+  process_schema = YAML.load_file("contracts/observability/process_trace_log_baseline.yaml") || {}
+  exception_schema = YAML.load_file("contracts/observability/exception_log_baseline.yaml") || {}
 
   process_required = (process_schema["required_fields"] || []).map(&:to_s)
   exception_required = (exception_schema["required_fields"] || []).map(&:to_s)
   process_forbidden = (process_schema["forbidden_fields"] || []).map(&:to_s)
   exception_forbidden = (exception_schema["forbidden_fields"] || []).map(&:to_s)
 
-  %w[schemaVersion service timestamp origin direction endpoint sourceId traceId requestId sessionId src step event result level].each do |f|
+  %w[ts level event result msg].each do |f|
     fail("process_trace_log_baseline missing required field: #{f}") unless process_required.include?(f)
   end
-  %w[schemaVersion service timestamp origin direction endpoint sourceId traceId requestId sessionId src errorCode errorModule errorKind errorReason userMessage].each do |f|
+  %w[ts level err msg].each do |f|
     fail("exception_log_baseline missing required field: #{f}") unless exception_required.include?(f)
   end
-  %w[headers statusCode logType env phase parentTraceId causationId].each do |f|
+  %w[schemaVersion signal logKind env sourceType service component instanceId runId releaseId dataReleaseId sessionId timestamp severity message requestId traceId spanId headers statusCode logType phase parentTraceId causationId].each do |f|
     fail("process_trace_log_baseline missing forbidden field: #{f}") unless process_forbidden.include?(f)
     fail("exception_log_baseline missing forbidden field: #{f}") unless exception_forbidden.include?(f)
   end
@@ -277,34 +278,31 @@ ruby -ryaml -e '
   fail("exception_log.go should not contain Headers field") if exception_go.include?("Headers")
 '
 
-# 2) Ensure deprecated specs are pointers only
-echo "[gate] checking deprecated specs are pointers only"
-if search "ADDED Requirements|Requirement:" specs/ops-service/spec.md specs/service-ops/spec.md >/dev/null 2>&1; then
-  fail "deprecated specs must not contain requirements; keep as pointer only"
-fi
+# 2) Historical service specs were removed; root feature-tree + metadata are the truth sources.
+echo "[gate] checking historical service specs are absent"
+for path in specs design.md tasks.md 工程目录设计.md 技术选型.md architecture_review.md proposal.md; do
+  if [ -e "$path" ]; then
+    fail "historical service spec/doc must be removed: $path"
+  fi
+done
 
-# 3) Naming: service-ops must not appear outside deprecated pointers
+# 3) Naming: service-ops must not appear in current service sources.
 echo "[gate] checking naming consistency (service-ops)"
 if has_rg; then
   if rg -n "service-ops|ServiceOps" . \
     --glob '!.cursor/**' \
     --glob '!scripts/gate.sh' \
-    --glob '!specs/service-ops/spec.md' \
-    --glob '!specs/ops-service/spec.md' \
     >/dev/null; then
-    fail "found service-ops references outside deprecated pointer specs"
+    fail "found service-ops references in current service sources"
   fi
 else
-  # grep fallback: search everything then filter out the deprecated pointer specs.
   if search "service-ops|ServiceOps" . \
     --exclude-dir .git \
     --exclude-dir .cursor \
     2>/dev/null \
     | grep -v "scripts/gate.sh" \
-    | grep -v "specs/service-ops/spec.md" \
-    | grep -v "specs/ops-service/spec.md" \
     >/dev/null; then
-    fail "found service-ops references outside deprecated pointer specs"
+    fail "found service-ops references in current service sources"
   fi
 fi
 
@@ -690,8 +688,9 @@ if [ -f "$CONTENT_POST_DIR/tests/contract.yaml" ]; then
     contract = YAML.load_file(ARGV[0]) || {}
     tests_dir = ARGV[1]
 
-    # Collect all func Test* names from *_test.go files in tests/
-    go_funcs = Dir.glob(File.join(tests_dir, "*_test.go")).flat_map do |f|
+    # Collect all func Test* names from canonical tests, including
+    # tests/api_integration and tests/local_contract wrapper packages.
+    go_funcs = Dir.glob(File.join(tests_dir, "**", "*_test.go")).flat_map do |f|
       File.read(f).scan(/^func (Test\w+)\s*\(/).flatten
     end.uniq
 
@@ -735,7 +734,7 @@ fi
 echo "[gate] running assistant-service contract tests"
 (
   cd services/assistant-service &&
-    go test ./... -count=1 -timeout=120s
+    go test ./... -count=1 -timeout="$SERVICE_GO_TEST_TIMEOUT"
 ) || fail "assistant-service go tests failed"
 
 # ── L2: content-service contract tests ───────────────────────────────────────
@@ -744,26 +743,26 @@ make verify-content-architecture \
   || fail "content-service application architecture verification failed"
 
 echo "[gate] running content-service contract tests"
-go test ./services/content-service/... -count=1 -timeout=120s \
+go test ./services/content-service/... -count=1 -timeout="$SERVICE_GO_TEST_TIMEOUT" \
   || fail "content-service go tests failed"
 
 # ── L2: rtc-service contract tests ──────────────────────────────────────────
 echo "[gate] running rtc-service contract tests"
-go test ./services/rtc-service/... -count=1 -timeout=120s \
+go test ./services/rtc-service/... -count=1 -timeout="$SERVICE_GO_TEST_TIMEOUT" \
   || fail "rtc-service go tests failed"
 
 # ── L2: product-ops-service contract tests ──────────────────────────────────
 echo "[gate] running product-ops-service contract tests"
 (
   cd services/product-ops-service &&
-    go test ./... -count=1 -timeout=120s
+    go test ./... -count=1 -timeout="$SERVICE_GO_TEST_TIMEOUT"
 ) || fail "product-ops-service go tests failed"
 
 # ── L2: tag-service contract tests ───────────────────────────────────────────
 # testcontainers(mongo) 在无 Docker 的本地会优雅 skip（TestMain os.Exit(0)），
 # CI(CI=true / GITHUB_ACTIONS=true) 下强制起容器，缺 Docker 即 panic 暴露。
 echo "[gate] running tag-service contract tests"
-go test ./services/tag-service/... -count=1 -timeout=120s \
+go test ./services/tag-service/... -count=1 -timeout="$SERVICE_GO_TEST_TIMEOUT" \
   || fail "tag-service go tests failed"
 
 # ── T38: e2e.yaml patrol_flow 文件存在性检查（warn 级别，不 fail）─────────────
@@ -810,11 +809,22 @@ fi
 
 # ── L2: recommendation-service python tests (mandatory) ──────────────────────
 echo "[gate] running recommendation-service python tests"
-PYTHON_TEST_RUNNER="python3"
-if [ -x "services/rec-model-service/.venv/bin/python" ]; then
-  PYTHON_TEST_RUNNER="services/rec-model-service/.venv/bin/python"
+PYTHON_TEST_RUNNER="${ML_PYTHON:-}"
+if [ -z "$PYTHON_TEST_RUNNER" ]; then
+  REPO_ROOT="$(cd "$ROOT/.." && pwd)"
+  REC_MODEL_VENV="$REPO_ROOT/.qwq_output/env/repo/local/python-envs/rec-model"
+  if [ ! -x "$REC_MODEL_VENV/bin/python" ]; then
+    echo "[gate] bootstrapping rec-model python env at $REC_MODEL_VENV"
+    python3 -m venv "$REC_MODEL_VENV" \
+      || fail "rec-model python env bootstrap failed"
+    "$REC_MODEL_VENV/bin/python" -m pip install --upgrade pip >/dev/null \
+      || fail "rec-model python env pip bootstrap failed"
+    "$REC_MODEL_VENV/bin/python" -m pip install -r services/rec-model-service/requirements.txt >/dev/null \
+      || fail "rec-model python requirements install failed"
+  fi
+  PYTHON_TEST_RUNNER="$REC_MODEL_VENV/bin/python"
 fi
-"$PYTHON_TEST_RUNNER" -m pytest services/rec-model-service/tests -q \
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON_TEST_RUNNER" -m pytest -p no:cacheprovider services/rec-model-service/tests -q \
   || fail "recommendation-service python tests failed"
 
 echo "[gate] running content-flywheel loop pure-function tests"

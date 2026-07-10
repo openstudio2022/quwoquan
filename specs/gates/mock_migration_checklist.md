@@ -1,7 +1,7 @@
 # Mock / Repository 迁移勾选表（后续整改）
 
 > 与 [`mock_production_separation_backlog.md`](mock_production_separation_backlog.md) 配套；**运行时策略**见下文 R1/R2。  
-> **契约包**：[`packages/quwoquan_cloud_contracts`](../../packages/quwoquan_cloud_contracts/)（首批 Circle + Content 抽象）。
+> **契约包**：[`quwoquan_app/packages/quwoquan_cloud_contracts`](../../quwoquan_app/packages/quwoquan_cloud_contracts/)（首批 Circle + Content 抽象）。
 
 ---
 
@@ -22,7 +22,7 @@
 
 ```bash
 (cd quwoquan_app && flutter pub get && dart analyze --fatal-infos)
-(cd quwoquan_app && flutter test test/cloud/circle/contract/ test/cloud/content/ -r expanded)
+(cd quwoquan_app && flutter test test/local_contract/cloud/circle/contract/ test/local_contract/cloud/content/ -r expanded)
 python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
 make verify-app-mock-isolation
 ```
@@ -64,4 +64,4 @@ make verify-app-mock-isolation
 
 - [`mock_test_separation_roadmap.md`](mock_test_separation_roadmap.md)（波次与门禁）
 - [`mock_data_cloud_integration_policy.md`](mock_data_cloud_integration_policy.md)
-- 契约包：[`packages/quwoquan_cloud_contracts/README.md`](../../packages/quwoquan_cloud_contracts/README.md)
+- 契约包：[`quwoquan_app/packages/quwoquan_cloud_contracts/README.md`](../../quwoquan_app/packages/quwoquan_cloud_contracts/README.md)

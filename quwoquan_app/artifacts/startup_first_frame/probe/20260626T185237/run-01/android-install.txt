@@ -1,4 +1,0 @@
-adb: device 'emulator-5554' not found
-
---- reinstall ---
-adb: device 'emulator-5554' not found

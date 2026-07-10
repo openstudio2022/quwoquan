@@ -14,7 +14,6 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_setting_dto.g.dar
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
-import 'package:quwoquan_app/cloud/runtime/prefab_user_resolver.dart';
 import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
 
 UserSettingDto _userSettingDtoFromWire(Map<String, dynamic> json) {
@@ -82,23 +81,20 @@ List<Map<String, dynamic>> _decodeMockPersonasWire() {
 }
 
 Map<String, dynamic> _mockActivePersonaContextWire() {
+  // `resolveMockUserProfileWire` 是 mock 当前用户资料的唯一解析入口，内部已按
+  // override → contract seed → creator_pool → _defaultProfile 顺序回退，并保证
+  // displayName / avatarUrl 非空（当前体验槽位真相源：creator_pool
+  // `currentUserVariant` = fixture_sub_current / 小趣体验号）。此处不再自造第二
+  // 真相源或写死占位昵称/头像字面量。
   final profile = resolveMockUserProfileWire(kMockCurrentSubAccountId);
-  final creatorWire =
-      PrefabUserResolver.creatorProfileWireFor(kMockCurrentSubAccountId);
-  final avatarUrl = profile.avatarUrl.isNotEmpty
-      ? profile.avatarUrl
-      : (creatorWire?['avatarUrl']?.toString() ??
-          'cold_start/creators/travel_batch_100_v1/current_user_variant/avatar.jpg');
   return <String, dynamic>{
     'ownerUserId': kMockCurrentOwnerId,
     'subAccountId': kMockCurrentSubAccountId,
     'subjectType': profile.subjectType.isNotEmpty
         ? profile.subjectType
         : 'user',
-    'displayName': profile.displayName.isNotEmpty
-        ? profile.displayName
-        : (creatorWire?['displayName']?.toString() ?? '趣我圈体验用户'),
-    'avatarUrl': avatarUrl,
+    'displayName': profile.displayName,
+    'avatarUrl': profile.avatarUrl,
     'avatarVersion': profile.avatarVersion > 0 ? profile.avatarVersion : 1,
     'personaContextVersion':
         profile.updatedAt?.millisecondsSinceEpoch.toString() ?? 'mock-static',

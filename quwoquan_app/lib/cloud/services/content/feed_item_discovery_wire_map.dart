@@ -1,5 +1,6 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_actor_evidence.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_representative_actor.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
@@ -107,14 +108,29 @@ Map<String, dynamic> _intersectionReasonToWireMap(IntersectionReason reason) {
         : _intersectionRepresentativeActorToWireMap(
             reason.representativeActor!,
           ),
+    'actorEvidence': reason.actorEvidence
+        .map(_intersectionActorEvidenceToWireMap)
+        .toList(growable: false),
     'actionHints': reason.actionHints
         .map(_intersectionActionHintToWireMap)
         .toList(growable: false),
+    'objectVisual': reason.objectVisual == null
+        ? null
+        : _intersectionVisualToWireMap(reason.objectVisual!),
   };
 }
 
 Map<String, dynamic> _intersectionRepresentativeActorToWireMap(
   IntersectionRepresentativeActor actor,
+) {
+  return <String, dynamic>{
+    ...actor.toMap(),
+    if (actor.target != null) 'target': actor.target!.toMap(),
+  };
+}
+
+Map<String, dynamic> _intersectionActorEvidenceToWireMap(
+  IntersectionActorEvidence actor,
 ) {
   return <String, dynamic>{
     ...actor.toMap(),
@@ -136,6 +152,8 @@ Map<String, dynamic> _intersectionTextSpanToWireMap(IntersectionTextSpan span) {
     'text': span.text,
     'role': span.role,
     if (span.target != null) 'target': span.target!.toMap(),
+    if (span.visual != null)
+      'visual': _intersectionVisualToWireMap(span.visual!),
   };
 }
 

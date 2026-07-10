@@ -2,17 +2,17 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	rtimpact "quwoquan_service/runtime/impact"
+	rtobs "quwoquan_service/runtime/observability"
+	rtsearch "quwoquan_service/runtime/search"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"go.opentelemetry.io/otel/attribute"
-
-	rtobs "quwoquan_service/runtime/observability"
-	rtsearch "quwoquan_service/runtime/search"
 )
 
 const (
@@ -43,7 +43,6 @@ type GeoPoint struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
 }
-
 type Homepage struct {
 	ID                 string           `json:"_id"`
 	Title              string           `json:"title"`
@@ -71,12 +70,16 @@ type Homepage struct {
 	RelatedGroups      []map[string]any `json:"relatedGroups,omitempty"`
 	RelationEdges      []map[string]any `json:"relationEdges,omitempty"`
 	AssistantContext   map[string]any   `json:"assistantContext,omitempty"`
-	CreatedAt          time.Time        `json:"createdAt"`
-	UpdatedAt          time.Time        `json:"updatedAt"`
-	PublishedAt        *time.Time       `json:"publishedAt,omitempty"`
-	OfflineAt          *time.Time       `json:"offlineAt,omitempty"`
+	// 数据工程实体主页三件套投影承载：page.md 三段结构正文与图片资产
+	// （封面 frontmatter / 正文块级内嵌图 / 页尾相关图片），见
+	// contracts/metadata/entity/homepage/projections/*.yaml。
+	IntroductionMarkdown string                      `json:"introductionMarkdown,omitempty"`
+	IntroductionAssets   []HomepageIntroductionAsset `json:"introductionAssets,omitempty"`
+	CreatedAt            time.Time                   `json:"createdAt"`
+	UpdatedAt            time.Time                   `json:"updatedAt"`
+	PublishedAt          *time.Time                  `json:"publishedAt,omitempty"`
+	OfflineAt            *time.Time                  `json:"offlineAt,omitempty"`
 }
-
 type HomepageSearchItemView struct {
 	HomepageID        string   `json:"homepageId"`
 	CanonicalEntityID string   `json:"canonicalEntityId"`
@@ -129,6 +132,12 @@ type HomepageRelatedGroupSummaryView struct {
 	Groups []map[string]any `json:"groups"`
 }
 
+type HomepageImpactSummaryView struct {
+	HomepageID string           `json:"homepageId"`
+	Total      int              `json:"total"`
+	Items      []map[string]any `json:"items"`
+}
+
 type HomepageClaimRequest struct {
 	ID                   string     `json:"_id"`
 	HomepageID           string     `json:"homepageId"`
@@ -169,6 +178,9 @@ type HomepageInput struct {
 	Address            string    `json:"address"`
 	City               string    `json:"city"`
 	Location           *GeoPoint `json:"location"`
+	// 数据工程 page.md 三段结构投影承载（service.yaml writable_fields 同源）。
+	IntroductionMarkdown string                      `json:"introductionMarkdown"`
+	IntroductionAssets   []HomepageIntroductionAsset `json:"introductionAssets"`
 }
 
 type ClaimRequestInput struct {
@@ -374,6 +386,11 @@ func (s *HomepageService) IntakeHomepageCandidate(ctx context.Context, input Hom
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
+	homepage.IntroductionMarkdown = strings.TrimSpace(input.IntroductionMarkdown)
+	homepage.IntroductionAssets = cloneIntroductionAssets(input.IntroductionAssets)
+	if homepage.CoverURL == "" {
+		homepage.CoverURL = coverURLFromIntroductionAssets(homepage.IntroductionAssets)
+	}
 	s.mu.Lock()
 	s.homepages[id] = homepage
 	err = s.persistLocked(ctx)
@@ -453,6 +470,7 @@ func (s *HomepageService) GetHomepageForViewer(
 		return nil, err
 	}
 	out := cloneHomepage(homepage)
+	applyDefaultShellData(&out)
 	s.applyViewerFollowStateLocked(&out, viewerID)
 	return &out, nil
 }
@@ -560,13 +578,19 @@ func (s *HomepageService) GetHomepageReviewSummary(ctx context.Context, homepage
 	if err != nil {
 		return nil, err
 	}
-	highlightTags, _ := homepage.ReviewSummary["highlightTags"].([]string)
-	dimensionScores, _ := homepage.ReviewSummary["dimensionScores"].([]map[string]any)
+	highlightTags := stringSliceFromAny(homepage.ReviewSummary["highlightTags"])
+	if highlightTags == nil {
+		highlightTags = []string{}
+	}
+	dimensionScores := mapSliceFromAny(homepage.ReviewSummary["dimensionScores"])
+	if dimensionScores == nil {
+		dimensionScores = []map[string]any{}
+	}
 	return &HomepageReviewSummaryView{
 		AverageRating:   homepage.AverageRating,
 		RatingCount:     homepage.RatingCount,
-		HighlightTags:   cloneStrings(highlightTags),
-		DimensionScores: cloneObjectSlice(dimensionScores),
+		HighlightTags:   highlightTags,
+		DimensionScores: dimensionScores,
 	}, nil
 }
 
@@ -581,6 +605,19 @@ func (s *HomepageService) GetHomepageRelatedGroups(ctx context.Context, homepage
 		return nil, err
 	}
 	return &HomepageRelatedGroupSummaryView{Groups: cloneObjectSlice(homepage.RelatedGroups)}, nil
+}
+
+func (s *HomepageService) GetHomepageImpact(ctx context.Context, homepageID string) (*HomepageImpactSummaryView, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.GetHomepageImpact",
+		attribute.String("homepage.id", homepageID))
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
+
+	homepage, err := s.GetHomepage(ctx, homepageID)
+	if err != nil {
+		return nil, err
+	}
+	return buildHomepageImpactSummary(homepage), nil
 }
 
 func (s *HomepageService) GetObjectPageBundle(
@@ -945,9 +982,18 @@ func (s *HomepageService) seed() {
 		Location:           &GeoPoint{Latitude: 30.2431, Longitude: 120.1500},
 		AverageRating:      &ratingA,
 		RatingCount:        328,
-		CreatedAt:          now.Add(-10 * 24 * time.Hour),
-		UpdatedAt:          now.Add(-2 * time.Hour),
-		PublishedAt:        &pubA,
+		RelatedGroups: []map[string]any{
+			{
+				"circleId":            "fixture_circle_photo",
+				"name":                "契约摄影社",
+				"memberCount":         128,
+				"linkedHomepageId":    "homepage_sight_west_lake",
+				"linkedHomepageTitle": "西湖景区",
+			},
+		},
+		CreatedAt:   now.Add(-10 * 24 * time.Hour),
+		UpdatedAt:   now.Add(-2 * time.Hour),
+		PublishedAt: &pubA,
 	})
 	add(&Homepage{
 		ID:                 "homepage_hotel_bamboo_inn",
@@ -1129,7 +1175,27 @@ func applyDefaultShellData(homepage *Homepage) {
 	if homepage == nil {
 		return
 	}
-	if homepage.ReviewSummary == nil {
+	if homepage.ID == "homepage_sight_west_lake" {
+		homepage.RelatedGroups = []map[string]any{
+			{
+				"circleId":            "fixture_circle_photo",
+				"name":                "契约摄影社",
+				"memberCount":         128,
+				"linkedHomepageId":    homepage.ID,
+				"linkedHomepageTitle": homepage.Title,
+			},
+		}
+	}
+	reviewSummaryNeedsSeed := homepage.ReviewSummary == nil
+	if !reviewSummaryNeedsSeed {
+		if mapSliceFromAny(homepage.ReviewSummary["dimensionScores"]) == nil {
+			reviewSummaryNeedsSeed = true
+		}
+		if stringSliceFromAny(homepage.ReviewSummary["highlightTags"]) == nil {
+			reviewSummaryNeedsSeed = true
+		}
+	}
+	if reviewSummaryNeedsSeed {
 		highlightTags := homepage.CategoryTags
 		if len(highlightTags) > 3 {
 			highlightTags = highlightTags[:3]
@@ -1208,7 +1274,11 @@ func validateHomepageInput(input HomepageInput) error {
 		return newAppError(400, codeClaimMaterialMissing, "主页标题不能为空", "homepage title is empty")
 	}
 	switch normalize(input.HomepageType) {
-	case "vehicle", "hotel", "restaurant", "sight", "university", "travel_photo":
+	// 闭集与 contracts/metadata/_shared/types.yaml HomepageType 枚举同源；
+	// 地点类新增值与数据工程 Entity/地点 试点 scope 对齐（裁决 6）。
+	case "vehicle", "hotel", "restaurant", "sight", "university", "travel_photo",
+		"museum", "heritage_site", "ancient_town", "religious_site",
+		"check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park":
 		return nil
 	default:
 		return newAppError(400, codeInvalidHomepageType, "不支持的主页类型", "unsupported homepage type")
@@ -1276,6 +1346,157 @@ func buildObjectPageBundle(
 	}
 }
 
+func buildHomepageImpactSummary(homepage *Homepage) *HomepageImpactSummaryView {
+	applyDefaultShellData(homepage)
+	target := homepageImpactTarget(homepage)
+	items := make([]map[string]any, 0, 3)
+
+	relatedMembers := 0
+	for _, group := range homepage.RelatedGroups {
+		if n, ok := anyInt(group["memberCount"]); ok && n > 0 {
+			relatedMembers += n
+		}
+	}
+	if relatedMembers == 0 && homepage.FollowerCount > 0 {
+		relatedMembers = homepage.FollowerCount
+	}
+	if relatedMembers > 0 {
+		items = append(items, buildHomepageImpactItem(
+			homepage,
+			target,
+			rtimpact.HelpRelationship,
+			"establish_connection",
+			"relationship",
+			"homepage_related_groups",
+			relatedMembers,
+			"相关圈子里的真实成员在这里继续认识彼此、建立连接。",
+		))
+	}
+	if homepage.RatingCount > 0 {
+		items = append(items, buildHomepageImpactItem(
+			homepage,
+			target,
+			rtimpact.HelpCommunity,
+			"start_discussion",
+			"content",
+			"homepage_reviews",
+			homepage.RatingCount,
+			"评分、记录与问答会继续沉淀围绕这个对象的真实讨论。",
+		))
+	}
+	if homepage.FollowerCount > 0 {
+		items = append(items, buildHomepageImpactItem(
+			homepage,
+			target,
+			rtimpact.HelpSpread,
+			"active_participation",
+			"relationship",
+			"homepage_followers",
+			homepage.FollowerCount,
+			"持续关注这个对象的人会把内容和关系继续扩散出去。",
+		))
+	}
+
+	total := 0
+	for _, item := range items {
+		if n, ok := item["count"].(int); ok {
+			total += n
+		}
+	}
+	return &HomepageImpactSummaryView{
+		HomepageID: homepage.ID,
+		Total:      total,
+		Items:      items,
+	}
+}
+
+func buildHomepageImpactItem(
+	homepage *Homepage,
+	target map[string]any,
+	helpType string,
+	action string,
+	dimension string,
+	source string,
+	count int,
+	subtitle string,
+) map[string]any {
+	primaryText := rtimpact.PrimaryText(helpType, action, int64(count), rtimpact.ActorTA)
+	summaryAction := rtimpact.DefaultSummaryAction
+	if actionHint, ok := rtimpact.SummaryActionByHelpType[helpType]; ok {
+		summaryAction = actionHint
+	}
+	iconKey := rtimpact.DefaultIconKey
+	if key, ok := rtimpact.IconKeyByHelpType[helpType]; ok && strings.TrimSpace(key) != "" {
+		iconKey = key
+	}
+	item := map[string]any{
+		"helpType":              helpType,
+		"action":                action,
+		"intersectionDimension": dimension,
+		"tagRef":                "",
+		"source":                source,
+		"count":                 count,
+		"primaryText":           primaryText,
+		"subtitleText":          subtitle,
+		"impactId":              homepage.ID + "_" + source,
+		"primarySpans": []map[string]any{
+			{"text": primaryText, "role": "plain"},
+		},
+		"sampleVisuals": []map[string]any{},
+		"actionHints": []map[string]any{
+			{
+				"actionKey":          summaryAction.Key,
+				"label":              summaryAction.Label,
+				"target":             target,
+				"isPrimary":          true,
+				"priority":           1,
+				"actionTier":         "light",
+				"requiredGates":      []string{},
+				"targetAvailability": "available",
+				"dispatch":           "navigate",
+			},
+		},
+		"countTarget":        target,
+		"evidenceSnapshotId": homepage.ID + "_" + source + "_summary",
+		"countObjectKind":    "person",
+		"iconKey":            iconKey,
+	}
+	if strings.TrimSpace(homepage.CoverURL) != "" {
+		item["sampleVisuals"] = []map[string]any{
+			{
+				"assetKind":   "image",
+				"imageUrl":    homepage.CoverURL,
+				"displayName": homepage.Title,
+				"target":      target,
+			},
+		}
+	}
+	return item
+}
+
+func homepageImpactTarget(homepage *Homepage) map[string]any {
+	return map[string]any{
+		"objectId":   homepage.ID,
+		"objectKind": homepageImpactObjectKind(homepage.HomepageType),
+		"routeId":    "homepageDetail",
+	}
+}
+
+func homepageImpactObjectKind(homepageType string) string {
+	switch normalize(homepageType) {
+	case "university", "school":
+		return "school"
+	case "travel_route", "route":
+		return "route"
+	case "photo_spot", "travel_spot":
+		return "photo_spot"
+	case "gear", "travel_gear":
+		return "gear"
+	default:
+		return "place"
+	}
+}
+
 func defaultRelationEdges(homepage *Homepage) []map[string]any {
 	edges := make([]map[string]any, 0, 1+len(homepage.RelatedGroups))
 	for i, group := range homepage.RelatedGroups {
@@ -1319,7 +1540,9 @@ func intersectionDimensionLabel(homepage *Homepage) (dimension string, shortLabe
 	switch homepage.HomepageType {
 	case "university":
 		return "identity", "同校", "你和这所学校有校园交集"
-	case "travel_photo", "sight":
+	case "travel_photo", "sight",
+		"museum", "heritage_site", "ancient_town", "religious_site",
+		"check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park":
 		return "location", "同游", "你们都到过这里"
 	default:
 		return "interest", "同好", "你们都关注这些内容"
@@ -1450,7 +1673,9 @@ func objectPageTemplate(homepageType string, explicit string) string {
 	switch normalize(homepageType) {
 	case "university":
 		return "campus"
-	case "travel_photo", "sight":
+	case "travel_photo", "sight",
+		"museum", "heritage_site", "ancient_town", "religious_site",
+		"check_in_spot", "natural_landscape", "park", "hot_spring", "theme_park":
 		return "travel_photo"
 	default:
 		return "standard"
@@ -1480,73 +1705,47 @@ func newAppError(status int, code, userMessage, debugMessage string) *AppError {
 	}
 }
 
-func normalize(raw string) string {
-	return strings.ToLower(strings.TrimSpace(raw))
+// ReloadHomepageStateResult 汇报免停服重载结果（ops 触发后用于导入审计）。
+type ReloadHomepageStateResult struct {
+	HomepagesBefore int `json:"homepagesBefore"`
+	HomepagesAfter  int `json:"homepagesAfter"`
+	SnapshotSize    int `json:"snapshotSize"`
 }
 
-func cloneHomepage(in *Homepage) Homepage {
-	if in == nil {
-		return Homepage{}
-	}
-	out := *in
-	out.CategoryTags = cloneStrings(in.CategoryTags)
-	out.Location = cloneGeoPoint(in.Location)
-	out.ReviewSummary = cloneMap(in.ReviewSummary)
-	out.ContentPreview = cloneObjectSlice(in.ContentPreview)
-	out.QuestionPreview = cloneObjectSlice(in.QuestionPreview)
-	out.RelatedGroups = cloneObjectSlice(in.RelatedGroups)
-	out.RelationEdges = cloneObjectSlice(in.RelationEdges)
-	out.AssistantContext = cloneMap(in.AssistantContext)
-	return out
-}
+// ReloadHomepageState 免停服重载：数据工程 homepage importer 直写 homepage_state
+// 集合后由 ops 触发本方法，把存储快照合并进内存主档（同 ID 覆盖、新 ID 追加），
+// 运行期的关注/认领/上报状态不清空。sequence 只前进不回退，避免重载覆盖运行期
+// 已推进的分配序列造成 ID 冲突。
+func (s *HomepageService) ReloadHomepageState(ctx context.Context) (ReloadHomepageStateResult, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.ReloadHomepageState")
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
 
-func (s *HomepageService) applyViewerFollowStateLocked(homepage *Homepage, viewerID string) {
-	if homepage == nil {
-		return
+	if s.store == nil {
+		err = errors.New("homepage state store not configured")
+		return ReloadHomepageStateResult{}, err
 	}
-	followers := s.followers[homepage.ID]
-	homepage.FollowerCount = len(followers)
-	viewerID = strings.TrimSpace(viewerID)
-	homepage.ViewerFollows = viewerID != "" && followers != nil && followers[viewerID]
-}
-
-func cloneStrings(values []string) []string {
-	if len(values) == 0 {
-		return nil
+	snapshot, err := s.store.Load(ctx)
+	if err != nil {
+		return ReloadHomepageStateResult{}, err
 	}
-	out := make([]string, len(values))
-	copy(out, values)
-	return out
-}
-
-func cloneGeoPoint(point *GeoPoint) *GeoPoint {
-	if point == nil {
-		return nil
+	if snapshot == nil {
+		err = errors.New("homepage state snapshot is empty")
+		return ReloadHomepageStateResult{}, err
 	}
-	out := *point
-	return &out
-}
-
-func cloneMap(in map[string]any) map[string]any {
-	if len(in) == 0 {
-		return nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := ReloadHomepageStateResult{
+		HomepagesBefore: len(s.homepages),
+		SnapshotSize:    len(snapshot.Homepages),
 	}
-	out := make(map[string]any, len(in))
-	for key, value := range in {
-		out[key] = value
+	current := atomic.LoadUint64(&s.sequence)
+	s.applySnapshot(snapshot)
+	if current > atomic.LoadUint64(&s.sequence) {
+		atomic.StoreUint64(&s.sequence, current)
 	}
-	return out
-}
-
-func cloneObjectSlice(items []map[string]any) []map[string]any {
-	if len(items) == 0 {
-		return nil
-	}
-	out := make([]map[string]any, len(items))
-	for i := range items {
-		out[i] = cloneMap(items[i])
-	}
-	return out
+	result.HomepagesAfter = len(s.homepages)
+	return result, nil
 }
 
 func (s *HomepageService) applySnapshot(snapshot *HomepageStateSnapshot) {

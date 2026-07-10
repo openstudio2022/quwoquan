@@ -3,9 +3,9 @@ vertical: photography
 defaultAction: block
 discoveryPlatformRoles:
   - platform: Pinterest
-    defaultDiscoveryRole: discovery_only
+    defaultDiscoveryRole: publish_candidate
   - platform: pinterest
-    defaultDiscoveryRole: discovery_only
+    defaultDiscoveryRole: publish_candidate
   - platform: 图虫
     defaultDiscoveryRole: licensed_candidate
 requiredImageFields:
@@ -14,6 +14,20 @@ requiredImageFields:
   - sourceUrl
   - termsUrl
   - usageScope
+  - authorizationProof
+  - modelReleaseStatus
+allowedAuthorizationBases:
+  - attribution_no_watermark
+attributionNoWatermarkRequiredFields:
+  - authorizationBasis
+  - pinUrl
+  - discoveryUrl
+  - originalAssetUrl
+  - sourceAuthor
+  - repostAttribution
+  - watermarkScan
+  - ocrScan
+  - collectedAt
 allowedLicenseKinds:
   - CC0
   - CC-BY
@@ -25,6 +39,7 @@ allowedLicenseKinds:
   - photographer_authorized
   - stock_authorized
   - museum_open_access
+  - attribution_no_watermark
 usageScopes:
   - internal_reference
   - app_publish

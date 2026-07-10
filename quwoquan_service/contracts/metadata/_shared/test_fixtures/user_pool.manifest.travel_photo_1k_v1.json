@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "shared.avatar-user-pool.manifest/2",
+  "defaultTrack": "creator_pool",
+  "mergeRules": {
+    "archivePath": "_shared/test_fixtures/user_pool.json",
+    "creatorPoolPath": "_shared/test_fixtures/user_pool.creator_pool.travel_photo_1k_v1.json",
+    "resolutionOrder": [
+      "creator_pool",
+      "archive"
+    ],
+    "conflictPolicy": "creator_pool_wins"
+  },
+  "currentUserVariant": {
+    "userId": "fixture_user_current",
+    "subAccountId": "fixture_sub_current"
+  },
+  "statistics": {
+    "archiveUserCount": 107,
+    "creatorPoolUserCount": 1201,
+    "mergedUserCount": 1308
+  },
+  "batchId": "travel_photo_1k_v1",
+  "generatedAt": "2026-07-05T13:26:11.548487+00:00"
+}

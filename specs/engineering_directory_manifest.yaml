@@ -1,57 +1,55 @@
 version: 1
 policy:
   single_source_of_truth:
-    feature_catalog: "changes/feature_catalog.yaml"
+    feature_catalog: "specs/feature-tree/tree_index.yaml"
     changelog: "specs/changelog/"
     global_specs: "specs/"
     root_rules: ".cursor/rules/"
     root_commands: ".cursor/commands/"
 
 verification_rules:
-  feature_traceability: { script: "agent_ops/scaffold/verify_feature_traceability.sh" }
+  feature_traceability: { script: "quwoquan_ops/gate/scaffold/verify_feature_traceability.sh" }
   contract_metadata: { script: "quwoquan_service/scripts/contract/verify_contract_metadata.sh" }
-  specs_l1: { script: "agent_ops/scaffold/verify_specs_l1_hierarchy.sh" }
-  feature_tree: { script: "agent_ops/scaffold/verify_feature_tree_refactor.sh" }
-  engineering: { script: "agent_ops/scaffold/verify_engineering_directory.sh" }
-  opsx_8services: { script: "quwoquan_service/scripts/deploy/verify_opsx_ff_8services_consistency.sh" }
+  specs_l1: { script: "quwoquan_ops/gate/scaffold/verify_specs_l1_hierarchy.sh" }
+  feature_tree: { script: "quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh" }
+  engineering: { script: "quwoquan_ops/gate/scaffold/verify_engineering_directory.sh" }
+  opsx_8services: { script: "quwoquan_ops/environments/verify/verify_opsx_ff_8services_consistency.sh" }
   opsx_8services_scope:
-    services: [gateway-service, orchestrator-service, content-service, circle-service, user-service, chat-service, assistant-service, product-ops]
-    required: [design.md, tasks.md, specs/*/spec.md, services/*/]
+    services: [assistant-service, chat-service, circle-service, content-service, entity-service, integration-service, notification-service, product-ops-service, rec-model-service, rtc-service, search-service, tag-service, user-service]
+    required: [services/*/, contracts/metadata/*/, services/*/configs/releases/]
 
 required_directories:
-  - "changes"
   - "specs"
   - "specs/changelog"
   - "specs/feature-tree"
-  - "agent_ops"
+  - "quwoquan_ops"
   - ".cursor/rules"
   - ".cursor/commands"
   - "quwoquan_app"
   - "quwoquan_data"
   - "quwoquan_service/contracts"
-  - "quwoquan_service/platform/observability"
-  - "quwoquan_service/platform/config"
+  - "quwoquan_service/contracts/observability"
+  - "quwoquan_ops/observability"
+  - "quwoquan_ops/environments"
 
 required_files:
   - "README.md"
   - "Makefile"
-  - "agent_ops/gate/gate_repo.sh"
-  - "agent_ops/scaffold/new_feature_fullstack.sh"
-  - "agent_ops/scaffold/new_service_fullstack.sh"
+  - "quwoquan_ops/gate/gate_repo.sh"
+  - "quwoquan_ops/gate/scaffold/new_feature_fullstack.sh"
+  - "quwoquan_ops/gate/scaffold/new_service_fullstack.sh"
   - "quwoquan_service/scripts/runtime/bootstrap_service_config_layout.sh"
-  - "agent_ops/scaffold/verify_feature_traceability.sh"
+  - "quwoquan_ops/gate/scaffold/verify_feature_traceability.sh"
   - "quwoquan_service/scripts/contract/verify_contract_metadata.sh"
-  - "agent_ops/scaffold/verify_acceptance_standard.sh"
-  - "agent_ops/scaffold/verify_specs_l1_hierarchy.sh"
-  - "agent_ops/scaffold/verify_feature_tree_refactor.sh"
+  - "quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh"
+  - "quwoquan_ops/gate/scaffold/verify_specs_l1_hierarchy.sh"
+  - "quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh"
   - "quwoquan_service/scripts/runtime/verify_service_config_layout.sh"
   - "quwoquan_service/scripts/runtime/verify_service_env_contract.sh"
-  - "quwoquan_service/scripts/deploy/verify_config_release_version_mapping.sh"
-  - "quwoquan_service/scripts/deploy/verify_config_image_compat.sh"
+  - "quwoquan_ops/environments/verify/verify_config_release_version_mapping.sh"
+  - "quwoquan_ops/environments/verify/verify_config_image_compat.sh"
   - "quwoquan_data/scripts/verify/verify_quwoquan_data.sh"
-  - "agent_ops/scaffold/scaffold_feature_tree_from_yaml.sh"
-  - "changes/README.md"
-  - "changes/feature_catalog.yaml"
+  - "quwoquan_ops/gate/scaffold/scaffold_feature_tree_from_yaml.sh"
   - "specs/00_AGENT_MASTER_SPEC.md"
   - "specs/l1_index.yaml"
   - "specs/feature-tree/README.md"
@@ -59,13 +57,3 @@ required_files:
   - "specs/changelog/README.md"
   - "specs/README.md"
   - ".cursor/rules/06-doc-authority-hierarchy.mdc"
-
-compatibility_files_must_be_pointer:
-  - "quwoquan_service/.cursor/rules/00-quwoquan-service-core.mdc"
-  - "quwoquan_service/.cursor/rules/01-contracts-openapi.mdc"
-  - "quwoquan_service/.cursor/rules/02-specs-tasks-docs.mdc"
-  - "quwoquan_service/.cursor/rules/03-feature-delivery-workflow.mdc"
-  - "quwoquan_service/.cursor/rules/04-fullstack-metadata-consistency.mdc"
-pointer_required_keywords:
-  - "兼容指引"
-  - "已迁移"

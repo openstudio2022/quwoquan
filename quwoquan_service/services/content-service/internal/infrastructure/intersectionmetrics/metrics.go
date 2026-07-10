@@ -52,6 +52,17 @@ var (
 		Help:      "Objects written into the cross-session intersection cooldown window.",
 	})
 
+	// negativeFeedbackReported counts subjects written into the negative-feedback
+	// cooldown set (rec:ineg) driven by explicit intersection feedbackKinds. Paired
+	// with feed filtered_total{reason="negative"} it proves the negative-feedback →
+	// cooldown funnel (F: 过冷却不再重复推荐).
+	negativeFeedbackReported = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: namespace,
+		Subsystem: "cooldown",
+		Name:      "negative_feedback_reported_total",
+		Help:      "Subjects written into the intersection negative-feedback cooldown set (rec:ineg).",
+	})
+
 	// inboxVisit counts My-Intersection clears (read watermark advance) per
 	// dimension (清零 volume).
 	inboxVisit = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -79,7 +90,7 @@ var (
 		Namespace: namespace,
 		Subsystem: "redis",
 		Name:      "degraded_total",
-		Help:      "Intersection Redis degradations by op(exposure_write|watermark_write|watermark_read).",
+		Help:      "Intersection Redis degradations by op(exposure_write|negative_feedback_write|watermark_write|watermark_read).",
 	}, []string{"op"})
 )
 
@@ -114,6 +125,13 @@ func (*Recorder) ObserveFeedFiltered(channel, reason string) {
 func (*Recorder) ObserveExposureReported(count int) {
 	if count > 0 {
 		exposureReported.Add(float64(count))
+	}
+}
+
+// ObserveNegativeFeedbackReported implements intersectionapp.IntersectionMetricsRecorder.
+func (*Recorder) ObserveNegativeFeedbackReported(count int) {
+	if count > 0 {
+		negativeFeedbackReported.Add(float64(count))
 	}
 }
 

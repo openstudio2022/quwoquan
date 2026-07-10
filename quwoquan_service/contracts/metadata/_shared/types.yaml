@@ -59,7 +59,10 @@ enums:
   CircleFileType: [file, folder]
   CircleFileStatus: [uploading, active, deleted]
   HomepageStatus: [candidate, published, offline]
-  HomepageType: [vehicle, hotel, restaurant, sight, university, travel_photo]
+  # 地点类主页类型与数据工程 Entity/地点 一级类型试点 scope 对齐（裁决 6）：
+  # 景区→sight，其余按 entity_type_taxonomy.PILOT_PRIMARY_TYPES 补齐
+  # （博物馆/遗址/古镇/宗教场所/打卡地/自然景观/公园/温泉/主题乐园）。
+  HomepageType: [vehicle, hotel, restaurant, sight, university, travel_photo, museum, heritage_site, ancient_town, religious_site, check_in_spot, natural_landscape, park, hot_spring, theme_park]
   HomepageSourceType: [official_seed, imported, user_suggested, owner_created]
   HomepageClaimStatus: [unclaimed, pending_review, claimed, rejected]
   HomepageClaimTier: [basic, verified]
@@ -77,7 +80,7 @@ enums:
   RunTriggerType: [user_query, suggested_action, skill_select, global_search_handoff]
   InteractionEventType: [query, response, feedback, action_click, skill_trigger, tool_call, error]
   FeedbackType: [thumbs_up, thumbs_down, rating, text]
-  BehaviorEventType: [impression, click, dwell, like, dislike, hide_author, hide_content_type, report, share, comment, intersection_expand]
+  BehaviorEventType: [impression, click, dwell, like, dislike, hide_author, hide_content_type, report, share, comment, intersection_expand, intersection_feedback, wishlist_add, wishlist_remove, skip, follow, join_circle, add_contact, author_view, tag_click, content_depth, play_progress, assistant_interest]
   Platform: [ios, android]
   LocationProvider: [baidu, amap]
   ExternalInteractionOperation: [sms_otp.send, push_delivery.send, one_tap_phone.resolve, webhook.deliver]

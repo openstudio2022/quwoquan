@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
@@ -66,6 +65,7 @@ class GlobalTopActions extends ConsumerWidget {
             foregroundColor: foregroundColor,
             onTap: () => GlobalQuickActionSheet.show(
               context,
+              ref,
               priority: quickActionPriority,
             ),
           ),
@@ -425,16 +425,23 @@ class GlobalQuickActionSheet {
   const GlobalQuickActionSheet._();
 
   static Future<void> show(
-    BuildContext context, {
+    BuildContext context,
+    WidgetRef ref, {
     CreateActionSheetPriority priority =
         CreateActionSheetPriority.createPrimary,
-  }) {
-    return showCupertinoModalPopup<void>(
+  }) async {
+    final intent = await showAppBottomModal<_QuickActionIntent>(
       context: context,
-      barrierColor: Colors.transparent,
-      builder: (sheetContext) =>
-          _QuickActionSheet(rootContext: context, priority: priority),
+      builder: (sheetContext) => _QuickActionSheet(priority: priority),
     );
+    if (intent == null || !context.mounted) {
+      return;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!context.mounted) {
+      return;
+    }
+    await _handleQuickActionIntent(context, ref, intent);
   }
 
   /// 进入创建流（写文章/发图片/发视频）。/create 路由门负责未登录拦截与登录后回源。
@@ -491,138 +498,146 @@ class GlobalQuickActionSheet {
         openCreateCircle(context);
     }
   }
-}
 
-class _QuickActionSheet extends ConsumerWidget {
-  const _QuickActionSheet({required this.rootContext, required this.priority});
-
-  final BuildContext rootContext;
-  final CreateActionSheetPriority priority;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return CreateActionSheet(
-      onCreateAction: (action) => _openCreateAction(context, action),
-      onContinueFromDraft: () => _openContinueFromDraft(context, ref),
-      onStartGroupChat: () => _openStartGroupChat(context, ref),
-      onAddContact: () => _openAddContact(context, ref),
-      onCreateCircle: () => _openCreateCircle(context, ref),
-      onInterestMatch: () => _openInterestMatch(context),
-      onCancel: () => Navigator.of(context).pop(),
-      priority: priority,
-    );
-  }
-
-  void _openContinueFromDraft(BuildContext sheetContext, WidgetRef ref) {
-    Navigator.of(sheetContext).pop();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!rootContext.mounted) {
-        return;
-      }
-      final router = GoRouter.of(rootContext);
-      // 草稿页是强登录入口：关闭登录回首页安全态；登录成功直达本地草稿页。
-      if (!ref.read(authSessionControllerProvider).isAuthenticated) {
-        unawaited(
-          requireLogin(
-            ref,
-            rootContext,
-            AuthGateReason.createPost,
-            redirect: AppRoutePaths.localDrafts,
-            dismissFallback: AppRoutePaths.home,
-            allowGuestDismissPop: false,
-          ),
+  static Future<void> _handleQuickActionIntent(
+    BuildContext context,
+    WidgetRef ref,
+    _QuickActionIntent intent,
+  ) async {
+    switch (intent.kind) {
+      case _QuickActionIntentKind.createAction:
+        final action = intent.createAction;
+        if (action == null) {
+          return;
+        }
+        openCreateAction(context, action);
+      case _QuickActionIntentKind.continueFromDraft:
+        await _openContinueFromDraft(context, ref);
+      case _QuickActionIntentKind.startGroupChat:
+        await _runGatedSheetAction(
+          context,
+          ref,
+          reason: AuthGateReason.startGroupChat,
+          sheet: AuthContinuationSheet.startGroupChat,
+          openNow: () => openStartGroupChat(context),
         );
-        return;
-      }
-      unawaited(presentCreateDraftPickerAndGo(rootContext, router));
-    });
+      case _QuickActionIntentKind.addContact:
+        await _runGatedSheetAction(
+          context,
+          ref,
+          reason: AuthGateReason.addContact,
+          sheet: AuthContinuationSheet.addContact,
+          openNow: () => openAddContact(context),
+        );
+      case _QuickActionIntentKind.createCircle:
+        await _runGatedSheetAction(
+          context,
+          ref,
+          reason: AuthGateReason.createCircle,
+          sheet: AuthContinuationSheet.createCircle,
+          openNow: () => openCreateCircle(context),
+        );
+      case _QuickActionIntentKind.interestMatch:
+        openInterestMatch(context);
+    }
   }
 
-  void _openCreateAction(BuildContext sheetContext, EditorStartAction action) {
-    Navigator.of(sheetContext).pop();
-    // Wait for the transparent quick-action sheet to finish dismissing before
-    // replacing the root route, otherwise the entry sheet reverse transition
-    // and CreatePage's immediate picker/camera push can flash a black frame.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!rootContext.mounted) {
-        return;
-      }
-      // /create 路由门负责未登录拦截与登录后按 redirect 回源。
-      GlobalQuickActionSheet.openCreateAction(rootContext, action);
-    });
+  static Future<void> _openContinueFromDraft(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final router = GoRouter.of(context);
+    // 草稿页是强登录入口：关闭登录回首页安全态；登录成功直达本地草稿页。
+    if (!ref.read(authSessionControllerProvider).isAuthenticated) {
+      await requireLogin(
+        ref,
+        context,
+        AuthGateReason.createPost,
+        redirect: AppRoutePaths.localDrafts,
+        dismissFallback: AppRoutePaths.home,
+        allowGuestDismissPop: false,
+      );
+      return;
+    }
+    await presentCreateDraftPickerAndGo(context, router);
   }
 
-  void _openStartGroupChat(BuildContext sheetContext, WidgetRef ref) {
-    Navigator.of(sheetContext).pop();
-    _gatedSheetAction(
-      ref,
-      reason: AuthGateReason.startGroupChat,
-      sheet: AuthContinuationSheet.startGroupChat,
-      openNow: () => GlobalQuickActionSheet.openStartGroupChat(rootContext),
-    );
-  }
-
-  void _openAddContact(BuildContext sheetContext, WidgetRef ref) {
-    Navigator.of(sheetContext).pop();
-    _gatedSheetAction(
-      ref,
-      reason: AuthGateReason.addContact,
-      sheet: AuthContinuationSheet.addContact,
-      openNow: () => GlobalQuickActionSheet.openAddContact(rootContext),
-    );
-  }
-
-  void _openCreateCircle(BuildContext sheetContext, WidgetRef ref) {
-    Navigator.of(sheetContext).pop();
-    _gatedSheetAction(
-      ref,
-      reason: AuthGateReason.createCircle,
-      sheet: AuthContinuationSheet.createCircle,
-      openNow: () => GlobalQuickActionSheet.openCreateCircle(rootContext),
-    );
-  }
-
-  void _openInterestMatch(BuildContext sheetContext) {
-    Navigator.of(sheetContext).pop();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!rootContext.mounted) {
-        return;
-      }
-      GlobalQuickActionSheet.openInterestMatch(rootContext);
-    });
-  }
-
-  /// 账号态动作门：已登录直接执行；未登录先登记续接再引导登录，登录成功后由
-  /// 外壳消费 [OpenSheetContinuation] 自动续接，避免「登录回来什么都没发生」。
-  void _gatedSheetAction(
+  static Future<void> _runGatedSheetAction(
+    BuildContext context,
     WidgetRef ref, {
     required AuthGateReason reason,
     required AuthContinuationSheet sheet,
     required VoidCallback openNow,
-  }) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!rootContext.mounted) {
-        return;
-      }
-      if (ref.read(authSessionControllerProvider).isAuthenticated) {
-        openNow();
-        return;
-      }
-      ref
-          .read(authContinuationProvider.notifier)
-          .set(OpenSheetContinuation(sheet));
-      // 账号态动作门为强登录入口：动作面板已关闭，关闭登录只走安全兜底（首页），
-      // 禁止 pop 回受限触发态形成「关闭→再弹登录」死循环（登录入口无死循环宪法）。
-      unawaited(
-        requireLogin(
-          ref,
-          rootContext,
-          reason,
-          dismissFallback: AppRoutePaths.home,
-          allowGuestDismissPop: false,
-        ),
+  }) async {
+    if (ref.read(authSessionControllerProvider).isAuthenticated) {
+      openNow();
+      return;
+    }
+    ref
+        .read(authContinuationProvider.notifier)
+        .set(OpenSheetContinuation(sheet));
+    // 账号态动作门为强登录入口：动作面板已关闭，关闭登录只走安全兜底（首页），
+    // 禁止 pop 回受限触发态形成「关闭→再弹登录」死循环（登录入口无死循环宪法）。
+    await requireLogin(
+      ref,
+      context,
+      reason,
+      dismissFallback: AppRoutePaths.home,
+      allowGuestDismissPop: false,
+    );
+  }
+}
+
+enum _QuickActionIntentKind {
+  createAction,
+  continueFromDraft,
+  startGroupChat,
+  addContact,
+  createCircle,
+  interestMatch,
+}
+
+class _QuickActionIntent {
+  const _QuickActionIntent(this.kind, {this.createAction});
+
+  final _QuickActionIntentKind kind;
+  final EditorStartAction? createAction;
+
+  static _QuickActionIntent create(EditorStartAction action) =>
+      _QuickActionIntent(
+        _QuickActionIntentKind.createAction,
+        createAction: action,
       );
-    });
+}
+
+class _QuickActionSheet extends StatelessWidget {
+  const _QuickActionSheet({required this.priority});
+
+  final CreateActionSheetPriority priority;
+
+  @override
+  Widget build(BuildContext context) {
+    return CreateActionSheet(
+      onCreateAction: (action) =>
+          Navigator.of(context).pop(_QuickActionIntent.create(action)),
+      onContinueFromDraft: () => Navigator.of(
+        context,
+      ).pop(const _QuickActionIntent(_QuickActionIntentKind.continueFromDraft)),
+      onStartGroupChat: () => Navigator.of(
+        context,
+      ).pop(const _QuickActionIntent(_QuickActionIntentKind.startGroupChat)),
+      onAddContact: () => Navigator.of(
+        context,
+      ).pop(const _QuickActionIntent(_QuickActionIntentKind.addContact)),
+      onCreateCircle: () => Navigator.of(
+        context,
+      ).pop(const _QuickActionIntent(_QuickActionIntentKind.createCircle)),
+      onInterestMatch: () => Navigator.of(
+        context,
+      ).pop(const _QuickActionIntent(_QuickActionIntentKind.interestMatch)),
+      onCancel: () => Navigator.of(context).pop(),
+      priority: priority,
+    );
   }
 }
 

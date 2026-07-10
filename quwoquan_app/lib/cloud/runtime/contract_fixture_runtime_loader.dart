@@ -71,6 +71,10 @@ class ContractFixtureRuntimeLoader {
     return userSeedSet(ref);
   }
 
+  static Map<String, dynamic>? metadataJson(String metadataRelativePath) {
+    return _loadMetadataJson(metadataRelativePath);
+  }
+
   static Map<String, dynamic>? seedManifest([
     String env = CloudRuntimeConfig.appRuntimeEnv,
   ]) {
@@ -183,6 +187,12 @@ class ContractFixtureRuntimeLoader {
         .toSet()
         .toList(growable: false);
     final files = <File>[];
+    final repoRoot = Platform.environment['QWQ_REPO_ROOT'];
+    if (repoRoot != null && repoRoot.trim().isNotEmpty) {
+      for (final suffix in suffixes) {
+        files.add(File('${repoRoot.trim()}/$suffix'));
+      }
+    }
     for (final suffix in suffixes) {
       files.addAll(<File>[
         File('../$suffix'),

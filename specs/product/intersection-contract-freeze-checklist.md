@@ -65,7 +65,7 @@
 
 - `make verify`（含 `verify_intersection_kind_registry.py` 注册表↔Go 对齐）。
 - `make codegen` / `make codegen-app`（端云产物与 metadata 一致）。
-- `bash agent_ops/gate/gate_repo.sh --scope app` / `--scope service`（受影响范围）。
+- `bash quwoquan_ops/gate/gate_repo.sh --scope app` / `--scope service`（受影响范围）。
 
 ## 8. v2 三层架构草案字段（**未冻结**，UI 原型评审通过后再冻结）
 

@@ -243,6 +243,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
   final Map<int, Uint8List> _filterTemplatePreviewBytes = <int, Uint8List>{};
   final Set<int> _filterTemplatePreviewLoading = <int>{};
   final Set<int> _filterTemplatePreviewQueued = <int>{};
+  final Set<int> _filterTemplatePreviewFailed = <int>{};
   final Set<int> _filterVisibleIndices = <int>{};
   final List<int> _filterPreviewQueue = <int>[];
   bool _processingFilterPreviewQueue = false;
@@ -368,7 +369,10 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
       ColorType.foregroundSecondary,
     );
     final topPad = MediaQuery.paddingOf(context).top;
-    final bottomPad = MediaQuery.paddingOf(context).bottom;
+    final bottomPad = math.max(
+      MediaQuery.paddingOf(context).bottom,
+      AppSpacing.containerMd,
+    );
     final isToolEditing = _selectedToolIndex != null;
     // 顶栏纯黑；状态栏纯黑且图标略降对比（通过深灰背景弱化白图标）
     final topBarBg = AppColors.black;
@@ -641,6 +645,7 @@ class _ImageEditorPageState extends ConsumerState<ImageEditorPage> {
                     selectedToolIndex: _showProToolbox
                         ? kImageEditorToolPro
                         : _selectedToolIndex,
+                    onNextStep: () => _onDone(action: 'continueToCreate'),
                     onToolSelected: (index) {
                       setState(() {
                         _showProToolbox = false;

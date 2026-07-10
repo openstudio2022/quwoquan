@@ -26,14 +26,14 @@ minimum_package:
     t1:
       - contracts/metadata/recommendation/rec_model/service.yaml
     t2:
-      - services/rec-model-service/tests/test_runtime_contract.py
+      - services/rec-model-service/tests/local_contract/model_contract/test_runtime_contract__runtime_payload__contract__local_contract_test.py
     t3:
       - contracts/metadata/recommendation/rec_model/tests/e2e.yaml
     t4: []
 deployment:
   plane_binding_domain: recommendation
-  plane_binding_source: deploy/shared/process_domain_plane_mapping.yaml
-  current_binding_source: deploy/shared/process_domain_mapping.yaml
+  plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml
+  current_binding_source: quwoquan_ops/environments/process_domain_mapping.yaml
 replication:
   source_template: content
   next_copy_targets: []

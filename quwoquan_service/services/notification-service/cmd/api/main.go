@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -30,8 +32,9 @@ func main() {
 	rootMux := http.NewServeMux()
 	rootMux.Handle("/", httpadapter.NewHandler(service).Routes())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
+	addr := getenvOrDefault("NOTIFICATION_SERVICE_ADDR", ":18087")
 	server := &http.Server{
-		Addr:              ":18087",
+		Addr:              addr,
 		Handler:           rootMux,
 		BaseContext:       func(_ net.Listener) context.Context { return ctx },
 		ReadHeaderTimeout: 5 * time.Second,
@@ -64,4 +67,11 @@ func runWorkerLoop(ctx context.Context, service *application.NotificationDeliver
 			}
 		}
 	}
+}
+
+func getenvOrDefault(key string, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }

@@ -39,10 +39,10 @@ gwt_acceptance:
     - refresh token 正常轮换 P95 <= 800ms。
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
-      - file: quwoquan_app/test/core/auth/auth_session_store_test.dart
-      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-      - file: quwoquan_app/test/core/platform/native_auth_bridge_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/platform/native_auth_bridge__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/runtime/cloud_http_client_refresh__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/core/auth/auth_session_controller__local_contract_test.dart
@@ -73,7 +73,7 @@ gwt_acceptance:
     - '[migrated_from_recorded_command] make verify-app-auth-policy'
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

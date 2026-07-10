@@ -98,7 +98,7 @@
 - `quwoquan_service/services/content-service/internal/infrastructure/recommendation/intersection_source.go`（新数据源 + 文案 + 字段补全 + kind 标准名迁移）
 - `quwoquan_service/services/content-service/internal/application/intersection/intersection_service.go`（`evidenceKindRank` 标准化、保鲜、候选过滤）
 - `quwoquan_service/services/content-service/internal/application/feed/feed_intersection_mixer.go`（feed 理由混排消费新 kind）
-- favorite 退场触达面：`contracts/metadata/content/post/{service,fields,behaviors,events,storage,aggregate,ui_config}.yaml`、`_shared/{request_context,types,redis_keyspace}.yaml`、5 个投影 yaml、`recommendation/rec_model/projections/learning_events.yaml`、`assistant/assistant_run/fields.yaml`；content-service handler/application/推荐管线；rec-model-service 与 `scripts/ml/**`；端侧（详见 WP 各包与词典退场清单）
+- favorite 退场触达面：`contracts/metadata/content/post/{service,fields,behaviors,events,storage,aggregate,ui_config}.yaml`、`_shared/{request_context,types,redis_keyspace}.yaml`、5 个投影 yaml、`recommendation/rec_model/projections/learning_events.yaml`、`assistant/assistant_run/fields.yaml`；content-service handler/application/推荐管线；rec-model-service 与 `services/rec-model-service/scripts/**`；端侧（详见 WP 各包与词典退场清单）
 - `contracts/metadata/content/test_fixtures/**`、`_shared/test_fixtures/app_{alpha,beta}_seed_manifest.json`
 - `contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml`（字段收敛 + description 注记；见 §18 契约表）
 - 足迹只读契约登记（`content/post/service.yaml` 或独立分区 + `_shared/ui_surfaces.yaml` route `myFootprint`）
@@ -109,7 +109,7 @@
 1. T1：contract 测试断言六类 kind 均能产出，且 `primaryText` 符合 §20.3 高层措辞与 `specs/product/intersection-definition-and-application.md` 的词典口径，`intersectionPoints` 非空可枚举。
 2. T1：spotlight 候选完备性测试——进入候选窗的 reason `primaryText != '' && (avatarUrl != '' || objectKind 非 person 有头图)`。
 3. T3：gamma 环境真实 API（`/v1/content/intersections/summary` 与 `/v1/content/feed/intersections`）返回 ≥5 类事实表达；spotlight 候选非空。
-4. `bash agent_ops/gate/gate_repo.sh --scope service` 与 `--scope app` 全绿；`make verify-metadata` 绿。
+4. `bash quwoquan_ops/gate/gate_repo.sh --scope service` 与 `--scope app` 全绿；`make verify-metadata` 绿。
 5. 不得出现端侧本地拼装文案的回归（G2 契约测试保持绿）。
 6. grep 验收：
    - **防回归**（基线修正已达成）：契约/云侧/端侧 `favorite|FavoritePost|coFavorited|coFollowedContent` 零残留（词典退场清单章节与点赞心形图标 `Icons.favorite*` 豁免）。

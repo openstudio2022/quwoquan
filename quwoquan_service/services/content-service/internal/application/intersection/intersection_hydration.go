@@ -2,11 +2,15 @@ package intersection
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"quwoquan_service/services/content-service/internal/generated"
 )
+
+var rawInteractionStatsPattern = regexp.MustCompile(`[0-9０-９]+\s*(赞|评|转|转发)`)
 
 // 交集理由的纯派生/水合辅助（freshness、point/icon/target/text span 推导）
 // 自 intersection_service.go 拆出（同 application 包，R03 行数预算，行为不变）。
@@ -163,11 +167,17 @@ func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
 		// 离散化生命周期态；无信号不造假（留空，端按 freshAt/new 红点兜底）。
 		r.LifecycleState = lifecycleStateForReason(r)
 	}
+	r = hydrateActorEvidenceContract(r)
 	if r.RepresentativeActor == nil && hasAnchor {
 		r.RepresentativeActor = representativeActorForReason(r, anchor)
 	}
-	if strings.TrimSpace(r.PrimaryText) == "" && hasAnchor {
-		r.PrimaryText = explainPrimaryText(r, anchor)
+	if hasAnchor {
+		computed := explainPrimaryText(r, anchor)
+		if strings.TrimSpace(r.PrimaryText) == "" ||
+			!displayStatementTextAllowed(r, r.PrimaryText) {
+			r.PrimaryText = computed
+			r.PrimarySpans = nil
+		}
 	}
 	if strings.TrimSpace(r.SecondaryText) == "" {
 		r.SecondaryText = explainSecondaryText(r, anchor)
@@ -194,6 +204,11 @@ func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
 		r.IconKey = iconKeyForReason(r)
 	}
 	r = hydrateInteractionContract(r)
+	if !ValidateDisplayStatement(r) {
+		r.PrimaryText = ""
+		r.PrimarySpans = nil
+		r.ActionHints = nil
+	}
 	if r.ObjectVisual == nil {
 		r.ObjectVisual = objectVisualForReason(r)
 	}
@@ -263,6 +278,44 @@ func hydrateInteractionContract(r IntersectionReasonView) IntersectionReasonView
 	return r
 }
 
+func hydrateActorEvidenceContract(r IntersectionReasonView) IntersectionReasonView {
+	if len(r.ActorEvidence) > 0 && r.ActorEvidenceTotalCount == 0 {
+		r.ActorEvidenceTotalCount = len(r.ActorEvidence)
+	}
+	if strings.TrimSpace(r.ActorEvidenceCompleteness) == "" {
+		if len(r.ActorEvidence) > 0 && r.ActorEvidenceTotalCount == len(r.ActorEvidence) {
+			r.ActorEvidenceCompleteness = "complete"
+		} else {
+			r.ActorEvidenceCompleteness = "unknown"
+		}
+	}
+	for i := range r.ActorEvidence {
+		e := &r.ActorEvidence[i]
+		if strings.TrimSpace(e.PrivacyState) == "" {
+			e.PrivacyState = "visible"
+		}
+		if e.SortKey == 0 {
+			e.SortKey = i + 1
+		}
+		if strings.TrimSpace(e.SnapshotVersion) == "" {
+			e.SnapshotVersion = r.PointSummarySnapshotID
+		}
+		if e.EvidenceRank == 0 && strings.TrimSpace(e.SourceRef) != "" {
+			e.EvidenceRank = evidenceKindRank(e.SourceRef, "fact")
+		}
+		if e.Target == nil && strings.TrimSpace(e.ActorID) != "" {
+			routeID := routeIDForObjectKind("person")
+			e.Target = &IntersectionTargetView{
+				ObjectType: objectTypeForTarget("person", strings.TrimSpace(e.ActorID), routeID),
+				ObjectID:   strings.TrimSpace(e.ActorID),
+				ObjectKind: "person",
+				RouteID:    routeID,
+			}
+		}
+	}
+	return r
+}
+
 func intersectionTargetForReason(r IntersectionReasonView) *IntersectionTargetView {
 	id := strings.TrimSpace(r.ActionTargetID)
 	if id == "" {
@@ -275,10 +328,12 @@ func intersectionTargetForReason(r IntersectionReasonView) *IntersectionTargetVi
 	if kind == "" {
 		kind = "person"
 	}
+	routeID := routeIDForObjectKind(kind)
 	return &IntersectionTargetView{
+		ObjectType: objectTypeForTarget(kind, id, routeID),
 		ObjectID:   id,
 		ObjectKind: kind,
-		RouteID:    routeIDForObjectKind(kind),
+		RouteID:    routeID,
 	}
 }
 
@@ -287,6 +342,41 @@ func routeIDForObjectKind(kind string) string {
 	// （codegen generated.IntersectionRouteIDByObjectKind；端 intersectionRouteIdForObjectKind 同表）。
 	// 不可导航对象（content/tag）或未知值返回空串（map 零值）。
 	return generated.IntersectionRouteIDByObjectKind[strings.TrimSpace(kind)]
+}
+
+func objectTypeForTarget(kind, objectID, routeID string) string {
+	switch strings.TrimSpace(routeID) {
+	case "userProfile":
+		return "user"
+	case "circleDetail":
+		return "circle"
+	case "homepageDetail":
+		return "homepage"
+	case "workBrowser", "postDetail", "contentDetail":
+		return "post"
+	case "myIntersections":
+		return "dimension"
+	}
+	switch strings.TrimSpace(kind) {
+	case "person":
+		return "user"
+	case "circle":
+		return "circle"
+	case "school", "place", "enterprise", "route", "photo_spot", "gear":
+		return "homepage"
+	case "content":
+		return "post"
+	case "tag":
+		return "tag"
+	}
+	id := strings.TrimSpace(objectID)
+	switch {
+	case strings.HasPrefix(id, "homepage_"):
+		return "homepage"
+	case strings.HasPrefix(id, "fixture_circle_"), strings.HasPrefix(id, "circle_"):
+		return "circle"
+	}
+	return ""
 }
 
 func assetKindForObjectKind(kind string) string {
@@ -358,27 +448,304 @@ func primarySpansForReason(r IntersectionReasonView, target *IntersectionTargetV
 	if text == "" {
 		return nil
 	}
-	name := strings.TrimSpace(r.DisplayName)
-	if target == nil || name == "" || !strings.Contains(text, name) {
+	anchor, ok := explainAnchorPoint(r)
+	if !ok || target == nil {
 		return []IntersectionTextSpanView{{Text: text, Role: "plain"}}
 	}
-	parts := strings.SplitN(text, name, 2)
-	spans := make([]IntersectionTextSpanView, 0, 3)
-	if parts[0] != "" {
-		spans = append(spans, IntersectionTextSpanView{Text: parts[0], Role: "plain"})
+	spans := primaryStatementSpansForReason(r, anchor, target)
+	if len(spans) > 0 && joinedSpanText(spans) == text {
+		return spans
 	}
-	spans = append(spans, IntersectionTextSpanView{
-		Text:   name,
-		Role:   "object",
-		Target: target,
-	})
-	if len(parts) > 1 && parts[1] != "" {
-		spans = append(spans, IntersectionTextSpanView{Text: parts[1], Role: "plain"})
+	return []IntersectionTextSpanView{{Text: text, Role: "plain"}}
+}
+
+// ValidateDisplayStatement 是交集 v3 展示合同闸：服务端只允许完整 SVO 且可导航的实例
+// 进入 App 展示层。App 仍会 fail-closed 复核，但不再替云侧补主句。
+func ValidateDisplayStatement(r IntersectionReasonView) bool {
+	if !displayStatementTextAllowed(r, r.PrimaryText) {
+		return false
+	}
+	if len(r.PrimarySpans) == 0 {
+		return false
+	}
+	if joinedSpanText(r.PrimarySpans) != strings.TrimSpace(r.PrimaryText) {
+		return false
+	}
+	hasObjectTarget := false
+	for _, span := range r.PrimarySpans {
+		switch strings.TrimSpace(span.Role) {
+		case "count":
+			if span.Target != nil &&
+				(strings.TrimSpace(r.ActorEvidenceCompleteness) != "complete" ||
+					span.Target.RouteID != "myIntersections") {
+				return false
+			}
+		case "object":
+			if span.Target == nil || !displayObjectTargetAllowed(span.Target) {
+				return false
+			}
+			hasObjectTarget = true
+		}
+	}
+	return hasObjectTarget
+}
+
+func displayStatementTextAllowed(r IntersectionReasonView, text string) bool {
+	primary := strings.TrimSpace(text)
+	if primary == "" {
+		return false
+	}
+	if rawInteractionStatsPattern.MatchString(primary) {
+		return false
+	}
+	for _, banned := range []string{
+		"共同好友",
+		"都来这里互动过",
+		"在这里互动过",
+		"同读者",
+		"相近主题",
+		"TA的内容",
+		"相关圈子",
+		"我的连接",
+		"我的影响力",
+		"你和这里",
+		"你和这个圈子",
+		"你们有共同",
+	} {
+		if strings.Contains(primary, banned) {
+			return false
+		}
+	}
+	target := intersectionTargetForReason(r)
+	if target == nil || !displayObjectTargetAllowed(target) {
+		return false
+	}
+	if displayStatementNeedsRepresentative(r, primary) && !hasMeaningfulRepresentativeActor(r) {
+		return false
+	}
+	return true
+}
+
+func displayObjectTargetAllowed(target *IntersectionTargetView) bool {
+	if target == nil || strings.TrimSpace(target.ObjectID) == "" {
+		return false
+	}
+	switch strings.TrimSpace(target.ObjectType) {
+	case "user", "circle", "homepage", "post", "task":
+		return true
+	default:
+		return false
+	}
+}
+
+func displayStatementNeedsRepresentative(r IntersectionReasonView, text string) bool {
+	if r.ActorEvidenceTotalCount > 1 || len(r.ActorEvidence) > 1 {
+		return true
+	}
+	if strings.Contains(text, "等") {
+		return true
+	}
+	return regexp.MustCompile(`[0-9０-９]+\s*(人|位)`).MatchString(text)
+}
+
+func hasMeaningfulRepresentativeActor(r IntersectionReasonView) bool {
+	actor := r.RepresentativeActor
+	if actor == nil {
+		return false
+	}
+	if strings.TrimSpace(actor.DisplayName) == "" {
+		return false
+	}
+	name := strings.TrimSpace(actor.DisplayName)
+	if strings.HasPrefix(name, "一位") || name == "用户" {
+		return false
+	}
+	if !isMeaningfulRepresentativeRelationLabel(actor.RelationLabel) {
+		return false
+	}
+	if actor.Target == nil || strings.TrimSpace(actor.Target.ObjectType) != "user" {
+		return false
+	}
+	return true
+}
+
+func joinedSpanText(spans []IntersectionTextSpanView) string {
+	var b strings.Builder
+	for _, span := range spans {
+		b.WriteString(span.Text)
+	}
+	return b.String()
+}
+
+func primaryStatementSpansForReason(
+	r IntersectionReasonView,
+	anchor IntersectionPointView,
+	target *IntersectionTargetView,
+) []IntersectionTextSpanView {
+	if r.IntersectionClass == "affinity" {
+		return affinityPrimaryStatementSpansForReason(r, anchor, target)
+	}
+	objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+	if anchor.SourceRef == "commonContact" {
+		objectName = concreteObjectNameForReason(r)
+	}
+	if objectName == "" || target == nil {
+		return nil
+	}
+	subject := representativeSubjectSpans(r, anchor)
+	if len(subject) == 0 {
+		return nil
+	}
+	object := IntersectionTextSpanView{Text: objectName, Role: "object", Target: target}
+	switch anchor.SourceRef {
+	case "sharedFollowees", "commonFollower", "sharedEntityAttention":
+		return append(append(subject, plainSpan("也关注了")), object)
+	case "commonContact":
+		return append(append(append(subject, plainSpan("都是你和")), object), plainSpan("的共同联系人"))
+	case "sharedCircle", "coMemberCircle":
+		return append(append(subject, plainSpan("都加入了")), object)
+	case "coCommented", "sharedDiscussion":
+		action := interactionActionPhraseForReason(r)
+		if action == "" {
+			action = "都讨论过"
+		}
+		return append(append(subject, plainSpan(action)), object)
+	case "coSharedContent":
+		action := interactionActionPhraseForReason(r)
+		if action == "" {
+			action = "都转发过"
+		}
+		return append(append(subject, plainSpan(action)), object)
+	case "coCreatedContent":
+		return append(append(subject, plainSpan("都共创过")), object)
+	case "coVisitedEntity":
+		return append(append(subject, plainSpan("都去过")), object)
+	case "coWishlistedEntity":
+		return append(append(subject, plainSpan("都想去")), object)
+	case "followeeVisited":
+		return append(append(subject, plainSpan("来过")), object)
+	case "followeeInObject":
+		return append(append(subject, plainSpan("在")), object)
+	case "followeeViewing":
+		return append(append(subject, plainSpan("正在看")), object)
+	case "followeeDiscussedThis":
+		return append(append(subject, plainSpan("正在讨论")), object)
+	default:
+		return nil
+	}
+}
+
+func affinityPrimaryStatementSpansForReason(
+	r IntersectionReasonView,
+	anchor IntersectionPointView,
+	target *IntersectionTargetView,
+) []IntersectionTextSpanView {
+	objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+	text := strings.TrimSpace(r.PrimaryText)
+	if objectName == "" || text == "" || target == nil {
+		return nil
+	}
+	idx := strings.Index(text, objectName)
+	if idx < 0 {
+		return nil
+	}
+	spans := make([]IntersectionTextSpanView, 0, 3)
+	if idx > 0 {
+		spans = append(spans, plainSpan(text[:idx]))
+	}
+	spans = append(spans, IntersectionTextSpanView{Text: objectName, Role: "object", Target: target})
+	if tail := text[idx+len(objectName):]; tail != "" {
+		spans = append(spans, plainSpan(tail))
 	}
 	return spans
 }
 
+func representativeSubjectSpans(
+	r IntersectionReasonView,
+	anchor IntersectionPointView,
+) []IntersectionTextSpanView {
+	n := anchorAggregateCount(r, anchor)
+	subject := representativeSubject(r, anchor, n)
+	if strings.TrimSpace(subject) == "" {
+		return nil
+	}
+	actor := r.RepresentativeActor
+	if actor == nil || actor.Target == nil ||
+		strings.TrimSpace(actor.Target.ObjectType) != "user" ||
+		strings.TrimSpace(actor.DisplayName) == "" ||
+		!strings.Contains(subject, strings.TrimSpace(actor.DisplayName)) {
+		return splitCountSpan(subject, n, countTargetForReason(r, anchor))
+	}
+	name := strings.TrimSpace(actor.DisplayName)
+	parts := strings.SplitN(subject, name, 2)
+	spans := make([]IntersectionTextSpanView, 0, 5)
+	if parts[0] != "" {
+		spans = append(spans, plainSpan(parts[0]))
+	}
+	spans = append(spans, IntersectionTextSpanView{
+		Text:   name,
+		Role:   "object",
+		Target: actor.Target,
+	})
+	if len(parts) > 1 && parts[1] != "" {
+		spans = append(spans, splitCountSpan(parts[1], n, countTargetForReason(r, anchor))...)
+	}
+	return spans
+}
+
+func splitCountSpan(text string, n int, target *IntersectionTargetView) []IntersectionTextSpanView {
+	if n <= 1 || target == nil {
+		return []IntersectionTextSpanView{plainSpan(text)}
+	}
+	value := strconv.Itoa(n)
+	idx := strings.Index(text, value)
+	if idx < 0 {
+		return []IntersectionTextSpanView{plainSpan(text)}
+	}
+	out := make([]IntersectionTextSpanView, 0, 3)
+	if idx > 0 {
+		out = append(out, plainSpan(text[:idx]))
+	}
+	out = append(out, IntersectionTextSpanView{Text: value, Role: "count", Target: target})
+	if tail := text[idx+len(value):]; tail != "" {
+		out = append(out, plainSpan(tail))
+	}
+	return out
+}
+
+func countTargetForReason(r IntersectionReasonView, anchor IntersectionPointView) *IntersectionTargetView {
+	if strings.TrimSpace(r.ActorEvidenceCompleteness) != "complete" {
+		return nil
+	}
+	id := firstNonEmpty(r.Dimension, anchor.SourceRef)
+	if id == "" {
+		return nil
+	}
+	return &IntersectionTargetView{
+		ObjectType: "dimension",
+		ObjectID:   id,
+		ObjectKind: "dimension",
+		RouteID:    "myIntersections",
+	}
+}
+
+func plainSpan(text string) IntersectionTextSpanView {
+	return IntersectionTextSpanView{Text: text, Role: "plain"}
+}
+
 func representativeActorForReason(r IntersectionReasonView, anchor IntersectionPointView) *IntersectionRepresentativeActorView {
+	if actor, ok := representativeActorEvidenceForReason(r); ok {
+		return &IntersectionRepresentativeActorView{
+			ActorID:         strings.TrimSpace(actor.ActorID),
+			DisplayName:     strings.TrimSpace(actor.DisplayName),
+			AvatarURL:       actor.AvatarURL,
+			RelationLabel:   normalizedEvidenceRelationLabel(actor, anchor),
+			PrivacyState:    normalizedPrivacyState(actor.PrivacyState),
+			Target:          actor.Target,
+			EvidenceRank:    evidenceKindRank(actor.SourceRef, "fact"),
+			SnapshotVersion: firstNonEmpty(actor.SnapshotVersion, r.PointSummarySnapshotID),
+		}
+	}
 	name := representativeActorName(r, anchor)
 	if name == "" {
 		return nil
@@ -404,7 +771,48 @@ func representativeActorForReason(r IntersectionReasonView, anchor IntersectionP
 	}
 }
 
+func representativeActorEvidenceForReason(r IntersectionReasonView) (IntersectionActorEvidenceView, bool) {
+	for _, actor := range r.ActorEvidence {
+		if strings.TrimSpace(actor.DisplayName) == "" {
+			continue
+		}
+		if strings.TrimSpace(actor.PrivacyState) == "hidden" {
+			continue
+		}
+		return actor, true
+	}
+	return IntersectionActorEvidenceView{}, false
+}
+
+func normalizedEvidenceRelationLabel(actor IntersectionActorEvidenceView, anchor IntersectionPointView) string {
+	if isMeaningfulRepresentativeRelationLabel(actor.RelationLabel) {
+		return strings.TrimSpace(actor.RelationLabel)
+	}
+	return representativeRelationLabel(firstNonEmpty(actor.SourceRef, anchor.SourceRef))
+}
+
+func normalizedPrivacyState(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "visible"
+	}
+	return strings.TrimSpace(value)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
 func representativeActorName(r IntersectionReasonView, anchor IntersectionPointView) string {
+	if actor := r.RepresentativeActor; actor != nil {
+		if name := strings.TrimSpace(actor.DisplayName); name != "" {
+			return name
+		}
+	}
 	for _, v := range anchor.SampleVisuals {
 		if name := strings.TrimSpace(v.DisplayName); name != "" {
 			return name
@@ -439,7 +847,7 @@ func representativeRelationLabel(sourceRef string) string {
 	case "sharedFollowees", "commonFollower", "followeeInObject", "followeeVisited", "followeeViewing", "followeeDiscussedThis":
 		return "你关注的人"
 	case "commonContact":
-		return "共同联系人"
+		return "联系人"
 	case "sameSchool", "sameDepartment", "sameMajor", "sameCohort", "alumni", "alumniHere":
 		return "校友"
 	case "sameCompany", "sameTeam", "sameIndustry", "colleagueHere":
@@ -453,24 +861,121 @@ func representativeRelationLabel(sourceRef string) string {
 
 func representativeSubject(r IntersectionReasonView, anchor IntersectionPointView, n int) string {
 	name := representativeActorName(r, anchor)
+	relation := normalizedRepresentativeRelationLabel(r, anchor)
 	if name == "" {
-		name = "一位用户"
+		if n <= 1 {
+			if relation != "" {
+				return "一位" + relation
+			}
+			return "一位用户"
+		}
+		if relation != "" {
+			return fmt.Sprintf("%d位%s", n, relation)
+		}
+		return fmt.Sprintf("%d人", n)
+	}
+	base := name
+	if relation != "" && !strings.HasPrefix(name, "一位") {
+		base = relation + name
 	}
 	if n <= 1 {
-		return name
+		return base
 	}
-	return fmt.Sprintf("%s等%d人", name, n)
+	return fmt.Sprintf("%s等%d人", base, n)
+}
+
+func countedRepresentativeSubject(r IntersectionReasonView, anchor IntersectionPointView, n int) string {
+	relation := normalizedRepresentativeRelationLabel(r, anchor)
+	if n <= 1 {
+		if relation != "" {
+			return "1位" + relation
+		}
+		return "1位用户"
+	}
+	if relation != "" {
+		return fmt.Sprintf("%d位%s", n, relation)
+	}
+	return fmt.Sprintf("%d位用户", n)
+}
+
+func hasMachineRepresentativeName(r IntersectionReasonView, anchor IntersectionPointView) bool {
+	name := strings.TrimSpace(representativeActorName(r, anchor))
+	switch {
+	case name == "":
+		return false
+	case strings.Contains(name, "_"):
+		return true
+	case strings.HasPrefix(name, "fixture_"):
+		return true
+	case strings.HasPrefix(name, "ixsrc_"):
+		return true
+	default:
+		return false
+	}
 }
 
 func representativeSubjectWithUnit(r IntersectionReasonView, anchor IntersectionPointView, n int, unit string) string {
-	name := representativeActorName(r, anchor)
-	if name == "" {
-		name = "一位用户"
-	}
+	base := representativeSubject(r, anchor, 1)
 	if n <= 1 {
-		return name
+		return base
 	}
-	return fmt.Sprintf("%s等%d%s", name, n, unit)
+	return fmt.Sprintf("%s等%d%s", base, n, unit)
+}
+
+func normalizedRepresentativeRelationLabel(r IntersectionReasonView, anchor IntersectionPointView) string {
+	if actor := r.RepresentativeActor; actor != nil {
+		raw := strings.TrimSpace(actor.RelationLabel)
+		if isMeaningfulRepresentativeRelationLabel(raw) {
+			return raw
+		}
+	}
+	return representativeRelationLabel(anchor.SourceRef)
+}
+
+func isMeaningfulRepresentativeRelationLabel(label string) bool {
+	switch strings.TrimSpace(label) {
+	case "", "共同点赞", "共同讨论", "共同传播", "共同关注", "都关注此标签", "同行足迹", "同好":
+		return false
+	default:
+		return true
+	}
+}
+
+func interactionActionPhraseForReason(r IntersectionReasonView) string {
+	hasLike := false
+	hasComment := false
+	hasShare := false
+	for _, actor := range r.ActorEvidence {
+		if actor.LikeCount > 0 || strings.Contains(actor.ActionSummaryText, "赞") {
+			hasLike = true
+		}
+		if actor.CommentCount > 0 || strings.Contains(actor.ActionSummaryText, "评") || strings.Contains(actor.ActionSummaryText, "讨论") {
+			hasComment = true
+		}
+		if actor.ShareCount > 0 || strings.Contains(actor.ActionSummaryText, "转发") || strings.Contains(actor.ActionSummaryText, "分享") {
+			hasShare = true
+		}
+	}
+	parts := make([]string, 0, 3)
+	if hasLike {
+		parts = append(parts, "赞过")
+	}
+	if hasComment {
+		parts = append(parts, "评论过")
+	}
+	if hasShare {
+		parts = append(parts, "转发过")
+	}
+	switch len(parts) {
+	case 0:
+		return ""
+	case 1:
+		return parts[0]
+	case 2:
+		return parts[0] + "和" + parts[1]
+	default:
+		return parts[0] + "、" + parts[1] + "并" + parts[2]
+	}
 }
 
 func actionHintsForReason(r IntersectionReasonView, target *IntersectionTargetView) []IntersectionActionHintView {
@@ -482,11 +987,15 @@ func actionHintsForReason(r IntersectionReasonView, target *IntersectionTargetVi
 	out := make([]IntersectionActionHintView, 0, len(keys))
 	for i, key := range keys {
 		out = append(out, IntersectionActionHintView{
-			ActionKey: key,
-			Label:     actionLabelForKey(key),
-			Target:    target,
-			IsPrimary: i == 0,
-			Priority:  i + 1,
+			ActionKey:          key,
+			Label:              actionLabelForKey(key),
+			Target:             target,
+			IsPrimary:          i == 0,
+			Priority:           i + 1,
+			ActionTier:         actionTierForKey(key),
+			RequiredGates:      requiredGatesForKey(key),
+			TargetAvailability: actionTargetAvailabilityForKey(key),
+			Dispatch:           actionDispatchForKey(key),
 		})
 	}
 	return out
@@ -510,6 +1019,49 @@ func actionLabelForKey(key string) string {
 		return v
 	}
 	return generated.IntersectionActionLabelByKey["ask_assistant"]
+}
+
+// actionTierForKey 查 actionKey → 行动阶梯层级
+// （generated.IntersectionActionTierByKey，源 registry.actionKeyMeta.tier）。
+// 未登记 key 安全兜底 light，避免未知灰度 key 被误判为重社交行动。
+func actionTierForKey(key string) string {
+	if v, ok := generated.IntersectionActionTierByKey[strings.TrimSpace(key)]; ok && strings.TrimSpace(v) != "" {
+		return v
+	}
+	return "light"
+}
+
+// requiredGatesForKey 查 actionKey → 前置安全门列表
+// （generated.IntersectionRequiredGatesByActionKey，源 registry.actionKeyMeta.requiredGates）。
+// 返回副本，防止调用方误改 generated 表。
+func requiredGatesForKey(key string) []string {
+	gates := generated.IntersectionRequiredGatesByActionKey[strings.TrimSpace(key)]
+	if len(gates) == 0 {
+		return []string{}
+	}
+	out := make([]string, len(gates))
+	copy(out, gates)
+	return out
+}
+
+// actionTargetAvailabilityForKey 查 actionKey → available|deferred
+// （generated.IntersectionActionTargetAvailabilityByKey，源 registry.actionKeyMeta.targetAvailability）。
+// 未登记 key 兜底 available：未知轻行动只可按 target 尝试导航，不会被误判为规划态。
+func actionTargetAvailabilityForKey(key string) string {
+	if v, ok := generated.IntersectionActionTargetAvailabilityByKey[strings.TrimSpace(key)]; ok && strings.TrimSpace(v) != "" {
+		return v
+	}
+	return "available"
+}
+
+// actionDispatchForKey 查 actionKey → 端交互 handler 路由类别
+// （generated.IntersectionActionDispatchByKey，源 registry.actionKeyMeta.dispatch）。
+// 未登记 key 兜底 navigate，保证端只走对象导航安全路径，不误触发约伴/私信/助手。
+func actionDispatchForKey(key string) string {
+	if v, ok := generated.IntersectionActionDispatchByKey[strings.TrimSpace(key)]; ok && strings.TrimSpace(v) != "" {
+		return v
+	}
+	return "navigate"
 }
 
 // explainAnchorPoint 取结论句锚点：可见点中挖掘强度最高者（§9.8 evidenceKindRank）。
@@ -560,44 +1112,106 @@ func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) 
 	n := anchorAggregateCount(r, anchor)
 	switch anchor.SourceRef {
 	case "sharedFollowees", "commonFollower":
-		return fmt.Sprintf("你和%s共同关注了相同的人", representativeSubject(r, anchor, n))
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s也关注了%s", representativeSubject(r, anchor, n), objectName)
 	case "commonContact":
-		return fmt.Sprintf("你和%s有共同联系人", representativeSubject(r, anchor, n))
+		objectName := concreteObjectNameForReason(r)
+		if objectName == "" {
+			return fmt.Sprintf("%s都是你们的共同联系人", representativeSubject(r, anchor, n))
+		}
+		return fmt.Sprintf("%s都是你和%s的共同联系人", representativeSubject(r, anchor, n), objectName)
 	case "sharedCircle", "coMemberCircle":
-		return fmt.Sprintf("你和%s共同加入了圈子", representativeSubject(r, anchor, n))
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s都加入了%s", representativeSubject(r, anchor, n), objectName)
 	case "coCommented", "sharedDiscussion":
-		return fmt.Sprintf("你和%s都讨论过相同内容", representativeSubject(r, anchor, n))
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
+		}
+		if action := interactionActionPhraseForReason(r); action != "" {
+			return fmt.Sprintf("%s%s%s", representativeSubject(r, anchor, n), action, objectName)
+		}
+		return fmt.Sprintf("%s都讨论过%s", representativeSubject(r, anchor, n), objectName)
 	case "coSharedContent":
-		return fmt.Sprintf("你和%s都分享过相同内容", representativeSubject(r, anchor, n))
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
+		}
+		if action := interactionActionPhraseForReason(r); action != "" {
+			return fmt.Sprintf("%s%s%s", representativeSubject(r, anchor, n), action, objectName)
+		}
+		return fmt.Sprintf("%s都转发过%s", representativeSubject(r, anchor, n), objectName)
 	case "coCreatedContent":
-		return fmt.Sprintf("你和%s都创作过相关内容", representativeSubject(r, anchor, n))
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s都共创过%s", representativeSubject(r, anchor, n), objectName)
 	case "coVisitedEntity":
-		return fmt.Sprintf("你和%s都去过相同的地方", representativeSubject(r, anchor, n))
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s都去过%s", representativeSubject(r, anchor, n), objectName)
 	case "coWishlistedEntity":
-		return fmt.Sprintf("你和%s都想去相同的地方", representativeSubject(r, anchor, n))
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s都想去%s", representativeSubject(r, anchor, n), objectName)
 	case "sharedEntityAttention":
-		return fmt.Sprintf("你和%s共同关注了这里", representativeSubject(r, anchor, n))
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s也关注了%s", representativeSubject(r, anchor, n), objectName)
 	case "followeeVisited":
-		objectName := concreteObjectNameForReason(r)
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 		if objectName == "" {
 			return ""
 		}
-		return fmt.Sprintf("%s来过「%s」", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"), objectName)
+		subject := representativeSubject(r, anchor, n)
+		if hasMachineRepresentativeName(r, anchor) {
+			subject = countedRepresentativeSubject(r, anchor, n)
+		}
+		return fmt.Sprintf("%s来过%s", subject, objectName)
 	case "followeeInObject":
-		objectName := concreteObjectNameForReason(r)
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 		if objectName == "" {
 			return ""
 		}
-		return fmt.Sprintf("%s在「%s」", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"), objectName)
+		return fmt.Sprintf("%s在%s", representativeSubject(r, anchor, n), objectName)
 	case "followeeViewing":
-		return fmt.Sprintf("%s最近看过这些内容", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"))
-	case "followeeDiscussedThis":
-		return fmt.Sprintf("%s也在讨论这些主题", representativeSubjectWithUnit(r, anchor, n, "位你关注的人"))
-	case "sharedTagSample":
-		if r.Source == "circleTag" {
-			return fmt.Sprintf("%s在圈子里常看这些主题", representativeSubject(r, anchor, n))
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
 		}
-		return fmt.Sprintf("你和%s都关注这些主题", representativeSubject(r, anchor, n))
+		return fmt.Sprintf("%s正在看%s", representativeSubject(r, anchor, n), objectName)
+	case "followeeDiscussedThis":
+		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
+		if objectName == "" {
+			return ""
+		}
+		return fmt.Sprintf("%s正在讨论%s", representativeSubject(r, anchor, n), objectName)
+	case "sharedTagSample":
+		objectName := sharedTagSampleObjectName(r, anchor)
+		if objectName == "" {
+			return ""
+		}
+		subject := sharedTagSampleSubject(r, anchor, n)
+		if subject == "" {
+			return ""
+		}
+		if r.Source == "circleTag" {
+			return fmt.Sprintf("%s在圈子里常看%s", subject, objectName)
+		}
+		return fmt.Sprintf("%s都关注%s", subject, objectName)
 	default:
 		return ""
 	}
@@ -606,22 +1220,78 @@ func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) 
 func concreteObjectNameForReason(r IntersectionReasonView) string {
 	name := strings.TrimSpace(r.DisplayName)
 	switch name {
-	case "", "同游", "同好", "同校", "这里", "这个对象":
+	case "", "同游", "同好", "同校", "这里", "这个对象", "这些内容", "这些主题", "相同内容", "相同的人":
 		return ""
 	default:
 		return name
 	}
 }
 
+func renderedObjectNameForReason(r IntersectionReasonView, kind string) string {
+	name := concreteObjectNameForReason(r)
+	if name == "" {
+		return ""
+	}
+	switch kind {
+	case "coCommented", "sharedDiscussion", "coSharedContent", "coCreatedContent", "followeeViewing", "followeeDiscussedThis":
+		return "《" + name + "》"
+	default:
+		return "「" + name + "」"
+	}
+}
+
+func sharedTagSampleObjectName(r IntersectionReasonView, anchor IntersectionPointView) string {
+	if name := concreteObjectNameForReason(r); name != "" {
+		return name
+	}
+	name := strings.TrimSpace(anchor.SampleText)
+	if idx := strings.IndexAny(name, "、,"); idx > 0 {
+		name = strings.TrimSpace(name[:idx])
+	}
+	if name != "" {
+		return name
+	}
+	if name := strings.TrimSpace(anchor.DisplayText); name != "" {
+		return name
+	}
+	return strings.TrimSpace(anchor.Label)
+}
+
+func sharedTagSampleSubject(r IntersectionReasonView, anchor IntersectionPointView, n int) string {
+	if strings.TrimSpace(r.Source) == "circleTag" {
+		return "你"
+	}
+	if strings.TrimSpace(r.ActionTargetID) != "" &&
+		strings.TrimSpace(r.ActionTargetID) == strings.TrimSpace(r.RelationObjectID) {
+		switch objectTypeForTarget(strings.TrimSpace(r.ObjectKind), strings.TrimSpace(r.ActionTargetID), routeIDForObjectKind(strings.TrimSpace(r.ObjectKind))) {
+		case "homepage":
+			return "你和这里"
+		case "circle":
+			return "你和这个圈子"
+		}
+	}
+	return representativeSubject(r, anchor, n)
+}
+
 // affinityPrimaryText 概率通道结论句（必须配 confidenceLabel 标注「推荐」，§17.5/§3.4）。
 func affinityPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) string {
 	src := strings.ToLower(r.Source)
+	objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 	switch {
 	case anchor.SourceRef == "sharedCircle" || strings.Contains(src, "circle"):
+		if objectName != "" {
+			return "你的圈子里最近在看" + objectName
+		}
 		return "你的圈子里最近在看这些"
 	case anchor.SourceRef == "followeeViewing" || strings.Contains(src, "friend") || strings.Contains(src, "follow"):
+		if objectName != "" {
+			return "你关注的人最近在看" + objectName
+		}
 		return "你关注的人最近在看这些"
 	default:
+		if objectName != "" {
+			return "为你推荐" + objectName
+		}
 		return "为你推荐的相关内容"
 	}
 }

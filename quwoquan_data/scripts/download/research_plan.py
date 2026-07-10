@@ -15,6 +15,7 @@ import time
 import urllib.parse
 from typing import Any
 
+from download.research import network_breaker
 from download.research.auto_plan_public import write_auto_research_plans
 from download.research.auto_plan_report import (
     _AUTO_DISCOVERY_REPORT,
@@ -68,12 +69,9 @@ from download.research.source_quality import (
     _HOMEPAGE_INSECT_CONTEXT_RE,
     _HOMEPAGE_JSON_API_RE,
     _HOMEPAGE_NAVIGATION_MARKERS,
-    _HOMEPAGE_NON_HOMEPAGE_SOURCE_MARKERS,
     _HOMEPAGE_PAREN_LOCATION_LINE_RE,
-    _HOMEPAGE_PRIMARY_SOURCE_MARKERS,
     _HOMEPAGE_REDIRECT_MARKERS,
     _HOMEPAGE_STATION_CONTEXT_RE,
-    _HOMEPAGE_SUPPORT_ONLY_SOURCE_MARKERS,
     _HOMEPAGE_TEXT_EVIDENCE_REQUIRED_DOMAINS,
     _MAX_PUBLISHABLE_IMAGE_PIXELS,
     _SUPPORTING_ONLY_CATEGORIES,
@@ -166,7 +164,14 @@ _AUTO_RESEARCH_CURL_RETRIES = max(
 )
 
 
-def _curl_json(url: str, *, timeout: int = 25) -> dict[str, Any]:
+def _curl_raw(url: str, *, timeout: int) -> tuple[int, bytes]:
+    """共享 curl 执行 + 网络断路器：出口故障时对已打开 host 秒级短路。
+
+    网络级失败（DNS/连接/超时/SSL，见 NETWORK_CURL_EXIT_CODES）计入断路器；
+    内容级失败（HTTP 错误体/解析失败）不计入。任一成功复位该 host。
+    """
+    if network_breaker.BREAKER.is_open(url) or network_breaker.wave_budget_exceeded():
+        return -1, b""
     effective_timeout = max(3, int(timeout or _AUTO_RESEARCH_CURL_TIMEOUT_SECONDS))
     effective_retries = max(1, int(_AUTO_RESEARCH_CURL_RETRIES))
     proc = subprocess.run(
@@ -179,14 +184,30 @@ def _curl_json(url: str, *, timeout: int = 25) -> dict[str, Any]:
         capture_output=True,
         check=False,
     )
-    if proc.returncode != 0:
+    if proc.returncode == 0:
+        network_breaker.BREAKER.record_success(url)
+    elif proc.returncode in network_breaker.NETWORK_CURL_EXIT_CODES:
+        network_breaker.BREAKER.record_network_failure(url)
+    stdout = proc.stdout if isinstance(proc.stdout, bytes) else bytes(str(proc.stdout or ""), "utf-8")
+    return proc.returncode, stdout
+
+
+def _curl_json(url: str, *, timeout: int = 25) -> dict[str, Any]:
+    returncode, stdout = _curl_raw(url, timeout=timeout)
+    if returncode != 0:
         return {}
-    stdout = proc.stdout.decode("utf-8", errors="replace") if isinstance(proc.stdout, bytes) else str(proc.stdout or "")
     try:
-        data = json.loads(stdout or "{}")
+        data = json.loads(stdout.decode("utf-8", errors="replace") or "{}")
     except json.JSONDecodeError:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _curl_text(url: str, *, timeout: int = 25) -> str:
+    returncode, stdout = _curl_raw(url, timeout=timeout)
+    if returncode != 0:
+        return ""
+    return stdout.decode("utf-8", errors="replace")
 
 
 def _wiki_api(host: str, params: dict[str, str | int]) -> dict[str, Any]:

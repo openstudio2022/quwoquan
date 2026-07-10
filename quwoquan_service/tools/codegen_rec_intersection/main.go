@@ -136,9 +136,85 @@ func renderGoTable(sourcePath string, r *recintersectionmeta.Registry) string {
 	b.WriteString("// 未登记 key 由消费方兜底 ask_assistant 标签。\n")
 	b.WriteString("var IntersectionActionLabelByKey = map[string]string{\n")
 	writeSortedStringMap(&b, r.ActionLabelByKey)
+	b.WriteString("}\n\n")
+
+	// ── moment by kind（§24 M0.2 意图时态；缺省 current） ──
+	b.WriteString("// IntersectionMomentByKind: kind → 意图时态（registry.kinds[].moment，缺省 current）。\n")
+	b.WriteString("// retrospective 回溯 / current 当下 / prospective 前瞻；与 lifecycleState 正交，未登记 kind 兜底 current。\n")
+	b.WriteString("var IntersectionMomentByKind = map[string]string{\n")
+	for _, k := range r.Kinds {
+		b.WriteString(fmt.Sprintf("\t%q: %q,\n", k.Kind, k.MomentOrDefault()))
+	}
+	b.WriteString("}\n\n")
+
+	// ── 意图时态 / 安全门 / 负反馈闭集（§24 M0.1/M0.2/M0.4，端云同源下发） ──
+	writeStringSliceVar(&b, "IntersectionMoments",
+		"意图时态闭集（registry.moments，retrospective|current|prospective）", r.Moments)
+	writeStringSliceVar(&b, "IntersectionGateKeys",
+		"安全门闭集（registry.gateKeys，requiredGates 取值域）", r.GateKeys)
+	writeStringSliceVar(&b, "IntersectionFeedbackKinds",
+		"负反馈闭集（registry.feedbackKinds，驱动降权/冷却）", r.FeedbackKinds)
+	writeStringSliceVar(&b, "IntersectionActionDispatch",
+		"行动路由类别闭集（registry.actionDispatch，M0.7；assistant|navigate|message|companion|connect|commerce）", r.ActionDispatch)
+
+	// ── actionKey 行动阶梯元数据（§24 M0.1/M0.3；下发 IntersectionActionHint 时填充） ──
+	akKeys := sortedActionKeyMetaKeys(r.ActionKeyMeta)
+	b.WriteString("// IntersectionActionTierByKey: actionKey → tier（light|heavy，registry.actionKeyMeta）。\n")
+	b.WriteString("var IntersectionActionTierByKey = map[string]string{\n")
+	for _, key := range akKeys {
+		b.WriteString(fmt.Sprintf("\t%q: %q,\n", key, r.ActionKeyMeta[key].Tier))
+	}
+	b.WriteString("}\n\n")
+
+	b.WriteString("// IntersectionActionTargetAvailabilityByKey: actionKey → available|deferred（registry.actionKeyMeta）。\n")
+	b.WriteString("// deferred = 承接页/数据源未就绪，消费方不得下发可执行行动（§24.10 诚实红线）。\n")
+	b.WriteString("var IntersectionActionTargetAvailabilityByKey = map[string]string{\n")
+	for _, key := range akKeys {
+		b.WriteString(fmt.Sprintf("\t%q: %q,\n", key, r.ActionKeyMeta[key].TargetAvailability))
+	}
+	b.WriteString("}\n\n")
+
+	b.WriteString("// IntersectionRequiredGatesByActionKey: actionKey → 前置安全门有序列表（registry.actionKeyMeta.requiredGates ⊆ gateKeys）。\n")
+	b.WriteString("var IntersectionRequiredGatesByActionKey = map[string][]string{\n")
+	for _, key := range akKeys {
+		gates := r.ActionKeyMeta[key].RequiredGates
+		quoted := make([]string, 0, len(gates))
+		for _, g := range gates {
+			quoted = append(quoted, fmt.Sprintf("%q", g))
+		}
+		b.WriteString(fmt.Sprintf("\t%q: {%s},\n", key, strings.Join(quoted, ", ")))
+	}
+	b.WriteString("}\n\n")
+
+	b.WriteString("// IntersectionActionDispatchByKey: actionKey → 路由类别（registry.actionKeyMeta.dispatch ∈ actionDispatch，M0.7）。\n")
+	b.WriteString("// 端交互 handler 路由维度，与 tier 权限成本正交；下发 IntersectionActionHint 时填充 dispatch。\n")
+	b.WriteString("var IntersectionActionDispatchByKey = map[string]string{\n")
+	for _, key := range akKeys {
+		b.WriteString(fmt.Sprintf("\t%q: %q,\n", key, r.ActionKeyMeta[key].Dispatch))
+	}
 	b.WriteString("}\n")
 
 	return b.String()
+}
+
+func writeStringSliceVar(b *strings.Builder, name, doc string, values []string) {
+	b.WriteString(fmt.Sprintf("// %s: %s。\n", name, doc))
+	b.WriteString(fmt.Sprintf("var %s = []string{", name))
+	parts := make([]string, 0, len(values))
+	for _, v := range values {
+		parts = append(parts, fmt.Sprintf("%q", v))
+	}
+	b.WriteString(strings.Join(parts, ", "))
+	b.WriteString("}\n\n")
+}
+
+func sortedActionKeyMetaKeys(m map[string]recintersectionmeta.ActionKeyMeta) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func writeSortedStringMap(b *strings.Builder, m map[string]string) {

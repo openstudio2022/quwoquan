@@ -1,0 +1,73 @@
+creatorProfileId: sys_travelphoto_0612
+userId: sys_travelphoto_0612
+subAccountId: sys_travelphoto_0612_sub_01
+displayName: 蓝调风景
+userHandle: blue-scene
+handle: blue-scene
+avatarPresetId: avatar_travelphoto_mountain_guide
+coverPresetId: cover_travelphoto_harbor_sunset
+bio: 关注寺前石阶、取景点和成片节奏，希望看完能知道怎么走，也知道怎么拍；让图文都有来路。
+headline: 目的地取景观察
+slogan: 一班慢车之后，现场对了，路就亮了
+creatorArchetype: outdoor_hiking_photographer
+verticalSegment: travel_photography_cross
+verticalRefs:
+- travel
+- photography
+interestTagRefs: &id001
+- Topic/旅行/旅行主题/城市漫步
+- Topic/摄影/建筑摄影
+- Topic/摄影/摄影教程
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/旅行摄影
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/摄影
+- Topic/旅行/旅行主题/城市漫步
+- Topic/摄影/建筑摄影
+creatorClassTagRefs: []
+preferredContentTypes:
+- image
+- article
+carrierAffinity:
+  article: 0.25
+  image: 0.7
+  video: 0.05
+preferredBlueprintIds:
+- 图片_风光
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  - fixture_circle_creator_travel_photo_1k_v1_photography
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/topic/photography
+  - homepage/tag/Topic_旅行_旅行主题_城市漫步
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/topic/photography
+  - homepage/tag/Topic_旅行_旅行主题_城市漫步
+  - homepage/tag/Topic_摄影_建筑摄影
+  - homepage/tag/Topic_摄影_摄影教程
+  circleAffinityRefs:
+  - circle/topic/travel
+  - circle/topic/photography
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- photography
+- Topic/旅行/旅行主题/城市漫步
+- Topic/摄影/建筑摄影
+- Topic/摄影/摄影教程
+- Topic/旅行/玩法/摄影旅拍
+- Topic/摄影/旅行摄影

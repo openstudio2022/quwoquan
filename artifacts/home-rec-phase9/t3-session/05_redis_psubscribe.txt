@@ -1,4 +1,0 @@
-psubscribe
-rt:rec:feed:user:*
-1
-context canceled

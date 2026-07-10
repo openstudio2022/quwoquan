@@ -228,6 +228,8 @@ HomepageDetail _schoolHomepage(String id, String title, String city) {
     title: title,
     canonicalEntityId: title == '新东方' ? 'entity:school:neworiental' : null,
     subtitle: '教育培训 · 语言学习 · 校友网络',
+    coverUrl:
+        'media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png',
     status: 'published',
     sourceType: 'contract_fixture',
     claimStatus: 'unclaimed',
@@ -240,6 +242,8 @@ HomepageDetail _schoolHomepage(String id, String title, String city) {
         title: '$title 校友成长记录',
         summary: '聚合学习经历、职业转型、校友讨论和长期连接。',
         contentType: 'article',
+        coverUrl:
+            'media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png',
         authorName: '$title 校友号',
         likeCount: 248,
       ),
@@ -311,6 +315,8 @@ HomepageDetail _photoSpotHomepage(String id, String title, String city) {
         ? 'entity:photo_spot:hengshu_studio'
         : null,
     subtitle: '摄影取景地 · 城市影像 · 胶片旅拍',
+    coverUrl:
+        'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
     status: 'published',
     sourceType: 'contract_fixture',
     claimStatus: 'unclaimed',
@@ -323,6 +329,8 @@ HomepageDetail _photoSpotHomepage(String id, String title, String city) {
         title: '$title 光影记录',
         summary: '记录同一组取景地的构图、安全宽高比和圆角展示。',
         contentType: 'image',
+        coverUrl:
+            'media/image/s/archived-image/post/fixture_photo_001/v1/cover.png',
         authorName: '横竖影像馆',
         likeCount: 980,
       ),

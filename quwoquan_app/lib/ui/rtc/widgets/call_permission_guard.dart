@@ -1,22 +1,17 @@
 import 'package:flutter/widgets.dart';
-import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 
 /// 接听/发起前权限预检结果。
-enum CallPermissionOutcome {
-  granted,
-  fallbackVoiceOnly,
-  blocked,
-}
+enum CallPermissionOutcome { granted, fallbackVoiceOnly, blocked }
 
 /// 通话权限统一预检：麦克风为硬门槛，摄像头按通话类型，永久拒绝走 [AppPermissionCoordinator]。
 class CallPermissionGuard {
   const CallPermissionGuard._();
 
   static AppPermissionCoordinator get _coordinator =>
-      AppPermissionCoordinator.testable;
+      AppPermissionCoordinator.current;
 
   static Future<CallPermissionOutcome> ensure(
     BuildContext context, {
@@ -51,7 +46,7 @@ class CallPermissionGuard {
     required String title,
     required String message,
   }) {
-    final base = AppPermissionCoordinator.testable.permissionSemantic(
+    final base = AppPermissionCoordinator.current.permissionSemantic(
       AppPermissionKind.microphone,
       openSettings: true,
     );

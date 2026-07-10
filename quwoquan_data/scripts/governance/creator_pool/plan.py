@@ -25,10 +25,15 @@ def run_plan(
     shared = creator_pool_shared_dir(vertical, batch_id)
     live_mode = fixture is None and is_live_batch(batch_id)
     fixture_mode = fixture is not None or (not live_mode and batch_id.endswith("_v1"))
-    candidate_pool_size = max(target * 3, 350) if live_mode else max(target * 3, target + 20)
-    matrix = build_diversity_matrix(vertical, target)
+    candidate_pool_size = max(target * 5, 350) if live_mode else max(target * 3, target + 20)
+    matrix = build_diversity_matrix(vertical, target, batch_id=batch_id)
     if live_mode:
-        candidates = build_candidate_pool(vertical=vertical, pool_size=candidate_pool_size)
+        candidates = build_candidate_pool(
+            vertical=vertical,
+            batch_id=batch_id,
+            target=target,
+            pool_size=candidate_pool_size,
+        )
         write_json(
             shared / "candidate_pool.json",
             {
@@ -41,7 +46,7 @@ def run_plan(
         slots: list[dict[str, str]] = []
         creator_refs: list[str] = []
     else:
-        slots = assign_creator_slots(vertical, target)
+        slots = assign_creator_slots(vertical, target, batch_id=batch_id)
         creator_refs = [s["creatorRef"] for s in slots]
     plan = {
         "schemaVersion": "quwoquan_data.creator_pool_plan/1",
@@ -51,11 +56,14 @@ def run_plan(
         "candidatePoolSize": candidate_pool_size,
         "creatorRefs": creator_refs,
         "diversityQuotas": {
+            "verticalSegmentBuckets": matrix["dimensions"].get("verticalSegment"),
             "archetypeBuckets": matrix["dimensions"]["archetype"],
             "regionBuckets": matrix["dimensions"]["region"],
             "carrierBuckets": matrix["dimensions"]["carrier"],
+            "platformBuckets": matrix["dimensions"].get("platform"),
             "popularityTierBuckets": matrix["dimensions"].get("popularityTier"),
             "outputTierBuckets": matrix["dimensions"].get("outputTier"),
+            "sourceRegionClassBuckets": matrix["dimensions"].get("sourceRegionClass"),
         },
         "fixtureMode": fixture_mode,
         "liveMode": live_mode,

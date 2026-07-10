@@ -91,6 +91,24 @@ class SettingsAboutPage extends ConsumerWidget {
                             context.push(AppRoutePaths.legalPrivacyPolicy);
                           },
                         ),
+                        SettingsInsetFormSectionDivider(isDark: isDark),
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: UITextConstants.permissionsStatement,
+                          trailing: SettingsInsetChevron(isDark: isDark),
+                          onTap: () {
+                            context.push(AppRoutePaths.legalPermissions);
+                          },
+                        ),
+                        SettingsInsetFormSectionDivider(isDark: isDark),
+                        SettingsInsetFormRow(
+                          isDark: isDark,
+                          label: UITextConstants.thirdPartySdkList,
+                          trailing: SettingsInsetChevron(isDark: isDark),
+                          onTap: () {
+                            context.push(AppRoutePaths.legalThirdPartySdkList);
+                          },
+                        ),
                       ],
                     ),
                   ),

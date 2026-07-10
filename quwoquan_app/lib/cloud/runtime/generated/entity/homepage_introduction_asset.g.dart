@@ -5,12 +5,14 @@ class HomepageIntroductionAsset {
   final String assetId;
   final String url;
   final String? caption;
+  final String role;
   final String? sourceRef;
 
   HomepageIntroductionAsset({
     this.assetId = '',
     this.url = '',
     this.caption,
+    this.role = 'related',
     this.sourceRef,
   });
 
@@ -19,6 +21,7 @@ class HomepageIntroductionAsset {
       assetId: m['assetId']?.toString() ?? m['id']?.toString() ?? '',
       url: m['url']?.toString() ?? m['imageUrl']?.toString() ?? '',
       caption: m['caption']?.toString() ?? null,
+      role: m['role']?.toString() ?? m['assetRole']?.toString() ?? 'related',
       sourceRef: m['sourceRef']?.toString() ?? null,
     );
   }
@@ -28,6 +31,7 @@ class HomepageIntroductionAsset {
       'assetId': assetId,
       'url': url,
       'caption': caption,
+      'role': role,
       'sourceRef': sourceRef,
     };
   }
@@ -36,12 +40,14 @@ class HomepageIntroductionAsset {
     String? assetId,
     String? url,
     String? caption,
+    String? role,
     String? sourceRef,
   }) {
     return HomepageIntroductionAsset(
       assetId: assetId ?? this.assetId,
       url: url ?? this.url,
       caption: caption ?? this.caption,
+      role: role ?? this.role,
       sourceRef: sourceRef ?? this.sourceRef,
     );
   }

@@ -119,11 +119,12 @@ func renderHomepageUIConfigDart(uc *uiConfigFile) string {
 	sort.Slice(subTabs, func(i, j int) bool { return subTabs[i].Order < subTabs[j].Order })
 	b.WriteString("\n  static const List<HomepageSubTabConfig> subTabs = <HomepageSubTabConfig>[\n")
 	for _, sub := range subTabs {
+		homepageTypes := strings.TrimPrefix(renderStringListLiteral(sub.HomepageTypes), "const ")
 		b.WriteString(fmt.Sprintf("    HomepageSubTabConfig(id: %s, labelKey: %s, isDefault: %v, homepageTypes: %s),\n",
 			dartStringLiteral(sub.ID),
 			dartStringLiteral(sub.LabelKey),
 			sub.Default,
-			renderStringListLiteral(sub.HomepageTypes)))
+			homepageTypes))
 	}
 	b.WriteString("  ];\n")
 	b.WriteString("}\n")

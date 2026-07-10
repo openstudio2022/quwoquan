@@ -1,0 +1,63 @@
+creatorProfileId: sys_travel_0152
+userId: sys_travel_0152
+subAccountId: sys_travel_0152_sub_01
+displayName: 月台光谱
+userHandle: platform-spectrum
+handle: platform-spectrum
+avatarPresetId: avatar_travel_lighthouse
+coverPresetId: cover_travel_lake_sunrise
+bio: 会把山路转弯里的吃住行拆开讲，内容不求热闹，求对下一趟出门有用；把取舍摊开讲。
+headline: 给出发前的人
+slogan: 把远方拆成今天能走，别漏掉一场小雨
+creatorArchetype: self_drive_expert
+verticalSegment: travel_primary
+verticalRefs:
+- travel
+interestTagRefs: &id001
+- Topic/旅行/玩法/露营
+- Topic/旅行/出行方式/自驾
+- Topic/旅行/玩法/摄影旅拍
+publicProfileTagRefs:
+- Topic/旅行
+- Topic/旅行/玩法/露营
+- Topic/旅行/出行方式/自驾
+creatorClassTagRefs: []
+preferredContentTypes:
+- article
+- image
+carrierAffinity:
+  article: 0.7
+  image: 0.25
+  video: 0.05
+preferredBlueprintIds:
+- 景区_体验
+- 旅行_个人游记
+coverageScope:
+  kind: thematic
+  topicRefs: *id001
+relations:
+  joinedCircleIds:
+  - fixture_circle_creator_travel_photo_1k_v1_travel
+  followedHomepageCanonicalIds:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_出行方式_自驾
+  entityAffinityRefs:
+  - homepage/topic/travel
+  - homepage/tag/Topic_旅行_玩法_露营
+  - homepage/tag/Topic_旅行_出行方式_自驾
+  - homepage/tag/Topic_旅行_玩法_摄影旅拍
+  circleAffinityRefs:
+  - circle/topic/travel
+  relationSeedPolicy: topic_only_v2
+vertical: travel
+cohortId: travel_photo_1k_v1
+batchId: travel_photo_1k_v1
+status: active
+tags:
+- author
+- creator_pool
+- travel
+- Topic/旅行/玩法/露营
+- Topic/旅行/出行方式/自驾
+- Topic/旅行/玩法/摄影旅拍

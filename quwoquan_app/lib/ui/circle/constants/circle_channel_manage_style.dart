@@ -12,10 +12,8 @@ class CircleChannelManageStyle {
       SettingsSemanticConstants.conversationSheetPanelBackground(isDark);
 
   /// 顶部抽屉背景遮罩，保留下层轮廓但不过度压暗。
-  static Color backdropColor(bool isDark) => AppColorsFunctional.getColor(
-    isDark,
-    ColorType.modalScrim,
-  ).withValues(alpha: isDark ? 0.04 : 0.02);
+  static Color backdropColor(bool isDark) =>
+      AppColors.black.withValues(alpha: isDark ? 0.04 : 0.02);
 
   /// 顶部抽屉背景模糊强度，轻度虚化但保留底部 tab 与 post 轮廓。
   static double backdropBlurSigma(BuildContext context) =>

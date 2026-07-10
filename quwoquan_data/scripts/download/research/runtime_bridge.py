@@ -18,6 +18,14 @@ def curl_json(url: str, *, timeout: int = 25) -> dict[str, Any]:
     return {}
 
 
+def curl_text(url: str, *, timeout: int = 25) -> str:
+    facade = _facade()
+    fn = getattr(facade, "_curl_text", None) if facade is not None else None
+    if callable(fn) and fn is not curl_text:
+        return str(fn(url, timeout=timeout) or "")
+    return ""
+
+
 def wiki_api(host: str, params: dict[str, str | int]) -> dict[str, Any]:
     facade = _facade()
     fn = getattr(facade, "_wiki_api", None) if facade is not None else None

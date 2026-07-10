@@ -27,7 +27,20 @@ python3 quwoquan_data/scripts/cli.py <command> ...
 | `verify scale-readiness` | 商用放量证据门：来源充分率、workflow 状态、队列后端、TokenLedger、release/import、吞吐和首轮通过率 |
 | `env ready` | 一键准备 data venv，并检查 `cursor_sdk`、CV/OCR 依赖、`CURSOR_API_KEY` 和网络可达性 |
 | `env preflight` | 只做运行前环境验收，不安装依赖 |
+| `task decompose load --master-list --provinces <省,...>` | 枚举 SOP 阶段 A：主清单目录投影省→市州→区县分区树进 fanout plan，冻结前叠加地理覆盖发现门 |
+| `vertical master-list-stats` | 全国地点主清单统计（规模/类型分布/源就绪/跨省地点） |
+| `vertical master-list-probe-sources --provinces <省,...>` | 源可用性预筛：轻探百科主源有无并回填 `sourceReadiness`（节流+断点续跑，`--recheck` 重探） |
+| `verify coverage-master-list` | 主清单门禁 C1-C9（目录归属/schema/行政区树/类型 scope/canonicalName 全局唯一） |
 | `template lint` | 模板蓝图门禁（含 route 叙事契约 / gallery imagePolicy） |
+| `task run-recipe <ref>` | 按家族包配方跑批（`ensure-task → 契约门 → 执行 → readiness` 四段唯一主干；配方在 `control_plane/families/**.recipe.yaml`，如 `content/travel/homepage/h100`） |
+
+## 任务控制面（control_plane）
+
+任务实例、家族 preset/recipe、共享运行 profile 统一在 `quwoquan_data/control_plane/`：
+`tasks/<taskId>/task.yaml`（任务注册表）+ `families/<家族路径>/*.preset.yaml|*.recipe.yaml|*.instructions.md`
+（家族包）+ `_shared/*.runtime.yaml`（运行环境 profile）。任务默认值唯一来源是
+`task.yaml.presetRef`；批量运行编排唯一入口是 `qwq-data task run-recipe`，禁止再写
+runner shell 或第二套编排脚本。详见 `quwoquan_data/docs/pipeline_directory_layout_spec.md` §0.5。
 
 ## 正文创作只能由会话模型完成（禁止脚本拼正文 / 拼主页）
 
@@ -101,7 +114,7 @@ python3 quwoquan_data/scripts/cli.py annotate --task <task> --batch <batch> --re
 
 ## 一键发布 + 按环境采样 + 服务侧灌库 importer
 
-`publish/` 是单一发布主线（无版本目录，prod 全量）。`ship` 按 `deploy/shared/content_sampling_manifest.yaml`
+`publish/` 是单一发布主线（无版本目录，prod 全量）。`ship` 按 `quwoquan_ops/environments/content_sampling_manifest.yaml`
 对每个环境**确定性采样**（`rank=sha1(salt|ref)`，`<sampleRatio` 入选 + bucket cap + max），产出端云桥契约
 `publish/sample_bundles/{env}.json`（选中的 postRef/entityRef）。
 

@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
@@ -7,7 +6,6 @@ import 'package:quwoquan_app/ui/content/models/article_editor_projection.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_undo_snapshot.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
-
 part 'create_editor_provider_article_helpers.dart';
 
 class CreateEditorNotifier extends Notifier<CreateEditorState> {
@@ -47,6 +45,7 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
 
   bool get canUndoArticle => _undoStack.isNotEmpty;
   bool get canRedoArticle => _redoStack.isNotEmpty;
+  CreateEditorState get _currentState => state;
 
   void undoArticle() {
     if (_undoStack.isEmpty) {
@@ -2118,9 +2117,47 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       videoWidth: 0,
       videoHeight: 0,
       videoMuted: false,
+      isOneTapMovie: false,
+      oneTapMoviePath: '',
+      oneTapMovieEffectId: '',
       currentMediaIndex: sanitized.isEmpty
           ? 0
           : currentIndex.clamp(0, sanitized.length - 1),
+    );
+  }
+
+  void setOneTapMovie({
+    required List<String> sourceImagePaths,
+    required String generatedMediaPath,
+    required String effectId,
+  }) {
+    final sanitizedSources = sourceImagePaths
+        .map((path) => path.trim())
+        .where((path) => path.isNotEmpty)
+        .take(1)
+        .toList(growable: false);
+    state = state.copyWith(
+      editorKind: CreateEditorKind.media,
+      draftFlowKind: CreateDraftFlowKind.image,
+      mediaKind: sanitizedSources.isEmpty
+          ? CreateMediaKind.none
+          : CreateMediaKind.images,
+      imagePaths: sanitizedSources,
+      videoPath: '',
+      originalVideoPath: '',
+      videoThumbnail: '',
+      videoDurationMs: 0,
+      videoTrimStartMs: 0,
+      videoTrimEndMs: 0,
+      videoCoverTimeMs: 0,
+      videoCoverStrategy: 'first_frame',
+      videoWidth: 0,
+      videoHeight: 0,
+      videoMuted: false,
+      isOneTapMovie: sanitizedSources.isNotEmpty,
+      oneTapMoviePath: generatedMediaPath.trim(),
+      oneTapMovieEffectId: effectId.trim(),
+      currentMediaIndex: 0,
     );
   }
 
@@ -2219,6 +2256,9 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       videoWidth: width.clamp(0, 999999999),
       videoHeight: height.clamp(0, 999999999),
       videoMuted: muted,
+      isOneTapMovie: false,
+      oneTapMoviePath: '',
+      oneTapMovieEffectId: '',
       currentMediaIndex: 0,
     );
   }
@@ -2259,6 +2299,9 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       videoWidth: width.clamp(0, 999999999),
       videoHeight: height.clamp(0, 999999999),
       videoMuted: muted,
+      isOneTapMovie: false,
+      oneTapMoviePath: '',
+      oneTapMovieEffectId: '',
       currentMediaIndex: 0,
     );
   }
@@ -2279,6 +2322,9 @@ class CreateEditorNotifier extends Notifier<CreateEditorState> {
       videoWidth: 0,
       videoHeight: 0,
       videoMuted: false,
+      isOneTapMovie: false,
+      oneTapMoviePath: '',
+      oneTapMovieEffectId: '',
       currentMediaIndex: 0,
     );
   }

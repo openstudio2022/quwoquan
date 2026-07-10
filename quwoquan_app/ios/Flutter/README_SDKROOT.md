@@ -52,7 +52,7 @@ VM/CI 单测使用：
 - Android 自定义上游 AAR（`webrtc-sdk`、`audioswitch`、`livekit noise`）已固定
   到 `quwoquan_app/vendor/android_artifacts/`，不再允许通过 GitHub / JitPack /
   自定义 Maven 在编译时下载。
-- 仓库级门禁：`python3 agent_ops/gate/verify_local_dependency_purity.py`。
+- 仓库级门禁：`python3 quwoquan_ops/gate/verify_local_dependency_purity.py`。
 
 ## 防御配置（Xcode 工程侧）
 已在以下 xcconfig 文件中明确设置了 SDKROOT：

@@ -76,10 +76,22 @@ func renderContentBehaviorsDart(bf *behaviorsFile) string {
 				positional = append(positional, "double consumedRatio")
 			case "totalUnits":
 				positional = append(positional, "int totalUnits")
+			case "subjectId":
+				positional = append(positional, "String subjectId")
+			case "feedbackKind":
+				positional = append(positional, "String feedbackKind")
+			case "objectId":
+				positional = append(positional, "String objectId")
+			case "objectKind":
+				positional = append(positional, "String objectKind")
 			case "feedPosition":
 				named = append(named, "int feedPosition = 0")
 			case "contentType":
 				named = append(named, "String contentType = ''")
+			case "displayName":
+				named = append(named, "String displayName = ''")
+			case "sourceSurface":
+				named = append(named, "String sourceSurface = ''")
 			case "shareTarget":
 				named = append(named, "String shareTarget = ''")
 			case "intersectionDimension":

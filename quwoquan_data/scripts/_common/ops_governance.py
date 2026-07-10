@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import socket
 import time
 from contextlib import contextmanager
@@ -22,6 +23,7 @@ from _common.paths import batch_root
 from task import store
 
 CONTROLLER_LEASE_SCHEMA = "quwoquan_data.controller_lease/1"
+RUNTIME_PROTECTION_SCHEMA = "quwoquan_data.runtime_protection/1"
 ASSIGNMENT_SCHEMA = "quwoquan_data.assignment/1"
 ASSIGNMENT_STATE_SCHEMA = "quwoquan_data.assignment_state/1"
 ASSIGNMENT_EVENT_SCHEMA = "quwoquan_data.assignment_event/1"
@@ -88,6 +90,62 @@ def failure_ledger_path(task_id: str, batch_id: str) -> Path:
 
 def quality_target_report_path(task_id: str, batch_id: str) -> Path:
     return _shared_dir(task_id, batch_id) / "quality_target_report.json"
+
+
+def runtime_protection_manifest_path(task_id: str, batch_id: str, *, create: bool = False) -> Path:
+    return _shared_dir(task_id, batch_id, create=create) / "runtime_protection.json"
+
+
+def write_runtime_protection_manifest(
+    task_id: str,
+    batch_id: str,
+    *,
+    plan_id: str | None = None,
+    protected_paths: Sequence[str] = (),
+    note: str = "",
+) -> Path:
+    """跑批保护协议：声明本批次活跃期间禁止外部治理代理清理/终止的资源清单。
+
+    WP5 实测外部治理代理会拒杀长跑进程并清理 runtime 产物。协议约定：
+    - 任何外部清理动作前必须读取本清单；`pid` 存活且 lease 活跃时，清单内
+      路径（frozen plan、release 产物、workflow state、object queue）不得
+      删除/覆盖，进程树不得 kill；
+    - 清单与 controller lease 同目录同源（`_shared/`），批次收口后随批次
+      证据留档，不需要显式解除。
+    """
+    from _common.paths import OUTPUT_ROOT, fanout_plan_path
+
+    defaults: list[str] = [
+        str(batch_root(task_id, batch_id)),
+        str(controller_lease_path(task_id, batch_id)),
+    ]
+    if plan_id:
+        try:
+            defaults.append(str(fanout_plan_path(plan_id)))
+        except Exception:  # noqa: BLE001
+            pass
+    release_root = OUTPUT_ROOT / "release"
+    if release_root.is_dir():
+        defaults.append(str(release_root))
+    merged = list(dict.fromkeys([*defaults, *[str(p) for p in protected_paths if str(p)]]))
+    manifest = {
+        "schema": RUNTIME_PROTECTION_SCHEMA,
+        "taskId": task_id,
+        "batchId": batch_id,
+        "planId": plan_id or None,
+        "pid": os.getpid(),
+        "hostname": socket.gethostname(),
+        "startedAt": store.now_iso(),
+        "protectedPaths": merged,
+        "leaseRef": str(controller_lease_path(task_id, batch_id)),
+        "note": note or (
+            "active batch runtime protection: do not kill process tree or delete "
+            "protected paths while pid is alive"
+        ),
+    }
+    path = runtime_protection_manifest_path(task_id, batch_id, create=True)
+    write_json(path, manifest)
+    return path
 
 
 def _now_epoch() -> float:
@@ -487,9 +545,30 @@ def append_conflict(
     )
 
 
-def source_unit_id(*, canonical_url: str = "", snapshot_hash: str = "", source_ref: str = "") -> str:
+def source_unit_id(
+    *,
+    canonical_url: str = "",
+    snapshot_hash: str = "",
+    source_ref: str = "",
+    entity_name: str = "",
+    source_kind: str = "",
+) -> str:
+    """sourceUnitId（= sources/ 目录名）。
+
+    可读契约（pipeline_directory_layout_spec §3）：提供 entity_name + source_kind 时
+    返回 `{实体名}__{sourceKind}__{hash8}`（实体名保留中文，仅替换路径危险字符）。
+    hash8 由 canonical URL / snapshot hash / source ref 稳定派生，跨批可复算。
+    未提供实体语境（如 fanout job 标识）时回退纯哈希 `su_{hash20}`。
+    """
     seed = f"{canonical_url.strip()}|{snapshot_hash.strip()}|{source_ref.strip()}"
-    return "su_" + hashlib.sha1(seed.encode("utf-8")).hexdigest()[:20]
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()
+    name = str(entity_name or "").strip()
+    kind = str(source_kind or "").strip()
+    if name and kind:
+        safe_name = re.sub(r"[\\/:*?\"<>|\s]+", "_", name).strip("_.") or "entity"
+        safe_kind = re.sub(r"[^a-zA-Z0-9_\-]+", "_", kind).strip("_") or "web"
+        return f"{safe_name}__{safe_kind}__{digest[:8]}"
+    return "su_" + digest[:20]
 
 
 def source_unit_root_from_ref(ref: object) -> str:

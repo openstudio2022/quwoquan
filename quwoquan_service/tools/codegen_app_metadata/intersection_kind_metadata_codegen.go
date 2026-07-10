@@ -62,6 +62,32 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	b.WriteString("/// 垂类闭集（registry.verticals，§23.4 三元组正交标注）。\n")
 	b.WriteString(fmt.Sprintf("const List<String> intersectionVerticalKeys = %s;\n\n", dartStringListLiteral(r.Verticals)))
 
+	b.WriteString("/// 意图时态闭集（registry.moments，§24 M0.2；retrospective|current|prospective，与 lifecycleState 正交）。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionMomentKeys = %s;\n\n", dartStringListLiteral(r.Moments)))
+
+	b.WriteString("/// 安全门闭集（registry.gateKeys，§24 M0.1；重行动 requiredGates 取值域）。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionGateKeys = %s;\n\n", dartStringListLiteral(r.GateKeys)))
+
+	b.WriteString("/// 负反馈闭集（registry.feedbackKinds，§24 M0.4；端上报与云侧降权/冷却同源）。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionFeedbackKinds = %s;\n\n", dartStringListLiteral(r.FeedbackKinds)))
+
+	// 负反馈 kind 命名常量：端 UI 触发点（收件箱「不感兴趣」等）读命名常量，
+	// 禁止硬编码 registry 字符串字面量（单一真相源 = registry.feedbackKinds）。
+	b.WriteString("/// 负反馈 kind 命名常量（registry.feedbackKinds 单条；端 UI 触发点读此常量，禁止字面量）。\n")
+	for _, kind := range r.FeedbackKinds {
+		trimmed := strings.TrimSpace(kind)
+		if trimmed == "" {
+			continue
+		}
+		name := "intersectionFeedbackKind" + strings.ToUpper(trimmed[:1]) + trimmed[1:]
+		b.WriteString(fmt.Sprintf("const String %s = %q;\n", name, trimmed))
+	}
+	b.WriteString("\n")
+
+	b.WriteString("/// 行动路由类别闭集（registry.actionDispatch，§24 M0.7；assistant|navigate|message|companion|connect|commerce）。\n")
+	b.WriteString("/// 端交互 handler 路由维度，与 tier 权限成本正交；端 navigator/徽标/助手分发读 actionKeyMeta.dispatch。\n")
+	b.WriteString(fmt.Sprintf("const List<String> intersectionActionDispatchKeys = %s;\n\n", dartStringListLiteral(r.ActionDispatch)))
+
 	// action key closed set (sorted for deterministic output) + legend.
 	actionKeys := make([]string, 0, len(r.ActionHintLegend))
 	for k := range r.ActionHintLegend {
@@ -70,6 +96,57 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	sort.Strings(actionKeys)
 	b.WriteString("/// 行动建议 actionKey 闭集（registry.actionHintLegend，端只读分发，不按 kind 猜测）。\n")
 	b.WriteString(fmt.Sprintf("const List<String> intersectionActionKeys = %s;\n\n", dartStringListLiteral(actionKeys)))
+
+	// ── actionKey 行动阶梯元数据（§24 M0.1/M0.3；端 safetyGate 降级真相源） ──
+	b.WriteString("/// 单个 actionKey 的行动阶梯元数据（registry.actionKeyMeta，§24 M0.1/M0.3/M0.7）。\n")
+	b.WriteString("/// 端据 requiredGates 判断「可执行 / 优雅降级」；tier 区分轻查看/重社交；\n")
+	b.WriteString("/// targetAvailability=deferred 表示承接页/数据源未就绪，端不得伪造成行（§24.10 诚实红线）；\n")
+	b.WriteString("/// dispatch 表示端交互 handler 路由类别（assistant|navigate|message|companion|connect|commerce），\n")
+	b.WriteString("/// 端 navigator/徽标/助手分发读本字段，禁止端手写「哪些 actionKey 属助手/约伴」第二份枚举（M0.7）。\n")
+	b.WriteString("class IntersectionActionKeyMeta {\n")
+	b.WriteString("  const IntersectionActionKeyMeta({\n")
+	b.WriteString("    required this.tier,\n")
+	b.WriteString("    required this.requiredGates,\n")
+	b.WriteString("    required this.targetAvailability,\n")
+	b.WriteString("    required this.dispatch,\n")
+	b.WriteString("  });\n\n")
+	b.WriteString("  final String tier;\n")
+	b.WriteString("  final List<String> requiredGates;\n")
+	b.WriteString("  final String targetAvailability;\n")
+	b.WriteString("  final String dispatch;\n\n")
+	b.WriteString("  bool get isHeavy => tier == 'heavy';\n")
+	b.WriteString("  bool get isDeferred => targetAvailability == 'deferred';\n")
+	b.WriteString("  /// 助手类：点击打开小艺解释/追问/续写，而非导航到对象页。\n")
+	b.WriteString("  bool get isAssistant => dispatch == 'assistant';\n")
+	b.WriteString("  /// 同行/线下约伴类：唯一驱动「有人同行」徽标与约伴专属落点。\n")
+	b.WriteString("  bool get isCompanion => dispatch == 'companion';\n")
+	b.WriteString("  /// 重社交连接类（私信/约伴/房间/心动，需破冰阶梯/请求/建群），非简单对象下钻。\n")
+	b.WriteString("  bool get isSocialConnect =>\n")
+	b.WriteString("      dispatch == 'message' || dispatch == 'companion' || dispatch == 'connect';\n\n")
+	b.WriteString("  /// 由 actionKey 查行动阶梯元数据；未知 key 返回 null（端据此安全降级）。\n")
+	b.WriteString("  static IntersectionActionKeyMeta? of(String? actionKey) {\n")
+	b.WriteString("    if (actionKey == null) return null;\n")
+	b.WriteString("    return intersectionActionKeyMeta[actionKey.trim()];\n")
+	b.WriteString("  }\n")
+	b.WriteString("}\n\n")
+
+	actionMetaKeys := make([]string, 0, len(r.ActionKeyMeta))
+	for k := range r.ActionKeyMeta {
+		actionMetaKeys = append(actionMetaKeys, k)
+	}
+	sort.Strings(actionMetaKeys)
+	b.WriteString("/// actionKey → 行动阶梯元数据表（单一真相源 registry.actionKeyMeta 下发）。\n")
+	b.WriteString("const Map<String, IntersectionActionKeyMeta> intersectionActionKeyMeta = <String, IntersectionActionKeyMeta>{\n")
+	for _, key := range actionMetaKeys {
+		meta := r.ActionKeyMeta[key]
+		b.WriteString(fmt.Sprintf("  %s: IntersectionActionKeyMeta(\n", dartStringLiteral(key)))
+		b.WriteString(fmt.Sprintf("    tier: %s,\n", dartStringLiteral(meta.Tier)))
+		b.WriteString(fmt.Sprintf("    requiredGates: %s,\n", dartStringListLiteral(meta.RequiredGates)))
+		b.WriteString(fmt.Sprintf("    targetAvailability: %s,\n", dartStringLiteral(meta.TargetAvailability)))
+		b.WriteString(fmt.Sprintf("    dispatch: %s,\n", dartStringLiteral(meta.Dispatch)))
+		b.WriteString("  ),\n")
+	}
+	b.WriteString("};\n\n")
 
 	b.WriteString("/// iconKey → 低饱和语义 tone（registry.visualToneByIconKey）。\n")
 	b.WriteString("const Map<String, String> intersectionVisualToneByIconKey = <String, String>{\n")
@@ -150,6 +227,7 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	b.WriteString("    required this.tone,\n")
 	b.WriteString("    required this.lifecycleApplicable,\n")
 	b.WriteString("    required this.vertical,\n")
+	b.WriteString("    required this.moment,\n")
 	b.WriteString("  });\n\n")
 	b.WriteString("  final String kind;\n")
 	b.WriteString("  final String iconKey;\n")
@@ -159,7 +237,9 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 	b.WriteString("  final List<String> actionHints;\n")
 	b.WriteString("  final String tone;\n")
 	b.WriteString("  final bool lifecycleApplicable;\n")
-	b.WriteString("  final String vertical;\n\n")
+	b.WriteString("  final String vertical;\n")
+	b.WriteString("  /// §24 M0.2 意图时态（retrospective|current|prospective，缺省 current；与 lifecycleState 正交）。\n")
+	b.WriteString("  final String moment;\n\n")
 	b.WriteString("  /// 主维度（dimensions 首项；用于 tone/label 归一）。\n")
 	b.WriteString("  String get primaryDimension => dimensions.isEmpty ? '' : dimensions.first;\n\n")
 	b.WriteString("  /// 主行动 actionKey（actionHints 首项；缺省 ask_assistant 助手解释）。\n")
@@ -191,6 +271,7 @@ func renderIntersectionKindMetadataDart(sourcePath string, r *recintersectionmet
 		b.WriteString(fmt.Sprintf("    tone: %s,\n", dartStringLiteral(tone)))
 		b.WriteString(fmt.Sprintf("    lifecycleApplicable: %t,\n", k.LifecycleApplicable))
 		b.WriteString(fmt.Sprintf("    vertical: %s,\n", dartStringLiteral(k.Vertical)))
+		b.WriteString(fmt.Sprintf("    moment: %s,\n", dartStringLiteral(k.MomentOrDefault())))
 		b.WriteString("  ),\n")
 	}
 	b.WriteString("};\n")

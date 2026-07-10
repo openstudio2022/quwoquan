@@ -30,7 +30,7 @@
 
 ### B. Persona 通过 header 传递（兼容）
 
-- 端侧在需要 persona 的请求中携带 `X-Persona-Id`（见 `contracts/openapi/common.yaml`）。
+- 端侧在需要 persona 的请求中携带 `X-Persona-Id`（见 `contracts/metadata/_shared/request_context.yaml`）。
 - 网关校验该 persona 是否属于 userId，并透传给下游。
 
 ---
@@ -60,5 +60,5 @@
 ## 5. 与公共库的关系（强制）
 
 - token 解析、caller identity、权限校验辅助工具建议统一由 `runtime/` 提供（后续落地）。
-- 日志中不得记录 token 明文；debugMessage 需脱敏（见 `contracts/error_codes.md`）。
+- 日志中不得记录 token 明文；debugMessage 需脱敏（见 `contracts/runtime_errors/errors/runtime_failure_codes.yaml`）。
 

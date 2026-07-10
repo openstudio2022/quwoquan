@@ -2,12 +2,13 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
-REPORT="${LOCAL_GAMMA_T4_REPORT:-$ROOT/artifacts/local-gamma/t4_report.json}"
+LOCAL_GAMMA_ARTIFACT_ROOT="${LOCAL_GAMMA_ARTIFACT_ROOT:-${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}/env/gamma/local/gamma-local/app-artifacts}"
+REPORT="${LOCAL_GAMMA_T4_REPORT:-$LOCAL_GAMMA_ARTIFACT_ROOT/t4_report.json}"
 GATEWAY_BASE_URL="${LOCAL_GAMMA_GATEWAY_BASE_URL:-https://gamma-api.quwoquan-env.test:19000}"
 PRODUCT_OPS_BASE_URL="${LOCAL_GAMMA_PRODUCT_OPS_BASE_URL:-https://gamma-product-ops.quwoquan-env.test:19010}"
 MEDIA_BASE_URL="${LOCAL_GAMMA_MEDIA_BASE_URL:-https://gamma-image.quwoquan-env.test:19100}"
 TEST_AUTH_TOKEN="${LOCAL_GAMMA_TEST_AUTH_TOKEN:-${TEST_AUTH_TOKEN:-local-gamma-token}}"
-PATROL_TARGET="${LOCAL_GAMMA_T4_TARGET:-test/patrol/discovery/feed_load_test.dart}"
+PATROL_TARGET="${LOCAL_GAMMA_T4_TARGET:-test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart}"
 DEVICE_ID="${LOCAL_GAMMA_T4_DEVICE_ID:-}"
 PLATFORM="${LOCAL_GAMMA_T4_PLATFORM:-all}"
 DRY_RUN=0
@@ -65,7 +66,7 @@ mkdir -p "$(dirname "$REPORT")"
 
 cmd=(
   python3
-  agent_ops/deploy/smoke/run_environment_patrol_smoke.py
+  quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py
   --report "$REPORT"
   --target "$PATROL_TARGET"
   --env-name "local-gamma"

@@ -56,10 +56,11 @@ sit_acceptance:
         cases:
         - local_contract.runtime.runtime_data_engineering.sit1.sit1_local_contract
         envs: *id001
-    notes: []
+    notes:
+    - article-commercial-scale-closure 作为本能力的新增商业化 story，负责冻结 article/homepage shared commercial pool、single branch、H100/H1000 与 10k evaluate-only 证据口径；其 story 级 GWT 通过后，相关 release/import/search/reco 与 authoritative TokenLedger 证据回灌本 SIT。
 execution:
   local_gate:
-  - bash agent_ops/scaffold/verify_feature_tree_refactor.sh
-  - bash agent_ops/scaffold/verify_acceptance_standard.sh
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
   full_gate:
   - make gate

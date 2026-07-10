@@ -16,6 +16,7 @@ from typing import Any, Mapping
 
 import yaml
 
+from _common.carrier_contract import LANE_TO_CANONICAL_CONTENT_MIX
 from _common.io import read_json, write_json
 from _common.paths import DATA_ROOT, RUNTIME_ROOT, now_iso
 from download.fetch import fetch_image_payload, fetch_source_payload
@@ -500,13 +501,9 @@ def build_site_map_packet(candidate: Mapping[str, Any], score: Mapping[str, Any]
     if not source_ref:
         blockers.append("candidate sourceRef missing")
     lane = str(candidate.get("lane") or "")
-    content_type = {
-        "article": "article",
-        "image": "imagePost",
-        "video": "videoPost",
-        "homepage": "homepage",
-        "knowledgeCard": "knowledgeCard",
-    }.get(lane, lane)
+    # lane → 排产命名映射真相源在 _common/carrier_contract；knowledgeCard 等
+    # 排产变体不占独立 lane，fallback 保持原值。
+    content_type = LANE_TO_CANONICAL_CONTENT_MIX.get(lane, lane)
     mentions = candidate.get("semanticMentions") if isinstance(candidate.get("semanticMentions"), Mapping) else {}
     if mentions.get("state") != "mention_only":
         blockers.append("site_map may only emit mention_only refs before entity/homepage review")

@@ -46,6 +46,8 @@ def _normalized_license_kind(value: str) -> str:
     normalized = normalized.replace("_", " ").replace("-", " ")
     if not normalized:
         return ""
+    if normalized == "attribution no watermark":
+        return normalized
     if "cc0" in normalized:
         if "1.0" in normalized or "universal" in normalized:
             return "cc0 1.0 universal"
@@ -66,6 +68,20 @@ def _normalized_license_kind(value: str) -> str:
     return normalized
 
 
+def _scan_status_passed(value: Any) -> bool:
+    normalized = re.sub(r"\s+", "_", str(value or "").strip()).casefold()
+    return normalized in {
+        "clear",
+        "pass",
+        "passed",
+        "none_detected",
+        "no_explicit_watermark",
+        "no_watermark_detected",
+        "no_text_detected",
+        "clean",
+    }
+
+
 def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str]:
     if vertical not in _POLICY_PATHS:
         return []
@@ -77,6 +93,14 @@ def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str
     for field in policy.get("requiredImageFields") or []:
         if not str(spec.get(field) or "").strip():
             issues.append(f"imageRights: missing required field {field}")
+    authorization_basis = str(spec.get("authorizationBasis") or "").strip()
+    allowed_bases = {
+        str(item).strip()
+        for item in (policy.get("allowedAuthorizationBases") or [])
+        if str(item).strip()
+    }
+    if authorization_basis and allowed_bases and authorization_basis not in allowed_bases:
+        issues.append(f"imageRights: unsupported authorizationBasis {authorization_basis}")
     license_value = str(spec.get("license") or "").strip()
     normalized_allowed = {
         _normalized_license_kind(str(item))
@@ -85,6 +109,26 @@ def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str
     normalized_license = _normalized_license_kind(license_value)
     if license_value and normalized_license not in normalized_allowed:
         issues.append(f"imageRights: unsupported license {license_value}")
+    uses_attribution_no_watermark = (
+        authorization_basis == "attribution_no_watermark"
+        or normalized_license == _normalized_license_kind("attribution_no_watermark")
+    )
+    if uses_attribution_no_watermark:
+        if authorization_basis != "attribution_no_watermark":
+            issues.append(
+                "imageRights: attribution_no_watermark assets must set authorizationBasis=attribution_no_watermark"
+            )
+        for field in policy.get("attributionNoWatermarkRequiredFields") or []:
+            if not str(spec.get(field) or "").strip():
+                issues.append(f"imageRights: attribution_no_watermark missing {field}")
+        if str(spec.get("sourceAuthor") or "").strip() and not str(spec.get("credit") or "").strip():
+            issues.append("imageRights: attribution_no_watermark requires credit derived from sourceAuthor")
+        if str(spec.get("pinUrl") or "").strip() and not str(spec.get("authorizationProof") or "").strip():
+            issues.append("imageRights: attribution_no_watermark requires authorizationProof pointing to source evidence")
+        if not _scan_status_passed(spec.get("watermarkScan")):
+            issues.append("imageRights: attribution_no_watermark requires watermarkScan=clear/pass/no_explicit_watermark")
+        if not _scan_status_passed(spec.get("ocrScan")):
+            issues.append("imageRights: attribution_no_watermark requires ocrScan=clear/pass/no_text_detected")
     if normalized_license == "ai generated original".casefold():
         for field in ("generationModel", "generationPromptHash", "generatedAt"):
             if not str(spec.get(field) or "").strip():
@@ -103,6 +147,7 @@ def validate_image_rights(spec: Mapping[str, Any], *, vertical: str) -> list[str
 
 def normalize_rights_payload(spec: Mapping[str, Any]) -> dict[str, Any]:
     keys = [
+        "authorizationBasis",
         "license",
         "credit",
         "sourceUrl",
@@ -112,6 +157,14 @@ def normalize_rights_payload(spec: Mapping[str, Any]) -> dict[str, Any]:
         "modelReleaseRequired",
         "modelReleaseStatus",
         "authorizationProof",
+        "pinUrl",
+        "discoveryUrl",
+        "originalAssetUrl",
+        "sourceAuthor",
+        "repostAttribution",
+        "watermarkScan",
+        "ocrScan",
+        "collectedAt",
         "generationModel",
         "generationPromptHash",
         "generatedAt",
