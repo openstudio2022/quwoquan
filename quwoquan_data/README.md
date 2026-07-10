@@ -10,7 +10,7 @@ Agent 驱动的语义数据加工管线，从地理实体发现到内容生产�
   `control_plane/`（`tasks/` + `families/` + `_shared/`）；默认值只由 `task.yaml.presetRef` 决定，
   运行编排只走 `qwq-data task run-recipe`（详见 [`docs/pipeline_directory_layout_spec.md`](docs/pipeline_directory_layout_spec.md) §0.5）。
 - **任务/批次隔离**：运行期输出统一落 `QWQ_OUTPUT_ROOT`（默认 `.qwq_output/`），按批次三轴
-  `local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/` 组织，支持并行。
+  `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/` 组织，支持并行。
 - **中文优先**：所有标签、实体、文章的 ID 和目录名使用中文，英文作为扩展字段。
 - **轻量 schema**：标签本体只含稳定语义字段，动态规则外置到 `tag_policy.yaml` 和 `tag_runtime/`。
 
@@ -421,7 +421,7 @@ python3 verticals/campus/verify/verify_campus_taxonomy.py
 | 脚本                           | 功能                       |
 | ---------------------------- | ------------------------ |
 | `scripts/bootstrap/taxonomy/bootstrap_tags.py`          | 生成四分组完整标签树（31 垂类 + 4 结构维度） |
-| `scripts/bootstrap/taxonomy/bootstrap_admin_regions.py` | 生成行政区标签（数据源：pca.json，中国 34 省 337 市 3056 区县 + 泰国 + 欧洲） |
+| `scripts/bootstrap/taxonomy/bootstrap_admin_regions.py` | 生成行政区标签（数据源：`reference/admin_regions/pca.json`，中国 34 省 337 市 3056 区县 + 泰国 + 欧洲） |
 | `scripts/bootstrap/taxonomy/bootstrap_geo_landmarks.py` | 生成地形地貌科学分类标签             |
 | `scripts/bootstrap/taxonomy/bootstrap_event_topics.py`  | 生成事件 / 话题标签             |
 | `verticals/campus/scripts/bootstrap_school_entities.py` | 从 seed catalog 批量生成学校实体三件套（全国高校 + 北京上海中学/幼儿园） |
@@ -477,7 +477,7 @@ python3 scripts/tags/tag_stats.py
 8. **正交三分**：自然风光（审美）⊥ 地形地貌（科学分类）⊥ 自然景观（Entity 实例类型）
 9. **时间唯一真相源**：节日/季节信息只在 Topic/时间/ 定义
 10. **无显式关系文件**：标签关联通过 tagRef 共现度隐式计算
-11. **行政区数据驱动**：中国行政区来自民政部权威数据源（`data/admin_regions/pca.json`），脚本驱动生成，不硬编码
+11. **行政区数据驱动**：中国行政区来自民政部权威数据源（`reference/admin_regions/pca.json`），脚本驱动生成，不硬编码
 12. **行政区 vs 城市正交**：行政区标签回答"在哪"（Topic/地理/行政区），城市实体回答"是什么类型"（Entity/地点/城市），通过 geoTagRef 关联
 13. **Entity/机构/学校只放类型标签**：学段(13)+高校层次(8)+学科类型(12)+办学性质(2)=35 个叶子直接挂在 L4，严禁出现具体学校名；学校实例在 `entities/机构/学校/{name}/` 目录
 14. **校园标签四组联动**：Topic/教育成长(12 子域) + Entity/机构/学校(35 类型) + Audience/圈子/校园圈(6 社群) + Format/内容角度(含经验分享 5 角度) 协同覆盖校园场景
@@ -494,7 +494,7 @@ Entity/机构/学校/          (L3)
   └── 办学性质: 公办/民办 (2)
 ```
 
-### 数据源（`.qwq_output/local/data-runtime/seed/school_catalog/`）
+### 数据源（`.qwq_output/data/local/runtime/seed/school_catalog/`）
 
 | 数据文件 | 来源 | 行数 |
 |---------|------|------|

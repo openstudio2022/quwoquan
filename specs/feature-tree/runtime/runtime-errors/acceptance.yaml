@@ -39,12 +39,12 @@ sit_acceptance:
       - file: quwoquan_app/scripts/runtime/verify_domain_error_code_registry.py
       - file: quwoquan_app/scripts/runtime/verify_behavior_error_stack_convergence.py
       - file: quwoquan_service/contracts/runtime_errors/packages/dart/quwoquan_runtime_errors/test/runtime_failure_codec_test.dart
-      - file: quwoquan_app/test/cloud/runtime/errors/cloud_error_mapper_runtime_failure_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/runtime/errors/cloud_error_mapper_runtime_failure__local_contract_test.dart
       - file: quwoquan_app/test/cloud/services/behavior/behavior_repository_error_contract_test.dart
-      - file: quwoquan_app/test/assistant/observability/logging/app_exception_telemetry_service_test.dart
+      - file: quwoquan_app/test/local_contract/quality/observability/assistant/observability/logging/app_exception_telemetry_service__local_contract_test.dart
       - file: quwoquan_service/runtime/errors/errors_test.go
       - file: quwoquan_service/runtime/controlplane/error_message_override_test.go
-      - file: quwoquan_service/services/content-service/tests/post_behavior_contract_test.go
+      - file: quwoquan_service/services/content-service/tests/api_integration/post_behavior_contract__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:

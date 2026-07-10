@@ -20,16 +20,34 @@ import multiprocessing
 import os
 import tempfile
 
-os.environ.setdefault("QWQ_DATA_ROOT", tempfile.mkdtemp(prefix="dedup_ledger_"))
+_DEDUP_ROOT = Path(os.environ.get("QWQ_DEDUP_LEDGER_TEST_ROOT") or tempfile.mkdtemp(prefix="dedup_ledger_"))
+os.environ["QWQ_DEDUP_LEDGER_TEST_ROOT"] = str(_DEDUP_ROOT)
+os.environ["QWQ_DATA_ROOT"] = str(_DEDUP_ROOT)
+os.environ["QWQ_RUNTIME_ROOT"] = str(_DEDUP_ROOT / "runtime")
 
+from _common import paths as _paths_mod  # noqa: E402
 from _common import dedup  # noqa: E402
 
 TASK = "旅行/地域/中国/景区/去重账本_gwt"
 
 
-def _mark_range(bounds: tuple[int, int]) -> None:
-    # 子进程 worker：继承 QWQ_DATA_ROOT，与父进程写同一账本。
-    start, end = bounds
+def _retarget_root(root: Path = _DEDUP_ROOT) -> None:
+    os.environ["QWQ_DEDUP_LEDGER_TEST_ROOT"] = str(root)
+    os.environ["QWQ_DATA_ROOT"] = str(root)
+    os.environ["QWQ_RUNTIME_ROOT"] = str(root / "runtime")
+    _paths_mod.DATA_ROOT = root
+    _paths_mod.RUNTIME_ROOT = root / "runtime"
+    _paths_mod.TASKS_ROOT = _paths_mod.RUNTIME_ROOT / "tasks"
+
+
+def setup_function() -> None:
+    _retarget_root()
+
+
+def _mark_range(bounds: tuple[int, int, str]) -> None:
+    # 子进程 worker：spawn 后显式重绑到父进程同一测试根。
+    start, end, root = bounds
+    _retarget_root(Path(root))
     for i in range(start, end):
         dedup.mark_entity_done(TASK, f"实体{i:03d}")
 
@@ -37,8 +55,9 @@ def _mark_range(bounds: tuple[int, int]) -> None:
 def test_concurrent_marks_do_not_lose_updates() -> None:
     total, workers = 60, 4
     step = total // workers
-    bounds = [(i * step, (i + 1) * step) for i in range(workers)]
-    ctx = multiprocessing.get_context("fork")
+    _retarget_root()
+    bounds = [(i * step, (i + 1) * step, str(_DEDUP_ROOT)) for i in range(workers)]
+    ctx = multiprocessing.get_context("spawn")
     with ctx.Pool(workers) as pool:
         pool.map(_mark_range, bounds)
     completed = set(dedup.load_manifest(TASK).get("completedEntities", []))

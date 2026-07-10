@@ -16,7 +16,7 @@
 ## 专项目标（执行时）
 
 1. **契约包**：`quwoquan_cloud_contracts`（名称可议），抽象接口 + 必要 DTO export；**`quwoquan_app`** 与 Mock 实现侧 **均只依赖契约**，避免循环依赖。
-2. **Mock 迁入 `test/` 镜像**：[`quwoquan_app/test/cloud/services/`](../../quwoquan_app/test/cloud/services/) 对齐 `lib/cloud/services/` 相对路径；**注意**：`lib` **不可** import `test/`，应用内若仍要 **可切换内嵌数据**，须配合 **R1** 或 **R2**（见下）。
+2. **Mock 迁入 `test/` 镜像**：[`quwoquan_app/test/local_contract/cloud/services/`](../../quwoquan_app/test/local_contract/cloud/services/) 对齐 `lib/cloud/services/` 相对路径；**注意**：`lib` **不可** import `test/`，应用内若仍要 **可切换内嵌数据**，须配合 **R1** 或 **R2**（见下）。
 3. **运行时策略（必选其一）**
    - **R1**：运行进程内 **仅 Remote**；`Mock*` **只**给 `flutter test`；**取消**或弱化应用内 `AppDataSourceMode.mock`。
    - **R2**：保留应用内切换时，**额外**使用 **`packages/quwoquan_cloud_mock`**（dev 依赖、发布去掉），与「权威在 test/」时需 **export/codegen** 防双份漂移。
@@ -30,7 +30,7 @@
 | 阶段 | 内容 |
 |------|------|
 | **A** | 契约包骨架；抽象 `*Repository` 迁入或 export |
-| **B** | `Mock*` 与 mock 数据迁入 `test/cloud/services/...` 镜像树 |
+| **B** | `Mock*` 与 mock 数据迁入 `test/local_contract/cloud/services/...` 镜像树 |
 | **B'** | 可选：`packages/quwoquan_cloud_mock`（仅 R2） |
 | **C** | 组合根单一绑定 |
 | **D** | 双 `pubspec` / `main_release` |

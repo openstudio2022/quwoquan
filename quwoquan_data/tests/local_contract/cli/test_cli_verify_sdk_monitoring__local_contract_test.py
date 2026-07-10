@@ -11,7 +11,9 @@ from _common.paths import OUTPUT_ARTIFACTS_ROOT
 
 def test_sdk_monitoring_discovery_root_uses_output_artifacts_root():
     assert sdk_monitor_mod._ARTIFACTS_ROOT == OUTPUT_ARTIFACTS_ROOT
-    assert ".qwq_output/runs/" + "quwoquan_data_runs" not in str(sdk_monitor_mod._ARTIFACTS_ROOT)
+    retired_root = ".qwq_output/" + "runs/"
+    assert retired_root not in str(sdk_monitor_mod._ARTIFACTS_ROOT)
+    assert sdk_monitor_mod._ARTIFACTS_ROOT.parts[-2:] == ("data", "runs")
 
 
 def _seed_sdk_monitor_batch(task_id: str, batch_id: str, *, plan_id: str) -> tuple[Path, Path]:

@@ -37,7 +37,7 @@ gwt_acceptance:
       recorded:
       - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/projection_fields__local_contract_test.go
       - file: quwoquan_service/services/content-service/tests/local_contract/runtime/recommendation/quality_score_fusion__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/cmd/import/mongo_import__local_contract_test.go
+      - file: quwoquan_service/services/content-service/cmd/import/mongo_import__local_contract_test.go
     status: partial
     test_evidence:
       primary:

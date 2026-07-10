@@ -9,7 +9,7 @@ from _common.creator_pool.bundle import build_creator_bundle
 
 REPO = Path(__file__).resolve().parents[4]
 SCHEMA = REPO / "quwoquan_data/schema/creator/creator_bundle.schema.json"
-GOLDEN = REPO / "quwoquan_data/tests/fixtures/creator_pool/travel_scale10_verify/golden_creator_bundle.json"
+GOLDEN = REPO / "quwoquan_data/tests/support/fixtures/creator_pool/travel_scale10_verify/golden_creator_bundle.json"
 
 
 def test_golden_creator_bundle_required_fields() -> None:

@@ -74,7 +74,7 @@
 - 区域规则：`quwoquan_ops/AGENTS.md`、environment skill、deploy command。
 - Pre-work Reflection：确认不是 `prod-gray`，确认 step/error-rate/p95/redis-error-rate，确认密钥与破坏性动作需人工确认。
 - Cursor voice：我会用 stackctl，不手写旧 deploy 脚本。
-- Codex voice：我会收集 `.qwq_output/runs/prod/**` 和 release state 作为证据。
+- Codex voice：我会收集 `.qwq_output/env/prod/runs/**` 和 release state 作为证据。
 - 出口证据：stackctl deploy 报告、health/inspect/doctor、回滚路径。
 - 应跑门禁：`stackctl verify --env prod --kind all --tier all`。
 

@@ -49,12 +49,16 @@ func fetchContentServiceObjectIntersections(
 	}
 	parsed.Path = strings.TrimRight(parsed.Path, "/") + contentServiceObjectIntersectionsPath
 	query := parsed.Query()
-	objectID := strings.TrimSpace(homepage.ID)
+	objectID := strings.TrimSpace(homepage.CanonicalEntityID)
 	if objectID == "" {
-		return nil, false
+		objectID = strings.TrimSpace(homepage.ID)
 	}
 	query.Set("objectId", objectID)
-	query.Set("objectType", "homepage")
+	objectType := strings.TrimSpace(homepage.HomepageType)
+	if objectType == "" || strings.TrimSpace(homepage.CanonicalEntityID) == "" {
+		objectType = "homepage"
+	}
+	query.Set("objectType", objectType)
 	query.Set("limit", strconv.Itoa(8))
 	parsed.RawQuery = query.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsed.String(), nil)

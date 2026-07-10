@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 STACKCTL = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
 PORT_PROFILE = ROOT / "quwoquan_ops" / "cli" / "print_local_port_profile.py"
-TMP = ROOT / ".qwq_output" / "local" / "stackctl-contract"
+TMP = ROOT / ".qwq_output" / "env" / "repo" / "local" / "stackctl-contract"
 
 
 def run(argv: list[str]) -> subprocess.CompletedProcess[str]:

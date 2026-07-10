@@ -2,7 +2,7 @@
 
 committed: quwoquan_data/control_plane/tasks/<taskId>/ {task.yaml(入库), progress.json, runs/, notes.md(本地)}
 preset   : quwoquan_data/control_plane/families/<presetRef>.preset.yaml（受版本控制，默认值唯一真相源）
-runtime  : QWQ_OUTPUT_ROOT/local/data-runtime/tasks/<taskId>/ {.lock, 生成产物}
+runtime  : QWQ_OUTPUT_ROOT/data/local/runtime/tasks/<taskId>/ {.lock, 生成产物}
 taskId    : 斜杠路径 <vertical>/<organizeBy>/<key>[/<category>]/<name>
 """
 from __future__ import annotations

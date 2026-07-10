@@ -43,6 +43,8 @@ districts:
     - 临海古城
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:02:08Z'
+    sourceScreenEvidence: zh.wikipedia.org:台州府城文化旅游区 extract=208ch
   - name: 江南长城
     canonicalName: 江南长城
     entityType: 地点/遗址
@@ -54,6 +56,8 @@ districts:
     - 台州府城墙
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:02:09Z'
+    sourceScreenEvidence: zh.wikipedia.org:江南长城 extract=208ch
   - name: 紫阳古街
     canonicalName: 紫阳古街
     entityType: 地点/古镇
@@ -93,6 +97,54 @@ districts:
     - 羊岩山茶文化园
     selectionPriority: 6
     sourceReadiness: pending
+  - name: 临海鲁迅展览馆
+    canonicalName: 临海鲁迅展览馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 台州府文庙
+    canonicalName: 台州府文庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 国华珠算博物馆
+    canonicalName: 国华珠算博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 杨哲商
+    canonicalName: 杨哲商
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 谭纶画像碑
+    canonicalName: 谭纶画像碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 马氏庄园 (临海)
+    canonicalName: 马氏庄园 (临海)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    sourceReadiness: pending
+    selectionPriority: 12
 - district: 仙居县
   leaves:
   - name: 神仙居
@@ -144,6 +196,38 @@ districts:
     - 景星岩景区
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 下各东桥
+    canonicalName: 下各东桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 下汤遗址
+    canonicalName: 下汤遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 南峰塔 (仙居县)
+    canonicalName: 南峰塔 (仙居县)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 岩石殿石棚墓
+    canonicalName: 岩石殿石棚墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 天台县
   leaves:
   - name: 天台山
@@ -177,6 +261,8 @@ districts:
     - 石梁景区
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:02:46Z'
+    sourceScreenEvidence: zh.wikipedia.org:石梁飞瀑 extract=244ch
   - name: 琼台仙谷
     canonicalName: 琼台仙谷
     entityType: 地点/自然景观
@@ -213,6 +299,14 @@ districts:
     - 华顶峰
     selectionPriority: 7
     sourceReadiness: pending
+  - name: 南屏乡 (天台县)
+    canonicalName: 南屏乡 (天台县)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 椒江区
   leaves:
   - name: 大陈岛
@@ -226,6 +320,8 @@ districts:
     - 下大陈岛
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:03:07Z'
+    sourceScreenEvidence: zh.wikipedia.org:大陈岛 extract=231ch
   - name: 海门老街
     canonicalName: 海门老街
     entityType: 地点/古镇
@@ -264,6 +360,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/温岭市
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:03:25Z'
+    sourceScreenEvidence: zh.wikipedia.org:长屿硐天 extract=293ch
   - name: 石塘
     canonicalName: 石塘（温岭）
     entityType: 地点/古镇
@@ -328,6 +426,30 @@ districts:
     - 漩门湾湿地
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 三合潭遗址
+    canonicalName: 三合潭遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/玉环市
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 台州市汉邦美术馆
+    canonicalName: 台州市汉邦美术馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/玉环市
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 泗边小鹿巡检司城遗址
+    canonicalName: 泗边小鹿巡检司城遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/玉环市
+    sourceReadiness: pending
+    selectionPriority: 5
 - district: 路桥区
   leaves:
   - name: 十里长街
@@ -340,6 +462,8 @@ districts:
     - 路桥老街
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:04:51Z'
+    sourceScreenEvidence: zh.wikipedia.org:十里长街 extract=391ch
   - name: 中央山公园
     canonicalName: 中央山公园（路桥）
     entityType: 地点/公园
@@ -348,6 +472,14 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/路桥区
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 新桥爱吾庐
+    canonicalName: 新桥爱吾庐
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/路桥区
+    sourceReadiness: pending
+    selectionPriority: 3
 - district: 黄岩区
   leaves:
   - name: 黄岩石窟
@@ -378,3 +510,51 @@ districts:
     - 布袋山风景区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 五洞桥 (黄岩)
+    canonicalName: 五洞桥 (黄岩)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 净土寺塔
+    canonicalName: 净土寺塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 委羽山大有宫
+    canonicalName: 委羽山大有宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 水口石塔
+    canonicalName: 水口石塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 镇锁桥
+    canonicalName: 镇锁桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 黄岩孔庙
+    canonicalName: 黄岩孔庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    sourceReadiness: pending
+    selectionPriority: 9

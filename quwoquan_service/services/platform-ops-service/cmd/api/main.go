@@ -684,7 +684,7 @@ func (s *platformService) readOnboardingDomains() ([]map[string]any, error) {
 }
 
 func readReleaseState(repoRoot, service string) string {
-	stateFile := filepath.Join(repoRoot, ".qwq_output", "local", "release-state", service+".state")
+	stateFile := filepath.Join(repoRoot, ".qwq_output", "env", "repo", "local", "release-state", service+".state")
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
 		return ""
@@ -714,7 +714,7 @@ func resolveRepoRoot() string {
 }
 
 func localControlPlaneStorePath(repoRoot, serviceName string) string {
-	return filepath.Join(repoRoot, ".qwq_output", "local", serviceName, "control-plane", serviceName+".json")
+	return filepath.Join(repoRoot, ".qwq_output", "env", "repo", "local", "control-plane", serviceName, serviceName+".json")
 }
 
 func resolveConfigSchemaPath(repoRoot string) string {

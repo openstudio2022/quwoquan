@@ -19,15 +19,15 @@ from quwoquan_ops.gate.verify_observability_layout import layout_issues
 
 
 def test_compact_deploy_log_accepts_short_fields(tmp_path: Path) -> None:
-    root = tmp_path / "observability"
-    run = root / "runs" / "gamma" / "run-1"
+    root = tmp_path / ".qwq_output"
+    run = root / "env" / "gamma" / "observability" / "run-1"
     write_run_manifest(
         run,
         env_name="gamma",
         run_id="run-1",
         command="package",
         target="gamma-local",
-        report_dir=tmp_path / ".qwq_output" / "runs" / "gamma" / "run-1",
+        report_dir=tmp_path / ".qwq_output" / "env" / "gamma" / "runs" / "run-1",
     )
     append_log_line(
         run / "logs" / "ci" / "stackctl" / "deploy.log",
@@ -76,15 +76,15 @@ def test_attrs_are_size_limited_and_secret_keys_blocked() -> None:
 
 
 def test_layout_rejects_unknown_log_kind(tmp_path: Path) -> None:
-    root = tmp_path / "observability"
-    run = root / "runs" / "gamma" / "run-1"
+    root = tmp_path / ".qwq_output"
+    run = root / "env" / "gamma" / "observability" / "run-1"
     write_run_manifest(
         run,
         env_name="gamma",
         run_id="run-1",
         command="verify",
         target="gamma-local",
-        report_dir=tmp_path / ".qwq_output" / "runs" / "gamma" / "run-1",
+        report_dir=tmp_path / ".qwq_output" / "env" / "gamma" / "runs" / "run-1",
     )
     unknown = run / "logs" / "service" / "content-service" / "1" / "profile.log"
     unknown.parent.mkdir(parents=True)
@@ -94,11 +94,10 @@ def test_layout_rejects_unknown_log_kind(tmp_path: Path) -> None:
 
 
 def test_layout_rejects_root_side_channel(tmp_path: Path) -> None:
-    root = tmp_path / "observability"
-    (root / "runs").mkdir(parents=True)
-    (root / "scratch").mkdir()
+    root = tmp_path / ".qwq_output"
+    (root / "observability" / "runs").mkdir(parents=True)
 
-    assert any("unknown entries" in issue for issue in layout_issues(root))
+    assert any("old observability root" in issue for issue in layout_issues(root))
 
 
 def test_delimited_log_parser_keeps_message_commas_and_stack_lines() -> None:

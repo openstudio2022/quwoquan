@@ -28,7 +28,7 @@
 ### 3.1 Deliver 阶段完成
 
 - 代码已合入 `dev1.0`（分支开发模式）或已准备发起进入 `main` 的 PR；分支策略见 `quwoquan_ops/environments/branch_strategy.md`
-- `make gate-local-gamma` 建议在提交前通过并生成 `.qwq_output/local/gamma-local/report.json`。该命令用于左移预测试，不替代 `main` 的 required checks；见 `/.cursor/commands/commit.md`
+- `make gate-local-gamma` 建议在提交前通过并生成 `.qwq_output/env/gamma/local/gamma-local/report.json`。该命令用于左移预测试，不替代 `main` 的 required checks；见 `/.cursor/commands/commit.md`
 - `quwoquan_ops/environments/process_domain_mapping.yaml` 合法，`verify_deployment_domain_mapping.sh` 通过
 - `quwoquan_ops/environments/environment_topology_manifest.yaml`、`quwoquan_ops/environments/local_env_port_manifest.yaml` 已通过校验
 - 如变更环境打包/启动/发布链路，先执行 `python3 quwoquan_ops/cli/stackctl.py verify`
@@ -49,7 +49,7 @@ python3 quwoquan_ops/cli/stackctl.py up --env gamma
 - `T2`：Flutter/Go/Ops 模块、Widget、Provider/Journey 测试通过。
 - `T3`：本地 gamma 镜像栈真实 API、真实存储副作用、错误响应与 RemoteRepository smoke 通过。
 - `T4`：复用共享 gamma 旅程脚本；若当前可见多台设备则全部执行，本地左移至少需要一台可用设备进入验证。
-- 报告：`.qwq_output/local/gamma-local/report.json` 状态为 `passed`。
+- 报告：`.qwq_output/env/gamma/local/gamma-local/report.json` 状态为 `passed`。
 
 缺少本地 DNS/TLS、设备、服务依赖或 seed/reset 能力时，状态必须为 `GATE_BLOCK`，不得继续提交。
 
@@ -86,17 +86,17 @@ python3 quwoquan_ops/cli/stackctl.py up --env gamma
 
 **要区分两个东西**：
 
-- **`.qwq_output/local/release-state/seed-box.state`** 是**状态文件**，记录「上一次灰度完成后 prod 正在跑的版本」：里面的 `to_image`、`to_config` 就是**当前 prod** 的镜像/配置版本。表单里的 **Current prod** 应从**这个 state 文件**取，不是从 `quwoquan_service/services/` 取。
+- **`.qwq_output/env/repo/local/release-state/seed-box.state`** 是**状态文件**，记录「上一次灰度完成后 prod 正在跑的版本」：里面的 `to_image`、`to_config` 就是**当前 prod** 的镜像/配置版本。表单里的 **Current prod** 应从**这个 state 文件**取，不是从 `quwoquan_service/services/` 取。
 - **`quwoquan_service/services/seed-box/v*.yaml`** 是**某次发布用的配置内容**（该版本的配置快照），用于校验「目标配置版本」是否存在；不表示“当前 prod 版本号”。
 
 | 字段 | 含义 | 获取方式 |
 |------|------|----------|
-| **Current prod image version** | 当前生产正在使用的镜像版本 | 从 **`.qwq_output/local/release-state/seed-box.state`** 的 **`to_image`** 读取（上次灰度完成后写入）；若无则 SSH 到 prod ECS（`prod-service-svc`）查：`podman inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' quwoquan-service-prod_seed-box_1`（远端为 ssh-hosted + rootless podman compose，已退役 kubectl/`PROD_KUBECONFIG`） |
+| **Current prod image version** | 当前生产正在使用的镜像版本 | 从 **`.qwq_output/env/repo/local/release-state/seed-box.state`** 的 **`to_image`** 读取（上次灰度完成后写入）；若无则 SSH 到 prod ECS（`prod-service-svc`）查：`podman inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' quwoquan-service-prod_seed-box_1`（远端为 ssh-hosted + rootless podman compose，已退役 kubectl/`PROD_KUBECONFIG`） |
 | **Target image version (match pre-release)** | 本次要上的镜像版本，须与预发布一致 | 来自 **main PR required checks（`04. Pre-Release Gate`）通过的构建版本**：tag 触发用该 tag 或解析值；必要时参考 service pipeline build report / workflow artifact |
-| **Current prod config version** | 当前生产正在使用的配置版本 | 从 **`.qwq_output/local/release-state/seed-box.state`** 的 **`to_config`** 读取；若无则从 deployment 环境变量 `CONFIG_VERSION` 读取 |
+| **Current prod config version** | 当前生产正在使用的配置版本 | 从 **`.qwq_output/env/repo/local/release-state/seed-box.state`** 的 **`to_config`** 读取；若无则从 deployment 环境变量 `CONFIG_VERSION` 读取 |
 | **Target config version** | 本次要上的配置版本 | 与 target image 对应，来自 pre-release 的 `CONFIG_VERSION`（同上） |
 
-**约定**：Target 必须与 `04. Pre-Release Gate` 通过的构建版本一致。Workflow 支持**留空 Current prod 两栏**时自动从 `.qwq_output/local/release-state/seed-box.state` 读取（见下文）。
+**约定**：Target 必须与 `04. Pre-Release Gate` 通过的构建版本一致。Workflow 支持**留空 Current prod 两栏**时自动从 `.qwq_output/env/repo/local/release-state/seed-box.state` 读取（见下文）。
 
 ---
 
@@ -132,7 +132,7 @@ python3 quwoquan_ops/cli/stackctl.py deploy --target prod-hosted --service seed-
 python3 quwoquan_ops/cli/stackctl.py verify --target prod-hosted --kind topology --tier t4
 ```
 
-页面 smoke 报告与设备证据归档在 `.qwq_output/runs/prod/<run-id>-deploy-prod-hosted/environment-page-smoke/`，其中 `report.json` 是阻断判据，`runs/*/command.json`、`patrol.log`、截图用于回放。
+页面 smoke 报告与设备证据归档在 `.qwq_output/env/prod/runs/<run-id>-deploy-prod-hosted/environment-page-smoke/`，其中 `report.json` 是阻断判据，`runs/*/command.json`、`patrol.log`、截图用于回放。
 
 ---
 
@@ -158,10 +158,10 @@ GAMMA_PRODUCT_OPS_BASE_URL=<gamma-product-ops-url>
 ### 5.2 T4 self-hosted 设备旅程（真机/模拟器）
 
 ```bash
-python3 quwoquan_service/services/assistant-service/tests/ops/ci/run_assistant_device_matrix_ci.py --platform android
-python3 quwoquan_service/services/assistant-service/tests/ops/ci/run_assistant_device_matrix_ci.py --platform ios
-python3 quwoquan_service/services/chat-service/tests/ops/ci/run_chat_avatar_device_matrix_ci.py --platform android
-python3 quwoquan_service/services/chat-service/tests/ops/ci/run_chat_avatar_device_matrix_ci.py --platform ios
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/ci/run_assistant_device_matrix_ci.py --platform android
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/ci/run_assistant_device_matrix_ci.py --platform ios
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix_ci.py --platform android
+python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/ci/run_chat_avatar_device_matrix_ci.py --platform ios
 python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local --runtime-env gamma --api-contract-env gamma --data-source remote --gateway-base-url <gamma-api> --product-ops-base-url <gamma-product-ops> --media-base-url <gamma-media> --test-auth-token <token> --platform android
 python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local --runtime-env gamma --api-contract-env gamma --data-source remote --gateway-base-url <gamma-api> --product-ops-base-url <gamma-product-ops> --media-base-url <gamma-media> --test-auth-token <token> --platform ios
 ```
@@ -193,7 +193,7 @@ scripts/start_app_instance.sh --env gamma --device-id <gamma-device>
 
 ### 6.0 灰度对象：整颗 seed-box（不按服务区分）
 
-在 **integration / prod** 只有一个发布单元：**seed-box**，内有两个容器（Go seed-box + Python recommendation-service），**一起发布、同一镜像/配置版本**。灰度就是整颗 seed-box 一起滚，不按“服务”拆开。配置与状态统一用 seed-box：`quwoquan_service/services/seed-box/`、`.qwq_output/local/release-state/seed-box.state`。
+在 **integration / prod** 只有一个发布单元：**seed-box**，内有两个容器（Go seed-box + Python recommendation-service），**一起发布、同一镜像/配置版本**。灰度就是整颗 seed-box 一起滚，不按“服务”拆开。配置与状态统一用 seed-box：`quwoquan_service/services/seed-box/`、`.qwq_output/env/repo/local/release-state/seed-box.state`。
 
 > **远端底座（prod-hosted）现状**：成本约束下 prod 与原 gamma 同台 ECS，远端发布为 **ssh-hosted + rootless podman compose**（非独立 ACK 集群），按 `edge/media/service/data` 四平面去 root 隔离（账号 `prod-<plane>-svc`，见 `quwoquan_ops/environments/prod_plane_access_isolation.yaml`），seed-box 归属 `service` 平面、由 `prod-service-svc` 发布。`quwoquan_service/services/seed-box/deploy/kustomize/**` 与 `quwoquan_ops/environments/kustomization/<cloud>-prod` 保留为面向未来 ACK 的脚手架（仅静态门禁校验），当前不参与远端 apply。
 >
@@ -239,9 +239,9 @@ python3 quwoquan_ops/cli/stackctl.py doctor --target prod-hosted
 
 本轮通过的真实证据：
 
-- `gray-initial`: `.qwq_output/runs/prod/20260617T164119Z-deploy-prod-hosted`（`OK: stage=5 decision=continue`，post-deploy `4/4 healthy`，doctor 无问题）。
-- `full`: `.qwq_output/runs/prod/20260617T172537Z-deploy-prod-hosted`（`OK: stage=100 decision=continue`，post-deploy `4/4 healthy`，doctor 无问题）。
-- 当前稳态复核：`.qwq_output/runs/prod/20260617T173159Z-verify-prod-hosted`、`.qwq_output/runs/prod/20260617T173201Z-doctor-prod-hosted`。
+- `gray-initial`: `.qwq_output/env/prod/runs/20260617T164119Z-deploy-prod-hosted`（`OK: stage=5 decision=continue`，post-deploy `4/4 healthy`，doctor 无问题）。
+- `full`: `.qwq_output/env/prod/runs/20260617T172537Z-deploy-prod-hosted`（`OK: stage=100 decision=continue`，post-deploy `4/4 healthy`，doctor 无问题）。
+- 当前稳态复核：`.qwq_output/env/prod/runs/20260617T173159Z-verify-prod-hosted`、`.qwq_output/env/prod/runs/20260617T173201Z-doctor-prod-hosted`。
 
 阈值见 `quwoquan_ops/policies/config-release/slo_thresholds.yaml`。
 
@@ -251,8 +251,8 @@ python3 quwoquan_ops/cli/stackctl.py doctor --target prod-hosted
 
 - `make verify-app-auth-policy`
 - `make verify-app-login-entry-loop-contract`
-- `flutter test test/cloud/runtime/cloud_http_client_refresh_test.dart test/core/auth/auth_session_controller_test.dart test/app/app_startup_welcome_test.dart`
-- `flutter test test/ui/settings/pages/settings_page_appearance_test.dart test/app/shell/web_auth_entry_contract_test.dart`
+- `flutter test test/local_contract/cloud/runtime/cloud_http_client_refresh__local_contract_test.dart test/local_contract/core/auth/auth_session_controller__local_contract_test.dart test/local_contract/app/app_startup_welcome__local_contract_test.dart`
+- `flutter test test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart test/local_contract/app/shell/web_auth_entry_contract__local_contract_test.dart`
 - user-service `auth_contract_test.go`、`credential_contract_test.go`、`persona_contract_test.go` 的 gamma 证据
 
 认证账号链路 SLO：
@@ -298,7 +298,7 @@ python3 quwoquan_ops/cli/stackctl.py repair --target prod-hosted --fix rebuild-p
 
 ```
 ☐ deliver 完成，代码已入库 `dev1.0` 或已准备进入 `main` 的显式 PR（分支策略见 `branch_strategy.md`）
-☐ make gate-local-gamma 通过（本地 T1/T2/T3/T4）并生成 .qwq_output/local/gamma-local/report.json
+☐ make gate-local-gamma 通过（本地 T1/T2/T3/T4）并生成 .qwq_output/env/gamma/local/gamma-local/report.json
 ☐ verify_deployment_domain_mapping.sh 通过
 ☐ environment_topology / local_env_port manifest 校验通过
 ☐ stackctl package / verify 报告已归档

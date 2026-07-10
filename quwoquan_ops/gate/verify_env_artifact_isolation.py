@@ -35,16 +35,12 @@ EXCLUDED_BASENAMES = frozenset(
 
 def artifact_files(env_name: str) -> list[Path]:
     files: list[Path] = []
-    app_dir = ROOT / ".qwq_output" / "release" / "app" / env_name
+    app_dir = ROOT / ".qwq_output" / "env" / env_name / "release" / "app"
     if app_dir.exists():
         files.extend(path for path in app_dir.rglob("*") if path.is_file())
-    service_root = ROOT / ".qwq_output" / "release" / "service"
+    service_root = ROOT / ".qwq_output" / "env" / env_name / "release" / "service"
     if service_root.exists():
-        files.extend(
-            path
-            for path in service_root.glob(f"*/{env_name}/**/*")
-            if path.is_file()
-        )
+        files.extend(path for path in service_root.rglob("*") if path.is_file())
     files = [path for path in files if path.name not in EXCLUDED_BASENAMES]
     deduped: dict[str, Path] = {str(path): path for path in files}
     return sorted(deduped.values())

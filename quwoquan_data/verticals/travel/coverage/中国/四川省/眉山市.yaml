@@ -21,6 +21,8 @@ districts:
     - 三苏祠博物馆
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:51:03Z'
+    sourceScreenEvidence: zh.wikipedia.org:三苏祠 extract=442ch
   - name: 中国泡菜城
     canonicalName: 眉山中国泡菜城
     entityType: 地点/景区
@@ -48,6 +50,78 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 丈六院摩崖造像
+    canonicalName: 丈六院摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 大旺寺白塔
+    canonicalName: 大旺寺白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 寨子城及武廟
+    canonicalName: 寨子城及武廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 报恩寺 (眉山)
+    canonicalName: 报恩寺 (眉山)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 石碓窩摩崖造像
+    canonicalName: 石碓窩摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 蘇洵家族墓地
+    canonicalName: 蘇洵家族墓地
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 連鼇山石刻
+    canonicalName: 連鼇山石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 重瞳觀
+    canonicalName: 重瞳觀
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 陳溝千佛岩摩崖造像
+    canonicalName: 陳溝千佛岩摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/东坡区
+    sourceReadiness: pending
+    selectionPriority: 12
 - district: 彭山区
   leaves:
   - name: 彭祖山
@@ -71,6 +145,70 @@ districts:
     - 江口明末战场遗址
     selectionPriority: 2
     sourceReadiness: ready
+  - name: 彭山陶窯遺址
+    canonicalName: 彭山陶窯遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 梓潼宫
+    canonicalName: 梓潼宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 武陽故城遺址
+    canonicalName: 武陽故城遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 江口崖墓
+    canonicalName: 江口崖墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 江口石龍
+    canonicalName: 江口石龍
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 老鷹岩摩崖造像
+    canonicalName: 老鷹岩摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 虞公著夫婦合葬墓
+    canonicalName: 虞公著夫婦合葬墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 順河崖墓
+    canonicalName: 順河崖墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/彭山区
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 仁寿县
   leaves:
   - name: 黑龙滩
@@ -112,6 +250,134 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 仁壽天主教堂
+    canonicalName: 仁壽天主教堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 仁壽奎星閣
+    canonicalName: 仁壽奎星閣
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 仁壽甘泉寺
+    canonicalName: 仁壽甘泉寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 仁寿文幼章旧居
+    canonicalName: 仁寿文幼章旧居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 兩岔河摩崖造像
+    canonicalName: 兩岔河摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 冒水村摩崖造像
+    canonicalName: 冒水村摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 望峨台摩崖造像
+    canonicalName: 望峨台摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 洞子山崖墓群
+    canonicalName: 洞子山崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 潘文華舊居
+    canonicalName: 潘文華舊居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 牛角寨石窟
+    canonicalName: 牛角寨石窟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 能仁寺摩崖造像
+    canonicalName: 能仁寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 葉家祠
+    canonicalName: 葉家祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 觀音堂崖墓群
+    canonicalName: 觀音堂崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 雙堡牌坊
+    canonicalName: 雙堡牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 黑龙滩农田水利工程
+    canonicalName: 黑龙滩农田水利工程
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 黑龙滩镇
+    canonicalName: 黑龙滩镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/仁寿县
+    sourceReadiness: pending
+    selectionPriority: 19
 - district: 洪雅县
   leaves:
   - name: 瓦屋山
@@ -162,6 +428,54 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 五龍祠
+    canonicalName: 五龍祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 修文塔
+    canonicalName: 修文塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 洪雅周家祠
+    canonicalName: 洪雅周家祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 洪雅曾家園
+    canonicalName: 洪雅曾家園
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 田公祠古建築群
+    canonicalName: 田公祠古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 苟王寨造像
+    canonicalName: 苟王寨造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/洪雅县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 丹棱县
   leaves:
   - name: 老峨山
@@ -183,6 +497,54 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/丹棱县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 丹棱白塔
+    canonicalName: 丹棱白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/丹棱县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 劉嘴摩崖造像
+    canonicalName: 劉嘴摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/丹棱县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 郑山、刘嘴摩崖造像
+    canonicalName: 郑山、刘嘴摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/丹棱县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 鄭山摩崖造像
+    canonicalName: 鄭山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/丹棱县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 雞公山摩崖造像
+    canonicalName: 雞公山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/丹棱县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 龍鵠山摩崖造像
+    canonicalName: 龍鵠山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/丹棱县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 青神县
   leaves:
   - name: 中岩寺
@@ -224,3 +586,43 @@ districts:
     - 汉阳古镇
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 中岩寺摩崖造像
+    canonicalName: 中岩寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/青神县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 八角洞崖墓群
+    canonicalName: 八角洞崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/青神县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 瑞峰崖墓群
+    canonicalName: 瑞峰崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/青神县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 罈罐窯遺址
+    canonicalName: 罈罐窯遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/青神县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 蜂耳洞崖墓群
+    canonicalName: 蜂耳洞崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/眉山市/青神县
+    sourceReadiness: pending
+    selectionPriority: 8

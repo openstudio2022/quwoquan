@@ -16,8 +16,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from _common.carrier_contract import CONTENT_MIX_TO_LANE
 from _common.io import read_json, write_json
-from _common.paths import DATA_ROOT, RUNTIME_ROOT
+from _common import paths as _paths
+from _common.paths import _REPO_DATA_ROOT
 
 
 TASK_SCHEMA = "quwoquan.content_supply.task"
@@ -37,10 +39,10 @@ VALID_SCENARIOS = (
     "refresh_stale",
     "reported_revision",
 )
-# 可生产 content_type 单一真相源：moment(随记/casual) 不属于"作品"，禁止进入生产。
-# 与 schema/produce/post_manifest.schema.json 的 contentType enum(article/image/video) 对齐：
-# imagePost→image、videoPost→video、knowledgeCard→article、homepage→实体主页独立流程。
-VALID_CONTENT_TYPES = ("homepage", "article", "imagePost", "videoPost", "knowledgeCard")
+# 可生产 content_type：moment(随记/casual) 不属于"作品"，禁止进入生产。
+# 排产命名 → 载体 lane 的映射真相源在 _common/carrier_contract.CONTENT_MIX_TO_LANE；
+# 本枚举从映射表派生，禁止在此另行增删条目。
+VALID_CONTENT_TYPES = tuple(CONTENT_MIX_TO_LANE)
 VALID_RUN_MODES = ("new", "fill_missing", "optimize_existing", "refresh_stale", "repair_failed")
 VALID_CREATOR_STATUSES = ("draft", "ai_reviewed", "active", "throttled", "suspended", "retired")
 VALID_RISK_TIERS = ("low", "medium", "high")
@@ -162,11 +164,11 @@ def _split_csv(value: str | None) -> list[str]:
 
 
 def _relative_exists(ref: str) -> bool:
-    return (DATA_ROOT / ref).exists()
+    return (_REPO_DATA_ROOT / ref).exists()
 
 
 def content_supply_root(supply_task_id: str) -> Path:
-    return RUNTIME_ROOT / "_shared" / "content_supply" / supply_task_id
+    return _paths.current_runtime_root() / "_shared" / "content_supply" / supply_task_id
 
 
 def task_spec_path(supply_task_id: str) -> Path:

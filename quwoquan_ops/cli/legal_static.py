@@ -24,7 +24,7 @@ from quwoquan_ops.cli.lib.environment_topology import (
 )
 
 DEFAULT_MANIFEST = ROOT / "quwoquan_service" / "services" / "legal-static" / "source" / "manifest.yaml"
-DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output" / "release" / "legal-static"
+DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output" / "env"
 REQUIRED_DOCUMENTS = {
     "user-agreement",
     "privacy-policy",
@@ -53,9 +53,9 @@ PLACEHOLDER_TOKENS = (
 
 @contextmanager
 def _package_lock(output_root: Path, env_name: str, *, exclusive: bool) -> Any:
-    env_root = output_root / env_name
-    env_root.mkdir(parents=True, exist_ok=True)
-    lock_path = env_root / ".legal-static.lock"
+    legal_root = _legal_static_root(output_root, env_name)
+    legal_root.mkdir(parents=True, exist_ok=True)
+    lock_path = legal_root / ".legal-static.lock"
     with lock_path.open("w", encoding="utf-8") as handle:
         try:
             import fcntl  # type: ignore
@@ -230,8 +230,12 @@ def validate_manifest(
     return manifest, issues
 
 
+def _legal_static_root(output_root: Path, env_name: str) -> Path:
+    return output_root / env_name / "release" / "legal-static"
+
+
 def _package_dir(output_root: Path, env_name: str, version: str) -> Path:
-    return output_root / env_name / version
+    return _legal_static_root(output_root, env_name) / version
 
 
 def _refresh_current_pointer(env_root: Path, package_dir: Path) -> str:
@@ -326,7 +330,7 @@ def build_package(
             "version": version,
             "currentVersion": version,
             "legalBaseUrl": legal_base_url,
-            "artifactRoot": relpath(output_root),
+            "artifactRoot": relpath(_legal_static_root(output_root, env_name)),
             "packageDir": relpath(package_dir),
             "stableUrls": {doc["slug"]: doc["stableUrl"] for doc in docs_payload},
             "versionedUrls": {doc["slug"]: doc["versionUrl"] for doc in docs_payload},
@@ -345,7 +349,7 @@ def build_package(
             if path.is_file() and path.name != "checksums.json":
                 checksums[str(path.relative_to(package_dir))] = _sha256_file(path)
         write_json(package_dir / "checksums.json", checksums)
-        current_pointer = _refresh_current_pointer(output_root / env_name, package_dir)
+        current_pointer = _refresh_current_pointer(_legal_static_root(output_root, env_name), package_dir)
     return {
         "status": "ok",
         "env": env_name,

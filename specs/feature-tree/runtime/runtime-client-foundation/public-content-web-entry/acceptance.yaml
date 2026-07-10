@@ -41,7 +41,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/content/share/content_share_template_public_link_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/share/content_share_template_public_link__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/share/content_share_template_public_link__local_contract_test.dart
     status: implemented
@@ -82,7 +82,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/content/seo/markdown_seo_html_renderer_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/seo/markdown_seo_html_renderer__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/seo/markdown_seo_html_renderer__local_contract_test.dart
     status: implemented

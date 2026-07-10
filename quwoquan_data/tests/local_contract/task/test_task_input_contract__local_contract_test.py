@@ -5,7 +5,7 @@
   受版本控制；默认值唯一来源是 `presetRef → control_plane/families/<ref>.preset.yaml`
   （旧 `_defaults.yaml` 路径继承链已退役）；progress.json / runs/ / notes.md
   等运行进度只留本地，不入库。
-- runtime snapshot（仓外一次性）：`local/data-runtime/tasks/{taskId}/` 只允许
+- runtime snapshot（仓外一次性）：`data/local/runtime/tasks/{taskId}/` 只允许
   `task_manifest.json` + `_shared/` + `entities/`，不复制 committed 模板本体。
 - publish 输出：task.yaml / 模板 / schema 不进入 `publish/**`。
 """
@@ -44,7 +44,7 @@ def test_committed_spec_path_is_repo_side_contract():
 
 
 def test_runtime_task_snapshot_is_minimal_allowlist():
-    """local/data-runtime/tasks/{taskId} 是最小 snapshot 层，不承载 committed 模板本体。"""
+    """data/local/runtime/tasks/{taskId} 是最小 snapshot 层，不承载 committed 模板本体。"""
     assert paths_mod.TASK_ROOT_ALLOWED_ENTRIES == frozenset(
         {"entities", "_shared", "task_manifest.json"}
     )

@@ -369,7 +369,7 @@ def test_resume_until_done_accepts_reasoned_reject_terminal_status(monkeypatch):
 
 
 def test_resume_until_done_manual_required_contract_kind_exits(monkeypatch):
-    """manual_required 且根因为配额/契约类 → 立即退出交人工。"""
+    """manual_required 且根因为契约类（含内容配额缺口）→ 立即退出交人工。"""
     recipe = recipe_mod.load_recipe("content/travel/homepage/pilot")
     monkeypatch.setattr(recipe_mod, "_workflow_status", lambda t, b: "manual_required")
     monkeypatch.setattr(recipe_mod, "_workflow_failure_kind", lambda t, b: "contract")
@@ -377,7 +377,79 @@ def test_resume_until_done_manual_required_contract_kind_exits(monkeypatch):
         recipe_mod._resume_until_done(recipe, "任务", "批次", lambda argv: 0, sleep_seconds=0)
         raise AssertionError("契约类 manual_required 必须退出")
     except SystemExit as exc:
-        assert "配额/契约" in str(exc)
+        assert "契约类" in str(exc)
+
+
+def test_resume_until_done_manual_required_auth_kind_waits_for_key_then_resumes(monkeypatch):
+    """manual_required 且根因为凭据/API 限额类 → key 生命周期内置：
+    暂停轮询 key 探活（轮换/额度恢复），恢复后自动续跑（收编家目录守护脚本语义）。"""
+    recipe = recipe_mod.load_recipe("content/travel/homepage/pilot")
+    statuses = iter(["manual_required", "succeeded", "succeeded"])
+    key_probes = iter([False, False, True])
+    waits: list[float] = []
+    resumes: list[list[str]] = []
+    monkeypatch.setattr(recipe_mod, "_workflow_status", lambda t, b: next(statuses))
+    monkeypatch.setattr(recipe_mod, "_workflow_failure_kind", lambda t, b: "auth")
+    recipe_mod._resume_until_done(
+        recipe, "任务", "批次",
+        lambda argv: resumes.append(list(argv)) or 0,
+        sleep_seconds=0,
+        probe_cursor_key=lambda: next(key_probes),
+        network_wait_sleep=waits.append,
+    )
+    assert len(waits) == 2, "key 探活两次不通过必须等待两轮退避"
+    assert len(resumes) == 1 and resumes[0][:3] == ["task", "run", "--mode"]
+
+
+def test_resume_until_done_auth_retry_limit_blocks(monkeypatch):
+    """凭据恢复等待超过 authRetryLimit → GATE_BLOCK（不无限等 key）。"""
+    recipe = {"execution": {"authRetryLimit": 1, "maxAuthorRounds": 10}}
+    monkeypatch.setattr(recipe_mod, "_workflow_status", lambda t, b: "manual_required")
+    monkeypatch.setattr(recipe_mod, "_workflow_failure_kind", lambda t, b: "auth")
+    try:
+        recipe_mod._resume_until_done(
+            recipe, "任务", "批次", lambda argv: 0,
+            sleep_seconds=0,
+            probe_cursor_key=lambda: True,
+        )
+        raise AssertionError("超过 authRetryLimit 必须退出")
+    except SystemExit as exc:
+        assert "凭据/配额恢复等待超过上限" in str(exc)
+
+
+def test_resume_until_done_no_progress_watchdog_fails_fast(monkeypatch):
+    """no-progress watchdog：连续 noProgressRoundLimit 轮推进指纹无变化且网络正常 → fail-fast。"""
+    recipe = {"execution": {"noProgressRoundLimit": 2, "maxAuthorRounds": 50}}
+    monkeypatch.setattr(recipe_mod, "_workflow_status", lambda t, b: "waiting_agent")
+    monkeypatch.setattr(
+        recipe_mod, "_workflow_progress_fingerprint", lambda t, b: "frozen-fingerprint"
+    )
+    try:
+        recipe_mod._resume_until_done(
+            recipe, "任务", "批次", lambda argv: 0,
+            sleep_seconds=0,
+            probe_network=lambda: True,
+        )
+        raise AssertionError("无进展且网络正常必须 fail-fast")
+    except SystemExit as exc:
+        assert "no-progress watchdog" in str(exc)
+
+
+def test_resume_until_done_progress_resets_watchdog(monkeypatch):
+    """指纹变化即视为有推进：watchdog 归零，不误杀慢而有进展的批次。"""
+    recipe = {"execution": {"noProgressRoundLimit": 2, "maxAuthorRounds": 4}}
+    statuses = iter(["waiting_agent", "waiting_agent", "waiting_agent", "waiting_agent",
+                     "waiting_agent", "waiting_agent", "succeeded", "succeeded"])
+    fingerprints = iter(["a", "b", "c", "d"])
+    monkeypatch.setattr(recipe_mod, "_workflow_status", lambda t, b: next(statuses))
+    monkeypatch.setattr(
+        recipe_mod, "_workflow_progress_fingerprint", lambda t, b: next(fingerprints)
+    )
+    recipe_mod._resume_until_done(
+        recipe, "任务", "批次", lambda argv: 0,
+        sleep_seconds=0,
+        probe_network=lambda: True,
+    )
 
 
 def test_resume_until_done_manual_required_network_kind_waits_then_resumes(monkeypatch):

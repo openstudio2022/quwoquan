@@ -14,9 +14,14 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-# 统一输出根：app seed-matrix 辅助报告属于本地工具状态；正式 stackctl 证据写入 .qwq_output/runs/<env>/<runId>。
+# 统一输出根：app seed-matrix 辅助报告属于 repo 本地工具状态；正式 stackctl 证据写入 .qwq_output/env/<env>/runs/<runId>。
 OUTPUT_ROOT = Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
-APP_ARTIFACTS_ROOT = Path(os.environ.get("QWQ_APP_ARTIFACTS_ROOT", OUTPUT_ROOT / "local" / "app-seed-matrix"))
+APP_ARTIFACTS_ROOT = Path(
+    os.environ.get(
+        "QWQ_APP_ARTIFACTS_ROOT",
+        OUTPUT_ROOT / "env" / "repo" / "local" / "app-seed-matrix",
+    )
+)
 APP = ROOT / "quwoquan_app"
 USER_POOL = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "user_pool.json"
 ALPHA_MANIFEST = ROOT / "quwoquan_service" / "contracts" / "metadata" / "_shared" / "test_fixtures" / "app_alpha_seed_manifest.json"
@@ -56,7 +61,7 @@ def beta_gateway_smoke(port: int) -> dict[str, object]:
     proc = subprocess.Popen(
         [
             sys.executable,
-            "quwoquan_service/services/assistant-service/tests/ops/smoke/dev_assistant_beta_gateway.py",
+            "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py",
             "--listen-host",
             "127.0.0.1",
             "--listen-port",
@@ -132,7 +137,7 @@ def main() -> int:
     }
     try:
         run([sys.executable, "quwoquan_app/scripts/env/verify_app_seed_manifests.py"])
-        run([sys.executable, "quwoquan_service/services/chat-service/tests/ops/gate/verify_avatar_user_pool_consistency.py"])
+        run([sys.executable, "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_avatar_user_pool_consistency.py"])
         run(["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", "alpha"])
         run(
             ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", "beta"],
@@ -144,20 +149,20 @@ def main() -> int:
                 "flutter",
                 "test",
                 "--dart-define=CONTRACT_FIXTURE_PROFILE=full",
-                "test/cloud/services/contract_seeded_mock_repository_test.dart",
+                "test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart",
             ],
             cwd=APP,
         )
         report["alpha"] = {
             "dataSource": "mock",
-            "test": "test/cloud/services/contract_seeded_mock_repository_test.dart",
+            "test": "test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart",
             "outputTail": alpha_output[-2000:],
             "deliveryChannels": load_alpha_delivery_channels(),
         }
         report["beta"] = {
             "dataSource": "remote",
             **beta_gateway_smoke(args.gateway_port),
-            "gatewayProbe": run([sys.executable, "quwoquan_service/services/chat-service/tests/ops/smoke/probe_avatar_user_pool_gateway.py"])[-1000:],
+            "gatewayProbe": run([sys.executable, "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/probe_avatar_user_pool_gateway.py"])[-1000:],
         }
     except Exception as exc:  # noqa: BLE001
         report["status"] = "failed"

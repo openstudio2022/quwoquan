@@ -6,7 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import '../events.dart' show AudioVisualizerEvent;
 import '../support/native.dart' show Native;
-import '../track/local/local.dart';
+import 'local/local.dart';
 import 'audio_visualizer.dart';
 
 class AudioVisualizerNative extends AudioVisualizer {

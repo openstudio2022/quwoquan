@@ -37,7 +37,7 @@ gwt_acceptance:
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_action_bar_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/circle/circle_detail/circle_detail_page__user_acceptance_test.dart
       - file: quwoquan_service/services/circle-service/tests/api_integration/circle_section_contract__api_integration_test.go
       - file: quwoquan_service/services/circle-service/tests/api_integration/circle_feed_contract__api_integration_test.go

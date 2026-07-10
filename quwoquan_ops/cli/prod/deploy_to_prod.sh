@@ -202,7 +202,7 @@ deploy_plane() {
   fi
 
   if [[ "$plane" == "service" ]]; then
-    local render_dir=".qwq_output/local/prod-plane-stack/service-${INSTANCE_SUFFIX}"
+    local render_dir=".qwq_output/env/prod/local/prod-plane-stack/service-${INSTANCE_SUFFIX}"
     python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
       --plane service \
       --instance "$INSTANCE_SUFFIX" \

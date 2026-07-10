@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from quwoquan_ops.cli.lib.common import run
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
+from quwoquan_ops.cli.lib.output_paths import env_runs_root, target_local_dir
 from quwoquan_ops.cli.lib.port_manifest import load_port_manifest, profile_ports
 
 
@@ -49,10 +50,10 @@ ANDROID_LOCAL_LOOPBACK_SUFFIX = ".localhost"
 ANDROID_LOCAL_DEBUG_CA_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_PATH"
 ANDROID_LOCAL_DEBUG_CA_REQUIRED_ENV = "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED"
 ANDROID_LOCAL_DEBUG_CA_PATHS = {
-    "alpha-local": ROOT / ".qwq_output" / "local" / "alpha-local" / "tls" / "ca" / "root.crt",
-    "beta-local": ROOT / ".qwq_output" / "local" / "beta-local" / "caddy" / "data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
-    "gamma-local": ROOT / ".qwq_output" / "local" / "gamma-local" / "caddy" / "data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
-    "prod-sim": ROOT / ".qwq_output" / "local" / "prod-sim" / "caddy" / "data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
+    "alpha-local": target_local_dir("alpha-local") / "tls" / "ca" / "root.crt",
+    "beta-local": target_local_dir("beta-local") / "caddy" / "data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
+    "gamma-local": target_local_dir("gamma-local") / "caddy" / "data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
+    "prod-sim": target_local_dir("prod-sim") / "caddy" / "data" / "caddy" / "pki" / "authorities" / "local" / "root.crt",
 }
 
 
@@ -438,9 +439,7 @@ def launch_app(
         topology=manifest,
         rollout_mode=rollout_mode,
     )
-    launch_log = log_path or (
-        ROOT / ".qwq_output" / "runs" / runtime_env_for_dev_env(env_name) / "app-launch.log"
-    )
+    launch_log = log_path or (env_runs_root(runtime_env_for_dev_env(env_name)) / "app-launch.log")
     launch_log.parent.mkdir(parents=True, exist_ok=True)
     log_handle = launch_log.open("a", encoding="utf-8")
     try:

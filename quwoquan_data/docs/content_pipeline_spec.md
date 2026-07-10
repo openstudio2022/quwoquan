@@ -99,7 +99,7 @@ Cursor 只允许三类执行面：
 
 网站线是实体线的上游补给模式，不是第二套内容工厂：
 
-- 工作区固定为 `local/data-runtime/site_supply/{vertical}/{siteId}/{batch}`，不得写入实体线 `local/data-runtime/tasks/**` 的候选池、队列状态或临时文件。
+- 工作区固定为 `data/local/runtime/site_supply/{vertical}/{siteId}/{batch}`，不得写入实体线 `data/local/runtime/tasks/**` 的候选池、队列状态或临时文件。
 - 唯一站点真相源仍是垂类 `source_registry.yaml` 的 `siteCrawlProfile`；`fetchable=false` 或 `crawlAllowed=false` 的站点不得进入批量抓取。
 - `controlledTrial.allowed=true` 只允许站点作为受控验证源进入 `site-supply trial --admission-mode controlled_trial`，用于验证 DAG、并发、lane mix、stage evidence、repair/gate 和 readiness；它不代表真实批量抓取授权，不允许 raw fetch，也不得把平台素材标记为可发布资产。
 - 前半段只产出 `site_frontier_packet`、`site_candidate_packet`、`site_score_packet`、`site_map_packet` 与 `site_rollup_report`；发布主线只接受 `content_plan_packet` 之后的标准对象。
@@ -199,7 +199,7 @@ AI 不可以自主决定：
 
 ### 阶段产物最小契约
 
-批次树是仓外工程过程目录（`QWQ_OUTPUT_ROOT/local/data-runtime/{phase}/{contentType}/{supplyMode}/…`，
+批次树是仓外工程过程目录（`QWQ_OUTPUT_ROOT/data/local/runtime/{phase}/{contentType}/{supplyMode}/…`，
 见 [`pipeline_directory_layout_spec.md`](pipeline_directory_layout_spec.md) §0.5），默认可重建；
 进入模型上下文或高频报告的文件必须瘦身：
 
@@ -211,7 +211,7 @@ AI 不可以自主决定：
 - `posts/{type}/{angle}/{title}/{seq}/`：保留；这是 materialize 成品包，必须包含 `article.md/manifest.json/assets/` 与可选 `5.review/` sidecar。`gallery.md` 仅在 gallery carrier 时作为展示层出现，article 载体不得写入。
 - `publish/{posts,entities,tags,index,sample_bundles,env_releases}`：保留；这是发布主线和环境同步输入。
 
-可清理原则：`assistant_tasks/`、`workflow_packets/`、`object_queue/`、过期 `results/*_gate`、失败批次草稿、可从 source/brief 重建的中间分析明细均不进入 post 包；需要审计时从 task/batch 源目录重算。`batch/_shared` 按 `paths.BATCH_SHARED_AUTHORITATIVE_ENTRIES`（不可重算真相源）与 `BATCH_SHARED_RECLAIMABLE_ENTRIES`（可清理层）两分，未登记条目由目录证据链门 BLOCK；仓外 `.qwq_output/runs/**` 只做 index-first 摘要索引，必须回指 `runtimeBatchRoot/taskId/publishRoot/releaseId` 与批次三轴。
+可清理原则：`assistant_tasks/`、`workflow_packets/`、`object_queue/`、过期 `results/*_gate`、失败批次草稿、可从 source/brief 重建的中间分析明细均不进入 post 包；需要审计时从 task/batch 源目录重算。`batch/_shared` 按 `paths.BATCH_SHARED_AUTHORITATIVE_ENTRIES`（不可重算真相源）与 `BATCH_SHARED_RECLAIMABLE_ENTRIES`（可清理层）两分，未登记条目由目录证据链门 BLOCK；仓外 `.qwq_output/env/repo/runs/**` 只做 index-first 摘要索引，必须回指 `runtimeBatchRoot/taskId/publishRoot/releaseId` 与批次三轴。
 
 ## 3. Human-in-loop 标注账本（唯一发布态真相源）
 

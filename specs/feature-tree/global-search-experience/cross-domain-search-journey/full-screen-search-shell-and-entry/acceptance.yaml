@@ -41,7 +41,7 @@ gwt_acceptance:
     - 搜索页打开后默认壳层即时可见，默认数据可异步补齐。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -82,7 +82,7 @@ gwt_acceptance:
     - 输入后首批可见分组 P95 在 1.5s 内出现。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -124,8 +124,8 @@ gwt_acceptance:
     - 单次综合搜索 fan-out 不得让首屏分组超过 1.5s 目标。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
-      - file: quwoquan_app/test/ui/search/search_repository_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/search_repository__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -166,7 +166,7 @@ gwt_acceptance:
     - 切换 Tab 后加载状态和结果状态稳定，无旧 Tab 内容闪回。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:

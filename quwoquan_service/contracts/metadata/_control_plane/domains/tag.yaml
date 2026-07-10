@@ -32,9 +32,9 @@ minimum_package:
     t1:
     - contracts/metadata/tag/service.yaml
     t2:
-    - services/tag-service/internal/application/tag_service_test.go
+    - services/tag-service/internal/application/tag_service__local_contract_test.go
     t3:
-    - services/tag-service/tests/tag_contract_test.go
+    - services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
     t4: []
 deployment:
   plane_binding_domain: tag

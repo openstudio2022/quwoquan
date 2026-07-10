@@ -13,7 +13,7 @@ owner:
   icpFilingNumber: ICP 备案号（待备案）
 releasePolicy:
   packageKind: legal-static
-  artifactRoot: .qwq_output/release/legal-static
+  artifactRoot: .qwq_output/env/<env>/release/legal-static
   stableUrlResolution: manifest.currentVersion
   immutableVersionUrl: true
   prodCanonicalBaseUrl: https://quwoquan.com/legal

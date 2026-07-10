@@ -37,11 +37,11 @@ minimum_package:
     - contracts/metadata/assistant/assistant_run/service.yaml
     t2:
     - runtime/controlplane/assistant_seedbox_contract_test.go
-    - ../quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart
-    - ../quwoquan_app/test/ui/chat/widgets/chat_assistant_ui_widget_test.dart
+    - ../quwoquan_app/test/local_contract/ui/assistant/contract/assistant_message_history_contract__local_contract_test.dart
+    - ../quwoquan_app/test/local_contract/ui/chat/widgets/chat_assistant_ui_widget__local_contract_test.dart
     t3:
-    - ../quwoquan_app/test/common/assistant/assistant_environment_smoke_test.dart
-    - ../quwoquan_app/test/gamma/assistant_alpha_beta_simulator_test.dart
+    - ../quwoquan_app/test/local_contract/quality/shared/assistant/assistant_environment_smoke__local_contract_test.dart
+    - ../quwoquan_app/test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart
     t4: []
 deployment:
   plane_binding_domain: assistant

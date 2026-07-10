@@ -9,9 +9,9 @@
 3. 【批次轴门】canonical 批次必须携带 batch_manifest.json，且 phase/contentType/
    supplyMode 与所在目录层级一致；manifest.taskId 必须能回指仓内 committed task.yaml
    （committed 模板存在性/路径合法性）。
-4. 【摘要索引门】.qwq_output/runs/content_runs 批次摘要目录必须 index-first：
+4. 【摘要索引门】.qwq_output/data/runs/content_runs 批次摘要目录必须 index-first：
    有报告即有 index.json，回指字段齐全（复用 _common.artifacts_index）。
-5. 【artifacts 根隔离门】repo `.qwq_output/runs/` 只服务非 data 运行证据；data-owned
+5. 【artifacts 根隔离门】data-owned
    临时报表、旧目录和 legacy marker/index/manifest 一律 FAIL。
 
 CLI 入口（cli-first）：`qwq-data verify output-root-isolation`。
@@ -39,6 +39,8 @@ from _common.paths import (  # noqa: E402
     RUNTIME_ROOT,
     committed_task_spec,
 )
+
+ACTIVE_RUNTIME_PROTECTION = "runtime_protection.json"
 
 # 仓内禁止进入版本控制的生成输出面（publish 是唯一例外，不在此列）。
 TRACKED_FORBIDDEN_PATHS = (
@@ -134,7 +136,7 @@ def data_root_artifact_issues(repo_root: Path = REPO_ROOT) -> list[str]:
             continue
         rel = entry.relative_to(repo_root)
         issues.append(
-            f"{rel}: data 运行残留不得落 repo .qwq_output/runs/ 根；请删除并改写到 .qwq_output/runs/**"
+            f"{rel}: data 运行残留不得落 repo artifacts 根；请删除并改写到 .qwq_output/data/runs/**"
         )
     return issues
 
@@ -166,9 +168,74 @@ def legacy_marker_issues(
     return issues
 
 
+def _batch_id_from_dir(batch_dir: Path) -> str:
+    if "__" in batch_dir.name:
+        return batch_dir.name.rsplit("__", 1)[-1]
+    return batch_dir.name
+
+
+def _runtime_protection_meta(batch_dir: Path) -> dict:
+    protection = batch_dir / "_shared" / ACTIVE_RUNTIME_PROTECTION
+    if not protection.is_file():
+        return {}
+    try:
+        meta = read_json(protection)
+    except Exception:  # noqa: BLE001 - unreadable protection is handled by manifest gate.
+        return {}
+    return meta if isinstance(meta, dict) else {}
+
+
+def _current_process_lines() -> list[str]:
+    try:
+        proc = subprocess.run(
+            ["ps", "-axo", "pid=,command="],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return []
+    return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+
+
+def _active_batch_process_lines(batch_id: str, process_lines: list[str]) -> list[str]:
+    if not batch_id:
+        return []
+    marker = f"--batch {batch_id}"
+    return [
+        line
+        for line in process_lines
+        if marker in line
+        and "quwoquan_data/scripts/cli.py" in line
+        and (" task " in line or " data workflow " in line)
+    ]
+
+
+def _active_runtime_block_issue(
+    batch_dir: Path,
+    runtime_root: Path,
+    process_lines: list[str],
+) -> str | None:
+    meta = _runtime_protection_meta(batch_dir)
+    batch_id = str(meta.get("batchId") or _batch_id_from_dir(batch_dir))
+    active_lines = _active_batch_process_lines(batch_id, process_lines)
+    if not active_lines:
+        return None
+    rel = batch_dir.relative_to(runtime_root)
+    first_pid = active_lines[0].split(maxsplit=1)[0]
+    task_id = str(meta.get("taskId") or "")
+    task_hint = f", taskId={task_id}" if task_id else ""
+    return (
+        f"{rel}: GATE_BLOCK active data runtime still writing "
+        f"(pid={first_pid}, batchId={batch_id}{task_hint}); "
+        "do not delete protected output, rerun gate after the process exits"
+    )
+
+
 def canonical_batch_axis_issues(runtime_root: Path = RUNTIME_ROOT) -> list[str]:
     """批次轴门：canonical 批次 manifest 轴与目录层级一致，且回指 committed task。"""
     issues: list[str] = []
+    process_lines = _current_process_lines()
     for phase in BATCH_PHASES:
         for content_type in BATCH_CONTENT_TYPES:
             for supply_mode in BATCH_SUPPLY_MODES:
@@ -179,6 +246,14 @@ def canonical_batch_axis_issues(runtime_root: Path = RUNTIME_ROOT) -> list[str]:
                     rel = batch_dir.relative_to(runtime_root)
                     manifest_path = batch_dir / "batch_manifest.json"
                     if not manifest_path.is_file():
+                        active_issue = _active_runtime_block_issue(
+                            batch_dir,
+                            runtime_root,
+                            process_lines,
+                        )
+                        if active_issue:
+                            issues.append(active_issue)
+                            continue
                         issues.append(f"{rel}: canonical 批次缺 batch_manifest.json")
                         continue
                     try:
@@ -245,7 +320,8 @@ def scan_all() -> list[str]:
 def main() -> int:
     issues = scan_all()
     if issues:
-        print("FAIL verify_output_root_isolation:")
+        prefix = "GATE_BLOCK" if any("GATE_BLOCK" in issue for issue in issues) else "FAIL"
+        print(f"{prefix} verify_output_root_isolation:")
         for issue in issues:
             print(f"  - {issue}")
         return 1

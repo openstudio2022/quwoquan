@@ -22,6 +22,8 @@ districts:
     - 凌云大佛
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:33:11Z'
+    sourceScreenEvidence: zh.wikipedia.org:乐山大佛 extract=389ch
   - name: 东方佛都
     canonicalName: 乐山东方佛都
     entityType: 地点/景区
@@ -59,6 +61,118 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 乌尤寺
+    canonicalName: 乌尤寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 乐山文幼章故居
+    canonicalName: 乐山文幼章故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 乐山文庙
+    canonicalName: 乐山文庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 凌雲寺 (樂山)
+    canonicalName: 凌雲寺 (樂山)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 嘉州古城墙
+    canonicalName: 嘉州古城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 柿子湾崖墓
+    canonicalName: 柿子湾崖墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 樂山宋氏祠堂
+    canonicalName: 樂山宋氏祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 白岩山崖墓
+    canonicalName: 白岩山崖墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 老霄頂
+    canonicalName: 老霄頂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 肖壩崖墓
+    canonicalName: 肖壩崖墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 蘊真洞崖墓
+    canonicalName: 蘊真洞崖墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 離堆
+    canonicalName: 離堆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 麻浩崖墓
+    canonicalName: 麻浩崖墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 龍泓寺
+    canonicalName: 龍泓寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/市中区
+    sourceReadiness: pending
+    selectionPriority: 17
 - district: 峨眉山市
   leaves:
   - name: 峨眉山
@@ -74,6 +188,8 @@ districts:
     - 峨眉山风景名胜区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:33:17Z'
+    sourceScreenEvidence: zh.wikipedia.org:峨眉山 extract=274ch
   - name: 峨眉山大佛禅院
     canonicalName: 峨眉山大佛禅院
     entityType: 地点/景区
@@ -109,6 +225,182 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
     selectionPriority: 2
     sourceReadiness: ready
+  - name: 仙峰寺
+    canonicalName: 仙峰寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 伏虎寺
+    canonicalName: 伏虎寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 塘房陳氏民居
+    canonicalName: 塘房陳氏民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 大庙飞来殿
+    canonicalName: 大庙飞来殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 峨眉山古建筑群
+    canonicalName: 峨眉山古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 峨眉山圣寿万年寺铜铁佛像
+    canonicalName: 峨眉山圣寿万年寺铜铁佛像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 峨眉山雷音寺
+    canonicalName: 峨眉山雷音寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 成昆铁路
+    canonicalName: 成昆铁路
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 报国寺 (峨眉山)
+    canonicalName: 报国寺 (峨眉山)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 普興祝家大院
+    canonicalName: 普興祝家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 洗象池
+    canonicalName: 洗象池
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 洪椿坪
+    canonicalName: 洪椿坪
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 清音阁
+    canonicalName: 清音阁
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 玫瑰聖母堂 (峨眉山市)
+    canonicalName: 玫瑰聖母堂 (峨眉山市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 磚殿
+    canonicalName: 磚殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 神水閣
+    canonicalName: 神水閣
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 福利普賢寺
+    canonicalName: 福利普賢寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 純陽殿
+    canonicalName: 純陽殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 聖積寺銅塔
+    canonicalName: 聖積寺銅塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 聖積銅鐘
+    canonicalName: 聖積銅鐘
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 臥雲庵
+    canonicalName: 臥雲庵
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 24
+  - name: 靈岩寺石牌坊
+    canonicalName: 靈岩寺石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/峨眉山市
+    sourceReadiness: pending
+    selectionPriority: 25
 - district: 五通桥区
   leaves:
   - name: 中国根书艺术馆
@@ -152,6 +444,14 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/沙湾区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 樂山郭沫若故居
+    canonicalName: 樂山郭沫若故居
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/沙湾区
+    sourceReadiness: pending
+    selectionPriority: 4
 - district: 金口河区
   leaves:
   - name: 大渡河金口大峡谷
@@ -206,6 +506,54 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 九井禹王宮
+    canonicalName: 九井禹王宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 嘉陽小火車及芭石窄軌鐵路
+    canonicalName: 嘉陽小火車及芭石窄軌鐵路
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 沉犀節孝坊
+    canonicalName: 沉犀節孝坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 犍為文峰塔
+    canonicalName: 犍為文峰塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 罗城镇 (犍为县)
+    canonicalName: 罗城镇 (犍为县)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 羅城古建築群
+    canonicalName: 羅城古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/犍为县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 井研县
   leaves:
   - name: 雷畅故居
@@ -217,6 +565,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/井研县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 三江白塔
+    canonicalName: 三江白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/井研县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 井研雷氏民居
+    canonicalName: 井研雷氏民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/井研县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 熊克武故居
+    canonicalName: 熊克武故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/井研县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 夹江县
   leaves:
   - name: 东风堰-千佛岩景区
@@ -239,6 +611,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/夹江县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 夾江千佛岩摩岩造像
+    canonicalName: 夾江千佛岩摩岩造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/夹江县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 楊公雙闕
+    canonicalName: 楊公雙闕
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/夹江县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 金像寺摩崖造像
+    canonicalName: 金像寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/夹江县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 沐川县
   leaves:
   - name: 沐川竹海
@@ -260,6 +656,14 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/沐川县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 沐川永濟橋
+    canonicalName: 沐川永濟橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/沐川县
+    sourceReadiness: pending
+    selectionPriority: 4
 - district: 峨边彝族自治县
   leaves:
   - name: 黑竹沟
@@ -273,6 +677,8 @@ districts:
     - 黑竹沟风景区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:34:23Z'
+    sourceScreenEvidence: zh.wikipedia.org:黑竹沟 extract=337ch
 - district: 马边彝族自治县
   leaves:
   - name: 云上福来景区
@@ -292,3 +698,19 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/马边彝族自治县
     selectionPriority: 3
     sourceReadiness: ready
+  - name: 東皇殿
+    canonicalName: 東皇殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/马边彝族自治县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 馬邊明王寺
+    canonicalName: 馬邊明王寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/乐山市/马边彝族自治县
+    sourceReadiness: pending
+    selectionPriority: 5

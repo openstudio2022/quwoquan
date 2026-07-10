@@ -21,10 +21,10 @@ sit_acceptance:
       planned: []
       recorded:
       - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/video_cover_contract__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/searchprojection/place_search_projection__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_service__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/behavior/behavior_feed_patch__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/authorimpact/author_impact_travel__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/searchprojection/place_search_projection__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_service__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/behavior/behavior_feed_patch__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/authorimpact/author_impact_travel__local_contract_test.go
     status: implemented
     test_evidence:
       primary:

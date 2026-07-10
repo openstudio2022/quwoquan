@@ -133,11 +133,17 @@ api_routes:
     writable_fields: [status, reviewNote]
     auth: required
 
+  - method: POST
+    path: /v1/homepages:reload
+    operation: ReloadHomepageState
+    description: 免停服重载 homepage_state 快照（数据工程 importer 直写运行库后由 ops 触发；同 ID 覆盖、新 ID 追加，不清空运行期关注/认领状态）
+    auth: required
+
 consumers:
   - name: app
     capabilities: [search, suggest, read_homepage, read_homepage_introduction, follow, claim, maintain, report_status]
   - name: platform-ops
-    capabilities: [publish_candidate, review_claim, review_status_report]
+    capabilities: [publish_candidate, review_claim, review_status_report, reload_state]
   - name: content-service
     capabilities: [read_homepage]
   - name: circle-service

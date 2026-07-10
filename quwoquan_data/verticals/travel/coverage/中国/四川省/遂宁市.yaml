@@ -30,6 +30,8 @@ districts:
     - 卓筒井大顺灶
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:56:27Z'
+    sourceScreenEvidence: zh.wikipedia.org:卓筒井 extract=339ch
   - name: 魁山寺
     canonicalName: 大英魁山寺
     entityType: 地点/宗教场所
@@ -38,6 +40,94 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 中國死海
+    canonicalName: 中國死海
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 卓筒小井
+    canonicalName: 卓筒小井
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 吉安寨遺址
+    canonicalName: 吉安寨遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 大埂子摩崖造像
+    canonicalName: 大埂子摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 天保戴氏祠
+    canonicalName: 天保戴氏祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 蓬基井
+    canonicalName: 蓬基井
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 譚家大院
+    canonicalName: 譚家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 遂寧寂光寺
+    canonicalName: 遂寧寂光寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 郭子儀後裔墓葬群
+    canonicalName: 郭子儀後裔墓葬群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 金鵬寺摩崖造像
+    canonicalName: 金鵬寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 長江壩遺址
+    canonicalName: 長江壩遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/大英县
+    sourceReadiness: pending
+    selectionPriority: 14
 - district: 安居区
   leaves:
   - name: 龙凤古镇
@@ -66,6 +156,22 @@ districts:
     - 海龙村沼气文化园区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 安居十聖宮
+    canonicalName: 安居十聖宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/安居区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 毗盧寺及石刻
+    canonicalName: 毗盧寺及石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/安居区
+    sourceReadiness: pending
+    selectionPriority: 5
 - district: 射洪市
   leaves:
   - name: 陈子昂读书台
@@ -78,6 +184,8 @@ districts:
     - 子昂故里
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:56:36Z'
+    sourceScreenEvidence: zh.wikipedia.org:陈子昂读书台 extract=353ch
   - name: 金华山
     canonicalName: 射洪金华山
     entityType: 地点/宗教场所
@@ -89,6 +197,8 @@ districts:
     - 金华山道观
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:56:40Z'
+    sourceScreenEvidence: zh.wikipedia.org:金华山 extract=223ch
   - name: 射洪硅化木国家地质公园
     canonicalName: 射洪硅化木国家地质公园
     entityType: 地点/景区
@@ -109,6 +219,78 @@ districts:
     - 沱牌舍得文化旅游区
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 兜率寺
+    canonicalName: 兜率寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 射洪古佛寺
+    canonicalName: 射洪古佛寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 楞嚴閣
+    canonicalName: 楞嚴閣
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 泰安酢坊遺址
+    canonicalName: 泰安酢坊遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 玉京觀
+    canonicalName: 玉京觀
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 白流寺
+    canonicalName: 白流寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 金華火神廟
+    canonicalName: 金華火神廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 雙溪何氏家族墓
+    canonicalName: 雙溪何氏家族墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 饒益寺
+    canonicalName: 饒益寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/射洪市
+    sourceReadiness: pending
+    selectionPriority: 13
 - district: 船山区
   leaves:
   - name: 广德寺
@@ -156,6 +338,54 @@ districts:
     - 世界荷花博览园
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 天上宮
+    canonicalName: 天上宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 月亮坡崖墓群
+    canonicalName: 月亮坡崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 百福院
+    canonicalName: 百福院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 花園節孝坊
+    canonicalName: 花園節孝坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 遂寧靈泉寺
+    canonicalName: 遂寧靈泉寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 龙凤镇 (遂宁市)
+    canonicalName: 龙凤镇 (遂宁市)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/船山区
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 蓬溪县
   leaves:
   - name: 高峰山
@@ -207,3 +437,75 @@ districts:
     - 旷继勋公园
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 宝梵寺 (蓬溪县)
+    canonicalName: 宝梵寺 (蓬溪县)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 常乐寺 (遂宁市)
+    canonicalName: 常乐寺 (遂宁市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 慧嚴寺
+    canonicalName: 慧嚴寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 明月關廟
+    canonicalName: 明月關廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 牛角溝起義紀念地
+    canonicalName: 牛角溝起義紀念地
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 蓬溪奎塔
+    canonicalName: 蓬溪奎塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 蓬溪白塔
+    canonicalName: 蓬溪白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 金仙寺
+    canonicalName: 金仙寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 高峰山古建築群
+    canonicalName: 高峰山古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/遂宁市/蓬溪县
+    sourceReadiness: pending
+    selectionPriority: 14

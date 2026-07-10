@@ -40,7 +40,7 @@ sit_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/user_acceptance/ui/search/journeys/cross_domain_search_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/retrieve_request_mapper__local_contract_test.dart
@@ -55,7 +55,7 @@ sit_acceptance:
       suggest 本地两阶段、result 云侧固定 Tab、本地对象不进 result、最近搜索水合、单域降级不阻塞整页、整页错误态可重试、默认页/结果页
       referralSource=search + feedRequestId 归因链。
     - api_integration 远端集成：local-gamma `/v1/search` 冒烟 + search-service contract test
-      + runtime retrieve test 已 recorded；故障/回滚演练已 recorded（`.qwq_output/runs/gamma/search_rollback_rehearsal.md`）。真集群容量/性能为
+      + runtime retrieve test 已 recorded；故障/回滚演练已 recorded（`.qwq_output/env/gamma/runs/search_rollback_rehearsal.md`）。真集群容量/性能为
       WP-G/SLO 与 R-S06-S-1 发布前阻断，不阻塞本能力 SIT。
     - '[migrated_from_recorded_noncanonical] quwoquan_service/runtime/search/retrieve_test.go'
     test_evidence:

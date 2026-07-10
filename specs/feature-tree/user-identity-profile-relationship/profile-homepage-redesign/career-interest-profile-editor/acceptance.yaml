@@ -111,7 +111,7 @@ gwt_acceptance:
       planned:
         - file: quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
       recorded:
-        - file: quwoquan_service/services/user-service/tests/local_contract/internal/infrastructure/projection/interest_profile_projector__local_contract_test.go
+        - file: quwoquan_service/services/user-service/internal/infrastructure/projection/interest_profile_projector__local_contract_test.go
         - file: quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
     status: implemented
     test_evidence:

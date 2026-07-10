@@ -105,6 +105,14 @@ districts:
     - 摩星山景区
     selectionPriority: 5
     sourceReadiness: ready
+  - name: 东沙菜市场
+    canonicalName: 东沙菜市场
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/岱山县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 嵊泗县
   leaves:
   - name: 嵊泗列岛
@@ -155,6 +163,14 @@ districts:
     - 花鸟灯塔
     selectionPriority: 5
     sourceReadiness: ready
+  - name: 花鸟山岛
+    canonicalName: 花鸟山岛
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/嵊泗县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 普陀区
   leaves:
   - name: 普陀山
@@ -271,3 +287,19 @@ districts:
     - 朱家尖乌石塘
     selectionPriority: 11
     sourceReadiness: pending
+  - name: 沈家门街道
+    canonicalName: 沈家门街道
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 蚂蚁岛人民公社旧址
+    canonicalName: 蚂蚁岛人民公社旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    sourceReadiness: pending
+    selectionPriority: 13

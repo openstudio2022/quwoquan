@@ -61,7 +61,7 @@ entries:
       - "通过：cd quwoquan_app && flutter test test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart test/local_contract/cloud/integration/remote_api_path_contract__local_contract_test.dart"
       - "通过：cd quwoquan_app && flutter test test/ui/user/widgets/persona_management_page_test.dart"
       - "通过：cd quwoquan_app && flutter test test/ui/user/journeys/edit_profile_journey_test.dart"
-      - "通过：cd quwoquan_app && flutter test test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart"
+      - "通过：cd quwoquan_app && flutter test test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart"
       - "通过：make verify-app-page-horizontal-quality"
       - "通过：make verify-app-mock-isolation"
       - "通过：make verify-app-login-entry-loop-contract"

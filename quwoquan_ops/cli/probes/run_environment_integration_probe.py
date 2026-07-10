@@ -15,7 +15,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_REPORT = (
-    REPO_ROOT / ".qwq_output" / "runs" / "integration-probe" / "report.json"
+    REPO_ROOT / ".qwq_output" / "env" / "repo" / "runs" / "integration-probe" / "report.json"
 )
 
 

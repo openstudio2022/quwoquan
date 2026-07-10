@@ -139,7 +139,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--report",
-        default=".qwq_output/runs/business_beta_db_seed_report.json",
+        default=".qwq_output/env/beta/runs/business_beta_db_seed_report.json",
         help="Path to write the JSON evidence report.",
     )
     parser.add_argument(

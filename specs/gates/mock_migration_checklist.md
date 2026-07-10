@@ -22,7 +22,7 @@
 
 ```bash
 (cd quwoquan_app && flutter pub get && dart analyze --fatal-infos)
-(cd quwoquan_app && flutter test test/cloud/circle/contract/ test/cloud/content/ -r expanded)
+(cd quwoquan_app && flutter test test/local_contract/cloud/circle/contract/ test/local_contract/cloud/content/ -r expanded)
 python3 quwoquan_app/scripts/env/verify_ui_mock_isolation.py
 make verify-app-mock-isolation
 ```

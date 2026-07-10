@@ -1,0 +1,188 @@
+version: 2
+node:
+  id: zhejiang-sichuan-province-coverage
+  level: L3_story
+  path: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage
+  title: zhejiang sichuan province coverage
+  parent_domain_service: discovery-content
+  parent_business_capability: object-homepage-coverage-scaling
+scope:
+  summary: 浙江/四川旅行地点省级覆盖放量：主清单扩容、前置核验、M1/M2/M3 批次执行、App 消费 UAT。
+  in_scope:
+  - 两省主清单扩容至来源发现饱和（目标合计 3000+ 候选，证据约束）。
+  - 两省 ready 存量前置 sourceScreen 全量核验与折扣率报告。
+  - WP5 尾部 3 分区补跑收口（沙湾区/市中区/岱山县）。
+  - M1/M2/M3 三档批次执行、gamma 导入、coverage 账本回写。
+  - App 标签页/搜索到实体主页消费路径 UAT。
+  out_of_scope:
+  - 两省以外省份实跑。
+  - pending 存量逐项扩源执行。
+gwt_acceptance:
+  GWT1:
+    title: 省级全覆盖口径达成（主清单扩容 + 来源饱和）
+    given:
+    - 两省主清单基线 1093 项（浙江 415 / 四川 678），schema discovery_seed/2。
+    - 五路来源（百科/官方文旅/政府名录/OTA 公共索引/地图 POI 线索）发现管线可用。
+    when:
+    - 执行 coverage 扩容批（发现 → 去重 → 类型/地理打标 → 写回市州 YAML）。
+    then:
+    - 每批写回后 verify coverage-master-list 门禁绿，master-list-stats 出数。
+    - 市州文件齐全（浙 11 / 川 21）、区县分组无缺口、10 类 entityType 省级维度全覆盖。
+    - 跨省地点单主 geoTagRef + geoTagRefs 数组表达。
+    done_when:
+    - 两省合计候选 3000+，或五路来源饱和（新一轮发现增量 <5%）并产出来源饱和报告与缺口清单。
+    edge_cases:
+    - 同名地点跨区县去重以 canonicalName 全局唯一裁决。
+    - 个别区县确无某类 entityType 属诚实事实，不凑数。
+    contract_refs:
+    - quwoquan_data/schema/coverage/master_list.schema.json
+    performance_points: []
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/vertical/test_coverage_expand__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt1_local_contract
+        cases:
+        - local_contract.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt1_local_contract
+        envs: &id001
+        - local
+      supporting: []
+    notes: []
+  GWT2:
+    title: 前置 sourceScreen 核验与 ready 折扣率出数
+    given:
+    - 两省 ready 存量 492（WP5 口径含 20-30% 虚高）。
+    when:
+    - 执行 qwq-data vertical source-screen 批量深核验（排产前置）。
+    then:
+    - 逐叶子回写 sourceReadiness 三态（ready/pending/no_primary_source）与核验时间戳。
+    - 产出 ready 折扣率与扩源缺口报告。
+    done_when:
+    - 两省 ready 存量完成首轮核验，折扣率实测出数，排产只消费核验后 ready。
+    edge_cases:
+    - 网络断路/反爬拦截不结论（保持 pending，不误降级）。
+    contract_refs: []
+    performance_points: []
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/vertical/test_source_screen__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt2_local_contract
+        cases:
+        - local_contract.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt2_local_contract
+        envs: *id001
+      supporting: []
+    notes: []
+  GWT3:
+    title: M1 校准批准入门（尾部补跑 + 两省各 100 + 并发改造生效）
+    given:
+    - WP5 尾部 3 分区（沙湾区/市中区/岱山县）产线修复已落码待实跑。
+    - download/author 两段流水线与 bridge 池化改造完成并带合同测试。
+    when:
+    - 补跑尾部 3 分区收口；随后两省各启动 100 地点校准批（双 worktree 并行拓扑）。
+    then:
+    - 尾部 3 分区收口（成稿晋升或 reasoned 放弃归因落账）。
+    - 校准批全链走通（env ready → run-recipe → verify → ship → coverage 回写）。
+    - 分段吞吐出数（sourceScreen/download/author/review/ship）。
+    done_when:
+    - 改造后单机吞吐基线 ≥4-6 主页/h；author 并发实测安全上限写入 runtime profile。
+    - no-progress watchdog 与断点续跑在批内至少各验证一次（或证明无触发场景）。
+    edge_cases:
+    - promote 质量门 SKIP 属正常裁决不计失败。
+    contract_refs: []
+    performance_points:
+    - 单机吞吐 ≥4-6 主页/h（M1 出数）。
+    tests:
+      planned:
+      - file: quwoquan_data/tests/local_contract/task/test_pipeline_stage_split__local_contract_test.py
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: gwt3_local_contract
+        cases:
+        - local_contract.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt3_local_contract
+        envs: *id001
+      - layer: api_integration
+        suite: gwt3_api_integration
+        cases:
+        - api_integration.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt3_api_integration
+        envs:
+        - gamma
+      supporting: []
+    notes:
+    - M1 未达标不得进 M2；并发改造未完成不得启动省级大批。
+  GWT4:
+    title: M2/M3 扩量与全量批（首过率门 + 环境导入）
+    given:
+    - M1 准入门达标。
+    when:
+    - 两省各 500 地点批（M2）；达标后全部真 ready 批（M3）。
+    then:
+    - 每批附 env ready、run-recipe、scale-readiness --daily-target 100000、
+      verify_quwoquan_data.sh、ship/import 报告、coverage 账本回写。
+    done_when:
+    - M2 首过率（非放弃口径）≥85%；M3 全部真 ready 成稿或诚实放弃归因。
+    - 放量硬前置未完成前省级大批只导 gamma，prod 只做受控小批窗口。
+    edge_cases:
+    - key 403/limit 自动暂停、恢复自动续跑（CLI 内置 key 生命周期能力）。
+    contract_refs: []
+    performance_points: []
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: gwt4_api_integration
+        cases:
+        - api_integration.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt4_api_integration
+        envs:
+        - gamma
+      supporting: []
+    notes: []
+  GWT5:
+    title: App 消费路径 user_acceptance（标签/搜索 → 实体主页）
+    given:
+    - 两省批次成稿已导入 gamma，introduction API 抽查 200。
+    when:
+    - 用户从标签页/搜索入口进入实体主页。
+    then:
+    - 正文、封面、categoryTags 正确渲染；错误/空态有兜底；曝光/停留埋点上报。
+    done_when:
+    - widget 或真机 UAT 通过；路由与 surface 来自 metadata（禁止 UI mock）。
+    edge_cases:
+    - 未导入实体的 404 语义与空态兜底。
+    contract_refs: []
+    performance_points: []
+    tests:
+      planned:
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: user_acceptance
+        suite: gwt5_user_acceptance
+        cases:
+        - user_acceptance.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt5_user_acceptance
+        envs:
+        - gamma_local
+      supporting: []
+    notes: []
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

@@ -15,7 +15,7 @@ Usage:
 Behavior:
   - Validates rollout step sequence.
   - Ensures target config version file exists.
-  - Writes rollout state to .qwq_output/local/release-state/<service>.state.
+  - Writes rollout state to .qwq_output/env/repo/local/release-state/<service>.state.
 EOF
 }
 
@@ -58,7 +58,7 @@ if [[ ! -f "$cfg_file" ]]; then
   exit 1
 fi
 
-state_dir="$ROOT/.qwq_output/local/release-state"
+state_dir="$ROOT/.qwq_output/env/repo/local/release-state"
 mkdir -p "$state_dir"
 state_file="$state_dir/$SERVICE.state"
 audit_file="$state_dir/$SERVICE.audit.log"

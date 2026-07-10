@@ -50,7 +50,7 @@ SSOT：`contracts/metadata/assistant/**/schema.yaml`（及 `assistant_run/fields
 
 - `test_fixtures/wire_min_run_artifacts.json` — 最小 `RunArtifacts` JSON（Dart `RunArtifacts.fromJson` + Go `runartifacts.RunArtifacts` round-trip）。
 - `test_fixtures/wire_min_assistant_turn.json` — 最小 `AssistantTurnOutput` JSON（Dart + Go `assistantturn`）。
-- `test_fixtures/wire_min_run_request.json` — 最小 `AssistantRunRequest` HTTP body（Dart `AssistantRunRequest.fromJson`，见 `test/assistant/assistant_run_request_fixture_test.dart`）。
+- `test_fixtures/wire_min_run_request.json` — 最小 `AssistantRunRequest` HTTP body（Dart `AssistantRunRequest.fromJson`，见 `test/local_contract/ui/assistant/assistant_run_request_fixture__local_contract_test.dart`）。
 - `test_fixtures/wire_session_turn_run_artifacts.json` — 会话记录里助手轮次常见 `runArtifacts` 壳（`journey.readiness` + `understandingSnapshot`，由单测覆写 `userFacingSummary`）。
 
 ## 4. 相关命令

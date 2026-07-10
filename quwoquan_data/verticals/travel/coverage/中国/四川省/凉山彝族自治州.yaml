@@ -25,6 +25,8 @@ districts:
     - 泸沽湖风景区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:35:45Z'
+    sourceScreenEvidence: zh.wikipedia.org:泸沽湖 extract=313ch
   - name: 公母山
     canonicalName: 盐源公母山
     entityType: 地点/景区
@@ -36,6 +38,22 @@ districts:
     - 公母山景区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 瀘沽湖阿六貢巴經堂
+    canonicalName: 瀘沽湖阿六貢巴經堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 老龍頭古墓葬群
+    canonicalName: 老龍頭古墓葬群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/盐源县
+    sourceReadiness: pending
+    selectionPriority: 5
 - district: 西昌市
   leaves:
   - name: 邛海
@@ -113,6 +131,78 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 丁佑君烈士陵園及犧牲處
+    canonicalName: 丁佑君烈士陵園及犧牲處
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 大洋堆遺址
+    canonicalName: 大洋堆遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 大通門
+    canonicalName: 大通門
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 月華知青窯洞群
+    canonicalName: 月華知青窯洞群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 東坪冶銅鑄幣遺址
+    canonicalName: 東坪冶銅鑄幣遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 泸山
+    canonicalName: 泸山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 西昌地震碑林
+    canonicalName: 西昌地震碑林
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 西昌安定門
+    canonicalName: 西昌安定門
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 高梘漢城遺址
+    canonicalName: 高梘漢城遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/西昌市
+    sourceReadiness: pending
+    selectionPriority: 12
 - district: 会理市
   leaves:
   - name: 会理古城
@@ -155,6 +245,70 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 會理倉聖宮
+    canonicalName: 會理倉聖宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 會理城北門
+    canonicalName: 會理城北門
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 會理文塔
+    canonicalName: 會理文塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 會理糞箕灣古墓群
+    canonicalName: 會理糞箕灣古墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 會理聖母堂
+    canonicalName: 會理聖母堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 碗廠灣瓷窯遺址
+    canonicalName: 碗廠灣瓷窯遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 金江書院
+    canonicalName: 金江書院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 金沙江皎平渡口
+    canonicalName: 金沙江皎平渡口
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/会理市
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 德昌县
   leaves:
   - name: 傈僳水寨
@@ -177,6 +331,62 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 德昌倉聖宮
+    canonicalName: 德昌倉聖宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 德昌字庫塔群
+    canonicalName: 德昌字庫塔群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 德昌聖心堂
+    canonicalName: 德昌聖心堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 德昌鐘鼓樓
+    canonicalName: 德昌鐘鼓樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 永興大石墓群
+    canonicalName: 永興大石墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 王所大石墓
+    canonicalName: 王所大石墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 茶園大石墓
+    canonicalName: 茶園大石墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/德昌县
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 会东县
   leaves:
   - name: 老君峰
@@ -244,6 +454,22 @@ districts:
     - 白鹤滩水电站观景点
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 華彈南華宮
+    canonicalName: 華彈南華宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/宁南县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 華彈字庫
+    canonicalName: 華彈字庫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/宁南县
+    sourceReadiness: pending
+    selectionPriority: 5
 - district: 普格县
   leaves:
   - name: 螺髻山
@@ -257,6 +483,8 @@ districts:
     - 螺髻山旅游景区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:36:08Z'
+    sourceScreenEvidence: zh.wikipedia.org:螺髻山 extract=421ch
   - name: 螺髻九十九里温泉瀑布
     canonicalName: 螺髻九十九里温泉瀑布
     entityType: 地点/温泉
@@ -333,6 +561,38 @@ districts:
     - 阿土列尔村
     selectionPriority: 2
     sourceReadiness: ready
+  - name: 利利茲莫衙門石柱
+    canonicalName: 利利茲莫衙門石柱
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/昭觉县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 博什瓦黑石刻
+    canonicalName: 博什瓦黑石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/昭觉县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 好谷東漢石表
+    canonicalName: 好谷東漢石表
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/昭觉县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 木撮乃姐石板墓群
+    canonicalName: 木撮乃姐石板墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/昭觉县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 喜德县
   leaves:
   - name: 小相岭
@@ -345,6 +605,8 @@ districts:
     - 小相岭风景区
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:36:23Z'
+    sourceScreenEvidence: zh.wikipedia.org:小相岭 extract=641ch
   - name: 彝族母语文化博览园
     canonicalName: 喜德彝族母语文化博览园
     entityType: 地点/景区
@@ -353,6 +615,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/喜德县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 伍合大石墓
+    canonicalName: 伍合大石墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/喜德县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 喜德鄧公館
+    canonicalName: 喜德鄧公館
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/喜德县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 沙马拉达隧道
+    canonicalName: 沙马拉达隧道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/喜德县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 冕宁县
   leaves:
   - name: 彝海
@@ -390,6 +676,72 @@ districts:
     - 西昌卫星发射基地
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:36:35Z'
+    sourceScreenEvidence: zh.wikipedia.org:西昌卫星发射中心 extract=250ch
+  - name: 冕宁雅砻江古道
+    canonicalName: 冕宁雅砻江古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 冕寧凌家大墳
+    canonicalName: 冕寧凌家大墳
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 冕寧蘇州古道
+    canonicalName: 冕寧蘇州古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 冕寧趙家院子
+    canonicalName: 冕寧趙家院子
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 彝海結盟處
+    canonicalName: 彝海結盟處
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 彝海镇
+    canonicalName: 彝海镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 興隆安定祠
+    canonicalName: 興隆安定祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 覺華寺
+    canonicalName: 覺華寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/冕宁县
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 越西县
   leaves:
   - name: 文昌故里
@@ -420,6 +772,14 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/越西县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 新民古城遺址
+    canonicalName: 新民古城遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/越西县
+    sourceReadiness: pending
+    selectionPriority: 4
 - district: 甘洛县
   leaves:
   - name: 海棠古镇
@@ -439,6 +799,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/甘洛县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 海棠北城門
+    canonicalName: 海棠北城門
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/甘洛县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 煖帶密土司衙門
+    canonicalName: 煖帶密土司衙門
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/甘洛县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 零關古道清溪峽段
+    canonicalName: 零關古道清溪峽段
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/甘洛县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 美姑县
   leaves:
   - name: 美姑大风顶国家级自然保护区
@@ -485,6 +869,22 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/雷波县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 原涼山工委辦公樓舊址
+    canonicalName: 原涼山工委辦公樓舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/雷波县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 海龍寺
+    canonicalName: 海龍寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/雷波县
+    sourceReadiness: pending
+    selectionPriority: 5
 - district: 木里藏族自治县
   leaves:
   - name: 木里大寺
@@ -515,3 +915,67 @@ districts:
     - 康坞牧场香格里拉湖
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 仁江寺
+    canonicalName: 仁江寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 俄亞大村
+    canonicalName: 俄亞大村
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 康塢大寺遺址
+    canonicalName: 康塢大寺遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 日藏伸臂橋
+    canonicalName: 日藏伸臂橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 昏沙伸臂桥
+    canonicalName: 昏沙伸臂桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 曲公伸臂橋
+    canonicalName: 曲公伸臂橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 東朗菶咔碉樓
+    canonicalName: 東朗菶咔碉樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 瓦崗八角石碉樓
+    canonicalName: 瓦崗八角石碉樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/凉山彝族自治州/木里藏族自治县
+    sourceReadiness: pending
+    selectionPriority: 11

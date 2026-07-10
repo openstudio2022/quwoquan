@@ -135,7 +135,7 @@ Nightly 全量验证（每晚 22:00 UTC+8 = cron `0 14 * * *`），全部针对 
 5. `09` nightly 22:00 自动执行全量验证（local-gamma full semantic + Patrol UI + 全设备矩阵）。
 6. `quwoquan_ops/environments/gamma_validation_suites.json` 是 profile/suite 唯一真相源。
 7. 门禁脚本 `verify_gamma_validation_profiles.py`、`verify_ci_profile_consistency.py`、`verify_environment_topology_manifest.py`、`verify_local_env_port_manifest.py`、`verify_public_vs_upstream_url_contract.py`、`verify_environment_packaging_contract.py`、`verify_env_artifact_isolation.py`、`verify_prod_package_purity.py` 已串联 `make gate` 或 `stackctl verify`。
-8. T1~T4 证据均可从 `.qwq_output/runs/**`、`.qwq_output/local/gamma-local/**`、`.qwq_output/runs/device-matrix/environment-smoke/**`、workflow artifact 回放。
+8. T1~T4 证据均可从 `.qwq_output/env/repo/runs/**`、`.qwq_output/env/gamma/local/gamma-local/**`、`.qwq_output/env/repo/runs/device-matrix/environment-smoke/**`、workflow artifact 回放。
 
 ## 7. 参考
 

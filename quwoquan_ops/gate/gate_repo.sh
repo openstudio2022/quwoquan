@@ -45,8 +45,11 @@ python3 quwoquan_ops/gate/scaffold/verify_test_coverage_map.py
 python3 quwoquan_ops/gate/verify_local_dependency_purity.py
 python3 quwoquan_ops/gate/verify_observability_layout.py
 python3 quwoquan_ops/gate/verify_observability_envelope.py
+python3 quwoquan_ops/gate/verify_output_layout.py
 python3 quwoquan_ops/gate/verify_root_layout.py
+python3 quwoquan_app/scripts/runtime/verify_app_layout.py
 python3 quwoquan_service/scripts/verify/verify_service_layout.py
+python3 quwoquan_data/scripts/verify/verify_data_layout.py
 
 run_service() {
   echo "[gate] quwoquan_service"
@@ -98,7 +101,7 @@ run_service() {
   dart quwoquan_ops/tools/runtime_error_codegen/bin/generate_runtime_errors.dart --check
   dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart
   (cd quwoquan_service && make gate)
-  (cd quwoquan_service/services/product-ops-service && QWQ_OUTPUT_ROOT="$ROOT/.qwq_output" go test ./cmd/api ./tests -count=1)
+  (cd quwoquan_service/services/product-ops-service && QWQ_OUTPUT_ROOT="$ROOT/.qwq_output" go test ./cmd/api ./tests/... -count=1)
 }
 
 run_app() {
@@ -130,14 +133,14 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_app_remote_config_contract.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_route_and_context_semantic.py || exit 1
     python3 quwoquan_app/scripts/env/verify_runtime_host_literals.py || exit 1
-    python3 quwoquan_service/services/assistant-service/tests/ops/gate/verify_no_personal_assistant_imports.py || exit 1
-    python3 quwoquan_service/services/assistant-service/tests/ops/gate/verify_assistant_old_stack_retired.py || exit 1
+    python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_no_personal_assistant_imports.py || exit 1
+    python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_old_stack_retired.py || exit 1
     # L0 PA 降级响应契约静态分析（阻断）：
     #   - degraded:true 必须有 errorCode
     #   - finalText 不得泄漏 JSON envelope key
     #   - catch 块必须保留 $error 根因信息
     #   - acceptance.yaml 引用的测试文件必须存在
-    python3 quwoquan_service/services/assistant-service/tests/ops/gate/verify_degraded_response_contract.py || exit 1
+    python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_degraded_response_contract.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_ios_native_surface_gate.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_native_edge_navigation.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py || exit 1
@@ -178,7 +181,7 @@ run_app() {
       python3 quwoquan_app/scripts/runtime/verify_page_abc_governance.py --quiet
     fi
     # 助手手写 + App 搜索仓库：弱类型棘轮（见 specs/gates/assistant_search_weak_typing_governance.md）
-    python3 quwoquan_service/services/assistant-service/tests/ops/gate/verify_assistant_search_weak_typing_ratchet.py || exit 1
+    python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_user_profile_avatar_projection_versions.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py || exit 1
@@ -265,8 +268,8 @@ run_app() {
   rm -f "$flutter_log"
   # PA Core（桶 A 协议契约 + 桶 B 引擎集成 + 桶 C UI 契约）默认全部阻断。
   # 桶 A 覆盖降级响应根因/消息记录协议/可观测字段，失败即退。
-  bash quwoquan_service/services/assistant-service/tests/ops/gate/run_pa_core_tests.sh
-  # Skip in CI: test/patrol/ (needs real device/Patrol, run via FTL).
+  bash quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/run_pa_core_tests.sh
+  # Skip in CI: test/user_acceptance/patrol/ (needs real device/Patrol, run via FTL).
 
   # dart_func 覆盖率检查：mock.yaml 声明的 dart_func 必须在 Dart 测试文件中存在
   if command -v python3 >/dev/null 2>&1; then
@@ -279,16 +282,16 @@ run_app() {
 run_portal() {
   echo "[gate] ops-portal"
   command -v npm >/dev/null 2>&1 || { echo "[gate] FAIL: npm not found in PATH" 1>&2; exit 1; }
-  if [[ ! -f package-lock.json ]]; then
-    echo "[gate] FAIL: package-lock.json missing at repo root — dependency upgrades must be explicit and lockfile-backed" 1>&2
+  local portal_dir="quwoquan_ops/portal"
+  if [[ ! -f "$portal_dir/package-lock.json" ]]; then
+    echo "[gate] FAIL: $portal_dir/package-lock.json missing — Portal dependencies must be locked in the Portal domain" 1>&2
     exit 1
   fi
-  if [[ ! -d node_modules ]]; then
-    echo "[gate] FAIL: node_modules missing — run an explicit 'npm ci' from repo root when intentionally refreshing Node dependencies" 1>&2
-    exit 1
-  fi
-  npm run ops-portal:test
-  npm run ops-portal:build
+  npm --prefix "$portal_dir" ci
+  npm --prefix "$portal_dir" test
+  npm --prefix "$portal_dir" run build
+  rm -rf "$portal_dir/dist" "$portal_dir/.test-dist"
+  rm -f "$portal_dir"/*.tsbuildinfo "$portal_dir"/vite.config.js "$portal_dir"/vite.config.d.ts
 }
 
 run_data() {
@@ -305,7 +308,7 @@ run_patrol_local() {
     return 0
   fi
   echo "[gate] user_acceptance Patrol (local device)"
-  (cd quwoquan_app && patrol test test/patrol/ --dart-define=APP_RUNTIME_ENV=gamma --dart-define=API_CONTRACT_ENV=gamma)
+  (cd quwoquan_app && patrol test test/user_acceptance/patrol/ --dart-define=APP_RUNTIME_ENV=gamma --dart-define=API_CONTRACT_ENV=gamma)
 }
 
 case "$scope" in

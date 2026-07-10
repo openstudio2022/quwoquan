@@ -76,9 +76,9 @@ gwt_acceptance:
       - file: quwoquan_service/services/chat-service/tests/api_integration/conversation_error_contract__api_integration_test.go
       - file: quwoquan_service/services/chat-service/tests/api_integration/conversation_settings_contract__api_integration_test.go
       - file: quwoquan_service/services/chat-service/tests/api_integration/member_management_contract__api_integration_test.go
-      - file: quwoquan_app/test/api_integration/gamma/assistant_alpha_beta_simulator__api_integration_test.dart
+      - file: quwoquan_app/test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart
       - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
-      - file: quwoquan_app/test/api_integration/gamma/assistant_skill_comparison__api_integration_test.dart
+      - file: quwoquan_app/test/api_integration/cloud/assistant/assistant_skill_comparison__api_integration_test.dart
       - file: quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
       - file: quwoquan_service/services/search-service/tests/api_integration/storage_ttl_contract__api_integration_test.go
       - file: quwoquan_service/services/search-service/tests/api_integration/search_signal_contract__api_integration_test.go

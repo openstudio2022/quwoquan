@@ -47,15 +47,15 @@ gwt_acceptance:
     - 强网录音完成到发送方可播放目标不超过 3 秒。
     tests:
       planned:
-      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
-      - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
-      - file: .qwq_output/runs/voice_message_t4_evidence.md
-      recorded:
-      - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_send_provider__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/pages/chat_conversation_page_composer__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/chat/pages/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+      - file: .qwq_output/env/repo/runs/voice_message_t4_evidence.md
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_send_provider__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/pages/chat_conversation_page_composer__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation_page_realtime_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/chat-service/tests/api_integration/message_audio_contract__api_integration_test.go
     status: implemented
     test_evidence:
@@ -86,7 +86,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/env/repo/runs/voice_message_t4_evidence.md'
   GWT2:
     title: 上滑取消、页面退出和并发录音不会产生幽灵录音或重复发送
     given:
@@ -109,13 +109,13 @@ gwt_acceptance:
     - 快速连按不创建第二个录音任务。
     tests:
       planned:
-      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_composer_test.dart
-      - file: quwoquan_app/test/ui/chat/providers/voice_offline_queue_test.dart
-      recorded:
-      - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/pages/chat_conversation_page_composer__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_offline_queue__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/chat/pages/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+      recorded:
+      - file: quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_offline_queue__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation_page_realtime_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/chat-service/tests/api_integration/message_audio_contract__api_integration_test.go
     status: implemented
     test_evidence:
@@ -140,7 +140,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/env/repo/runs/voice_message_t4_evidence.md'
   GWT3:
     title: 权限与失败统一映射到临时或永久恢复动作
     given:
@@ -163,13 +163,13 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/components/input/customizable_chat_input_bar_test.dart
-      - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
-      - file: quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
-      - file: quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
-      - file: .qwq_output/runs/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_send_provider__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_message_bubble_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_player_manager__local_contract_test.dart
+      - file: .qwq_output/env/repo/runs/voice_message_t4_evidence.md
       recorded:
-      - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_send_provider__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_message_bubble_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_player_manager__local_contract_test.dart
@@ -188,7 +188,7 @@ gwt_acceptance:
         - local_contract.chat_conversation.list_detail_message_delivery.voice_message.gwt3_local_contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/env/repo/runs/voice_message_t4_evidence.md'
   GWT4:
     title: audio 消息契约与端云 media payload 一致
     given:
@@ -211,10 +211,10 @@ gwt_acceptance:
     - waveform 做采样压缩，避免 120 秒录音产生超大 payload。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/chat/message/contract/send_message_request_contract_test.dart
-      - file: quwoquan_app/test/cloud/chat/message/contract/message_dto_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/chat/message/contract/send_message_request_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/chat/message/contract/message_dto_contract__local_contract_test.dart
       - file: quwoquan_service/runtime/media/media_test.go
-      - file: quwoquan_app/test/ui/chat/providers/voice_send_provider_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_send_provider__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/chat/message/contract/send_message_request_contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/chat/message/contract/message_dto_contract__local_contract_test.dart
@@ -262,13 +262,13 @@ gwt_acceptance:
     - 播放进度更新不导致消息列表全量重建或掉帧。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
-      - file: quwoquan_app/test/ui/chat/providers/voice_player_manager_test.dart
-      - file: .qwq_output/runs/voice_message_t4_evidence.md
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_message_bubble_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_player_manager__local_contract_test.dart
+      - file: .qwq_output/env/repo/runs/voice_message_t4_evidence.md
       recorded:
       - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_message_bubble_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/voice_player_manager__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/chat/pages/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation_page_realtime_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/chat-service/tests/api_integration/message_audio_contract__api_integration_test.go
     status: implemented
     test_evidence:
@@ -293,7 +293,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/env/repo/runs/voice_message_t4_evidence.md'
   GWT6:
     title: 评论和回复入口在 ASR 未支持时不展示语音能力
     given:
@@ -314,12 +314,12 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/components/comment_system/comment_input_overlay_test.dart
-      - file: quwoquan_app/test/components/comment_system/comment_viewer_modal_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_input_overlay__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_input_overlay__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/chat/pages/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_input_overlay__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation_page_realtime_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/chat-service/tests/api_integration/message_audio_contract__api_integration_test.go
     status: implemented
     test_evidence:
@@ -349,7 +349,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_recorded_reference] .qwq_output/runs/voice_message_t4_evidence.md'
+    - '[migrated_from_recorded_reference] .qwq_output/env/repo/runs/voice_message_t4_evidence.md'
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

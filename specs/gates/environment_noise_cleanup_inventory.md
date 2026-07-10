@@ -47,7 +47,7 @@
 
 - `beta-local`
   - `quwoquan_ops/cli/beta/start_beta-local.sh` 已改为启动时覆盖写日志
-- `quwoquan_ops/lib/beta_manual_lifecycle.sh` 已改为覆盖写 `.qwq_output/local/beta-local/*.log`
+  - `quwoquan_ops/cli/lib/beta_manual_lifecycle.sh` 已改为覆盖写 `.qwq_output/env/beta/local/beta-local/*.log`
 
 结论：
 
@@ -110,8 +110,8 @@
 
 验证结果：
 
-- 当前轮次 `.qwq_output/local/beta-local/platform-ops.log` 不再出现 `load config_schema.yaml failed`
-- 当前轮次 `.qwq_output/local/beta-local/product-ops.log` 不再出现 `config report failed`
+- 当前轮次 `.qwq_output/env/beta/local/beta-local/platform-ops.log` 不再出现 `load config_schema.yaml failed`
+- 当前轮次 `.qwq_output/env/beta/local/beta-local/product-ops.log` 不再出现 `config report failed`
 - `go test ./cmd/api`
   - `quwoquan_service/services/platform-ops-service`
   - `quwoquan_service/services/product-ops-service`
@@ -124,7 +124,7 @@
 现状：
 
 - `gamma-local` 当前健康检查全绿
-- 过往 `.qwq_output/runs/gamma/*/app-launch-*.log` 中存在：
+- 过往 `.qwq_output/env/gamma/runs/*/app-launch-*.log` 中存在：
   - 旧代码编译失败
   - `Lost connection to device.`
 
@@ -149,15 +149,15 @@
 
 - `gamma-local`
   - 当前 health 已覆盖主路径
-  - `.qwq_output/local/gamma-local/runs` 已在本轮过往产物清理中移除
-  - 当前需关注的是本轮 `.qwq_output/local/gamma-local/*.json` 证据，而非旧 runtime 目录
+  - `.qwq_output/env/gamma/local/gamma-local/runs` 已在本轮过往产物清理中移除
+  - 当前需关注的是本轮 `.qwq_output/env/gamma/local/gamma-local/*.json` 证据，而非旧 runtime 目录
 
 ### 8. 过往 report / log 的保留策略
 
 当前状态：
 
 - 运行态日志已按轮次覆盖
-- `.qwq_output/runs/**` 已执行 retention 收缩：每个环境/目标/命令分组仅保留最新一份时间戳报告
+- `.qwq_output/env/repo/runs/**` 已执行 retention 收缩：每个环境/目标/命令分组仅保留最新一份时间戳报告
 
 后续建议：
 
@@ -170,13 +170,13 @@
 - `quwoquan_ops/cli/beta/start_beta-local.sh`
 - `quwoquan_ops/cli/stackctl.py`
 - `quwoquan_ops/cli/lib/mock_public_plane.py`
-- `quwoquan_ops/lib/beta_manual_lifecycle.sh`
-- `quwoquan_service/services/assistant-service/tests/ops/smoke/dev_assistant_beta_gateway.py`
+- `quwoquan_ops/cli/lib/beta_manual_lifecycle.sh`
+- `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py`
 - `quwoquan_service/services/platform-ops-service/cmd/api/main.go`
-- `quwoquan_service/services/platform-ops-service/cmd/api/main_test.go`
+- `quwoquan_service/services/platform-ops-service/cmd/api/main__local_contract_test.go`
 - `quwoquan_app/scripts/device/start_beta-local.sh`
-- `quwoquan_ops/tests/test_dev_up.py`
-- `quwoquan_ops/tests/test_stackctl_up_runtime.py`
+- `quwoquan_ops/tests/acceptance/user_acceptance/test_dev_up__user_acceptance_test.py`
+- `quwoquan_ops/tests/acceptance/user_acceptance/test_stackctl_up_runtime__user_acceptance_test.py`
 
 ## 本轮验证证据
 

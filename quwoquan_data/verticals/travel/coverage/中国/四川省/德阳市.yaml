@@ -22,6 +22,8 @@ districts:
     - 广汉三星堆
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:42:42Z'
+    sourceScreenEvidence: zh.wikipedia.org:三星堆遗址 extract=330ch
   - name: 房湖公园
     canonicalName: 广汉房湖公园
     entityType: 地点/遗址
@@ -51,6 +53,62 @@ districts:
     - 三水易家河坝乡村旅游区
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 廣漢文廟
+    canonicalName: 廣漢文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/广汉市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 房湖
+    canonicalName: 房湖
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/广汉市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 杜家咀崖墓群
+    canonicalName: 杜家咀崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/广汉市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 煙堆子遺址
+    canonicalName: 煙堆子遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/广汉市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 益蘭祠
+    canonicalName: 益蘭祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/广汉市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 雒城遺址
+    canonicalName: 雒城遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/广汉市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 龙居寺 (广汉市)
+    canonicalName: 龙居寺 (广汉市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/广汉市
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 什邡市
   leaves:
   - name: 蓥华山
@@ -86,6 +144,46 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/什邡市
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 師古南華宮
+    canonicalName: 師古南華宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/什邡市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 慧劍寺
+    canonicalName: 慧劍寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/什邡市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 正觉寺塔
+    canonicalName: 正觉寺塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/什邡市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 洛水川主廟
+    canonicalName: 洛水川主廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/什邡市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 龍居寺 (什邡市)
+    canonicalName: 龍居寺 (什邡市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/什邡市
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 绵竹市
   leaves:
   - name: 绵竹年画村
@@ -152,6 +250,46 @@ districts:
     - 汉旺地震工业遗址
     selectionPriority: 7
     sourceReadiness: pending
+  - name: 三溪寺
+    canonicalName: 三溪寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/绵竹市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 剑南春酒坊遗址
+    canonicalName: 剑南春酒坊遗址
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/绵竹市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 綿竹關帝廟
+    canonicalName: 綿竹關帝廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/绵竹市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 绵竹木版年画
+    canonicalName: 绵竹木版年画
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/绵竹市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 諸葛雙忠祠
+    canonicalName: 諸葛雙忠祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/绵竹市
+    sourceReadiness: pending
+    selectionPriority: 12
 - district: 旌阳区
   leaves:
   - name: 德阳文庙
@@ -164,6 +302,8 @@ districts:
     - 德阳孔庙
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:43:25Z'
+    sourceScreenEvidence: zh.wikipedia.org:德阳文庙 extract=232ch
   - name: 德阳石刻艺术墙
     canonicalName: 德阳石刻艺术墙
     entityType: 地点/打卡地
@@ -198,6 +338,54 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/旌阳区
     selectionPriority: 5
     sourceReadiness: ready
+  - name: 上庸長闕
+    canonicalName: 上庸長闕
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/旌阳区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 姜公墳
+    canonicalName: 姜公墳
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/旌阳区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 姜孝祠
+    canonicalName: 姜孝祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/旌阳区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 孝泉镇
+    canonicalName: 孝泉镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/旌阳区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 綿竹城遺址
+    canonicalName: 綿竹城遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/旌阳区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 龍護舍利塔
+    canonicalName: 龍護舍利塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/旌阳区
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 罗江区
   leaves:
   - name: 白马关
@@ -244,6 +432,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/罗江区
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 白马关镇
+    canonicalName: 白马关镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/罗江区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 羅江奎星閣
+    canonicalName: 羅江奎星閣
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/罗江区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 羅江萬佛寺
+    canonicalName: 羅江萬佛寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/罗江区
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 中江县
   leaves:
   - name: 黄继光纪念馆
@@ -288,3 +500,147 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
     selectionPriority: 5
     sourceReadiness: ready
+  - name: 中江北塔
+    canonicalName: 中江北塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 中江南塔
+    canonicalName: 中江南塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 中江帝主廟
+    canonicalName: 中江帝主廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 中江文廟
+    canonicalName: 中江文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 中江玄武觀
+    canonicalName: 中江玄武觀
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 中江禹王宮
+    canonicalName: 中江禹王宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 中江鎮江寺
+    canonicalName: 中江鎮江寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 五角寺
+    canonicalName: 五角寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 南山淩家大院
+    canonicalName: 南山淩家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 回龍吳氏祠堂
+    canonicalName: 回龍吳氏祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 壽寧寺 (中江縣)
+    canonicalName: 壽寧寺 (中江縣)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 大旺寺摩崖造像
+    canonicalName: 大旺寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 天平梁子崖墓群
+    canonicalName: 天平梁子崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 彤華宮
+    canonicalName: 彤華宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 柑橘梁子崖墓群
+    canonicalName: 柑橘梁子崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 永豐鄧氏碉樓
+    canonicalName: 永豐鄧氏碉樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 董昭寺
+    canonicalName: 董昭寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 通濟文峰塔
+    canonicalName: 通濟文峰塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/德阳市/中江县
+    sourceReadiness: pending
+    selectionPriority: 23

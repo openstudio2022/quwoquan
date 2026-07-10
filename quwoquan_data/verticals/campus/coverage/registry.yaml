@@ -6,7 +6,7 @@ units:
     label: 全国普通高校
     entityType: 机构/学校
     expectedCount: 2922
-    source: .qwq_output/local/data-runtime/seed/school_catalog/universities_national.ndjson
+    source: .qwq_output/data/local/runtime/seed/school_catalog/universities_national.ndjson
     requiredSourceCategories: [school_official, forum]
     requiredAngles: [索引, 新生攻略, 校园评测]
     maturity: partial
@@ -14,7 +14,7 @@ units:
     label: 北京中小学幼儿园
     entityType: 机构/学校
     expectedCount: 177
-    source: .qwq_output/local/data-runtime/seed/school_catalog/schools_beijing.ndjson
+    source: .qwq_output/data/local/runtime/seed/school_catalog/schools_beijing.ndjson
     requiredSourceCategories: [school_official, forum]
     requiredAngles: [索引, 校园评测]
     maturity: pilot
@@ -22,7 +22,7 @@ units:
     label: 上海中小学幼儿园
     entityType: 机构/学校
     expectedCount: 169
-    source: .qwq_output/local/data-runtime/seed/school_catalog/schools_shanghai.ndjson
+    source: .qwq_output/data/local/runtime/seed/school_catalog/schools_shanghai.ndjson
     requiredSourceCategories: [school_official, forum]
     requiredAngles: [索引, 校园评测]
     maturity: pilot

@@ -46,6 +46,86 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 傅鍾故居
+    canonicalName: 傅鍾故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 大石賴氏家族墓
+    canonicalName: 大石賴氏家族墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 敘永松坡樓
+    canonicalName: 敘永松坡樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 敘永牌坊群
+    canonicalName: 敘永牌坊群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 敘永雪山關
+    canonicalName: 敘永雪山關
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 水尾劉氏宗祠
+    canonicalName: 水尾劉氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 水潦鋪大堰
+    canonicalName: 水潦鋪大堰
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 清涼洞摩崖造像
+    canonicalName: 清涼洞摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 紫霞峰摩崖造像及石刻
+    canonicalName: 紫霞峰摩崖造像及石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 龍龜山寺遺址
+    canonicalName: 龍龜山寺遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/叙永县
+    sourceReadiness: pending
+    selectionPriority: 14
 - district: 古蔺县
   leaves:
   - name: 黄荆老林
@@ -76,6 +156,8 @@ districts:
     - 太平渡渡口
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:48:20Z'
+    sourceScreenEvidence: zh.wikipedia.org:太平渡渡口 extract=224ch
   - name: 大黑洞
     canonicalName: 古蔺大黑洞
     entityType: 地点/自然景观
@@ -96,6 +178,48 @@ districts:
     - 二郎滩
     selectionPriority: 5
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:48:25Z'
+    sourceScreenEvidence: zh.wikipedia.org:二郎滩渡口 extract=224ch
+  - name: 古蔺县红军四渡赤水战役遗址
+    canonicalName: 古蔺县红军四渡赤水战役遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/古蔺县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 古藺清代墓葬群
+    canonicalName: 古藺清代墓葬群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/古蔺县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 红军四渡赤水战役旧址
+    canonicalName: 红军四渡赤水战役旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/古蔺县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 郎酒老作坊遗址
+    canonicalName: 郎酒老作坊遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/古蔺县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 齊安宮
+    canonicalName: 齊安宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/古蔺县
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 合江县
   leaves:
   - name: 福宝古镇
@@ -136,6 +260,8 @@ districts:
     - 老泸州城遗址
     selectionPriority: 4
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:48:26Z'
+    sourceScreenEvidence: zh.wikipedia.org:神臂城遗址 extract=416ch
   - name: 合江汉代画像石棺博物馆
     canonicalName: 合江汉代画像石棺博物馆
     entityType: 地点/博物馆
@@ -154,6 +280,126 @@ districts:
     - 安乐山
     selectionPriority: 6
     sourceReadiness: ready
+  - name: 何家灣崖墓
+    canonicalName: 何家灣崖墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 先市酱油酿造作坊群
+    canonicalName: 先市酱油酿造作坊群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 合江城垣
+    canonicalName: 合江城垣
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 合江崖墓群
+    canonicalName: 合江崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 合江法王寺
+    canonicalName: 合江法王寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 合江節孝坊群
+    canonicalName: 合江節孝坊群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 合江考棚
+    canonicalName: 合江考棚
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 周祠
+    canonicalName: 周祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 太平軍過縣始末岩刻
+    canonicalName: 太平軍過縣始末岩刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 尧坝镇古建筑群
+    canonicalName: 尧坝镇古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 川滇黔工農紅軍游擊隊起義指揮部舊址
+    canonicalName: 川滇黔工農紅軍游擊隊起義指揮部舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 白鹿古建築群
+    canonicalName: 白鹿古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 神臂城
+    canonicalName: 神臂城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 福寶古建築群
+    canonicalName: 福寶古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 轉龍壩菜河園
+    canonicalName: 轉龍壩菜河園
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/合江县
+    sourceReadiness: pending
+    selectionPriority: 21
 - district: 江阳区
   leaves:
   - name: 张坝桂圆林
@@ -223,6 +469,78 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
     selectionPriority: 7
     sourceReadiness: pending
+  - name: 張壩桂圓林
+    canonicalName: 張壩桂圓林
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 朱家山東華詩社舊址
+    canonicalName: 朱家山東華詩社舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 江陽熙園
+    canonicalName: 江陽熙園
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 江陽雁塔
+    canonicalName: 江陽雁塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 泸州城墙
+    canonicalName: 泸州城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 泸州老窖窖池群及酿酒作坊
+    canonicalName: 泸州老窖窖池群及酿酒作坊
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 瀘州報恩塔
+    canonicalName: 瀘州報恩塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 醉八仙修德槽坊釀酒作坊
+    canonicalName: 醉八仙修德槽坊釀酒作坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 龍透關
+    canonicalName: 龍透關
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/江阳区
+    sourceReadiness: pending
+    selectionPriority: 16
 - district: 泸县
   leaves:
   - name: 龙脑桥
@@ -233,6 +551,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:48:58Z'
+    sourceScreenEvidence: zh.wikipedia.org:龙脑桥 extract=211ch
   - name: 玉蟾山
     canonicalName: 泸县玉蟾山
     entityType: 地点/自然景观
@@ -251,6 +571,150 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 奇峰渡槽
+    canonicalName: 奇峰渡槽
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 岩灣墓群
+    canonicalName: 岩灣墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 延福寺石刻
+    canonicalName: 延福寺石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 東林觀山寨遺址
+    canonicalName: 東林觀山寨遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 沙嘴宋墓群
+    canonicalName: 沙嘴宋墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 沙子坪洞子山墓群
+    canonicalName: 沙子坪洞子山墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 河壩頭宋墓群
+    canonicalName: 河壩頭宋墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 泸县圆通寺
+    canonicalName: 泸县圆通寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 瀘縣宋墓群
+    canonicalName: 瀘縣宋墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 瀘縣屈氏莊園
+    canonicalName: 瀘縣屈氏莊園
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 瀘縣惠濟橋
+    canonicalName: 瀘縣惠濟橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 瀘縣酒窖池
+    canonicalName: 瀘縣酒窖池
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 瀘縣龍橋群
+    canonicalName: 瀘縣龍橋群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 照南山尹氏宗祠
+    canonicalName: 照南山尹氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 玉蟾山摩崖造像
+    canonicalName: 玉蟾山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 羅盤嘴墓群
+    canonicalName: 羅盤嘴墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 菩橋墓群
+    canonicalName: 菩橋墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 長嶺埂宋墓群
+    canonicalName: 長嶺埂宋墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/泸县
+    sourceReadiness: pending
+    selectionPriority: 21
 - district: 纳溪区
   leaves:
   - name: 花田酒地
@@ -299,6 +763,54 @@ districts:
     - 云溪温泉度假区
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 天仙硐物價石刻
+    canonicalName: 天仙硐物價石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/纳溪区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 天仙鎮抗戰小學舊址
+    canonicalName: 天仙鎮抗戰小學舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/纳溪区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 納溪龍橋群
+    canonicalName: 納溪龍橋群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/纳溪区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 護國岩題刻
+    canonicalName: 護國岩題刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/纳溪区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 護國軍棉花坡戰場遺跡
+    canonicalName: 護國軍棉花坡戰場遺跡
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/纳溪区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 金鳳寺及壁畫
+    canonicalName: 金鳳寺及壁畫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/纳溪区
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 龙马潭区
   leaves:
   - name: 洞窝峡谷
@@ -322,3 +834,43 @@ districts:
     - 龙马潭
     selectionPriority: 2
     sourceReadiness: ready
+  - name: 三溪酒坊遺址
+    canonicalName: 三溪酒坊遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/龙马潭区
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 夢仙亭崖墓群
+    canonicalName: 夢仙亭崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/龙马潭区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 夢仙亭摩崖造像及石刻
+    canonicalName: 夢仙亭摩崖造像及石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/龙马潭区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 泸州大曲老窖池
+    canonicalName: 泸州大曲老窖池
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/龙马潭区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 羅漢郭家祠堂
+    canonicalName: 羅漢郭家祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/泸州市/龙马潭区
+    sourceReadiness: pending
+    selectionPriority: 7

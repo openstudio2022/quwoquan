@@ -40,13 +40,13 @@ gwt_acceptance:
     - release config 只冻结配置合同，不代表真集群 measured 性能；性能准出仍归 R-S06-S-1。
     tests:
       planned:
-      - artifact: .qwq_output/runs/prod/search_config_gray_release_report.json
+      - artifact: .qwq_output/env/prod/runs/search_config_gray_release_report.json
       recorded: []
     status: partial
     notes:
     - 本地 release config 与风险灰度文档已补齐；真实 prod-hosted rollout 需用户确认后执行。
     - '[migrated_from_recorded_reference] quwoquan_service/services/search-service/v2026.06.16.0.yaml'
-    - '[migrated_from_recorded_artifact] .qwq_output/runs/gamma/search_rollback_rehearsal.md'
+    - '[migrated_from_recorded_artifact] .qwq_output/env/gamma/runs/search_rollback_rehearsal.md'
     test_evidence:
       primary:
       - layer: local_contract

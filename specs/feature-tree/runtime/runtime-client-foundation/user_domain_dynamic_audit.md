@@ -52,6 +52,6 @@
 
 ## 6. 测试
 
-- 契约：`quwoquan_app/test/cloud/user/contract/user_profile_wire_dto_contract_test.dart`（含 summary / capability / appearance / call / privacy wire）。  
+- 契约：`quwoquan_app/test/local_contract/cloud/user/contract/user_profile_wire_dto_contract__local_contract_test.dart`（含 summary / capability / appearance / call / privacy wire）。  
 - 解码：`test/cloud/runtime/codec/cloud_response_decoder_test.dart`（`asObject` 泛型 Map、`mapListFirstNonEmpty`）。  
 - Mock：`MockUserProfileRepository` 等仍以 JSON 字符串解码 → `WireDto.fromMap` → View，与 Remote 同链。

@@ -844,6 +844,13 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pseq.add_argument("--cwd", default=os.getcwd())
     pseq.add_argument("--spend-limit-usd", dest="spend_limit", type=float)
     pseq.add_argument("--cycles", type=int, default=3, help="author/finalize/verify 最大闭环轮数")
+    pseq.add_argument(
+        "--download-prefetch",
+        dest="download_prefetch",
+        type=int,
+        default=0,
+        help="两段流水线：author cycle 前对已物化分区并发预跑 download 段的并发度（0=关闭）",
+    )
     pseq.add_argument("--reset-state", dest="reset_state", action="store_true")
     pseq.add_argument("--skip-prepare", action="store_true", help="已有 prepare 证据时跳过 prepare 阶段")
     pseq.add_argument("--skip-startup-probe", action="store_true", help="跳过 author-runner 前置 Cursor startup probe")

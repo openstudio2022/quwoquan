@@ -37,8 +37,8 @@ minimum_package:
     t1:
     - contracts/metadata/user/user_profile/service.yaml
     t2:
-    - services/user-service/tests/profile_crud_contract_test.go
-    - services/user-service/tests/follow_contract_test.go
+    - services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
+    - services/user-service/tests/api_integration/follow_contract__api_integration_test.go
     t3:
     - contracts/metadata/user/user_profile/tests/e2e.yaml
     t4: []

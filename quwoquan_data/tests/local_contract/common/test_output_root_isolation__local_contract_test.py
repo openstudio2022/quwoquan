@@ -3,9 +3,9 @@
 固化统一输出目录规范的核心不变量：
 - 默认输出根 `QWQ_OUTPUT_ROOT=<repo>/.qwq_output/`：工程目录内、gitignore 隔离，
   不在用户 HOME / /tmp；
-- local/data-runtime/release/输出侧 artifacts 全部从 OUTPUT_ROOT 推导；publish 保持仓内受版本控制；
+- data/local/runtime/release/输出侧 artifacts 全部从 OUTPUT_ROOT 推导；publish 保持仓内受版本控制；
 - 显式覆盖 QWQ_DATA_ROOT（测试隔离根）时输出根跟随其隔离，schema/contracts 仍跟代码走；
-- 批次树按 local/data-runtime/{phase}/{contentType}/{supplyMode}/ 三级主键落位，
+- 批次树按 data/local/runtime/{phase}/{contentType}/{supplyMode}/ 三级主键落位，
   一批次唯一 phase、唯一 contentType、唯一 supplyMode；
 - 历史平铺 runtime/batches/ 与 `.qwq_sandbox` 不再作为 reader fallback。
 """
@@ -43,8 +43,7 @@ def test_pytest_session_runs_on_isolated_tempfile_root():
     """
     import os
 
-    if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") == "1":
-        pytest.skip("explicit env-root opt-out")
+    assert os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1"
     declared = os.environ.get("QWQ_DATA_ROOT", "")
     assert declared, "conftest 必须注入隔离 QWQ_DATA_ROOT"
     declared_path = Path(declared).resolve()
@@ -116,10 +115,10 @@ def test_output_root_drives_runtime_release_artifacts_but_not_publish(
 ):
     output_root = tmp_path / ".qwq_output"
     reloaded = _reload_paths(monkeypatch, QWQ_OUTPUT_ROOT=str(output_root))
-    # data-runtime/release/data/runs 摘要索引全部从输出根推导。
-    assert reloaded.RUNTIME_ROOT == output_root / "local" / "data-runtime"
-    assert reloaded.RELEASE_ROOT == output_root / "release" / "data"
-    assert reloaded.OUTPUT_ARTIFACTS_ROOT == output_root / "runs" / "data"
+    # data/local/runtime、data/release、data/runs 摘要索引全部从输出根推导。
+    assert reloaded.RUNTIME_ROOT == output_root / "data" / "local" / "runtime"
+    assert reloaded.RELEASE_ROOT == output_root / "data" / "release"
+    assert reloaded.OUTPUT_ARTIFACTS_ROOT == output_root / "data" / "runs"
     # publish 是唯一入库生成输出：默认仓内受版本控制，不随输出根出仓。
     assert reloaded.PUBLISH_ROOT == reloaded._REPO_DATA_ROOT / "publish"
     # schema / 服务侧 contracts 跟代码走。
@@ -134,14 +133,14 @@ def test_isolated_data_root_keeps_full_isolation_semantics(
 ):
     isolated = tmp_path / "isolated_root"
     reloaded = _reload_paths(monkeypatch, QWQ_DATA_ROOT=str(isolated))
-    # 测试隔离根：data-runtime/publish/release 全部跟随隔离根；release 仍按 data 域分组。
-    assert reloaded.RUNTIME_ROOT == isolated / "local" / "data-runtime"
+    # 测试隔离根：data/local/runtime、publish、data/release 全部跟随隔离根。
+    assert reloaded.RUNTIME_ROOT == isolated / "data" / "local" / "runtime"
     assert reloaded.PUBLISH_ROOT == isolated / "publish"
-    assert reloaded.RELEASE_ROOT == isolated / "release" / "data"
+    assert reloaded.RELEASE_ROOT == isolated / "data" / "release"
     # schema 契约仍跟代码走。
     assert reloaded.SCHEMA_ROOT == reloaded._REPO_DATA_ROOT / "schema"
     # gate 默认 release 根（仓库内）与隔离 release 根物理隔离。
-    gate_release_root = reloaded._REPO_DATA_ROOT / "release" / "data"
+    gate_release_root = reloaded._REPO_DATA_ROOT / "data" / "release"
     assert reloaded.RELEASE_ROOT != gate_release_root
 
 

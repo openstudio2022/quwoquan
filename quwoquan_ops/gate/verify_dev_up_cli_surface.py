@@ -223,10 +223,10 @@ def main() -> int:
         issues.append("gamma local mirror must expose host-readable caddy data root")
     if 'LOCAL_GAMMA_CADDY_CONFIG_ROOT="${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-${LOCAL_GAMMA_LOCAL_ROOT}/caddy/config}"' not in gamma_script:
         issues.append("gamma local mirror must expose host-readable caddy config root")
-    if '${LOCAL_GAMMA_CADDY_DATA_ROOT:-../../../.qwq_output/local/gamma-local/caddy/data}:/data' not in gamma_compose:
-        issues.append("gamma compose must bind caddy data to .qwq_output/local path")
-    if '${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-../../../.qwq_output/local/gamma-local/caddy/config}:/config' not in gamma_compose:
-        issues.append("gamma compose must bind caddy config to .qwq_output/local path")
+    if '${LOCAL_GAMMA_CADDY_DATA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/caddy/data}:/data' not in gamma_compose:
+        issues.append("gamma compose must bind caddy data to .qwq_output/env/gamma/local path")
+    if '${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/caddy/config}:/config' not in gamma_compose:
+        issues.append("gamma compose must bind caddy config to .qwq_output/env/gamma/local path")
     if "local-gamma-caddy/data:/data" in gamma_compose or "local-gamma-caddy/config:/config" in gamma_compose:
         issues.append("gamma compose must not hide caddy CA inside named volumes")
 

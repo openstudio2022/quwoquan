@@ -21,6 +21,7 @@ def main() -> None:
         "infrastructure",
         "platform",
         "specs",
+        ".cursor",
         ".control-plane-state",
         ".pytest_cache",
     }
@@ -54,6 +55,7 @@ def main() -> None:
         ".venv",
         "__pycache__",
         ".qwq_output",
+        ".cursor",
         "state",
     }
 

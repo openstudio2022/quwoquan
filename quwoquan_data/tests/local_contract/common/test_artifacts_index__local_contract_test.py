@@ -1,6 +1,6 @@
 """artifacts 摘要索引层契约（index-first + 回指，数据输出规范）。
 
-- `QWQ_OUTPUT_ROOT/runs/data/**` 只做镜像索引，不承载权威证据；
+- `QWQ_OUTPUT_ROOT/data/runs/**` 只做镜像索引，不承载权威证据；
 - 任意 summary 目录必须有 `index.json`，且回指 runtimeBatchRoot/taskId/
   publishRoot/releaseId/phase/contentType/supplyMode/sourceKey/maturity；
 - 回指字段从 batch_manifest / paths 真相源构造，禁止手写第二套。

@@ -199,6 +199,40 @@ def _run_importer(
     return reports
 
 
+def _trigger_entity_reload(reload_url: str, *, release_id: str) -> Path | None:
+    """importer 直写运行库后触发 entity-service 免停服重载。
+
+    契约：POST {base}/v1/homepages:reload（metadata operation: ReloadHomepageState）。
+    失败不阻断 ship（服务可能未运行，导入结果已在库中，重启后仍生效），但必须
+    显式打印并把结果落审计报告，禁止静默吞掉重载失败。
+    """
+    base = reload_url.rstrip("/")
+    endpoint = f"{base}/v1/homepages:reload"
+    proc = subprocess.run(
+        ["curl", "-sS", "-X", "POST", "-o", "-", "-w", "\n%{http_code}", "--max-time", "30", endpoint],
+        capture_output=True,
+        check=False,
+    )
+    raw = (proc.stdout or b"").decode("utf-8", errors="replace").strip()
+    body, _, code = raw.rpartition("\n")
+    ok = proc.returncode == 0 and code == "200"
+    result: dict = {
+        "schemaVersion": "quwoquan_data.entity_reload_report/1",
+        "endpoint": endpoint,
+        "httpStatus": code or None,
+        "ok": ok,
+        "response": body[:2000],
+        "triggeredAt": now_iso(),
+    }
+    report_path = PUBLISH_ROOT / "env_releases" / release_id / "entity-reload.json"
+    write_json(report_path, result)
+    if ok:
+        print(f"[ship] entity-service reload ok: {endpoint} -> {body[:200]}")
+    else:
+        print(f"[ship] WARNING: entity-service reload failed ({endpoint}, http={code or 'n/a'}); 服务重启后导入仍生效", file=sys.stderr)
+    return report_path
+
+
 def _service_root() -> Path:
     """Resolve the code-anchored service repo root for importer execution.
 
@@ -688,6 +722,11 @@ def handle_ship(args: argparse.Namespace) -> None:
             source_owner=source_owner,
             dry_run=bool(getattr(args, "dry_run", False)),
         )
+        reload_url = str(getattr(args, "entity_reload_url", "") or "").strip()
+        if reload_url and not bool(getattr(args, "dry_run", False)):
+            report = _trigger_entity_reload(reload_url, release_id=release_id)
+            if report is not None:
+                import_reports.append(report)
     else:
         print("[ship] 灌库（按需）：")
         print("       go run ./services/content-service/cmd/import \\")
@@ -706,7 +745,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("ship", help="一键发布：promote→索引→按环境采样→(可选)灌库")
     src = p.add_mutually_exclusive_group()
     src.add_argument("--release-id", help="release/ 下的发布包 id")
-    src.add_argument("--task", help="local/data-runtime/tasks 下的 task id")
+    src.add_argument("--task", help="data/local/runtime/tasks 下的 task id")
     p.add_argument("--batch", help="batch id（与 --task 同用）")
     p.add_argument("--copy-entities", action="store_true", help="promote 时同时拷贝 task entities/")
     p.add_argument("--env", help="目标环境逗号分隔（默认采样 manifest 内全部）")
@@ -714,6 +753,11 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p.add_argument("--skip-index", action="store_true", help="跳过 lookup 索引重建")
     p.add_argument("--import", dest="import_to_db", action="store_true", help="采样后直接调用服务侧 importer 灌库")
     p.add_argument("--mongo-uri", help="importer 目标 mongo uri（与 --import 同用）")
+    p.add_argument(
+        "--entity-reload-url",
+        dest="entity_reload_url",
+        help="entity-service base URL；灌库后 POST /v1/homepages:reload 免停服重载（dry-run 不触发）",
+    )
     p.add_argument("--data-release-id", help="环境数据发布 releaseId（默认按环境与时间生成）")
     p.add_argument("--mode", choices=["upsert", "sync", "reset-source"], default=DEFAULT_MODE, help="环境 apply 模式")
     p.add_argument("--delete-policy", choices=["none", "tombstone", "hard-delete"], default=DEFAULT_DELETE_POLICY, help="缺失对象处理策略")
@@ -745,7 +789,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     p.add_argument(
         "--sync-media-root",
-        help="CAS 媒体库增量同步目标（环境媒体根，如 .qwq_output/local/gamma-local/media 或 /srv/media）；sha256 校验失败即阻断",
+        help="CAS 媒体库增量同步目标（环境媒体根，如 .qwq_output/env/gamma/local/gamma-local/media 或 /srv/media）；sha256 校验失败即阻断",
     )
     p.set_defaults(handler=handle_ship)
 

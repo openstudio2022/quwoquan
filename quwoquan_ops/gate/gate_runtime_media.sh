@@ -64,12 +64,12 @@ echo "[runtime-media] flutter test realtime/cache coverage"
 (
   cd "${ROOT_DIR}/quwoquan_app"
   python3 scripts/env/run_flutter_test_guarded.py \
-    test/core/services/content_cache_services_test.dart \
-    test/core/services/conversation_avatar_sync_contract_test.dart \
-    test/components/avatar/conversation_avatar_test.dart \
-    test/cloud/realtime/realtime_avatar_sync_handler_test.dart \
-    test/core/services/local_chat_search_sync_service_test.dart \
-    test/ui/chat/widgets/chat_page_widget_test.dart
+    test/local_contract/core/services/content_cache_services__local_contract_test.dart \
+    test/local_contract/core/services/conversation_avatar_sync_contract__local_contract_test.dart \
+    test/local_contract/ui/components/avatar/conversation_avatar__local_contract_test.dart \
+    test/local_contract/cloud/realtime/realtime_avatar_sync_handler__local_contract_test.dart \
+    test/local_contract/core/services/local_chat_search_sync_service__local_contract_test.dart \
+    test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
 )
 
 if [[ "${FULL_MODE}" == "--full" ]]; then

@@ -9,7 +9,7 @@
 ## 运维与门禁硬约束
 
 - 环境、打包、URL/topology、健康检查、巡检、诊断、修复和部署统一使用 `python3 quwoquan_ops/cli/stackctl.py`；不要新增第二套环境脚本入口。
-- Ops 脚本按职责归入 `cli/`、`ci/`、`gate/`、`observability/`、`runbooks/` 等横切目录；禁止在 `quwoquan_ops/` 中按业务特性新增 `assistant/`、`avatar/`、`chat_avatar/` 等脚本岛或第二套 feature runner。特性相关 smoke/gate/CI 脚本归属对应领域服务的 `tests/ops/**`，Ops 只保留共享能力，例如 `ci/device_matrix/**`。
+- Ops 脚本按职责归入 `cli/`、`ci/`、`gate/`、`observability/`、`runbooks/` 等横切目录；禁止在 `quwoquan_ops/` 中按业务特性新增 `assistant/`、`avatar/`、`chat_avatar/` 等脚本岛或第二套 feature runner。跨环境 smoke/gate/CI 脚本统一归 `quwoquan_ops/tests/acceptance/user_acceptance/service_ops/<service>/`；领域内可解耦测试仍归各服务 `tests/local_contract` 或 `tests/api_integration`。
 - 四环境语义固定为 `alpha`、`beta`、`gamma`、`prod`；生产灰度是 `prod` rollout stage，不存在 `prod-gray`。
 - 不手写端口、host、public URL、gateway/media base；统一读取 quwoquan_ops/environments manifests 与 stackctl 输出。
 - 环境临时凭据、配置文件、运行状态和验证证据保持跨环境一致；本地生成物统一放 `.qwq_output/**`，禁止新增根 `artifacts/`、`state/` 或环境特例目录。
@@ -20,7 +20,7 @@
 ## 证据要求
 
 - 环境相关收口优先使用：`python3 quwoquan_ops/cli/stackctl.py verify --env <env> --kind all --tier all`。
-- hosted prod 操作（含 gray-initial 灰度验证，承接原远端 gamma 验证职责）以 `.qwq_output/runs/**`、`.qwq_output/local/release-state/**` 和 stackctl summary/report 为证据。
+- hosted prod 操作（含 gray-initial 灰度验证，承接原远端 gamma 验证职责）以 `.qwq_output/env/repo/runs/**`、`.qwq_output/env/repo/local/release-state/**` 和 stackctl summary/report 为证据。
 - 新增 gate 必须说明触发范围、阻断条件、修复方式和是否接入 `make gate` / `gate_repo.sh`。
 
 ## 典型触发与 E2E

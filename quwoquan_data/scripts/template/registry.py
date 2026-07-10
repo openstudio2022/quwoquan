@@ -60,7 +60,13 @@ def iter_yaml_files(root: Path, suffix: str) -> list[Path]:
 
 
 def active_tags_root() -> Path:
-    return PUBLISH_ROOT / "tags"
+    override = os.environ.get("QWQ_TAGS_ROOT")
+    if override:
+        return Path(override)
+    publish_tags = PUBLISH_ROOT / "tags"
+    if publish_tags.is_dir():
+        return publish_tags
+    return _REPO_DATA_ROOT / "publish" / "tags"
 
 
 def tag_exists(tag_ref: str) -> bool:

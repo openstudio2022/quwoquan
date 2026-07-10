@@ -36,8 +36,8 @@ minimum_package:
     t1:
     - contracts/metadata/social/circle/service.yaml
     t2:
-    - services/circle-service/tests/circle_crud_contract_test.go
-    - services/circle-service/tests/circle_member_contract_test.go
+    - services/circle-service/tests/api_integration/circle_crud_contract__api_integration_test.go
+    - services/circle-service/tests/api_integration/circle_member_contract__api_integration_test.go
     t3:
     - contracts/metadata/social/circle/tests/e2e.yaml
     t4: []

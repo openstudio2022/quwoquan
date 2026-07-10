@@ -812,13 +812,19 @@ echo "[gate] running recommendation-service python tests"
 PYTHON_TEST_RUNNER="${ML_PYTHON:-}"
 if [ -z "$PYTHON_TEST_RUNNER" ]; then
   REPO_ROOT="$(cd "$ROOT/.." && pwd)"
-  if [ -x "$REPO_ROOT/.qwq_output/local/python-envs/rec-model/bin/python" ]; then
-    PYTHON_TEST_RUNNER="$REPO_ROOT/.qwq_output/local/python-envs/rec-model/bin/python"
-  else
-    PYTHON_TEST_RUNNER="python3"
+  REC_MODEL_VENV="$REPO_ROOT/.qwq_output/env/repo/local/python-envs/rec-model"
+  if [ ! -x "$REC_MODEL_VENV/bin/python" ]; then
+    echo "[gate] bootstrapping rec-model python env at $REC_MODEL_VENV"
+    python3 -m venv "$REC_MODEL_VENV" \
+      || fail "rec-model python env bootstrap failed"
+    "$REC_MODEL_VENV/bin/python" -m pip install --upgrade pip >/dev/null \
+      || fail "rec-model python env pip bootstrap failed"
+    "$REC_MODEL_VENV/bin/python" -m pip install -r services/rec-model-service/requirements.txt >/dev/null \
+      || fail "rec-model python requirements install failed"
   fi
+  PYTHON_TEST_RUNNER="$REC_MODEL_VENV/bin/python"
 fi
-"$PYTHON_TEST_RUNNER" -m pytest -p no:cacheprovider services/rec-model-service/tests -q \
+PYTHONDONTWRITEBYTECODE=1 "$PYTHON_TEST_RUNNER" -m pytest -p no:cacheprovider services/rec-model-service/tests -q \
   || fail "recommendation-service python tests failed"
 
 echo "[gate] running content-flywheel loop pure-function tests"

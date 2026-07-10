@@ -3,7 +3,7 @@ aggregate: Conversation
 layer: app_side
 
 description: |
-  端侧独立测试场景。执行：flutter test test/cloud/chat/
+  端侧独立测试场景。执行：flutter test test/local_contract/cloud/chat/
 
 scenarios:
   - name: chat_inbox_dto_parse

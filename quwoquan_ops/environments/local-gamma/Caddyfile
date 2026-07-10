@@ -17,7 +17,7 @@
 }
 
 # 注意：local-gamma 运行栈真相源是 `quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh`
-# 内联生成的 `.qwq_output/local/gamma-local/Caddyfile`（compose 实际挂载该产物）。本文件是该路由表的
+# 内联生成的 `.qwq_output/env/gamma/local/gamma-local/Caddyfile`（compose 实际挂载该产物）。本文件是该路由表的
 # 静态参照副本，须与生成器逐路由一致；新增/调整领域路由时两处同步，避免第二真相源漂移。
 gamma-api.quwoquan-env.test,
 gamma-api.localhost {

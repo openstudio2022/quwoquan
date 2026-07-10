@@ -45,7 +45,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
     status: implemented
@@ -99,7 +99,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
     status: implemented
@@ -148,7 +148,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
     status: implemented
@@ -204,7 +204,7 @@ gwt_acceptance:
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/services/content/comment_sort_consistency__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -295,7 +295,7 @@ gwt_acceptance:
       planned: []
       recorded:
       - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -340,7 +340,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
       - file: quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart
@@ -421,7 +421,7 @@ gwt_acceptance:
     notes:
     - '[migrated_from_planned] quwoquan_service/services/content-service/tests/comment_seed_contract_test.go'
     - '[migrated_from_planned] quwoquan_app/integration_test/comment_thread_journey_test.dart'
-    - '[migrated_from_recorded_noncanonical] quwoquan_service/services/content-service/tests/contract_fixture_seed_test.go'
+    - '[migrated_from_recorded_noncanonical] quwoquan_service/services/content-service/tests/api_integration/contract_fixture_seed__api_integration_test.go'
     - '[migrated_from_recorded_reference] quwoquan_service/contracts/metadata/_shared/test_fixtures/app_alpha_seed_manifest.json'
     - '[migrated_from_recorded_reference] quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json'
     - '[migrated_from_recorded_reference] quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json'
@@ -448,7 +448,7 @@ gwt_acceptance:
       planned: []
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -486,7 +486,7 @@ gwt_acceptance:
       planned: []
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -525,7 +525,7 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
     status: implemented
     test_evidence:
@@ -563,9 +563,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/comment_display_fields__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/post/comment_display_fields__local_contract_test.go
       - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/comment_pin_contract__api_integration_test.go
     status: implemented
     test_evidence:
@@ -611,9 +611,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/comment_display_fields__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/post/comment_display_fields__local_contract_test.go
       - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
     status: implemented
     test_evidence:
       primary:
@@ -651,9 +651,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/post/comment_display_fields__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/post/comment_display_fields__local_contract_test.go
       - file: quwoquan_app/test/local_contract/cloud/content/contract/comment_dto_contract__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/comment_system/comment_viewer_modal_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_interaction_tab__local_contract_test.dart
     status: implemented
     test_evidence:

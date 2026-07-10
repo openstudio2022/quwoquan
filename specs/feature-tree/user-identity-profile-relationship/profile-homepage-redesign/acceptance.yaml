@@ -40,8 +40,8 @@ sit_acceptance:
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_creations_tab__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/my_profile_journey__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/other_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: completed
     test_evidence:
@@ -87,7 +87,7 @@ sit_acceptance:
     - 统计详情 Tab 切换 / 搜索恢复 P95 ≤ 200ms
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/tests/follow_contract_test.go
+      - file: quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
         cases:
         - TestListFollowing_QueryFiltersWithinSubject
         - TestListFollowers_QueryFiltersWithinSubject
@@ -97,13 +97,13 @@ sit_acceptance:
         - TestListFollowing_QueryFiltersWithinSubject
         - TestListFollowers_QueryFiltersWithinSubject
         - TestListFollowRowsCarryViewerRelationshipCapability
-      - file: quwoquan_service/services/circle-service/tests/circle_member_contract_test.go
+      - file: quwoquan_service/services/circle-service/tests/api_integration/circle_member_contract__api_integration_test.go
         cases:
         - TestListUserCircles_QueryFiltersAndHidesPrivateForOtherViewer
       - file: quwoquan_service/services/circle-service/tests/api_integration/circle_member_contract__api_integration_test.go
         cases:
         - TestListUserCircles_QueryFiltersAndHidesPrivateForOtherViewer
-      - file: quwoquan_app/test/cloud/user/contract/user_profile_repository_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart
         cases:
         - list followers/following/circles remote query+cursor+limit and relationshipCapability projection
       - file: quwoquan_app/test/user_acceptance/ui/user/journeys/profile_stats_journey__user_acceptance_test.dart
@@ -159,9 +159,9 @@ sit_acceptance:
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_intersection_card__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/recommendation/intersection_reason__local_contract_test.dart
-      - file: quwoquan_service/services/tag-service/tests/local_contract/internal/application/tag_service__local_contract_test.go
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/my_profile_journey__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/other_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_service/services/tag-service/internal/application/tag_service__local_contract_test.go
+      - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: completed
     test_evidence:
@@ -207,9 +207,9 @@ sit_acceptance:
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_action_bar_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_creations_tab__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/my_profile_journey__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/other_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: completed
     test_evidence:
@@ -259,11 +259,11 @@ sit_acceptance:
     - GetMyIntersectionSummary / ListMyIntersections / GetAuthorImpact 服务端 P95 ≤ 500ms
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/pages/my_intersection_inbox_page_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_action_bar_widget_test.dart
-      - file: quwoquan_app/test/cloud/recommendation/intersection_reason_test.dart
-      - file: quwoquan_app/test/cloud/user/contract/user_profile_repository_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/pages/my_intersection_inbox_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_action_bar_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/recommendation/intersection_reason__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -305,7 +305,7 @@ sit_acceptance:
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/tag/profile_career_interest_catalog__local_contract_test.dart
       - file: quwoquan_service/services/user-service/tests/local_contract/internal/application/profile_edit_validation__local_contract_test.go
-      - file: quwoquan_service/services/user-service/tests/local_contract/internal/infrastructure/projection/interest_profile_projector__local_contract_test.go
+      - file: quwoquan_service/services/user-service/internal/infrastructure/projection/interest_profile_projector__local_contract_test.go
       - file: quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
     status: implemented
     test_evidence:

@@ -18,6 +18,10 @@ type TagNodeReader interface {
 type ObjectTagIndexReader interface {
 	FindByObject(ctx context.Context, objectID, objectType string) (*model.ObjectTagIndex, error)
 	FindObjectsByTagRef(ctx context.Context, tagRef, objectType string, limit int64) ([]model.ObjectTagIndex, error)
+	// FindObjectsByTagRefSubtree 按路径制子孙展开反查：命中 tagRef 自身或其
+	// 任意子孙标签（前缀 tagRef + "/"）的对象。查询侧展开（存储不物化祖先链），
+	// 服务省/市级 geo 聚合等祖先标签反查场景。
+	FindObjectsByTagRefSubtree(ctx context.Context, tagRef, objectType string, limit int64) ([]model.ObjectTagIndex, error)
 }
 
 // ObjectTagIndexWriter 写对象↔tagRef 倒排索引。

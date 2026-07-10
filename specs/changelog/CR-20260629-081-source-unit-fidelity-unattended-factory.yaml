@@ -67,7 +67,7 @@ entries:
         - "pytest: local_contract/common/test_auto_content_plan__local_contract_test.py"
         - "pytest: local_contract/common/test_content_plan_source_gate__local_contract_test.py"
         - "pytest: produce/test_route_assets_layout.py produce/test_route_brief_and_evidence.py verify/test_release_integrity_gate.py download/test_download_gate.py"
-        - "真实 P0: python quwoquan_data/scripts/cli.py env cursor-probe --model composer-2.5 --attempts 20 --startup-timeout-seconds 45 --report-out .qwq_output/runs/cursor_probe_20260629_n20.json（GATE_BLOCK: authFailures=0, true5xxRate=1.0, startupLatencyP95=44.9101）"
+        - "真实 P0: python quwoquan_data/scripts/cli.py env cursor-probe --model composer-2.5 --attempts 20 --startup-timeout-seconds 45 --report-out .qwq_output/data/runs/cursor_probe_20260629_n20.json（GATE_BLOCK: authFailures=0, true5xxRate=1.0, startupLatencyP95=44.9101）"
     notes:
       - "N=20 真实 Cursor probe 已确认凭据不是 blocker；当前 blocker 为 Cursor startup true 5xx 100%，禁止据此进入百级商业结论。"
       - "百级商业 go 结论必须来自 fresh run 的 scale-readiness report；本 CR 只登记代码与契约闭环。"

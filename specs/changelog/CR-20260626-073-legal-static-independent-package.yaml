@@ -40,8 +40,8 @@ entries:
       - path: quwoquan_app/android/app/build.gradle.kts
       - path: quwoquan_app/lib/ui/user/pages/legal_document_page.dart
       - path: quwoquan_app/lib/core/constants/ui_text_constants_values.dart
-      - path: quwoquan_ops/tests/test_dev_up.py
-      - path: quwoquan_app/test/ui/user/legal_document_page_test.dart
+      - path: quwoquan_ops/tests/acceptance/user_acceptance/test_dev_up__user_acceptance_test.py
+      - path: quwoquan_app/test/local_contract/ui/user/legal_document_page__local_contract_test.dart
     impact:
       replan_required: false
       redesign_required: false

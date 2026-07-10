@@ -56,6 +56,13 @@ from quwoquan_ops.cli.lib.observability import (
     write_run_manifest,
     write_stackctl_links,
 )
+from quwoquan_ops.cli.lib.output_paths import (
+    app_release_dir,
+    env_runs_root,
+    repo_local_dir,
+    service_release_dir,
+    target_local_dir,
+)
 
 
 VERIFY_COMMAND_GROUPS = {
@@ -831,8 +838,8 @@ def _selected_tier_commands(
                     "argv": [
                         "python3",
                         "quwoquan_app/scripts/env/run_flutter_test_guarded.py",
-                        "test/core/media/content_media_url_test.dart",
-                        "test/cloud/chat/chat_avatar_url_resolution_test.dart",
+                        "test/local_contract/core/media/content_media_url__local_contract_test.dart",
+                        "test/local_contract/cloud/chat/chat_avatar_url_resolution__local_contract_test.dart",
                     ],
                     "cwd": ROOT,
                 },
@@ -842,7 +849,7 @@ def _selected_tier_commands(
                         "python3",
                         "quwoquan_app/scripts/env/run_flutter_test_guarded.py",
                         "--dart-define=CONTRACT_FIXTURE_PROFILE=full",
-                        "test/cloud/services/contract_seeded_mock_repository_test.dart",
+                        "test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart",
                     ],
                     "cwd": ROOT,
                 },
@@ -961,7 +968,7 @@ def _environment_page_smoke_tier_command(
     smoke_report = (
         report_dir / "environment-page-smoke" / "report.json"
         if report_dir is not None
-        else ROOT / ".qwq_output" / "runs" / env_name / "device-matrix" / "environment-smoke" / f"{target_name}.json"
+        else env_runs_root(env_name) / "device-matrix" / "environment-smoke" / f"{target_name}.json"
     )
     argv = [
         "python3",
@@ -985,7 +992,7 @@ def _environment_page_smoke_tier_command(
         "--test-auth-token",
         token,
         "--target",
-        "test/patrol/environment/basic_viability_test.dart",
+        "test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart",
     ]
     platform = os.environ.get("STACKCTL_PAGE_SMOKE_PLATFORM", "").strip()
     if platform:
@@ -1226,7 +1233,7 @@ def _script_probes_for_target(
 
 
 def _load_release_state(service: str = "seed-box") -> dict[str, str]:
-    state_path = ROOT / ".qwq_output" / "local" / "release-state" / f"{service}.state"
+    state_path = repo_local_dir("release-state") / f"{service}.state"
     payload: dict[str, str] = {}
     if not state_path.exists():
         return payload
@@ -1247,7 +1254,7 @@ def _update_release_state(
     to_config: str,
     step: str,
 ) -> dict[str, str]:
-    state_dir = ROOT / ".qwq_output" / "local" / "release-state"
+    state_dir = repo_local_dir("release-state")
     state_dir.mkdir(parents=True, exist_ok=True)
     state_path = state_dir / f"{service}.state"
     payload = {
@@ -1287,7 +1294,7 @@ def _legal_static_command(
     subcommand: str,
     env_name: str,
     *,
-    output_root: str = ".qwq_output/release/legal-static",
+    output_root: str = ".qwq_output/env",
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, Any]]:
     cmd = [
         "python3",
@@ -1443,7 +1450,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             "reportDir": relpath(report_dir),
             **timing,
         }
-    details.append(f"app package ready: .qwq_output/release/app/{env_name}")
+    details.append(f"app package ready: {relpath(app_release_dir(env_name))}")
 
     if args.include_services or args.service:
         services = [args.service] if args.service else _all_services()
@@ -1490,7 +1497,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                     "reportDir": relpath(report_dir),
                     **timing,
                 }
-            details.append(f"service package ready: .qwq_output/release/service/{service}/{env_name}")
+            details.append(f"service package ready: {relpath(service_release_dir(env_name, service))}")
 
     timing = _finish_timing(started_monotonic, started_at)
     payload = {
@@ -1850,7 +1857,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         }
 
     def tail_beta_background_logs() -> dict[str, Any]:
-        beta_log_dir = ROOT / ".qwq_output" / "local" / "beta-local"
+        beta_log_dir = target_local_dir("beta-local")
         return _tail_multiple_logs_for_startup(
             [
                 ("beta-app", beta_log_dir / "app-beta.log"),
@@ -1863,7 +1870,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     def tail_alpha_background_logs() -> dict[str, Any]:
-        alpha_log_dir = ROOT / ".qwq_output" / "local" / "alpha-local"
+        alpha_log_dir = target_local_dir("alpha-local")
         return _tail_multiple_logs_for_startup(
             [
                 ("alpha-api-edge", alpha_log_dir / "api-edge.log"),
@@ -1876,7 +1883,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     def tail_prod_sim_background_logs() -> dict[str, Any]:
-        prod_sim_log_dir = ROOT / ".qwq_output" / "local" / "prod-sim"
+        prod_sim_log_dir = target_local_dir("prod-sim")
         return _tail_multiple_logs_for_startup(
             [
                 ("prod-sim-api-edge", prod_sim_log_dir / "api-edge.log"),
@@ -1908,7 +1915,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
         if result.returncode == 0:
             beta_ready_tail = _tail_file_for_startup(
-                ROOT / ".qwq_output" / "local" / "beta-local" / "app-beta.log",
+                target_local_dir("beta-local") / "app-beta.log",
                 prefix="[beta app-beta] ",
                 idle_timeout_seconds=8.0,
                 max_follow_seconds=180.0,
@@ -2687,9 +2694,7 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
                     findings.append("prod service plane rootless env file is missing")
                 if int(runtime.get("containerCount", 0) or 0) == 0:
                     findings.append("prod service plane rootless runtime has no running containers")
-    packages = [
-        ROOT / ".qwq_output" / "release" / "app" / env_name / "report.json",
-    ]
+    packages = [app_release_dir(env_name) / "report.json"]
     require_package_artifacts = bool(target.get("portProfile"))
     if require_package_artifacts and not all(path.exists() for path in packages):
         findings.append("packaged app artifact is missing")
@@ -3544,12 +3549,12 @@ def _prod_rollout_workloads() -> list[dict[str, Any]]:
 
 def _local_log_report(target_name: str) -> dict[str, Any]:
     candidates: dict[str, Path] = {
-        "alpha-state": ROOT / ".qwq_output" / "local" / "alpha-local",
-        "beta-state": ROOT / ".qwq_output" / "local" / "beta-local",
-        "beta-manual": ROOT / ".qwq_output" / "local" / "app-beta-manual",
-        "app-instances": ROOT / ".qwq_output" / "local" / "app-instances",
-        "local-gamma": ROOT / ".qwq_output" / "local" / "gamma-local",
-        "release-state": ROOT / ".qwq_output" / "local" / "release-state",
+        "alpha-state": target_local_dir("alpha-local"),
+        "beta-state": target_local_dir("beta-local"),
+        "beta-manual": target_local_dir("beta-local") / "app-beta-manual",
+        "app-instances": repo_local_dir("app-instances"),
+        "local-gamma": target_local_dir("gamma-local"),
+        "release-state": repo_local_dir("release-state"),
     }
     hits = []
     for name, path in candidates.items():

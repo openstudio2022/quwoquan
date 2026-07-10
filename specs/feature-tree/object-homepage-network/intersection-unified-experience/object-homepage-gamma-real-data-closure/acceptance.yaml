@@ -110,9 +110,9 @@ implementation_backlog:
     entrypoints:
       - "quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart"
       - "quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart"
-      - "quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart"
+      - "quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart"
       - "quwoquan_app/test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart"
-      - "quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart"
+      - "quwoquan_app/test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart"
     done_when:
       - "local_contract 与 api_integration 字段、错误态、空态、点击行为一一对应。"
       - "remote/gamma 不回退 Dart mock 或 UI 自造 primaryText。"
@@ -122,7 +122,7 @@ implementation_backlog:
   P5_observability_feedback:
     owner_domains: [App, Service, Ops]
     entrypoints:
-      - "quwoquan_app/test/core/trackers/intersection_attribution_test.dart"
+      - "quwoquan_app/test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart"
       - "quwoquan_service/services/content-service/configs/observability/intersection_slo.yaml"
       - "quwoquan_ops/cli/stackctl.py"
     done_when:
@@ -193,7 +193,7 @@ gwt_acceptance:
       - "2026-06-25: metadata verify pass with existing unrelated warnings in search/user_profile response_entity checks."
       - "2026-06-25: docker compose gamma-local config pass."
       - "2026-06-25: stackctl verify --env gamma --kind all --tier all fails at api_integration gateway health with SSL UNEXPECTED_EOF_WHILE_READING, and user_acceptance page smoke fails because Patrol CLI is missing."
-      - "2026-07-05 continue-dev: `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local ... --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB` 通过，page smoke 改为本地 target 设备可达的 `.localhost` HTTPS base，并在 iOS simulator 注入 `.qwq_output/local/gamma-local/.../root.crt`；同轮 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 16 checks 全绿（`.qwq_output/runs/gamma/20260705T133026Z-verify-gamma-local`）。仍未单独证明 GWT2-GWT5 的 populated real-data 细项，故 status 维持 partial。"
+      - "2026-07-05 continue-dev: `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local ... --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB` 通过，page smoke 改为本地 target 设备可达的 `.localhost` HTTPS base，并在 iOS simulator 注入 `.qwq_output/env/gamma/local/gamma-local/.../root.crt`；同轮 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 16 checks 全绿（`.qwq_output/env/gamma/runs/20260705T133026Z-verify-gamma-local`）。仍未单独证明 GWT2-GWT5 的 populated real-data 细项，故 status 维持 partial。"
   GWT2_entity_homepage_real_bundle:
     title: "实体主页真实 bundle、简介、相关圈子与关注状态闭环"
     given:
@@ -237,7 +237,7 @@ gwt_acceptance:
             - gamma_local
       supporting: []
     notes:
-      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（`.qwq_output/local/gamma-local/t3_report.json`），当前 strict 已覆盖 `/v1/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/review-summary`、`/related-groups`、`/impact` 的 typed + populated 断言。"
+      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（`.qwq_output/env/gamma/local/gamma-local/t3_report.json`），当前 strict 已覆盖 `/v1/homepages/{homepageId}/object-page-bundle`、`/introduction`、`/review-summary`、`/related-groups`、`/impact` 的 typed + populated 断言。"
       - "2026-07-06 continue-dev: `flutter test test/user_acceptance/pages/entity/homepageDetail/homepageDetail_page__user_acceptance_test.dart` 全绿，实体主页壳层、介绍导流与相关对象旅程保持可用；关注状态 refresh 的 gamma 远端实操仍待 prod-hosted gray。"
   GWT3_circle_homepage_real_detail:
     title: "圈子主页真实 detail、impact、成员、讨论与加入状态闭环"
@@ -255,9 +255,9 @@ gwt_acceptance:
     tests:
       planned:
         - file: "quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart"
-        - file: "quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart"
+        - file: "quwoquan_app/test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart"
         - command: "python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all"
-        - file: "quwoquan_app/test/user_acceptance/ui/circle/journeys/circle_detail_journey__user_acceptance_test.dart"
+        - file: "quwoquan_app/test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart"
       recorded: []
     status: partial
     test_evidence:
@@ -282,8 +282,8 @@ gwt_acceptance:
             - gamma_local
       supporting: []
     notes:
-      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（`.qwq_output/local/gamma-local/t3_report.json`），当前 strict 已覆盖 `/v1/circles/{circleId}`、`/impact`、`/members`、`/feed` 的 typed + populated 断言。"
-      - "2026-07-06 continue-dev: `flutter test test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart test/user_acceptance/ui/circle/journeys/circle_detail_journey__user_acceptance_test.dart` 全绿，圈子 detail 基本旅程、错误态与幂等往返保持通过；join/leave 的 prod-hosted 真实远端刷新仍待 gray smoke。"
+      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（`.qwq_output/env/gamma/local/gamma-local/t3_report.json`），当前 strict 已覆盖 `/v1/circles/{circleId}`、`/impact`、`/members`、`/feed` 的 typed + populated 断言。"
+      - "2026-07-06 continue-dev: `flutter test test/user_acceptance/pages/circle/circleDetail/circleDetail_page__user_acceptance_test.dart test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart` 全绿，圈子 detail 基本旅程、错误态与幂等往返保持通过；join/leave 的 prod-hosted 真实远端刷新仍待 gray smoke。"
   GWT4_object_intersection_reason_contract:
     title: "对象交集理由的真实事实行契约"
     given:
@@ -301,7 +301,7 @@ gwt_acceptance:
     tests:
       planned:
         - file: "quwoquan_app/test/local_contract/widgets/object_intersection_card_test.dart"
-        - file: "quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart"
+        - file: "quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart"
         - file: "quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart"
         - file: "quwoquan_service/services/content-service/tests/api_integration/object_intersections_api_test.go"
         - file: "quwoquan_service/services/content-service/tests/api_integration/intersection_source_contract__api_integration_test.go"
@@ -330,7 +330,7 @@ gwt_acceptance:
             - gamma_local
       supporting: []
     notes:
-      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（`.qwq_output/local/gamma-local/t3_report.json`），homepage/circle object-intersection 的 primaryText、primarySpans、target、actionHints 与 objectType 真实链路已通过 Story strict gate。"
+      - "2026-07-06 continue-dev: `python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure` passed（`.qwq_output/env/gamma/local/gamma-local/t3_report.json`），homepage/circle object-intersection 的 primaryText、primarySpans、target、actionHints 与 objectType 真实链路已通过 Story strict gate。"
       - "2026-07-06 continue-dev: `flutter test test/components/object_page/object_intersection_card_test.dart test/cloud/services/content/intersection_inbox_synthesis_test.dart test/ui/user/widgets/my_intersection_inbox_widget_test.dart` 全绿，展示层不再补写主句、无 primaryText 不渲染、旧 `EvidenceGroup` 支路已删除。"
       - "2026-07-06 continue-dev: `go test ./services/content-service/tests/local_contract/internal/application/intersection ./services/content-service/tests/api_integration -run 'TestIntersection(ServiceLocalContractTest|MetricsLocalContractTest|SourceContractApiIntegrationTest|WatermarkStoreContractApiIntegrationTest)' -count=1` 通过，source/object semantics 与 watermark/visit 读写契约保持绿。"
   GWT5_observability_and_recommendation_feedback:
@@ -378,10 +378,10 @@ gwt_acceptance:
       supporting: []
     notes:
       - "2026-07-06 continue-dev: `flutter test test/local_contract/core/trackers/intersection_attribution__local_contract_test.dart` 与 `go test ./services/content-service/tests/local_contract/internal/application/intersection ./services/content-service/tests/api_integration -run 'TestIntersection(ServiceLocalContractTest|MetricsLocalContractTest|SourceContractApiIntegrationTest|WatermarkStoreContractApiIntegrationTest)' -count=1` 全绿；交集 attribution、MarkVisited/summary 清零、水位持久化与业务漏斗 recorder 保持通过。"
-      - "2026-07-06 continue-dev: `flutter test test/api_integration/gamma/intersection_remote_smoke__api_integration_test.dart --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，gamma-local 真实验证了 summary/list/object/feed attribution，并补证 `markIntersectionsVisited -> getMyIntersectionSummary` 远端清零链路。"
-      - "2026-07-06 continue-dev: 直接 `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local --runtime-env gamma --api-contract-env gamma --data-source remote --gateway-base-url https://gamma-api.quwoquan-env.test:19000 --product-ops-base-url https://gamma-product-ops.quwoquan-env.test:19010 --media-base-url https://gamma-image.quwoquan-env.test:19100 --test-auth-token local-gamma-token --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB --report .qwq_output/runs/device-matrix/environment-smoke/gamma-local-real.json` 通过；其后 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 16 checks 全绿（`.qwq_output/runs/gamma/20260705T235459Z-verify-gamma-local`）。"
+      - "2026-07-06 continue-dev: `flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，gamma-local 真实验证了 summary/list/object/feed attribution，并补证 `markIntersectionsVisited -> getMyIntersectionSummary` 远端清零链路。"
+      - "2026-07-06 continue-dev: 直接 `python3 quwoquan_ops/cli/smoke/run_environment_patrol_smoke.py --env-name gamma-local --runtime-env gamma --api-contract-env gamma --data-source remote --gateway-base-url https://gamma-api.quwoquan-env.test:19000 --product-ops-base-url https://gamma-product-ops.quwoquan-env.test:19010 --media-base-url https://gamma-image.quwoquan-env.test:19100 --test-auth-token local-gamma-token --platform ios --device-id DA74CDF7-1E16-4F85-BA5B-7D4320FD27DB --report .qwq_output/env/repo/runs/device-matrix/environment-smoke/gamma-local-real.json` 通过；其后 `python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 16 checks 全绿（`.qwq_output/env/gamma/runs/20260705T235459Z-verify-gamma-local`）。"
       - "2026-07-06 continue-dev: 只读拉取 `http://127.0.0.1:19220/metrics` 已观测到 `intersection_feed_candidates_total`、`intersection_feed_filtered_total`、`intersection_cooldown_exposure_reported_total`、`intersection_inbox_visit_total`；`intersection_inbox_filtered_total` 本轮未采样到（未触发 stale filter），因此状态维持 partial。"
-      - "2026-07-06 continue-dev: `python3 quwoquan_ops/cli/stackctl.py health --target prod-hosted --scope edge` 仍 0/2 healthy（`.qwq_output/runs/prod/20260705T235900Z-health-prod-hosted`，api/product-ops `/healthz` 均报 `SSL record layer failure`），真实 prod-hosted gray smoke 尚未闭环。"
+      - "2026-07-06 continue-dev: `python3 quwoquan_ops/cli/stackctl.py health --target prod-hosted --scope edge` 仍 0/2 healthy（`.qwq_output/env/prod/runs/20260705T235900Z-health-prod-hosted`，api/product-ops `/healthz` 均报 `SSL record layer failure`），真实 prod-hosted gray smoke 尚未闭环。"
 execution:
   local_gate:
     - "bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh"

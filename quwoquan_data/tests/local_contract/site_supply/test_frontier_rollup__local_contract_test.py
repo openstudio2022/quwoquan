@@ -264,7 +264,7 @@ def test_candidate_score_map_rollup_handoff_isolated_from_entity_runtime():
     assert rollup["siteFunnel"]["contentPlanHandoffCount"] == 1
     path = ss.write_site_rollup_report(rollup)
     assert "/site_supply/travel/qunar_guide/pipeline_ok/" in str(path)
-    assert "/local/data-runtime/tasks/" not in str(path)
+    assert "/data/local/runtime/tasks/" not in str(path)
     for name in ("stage_result.json", "gate_report.json", "repair_report.json"):
         assert (path.parents[1] / "candidates" / candidate["candidateRef"] / name).is_file()
         assert (path.parents[1] / "scores" / candidate["candidateRef"] / name).is_file()

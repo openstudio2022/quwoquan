@@ -36,8 +36,8 @@ minimum_package:
     t1:
     - contracts/metadata/messages/conversation/service.yaml
     t2:
-    - services/chat-service/tests/message_crud_contract_test.go
-    - services/chat-service/tests/message_sync_contract_test.go
+    - services/chat-service/tests/api_integration/message_crud_contract__api_integration_test.go
+    - services/chat-service/tests/api_integration/message_sync_contract__api_integration_test.go
     t3:
     - contracts/metadata/messages/conversation/tests/e2e.yaml
     t4: []

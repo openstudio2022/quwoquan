@@ -138,7 +138,7 @@
 - 已落地：`create_entry_arguments.dart` 模型 + `create_page.dart` 接收 `initialCircleId/initialCircleName` 注入 `PublishSettings`；`app_router.dart` 从 `extra` 解析；契约测试 `publish_payload_contract_test.dart` 校验圈子锚点注入 payload（circleIds + 公共可见性）。
 - 剩余：对象/地点锚点同样前置到创作主流程。
 - 负责方：研发。
-- 验收/verify：`flutter test test/ui/content/entry/contract/publish_payload_contract_test.dart`。
+- 验收/verify：`flutter test test/local_contract/ui/content/entry/contract/publish_payload_contract__local_contract_test.dart`。
 
 #### T4.3 创作模板与提示词（P1）— ⬜
 - 现状：仅有视觉排版模板，无写作/选题提示词机制。
@@ -158,7 +158,7 @@
 - 已落地：`creator_impact_summary.dart`（模型，count==0 隐藏、零估算）+ `creator_impact_card.dart`（卡片）；以 `getUserStats` 真实聚合总数（关注/赞同/作品/圈子）翻译为影响力叙事；接入 `profile_interaction_tab.dart` 的「我的·收到」；单元 + widget 测试通过，未破坏 profile 几何测试。
 - 剩余：接入 T5.1 服务端读模型后扩展决策/知识/交集等动作类，并将面板叙事从「总数」升级为「促成了什么有价值行动」。
 - 负责方：研发（依赖 T5.1）。
-- 验收/verify：`flutter test test/ui/user/creator_impact_summary_test.dart test/ui/user/creator_impact_card_test.dart test/ui/user/widgets/profile_shell_widget_test.dart`。
+- 验收/verify：当前仅保留 `flutter test test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart` 作为 profile shell 回归；Creator Impact 专项测试待 T5.1 服务端读模型恢复后补入 canonical local_contract/api_integration。
 
 #### T5.3 消费端可解释首屏强化（P0）— 🟡
 - 现状：交集理由已双形态呈现且同源（首屏交集模块 + 卡片 chip）。
@@ -178,7 +178,7 @@
 - 已落地：`core/links/share_attribution.dart`（`ShareAttribution` 生成 share_id + UTM，key 对齐 `link_templates.yaml attribution_params`，仅追加 http(s)、scheme 深链不动）；`content_share_template.dart` 每次分享生成 shareId 并注入 landingUrl、暴露只读 `shareId`；单元测试 `share_attribution_test.dart` + 分享模板断言更新。
 - 剩余（服务端）：扩展 `SharePost` 携带并落库 `share_id/utm`（metadata→codegen→Go）；口令/短链/二维码解析回流；`shareIntent/shareClick/shareSuccess/tokenResolved` 四段埋点 + T3 回流验证。
 - 负责方：服务端研发 + 端研发。
-- 验收/verify：`flutter test test/core/links/share_attribution_test.dart test/ui/content/share/`；服务端落库后单次分享可归因、站外回流可归因。
+- 验收/verify：`flutter test test/local_contract/core/links/share_attribution__local_contract_test.dart test/local_contract/ui/content/share/`；服务端落库后单次分享可归因、站外回流可归因。
 
 #### T6.3 小趣引用专用信号（P1）— ⬜
 - 现状：服务端仅落 `assistantMentioned`；`xiaoqu.mention.triggered`/`xiaoqu.open` 无端侧专用 tracker、无作者归因。
@@ -262,11 +262,10 @@
   - T4：五条用户旅程 + 双端提审前复验 + gamma-local 左移。
 - 门禁命令：
   - `make gate` / `bash quwoquan_ops/gate/gate_repo.sh --scope app`
-  - `flutter test test/core/links/share_attribution_test.dart`
-  - `flutter test test/ui/content/share/`
-  - `flutter test test/ui/content/entry/contract/publish_payload_contract_test.dart`
-  - `flutter test test/ui/user/creator_impact_summary_test.dart test/ui/user/creator_impact_card_test.dart`
-  - `flutter test test/ui/user/widgets/profile_shell_widget_test.dart`
+  - `flutter test test/local_contract/core/links/share_attribution__local_contract_test.dart`
+  - `flutter test test/local_contract/ui/content/share/`
+  - `flutter test test/local_contract/ui/content/entry/contract/publish_payload_contract__local_contract_test.dart`
+  - `flutter test test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart`
 
 ## 7. 风险与降级预案
 

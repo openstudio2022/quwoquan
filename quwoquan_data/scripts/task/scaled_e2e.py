@@ -8,6 +8,7 @@ import subprocess
 import sys
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Callable
 
 from _common.io import read_json
 from task import run as run_mod
@@ -191,6 +192,81 @@ def _prepare_author_jobs_for_paused_targets(
         fd.sync_content_author_jobs(plan, unit, partition_path=list(unit.get("partitionPath") or []))
 
 
+def _download_prefetch_command(task_id: str, batch_id: str) -> list[str]:
+    """download 预跑单元命令（两段流水线第一段，纯脚本推进不占 bridge）。"""
+    cli_path = DATA_ROOT / "scripts" / "cli.py"
+    return [
+        sys.executable, str(cli_path),
+        "data", "workflow", "run",
+        "--mode", "single",
+        "--task", task_id,
+        "--batch", batch_id,
+        "--until", "download_fetch",
+        "--resume",
+    ]
+
+
+def _download_prefetch(
+    plan_id: str,
+    *,
+    concurrency: int,
+    cwd: str | None = None,
+    runner: "Callable[[list[str]], int] | None" = None,
+) -> dict[str, int]:
+    """两段流水线第一段：对已物化分区并发预跑 download（源抓取+图片+sourceScreen）。
+
+    - download_plan 由 auto research 自动满足、download_fetch 为 auto stage，
+      全程无 Agent checkpoint，可安全 8-16 并发（纯网络 IO，不占 bridge）。
+    - 断点基线由 workflow stage 幂等语义保证：已完成 download_fetch 的分区
+      `--resume` 快速跳过，不重下已完成的 source unit。
+    - 未物化分区（fanout dispatch 尚未建 task spec）跳过，由后续 author cycle
+      的 orchestrator 兜底推进。
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from _common import fanout_plan as fp
+    from _common import fanout_strategies as fs
+
+    plan = fp.load_plan(plan_id)
+    if plan is None:
+        print(f"[scaled-e2e download-prefetch] plan not found: {plan_id}", file=sys.stderr)
+        raise SystemExit(2)
+    units = fs.expand_units(plan)
+    materialized: list[tuple[str, str]] = []
+    skipped = 0
+    for unit in units:
+        task_id = str(unit["taskId"])
+        batch_id = str(unit["batchId"])
+        try:
+            store.load_spec(task_id)
+        except FileNotFoundError:
+            skipped += 1
+            continue
+        materialized.append((task_id, batch_id))
+
+    def _default_runner(argv: list[str]) -> int:
+        proc = subprocess.run(argv, check=False, cwd=cwd or None)
+        return int(proc.returncode)
+
+    run_one = runner or _default_runner
+    failures = 0
+    if materialized:
+        workers = max(1, int(concurrency))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            codes = list(
+                pool.map(
+                    lambda item: run_one(_download_prefetch_command(item[0], item[1])),
+                    materialized,
+                )
+            )
+        # rc==10（暂停在 checkpoint）意味着 download 段已推进到 --until 前沿，属预期。
+        failures = sum(1 for code in codes if code not in (0, 10))
+    print(
+        f"[scaled-e2e download-prefetch] plan={plan_id} prefetched={len(materialized)} "
+        f"skipped(not-materialized)={skipped} failures={failures}"
+    )
+    return {"prefetched": len(materialized), "skipped": skipped, "failures": failures}
+
+
 def _handle_scaled_e2e_run(args: argparse.Namespace, *, invoke=None) -> None:
     invoke = invoke or handle_scaled_e2e
     cycles = max(1, int(getattr(args, "cycles", 3) or 3))
@@ -223,6 +299,23 @@ def _handle_scaled_e2e_run(args: argparse.Namespace, *, invoke=None) -> None:
             batch_size=None,
         )
     )
+    # 两段流水线第一段（可选）：author cycle 前对已物化分区高并发预跑 download，
+    # 让 author（bridge 受限段）只消费就绪对象。失败不阻断：author cycle 的
+    # orchestrator 会按原语义兜底推进 download。
+    prefetch_concurrency = int(getattr(args, "download_prefetch", 0) or 0)
+    if prefetch_concurrency > 0:
+        try:
+            _download_prefetch(
+                args.plan,
+                concurrency=prefetch_concurrency,
+                cwd=getattr(args, "cwd", None),
+            )
+        except SystemExit as exc:
+            print(
+                f"[task scaled-e2e run] download-prefetch exit={getattr(exc, 'code', 1)}; "
+                "continuing (orchestrator will advance download)",
+                file=sys.stderr,
+            )
     last_exit = 1
     for cycle in range(1, cycles + 1):
         print(f"[task scaled-e2e run] cycle {cycle}/{cycles}: author-runner")

@@ -65,3 +65,44 @@ def test_bridge_noise_is_not_classified_as_auth_error():
     )
     assert not cc.is_cursor_auth_error("internal error", status=500)
     assert not cc.is_cursor_auth_error("CURSOR_API_KEY missing")
+
+
+def test_probe_cursor_key_ready_requires_key_and_http_200(tmp_path, monkeypatch):
+    """key 生命周期探活：无 key → False；/v1/me 200 → True；非 200/网络失败 → False。"""
+    import subprocess as sp
+
+    monkeypatch.delenv(cc.CURSOR_API_KEY_FILE_ENV, raising=False)
+    monkeypatch.delenv(cc.CURSOR_API_KEY_ENV, raising=False)
+    assert cc.probe_cursor_key_ready() is False, "无 key 必须直接 False，不发探测请求"
+
+    key_file = tmp_path / "cursor_api_key"
+    key_file.write_text("crsr_live_key\n", encoding="utf-8")
+    monkeypatch.setenv(cc.CURSOR_API_KEY_FILE_ENV, str(key_file))
+
+    calls: list[list[str]] = []
+
+    def fake_run(argv, **kwargs):
+        calls.append(list(argv))
+
+        class _Result:
+            returncode = 0
+            stdout = b"200"
+            stderr = b""
+
+        return _Result()
+
+    monkeypatch.setattr(cc.subprocess, "run", fake_run)
+    assert cc.probe_cursor_key_ready() is True
+    assert calls and cc.CURSOR_CLOUD_API_ME_URL in calls[0]
+    assert any("Bearer crsr_live_key" in part for part in calls[0])
+
+    def fake_run_403(argv, **kwargs):
+        class _Result:
+            returncode = 0
+            stdout = b"403"
+            stderr = b""
+
+        return _Result()
+
+    monkeypatch.setattr(cc.subprocess, "run", fake_run_403)
+    assert cc.probe_cursor_key_ready() is False

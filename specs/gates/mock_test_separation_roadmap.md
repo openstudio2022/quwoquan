@@ -15,5 +15,5 @@
 ## 后续波次
 
 1. 将其余 `*Repository` 抽象迁入 `quwoquan_cloud_contracts`。  
-2. 按域将 `Mock*` 迁入 `test/cloud/services/...` 镜像（配合 R2 包或 R1）。  
+2. 按域将 `Mock*` 迁入 `test/local_contract/cloud/services/...` 镜像（配合 R2 包或 R1）。  
 3. 可选：`pubspec.release.yaml` 去掉 dev-only mock 包依赖。

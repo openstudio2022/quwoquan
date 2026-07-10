@@ -26,7 +26,7 @@ dev_log:
     verify:
       - python3 quwoquan_app/scripts/runtime/verify_link_templates_route_ids.py
       - make -C quwoquan_service codegen-app
-      - flutter test quwoquan_app/test/ui/content/share/share_template_by_identity_widget_test.dart
+      - flutter test quwoquan_app/test/local_contract/ui/content/share/share_template_by_identity_widget__local_contract_test.dart
   - date: "2026-03-30"
     change: baseline 冻结；新增 link_templates.yaml 与 L3 文档包。
     verify:

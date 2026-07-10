@@ -10,9 +10,9 @@ quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
 
 默认会生成：
 
-- `.qwq_output/local/gamma-local/config-root`：满足 `CONFIG_ROOT` 与 `CONFIG_VERSION=local-gamma-v1` 的本地配置树。
-- `.qwq_output/local/gamma-local/media`：本地 media/CDN 测试目录。
-- `.qwq_output/local/gamma-local/report.json`：后续 gate 汇总报告。
+- `.qwq_output/env/gamma/local/gamma-local/config-root`：满足 `CONFIG_ROOT` 与 `CONFIG_VERSION=local-gamma-v1` 的本地配置树。
+- `.qwq_output/env/gamma/local/gamma-local/media`：本地 media/CDN 测试目录。
+- `.qwq_output/env/gamma/local/gamma-local/report.json`：后续 gate 汇总报告。
 
 若 `quwoquan_data/publish/tags` 不存在，启动脚本会按当前标签真相源自动生成 taxonomy，并重建 `publish/index/` 派生索引后继续 local-gamma 启动。
 

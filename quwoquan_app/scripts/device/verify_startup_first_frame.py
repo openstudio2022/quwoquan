@@ -32,7 +32,7 @@ DEFAULT_ANDROID_APK = DEFAULT_ANDROID_APK_DIR / "app-debug.apk"
 DEFAULT_ANDROID_APK_METADATA = APP_DIR / "build/app/outputs/apk/debug/output-metadata.json"
 DEFAULT_IOS_BUNDLE = "com.example.quwoquanApp"
 DEFAULT_IOS_APP = APP_DIR / "build/ios/iphonesimulator/Runner.app"
-DEFAULT_OUTPUT_DIR = ROOT / ".qwq_output/runs/startup_first_frame/probe"
+DEFAULT_OUTPUT_DIR = ROOT / ".qwq_output/env/repo/runs/startup_first_frame/probe"
 FORBIDDEN_NATIVE_WELCOME_LOG_PATTERNS = (
     "android_startup_welcome_first_draw",
     "android_startup_activity_handoff",

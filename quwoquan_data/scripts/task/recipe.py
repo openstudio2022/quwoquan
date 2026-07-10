@@ -340,9 +340,37 @@ _NETWORK_PROBE_URLS = (
     "https://commons.wikimedia.org/w/api.php?action=query&format=json",
 )
 
+# 凭据/API 限额类失败标记（key 生命周期内置：403/limit 自动暂停 → 探活恢复自动续跑）。
+# 与 _common.cursor_credentials.is_cursor_auth_error 同向；此处补充 API 限流/额度文案。
+# 刻意不用裸 "quota"：内容配额（quota shortfall: selected<target）是契约类，须交人工。
+_AUTH_FAILURE_MARKERS = (
+    "authfailure",
+    "credential invalid",
+    "unauthorized",
+    "invalid api key",
+    "plan_required",
+    "plan required",
+    "forbidden",
+    "usage limit",
+    "usage_limit",
+    "rate limit",
+    "rate_limit",
+    "spend limit reached",
+    "quota exceeded",
+    "quota_exceeded",
+    "insufficient_quota",
+    "http 403",
+    "status 403",
+    "(auth)",
+)
+
 
 def _workflow_failure_kind(task_id: str, batch_id: str) -> str:
-    """读取 workflow state 的失败证据并分类：network | contract。"""
+    """读取 workflow state 的失败证据并分类：auth | network | contract。
+
+    auth 判定先于 network：凭据/配额类文案（403/limit）更特异，且其恢复
+    路径（等 key 轮换/额度恢复）与网络自愈（等出口恢复）不同。
+    """
     state_path = batch_workflow_state_path(task_id, batch_id)
     try:
         data = json.loads(state_path.read_text(encoding="utf-8"))
@@ -351,9 +379,34 @@ def _workflow_failure_kind(task_id: str, batch_id: str) -> str:
     texts = [str(item) for item in (data.get("failedObjects") or [])]
     texts.append(str(data.get("nextAction") or ""))
     blob = " ".join(texts).casefold()
+    if any(marker in blob for marker in _AUTH_FAILURE_MARKERS):
+        return "auth"
     if any(marker in blob for marker in _NETWORK_FAILURE_MARKERS):
         return "network"
     return "contract"
+
+
+def _workflow_progress_fingerprint(task_id: str, batch_id: str) -> str:
+    """workflow 推进指纹（no-progress watchdog 依据）。
+
+    取 status/waitingCheckpoint/currentStage 与 completed/failed 对象计数：
+    任一变化即视为有推进；连续多轮完全一致且网络正常 → stage 级无进展。
+    """
+    state_path = batch_workflow_state_path(task_id, batch_id)
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return "no-state"
+    parts = [
+        str(data.get("status") or ""),
+        str(data.get("waitingCheckpoint") or ""),
+        str(data.get("currentStage") or data.get("stage") or ""),
+        str(len(data.get("completedObjects") or [])),
+        str(len(data.get("failedObjects") or [])),
+        str(len(data.get("stageResults") or data.get("stages") or [])),
+        str(data.get("updatedAt") or ""),
+    ]
+    return "|".join(parts)
 
 
 def _probe_network_ready(urls: tuple[str, ...] = _NETWORK_PROBE_URLS) -> bool:
@@ -427,6 +480,9 @@ def _execute(
             "--startup-timeout-seconds", str(timeout),
             "--skip-prepare",
         ]
+        prefetch = int(execution.get("downloadPrefetchConcurrency") or 0)
+        if prefetch > 0:
+            argv += ["--download-prefetch", str(prefetch)]
         if bool(execution.get("forceCleanWorkspaceAgentState", True)):
             argv.append("--force-clean-workspace-agent-state")
         rc = invoke(argv)
@@ -474,6 +530,7 @@ def _resume_until_done(
     *,
     sleep_seconds: float = 2.0,
     probe_network: Callable[[], bool] | None = None,
+    probe_cursor_key: Callable[[], bool] | None = None,
     monotonic: Callable[[], float] | None = None,
     network_wait_sleep: Callable[[float], None] | None = None,
 ) -> None:
@@ -482,8 +539,13 @@ def _resume_until_done(
     终态语义：
     - succeeded / completed_with_reasoned_rejects → 成功，交 readiness 继续裁决；
     - failed → 立即退出；
-    - manual_required → 按根因分类：网络类等待出口自愈后继续 resume（带退避与
-      次数上限），配额/契约类立即退出。
+    - manual_required → 按根因分类：
+      - 网络类：等待出口自愈后继续 resume（带退避与次数上限）；
+      - 凭据/配额类（auth）：key 生命周期内置——暂停并轮询 key 探活
+        （keyfile 轮换/额度恢复 → /v1/me 200），恢复后自动续跑；
+      - 契约类：立即退出交人工。
+    no-progress watchdog：连续 noProgressRoundLimit 轮 workflow 推进指纹无变化
+    且网络正常 → fail-fast（防止无限空转烧预算）。
     循环整体受 wall-clock 预算约束（execution.resumeBudgetSeconds 或
     QWQ_RESUME_LOOP_BUDGET_SECONDS，0=不限）。
     """
@@ -499,11 +561,18 @@ def _resume_until_done(
     )
     network_retry_limit = int(execution.get("networkRetryLimit") or 24)
     network_retry_delay = float(execution.get("networkRetryDelaySeconds") or 300.0)
+    auth_retry_limit = int(execution.get("authRetryLimit") or 12)
+    auth_retry_delay = float(execution.get("authRetryDelaySeconds") or 300.0)
+    no_progress_round_limit = int(execution.get("noProgressRoundLimit") or 6)
     probe = probe_network or _probe_network_ready
+    probe_key = probe_cursor_key or _probe_cursor_key_ready_default
     clock = monotonic or time.monotonic
     wait = network_wait_sleep or time.sleep
     started = clock()
     network_retries = 0
+    auth_retries = 0
+    last_fingerprint = ""
+    no_progress_rounds = 0
 
     def _budget_exceeded() -> bool:
         return bool(budget_seconds) and (clock() - started) > budget_seconds
@@ -520,26 +589,44 @@ def _resume_until_done(
             raise SystemExit(f"[run-recipe] workflow 终态 {status}（round={round_no}）")
         if status == "manual_required":
             kind = _workflow_failure_kind(task_id, batch_id)
-            if kind != "network":
-                raise SystemExit(
-                    f"[run-recipe] workflow 终态 manual_required（round={round_no}，根因=配额/契约类，交人工）"
-                )
-            network_retries += 1
-            if network_retries > network_retry_limit:
-                raise SystemExit(
-                    f"[run-recipe] 网络类失败自动重试超过上限 {network_retry_limit}（round={round_no}）"
-                )
-            print(
-                f"[run-recipe] manual_required 根因=网络类，等待出口自愈后自动 resume"
-                f"（第 {network_retries}/{network_retry_limit} 次）",
-                flush=True,
-            )
-            while not probe():
-                if _budget_exceeded():
+            if kind == "auth":
+                auth_retries += 1
+                if auth_retries > auth_retry_limit:
                     raise SystemExit(
-                        f"[run-recipe] 网络自愈等待超出时间预算 {budget_seconds:.0f}s"
+                        f"[run-recipe] 凭据/配额恢复等待超过上限 {auth_retry_limit}（round={round_no}）"
                     )
-                wait(network_retry_delay)
+                print(
+                    f"[run-recipe] manual_required 根因=凭据/配额类，暂停等待 key 轮换/额度恢复"
+                    f"（第 {auth_retries}/{auth_retry_limit} 次）",
+                    flush=True,
+                )
+                while not probe_key():
+                    if _budget_exceeded():
+                        raise SystemExit(
+                            f"[run-recipe] key 恢复等待超出时间预算 {budget_seconds:.0f}s"
+                        )
+                    wait(auth_retry_delay)
+            elif kind == "network":
+                network_retries += 1
+                if network_retries > network_retry_limit:
+                    raise SystemExit(
+                        f"[run-recipe] 网络类失败自动重试超过上限 {network_retry_limit}（round={round_no}）"
+                    )
+                print(
+                    f"[run-recipe] manual_required 根因=网络类，等待出口自愈后自动 resume"
+                    f"（第 {network_retries}/{network_retry_limit} 次）",
+                    flush=True,
+                )
+                while not probe():
+                    if _budget_exceeded():
+                        raise SystemExit(
+                            f"[run-recipe] 网络自愈等待超出时间预算 {budget_seconds:.0f}s"
+                        )
+                    wait(network_retry_delay)
+            else:
+                raise SystemExit(
+                    f"[run-recipe] workflow 终态 manual_required（round={round_no}，根因=契约类，交人工）"
+                )
         argv = [
             "task", "run", "--mode", "single",
             "--task", task_id,
@@ -560,8 +647,26 @@ def _resume_until_done(
             return
         if rc not in (0, 10) and status not in {"manual_required"}:
             raise SystemExit(f"[run-recipe] resume round={round_no} rc={rc}")
+        # no-progress watchdog：推进指纹连续无变化且网络正常 → fail-fast。
+        fingerprint = _workflow_progress_fingerprint(task_id, batch_id)
+        if fingerprint == last_fingerprint:
+            no_progress_rounds += 1
+            if no_progress_rounds >= no_progress_round_limit and probe():
+                raise SystemExit(
+                    f"[run-recipe] no-progress watchdog：连续 {no_progress_rounds} 轮无推进"
+                    f"且网络正常（round={round_no}），fail-fast 交人工归因"
+                )
+        else:
+            no_progress_rounds = 0
+            last_fingerprint = fingerprint
         time.sleep(sleep_seconds)
     raise SystemExit(f"[run-recipe] author resume 超过最大轮数 {max_rounds}")
+
+
+def _probe_cursor_key_ready_default() -> bool:
+    from _common.cursor_credentials import probe_cursor_key_ready
+
+    return probe_cursor_key_ready()
 
 
 def _partition_slug(partition_path: list[str]) -> str:
@@ -767,6 +872,14 @@ def handle_run_recipe(args: argparse.Namespace, invoke: InvokeCli | None = None)
                  str(float((recipe.get("execution") or {}).get("startupTimeoutSeconds") or 240))])
     if rc != 0:
         raise SystemExit(f"[run-recipe] env ready rc={rc}")
+    # 跑批保护协议：执行前落 runtime 保护清单（frozen plan / release / workflow
+    # state / lease），供外部治理代理在清理前读取；写失败不阻断批次。
+    try:
+        from _common import ops_governance as og
+
+        og.write_runtime_protection_manifest(task_id, batch_id, plan_id=plan_id)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[run-recipe] runtime protection manifest write failed: {exc}", file=sys.stderr)
     _execute(recipe, task_id, batch_id, plan_id, invoke)
     _readiness(recipe, task_id, batch_id, plan_id, invoke, artifacts_dir)
     print(f"[run-recipe] DONE {recipe_ref} batch={batch_id}")

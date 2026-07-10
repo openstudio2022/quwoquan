@@ -17,16 +17,16 @@ domain_acceptance:
     boundary_points: []
     tests:
       planned:
-      - file: quwoquan_service/services/chat-service/tests/assistant_mentioned_stream_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/assistant_mentioned_chat_integration_test.go
-      - file: quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+      - file: quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
       recorded:
       - file: quwoquan_service/services/chat-service/tests/api_integration/event_publish_contract__api_integration_test.go
       - file: quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
-      - file: quwoquan_app/test/local_contract/components/input/customizable_chat_input_bar__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/input/customizable_chat_input_bar__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/chat/providers/chat_message_provider__local_contract_test.dart
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/infrastructure/chatclient/client__local_contract_test.go
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/chatclient/client__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/infrastructure/messaging/assistant_mentioned_consumer__local_contract_test.go
     status: partial
     test_evidence:
       primary:
@@ -87,7 +87,7 @@ domain_acceptance:
         - gamma_local
     notes:
     - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/message_home_projection_contract_test.go'
-    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/contact_home_projection_contract_test.go'
+    - '[migrated_from_planned] quwoquan_service/services/chat-service/tests/api_integration/contact_home_projection_contract__api_integration_test.go'
     - '[migrated_from_planned] quwoquan_service/services/notification-service/tests/app_message_inbox_contract_test.go'
     - '[migrated_from_planned] quwoquan_app/test/ui/chat/journeys/commercial_message_system_journey_test.dart'
 execution:

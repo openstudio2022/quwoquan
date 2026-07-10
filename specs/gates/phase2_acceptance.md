@@ -32,7 +32,7 @@
 | import mongo 集成 | `QWQ_TEST_MONGO_URI=… go test … -run Mongo`（临时 `mongo:7`） | 6 PASS（含 `TestMongoUpsertDiscoveryFeed`） |
 | recommendation 投影 | `go test …/internal/infrastructure/recommendation/...` | ok（projector 改动不回退） |
 | content-service 编译 | `go build ./services/content-service/...` | exit 0 |
-| 端 behavior 契约 | `flutter test test/cloud/behavior/contract/behavior_repository_contract_test.dart` | All tests passed（含 `toJson 使用 tagRefs wire key`） |
+| 端 behavior 契约 | `flutter test test/local_contract/cloud/behavior/contract/behavior_repository_contract__local_contract_test.dart` | All tests passed（含 `toJson 使用 tagRefs wire key`） |
 | **真实灌库端到端 T3** | `cmd/import --publish-root <P1 真实 publish> --sample-bundle alpha.json` 灌临时 `mongo:7` | `posts` 659/659 带 `sourceTaskId`；`rm_discovery_feed` 659 全 `published/public` + 659 带 `sourceTaskId`；`entities` 359/359 带 `sourceTaskId`（`conditionProfile` 0 = 旅行实体未落盘，符合边界） |
 
 ## 分层测试映射

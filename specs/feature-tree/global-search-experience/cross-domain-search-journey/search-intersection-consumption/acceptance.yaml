@@ -33,7 +33,7 @@ gwt_acceptance:
     - 交集 Tab 仅消费云侧 primaryText，端不二次拼装句子，渲染零额外 RPC。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -51,10 +51,10 @@ gwt_acceptance:
         - local_contract.global_search_experience.cross_domain_search_journey.search_intersection_consumption.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart（「交集
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart（「交集
       tab 按云侧 connectionState 分组并只读 primaryText」：交集句严格只读 intersectionReason.primaryText，无
       primaryText 不展示，无 displayText/label 回退与端侧拼装，2026-06-16 green）'
-    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local，.qwq_output/local/gamma-local/search_intersection_smoke.json
+    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local，.qwq_output/env/gamma/local/gamma-local/search_intersection_smoke.json
       + backlog R-S06-S）：经网关 `POST /v1/search` 200、provider=elasticsearch、rankingVersion=search-v1、返回真实
       seeded location（杭州西湖）。BLOCKED：hit 上 populated connectionState/intersectionReason.primaryText
       需网关可识别 token + seed viewer 关系，匿名探测为 null。'
@@ -74,7 +74,7 @@ gwt_acceptance:
     - 分组在端侧基于 connectionState 闭集一次性归类，无逐卡远程查询。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -91,7 +91,7 @@ gwt_acceptance:
         - local_contract.global_search_experience.cross_domain_search_journey.search_intersection_consumption.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart（同一用例混合
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart（同一用例混合
       connected / unconnected / intersection_lead 命中：connected 进「已形成的连接」、其余进「发现更多交集」，connected
       区不展示交集句，端基于 connectionState 闭集一次性归类，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma 真实 connectionState 闭集分组需

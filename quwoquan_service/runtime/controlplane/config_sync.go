@@ -137,7 +137,7 @@ func defaultSnapshotPath(configRoot, serviceName, instanceID string) string {
 	if strings.TrimSpace(configRoot) != "" {
 		return filepath.Join(configRoot, "runtime-cache", serviceName, instanceID+".json")
 	}
-	return filepath.Join(defaultOutputRoot(), "local", "runtime-cache", serviceName, instanceID+".json")
+	return filepath.Join(defaultOutputRoot(), "env", "repo", "local", "control-plane", serviceName, instanceID+".json")
 }
 
 func defaultOutputRoot() string {

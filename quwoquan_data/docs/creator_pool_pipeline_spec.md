@@ -8,7 +8,7 @@
 
 > 目录规范（[`pipeline_directory_layout_spec.md`](pipeline_directory_layout_spec.md) §0.5）：生成过程是仓外一次性 runtime 树；
 > 成品经 compact publish 进入仓内 `publish/creators/**`（长期可复用池），后续内容批次通过引用消费，不重新生成、不复制。
-> 摘要索引落 `.qwq_output/runs/pools/creator/{batchId}/`（index-first 回指），不承载权威证据。
+> 摘要索引落 `.qwq_output/data/runs/pools/creator/{batchId}/`（index-first 回指），不承载权威证据。
 
 | 阶段 | 必落盘 | 准出门 |
 |---|---|---|

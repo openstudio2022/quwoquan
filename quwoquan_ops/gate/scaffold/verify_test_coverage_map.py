@@ -14,7 +14,6 @@ from test_directory_inventory_lib import (
     PAGE_INVENTORY_PATH,
     REQUIRED_PAGE_CASE_SUFFIXES,
     ROOT,
-    build_path_mapping,
     page_wrapper_target_path,
     recorded_file_is_canonical,
 )
@@ -139,6 +138,8 @@ def canonical_layer_from_path(path_text: str) -> str | None:
             return "local_contract"
         if "/tests/api_integration/" in path_text:
             return "api_integration"
+        if path_text.endswith("__local_contract_test.go"):
+            return "local_contract"
     return None
 
 
@@ -190,9 +191,9 @@ def verify_acceptance_recorded_refs(failures: Failures) -> None:
                         continue
                     if kind == "artifact":
                         has_report_artifact = True
-                        if not (value.startswith(".qwq_output/runs/tests/") and value.endswith("report.json")):
+                        if not (value.startswith(".qwq_output/env/repo/runs/tests/") and value.endswith("report.json")):
                             failures.add(
-                                f"{path.relative_to(ROOT)} {group_name}.{item_id} recorded artifact must be .qwq_output/runs/tests/**/report.json: {value}"
+                                f"{path.relative_to(ROOT)} {group_name}.{item_id} recorded artifact must be .qwq_output/env/repo/runs/tests/**/report.json: {value}"
                             )
                         elif not (ROOT / value).exists():
                             failures.add(f"{path.relative_to(ROOT)} {group_name}.{item_id} artifact missing: {value}")
@@ -273,8 +274,6 @@ def verify_page_inventory(failures: Failures) -> None:
     routes_meta = load_yaml(APP_ROUTES_PATH).get("routes") or []
     surfaces = page_inventory.get("surfaces") or []
     route_only = page_inventory.get("route_only") or []
-    mapping = build_path_mapping()
-
     surface_by_id = {str(item["surface_id"]): item for item in surfaces if isinstance(item, dict) and item.get("surface_id")}
     route_only_ids = {str(item["route_id"]) for item in route_only if isinstance(item, dict) and item.get("route_id")}
     meta_surface_ids = {str(item["id"]) for item in surfaces_meta if isinstance(item, dict) and item.get("id")}
@@ -308,12 +307,14 @@ def verify_page_inventory(failures: Failures) -> None:
             continue
         for source in source_tests:
             source_text = str(source)
-            if not (ROOT / source_text).exists():
+            if not recorded_file_is_canonical(source_text):
+                failures.add(f"surface {surface_id} source test not canonical: {source_text}")
+            elif not (ROOT / source_text).exists():
                 failures.add(f"surface {surface_id} source test missing: {source_text}")
         canonical_locals = [
-            mapping[source_text]
+            source_text
             for source_text in (str(source) for source in source_tests)
-            if source_text in mapping and "/local_contract/" in mapping[source_text]
+            if canonical_layer_from_path(source_text) == "local_contract"
         ]
         if not canonical_locals:
             failures.add(f"surface {surface_id} has no reverse-bound local_contract canonical tests")

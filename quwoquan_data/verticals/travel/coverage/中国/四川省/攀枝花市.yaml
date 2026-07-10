@@ -40,6 +40,22 @@ districts:
     - 竹湖园公园
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 渡口建設指揮部招待所
+    canonicalName: 渡口建設指揮部招待所
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/东区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 雅江桥
+    canonicalName: 雅江桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/东区
+    sourceReadiness: pending
+    selectionPriority: 5
 - district: 仁和区
   leaves:
   - name: 攀枝花中国三线建设博物馆
@@ -89,6 +105,38 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 下灣遺址
+    canonicalName: 下灣遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 回龍灣洞穴遺址
+    canonicalName: 回龍灣洞穴遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 大田會議會址
+    canonicalName: 大田會議會址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 西祝寺
+    canonicalName: 西祝寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/仁和区
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 盐边县
   leaves:
   - name: 格萨拉生态旅游区
@@ -118,6 +166,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/盐边县
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:47:58Z'
+    sourceScreenEvidence: zh.wikipedia.org:二滩水电站 extract=266ch
   - name: 红格温泉
     canonicalName: 红格温泉
     entityType: 地点/温泉
@@ -126,6 +176,22 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/盐边县
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 程家墓群
+    canonicalName: 程家墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/盐边县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 马喇长官司衙门遗址
+    canonicalName: 马喇长官司衙门遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/盐边县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 米易县
   leaves:
   - name: 米易梯田
@@ -158,6 +224,38 @@ districts:
     - 海塔村
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 何家壩遺址
+    canonicalName: 何家壩遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/米易县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 得石攔木壩
+    canonicalName: 得石攔木壩
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/米易县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 掛榜清真寺
+    canonicalName: 掛榜清真寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/米易县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 灣丘五七幹校舊址
+    canonicalName: 灣丘五七幹校舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/米易县
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 西区
   leaves:
   - name: 攀枝花苏铁国家级自然保护区
@@ -197,3 +295,11 @@ districts:
     - 庄上村
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 503电厂
+    canonicalName: 503电厂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/攀枝花市/西区
+    sourceReadiness: pending
+    selectionPriority: 5

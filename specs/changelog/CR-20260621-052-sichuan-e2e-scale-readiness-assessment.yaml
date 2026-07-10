@@ -29,7 +29,7 @@ findings:
 changes:
   - 无业务代码改动（assessment-only）。
   - docs/outstanding_risks_backlog.md：R-CS01/CS02/CS03 三项以运行时证据精确回写复核段（更新既有项，非新登记风险）。
-  - 固化评估证据 .qwq_output/runs/sichuan-e2e-assessment/scale_readiness_100.json 与 scale_readiness_1000.json。
+  - 固化评估证据 .qwq_output/data/runs/sichuan-e2e-assessment/scale_readiness_100.json 与 scale_readiness_1000.json。
 evidence:
   t1:
     - python3 quwoquan_data/scripts/cli.py env preflight  # runtime=ready, CURSOR_API_KEY=present, network=ready
@@ -37,8 +37,8 @@ evidence:
     - python3 quwoquan_data/scripts/cli.py verify scale-readiness --task 旅行/地域/四川省/景区/景区十级e2e --batch e2e10 --daily-target 100   # decision=no_go
     - python3 quwoquan_data/scripts/cli.py verify scale-readiness --task 旅行/地域/四川省/景区/景区十级e2e --batch e2e10 --daily-target 1000  # decision=no_go
   artifacts:
-    - .qwq_output/runs/sichuan-e2e-assessment/scale_readiness_100.json
-    - .qwq_output/runs/sichuan-e2e-assessment/scale_readiness_1000.json
+    - .qwq_output/data/runs/sichuan-e2e-assessment/scale_readiness_100.json
+    - .qwq_output/data/runs/sichuan-e2e-assessment/scale_readiness_1000.json
 next_round:
   - 真实放量验证（unblocks R-CS02/CS03）：新建含 quotas>0 的四川内容批次，Agent 真实创作正文，烧 token 跑完 plan→download→produce(compose-brief→author→review --materialize)→media check-images→verify→ship，采集首个真实 TokenLedger/firstPassRate/吞吐与 release/import 证据。
   - 该轮需用户授权 token 预算与放量规模（十/百/千），属真金白银/外部速率配额决策，不在会话内自动启动。

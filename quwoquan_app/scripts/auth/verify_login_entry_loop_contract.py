@@ -43,8 +43,8 @@ def main() -> int:
     home_page = read("quwoquan_app/lib/ui/discovery/pages/home_page.dart")
     auth_gate = read("quwoquan_app/lib/core/auth/auth_gate.dart")
     main_shell = read("quwoquan_app/lib/app/shell/main_app_shell.dart")
-    shell_test = read("quwoquan_app/test/app/shell/main_app_shell_widget_test.dart")
-    route_test = read("quwoquan_app/test/core/auth/required_route_gate_test.dart")
+    shell_test = read("quwoquan_app/test/local_contract/app/shell/main_app_shell_widget__local_contract_test.dart")
+    route_test = read("quwoquan_app/test/local_contract/core/auth/required_route_gate__local_contract_test.dart")
 
     require(
         "class OpenHomeChannelContinuation extends AuthContinuation" in auth_continuation,

@@ -49,7 +49,7 @@ gwt_acceptance:
       - file: quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/task/test_managed_preflight_workspace__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py
-      - file: quwoquan_data/tests/verify/test_site_scale_readiness.py
+      - file: quwoquan_data/tests/local_contract/verify/test_site_scale_readiness__local_contract_test.py
       recorded:
       - file: quwoquan_data/tests/local_contract/site_supply/test_tuchong_authorized_assets__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/site_supply/test_pinterest_public_pin__local_contract_test.py
@@ -106,7 +106,7 @@ gwt_acceptance:
     - partialDelivery.fulfillment 可用于百级、千级、万级扩容时估算真实产能。
     tests:
       planned:
-      - file: quwoquan_data/tests/annotate/test_annotate_publish_filter.py
+      - file: quwoquan_data/tests/local_contract/annotate/test_annotate_publish_filter__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/task/test_workflow_state_machine__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/task/test_download_checkpoint_repair__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/task/test_download_auto_research__local_contract_test.py
@@ -114,8 +114,8 @@ gwt_acceptance:
       - file: quwoquan_data/tests/local_contract/produce/test_task_author_review__local_contract_test.py
       - file: quwoquan_data/tests/api_integration/ship/test_task_publish_release__api_integration_test.py
       - file: quwoquan_data/tests/user_acceptance/workflow/test_task_run_operator_journey__user_acceptance_test.py
-      - file: quwoquan_data/tests/verify/test_scale_readiness.py
-      - file: quwoquan_data/tests/task/test_trial_review.py
+      - file: quwoquan_data/tests/local_contract/verify/test_scale_readiness__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py
       recorded:
       - file: quwoquan_data/tests/local_contract/annotate/test_annotate_publish_filter__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/build/test_homepage_prepare__local_contract_test.py

@@ -23,7 +23,7 @@
 - `go test ./quwoquan_service/services/chat-service/internal/application`
 - `go test ./quwoquan_service/services/chat-service/tests`
 - `go test ./quwoquan_service/services/user-service/tests -run TestUpdateProfile_AvatarVersionAndSyncPatch`
-- `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart`
+- `flutter test test/local_contract/cloud/realtime/realtime_avatar_sync_handler__local_contract_test.dart`
 - `flutter test test/core/services/local_chat_search_sync_service_test.dart`
 - `flutter test test/core/services/content_cache_services_test.dart`
 - `flutter test test/ui/chat/widgets/chat_page_widget_test.dart`

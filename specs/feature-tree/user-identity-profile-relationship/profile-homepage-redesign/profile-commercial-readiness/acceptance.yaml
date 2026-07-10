@@ -36,8 +36,8 @@ gwt_acceptance:
     - 我的主页首屏 TTI P95 ≤ 1.5s（缓存命中 ≤ 600ms）
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/profile_stats_row_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_stats_row__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:

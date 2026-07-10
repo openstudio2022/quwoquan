@@ -74,7 +74,7 @@ class PatrolCliResolutionTest(unittest.TestCase):
             product_ops_base_url="https://ops.example.test",
             media_base_url="https://media.example.test",
             test_auth_token="token",
-            target="test/patrol/environment/basic_viability_test.dart",
+            target="test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart",
             env_name="prod-sim",
         )
 
@@ -89,7 +89,7 @@ class PatrolCliResolutionTest(unittest.TestCase):
             gateway_base_url="https://api.example.test",
             product_ops_base_url="https://ops.example.test",
             test_auth_token="token",
-            target="test/patrol/discovery/feed_load_test.dart",
+            target="test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart",
         )
 
         command = gamma_patrol.patrol_command({"id": "device-1"}, args, "/tmp/patrol")

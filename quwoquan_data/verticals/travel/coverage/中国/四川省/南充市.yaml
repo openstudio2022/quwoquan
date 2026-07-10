@@ -40,6 +40,118 @@ districts:
     - 鲜于氏离堆
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 丁氏莊園
+    canonicalName: 丁氏莊園
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 儀隴報恩寺
+    canonicalName: 儀隴報恩寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 儀隴文廟
+    canonicalName: 儀隴文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 張思德同志出生地
+    canonicalName: 張思德同志出生地
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 朱德故居
+    canonicalName: 朱德故居
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 朱德紀念地
+    canonicalName: 朱德紀念地
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 朱德誕生地
+    canonicalName: 朱德誕生地
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 楊橋王家祠堂
+    canonicalName: 楊橋王家祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 火煙寨白廟
+    canonicalName: 火煙寨白廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 金城崖墓群
+    canonicalName: 金城崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 離堆山石刻
+    canonicalName: 離堆山石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 靈官佛爾崖石窟
+    canonicalName: 靈官佛爾崖石窟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 馬鞍古建築群
+    canonicalName: 馬鞍古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 高觀廟范公墓
+    canonicalName: 高觀廟范公墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/仪陇县
+    sourceReadiness: pending
+    selectionPriority: 17
 - district: 南部县
   leaves:
   - name: 升钟湖
@@ -53,6 +165,8 @@ districts:
     - 升钟水库
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T13:12:13Z'
+    sourceScreenEvidence: baike.baidu.com:升钟湖景区
   - name: 禹迹山
     canonicalName: 南部禹迹山
     entityType: 地点/遗址
@@ -81,6 +195,134 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
     selectionPriority: 4
     sourceReadiness: no_primary_source
+  - name: 上乘寺
+    canonicalName: 上乘寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 南部報恩寺
+    canonicalName: 南部報恩寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 南部文廟
+    canonicalName: 南部文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 南部馬家大院
+    canonicalName: 南部馬家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 回龍山石刻
+    canonicalName: 回龍山石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 平橋東觀廟
+    canonicalName: 平橋東觀廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 廟子梁李氏墓
+    canonicalName: 廟子梁李氏墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 廣川廟
+    canonicalName: 廣川廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 永安廟
+    canonicalName: 永安廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 真相寺
+    canonicalName: 真相寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 神壩磚塔
+    canonicalName: 神壩磚塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 禹跡山摩崖造像
+    canonicalName: 禹跡山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 觀音山摩崖造像
+    canonicalName: 觀音山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 觀音庵
+    canonicalName: 觀音庵
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 醴峰觀
+    canonicalName: 醴峰觀
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 長坪山紅軍戰場遺址及石刻標語群
+    canonicalName: 長坪山紅軍戰場遺址及石刻標語群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/南部县
+    sourceReadiness: pending
+    selectionPriority: 20
 - district: 嘉陵区
   leaves:
   - name: 凤垭山
@@ -101,6 +343,54 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/南充市/嘉陵区
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 七寶寺 (四川)
+    canonicalName: 七寶寺 (四川)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/嘉陵区
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 大通梓潼廟
+    canonicalName: 大通梓潼廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/嘉陵区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 田坝会馆
+    canonicalName: 田坝会馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/嘉陵区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 羊龍廟石牌坊
+    canonicalName: 羊龍廟石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/嘉陵区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 臨水院
+    canonicalName: 臨水院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/嘉陵区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 龍歸院
+    canonicalName: 龍歸院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/嘉陵区
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 营山县
   leaves:
   - name: 太蓬山
@@ -119,6 +409,70 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 太蓬山古建築群
+    canonicalName: 太蓬山古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 太蓬山摩崖造像及石刻
+    canonicalName: 太蓬山摩崖造像及石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 普嶺張氏祠
+    canonicalName: 普嶺張氏祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 朗池迴龍塔
+    canonicalName: 朗池迴龍塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 營山李氏家族墓
+    canonicalName: 營山李氏家族墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 營山龍興寺
+    canonicalName: 營山龍興寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 石槽溝吳氏碉樓
+    canonicalName: 石槽溝吳氏碉樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 紅九軍政治部舊址
+    canonicalName: 紅九軍政治部舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/营山县
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 蓬安县
   leaves:
   - name: 嘉陵第一桑梓
@@ -155,6 +509,70 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 利溪大夫第
+    canonicalName: 利溪大夫第
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 吐佛寺正殿
+    canonicalName: 吐佛寺正殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 周子古鎮民居建築群
+    canonicalName: 周子古鎮民居建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 小樂山摩崖造像
+    canonicalName: 小樂山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 桐桷寨摩崖造像
+    canonicalName: 桐桷寨摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 潛廬
+    canonicalName: 潛廬
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 蓬安接引塔
+    canonicalName: 蓬安接引塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 蓬安舊城古建築
+    canonicalName: 蓬安舊城古建築
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/蓬安县
+    sourceReadiness: pending
+    selectionPriority: 12
 - district: 西充县
   leaves:
   - name: 张澜故里
@@ -186,6 +604,78 @@ districts:
     - 化凤山森林公园
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 仙林字庫塔
+    canonicalName: 仙林字庫塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 圭心寺
+    canonicalName: 圭心寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 張瀾誕生地
+    canonicalName: 張瀾誕生地
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 百福寺
+    canonicalName: 百福寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 萬民寶塔
+    canonicalName: 萬民寶塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 西充占山寺
+    canonicalName: 西充占山寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 西充文廟
+    canonicalName: 西充文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 西充觀音殿
+    canonicalName: 西充觀音殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 雙鳳武廟
+    canonicalName: 雙鳳武廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/西充县
+    sourceReadiness: pending
+    selectionPriority: 12
 - district: 阆中市
   leaves:
   - name: 阆中古城
@@ -277,6 +767,230 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
     selectionPriority: 10
     sourceReadiness: pending
+  - name: 中共閬南縣委舊址
+    canonicalName: 中共閬南縣委舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 圓覺寺大殿
+    canonicalName: 圓覺寺大殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 大像山摩崖造像
+    canonicalName: 大像山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 天宮院
+    canonicalName: 天宮院
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 川北道貢院
+    canonicalName: 川北道貢院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 张桓侯祠
+    canonicalName: 张桓侯祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 朱家山坪上遺址
+    canonicalName: 朱家山坪上遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 杜家客棧
+    canonicalName: 杜家客棧
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 永安寺 (阆中)
+    canonicalName: 永安寺 (阆中)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 汪家樓
+    canonicalName: 汪家樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 牛王洞摩崖造像
+    canonicalName: 牛王洞摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 玉臺山石塔
+    canonicalName: 玉臺山石塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 石室觀摩崖造像
+    canonicalName: 石室觀摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 華光樓
+    canonicalName: 華光樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 24
+  - name: 讀書岩石刻
+    canonicalName: 讀書岩石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 25
+  - name: 邵家灣墓群
+    canonicalName: 邵家灣墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 26
+  - name: 閬中古城古建築群
+    canonicalName: 閬中古城古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 27
+  - name: 閬中古建築群
+    canonicalName: 閬中古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 28
+  - name: 閬中文廟
+    canonicalName: 閬中文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 29
+  - name: 閬中文筆塔
+    canonicalName: 閬中文筆塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 30
+  - name: 閬中清真寺
+    canonicalName: 閬中清真寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 31
+  - name: 閬中紅四方面軍總政治部舊址
+    canonicalName: 閬中紅四方面軍總政治部舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 32
+  - name: 閬中觀音寺
+    canonicalName: 閬中觀音寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 33
+  - name: 閬中銅鐘
+    canonicalName: 閬中銅鐘
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 34
+  - name: 閬中鐵塔
+    canonicalName: 閬中鐵塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 35
+  - name: 阆中圣约翰座堂
+    canonicalName: 阆中圣约翰座堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 36
+  - name: 陕西会馆 (阆中)
+    canonicalName: 陕西会馆 (阆中)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 37
+  - name: 雷神洞摩崖造像
+    canonicalName: 雷神洞摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/阆中市
+    sourceReadiness: pending
+    selectionPriority: 38
 - district: 顺庆区
   leaves:
   - name: 西山
@@ -316,6 +1030,54 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 南充奎閣
+    canonicalName: 南充奎閣
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 南充市解放紀念碑
+    canonicalName: 南充市解放紀念碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 川北行署辦公廳舊址
+    canonicalName: 川北行署辦公廳舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 張瀾舊居
+    canonicalName: 張瀾舊居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 羅瑞卿故居
+    canonicalName: 羅瑞卿故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 耶穌聖心堂 (南充)
+    canonicalName: 耶穌聖心堂 (南充)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/顺庆区
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 高坪区
   leaves:
   - name: 凌云山
@@ -351,6 +1113,8 @@ districts:
     - 无量宝塔
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:38:44Z'
+    sourceScreenEvidence: zh.wikipedia.org:南充白塔 extract=228ch
   - name: 六合丝博园
     canonicalName: 南充六合丝博园
     entityType: 地点/打卡地
@@ -361,3 +1125,43 @@ districts:
     - 都京丝绸小镇
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 紅旗農莊
+    canonicalName: 紅旗農莊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/高坪区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 隱珠寺
+    canonicalName: 隱珠寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/高坪区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 高坪禹王宮
+    canonicalName: 高坪禹王宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/高坪区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 高坪萬壽宮
+    canonicalName: 高坪萬壽宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/高坪区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 高坪觀音寺
+    canonicalName: 高坪觀音寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/南充市/高坪区
+    sourceReadiness: pending
+    selectionPriority: 9

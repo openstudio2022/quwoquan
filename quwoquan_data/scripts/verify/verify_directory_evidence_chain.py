@@ -190,6 +190,11 @@ def _source_refs_issues(obj: Path, batch: Path) -> list[str]:
         data = read_json(snapshot_path)
     except Exception as exc:  # noqa: BLE001
         return [f"{rel}: source_refs.json unreadable ({exc})"]
+    if not isinstance(data, dict):
+        # agent 产物是外部输入：顶层写成数组/标量属于契约违规，必须报 issue 而非崩溃。
+        return [
+            f"{rel}: source_refs.json 顶层必须是 object（实得 {type(data).__name__}）"
+        ]
     issues: list[str] = []
     if snapshot_path.stat().st_size > SOURCE_REFS_MAX_BYTES:
         issues.append(
@@ -243,6 +248,10 @@ def _object_source_unit_records(obj: Path, batch: Path) -> list[tuple[str, str]]
     try:
         data = read_json(snapshot_path)
     except Exception:  # noqa: BLE001
+        return []
+    if not isinstance(data, dict):
+        # 顶层坏类型（agent 写成数组等）：无可提取记录；契约违规由
+        # _source_refs_issues / download gate 负责报 issue，这里不得崩溃。
         return []
     rows = data.get("sources") or []
     if not isinstance(rows, list):

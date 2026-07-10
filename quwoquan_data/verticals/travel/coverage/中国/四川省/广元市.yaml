@@ -34,6 +34,8 @@ districts:
     - 千佛崖石刻艺术博物馆
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:40:48Z'
+    sourceScreenEvidence: zh.wikipedia.org:广元千佛崖 extract=243ch
   - name: 天曌山
     canonicalName: 天曌山
     entityType: 地点/景区
@@ -53,6 +55,38 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/广元市/利州区
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 利州魁星樓
+    canonicalName: 利州魁星樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/利州区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 来雁塔 (广元市)
+    canonicalName: 来雁塔 (广元市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/利州区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 紅軍標語碑林
+    canonicalName: 紅軍標語碑林
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/利州区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 观音岩石窟
+    canonicalName: 观音岩石窟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/利州区
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 剑阁县
   leaves:
   - name: 剑门关
@@ -107,6 +141,142 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 中國共產黨十大政綱石刻
+    canonicalName: 中國共產黨十大政綱石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 劍州文廟
+    canonicalName: 劍州文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 劍溪橋
+    canonicalName: 劍溪橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 劍閣南城門與箭樓
+    canonicalName: 劍閣南城門與箭樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 劍閣古城牆
+    canonicalName: 劍閣古城牆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 劍閣火神廟
+    canonicalName: 劍閣火神廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 劍閣鐘樓
+    canonicalName: 劍閣鐘樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 劍閣鐘鼓樓古建築區
+    canonicalName: 劍閣鐘鼓樓古建築區
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 劍閣香沉寺
+    canonicalName: 劍閣香沉寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 化林大隊舊址
+    canonicalName: 化林大隊舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 大路河紅軍石刻標語及紅軍墓
+    canonicalName: 大路河紅軍石刻標語及紅軍墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 李商隱撰劍州重陽亭碑
+    canonicalName: 李商隱撰劍州重陽亭碑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 白兔寺
+    canonicalName: 白兔寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 觉苑寺
+    canonicalName: 觉苑寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 金仙文廟
+    canonicalName: 金仙文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 顏真卿撰中興頌刻石
+    canonicalName: 顏真卿撰中興頌刻石
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 鶴鳴山道教造像
+    canonicalName: 鶴鳴山道教造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/剑阁县
+    sourceReadiness: pending
+    selectionPriority: 22
 - district: 旺苍县
   leaves:
   - name: 鼓城山—七里峡
@@ -160,6 +330,126 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 中嘴杜家祠堂
+    canonicalName: 中嘴杜家祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 九龍楊氏宗祠
+    canonicalName: 九龍楊氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 五郎坡墓群
+    canonicalName: 五郎坡墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 佛子岩摩崖造像
+    canonicalName: 佛子岩摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 化龍王家祠堂
+    canonicalName: 化龍王家祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 木門石牌坊
+    canonicalName: 木門石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 木门会议旧址
+    canonicalName: 木门会议旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 木门镇
+    canonicalName: 木门镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 柳溪袁氏墓
+    canonicalName: 柳溪袁氏墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 石川杜家祠堂
+    canonicalName: 石川杜家祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 福慶石家大院
+    canonicalName: 福慶石家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 福慶貞節牌坊
+    canonicalName: 福慶貞節牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 紅軍城遺址群
+    canonicalName: 紅軍城遺址群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 西陵趙家院子
+    canonicalName: 西陵趙家院子
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 郝家河墓群
+    canonicalName: 郝家河墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/旺苍县
+    sourceReadiness: pending
+    selectionPriority: 20
 - district: 昭化区
   leaves:
   - name: 昭化古城
@@ -214,6 +504,94 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 太公山紅軍遺址群
+    canonicalName: 太公山紅軍遺址群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 廣善寺及魁星閣
+    canonicalName: 廣善寺及魁星閣
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 昭化古民居
+    canonicalName: 昭化古民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 昭化城墙
+    canonicalName: 昭化城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 昭化考棚
+    canonicalName: 昭化考棚
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 昭化龍門書院
+    canonicalName: 昭化龍門書院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 柏林沟镇
+    canonicalName: 柏林沟镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 柳橋石牌坊
+    canonicalName: 柳橋石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 費禕墓
+    canonicalName: 費禕墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 鮑三娘墓
+    canonicalName: 鮑三娘墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 黃龍石牌坊
+    canonicalName: 黃龍石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/昭化区
+    sourceReadiness: pending
+    selectionPriority: 16
 - district: 朝天区
   leaves:
   - name: 明月峡
@@ -256,6 +634,56 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
     selectionPriority: 4
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:41:17Z'
+    sourceScreenEvidence: zh.wikipedia.org:水磨沟 extract=276ch
+  - name: 中子鋪遺址
+    canonicalName: 中子鋪遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 寺包山崖墓
+    canonicalName: 寺包山崖墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 廣元大安寺
+    canonicalName: 廣元大安寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 朝天峽古棧道遺址
+    canonicalName: 朝天峽古棧道遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 朝天關遺址
+    canonicalName: 朝天關遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 鐵龍橋
+    canonicalName: 鐵龍橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/朝天区
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 苍溪县
   leaves:
   - name: 红军渡·西武当山
@@ -300,6 +728,118 @@ districts:
     - 贾家洞
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 中共川陝省蒼溪縣委舊址
+    canonicalName: 中共川陝省蒼溪縣委舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 中土觀音寺
+    canonicalName: 中土觀音寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 尋樂書岩
+    canonicalName: 尋樂書岩
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 崇霞寶塔
+    canonicalName: 崇霞寶塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 張家河墓群
+    canonicalName: 張家河墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 橋溪江家大院
+    canonicalName: 橋溪江家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 煙叢寺
+    canonicalName: 煙叢寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 白山涼橋
+    canonicalName: 白山涼橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 紅四方面軍強渡嘉陵江渡口遺址
+    canonicalName: 紅四方面軍強渡嘉陵江渡口遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 臨江寺
+    canonicalName: 臨江寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 蒼溪縣蘇維埃政府舊址
+    canonicalName: 蒼溪縣蘇維埃政府舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 金洞梁引水渠
+    canonicalName: 金洞梁引水渠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 陽岳寺千佛崖摩崖造像
+    canonicalName: 陽岳寺千佛崖摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 黃貓埡戰鬥遺址
+    canonicalName: 黃貓埡戰鬥遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/苍溪县
+    sourceReadiness: pending
+    selectionPriority: 18
 - district: 青川县
   leaves:
   - name: 唐家河
@@ -353,3 +893,35 @@ districts:
     - 白龙湖风景名胜区
     selectionPriority: 5
     sourceReadiness: ready
+  - name: 東河口地震遺址
+    canonicalName: 東河口地震遺址
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/青川县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 茶壩韓家大院
+    canonicalName: 茶壩韓家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/青川县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 郝家坪戰國墓葬群
+    canonicalName: 郝家坪戰國墓葬群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/青川县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 青溪古城墙
+    canonicalName: 青溪古城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/广元市/青川县
+    sourceReadiness: pending
+    selectionPriority: 9

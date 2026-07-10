@@ -1,7 +1,7 @@
 """生成行政区标签到 Topic/地理/行政区/
 
 数据源：
-  - 中国大陆 31 省级：quwoquan_data/data/admin_regions/pca.json（民政部数据）
+  - 中国大陆 31 省级：quwoquan_data/reference/admin_regions/pca.json（民政部数据）
   - 港澳台 3 个省级：脚本内手工定义（暂无下级数据）
   - 泰国/欧洲：脚本内手工定义（量小、变化少）
 
@@ -37,7 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _common.paths import PUBLISH_ROOT, NOW_ISO
 
 TAGS_ROOT = PUBLISH_ROOT / "tags" / "Topic" / "地理" / "行政区"
-DATA_DIR = Path(__file__).resolve().parent.parent / "data" / "admin_regions"
+DATA_DIR = DATA_ROOT / "reference" / "admin_regions"
 
 DRY_RUN = False
 created = 0

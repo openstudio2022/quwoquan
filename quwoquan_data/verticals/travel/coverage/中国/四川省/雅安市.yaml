@@ -52,6 +52,110 @@ districts:
     - 金凤寺
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 上里石牌坊
+    canonicalName: 上里石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 柯培得旧居
+    canonicalName: 柯培得旧居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 白馬泉
+    canonicalName: 白馬泉
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 西康省人委辦公廳大樓舊址
+    canonicalName: 西康省人委辦公廳大樓舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 西康省委黨校舊址
+    canonicalName: 西康省委黨校舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 西康省氣象觀測台
+    canonicalName: 西康省氣象觀測台
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 觀音閣 (雅安)
+    canonicalName: 觀音閣 (雅安)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 金鳳寺
+    canonicalName: 金鳳寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 雅安市博物馆
+    canonicalName: 雅安市博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 雅安私立明德初級中學校
+    canonicalName: 雅安私立明德初級中學校
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 雨城茶馬古道
+    canonicalName: 雨城茶馬古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 韓家大院
+    canonicalName: 韓家大院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 高颐墓阙及石刻
+    canonicalName: 高颐墓阙及石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/雨城区
+    sourceReadiness: pending
+    selectionPriority: 16
 - district: 名山区
   leaves:
   - name: 蒙顶山
@@ -85,6 +189,86 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 三皇宮石牌坊
+    canonicalName: 三皇宮石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 六合橋
+    canonicalName: 六合橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 名山文廟
+    canonicalName: 名山文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 名山茶馬古道
+    canonicalName: 名山茶馬古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 名山觀音殿
+    canonicalName: 名山觀音殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 名山金剛寺
+    canonicalName: 名山金剛寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 吳之英故居
+    canonicalName: 吳之英故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 水月寺
+    canonicalName: 水月寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 看燈山摩崖造像
+    canonicalName: 看燈山摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 蒙頂山古建築群
+    canonicalName: 蒙頂山古建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/名山区
+    sourceReadiness: pending
+    selectionPriority: 13
 - district: 荥经县
   leaves:
   - name: 龙苍沟叠翠溪景区
@@ -130,6 +314,54 @@ districts:
     - 荥经砂器博物馆
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 南羅壩墓葬群
+    canonicalName: 南羅壩墓葬群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 嚴道古城遺址
+    canonicalName: 嚴道古城遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 太湖寺
+    canonicalName: 太湖寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 滎經石佛寺摩崖造像
+    canonicalName: 滎經石佛寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 滎經茶馬古道
+    canonicalName: 滎經茶馬古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 滎經開善寺
+    canonicalName: 滎經開善寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/荥经县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 汉源县
   leaves:
   - name: 花海果乡旅游景区
@@ -150,6 +382,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/汉源县
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:00:02Z'
+    sourceScreenEvidence: zh.wikipedia.org:汉源湖 extract=268ch
   - name: 轿顶山
     canonicalName: 汉源轿顶山
     entityType: 地点/自然景观
@@ -160,6 +394,38 @@ districts:
     - 轿顶山大天缺
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 九襄石牌坊
+    canonicalName: 九襄石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/汉源县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 寨子園冶銅遺址
+    canonicalName: 寨子園冶銅遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/汉源县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 清溪文廟
+    canonicalName: 清溪文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/汉源县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 漢源茶馬古道
+    canonicalName: 漢源茶馬古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/汉源县
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 石棉县
   leaves:
   - name: 安顺场
@@ -201,6 +467,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/石棉县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 安顺场镇
+    canonicalName: 安顺场镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/石棉县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 強渡大渡河遺址
+    canonicalName: 強渡大渡河遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/石棉县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 石棉茶馬古道
+    canonicalName: 石棉茶馬古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/石棉县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 天全县
   leaves:
   - name: 二郎山喇叭河景区
@@ -235,6 +525,56 @@ districts:
     - 仁义镇红军村
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:00:07Z'
+    sourceScreenEvidence: zh.wikipedia.org:红军村 extract=228ch
+  - name: 天全紅四方面軍總部舊址
+    canonicalName: 天全紅四方面軍總部舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/天全县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 天全茶馬古道
+    canonicalName: 天全茶馬古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/天全县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 楊家土司祠堂
+    canonicalName: 楊家土司祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/天全县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 白君廟
+    canonicalName: 白君廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/天全县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 西湖勝境石牌坊
+    canonicalName: 西湖勝境石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/天全县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 边茶官库
+    canonicalName: 边茶官库
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/天全县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 芦山县
   leaves:
   - name: 龙门古镇
@@ -280,6 +620,134 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 中共四川省委舊址
+    canonicalName: 中共四川省委舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 太平紅軍橋
+    canonicalName: 太平紅軍橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 姜慶樓
+    canonicalName: 姜慶樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 姜維墓
+    canonicalName: 姜維墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 庐山青龙寺大殿
+    canonicalName: 庐山青龙寺大殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 樊敏阙
+    canonicalName: 樊敏阙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 王暉石棺及石刻
+    canonicalName: 王暉石棺及石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 蘆山佛圖寺
+    canonicalName: 蘆山佛圖寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 蘆山廣福寺大殿
+    canonicalName: 蘆山廣福寺大殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 蘆山湧泉寺
+    canonicalName: 蘆山湧泉寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 蘆山白塔寺大殿
+    canonicalName: 蘆山白塔寺大殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 蘆山紅四方面軍舊址
+    canonicalName: 蘆山紅四方面軍舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 蘆山茶馬古道
+    canonicalName: 蘆山茶馬古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 蘆山飛仙關及南界牌坊
+    canonicalName: 蘆山飛仙關及南界牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 蘆山飛仙關橋
+    canonicalName: 蘆山飛仙關橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 龙门镇 (芦山县)
+    canonicalName: 龙门镇 (芦山县)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/芦山县
+    sourceReadiness: pending
+    selectionPriority: 19
 - district: 宝兴县
   leaves:
   - name: 熊猫古城
@@ -323,6 +791,8 @@ districts:
     - 大熊猫发现地
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:00:12Z'
+    sourceScreenEvidence: zh.wikipedia.org:蜂桶寨国家级自然保护区 extract=310ch
   - name: 灵关石城旅游景区
     canonicalName: 宝兴灵关石城旅游景区
     entityType: 地点/景区
@@ -331,3 +801,27 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/宝兴县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 寶興茶馬古道
+    canonicalName: 寶興茶馬古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/宝兴县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 磽磧毛澤東、朱德居住地舊址
+    canonicalName: 磽磧毛澤東、朱德居住地舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/宝兴县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 鄧池溝聖母領報堂
+    canonicalName: 鄧池溝聖母領報堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/雅安市/宝兴县
+    sourceReadiness: pending
+    selectionPriority: 6

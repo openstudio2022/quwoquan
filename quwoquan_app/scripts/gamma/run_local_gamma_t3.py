@@ -21,11 +21,13 @@ from urllib.parse import urlsplit, urlunsplit
 ROOT = Path(__file__).resolve().parents[3]
 MANIFEST = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
 METADATA_ROOT = ROOT / "quwoquan_service/contracts/metadata"
-# 统一输出根：local-gamma 辅助报告属于本地环境状态，正式运行证据由 stackctl 写入 .qwq_output/runs/<env>/<runId>。
+# 统一输出根：local-gamma 辅助报告属于本地环境状态，正式运行证据由 stackctl 写入 .qwq_output/env/<env>/runs/<runId>。
 LOCAL_GAMMA_ARTIFACT_ROOT = Path(
     os.environ.get(
         "LOCAL_GAMMA_ARTIFACT_ROOT",
         Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
+        / "env"
+        / "gamma"
         / "local"
         / "gamma-local"
         / "app-artifacts",
@@ -464,7 +466,7 @@ def seed_content() -> Dict[str, Any]:
             doc = fixture_post_to_doc(post)
             docs_by_id[str(doc["_id"])] = doc
     docs = list(docs_by_id.values())
-    js_path = ROOT / ".qwq_output/local/gamma-local/seed-content.js"
+    js_path = ROOT / ".qwq_output/env/gamma/local/gamma-local/seed-content.js"
     js_path.parent.mkdir(parents=True, exist_ok=True)
     js_path.write_text(
         """
@@ -1164,7 +1166,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
     cases = [
         {
             "name": "content_api_contract",
-            "path": "test/cloud/content/api_contract_runner.dart",
+            "path": "test/api_integration/cloud/content/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
                 f"--dart-define=API_CONTRACT_BASE_URL={flutter_base_url}",
@@ -1175,7 +1177,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
         },
         {
             "name": "chat_api_contract",
-            "path": "test/cloud/chat/api_contract_runner.dart",
+            "path": "test/api_integration/cloud/chat/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
                 f"--dart-define=API_CONTRACT_BASE_URL={flutter_base_url}",
@@ -1185,7 +1187,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
         },
         {
             "name": "product_ops_api_contract",
-            "path": "test/cloud/ops/api_contract_runner.dart",
+            "path": "test/api_integration/cloud/ops/api_contract_runner.dart",
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
                 f"--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL={flutter_product_ops_base_url}",

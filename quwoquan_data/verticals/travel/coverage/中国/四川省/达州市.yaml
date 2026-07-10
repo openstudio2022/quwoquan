@@ -50,6 +50,46 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/达州市/万源市
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 固軍壩起義指揮部舊址
+    canonicalName: 固軍壩起義指揮部舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/万源市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 張建成石刻墓坊
+    canonicalName: 張建成石刻墓坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/万源市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 李家俊烈士故居
+    canonicalName: 李家俊烈士故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/万源市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 玉帶余王氏節孝坊
+    canonicalName: 玉帶余王氏節孝坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/万源市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 紫雲坪植茗靈園記岩刻
+    canonicalName: 紫雲坪植茗靈園記岩刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/万源市
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 大竹县
   leaves:
   - name: 五峰山
@@ -90,6 +130,46 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/达州市/大竹县
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 大竹孟氏公館
+    canonicalName: 大竹孟氏公館
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/大竹县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 平灘河牌坊
+    canonicalName: 平灘河牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/大竹县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 清河街道建築群
+    canonicalName: 清河街道建築群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/大竹县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 烏橋千佛岩摩崖造像
+    canonicalName: 烏橋千佛岩摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/大竹县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 神合張胡氏節孝坊
+    canonicalName: 神合張胡氏節孝坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/大竹县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 宣汉县
   leaves:
   - name: 巴山大峡谷
@@ -125,6 +205,70 @@ districts:
     - 峨城山旅游景区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 向家嘴李鄧氏墓
+    canonicalName: 向家嘴李鄧氏墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/宣汉县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 姚氏宗祠
+    canonicalName: 姚氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/宣汉县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 宏文校工字樓
+    canonicalName: 宏文校工字樓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/宣汉县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 插旗山曾氏家族墓
+    canonicalName: 插旗山曾氏家族墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/宣汉县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 浪洋寺摩崖造像
+    canonicalName: 浪洋寺摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/宣汉县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 王維舟舊居
+    canonicalName: 王維舟舊居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/宣汉县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 羅家壩遺址
+    canonicalName: 羅家壩遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/宣汉县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 陳民安墓
+    canonicalName: 陳民安墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/宣汉县
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 开江县
   leaves:
   - name: 金山景区
@@ -148,6 +292,62 @@ districts:
     - 渔人部落旅游景区
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 任市陶牌坊
+    canonicalName: 任市陶牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/开江县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 普安姜吳氏節孝坊
+    canonicalName: 普安姜吳氏節孝坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/开江县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 甘棠胡氏节孝坊
+    canonicalName: 甘棠胡氏节孝坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/开江县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 開江仁德橋
+    canonicalName: 開江仁德橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/开江县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 開江寶泉塔
+    canonicalName: 開江寶泉塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/开江县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 開江牌坊
+    canonicalName: 開江牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/开江县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 開江金山寺
+    canonicalName: 開江金山寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/开江县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 渠县
   leaves:
   - name: 賨人谷
@@ -192,6 +392,8 @@ districts:
     - 沈府君阙
     selectionPriority: 4
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:55:50Z'
+    sourceScreenEvidence: zh.wikipedia.org:渠县汉阙 extract=382ch
   - name: 城坝遗址
     canonicalName: 渠县城坝遗址
     entityType: 地点/遗址
@@ -210,6 +412,126 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
     selectionPriority: 6
     sourceReadiness: pending
+  - name: 城壩遺址
+    canonicalName: 城壩遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 梭羅碥摩崖造像
+    canonicalName: 梭羅碥摩崖造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 渠縣三匯白塔
+    canonicalName: 渠縣三匯白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 渠縣文廟
+    canonicalName: 渠縣文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 渠縣節孝坊
+    canonicalName: 渠縣節孝坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 渠縣趙氏宗祠
+    canonicalName: 渠縣趙氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 渠縣雲峰塔
+    canonicalName: 渠縣雲峰塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 王家坪汉阙
+    canonicalName: 王家坪汉阙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 王萬邦墓
+    canonicalName: 王萬邦墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 礼义城
+    canonicalName: 礼义城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 蒲家湾汉阙
+    canonicalName: 蒲家湾汉阙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 赵家村东无铭阙
+    canonicalName: 赵家村东无铭阙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 赵家村汉阙
+    canonicalName: 赵家村汉阙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 赵家村西无铭阙
+    canonicalName: 赵家村西无铭阙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 馮煥闕
+    canonicalName: 馮煥闕
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/渠县
+    sourceReadiness: pending
+    selectionPriority: 21
 - district: 达川区
   leaves:
   - name: 真佛山
@@ -245,6 +567,38 @@ districts:
     - 石桥列宁街
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 大風高拱橋
+    canonicalName: 大風高拱橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/达川区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 戛雲亭
+    canonicalName: 戛雲亭
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/达川区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 真佛山廟群
+    canonicalName: 真佛山廟群
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/达川区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 石橋牌坊群
+    canonicalName: 石橋牌坊群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/达川区
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 通川区
   leaves:
   - name: 神剑园
@@ -279,6 +633,8 @@ districts:
     - 莲花湖
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:56:05Z'
+    sourceScreenEvidence: zh.wikipedia.org:莲花湖 extract=541ch
   - name: 凤凰山
     canonicalName: 达州凤凰山
     entityType: 地点/自然景观
@@ -290,3 +646,51 @@ districts:
     - 元稹纪念馆
     selectionPriority: 4
     sourceReadiness: ready
+  - name: 張愛萍故居
+    canonicalName: 張愛萍故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/通川区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 瓷碗鋪窯址
+    canonicalName: 瓷碗鋪窯址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/通川区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 紅三十軍政治部舊址
+    canonicalName: 紅三十軍政治部舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/通川区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 紅八十八師政治部舊址
+    canonicalName: 紅八十八師政治部舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/通川区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 达州博物馆
+    canonicalName: 达州博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/通川区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 龍爪塔
+    canonicalName: 龍爪塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/达州市/通川区
+    sourceReadiness: pending
+    selectionPriority: 10

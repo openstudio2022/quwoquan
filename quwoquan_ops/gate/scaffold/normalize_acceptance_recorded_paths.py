@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Rewrite acceptance recorded refs to canonical test paths and .qwq_output/runs/tests reports."""
+"""Rewrite acceptance recorded refs to canonical test paths and .qwq_output/env/repo/runs/tests reports."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from test_directory_inventory_lib import ROOT, build_path_mapping, recorded_file_is_canonical
+from test_directory_inventory_lib import ROOT, recorded_file_is_canonical
 
 
 FEATURE_TREE = ROOT / "specs" / "feature-tree"
@@ -23,7 +23,7 @@ DONE_STATUSES = {"implemented", "completed"}
 TEST_FILE_SUFFIXES = (".dart", ".go", ".py")
 
 
-def normalize_record(record: Any, mapping: dict[str, str]) -> tuple[dict[str, str] | None, str | None]:
+def normalize_record(record: Any) -> tuple[dict[str, str] | None, str | None]:
     kind: str | None = None
     value: str | None = None
     if isinstance(record, dict):
@@ -46,21 +46,19 @@ def normalize_record(record: Any, mapping: dict[str, str]) -> tuple[dict[str, st
     if not kind or not value:
         return None, None
     if kind == "file":
-        if value in mapping:
-            return {"file": mapping[value]}, None
         if recorded_file_is_canonical(value):
             return {"file": value}, None
         if value.endswith(TEST_FILE_SUFFIXES):
-            return None, f"[migrated_from_recorded_noncanonical] {value}"
-        return None, f"[migrated_from_recorded_reference] {value}"
+            return None, f"[removed_recorded_noncanonical] {value}"
+        return None, f"[removed_recorded_reference] {value}"
     if kind == "artifact":
-        if value.startswith(".qwq_output/runs/tests/") and value.endswith("report.json"):
+        if value.startswith(".qwq_output/env/repo/runs/tests/") and value.endswith("report.json"):
             return {"artifact": value}, None
         return None, f"[migrated_from_recorded_artifact] {value}"
     return None, f"[migrated_from_recorded_command] {value}"
 
 
-def migrate_file(path: Path, mapping: dict[str, str]) -> bool:
+def migrate_file(path: Path) -> bool:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     changed = False
     for group_name in ACCEPTANCE_GROUPS:
@@ -80,7 +78,7 @@ def migrate_file(path: Path, mapping: dict[str, str]) -> bool:
                 item["notes"] = notes
             normalized: list[dict[str, str]] = []
             for record in recorded:
-                mapped, note = normalize_record(record, mapping)
+                mapped, note = normalize_record(record)
                 if mapped is not None:
                     normalized.append(mapped)
                 if note and note not in notes:
@@ -101,10 +99,9 @@ def migrate_file(path: Path, mapping: dict[str, str]) -> bool:
 
 
 def main() -> int:
-    mapping = build_path_mapping()
     changed = 0
     for path in sorted(FEATURE_TREE.rglob("acceptance.yaml")):
-        if migrate_file(path, mapping):
+        if migrate_file(path):
             changed += 1
             print(f"[normalize] {path.relative_to(ROOT)}")
     print(f"[normalize] changed_files={changed}")

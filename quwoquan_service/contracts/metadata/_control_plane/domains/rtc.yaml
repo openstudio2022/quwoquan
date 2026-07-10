@@ -26,7 +26,7 @@ minimum_package:
     t1:
       - contracts/metadata/rtc/call_session/service.yaml
     t2:
-      - services/rtc-service/tests/room_management_contract_test.go
+      - services/rtc-service/tests/api_integration/room_management_contract__api_integration_test.go
     t3:
       - contracts/metadata/rtc/call_session/tests/e2e.yaml
     t4: []

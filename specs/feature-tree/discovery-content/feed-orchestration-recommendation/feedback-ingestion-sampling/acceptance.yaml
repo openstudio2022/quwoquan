@@ -74,7 +74,7 @@ gwt_acceptance:
         - beta
         - gamma
     notes:
-    - '[migrated_from_planned] quwoquan_app/test/patrol/discovery/feed_exposure_governance_journey_test.dart'
+    - '[migrated_from_planned] quwoquan_app/test/user_acceptance/patrol/discovery/feed_exposure_governance_journey_test.dart'
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

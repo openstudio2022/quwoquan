@@ -7,8 +7,8 @@ LOCAL_PORT="${PUBLIC_MEDIA_LOCAL_PORT:-18098}"
 PUBLIC_PORT="${PUBLIC_MEDIA_PUBLIC_PORT:-$LOCAL_PORT}"
 PUBLIC_SCHEME="${PUBLIC_MEDIA_PUBLIC_SCHEME:-http}"
 PUBLIC_IP_OVERRIDE="${PUBLIC_MEDIA_PUBLIC_IP:-}"
-ORIGIN_REPORT_PATH="${PUBLIC_MEDIA_ORIGIN_REPORT:-$ROOT_DIR/.qwq_output/runs/gamma-local-origin/origin-report.json}"
-SESSION_REPORT_PATH="${PUBLIC_MEDIA_SESSION_REPORT:-$ROOT_DIR/.qwq_output/runs/gamma-local-origin/public-ip-session.json}"
+ORIGIN_REPORT_PATH="${PUBLIC_MEDIA_ORIGIN_REPORT:-$ROOT_DIR/.qwq_output/env/gamma/runs/gamma-local-origin/origin-report.json}"
+SESSION_REPORT_PATH="${PUBLIC_MEDIA_SESSION_REPORT:-$ROOT_DIR/.qwq_output/env/gamma/runs/gamma-local-origin/public-ip-session.json}"
 
 usage() {
   cat <<EOF

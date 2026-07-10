@@ -5,12 +5,12 @@ revision: 1
 status: implemented
 
 affected_nodes:
-  - quwoquan_app/test/ui/chat/widgets/chat_message_bubble_widget_test.dart
-  - quwoquan_app/test/ui/chat/widgets/chat_receipt_ui_widget_test.dart
-  - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-  - quwoquan_app/test/ui/content/entry/widgets/location_selector_page_widget_test.dart
-  - quwoquan_app/test/ui/discovery/pages/work_browser_entry_page_test.dart
-  - quwoquan_app/test/ui/circle/pages/home_circles_hub_page_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_message_bubble_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_receipt_ui_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/content/entry/widgets/location_selector_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/discovery/pages/work_browser_entry_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/circle/pages/home_circles_hub_page__local_contract_test.dart
   - quwoquan_app/test/local_contract/ui/**/__local_contract_test.dart（6 个 wrapper 自动继承）
 
 entries:

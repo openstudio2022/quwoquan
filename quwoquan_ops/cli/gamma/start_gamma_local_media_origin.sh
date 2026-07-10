@@ -6,7 +6,7 @@ REGISTRY_PATH="${GAMMA_LOCAL_MEDIA_REGISTRY:-$ROOT_DIR/quwoquan_ops/environments
 BIND_HOST="${GAMMA_LOCAL_MEDIA_BIND_HOST:-0.0.0.0}"
 PORT="${GAMMA_LOCAL_MEDIA_PORT:-19110}"
 PUBLIC_BASE_URL="${GAMMA_LOCAL_MEDIA_PUBLIC_BASE_URL:-}"
-REPORT_PATH="${GAMMA_LOCAL_MEDIA_REPORT:-$ROOT_DIR/.qwq_output/runs/gamma-local-origin/report.json}"
+REPORT_PATH="${GAMMA_LOCAL_MEDIA_REPORT:-$ROOT_DIR/.qwq_output/env/gamma/runs/gamma-local-origin/report.json}"
 
 usage() {
   cat <<EOF

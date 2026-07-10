@@ -21,9 +21,9 @@ for f in \
   fi
 done
 
-state_file="$ROOT/.qwq_output/local/release-state/$SERVICE.state"
-audit_file="$ROOT/.qwq_output/local/release-state/$SERVICE.audit.log"
-mkdir -p "$ROOT/.qwq_output/local/release-state"
+state_file="$ROOT/.qwq_output/env/repo/local/release-state/$SERVICE.state"
+audit_file="$ROOT/.qwq_output/env/repo/local/release-state/$SERVICE.audit.log"
+mkdir -p "$ROOT/.qwq_output/env/repo/local/release-state"
 backup_state=""
 backup_audit=""
 if [[ -f "$state_file" ]]; then

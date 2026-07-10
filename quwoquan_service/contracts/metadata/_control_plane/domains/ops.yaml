@@ -42,7 +42,7 @@ minimum_package:
     - contracts/metadata/ops/experiment_bucket/service.yaml
     - contracts/metadata/ops/visit_record/service.yaml
     t2:
-    - services/product-ops-service/cmd/api/main_test.go
+    - services/product-ops-service/cmd/api/main__local_contract_test.go
     t3:
     - contracts/metadata/ops/experiment_bucket/tests/e2e.yaml
     - contracts/metadata/ops/visit_record/tests/e2e.yaml

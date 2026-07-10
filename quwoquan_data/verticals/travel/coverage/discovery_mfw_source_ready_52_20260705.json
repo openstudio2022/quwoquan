@@ -2,7 +2,7 @@
   "schemaVersion": "quwoquan_data.discovery_seed/1",
   "generatedBy": "codex_mfw_real_e2e_source_precheck_20260705",
   "createdFor": "mfw_reference_release_safe_100_object_rerun",
-  "sourceEvidence": "/tmp/qwq_mfw_real_e2e_20260704/.qwq_output/runs/source_precheck_all_downloaded_entities.json",
+  "sourceEvidence": "/tmp/qwq_mfw_real_e2e_20260704/.qwq_output/env/repo/runs/source_precheck_all_downloaded_entities.json",
   "sourcePolicy": {
     "mafengwo": "reference_only_no_publish_assets",
     "releaseAssets": "official_open_license_or_authorized_only"

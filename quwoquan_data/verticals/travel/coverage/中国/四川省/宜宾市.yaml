@@ -20,6 +20,8 @@ districts:
     - 中国李庄
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T13:15:15Z'
+    sourceScreenEvidence: baike.baidu.com:李庄古镇
   - name: 五粮液旅游景区
     canonicalName: 五粮液旅游景区
     entityType: 地点/景区
@@ -59,6 +61,142 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 七星山黑塔
+    canonicalName: 七星山黑塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 中国营造学社旧址
+    canonicalName: 中国营造学社旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 五糧液老窖池遺址
+    canonicalName: 五糧液老窖池遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 元興和酒窖
+    canonicalName: 元興和酒窖
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 大观楼 (宜宾)
+    canonicalName: 大观楼 (宜宾)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 宜賓流杯池及石刻題記
+    canonicalName: 宜賓流杯池及石刻題記
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 德盛福酒窖
+    canonicalName: 德盛福酒窖
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 李庄禹王宫
+    canonicalName: 李庄禹王宫
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 李莊中央研究院舊址
+    canonicalName: 李莊中央研究院舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 李莊張家祠
+    canonicalName: 李莊張家祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 李莊東嶽廟
+    canonicalName: 李莊東嶽廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 東山白塔
+    canonicalName: 東山白塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 玄義玫瑰堂
+    canonicalName: 玄義玫瑰堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 真武山古建筑群
+    canonicalName: 真武山古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 翠屏書院
+    canonicalName: 翠屏書院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 舊州塔
+    canonicalName: 舊州塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 趙一曼故居
+    canonicalName: 趙一曼故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/翠屏区
+    sourceReadiness: pending
+    selectionPriority: 20
 - district: 南溪区
   leaves:
   - name: 南溪古街
@@ -78,6 +216,38 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/南溪区
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 南溪城墙
+    canonicalName: 南溪城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/南溪区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 南溪映南塔
+    canonicalName: 南溪映南塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/南溪区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 南溪朱德舊居
+    canonicalName: 南溪朱德舊居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/南溪区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 南溪鎮南塔
+    canonicalName: 南溪鎮南塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/南溪区
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 叙州区
   leaves:
   - name: 横江古镇
@@ -108,6 +278,72 @@ districts:
     - 石城山森林公园
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:39:43Z'
+    sourceScreenEvidence: zh.wikipedia.org:石城山 extract=293ch
+  - name: 徐家石室墓群
+    canonicalName: 徐家石室墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 朱家民居
+    canonicalName: 朱家民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 石城山崖墓群
+    canonicalName: 石城山崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 糟房頭釀酒作坊遺址
+    canonicalName: 糟房頭釀酒作坊遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 肖公館
+    canonicalName: 肖公館
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 郭成夫婦墓
+    canonicalName: 郭成夫婦墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 隆興石室墓群
+    canonicalName: 隆興石室墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 黃傘崖墓群
+    canonicalName: 黃傘崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/叙州区
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 江安县
   leaves:
   - name: 夕佳山民居
@@ -129,6 +365,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/江安县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 國立戲劇專科學校舊址
+    canonicalName: 國立戲劇專科學校舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/江安县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 江安吳氏民居
+    canonicalName: 江安吳氏民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/江安县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 油榨坪祠堂
+    canonicalName: 油榨坪祠堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/江安县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 长宁县
   leaves:
   - name: 蜀南竹海
@@ -184,6 +444,38 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 七個洞崖墓群
+    canonicalName: 七個洞崖墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 仙寓洞
+    canonicalName: 仙寓洞
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 雙河文廟
+    canonicalName: 雙河文廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 龍吟寺石刻造像
+    canonicalName: 龍吟寺石刻造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/长宁县
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 高县
   leaves:
   - name: 胜天红岩山旅游景区
@@ -213,6 +505,38 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/高县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 大窩文昌宮
+    canonicalName: 大窩文昌宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/高县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 李碩勛故居
+    canonicalName: 李碩勛故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/高县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 陽翰笙故居
+    canonicalName: 陽翰笙故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/高县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 高縣回龍寺
+    canonicalName: 高縣回龍寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/高县
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 珙县
   leaves:
   - name: 珙县僰人悬棺
@@ -241,6 +565,38 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/珙县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 僰人石寨古堡
+    canonicalName: 僰人石寨古堡
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/珙县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 珙縣僰人懸棺
+    canonicalName: 珙縣僰人懸棺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/珙县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 珙縣北京寺
+    canonicalName: 珙縣北京寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/珙县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 隘口石牌坊
+    canonicalName: 隘口石牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/珙县
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 筠连县
   leaves:
   - name: 古楼峰丛
@@ -271,6 +627,54 @@ districts:
     - 石漠花海
     selectionPriority: 3
     sourceReadiness: ready
+  - name: 万寿桥 (筠连县)
+    canonicalName: 万寿桥 (筠连县)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/筠连县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 大梁子兵营
+    canonicalName: 大梁子兵营
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/筠连县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 沐愛衙署舊址
+    canonicalName: 沐愛衙署舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/筠连县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 玉壺井碑刻
+    canonicalName: 玉壺井碑刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/筠连县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 筠連五尺道
+    canonicalName: 筠連五尺道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/筠连县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 筠連淩雲關
+    canonicalName: 筠連淩雲關
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/筠连县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 兴文县
   leaves:
   - name: 兴文石海
@@ -285,6 +689,8 @@ districts:
     - 兴文世界地质公园
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:40:22Z'
+    sourceScreenEvidence: zh.wikipedia.org:兴文世界地质公园 extract=252ch
   - name: 僰王山
     canonicalName: 僰王山
     entityType: 地点/景区
@@ -312,6 +718,22 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/兴文县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 興文僰人懸棺
+    canonicalName: 興文僰人懸棺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/兴文县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 興文縣委舊址
+    canonicalName: 興文縣委舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/兴文县
+    sourceReadiness: pending
+    selectionPriority: 5
 - district: 屏山县
   leaves:
   - name: 八仙山旅游景区
@@ -340,3 +762,59 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 丹霞洞摩崖造像及石刻
+    canonicalName: 丹霞洞摩崖造像及石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 屏山楞嚴寺
+    canonicalName: 屏山楞嚴寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 屏山清涼寺
+    canonicalName: 屏山清涼寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 屏山龍氏山莊
+    canonicalName: 屏山龍氏山莊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 禹帝宮
+    canonicalName: 禹帝宮
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 馬湖萬壽寺
+    canonicalName: 馬湖萬壽寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 馬湖萬壽觀
+    canonicalName: 馬湖萬壽觀
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/宜宾市/屏山县
+    sourceReadiness: pending
+    selectionPriority: 10

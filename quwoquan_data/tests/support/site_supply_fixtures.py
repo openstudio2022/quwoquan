@@ -60,6 +60,46 @@ for _path in (DATA_ROOT, SCRIPTS_ROOT):
 from site_supply import handler as ss
 
 from task import store
+import _common.paths as _paths_mod
+from site_supply import content_plan as _site_content_plan
+from site_supply import core as _site_core
+from site_supply import crawler as _site_crawler
+from site_supply import packets as _site_packets
+from site_supply import reports as _site_reports
+from site_supply import targets as _site_targets
+from site_supply import trial as _site_trial
+
+
+def _retarget_paths() -> None:
+    runtime_root = _TMP / "runtime"
+    publish_root = _TMP / "publish"
+    release_root = _TMP / "release"
+    os.environ["QWQ_DATA_ROOT"] = str(TEST_DATA_ROOT)
+    os.environ["QWQ_RUNTIME_ROOT"] = str(runtime_root)
+    os.environ["QWQ_PUBLISH_ROOT"] = str(publish_root)
+    os.environ["QWQ_RELEASE_ROOT"] = str(release_root)
+    os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(TEST_TASKS_ROOT)
+    _paths_mod.DATA_ROOT = TEST_DATA_ROOT
+    _paths_mod.RUNTIME_ROOT = runtime_root
+    _paths_mod.TASKS_ROOT = runtime_root / "tasks"
+    _paths_mod.PUBLISH_ROOT = publish_root
+    _paths_mod.RELEASE_ROOT = release_root
+    _paths_mod.COMMITTED_TASKS_ROOT = TEST_TASKS_ROOT
+    for module in (
+        _site_content_plan,
+        _site_core,
+        _site_crawler,
+        _site_packets,
+        _site_reports,
+        _site_targets,
+        _site_trial,
+    ):
+        if hasattr(module, "DATA_ROOT"):
+            module.DATA_ROOT = TEST_DATA_ROOT
+        if hasattr(module, "RUNTIME_ROOT"):
+            module.RUNTIME_ROOT = runtime_root
+    if hasattr(store, "COMMITTED_TASKS_ROOT"):
+        store.COMMITTED_TASKS_ROOT = TEST_TASKS_ROOT
 
 def _cli_env() -> dict[str, str]:
     """site-supply CLI 子进程的显式环境。
@@ -67,7 +107,7 @@ def _cli_env() -> dict[str, str]:
     DATA_ROOT 指向隔离 tmp，并通过 verticals symlink 读取真实 source registry；
     运行态/发布/committed 根也隔离到本测试 tmp。必须显式构造而非继承全局
     os.environ：同一 pytest 进程内其他测试模块会改写 QWQ_*，子进程若继承污染值
-    会读到错误的 local/data-runtime/tasks。
+    会读到错误的 data/local/runtime/tasks。
     """
     env = dict(os.environ)
     env["QWQ_DATA_ROOT"] = str(TEST_DATA_ROOT)
@@ -96,6 +136,7 @@ PNG_BYTES = (
 TEST_COMMITTED_TASK_ID = "旅行/网站供给线/维基导游/真实运营试跑"
 
 def _seed_committed_task_spec() -> None:
+    _retarget_paths()
     spec = store.scaffold_spec(
         vertical="travel",
         organize_by="网站供给线",
@@ -126,6 +167,11 @@ def _seed_committed_task_spec() -> None:
     assert spec["taskId"] == TEST_COMMITTED_TASK_ID
     store.save_spec(spec)
     ss._known_coverage_entity_targets.cache_clear()
+
+
+def reset_site_supply_fixture() -> None:
+    _retarget_paths()
+    _seed_committed_task_spec()
 
 
 _seed_committed_task_spec()

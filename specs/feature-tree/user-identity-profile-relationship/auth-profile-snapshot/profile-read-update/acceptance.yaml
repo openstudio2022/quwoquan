@@ -48,8 +48,8 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/user/profile_identity_sync/profile_creation_update__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/profile_identity_sync/create_update_chat_sync__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/chat/chat_message_snapshot_contract__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       - file: quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
     status: completed
@@ -134,13 +134,13 @@ gwt_acceptance:
       - layer: local_contract
         file: quwoquan_app/test/local_contract/cloud/integration/remote_api_path_contract__local_contract_test.dart
       - layer: user_acceptance
-        file: quwoquan_app/test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart
+        file: quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/user/contract/user_profile_repository_contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/integration/remote_api_path_contract__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/persona_management_page__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
       - file: quwoquan_service/services/user-service/tests/api_integration/credential_contract__api_integration_test.go
       - file: quwoquan_service/services/user-service/tests/api_integration/persona_contract__api_integration_test.go

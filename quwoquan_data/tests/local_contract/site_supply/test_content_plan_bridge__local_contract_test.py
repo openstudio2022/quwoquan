@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-
-
 from pathlib import Path
 
 from support.site_supply_fixtures import *  # noqa: F401,F403
 
+
+def setup_function() -> None:
+    reset_site_supply_fixture()
 
 
 def _write_large_image(path: Path) -> Path:

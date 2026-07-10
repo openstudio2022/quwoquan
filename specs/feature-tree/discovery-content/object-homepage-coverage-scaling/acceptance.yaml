@@ -1,0 +1,65 @@
+version: 2
+node:
+  id: object-homepage-coverage-scaling
+  level: L2_business_capability
+  path: specs/feature-tree/discovery-content/object-homepage-coverage-scaling
+  title: object homepage coverage scaling
+  parent_domain_service: discovery-content
+  parent_business_capability: object-homepage-coverage-scaling
+scope:
+  summary: 实体主页省级覆盖放量产线（主清单扩容、前置源核验、两段流水线、省级 recipe、批次执行导入、App 消费 UAT）验收范围。
+  in_scope:
+  - 主清单扩容管线（发现/去重/打标/写回）与 coverage-master-list 门禁。
+  - 前置 sourceScreen 批量核验与 sourceReadiness 三态回写。
+  - download/author 两段流水线与 bridge 池化并发改造。
+  - 省级参数化 recipe（100/500/all-ready 三档）与断点续跑。
+  - 批次执行、ship/import、coverage 账本回写证据链。
+  out_of_scope:
+  - 对象页消费体验升级（object-homepage-network）。
+  - 主页认领维护下线治理（shared-homepage-network）。
+  - 云端弹性 worker 池专项。
+sit_acceptance:
+  SIT1:
+    title: 省级批次产线端到端 SIT（扩容→核验→两段流水线→ship→coverage）
+    story_refs:
+    - zhejiang-sichuan-province-coverage
+    done_when:
+    - 主清单扩容批写回后 coverage-master-list 门禁绿，master-list-stats 出数。
+    - source-screen 批量核验回写三态与时间戳，产出 ready 折扣率报告。
+    - download stage 与 author stage 独立编排可断点续跑，author 只消费就绪对象。
+    - 批次 ship 后 coverage 账本 hasHomepage 与 envImports 与 publish 主线一致。
+    - gamma 导入后 introduction API 抽查 200。
+    performance_points:
+    - M1 改造后单机吞吐 ≥4-6 主页/h（分段出数佐证）。
+    tests:
+      planned: []
+      recorded: []
+    status: pending
+    test_evidence:
+      primary:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.discovery_content.object_homepage_coverage_scaling.sit1.sit1_local_contract
+        envs: &id001
+        - local
+      - layer: api_integration
+        suite: sit1_api_integration
+        cases:
+        - api_integration.discovery_content.object_homepage_coverage_scaling.sit1.sit1_api_integration
+        envs:
+        - gamma
+      supporting:
+      - layer: local_contract
+        suite: sit1_local_contract
+        cases:
+        - local_contract.discovery_content.object_homepage_coverage_scaling.sit1.sit1_local_contract
+        envs: *id001
+    notes:
+    - 批次证据归 QWQ_OUTPUT_ROOT/data/local/runtime/**，发布审计归 quwoquan_data/publish/env_releases/**。
+execution:
+  local_gate:
+  - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh
+  - bash quwoquan_ops/gate/scaffold/verify_acceptance_standard.sh
+  full_gate:
+  - make gate

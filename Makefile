@@ -168,13 +168,13 @@ verify-app-web-offline-resources:
 	@python3 quwoquan_app/scripts/cli.py web verify-offline --build
 
 verify-app-assistant-old-stack-retired:
-	@python3 quwoquan_service/services/assistant-service/tests/ops/gate/verify_assistant_old_stack_retired.py
+	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_old_stack_retired.py
 
 verify-avatar-user-pool:
-	@python3 quwoquan_service/services/chat-service/tests/ops/gate/verify_avatar_user_pool_consistency.py
+	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_avatar_user_pool_consistency.py
 
 probe-avatar-user-pool-gateway:
-	@python3 quwoquan_service/services/chat-service/tests/ops/smoke/probe_avatar_user_pool_gateway.py
+	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/probe_avatar_user_pool_gateway.py
 
 verify-business-env-data-inventory:
 	@python3 quwoquan_app/scripts/env/verify_business_env_data_inventory.py
@@ -364,7 +364,7 @@ verify-env-instance-isolation:
 	@python3 quwoquan_service/scripts/runtime/verify_env_instance_isolation.py
 
 test-app-alpha-seed:
-	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/services/contract_seeded_mock_repository_test.dart
+	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/cloud/services/contract_seeded_mock_repository__local_contract_test.dart
 
 test-app-beta-seed:
 	@python3 quwoquan_app/scripts/env/run_app_alpha_beta_seed_matrix.py
@@ -399,7 +399,7 @@ verify-app-native-edge-navigation:
 	@python3 quwoquan_app/scripts/runtime/verify_native_edge_navigation.py
 
 verify-app-pageflip-back-mainline:
-	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/components/pageflip/backward_sheet_partition_contract_test.dart test/components/pageflip/pageflip_contract_test.dart test/common/pageflip/pageflip_diagnostics_visual_test.dart test/components/pageflip/pageflip_widget_test.dart
+	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/ui/components/pageflip/backward_sheet_partition_contract__local_contract_test.dart test/local_contract/ui/components/pageflip/pageflip_contract__local_contract_test.dart test/local_contract/quality/shared/pageflip/pageflip_diagnostics_visual__local_contract_test.dart test/local_contract/ui/components/pageflip/pageflip_widget__local_contract_test.dart
 
 # 后翻路线 B 主线静态门禁（见 .cursor/rules/12-pageflip-backward-mainline.mdc）。
 verify-app-pageflip-backward-mainline:
@@ -447,7 +447,7 @@ verify-agent-context-contract:
 
 # 助手手写（排除 generated）+ search_repository：Map/dynamic 计数棘轮（见 specs/gates/assistant_search_weak_typing_governance.md）
 verify-app-assistant-search-weak-typing-ratchet:
-	@python3 quwoquan_service/services/assistant-service/tests/ops/gate/verify_assistant_search_weak_typing_ratchet.py
+	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py
 
 gate:
 	@$(MAKE) verify-global-increment-constraints
@@ -506,7 +506,7 @@ verify-chat-avatar-commercial-matrix:
 		echo "FAIL: 请设置 COMMERCIAL_MATRIX_MANIFEST=.qwq_output/runs/gamma/commercial-matrix-chat-avatar/manifest.yaml"; \
 		exit 2; \
 	fi
-	@python3 quwoquan_service/services/chat-service/tests/ops/gate/verify_chat_avatar_commercial_matrix_evidence.py --manifest "$(COMMERCIAL_MATRIX_MANIFEST)"
+	@python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_chat_avatar_commercial_matrix_evidence.py --manifest "$(COMMERCIAL_MATRIX_MANIFEST)"
 
 verify:
 	@$(MAKE) verify-global-increment-constraints
@@ -601,7 +601,6 @@ config-slo-gate:
 
 .PHONY: l2-content gate-full test-api-contract test-api-contract-chat
 .PHONY: verify-test-specs verify-test-no-fake verify-test-coverage-map verify-test-directory-layout
-.PHONY: generate-test-directory-inventory generate-app-canonical-test-wrappers generate-canonical-test-bridges
 .PHONY: normalize-acceptance-recorded-paths
 .PHONY: test-local-contract test-api-integration test-user-acceptance
 
@@ -625,15 +624,6 @@ verify-test-directory-layout:
 verify-test-remote-env:
 	@python3 quwoquan_ops/gate/scaffold/verify_test_remote_env.py --suite "$${MODE:?set MODE=api_integration|user_acceptance}" --env "$${ENV:-gamma}" --target "$${TARGET:-gamma-local}"
 
-generate-test-directory-inventory:
-	@python3 quwoquan_ops/gate/scaffold/generate_test_directory_inventory.py
-
-generate-app-canonical-test-wrappers:
-	@python3 quwoquan_ops/gate/scaffold/generate_canonical_test_bridges.py
-
-generate-canonical-test-bridges:
-	@python3 quwoquan_ops/gate/scaffold/generate_canonical_test_bridges.py
-
 normalize-acceptance-recorded-paths:
 	@python3 quwoquan_ops/gate/scaffold/normalize_acceptance_recorded_paths.py
 
@@ -644,7 +634,7 @@ test-local-contract:
 	@$(MAKE) verify-test-coverage-map
 	@bash quwoquan_service/scripts/contract/verify_contract_metadata.sh
 	@python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/local_contract/
-	@cd quwoquan_service && go test ./services/.../tests/local_contract -count=1
+	@cd quwoquan_service && go test $$(go list ./services/... | grep -v '/tests/api_integration') -count=1
 	@$(PYTEST_RUNNER) -m pytest quwoquan_data/tests/local_contract quwoquan_ops/tests/local_contract -q
 
 # api_integration：按统一环境名解析 HTTP 基址。API_CONTRACT_ENV 默认为 gamma。
@@ -662,12 +652,12 @@ test-api-contract:
 		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL and $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_PRODUCT_OPS_BASE_URL"; \
 		exit 2; \
 	fi; \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/content/api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/content/api_contract_runner.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
 		--dart-define=LOCAL_GAMMA_T3_SCOPE=$${LOCAL_GAMMA_T3_SCOPE:-} \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN && \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/ops/api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/ops/api_contract_runner.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL=$$OPS_BASE_URL
 
@@ -684,7 +674,7 @@ test-api-contract-chat:
 		echo "[L3] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL"; \
 		exit 2; \
 	fi; \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/cloud/chat/api_contract_runner.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/chat/api_contract_runner.dart \
 		--dart-define=API_CONTRACT_ENV=$$ENV_NAME \
 		--dart-define=API_CONTRACT_BASE_URL=$$BASE_URL \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN
@@ -701,20 +691,20 @@ test-app-api-integration:
 		echo "[api_integration] FAIL: set $$(printf '%s' "$$ENV_NAME" | tr '[:lower:]-' '[:upper:]_')_BASE_URL"; \
 		exit 2; \
 	fi; \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/beta/ \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/assistant/personal_assistant_weather_ui__api_integration_test.dart test/api_integration/cloud/assistant/personal_assistant_official_sources__api_integration_test.dart \
 		--dart-define=APP_RUNTIME_ENV=beta \
 		--dart-define=APP_DATA_SOURCE=remote \
 		--dart-define=CLOUD_GATEWAY_BASE_URL=$$BASE_URL \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN && \
 	ASSISTANT_SCENARIO_FIXTURE_B64="$$(python3 - <<'PY'\nimport base64\nfrom pathlib import Path\npath = Path('quwoquan_service/contracts/metadata/assistant/test_fixtures/scenarios/assistant_scenarios.json')\nprint(base64.b64encode(path.read_bytes()).decode('ascii'))\nPY\n)" && \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/gamma/assistant_alpha_beta_simulator__api_integration_test.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart \
 		--dart-define=APP_RUNTIME_ENV=beta \
 		--dart-define=APP_DATA_SOURCE=remote \
 		--dart-define=CLOUD_GATEWAY_BASE_URL=$$BASE_URL \
 		--dart-define=TEST_AUTH_TOKEN=$$AUTH_TOKEN \
 		--dart-define=ASSISTANT_SCENARIO_FIXTURE_JSON_B64=$$ASSISTANT_SCENARIO_FIXTURE_B64 && \
 	ASSISTANT_EVAL_FIXTURE_B64="$$(python3 - <<'PY'\nimport base64\nfrom pathlib import Path\npath = Path('quwoquan_service/contracts/metadata/assistant/test_fixtures/scenarios/assistant_skill_eval_scenarios.json')\nprint(base64.b64encode(path.read_bytes()).decode('ascii'))\nPY\n)" && \
-	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/gamma/assistant_skill_comparison__api_integration_test.dart \
+	python3 quwoquan_app/scripts/env/run_flutter_test_guarded.py test/api_integration/cloud/assistant/assistant_skill_comparison__api_integration_test.dart \
 		--dart-define=APP_RUNTIME_ENV=beta \
 		--dart-define=APP_DATA_SOURCE=remote \
 		--dart-define=CLOUD_GATEWAY_BASE_URL=$$BASE_URL \

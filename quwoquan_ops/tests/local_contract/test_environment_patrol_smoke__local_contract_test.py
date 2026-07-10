@@ -26,12 +26,12 @@ class EnvironmentPatrolSmokeTest(unittest.TestCase):
             "media_base_url": "https://gamma-image.quwoquan-env.test:19100",
             "test_auth_token": "local-gamma-token",
             "current_user_id": "",
-            "target": "test/patrol/environment/basic_viability_test.dart",
+            "target": "test/user_acceptance/patrol/environment/basic_viability__user_acceptance_test.dart",
             "platform": "all",
             "device_id": [],
             "dry_run": False,
             "timeout_seconds": 1200,
-            "report": ".qwq_output/runs/device-matrix/environment-smoke/report.json",
+            "report": ".qwq_output/env/repo/runs/device-matrix/environment-smoke/report.json",
         }
         values.update(overrides)
         return argparse.Namespace(**values)

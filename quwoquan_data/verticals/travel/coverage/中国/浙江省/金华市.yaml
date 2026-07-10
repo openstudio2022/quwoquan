@@ -20,6 +20,8 @@ districts:
     - 横店影视文化旅游区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:29:48Z'
+    sourceScreenEvidence: zh.wikipedia.org:横店影视城 extract=322ch
   - name: 卢宅
     canonicalName: 东阳卢宅
     entityType: 地点/遗址
@@ -48,6 +50,14 @@ districts:
     - 太白尖
     selectionPriority: 4
     sourceReadiness: ready
+  - name: 厦程里慎德堂
+    canonicalName: 厦程里慎德堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/东阳市
+    sourceReadiness: pending
+    selectionPriority: 5
 - district: 义乌市
   leaves:
   - name: 义乌国际商贸城
@@ -84,6 +94,22 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/义乌市
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 仪性堂
+    canonicalName: 仪性堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/义乌市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 凰升塘古建筑群
+    canonicalName: 凰升塘古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/义乌市
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 兰溪市
   leaves:
   - name: 诸葛八卦村
@@ -97,6 +123,8 @@ districts:
     - 诸葛村
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:30:25Z'
+    sourceScreenEvidence: zh.wikipedia.org:诸葛八卦村 extract=209ch
   - name: 六洞山地下长河
     canonicalName: 兰溪地下长河
     entityType: 地点/自然景观
@@ -123,6 +151,166 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
     selectionPriority: 4
     sourceReadiness: ready
+  - name: 兰溪东岳庙
+    canonicalName: 兰溪东岳庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 兰溪城墙
+    canonicalName: 兰溪城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 兰溪药皇庙
+    canonicalName: 兰溪药皇庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 周懋森古栈房
+    canonicalName: 周懋森古栈房
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 周懋森古栈房及爱莲堂
+    canonicalName: 周懋森古栈房及爱莲堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 女埠双塔
+    canonicalName: 女埠双塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 宁波会馆 (兰溪)
+    canonicalName: 宁波会馆 (兰溪)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 毕家明墓
+    canonicalName: 毕家明墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 游埠古桥群
+    canonicalName: 游埠古桥群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 焦石邵氏家庙及孝子坊
+    canonicalName: 焦石邵氏家庙及孝子坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 爱莲堂 (兰溪市)
+    canonicalName: 爱莲堂 (兰溪市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 章郭巷9号民居
+    canonicalName: 章郭巷9号民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 竹塘进士木牌坊
+    canonicalName: 竹塘进士木牌坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 米业公会 (兰溪)
+    canonicalName: 米业公会 (兰溪)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 越商别墅
+    canonicalName: 越商别墅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 越郡公所
+    canonicalName: 越郡公所
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 钱业公所 (兰溪)
+    canonicalName: 钱业公所 (兰溪)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 陶宅陶氏宗祠
+    canonicalName: 陶宅陶氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 黄店刘氏四祠
+    canonicalName: 黄店刘氏四祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 黄村坞钟瑞堂及小厅
+    canonicalName: 黄村坞钟瑞堂及小厅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    sourceReadiness: pending
+    selectionPriority: 24
 - district: 婺城区
   leaves:
   - name: 双龙洞
@@ -135,6 +323,8 @@ districts:
     - 双龙风景区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:30:38Z'
+    sourceScreenEvidence: zh.wikipedia.org:双龙洞 extract=383ch
   - name: 太平天国侍王府
     canonicalName: 太平天国侍王府
     entityType: 地点/遗址
@@ -171,6 +361,8 @@ districts:
     - 婺州古城
     selectionPriority: 5
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:31:05Z'
+    sourceScreenEvidence: zh.wikipedia.org:婺州古城 extract=306ch
   - name: 八咏楼
     canonicalName: 金华八咏楼
     entityType: 地点/遗址
@@ -179,6 +371,24 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
     selectionPriority: 6
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:31:09Z'
+    sourceScreenEvidence: zh.wikipedia.org:八咏楼 extract=319ch
+  - name: 白沙堰
+    canonicalName: 白沙堰
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 通济桥 (金华市)
+    canonicalName: 通济桥 (金华市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 武义县
   leaves:
   - name: 牛头山
@@ -219,6 +429,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
     selectionPriority: 4
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:31:36Z'
+    sourceScreenEvidence: zh.wikipedia.org:俞源村 extract=222ch
   - name: 延福寺
     canonicalName: 武义延福寺
     entityType: 地点/宗教场所
@@ -236,6 +448,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
     selectionPriority: 6
     sourceReadiness: pending
+  - name: 忠孝堂
+    canonicalName: 忠孝堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 毓英塔
+    canonicalName: 毓英塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 熟溪桥
+    canonicalName: 熟溪桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 永康市
   leaves:
   - name: 方岩
@@ -248,6 +484,8 @@ districts:
     - 方岩风景名胜区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:31:51Z'
+    sourceScreenEvidence: zh.wikipedia.org:方岩风景名胜区 extract=439ch
   - name: 中国科技五金城
     canonicalName: 中国科技五金城
     entityType: 地点/打卡地
@@ -258,6 +496,78 @@ districts:
     - 永康五金城
     selectionPriority: 2
     sourceReadiness: ready
+  - name: 仁寿堂
+    canonicalName: 仁寿堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 占鳌公祠
+    canonicalName: 占鳌公祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 厚仁后宅厅
+    canonicalName: 厚仁后宅厅
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 徐震二公祠
+    canonicalName: 徐震二公祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 慈孝堂
+    canonicalName: 慈孝堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 正心堂
+    canonicalName: 正心堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 燕贻堂
+    canonicalName: 燕贻堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 花街大夫第
+    canonicalName: 花街大夫第
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 西津桥
+    canonicalName: 西津桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 浦江县
   leaves:
   - name: 仙华山
@@ -290,6 +600,8 @@ districts:
     - 上山考古遗址公园
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:32:10Z'
+    sourceScreenEvidence: zh.wikipedia.org:上山遗址 extract=477ch
   - name: 神丽峡
     canonicalName: 浦江神丽峡
     entityType: 地点/自然景观
@@ -298,6 +610,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/浦江县
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 东陈陈氏宗祠
+    canonicalName: 东陈陈氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/浦江县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 嵩溪建筑群
+    canonicalName: 嵩溪建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/浦江县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 广安桥
+    canonicalName: 广安桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/浦江县
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 磐安县
   leaves:
   - name: 花溪风景区
@@ -328,6 +664,16 @@ districts:
     - 婺州南宗孔氏家庙
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:32:11Z'
+    sourceScreenEvidence: zh.wikipedia.org:榉溪孔氏家庙 extract=268ch
+  - name: 宅口承志桥
+    canonicalName: 宅口承志桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/磐安县
+    sourceReadiness: pending
+    selectionPriority: 4
 - district: 金东区
   leaves:
   - name: 艾青故里
@@ -351,3 +697,11 @@ districts:
     - 曹宅大佛寺
     selectionPriority: 2
     sourceReadiness: ready
+  - name: 蒲塘王氏宗祠
+    canonicalName: 蒲塘王氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/金东区
+    sourceReadiness: pending
+    selectionPriority: 3

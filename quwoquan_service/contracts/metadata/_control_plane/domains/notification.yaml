@@ -35,11 +35,11 @@ minimum_package:
     t1:
     - contracts/metadata/notification/notification/service.yaml
     t2:
-    - ../quwoquan_app/test/cloud/notification/notification_metadata_contract_test.dart
+    - ../quwoquan_app/test/local_contract/cloud/notification/notification_metadata_contract__local_contract_test.dart
     t3:
     - contracts/metadata/notification/notification/tests/e2e.yaml
     t4:
-    - ../quwoquan_app/test/patrol/chat/chat_notification_entry_test.dart
+    - ../quwoquan_app/test/user_acceptance/patrol/chat/chat_notification_entry__user_acceptance_test.dart
 deployment:
   plane_binding_domain: notification
   plane_binding_source: quwoquan_ops/environments/process_domain_plane_mapping.yaml

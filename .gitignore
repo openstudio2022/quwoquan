@@ -22,6 +22,7 @@ build/
 dist/
 .test-dist/
 .gradle/
+*.tsbuildinfo
 *.o
 *.a
 
@@ -36,6 +37,8 @@ dist/
 
 # Node modules (if any)
 node_modules/
+quwoquan_ops/portal/vite.config.js
+quwoquan_ops/portal/vite.config.d.ts
 
 # Python (if any)
 __pycache__/
@@ -67,6 +70,10 @@ ref/
 .mainline-release-artifact/
 quwoquan_app/assistant/
 quwoquan_app/personal_assistant/
+quwoquan_app/package.json
+quwoquan_app/package-lock.json
+quwoquan_app/figma.config.json
+quwoquan_app/openspec-README.md
 
 # Retired sandbox root; do not use it as a runtime fallback.
 .qwq_sandbox/
@@ -100,6 +107,7 @@ quwoquan_data/publish/**
 quwoquan_data/out/
 quwoquan_data/raw/
 quwoquan_data/batch_plans/
+quwoquan_data/data/
 
 # Retired top-level runtime/output roots. They are ignored if recreated locally,
 # and quwoquan_ops/gate/verify_root_layout.py fails when they exist in repo root.

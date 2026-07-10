@@ -473,7 +473,7 @@ func resolveRepoRoot() string {
 }
 
 func localControlPlaneStorePath(repoRoot, serviceName string) string {
-	return filepath.Join(repoRoot, ".qwq_output", "local", serviceName, "control-plane", serviceName+".json")
+	return filepath.Join(repoRoot, ".qwq_output", "env", "repo", "local", "control-plane", serviceName, serviceName+".json")
 }
 
 func actorFromRequest(r *http.Request) string {

@@ -796,19 +796,19 @@ entries:
       - path: quwoquan_app/lib/ui/user/providers/persona_management_provider.dart
         sections:
           - success telemetry
-      - path: quwoquan_app/test/cloud/integration/remote_api_path_contract_test.dart
+      - path: quwoquan_app/test/local_contract/cloud/integration/remote_api_path_contract__local_contract_test.dart
         sections:
           - persona management remote paths
-      - path: quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
+      - path: quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
         sections:
           - persona management flag-off verification
-      - path: quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
+      - path: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
         sections:
           - persona management flag-off verification
-      - path: quwoquan_app/test/ui/user/providers/persona_management_provider_test.dart
+      - path: quwoquan_app/test/local_contract/ui/user/providers/persona_management_provider__local_contract_test.dart
         sections:
           - persona management telemetry verification
-      - path: quwoquan_service/services/user-service/tests/persona_contract_test.go
+      - path: quwoquan_service/services/user-service/tests/api_integration/persona_contract__api_integration_test.go
         sections:
           - summary update profile-sync guard retire contracts
     impact:

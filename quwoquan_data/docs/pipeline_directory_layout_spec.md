@@ -1,6 +1,6 @@
 # workflow 目录与资产证据链规格（对象优先 · 来源内聚 · 阶段编号 · 公共上提 · 路径单一真相源）
 
-本规格冻结 `local/data-runtime/tasks/{task}/` 工程过程目录的组织方式，使其**与 `publish/` 发布主线同构**，
+本规格冻结 `data/local/runtime/tasks/{task}/` 工程过程目录的组织方式，使其**与 `publish/` 发布主线同构**，
 并保证「单个对象（实体/内容）可集中查证」「来源与图片内聚」「`asset://` 可直查物理文件」「内部引用全为相对路径」。
 
 `task_workflow` 是任务级编排根，`task_download` 是任务级下载规划工作区；两者只承载编排和中间态，不承载对象最终成品。
@@ -35,7 +35,7 @@
 
 **仓内（版本控制）只保留两类长期真相源：**
 
-- 输入契约（可复用）：任务控制面 `quwoquan_data/control_plane/**`（见下）、`schema/**`、`templates/**`、`prompts/**`、`sop/**`、`verticals/**`、`scripts/**`；
+- 输入契约（可复用）：任务控制面 `quwoquan_data/control_plane/**`（见下）、长期参考数据 `reference/**`、`schema/**`、`templates/**`、`prompts/**`、`sop/**`、`verticals/**`、`scripts/**`；
 - 发布主线（唯一入库生成输出）：`quwoquan_data/publish/**`（含 `publish/creators/**` 池成品）。
 
 **任务控制面（`control_plane/`，任务输入契约唯一真相源）：**
@@ -50,6 +50,17 @@ quwoquan_data/control_plane/
   _shared/*.runtime.yaml              # 跨家族共享运行环境 profile（recipe.runtimeProfile 引用）
 ```
 
+**长期参考数据（`reference/`）：**
+
+```
+quwoquan_data/reference/
+  admin_regions/                         # 行政区划等稳定参考数据
+```
+
+- `reference/` 只放可复用、低频更新、非运行期生成的基础参考数据；
+- 运行批次中间态、临时报表、下载缓存、清洗结果不得进入 `reference/`；
+- 旧 `quwoquan_data/data/` 根已退役，新增根层数据资产必须先落入本规格和 `verify_no_flat_roots.py`。
+
 - 家族路径按「域/垂类/内容形态」组织（如 `content/travel/homepage/`），禁止平铺；
 - preset/recipe 引用 = families/ 下相对路径去类型后缀（`presetId`/`recipeId` 必须与之相等）；
 - 默认值机制唯一真相源 = `task.yaml.presetRef → families/<ref>.preset.yaml`（旧 `_defaults.yaml`
@@ -62,14 +73,14 @@ quwoquan_data/control_plane/
 
 ```
 QWQ_OUTPUT_ROOT/
-  local/data-runtime/e2e/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/        # 端到端试跑
-  local/data-runtime/operations/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/ # 自动化运营
-  local/data-runtime/site_supply/{vertical}/{siteId}/{batchId}/                               # 站点前半段工作区
-  local/data-runtime/creator_pools/{vertical}/{batchId}/                                      # creator 生成过程
-  local/data-runtime/user_pools/{batchId}/                                                    # user-pool 生成过程
-  local/data-runtime/tasks/{taskId}/                                                          # task snapshot（最小）
-  runs/data/{content_runs|pools|app}/**                                                       # 摘要索引（只回指不承载真相）
-  release/data/{releaseId}/                                                                   # 发布包过程
+  data/local/runtime/e2e/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/        # 端到端试跑
+  data/local/runtime/operations/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/ # 自动化运营
+  data/local/runtime/site_supply/{vertical}/{siteId}/{batchId}/                               # 站点前半段工作区
+  data/local/runtime/creator_pools/{vertical}/{batchId}/                                      # creator 生成过程
+  data/local/runtime/user_pools/{batchId}/                                                    # user-pool 生成过程
+  data/local/runtime/tasks/{taskId}/                                                          # task snapshot（最小）
+  data/runs/{content_runs|pools|app}/**                                                       # 摘要索引（只回指不承载真相）
+  data/release/{releaseId}/                                                                   # 发布包过程
 ```
 
 **批次三轴（一批次唯一，缺一即门禁 BLOCK）：**
@@ -82,8 +93,8 @@ QWQ_OUTPUT_ROOT/
 
 - 三轴 + `sourceKey`（siteId / 检索键）固化进 `batch_manifest.json`，初次写入后不可变；
 - **单元/合约测试无批次概念**：pytest 一律跑 tempfile 临时根（conftest 导入期守卫强制），跑完即弃，绝不写仓内根与 `QWQ_OUTPUT_ROOT`；
-- 旧平铺运行根、sandbox 根与 `.qwq_output/runs/` 根级 data 临时报表已退役；reader 不做 fallback，不建索引回指，不落只读标记；缺历史证据时按 canonical 目录重跑/重生；
-- repo `.qwq_output/runs/` 根按领域分组；data 运行报告只写 `QWQ_OUTPUT_ROOT/runs/data/**`，权威批次证据只写 `QWQ_OUTPUT_ROOT/local/data-runtime/**/_shared/**`，发布真相源只写 `quwoquan_data/publish/**`；
+- 旧平铺运行根、sandbox 根与 `.qwq_output/env/repo/runs/` 根级 data 临时报表已退役；reader 不做 fallback，不建索引回指，不落只读标记；缺历史证据时按 canonical 目录重跑/重生；
+- data 运行报告只写 `QWQ_OUTPUT_ROOT/data/runs/**`，权威批次证据只写 `QWQ_OUTPUT_ROOT/data/local/runtime/**/_shared/**`，发布真相源只写 `quwoquan_data/publish/**`；
 - 搜索补全必须单独批次执行（`search_supplement`），不得与站点主线共用 batchId、readiness 口径或 summary 路径；
 - 门禁：`verify_output_root_isolation.py`（repo allowlist / 仓内阶段树 / 批次轴与 committed 回指 / artifacts index-first）。
 
@@ -101,7 +112,7 @@ QWQ_OUTPUT_ROOT/
 
 | 位置 | 概念 | 内容 | 生命周期 |
 |---|---|---|---|
-| `QWQ_OUTPUT_ROOT/release/data/{releaseId}/` | 装配包过程区 | ship 装配时对 publish 成品的**真拷贝**（可独立分发的发布包） | 运行期输出，可清理重建 |
+| `QWQ_OUTPUT_ROOT/data/release/{releaseId}/` | 装配包过程区 | ship 装配时对 publish 成品的**真拷贝**（可独立分发的发布包） | 运行期输出，可清理重建 |
 | `quwoquan_data/publish/env_releases/{env}/{releaseId}/` | 发布审计主线 | 各环境导入报告/审计记录（谁在何时把哪些实体/post 导入了哪个环境） | publish 主线，长期保留 |
 | `quwoquan_data/publish/media/releases/` | 媒体引用清单 | 发布态媒体资产的引用列表（媒体去重/引用计数真相源） | publish 主线，长期保留 |
 | 仓库根 `quwoquan_service/services/` | 服务配置快照 | 云侧服务发布配置（**与数据工程无关**，属 deploy/ops 域） | 版本控制 |
@@ -138,7 +149,7 @@ QWQ_OUTPUT_ROOT/
 ### 2.1 任务根（公共，跨批次唯一）
 
 ```
-local/data-runtime/tasks/{task}/       # {task} = taskId 斜杠路径（committed 分类树同构，受版本控制的规格在 control_plane/tasks/{task}/）
+data/local/runtime/tasks/{task}/       # {task} = taskId 斜杠路径（committed 分类树同构，受版本控制的规格在 control_plane/tasks/{task}/）
   task_manifest.json          # [处理] task 定义快照：intentLabel/垂类/organizeBy/scope/目标对象口径（由 task run 写，来源 committed task.yaml）
   notes.md                    # [处理] 人写任务说明（可选）
   catalog.ndjson              # [处理] 任务级对象台账（可选，assemble 消费）
@@ -147,12 +158,12 @@ local/data-runtime/tasks/{task}/       # {task} = taskId 斜杠路径（committe
   _shared/                    # [处理] 任务级共享（dedup_ledger.json / catalog.ndjson / entities.ndjson …）
 ```
 
-> **批次工作区不再挂在任务根下**（消除「批次埋在 `旅行/地域/四川省/景区/…` 分类树深处、无法在顶层找到批次」的问题）。批次统一落在 `local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`（见 2.2），通过 `batch_manifest.json.taskId` 反指所属任务。任务根只保留跨批次唯一的实体成品、任务定义快照与任务级共享账本。
+> **批次工作区不再挂在任务根下**（消除「批次埋在 `旅行/地域/四川省/景区/…` 分类树深处、无法在顶层找到批次」的问题）。批次统一落在 `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`（见 2.2），通过 `batch_manifest.json.taskId` 反指所属任务。任务根只保留跨批次唯一的实体成品、任务定义快照与任务级共享账本。
 
-### 2.2 批次根（canonical `local/data-runtime/{phase}/{contentType}/{supplyMode}/`）
+### 2.2 批次根（canonical `data/local/runtime/{phase}/{contentType}/{supplyMode}/`）
 
 ```
-local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/   # phase/contentType/supplyMode 见 §0.5；intentLabel = 任务意图标签（≤16 字，源自 task.yaml.intentLabel）；taskHash = 归一 taskId 短哈希（8 hex），消歧同名任务
+data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/   # phase/contentType/supplyMode 见 §0.5；intentLabel = 任务意图标签（≤16 字，源自 task.yaml.intentLabel）；taskHash = 归一 taskId 短哈希（8 hex），消歧同名任务
   batch_manifest.json         # [处理] 批次公共：taskId（反指任务，反查唯一依据）、目标对象、参数快照、env、salt、命令链、globalBatchSeq、时间戳、schemaVersion（新布局标识）
   _shared/                    # [处理] 批次级跨对象共享产物（不属于任一对象）
     source_catalog.json       #   受控来源类目白名单（限定 sourceKind，挡散文来源）
@@ -243,6 +254,53 @@ posts/{contentType}/{angle}/{title}/{seq}/
 
 ---
 
+## 2.6 载体扩展契约（lane adapter 边界，代码真相源 `_common/carrier_contract.py`）
+
+多载体（homepage / article / image / video）统一框架的冻结口径。**代码级唯一真相源是
+`quwoquan_data/scripts/_common/carrier_contract.py`（`CARRIER_LANES` / `COMMON_LAYER_STAGES` /
+`CONTENT_MIX_TO_LANE`）**；本节是其成文镜像，两处不一致时以代码契约 + 合同测试
+（`tests/local_contract/common/test_carrier_contract__local_contract_test.py`）为准。
+
+**共同层（载体无关，禁止 per-lane 分叉）：**
+`target_selection → source_unit（§3）→ asset_index（§4）→ review_ledger（§2.4 5.review）→
+publish（§8）→ ship → coverage/env import`。任一载体不得绕开共同层另建来源、资产、
+review 或发布通道。
+
+**lane adapter 边界（载体差异只允许出现在以下产物/阶段差异）：**
+
+| lane | download 计划 | 成品必备 | agent 写作段 | 放量状态 |
+|---|---|---|---|---|
+| `homepage` | `homepage_source_plan.json` | `page.md` + `_entity.json` + `manifest.json`（task 根 entities/，跨批次唯一） | 有 | scaled |
+| `article` | `article_source_plan.json` | `article.md` + `manifest.json` + `provenance.json`（§2.4 对象根） | 有（`writing_pack` → `draft.article.md`） | scaled |
+| `image` | `image_source_plan.json` | `manifest.json` + `provenance.json`（单源图片作品，图必须归属来源单元 assets/ 且带 relevance） | 无 | scaled |
+| `video` | 无（不建下载计划） | `manifest.json`（schema：`post_manifest.schema.json` contentType=video + `videoBindings`） | 无 | **smoke_only（排产放量必须 BLOCK）** |
+
+**命名分层（防第二套枚举）：**
+
+- 批次三轴 `contentType`（§0.5）与 lane 同名：`homepage/article/image/video`（`paths.BATCH_CONTENT_TYPES`）。
+- 排产层（任务规格 content mix）命名 `imagePost/videoPost/knowledgeCard` 通过
+  `carrier_contract.CONTENT_MIX_TO_LANE` 唯一映射到 lane（`knowledgeCard` 是 article 载体的
+  排产变体，不占独立 lane）；`content_supply.VALID_CONTENT_TYPES` 从该表派生，
+  site_supply packet 的 lane→排产命名反查用 `LANE_TO_CANONICAL_CONTENT_MIX`。
+  禁止再写内联映射 dict。
+
+**多代理跑批保护协议（长批运行约定，与 §0.5 输出根规则并行生效）：**
+
+- 长批（省级 fanout / M1+）的 runtime root 必须落**家目录受保护路径**
+  （如 `~/.qwq_m1_<province>_runtime`，经 `QWQ_RUNTIME_ROOT` 显式声明），
+  不得落仓内 `.qwq_output/**`——外部治理/gate 进程只允许清理仓内可再生区，
+  受保护 root 下的批次证据（`task_workflow_state.json`、成品树）任何非批属进程不得删改。
+- 批属进程以 `run-recipe --batch <batchId>` 的 batch 声明为 lease 语义：同一
+  `(RUNTIME_ROOT, taskId, batchId)` 同时至多一个 run-recipe 驱动进程；接管前必须
+  确认原进程已退出（`pgrep -lf "run-recipe .*<batchId>"`）。
+- 批次中断恢复走 resume 协议（同 batch/plan 原样重跑 = 整体幂等 resume；
+  单分区 `manual_required` 用 `task retry-stage` 重置后 resume），禁止绕过 workflow
+  状态机直接改 `task_workflow_state.json`。
+- 报告类产物（审计包、readiness 汇总）固化到 `publish/env_releases/**`（长期保留区），
+  不依赖 runtime 区存活。
+
+---
+
 ## 3. 来源单元内聚契约（source unit）
 
 每个来源是一个**稳定 sourceUnitId** 的批次级自包含单元，实体/内容对象只保留 `1.download/source_refs.json` 软引用索引，替代旧「实体目录承载来源 + 图片与来源分离」布局：
@@ -290,13 +348,13 @@ sources/{sourceUnitId}/
 
 | 信息 | 唯一位置 | 禁止 |
 |---|---|---|
-| 任务定义/口径/intentLabel | `local/data-runtime/tasks/{task}/task_manifest.json`、committed `control_plane/tasks/{task}/task.yaml` | 在对象目录重复 |
-| 批次归属任务（反查唯一依据） | `local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/batch_manifest.json.taskId` | 用目录名 intentLabel 当反查真相 |
-| 批次参数/env/salt/命令链/globalBatchSeq/时间/schemaVersion | `local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/batch_manifest.json` | 在对象目录重复 |
-| 受控来源类目 | `local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/_shared/source_catalog.json` | 每对象各存一份 |
+| 任务定义/口径/intentLabel | `data/local/runtime/tasks/{task}/task_manifest.json`、committed `control_plane/tasks/{task}/task.yaml` | 在对象目录重复 |
+| 批次归属任务（反查唯一依据） | `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/batch_manifest.json.taskId` | 用目录名 intentLabel 当反查真相 |
+| 批次参数/env/salt/命令链/globalBatchSeq/时间/schemaVersion | `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/batch_manifest.json` | 在对象目录重复 |
+| 受控来源类目 | `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/_shared/source_catalog.json` | 每对象各存一份 |
 | 批次级共享 brief | `…/_shared/compose_brief.json` | 复制进每个内容对象 |
 | workflow 状态 | `…/_shared/task_workflow_state.json` | 上提到对象根 |
-| 实体成品（事实/主页/资产） | `local/data-runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一，不随批次上提） | 在每个 batch 重复生产 |
+| 实体成品（事实/主页/资产） | `data/local/runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一，不随批次上提） | 在每个 batch 重复生产 |
 | 对象自身来源/质量/草稿/审校/内容成品 | 对象目录 `N.xxx/` 与对象根 | 上提到批次根 |
 
 ---
@@ -355,9 +413,9 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 
 | 门 | 校验内容（对照本规格章节） | 处置 | 状态 |
 |---|---|---|---|
-| **批次顶层归属门**（`verify_directory_evidence_chain.py`） | 批次工作区只能落 `local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`，**不得**再出现在 `local/data-runtime/tasks/{task}/batches/` 或旧 `local/data-runtime/batches/`；`batch_manifest.json.taskId` 必填且与 intentLabel 自洽 | BLOCK | ◑ 本版落地 |
+| **批次顶层归属门**（`verify_directory_evidence_chain.py`） | 批次工作区只能落 `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`，**不得**再出现在 `data/local/runtime/tasks/{task}/batches/` 或旧 `data/local/runtime/batches/`；`batch_manifest.json.taskId` 必填且与 intentLabel 自洽 | BLOCK | ◑ 本版落地 |
 | **顶层结构门**（新增 `verify_directory_layout_structure.py`） | §2.2 batch 顶层只允许 4 项；出现 `download/build/produce/pipeline/` BLOCK；内容对象路径 = `posts/{type}/{angle}/{title}/{seq}`；阶段名 ∈ §1.5 枚举且带序号 | BLOCK | ❌ 待建 |
-| **去 stage-first 豁免**（改 `verify_directory_evidence_chain.py`） | 删除「stage-first 不在扫描范围」，canonical 批次全量纳入（scan 遍历 `local/data-runtime/{phase}/{contentType}/{supplyMode}/`，taskId 取自 `batch_manifest.taskId`） | BLOCK | ◑ 本版落地 |
+| **去 stage-first 豁免**（改 `verify_directory_evidence_chain.py`） | 删除「stage-first 不在扫描范围」，canonical 批次全量纳入（scan 遍历 `data/local/runtime/{phase}/{contentType}/{supplyMode}/`，taskId 取自 `batch_manifest.taskId`） | BLOCK | ◑ 本版落地 |
 | **批次号/资产零碰撞门**（新增 `verify_asset_id_zero_collision.py`） | §4.1/§14.2 `globalBatchSeq` 单调；批内 registry + `parse_post_asset_id` 零碰撞 | BLOCK | ❌ 待建 |
 | **命名一致门** | §0/§3：来源单元 `{NN}.{kind}`、`meta.json`、`assets/index.json`、阶段枚举 | BLOCK | ❌ 待建 |
 | **散落 images 门** | §3 无对象级 `images/` | BLOCK | ✅ 已有 |
@@ -432,11 +490,11 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 
 > 仅列最小必填；可加字段但不得少。所有路径字段为相对引用（§4/§5）。
 
-### 14.1 `local/data-runtime/tasks/{task}/task_manifest.json`
+### 14.1 `data/local/runtime/tasks/{task}/task_manifest.json`
 `{ schemaVersion:"quwoquan.task.manifest", taskId, intentLabel, vertical, organizeBy, scope{region?, entityTypes[], coverageTargets[]}, content{angles[]}, createdAt }`
 （`intentLabel` = ≤16 字人类可读任务意图标签，来源 committed `task.yaml.intentLabel`；它是批次目录名 `{intentLabel}-{taskHash}__{batch}` 的唯一标签真相源。）
 
-### 14.2 `local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/batch_manifest.json`
+### 14.2 `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/batch_manifest.json`
 `{ schemaVersion:"quwoquan_data.batch_manifest", taskId, batchId, layout:"object-first", phase, contentType, supplyMode, sourceKey, env, salt, params{}, coverageTargets[], commandChain[], globalBatchSeq, createdAt, updatedAt }`
 （`phase/contentType/supplyMode/sourceKey` 为批次三轴 + 来源键（§0.5），初次写入后不可变；目录层级与 manifest 轴漂移即被 `verify_output_root_isolation.py` BLOCK。）
 （`taskId` 是 **batch→task 反查的唯一依据**（目录名 intentLabel 仅用于人读定位与候选过滤，可被多任务复用）；`layout` 与 `schemaVersion` 是新旧布局判定依据；§10 去豁免门与 §13 旧布局历史说明据此区分新旧批次。）
@@ -460,7 +518,7 @@ promote/ship 时对象根成品**直接拷贝**到 publish 同名路径；过程
 
 > 编排器是薄壳，stage 间流转改为「写对象阶段目录」；`task_workflow_state.json` 与 `assistant_tasks/` 属批次工作区，落 `_shared/`（不进对象目录、不进 publish）。
 >
-> 批次工作区根 = `local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`（不再挂任务根）；`build_homepage` 仍把实体**成品**落任务根 `local/data-runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一），批次内只放实体过程对象。
+> 批次工作区根 = `data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/`（不再挂任务根）；`build_homepage` 仍把实体**成品**落任务根 `data/local/runtime/tasks/{task}/entities/{d}/{t}/{name}/`（跨批次唯一），批次内只放实体过程对象。
 
 | stage | 类型 | 对象 | 写入位置（对象优先） |
 |---|---|---|---|

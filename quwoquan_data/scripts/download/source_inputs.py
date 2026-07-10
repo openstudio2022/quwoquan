@@ -2,7 +2,7 @@
 
 来源候选由任务/Agent 在 download source_plan 输入中给出，主线不内置任何区域语料。
 对象优先布局（真相源 docs/pipeline_directory_layout_spec.md §15）：
-  local/data-runtime/tasks/{task}/batches/{batch}/entities/{domain}/{type}/{name}/1.download/{homepage,article,image}_source_plan.json
+  data/local/runtime/tasks/{task}/batches/{batch}/entities/{domain}/{type}/{name}/1.download/{homepage,article,image}_source_plan.json
 统一 payload 形态：
   homepage/article: {"sources": [{"source_id","platform","url","body?","imageUrls?"}]}
   image: {"collections": [{"sourceCollectionId", "creator", "images": [...]}]}

@@ -530,6 +530,10 @@ def iter_source_units(object_dir: Path) -> list[Path]:
     if batch_dir is None:
         return []
     payload = read_json(refs_path)
+    if not isinstance(payload, Mapping):
+        # agent 产物是外部输入：顶层写成数组/标量时视为无可回查来源单元，
+        # 契约违规由 verify 证据链负责报 issue，读路径不得崩溃。
+        return []
     units: list[Path] = []
     for row in payload.get("sources") or []:
         if not isinstance(row, Mapping):

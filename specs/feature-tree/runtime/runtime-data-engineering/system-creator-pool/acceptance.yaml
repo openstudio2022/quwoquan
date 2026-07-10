@@ -112,7 +112,7 @@ gwt_acceptance:
       - file: quwoquan_data/scripts/verify/verify_creator_pool_seed_consistency.py
       - file: quwoquan_service/services/user-service/tests/local_contract/creator_pool_seed_contract__local_contract_test.go
       - file: quwoquan_service/services/user-service/tests/api_integration/creator_pool_contract_fixture_seed__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/creator_travel_photo_1k/creator_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/creator_travel_photo_1k/creator_profile_journey__user_acceptance_test.dart
       recorded:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_commercial_readiness__local_contract_test.py
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_content_workflow_smoke__local_contract_test.py
@@ -120,7 +120,7 @@ gwt_acceptance:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_relations_consumer__local_contract_test.py
       - file: quwoquan_service/services/user-service/tests/local_contract/creator_pool_seed_contract__local_contract_test.go
       - file: quwoquan_service/services/user-service/tests/api_integration/creator_pool_contract_fixture_seed__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/creator_travel_photo_1k/creator_profile_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/creator_travel_photo_1k/creator_profile_journey__user_acceptance_test.dart
     status: completed
     test_evidence:
       primary:
@@ -223,12 +223,12 @@ gwt_acceptance:
       planned:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_content_bind__local_contract_test.py
       - file: quwoquan_data/scripts/verify/verify_creator_pool_seed_consistency.py
-      - file: quwoquan_service/services/content-service/tests/creator_pool_content_feed_contract_test.go
-      - file: quwoquan_app/test/user_acceptance/creator_travel_photo_1k/creator_authored_feed__user_acceptance_test.dart
+      - file: quwoquan_service/services/content-service/tests/api_integration/creator_pool_content_feed_contract__api_integration_test.go
+      - file: quwoquan_app/test/user_acceptance/journeys/creator_travel_photo_1k/creator_authored_feed__user_acceptance_test.dart
       recorded:
       - file: quwoquan_data/tests/local_contract/creator_pool/test_creator_content_bind__local_contract_test.py
       - file: quwoquan_service/services/content-service/tests/api_integration/creator_pool_content_feed_contract__api_integration_test.go
-      - file: quwoquan_app/test/user_acceptance/creator_travel_photo_1k/creator_authored_feed__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/creator_travel_photo_1k/creator_authored_feed__user_acceptance_test.dart
     status: completed
     test_evidence:
       primary:

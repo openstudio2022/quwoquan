@@ -150,7 +150,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         help="Do not fail the gate on needs_review (faces/backend) images",
     )
     p_sync = media_sub.add_parser("sync", help="CAS 媒体库增量同步到环境媒体根（sha256 校验）")
-    p_sync.add_argument("--dest", required=True, help="环境媒体根（如 .qwq_output/local/gamma-local/media 或 /srv/media）")
+    p_sync.add_argument("--dest", required=True, help="环境媒体根（如 .qwq_output/env/gamma/local/gamma-local/media 或 /srv/media）")
     p_sync.add_argument("--source", help="CAS 库根（默认 publish/media/library）")
     p_sync.add_argument("--report", help="同步报告 JSON 输出路径（可选）")
     p.set_defaults(handler=handle_media)

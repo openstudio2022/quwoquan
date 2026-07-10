@@ -1,0 +1,793 @@
+schemaVersion: quwoquan.task.spec
+taskId: 旅行/地域/中国/浙江省/景区/浙江省主页省级放量批
+title: 浙江省主页省级放量批
+intentLabel: 浙江主页省级放量
+taskArchetype: region_category_coverage
+vertical: travel
+organizeBy: 地域
+key: 中国/浙江省
+entityCategory: 景区
+parentTaskId: null
+status: active
+scope:
+  region: 中国/浙江省
+  entityTypes:
+  - 地点/景区
+  coverageTargets:
+  - entityType: 地点/景区
+    name: 云和梯田
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/云和县
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/湿地公园
+    aliases:
+    - 云和梯田国家湿地公园
+  - entityType: 地点/景区
+    name: 百山祖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/庆元县
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 凤阳山—百山祖国家级自然保护区百山祖园区
+  - entityType: 地点/宗教场所
+    name: 景宁时思寺
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/景宁畲族自治县
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/打卡地
+    name: 松阳老街
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    typeTagRefs:
+    - Entity/地点/打卡地
+    aliases:
+    - 松阳明清古街
+  - entityType: 地点/景区
+    name: 缙云仙都
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/缙云县
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 仙都景区
+    - 鼎湖峰
+  - entityType: 地点/遗址
+    name: 丽水通济堰
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/莲都区
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/自然景观
+    name: 浙江龙泉山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/龙泉市
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 黄茅尖
+    - 凤阳山
+  - entityType: 地点/自然景观
+    name: 蛇蟠岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/三门县
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    aliases:
+    - 蛇蟠岛景区
+  - entityType: 地点/景区
+    name: 台州府城文化旅游区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 台州府城
+    - 临海古城
+  - entityType: 地点/景区
+    name: 神仙居
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 神仙居景区
+  - entityType: 地点/景区
+    name: 天台山（台州）
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 天台山风景名胜区
+  - entityType: 地点/自然景观
+    name: 大陈岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/椒江区
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    aliases:
+    - 上大陈岛
+    - 下大陈岛
+  - entityType: 地点/景区
+    name: 长屿硐天
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/温岭市
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+  - entityType: 地点/自然景观
+    name: 大鹿岛（玉环）
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/玉环市
+    typeTagRefs:
+    - Entity/地点/自然景观/海岸海岛
+    aliases:
+    - 大鹿岛景区
+  - entityType: 地点/古镇
+    name: 十里长街（路桥）
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/路桥区
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 路桥老街
+  - entityType: 地点/公园
+    name: 九峰公园（黄岩）
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/黄岩区
+    typeTagRefs:
+    - Entity/地点/公园
+  - entityType: 地点/景区
+    name: 嘉兴南湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 南湖旅游区
+    - 南湖景区
+  - entityType: 地点/景区
+    name: 西塘古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/嘉善县
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 西塘
+  - entityType: 地点/自然景观
+    name: 平湖东湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/平湖市
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 东湖景区
+  - entityType: 地点/景区
+    name: 乌镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/桐乡市
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 乌镇古镇
+  - entityType: 地点/景区
+    name: 海宁盐官观潮景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海宁市
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/历史古镇
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 盐官古城
+    - 海宁潮
+  - entityType: 地点/自然景观
+    name: 海盐南北湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海盐县
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    - Entity/地点/自然景观/海岸海岛
+    aliases:
+    - 南北湖风景区
+  - entityType: 地点/古镇
+    name: 嘉兴新塍古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/秀洲区
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 新塍镇
+  - entityType: 地点/遗址
+    name: 河姆渡遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/余姚市
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    aliases:
+    - 河姆渡遗址博物馆
+  - entityType: 地点/博物馆
+    name: 中国港口博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/北仑区
+    typeTagRefs:
+    - Entity/地点/博物馆
+  - entityType: 地点/景区
+    name: 溪口风景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/奉化区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    aliases:
+    - 溪口
+    - 溪口雪窦山风景区
+    - 蒋氏故里
+  - entityType: 地点/古镇
+    name: 前童古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/宁海县
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+  - entityType: 地点/遗址
+    name: 上林湖越窑遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/慈溪市
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+    aliases:
+    - 上林湖越窑国家考古遗址公园
+  - entityType: 地点/打卡地
+    name: 宁波老外滩
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/江北区
+    typeTagRefs:
+    - Entity/地点/打卡地
+    aliases:
+    - 老外滩
+  - entityType: 地点/景区
+    name: 天一阁
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/海曙区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/博物馆
+    - Entity/地点/遗址/历史建筑
+    aliases:
+    - 天一阁博物院
+    - 天一阁·月湖景区
+  - entityType: 地点/景区
+    name: 象山影视城
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/象山县
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/主题乐园/影视主题乐园
+    aliases:
+    - 宁波影视城
+  - entityType: 地点/博物馆
+    name: 宁波博物院
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/鄞州区
+    typeTagRefs:
+    - Entity/地点/博物馆
+    aliases:
+    - 宁波博物馆
+  - entityType: 地点/自然景观
+    name: 招宝山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/宁波市/镇海区
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 招宝山旅游风景区
+  - entityType: 地点/打卡地
+    name: 清河坊历史街区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    typeTagRefs:
+    - Entity/地点/打卡地
+    aliases:
+    - 河坊街
+  - entityType: 地点/景区
+    name: 天目山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临安区
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 西天目山
+  - entityType: 地点/古镇
+    name: 塘栖古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 塘栖
+  - entityType: 地点/景区
+    name: 良渚古城遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/余杭区
+    typeTagRefs:
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/遗址/考古遗址
+    aliases:
+    - 良渚古城遗址公园
+  - entityType: 地点/主题乐园
+    name: 杭州野生动物世界
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/富阳区
+    typeTagRefs:
+    - Entity/地点/主题乐园/动物主题乐园
+  - entityType: 地点/宗教场所
+    name: 大慈岩
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/建德市
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 江南悬空寺
+  - entityType: 地点/遗址
+    name: 拱宸桥
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/自然景观
+    name: 瑶琳仙境
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 瑶琳洞
+  - entityType: 地点/景区
+    name: 千岛湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/淳安县
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 千岛湖风景区
+  - entityType: 地点/古镇
+    name: 西兴古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/滨江区
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 西兴老街
+  - entityType: 地点/自然景观
+    name: 杭州湘湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/萧山区
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 湘湖旅游度假区
+  - entityType: 地点/景区
+    name: 杭州西湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 西湖风景名胜区
+  - entityType: 地点/公园
+    name: 杭州金沙湖
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/钱塘区
+    typeTagRefs:
+    - Entity/地点/公园
+    aliases:
+    - 金沙湖公园
+  - entityType: 地点/景区
+    name: 雁荡山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/乐清市
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 北雁荡山
+    - 雁荡山风景名胜区
+  - entityType: 地点/景区
+    name: 南麂列岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/平阳县
+    typeTagRefs:
+    - Entity/地点/景区/自然保护区
+    - Entity/地点/自然景观/海岸海岛
+    aliases:
+    - 南麂岛
+  - entityType: 地点/自然景观
+    name: 百丈漈
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/文成县
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 百丈漈瀑布
+  - entityType: 地点/景区
+    name: 楠溪江
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/永嘉县
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 楠溪江风景名胜区
+  - entityType: 地点/景区
+    name: 廊桥文化园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/泰顺县
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    aliases:
+    - 泰顺廊桥
+    - 泗溪廊桥
+  - entityType: 地点/景区
+    name: 洞头列岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/洞头区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/海岸海岛
+    aliases:
+    - 百岛洞头
+  - entityType: 地点/遗址
+    name: 玉海楼
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瑞安市
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/自然景观
+    name: 泽雅
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/瓯海区
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 泽雅风景区
+    - 西雁荡
+  - entityType: 地点/景区
+    name: 江心屿
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/鹿城区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 江心屿景区
+  - entityType: 地点/遗址
+    name: 永昌堡
+    geoTagRef: Topic/地理/行政区/中国/浙江省/温州市/龙湾区
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    aliases:
+    - 永昌古堡
+  - entityType: 地点/景区
+    name: 南浔古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/南浔区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 南浔
+  - entityType: 地点/遗址
+    name: 飞英塔
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/吴兴区
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/主题乐园
+    name: 安吉Hello Kitty乐园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/安吉县
+    typeTagRefs:
+    - Entity/地点/主题乐园/儿童乐园
+    aliases:
+    - 凯蒂猫家园
+  - entityType: 地点/景区
+    name: 莫干山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/湖州市/德清县
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 莫干山风景名胜区
+  - entityType: 地点/遗址
+    name: 上虞曹娥庙
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/博物馆
+    name: 嵊州越剧博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/嵊州市
+    typeTagRefs:
+    - Entity/地点/博物馆
+  - entityType: 地点/宗教场所
+    name: 新昌大佛寺
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/新昌县
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    - Entity/地点/景区/4A景区
+    aliases:
+    - 新昌大佛寺景区
+  - entityType: 地点/景区
+    name: 绍兴兰亭
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/柯桥区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    aliases:
+    - 兰亭景区
+  - entityType: 地点/景区
+    name: 西施故里
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/诸暨市
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/遗址/文化遗产
+    aliases:
+    - 西施故里旅游区
+  - entityType: 地点/景区
+    name: 绍兴鲁迅故里
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/遗址/历史建筑
+    aliases:
+    - 鲁迅故里景区
+  - entityType: 地点/古镇
+    name: 定海古城
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/定海区
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 定海老城
+  - entityType: 地点/古镇
+    name: 东沙古镇
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/岱山县
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 东沙古渔镇
+  - entityType: 地点/景区
+    name: 嵊泗列岛
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/嵊泗县
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/自然景观/海岸海岛
+    aliases:
+    - 嵊泗列岛风景名胜区
+  - entityType: 地点/景区
+    name: 普陀山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/舟山市/普陀区
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/宗教场所
+    - Entity/地点/自然景观/海岸海岛
+    aliases:
+    - 普陀山风景名胜区
+  - entityType: 地点/景区
+    name: 钱江源国家公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/开化县
+    typeTagRefs:
+    - Entity/地点/景区/国家公园
+    aliases:
+    - 钱江源
+  - entityType: 地点/遗址
+    name: 孔氏南宗家庙
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/柯城区
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    aliases:
+    - 衢州孔庙
+    - 南宗孔庙
+  - entityType: 地点/景区
+    name: 江郎山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/江山市
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/景区/世界遗产
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 江郎山·廿八都旅游区
+  - entityType: 地点/自然景观
+    name: 衢州烂柯山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/衢江区
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 石室山
+  - entityType: 地点/遗址
+    name: 龙游石窟
+    geoTagRef: Topic/地理/行政区/中国/浙江省/衢州市/龙游县
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+  - entityType: 地点/景区
+    name: 横店影视城
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/东阳市
+    typeTagRefs:
+    - Entity/地点/景区/5A景区
+    - Entity/地点/主题乐园/影视主题乐园
+    aliases:
+    - 横店影视文化旅游区
+  - entityType: 地点/打卡地
+    name: 义乌国际商贸城
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/义乌市
+    typeTagRefs:
+    - Entity/地点/打卡地
+    aliases:
+    - 义乌小商品城
+  - entityType: 地点/景区
+    name: 诸葛八卦村
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/兰溪市
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    - Entity/地点/古镇/特色古村
+    aliases:
+    - 诸葛村
+  - entityType: 地点/自然景观
+    name: 金华双龙洞
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/婺城区
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 双龙风景区
+  - entityType: 地点/自然景观
+    name: 武义牛头山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/武义县
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 牛头山国家森林公园
+  - entityType: 地点/自然景观
+    name: 永康方岩
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/永康市
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 方岩风景名胜区
+  - entityType: 地点/遗址
+    name: 江南第一家
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/浦江县
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/古镇/历史古镇
+    aliases:
+    - 郑义门
+    - 郑宅古镇
+  - entityType: 地点/遗址
+    name: 榉溪孔氏家庙
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/磐安县
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    aliases:
+    - 婺州南宗孔氏家庙
+  - entityType: 地点/宗教场所
+    name: 金华大佛寺
+    geoTagRef: Topic/地理/行政区/中国/浙江省/金华市/金东区
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    aliases:
+    - 曹宅大佛寺
+  - entityType: 地点/遗址
+    name: 如龙桥
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/庆元县
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    aliases:
+    - 月山如龙桥
+  - entityType: 地点/古镇
+    name: 畲乡之窗
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/景宁畲族自治县
+    typeTagRefs:
+    - Entity/地点/古镇/民族风情村
+    aliases:
+    - 大均村
+  - entityType: 地点/遗址
+    name: 松阳延庆寺塔
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/松阳县
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/古镇
+    name: 河阳古民居
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/缙云县
+    typeTagRefs:
+    - Entity/地点/古镇/特色古村
+    aliases:
+    - 河阳村
+  - entityType: 地点/自然景观
+    name: 丽水南明山
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/莲都区
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    aliases:
+    - 南明山摩崖石刻
+  - entityType: 地点/遗址
+    name: 大窑龙泉窑遗址
+    geoTagRef: Topic/地理/行政区/中国/浙江省/丽水市/龙泉市
+    typeTagRefs:
+    - Entity/地点/遗址/考古遗址
+  - entityType: 地点/遗址
+    name: 江南长城
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/临海市
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    aliases:
+    - 临海古城墙
+    - 台州府城墙
+  - entityType: 地点/自然景观
+    name: 永安溪
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/仙居县
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 永安溪漂流
+  - entityType: 地点/自然景观
+    name: 石梁飞瀑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/天台县
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    aliases:
+    - 石梁景区
+  - entityType: 地点/博物馆
+    name: 戚继光纪念馆（椒江）
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/椒江区
+    typeTagRefs:
+    - Entity/地点/博物馆
+  - entityType: 地点/古镇
+    name: 石塘（温岭）
+    geoTagRef: Topic/地理/行政区/中国/浙江省/台州市/温岭市
+    typeTagRefs:
+    - Entity/地点/古镇/历史古镇
+    - Entity/地点/打卡地
+    aliases:
+    - 石塘古镇
+    - 石塘渔村
+  - entityType: 地点/博物馆
+    name: 南湖革命纪念馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/南湖区
+    typeTagRefs:
+    - Entity/地点/博物馆
+  - entityType: 地点/遗址
+    name: 平湖莫氏庄园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/平湖市
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/遗址
+    name: 乌镇茅盾故居
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/桐乡市
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/遗址
+    name: 海宁王国维故居
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海宁市
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+  - entityType: 地点/遗址
+    name: 海盐绮园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/嘉兴市/海盐县
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    - Entity/地点/公园
+    aliases:
+    - 绮园景区
+  reserveCoverageTargets: []
+provenance:
+  createdAt: '2026-07-09T13:27:55.603107+00:00'
+  createdBy: run-recipe content/travel/homepage/zhejiang_province
+presetRef: content/travel/homepage/base
+content:
+  modalityContract: separated_research
+  research:
+    lanes:
+    - homepage
+    maxConcurrency: 10
+    laneConcurrency:
+      homepage: 3
+    imageAssetStrategy: open_license_publish
+    imageCountPolicy: score_bonus
+    allowAiImages: false
+  quotas:
+    entityArticlesPerTarget: 0
+    imageWorksPerTarget: 0
+    entityHomepagesPerTarget: 1
+    routeArticles: 0
+acceptance:
+  minEntities: 100
+  minPostsPerEntity: 1
+  requiredAngles: []
+workflowPolicy:
+  allowPartialContent: true
+  deliveryMode: partial_with_replacement_report
+  maxReplacementWaves: 3
+  maxReplacementCandidatesPerWave: 25
+  maxReplacementScreenedPerRun: 25
+  elasticOverfetch: false
+  overfetchMultiplier: 2.0
+  targetEntityCount: 100
+  targetObjectCount: 100
+  allowQuotaShortfall: true
+  allowContentQuotaShortfall: true
+  allowMinEntityShortfall: true
+  allowOverProduction: false
+  minBatchCompletionMode: best_effort_with_reasoned_rejects
+  publishCadence:
+    mode: deterministic_creator_day_spread
+    targetDailyObjects: 100
+    maxDailyPostsPerCreator: 1
+  executionBranch: feature/homepage-commercial-lane
+queuePolicy:
+  backend: reliabletask
+  reliableTask:
+    taskType: data.content_object.execute
+    queue: reliabletask.data.content_supply
+    store: MongoStore
+    readyIndex: RedisReadyIndex
+  leaseSeconds: 900
+  heartbeatSeconds: 60
+  deadLetterAfterAttempts: 3
+sourceTaskId: 旅行/地域/中国/景区/景区全覆盖

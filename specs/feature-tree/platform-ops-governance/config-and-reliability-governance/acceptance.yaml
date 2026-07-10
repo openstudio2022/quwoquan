@@ -19,10 +19,10 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_service/services/platform-ops-service/cmd/api/main_test.go
+      - file: quwoquan_service/services/platform-ops-service/cmd/api/main__local_contract_test.go
       - file: quwoquan_ops/portal/src/shared/api/controlPlane.test.mjs
       recorded:
-      - file: quwoquan_service/services/platform-ops-service/tests/local_contract/cmd/api/main__local_contract_test.go
+      - file: quwoquan_service/services/platform-ops-service/cmd/api/main__local_contract_test.go
       - file: quwoquan_service/services/platform-ops-service/tests/api_integration/config_and_reliability_governance__api_integration_test.go
     status: implemented
     test_evidence:

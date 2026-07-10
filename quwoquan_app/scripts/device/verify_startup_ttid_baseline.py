@@ -23,7 +23,7 @@ REQUIRED_ACCEPTANCE = (
 REQUIRED_TESTS = (
     APP_DIR / "test/local_contract/app/startup_ttid__local_contract_test.dart",
     APP_DIR / "test/local_contract/app/startup_deferred_router__local_contract_test.dart",
-    APP_DIR / "test/app/app_startup_welcome_test.dart",
+    APP_DIR / "test/local_contract/app/app_startup_welcome__local_contract_test.dart",
     APP_DIR / "test/local_contract/app/startup_native_launch_screen__local_contract_test.dart",
 )
 

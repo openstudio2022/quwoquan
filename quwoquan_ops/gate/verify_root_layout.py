@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.gate.verify_output_layout import output_layout_issues  # noqa: E402
 
 FORBIDDEN_TOP_LEVEL = frozenset(
     {
@@ -25,19 +30,55 @@ FORBIDDEN_TOP_LEVEL = frozenset(
         "tools",
         "githooks",
         "social_content_app",
+        "node_modules",
+        ".pytest_cache",
         ".mainline-release-artifact",
     }
 )
 
+FORBIDDEN_TOP_LEVEL_FILES = frozenset(
+    {
+        ".DS_Store",
+        ".env",
+        ".env.local",
+        ".env.beta.local",
+        "eval_report_content_feed.json",
+        "eval_report_content_feed_multiobjective.json",
+        "gate.log",
+        "package-lock.json",
+        "package.json",
+        "runtime_scale10_ids.txt",
+    }
+)
 ALLOWED_RUNTIME_ROOT = ".qwq_output"
-ALLOWED_OUTPUT_TOP_LEVEL = frozenset({"local", "observability", "release", "runs"})
-ALLOWED_RUN_ROOTS = frozenset({"alpha", "beta", "gamma", "prod", "data"})
-ALLOWED_RELEASE_ROOTS = frozenset({"app", "service", "data", "legal-static"})
+ALLOWED_OUTPUT_TOP_LEVEL = frozenset({"env", "data"})
 FORBIDDEN_NESTED_DIRS = frozenset(
     {
         "docs/personal-assistant",
+        "quwoquan_app/.cursor",
+        "quwoquan_app/assistant",
+        "quwoquan_app/personal_assistant",
+        "quwoquan_app/node_modules",
+        "quwoquan_service/.cursor",
         "quwoquan_ops/assistant",
         "quwoquan_ops/avatar",
+        "quwoquan_ops/lib",
+    }
+)
+FORBIDDEN_FILES = frozenset(
+    {
+        "quwoquan_ops/cli/stackctl",
+        "quwoquan_ops/cli/stackctl.sh",
+        "quwoquan_ops/portal/vite.config.d.ts",
+        "quwoquan_ops/portal/vite.config.js",
+        "quwoquan_ops/portal/tsconfig.app.tsbuildinfo",
+        "quwoquan_ops/portal/tsconfig.node.tsbuildinfo",
+    }
+)
+FORBIDDEN_PORTAL_GENERATED_DIRS = frozenset(
+    {
+        "quwoquan_ops/portal/dist",
+        "quwoquan_ops/portal/.test-dist",
     }
 )
 
@@ -55,6 +96,10 @@ def root_layout_issues(root: Path = ROOT) -> list[str]:
         path = root / name
         if path.exists():
             issues.append(f"{_rel(path)}: forbidden top-level directory; move ownership to domain roots or {ALLOWED_RUNTIME_ROOT}/")
+    for name in sorted(FORBIDDEN_TOP_LEVEL_FILES):
+        path = root / name
+        if path.exists():
+            issues.append(f"{_rel(path)}: forbidden top-level file; move ownership to a domain root or {ALLOWED_RUNTIME_ROOT}/")
     for source_root in ("quwoquan_app", "quwoquan_service", "quwoquan_data", "quwoquan_ops"):
         path = root / source_root / "artifacts"
         if path.exists():
@@ -63,27 +108,22 @@ def root_layout_issues(root: Path = ROOT) -> list[str]:
         path = root / rel
         if path.exists():
             issues.append(f"{_rel(path)}: retired feature island directory; keep owned scripts under ci/, cli/smoke/ or gate/")
+    for rel in sorted(FORBIDDEN_FILES):
+        path = root / rel
+        if path.exists():
+            issues.append(f"{_rel(path)}: forbidden generated or shim file")
+    for rel in sorted(FORBIDDEN_PORTAL_GENERATED_DIRS):
+        path = root / rel
+        if path.exists():
+            issues.append(f"{_rel(path)}: Portal generated output must not live in source tree")
     output_root = root / ALLOWED_RUNTIME_ROOT
     if output_root.is_dir():
         for entry in sorted(p for p in output_root.iterdir() if p.is_dir()):
             if entry.name not in ALLOWED_OUTPUT_TOP_LEVEL:
                 issues.append(
-                    f"{_rel(entry)}: forbidden .qwq_output top-level directory; use local/, runs/, release/ or observability/"
+                    f"{_rel(entry)}: forbidden .qwq_output top-level directory; use env/ or data/"
                 )
-        runs_root = output_root / "runs"
-        if runs_root.is_dir():
-            for entry in sorted(p for p in runs_root.iterdir() if p.is_dir()):
-                if entry.name not in ALLOWED_RUN_ROOTS:
-                    issues.append(
-                        f"{_rel(entry)}: run evidence must be grouped by env under .qwq_output/runs/<env>/<runId>"
-                    )
-        release_root = output_root / "release"
-        if release_root.is_dir():
-            for entry in sorted(p for p in release_root.iterdir() if p.is_dir()):
-                if entry.name not in ALLOWED_RELEASE_ROOTS:
-                    issues.append(
-                        f"{_rel(entry)}: release output must be grouped by app/, service/, data/ or legal-static/"
-                    )
+        issues.extend(output_layout_issues(output_root))
     return issues
 
 

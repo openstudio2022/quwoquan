@@ -1081,7 +1081,7 @@ def _curl_get_bytes(
     with tempfile.NamedTemporaryFile() as body_file:
         proc = subprocess.run(
             [
-                "curl", "-sS", "-L", "-A", _USER_AGENT,
+                "curl", "-sS", "-L", "--compressed", "-A", _USER_AGENT,
                 "--retry", str(DOWNLOAD_CURL_RETRIES), "--retry-delay", "1", "--retry-all-errors",
                 "--max-time", str(timeout),
                 *size_guard,

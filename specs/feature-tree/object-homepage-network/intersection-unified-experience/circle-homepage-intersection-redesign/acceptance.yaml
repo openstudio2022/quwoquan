@@ -38,10 +38,10 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
     status: partial
     test_evidence:
       primary:
@@ -63,7 +63,7 @@ gwt_acceptance:
     - '[recorded] local_contract 2026-06-25：`flutter test test/components/object_page/object_intersection_card_test.dart
       test/components/object_page/object_intersection_section_test.dart` 15/15 green；圈子主页 ObjectIntersectionSection
       下游已切 primaryText/primarySpans 单通道，覆盖无 primaryText 隐藏、affinity 推荐辅助、展开与高亮。'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（旧推荐交集卡：单结论句
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart（旧推荐交集卡：单结论句
       + 辅助说明 + 查看更多，无交集三态降级，2026-06-16 green）'
     - '[recorded] PENDING api_integration 2026-06-25：gamma-local 静态拓扑已包含 circle-service，
       但 stackctl api_integration 仍因 gateway health SSL EOF 未进入 circle object intersections populated
@@ -85,7 +85,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
     status: partial
@@ -105,7 +105,7 @@ gwt_acceptance:
     notes:
     - '[recorded] local_contract 2026-06-25：`flutter test test/ui/circle/widgets/circle_shell_widget_test.dart`
       10/10 green；覆盖圈子价值卡云侧 displayText、来源说明、空/错态收起。'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（圈子价值卡与
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart（圈子价值卡与
       AuthorImpactCard 同构，文案「建立了新连接」，无好友化/收藏文案，2026-06-16 green）'
     - '[recorded] PENDING api_integration 2026-06-25：`/v1/circles/{id}/impact` 真实链路不再缺
       静态 compose/route，剩余阻断是 gamma-local health、seed viewer/circle 关系与 api_integration
@@ -127,7 +127,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart
     status: partial
@@ -145,7 +145,7 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.circle_homepage_intersection_redesign.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/section_widgets_test.dart（记录流双列瀑布、二级过滤右侧非胶囊、每卡至多一条交集句，无
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/circle/widgets/section_widgets__local_contract_test.dart（记录流双列瀑布、二级过滤右侧非胶囊、每卡至多一条交集句，无
       reasons 不占位，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma circle 记录流真实卡片 intersectionReasons
       待 WP-D。'
@@ -166,7 +166,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_header_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
@@ -189,7 +189,7 @@ gwt_acceptance:
       test/ui/circle/widgets/section_widgets_test.dart` 25/25 green；Header 与记录/讨论/成员 section 局部契约通过。'
     - '[recorded] local_contract 2026-06-25：`flutter test test/ui/circle/widgets/circle_shell_widget_test.dart`
       10/10 green；完整 Shell 通过头部、交集、价值卡、门禁、底部动作面板与稳定性契约。'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart（头部头像簇
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart（头部头像簇
       +「N 成员」单计数 + 独立头像缺省回退封面，无禁用术语外露，2026-06-16 green）'
     - '[recorded] PENDING api_integration 2026-06-25：circle iconUrl、成员计数与加入状态的真实链路
       需要在 gamma-local health 通过后由 api_integration/user_acceptance 验证；由 `object-homepage-gamma-real-data-closure`

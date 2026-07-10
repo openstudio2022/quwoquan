@@ -46,14 +46,14 @@ entries:
       - path: quwoquan_app/tool/pageflip_widget_diagnostics_main.dart
         sections:
           - "import 改相对 ../test/support/pageflip/pageflip_diagnostics.dart"
-      - path: quwoquan_app/test/components/pageflip/pageflip_widget_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/pageflip/pageflip_widget__local_contract_test.dart
         sections:
           - "barrel import 改相对 ../../support/pageflip/pageflip.dart"
-      - path: quwoquan_app/test/components/pageflip/pageflip_contract_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/pageflip/pageflip_contract__local_contract_test.dart
         sections:
           - "barrel import 改相对 ../../support/pageflip/pageflip.dart"
           - "两处 _readAppSource 诊断源码路径串重指 test/support/pageflip/src/debug/pageflip_diagnostics.dart"
-      - path: quwoquan_app/test/ui/content/article_reader/article_reader_architecture_test.dart
+      - path: quwoquan_app/test/local_contract/ui/content/article_reader/article_reader_architecture__local_contract_test.dart
         sections:
           - "allowedDirectDeckEntrypoints 删除已死的 harness 白名单；lib-only 扫描收紧为仅两个生产 host 可直连 deck"
       - path: quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py

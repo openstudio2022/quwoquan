@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import '../support/disposable.dart';
+import 'disposable.dart';
 import 'websocket/io.dart' if (dart.library.js_interop) 'websocket/web.dart';
 
 class WebSocketException implements Exception {

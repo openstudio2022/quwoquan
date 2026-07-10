@@ -53,12 +53,12 @@ export const domainOnboardingDomains = {
         ],
         "t2": [
           "runtime/controlplane/assistant_seedbox_contract_test.go",
-          "../quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart",
-          "../quwoquan_app/test/ui/chat/widgets/chat_assistant_ui_widget_test.dart"
+          "../quwoquan_app/test/local_contract/ui/assistant/contract/assistant_message_history_contract__local_contract_test.dart",
+          "../quwoquan_app/test/local_contract/ui/chat/widgets/chat_assistant_ui_widget__local_contract_test.dart"
         ],
         "t3": [
-          "../quwoquan_app/test/common/assistant/assistant_environment_smoke_test.dart",
-          "../quwoquan_app/test/gamma/assistant_alpha_beta_simulator_test.dart"
+          "../quwoquan_app/test/local_contract/quality/shared/assistant/assistant_environment_smoke__local_contract_test.dart",
+          "../quwoquan_app/test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart"
         ],
         "t4": []
       }
@@ -368,7 +368,7 @@ export const domainOnboardingDomains = {
         ],
         "t2": [
           "services/entity-service/tests/homepage_handler_test.go",
-          "../quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart"
+          "../quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart"
         ],
         "t3": [
           "contracts/metadata/entity/homepage/tests/e2e.yaml"
@@ -512,13 +512,13 @@ export const domainOnboardingDomains = {
           "contracts/metadata/notification/notification/service.yaml"
         ],
         "t2": [
-          "../quwoquan_app/test/cloud/notification/notification_metadata_contract_test.dart"
+          "../quwoquan_app/test/local_contract/cloud/notification/notification_metadata_contract__local_contract_test.dart"
         ],
         "t3": [
           "contracts/metadata/notification/notification/tests/e2e.yaml"
         ],
         "t4": [
-          "../quwoquan_app/test/patrol/chat/chat_notification_entry_test.dart"
+          "../quwoquan_app/test/user_acceptance/patrol/chat/chat_notification_entry__user_acceptance_test.dart"
         ]
       }
     },
@@ -666,7 +666,7 @@ export const domainOnboardingDomains = {
           "contracts/metadata/realtime/connection/service.yaml"
         ],
         "t2": [
-          "../quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart"
+          "../quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart"
         ],
         "t3": [
           "contracts/metadata/realtime/connection/tests/e2e.yaml"

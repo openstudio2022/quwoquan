@@ -1,17 +1,20 @@
 package application
+
 import (
 	"context"
+	"errors"
 	"fmt"
+	"go.opentelemetry.io/otel/attribute"
+	rtimpact "quwoquan_service/runtime/impact"
+	rtobs "quwoquan_service/runtime/observability"
+	rtsearch "quwoquan_service/runtime/search"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
-	"go.opentelemetry.io/otel/attribute"
-	rtimpact "quwoquan_service/runtime/impact"
-	rtobs "quwoquan_service/runtime/observability"
-	rtsearch "quwoquan_service/runtime/search"
 )
+
 const (
 	codeHomepageNotFound     = "ENTITY.USER.homepage_not_found"
 	codeClaimMaterialMissing = "ENTITY.USER.claim_material_missing"
@@ -21,18 +24,21 @@ const (
 	codePermissionDenied     = "ENTITY.USER.permission_denied"
 	codeInternalError        = "ENTITY.SYSTEM.internal_error"
 )
+
 type AppError struct {
 	StatusCode   int    `json:"-"`
 	Code         string `json:"code"`
 	UserMessage  string `json:"userMessage"`
 	DebugMessage string `json:"debugMessage,omitempty"`
 }
+
 func (e *AppError) Error() string {
 	if e == nil {
 		return ""
 	}
 	return e.Code + ": " + e.DebugMessage
 }
+
 type GeoPoint struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
@@ -67,12 +73,12 @@ type Homepage struct {
 	// 数据工程实体主页三件套投影承载：page.md 三段结构正文与图片资产
 	// （封面 frontmatter / 正文块级内嵌图 / 页尾相关图片），见
 	// contracts/metadata/entity/homepage/projections/*.yaml。
-	IntroductionMarkdown string                       `json:"introductionMarkdown,omitempty"`
-	IntroductionAssets   []HomepageIntroductionAsset  `json:"introductionAssets,omitempty"`
-	CreatedAt          time.Time        `json:"createdAt"`
-	UpdatedAt          time.Time        `json:"updatedAt"`
-	PublishedAt        *time.Time       `json:"publishedAt,omitempty"`
-	OfflineAt          *time.Time       `json:"offlineAt,omitempty"`
+	IntroductionMarkdown string                      `json:"introductionMarkdown,omitempty"`
+	IntroductionAssets   []HomepageIntroductionAsset `json:"introductionAssets,omitempty"`
+	CreatedAt            time.Time                   `json:"createdAt"`
+	UpdatedAt            time.Time                   `json:"updatedAt"`
+	PublishedAt          *time.Time                  `json:"publishedAt,omitempty"`
+	OfflineAt            *time.Time                  `json:"offlineAt,omitempty"`
 }
 type HomepageSearchItemView struct {
 	HomepageID        string   `json:"homepageId"`
@@ -1699,149 +1705,47 @@ func newAppError(status int, code, userMessage, debugMessage string) *AppError {
 	}
 }
 
-func normalize(raw string) string {
-	return strings.ToLower(strings.TrimSpace(raw))
+// ReloadHomepageStateResult 汇报免停服重载结果（ops 触发后用于导入审计）。
+type ReloadHomepageStateResult struct {
+	HomepagesBefore int `json:"homepagesBefore"`
+	HomepagesAfter  int `json:"homepagesAfter"`
+	SnapshotSize    int `json:"snapshotSize"`
 }
 
-func anyInt(value any) (int, bool) {
-	switch v := value.(type) {
-	case int:
-		return v, true
-	case int32:
-		return int(v), true
-	case int64:
-		return int(v), true
-	case float32:
-		return int(v), true
-	case float64:
-		return int(v), true
-	default:
-		return 0, false
-	}
-}
+// ReloadHomepageState 免停服重载：数据工程 homepage importer 直写 homepage_state
+// 集合后由 ops 触发本方法，把存储快照合并进内存主档（同 ID 覆盖、新 ID 追加），
+// 运行期的关注/认领/上报状态不清空。sequence 只前进不回退，避免重载覆盖运行期
+// 已推进的分配序列造成 ID 冲突。
+func (s *HomepageService) ReloadHomepageState(ctx context.Context) (ReloadHomepageStateResult, error) {
+	ctx, span := rtobs.StartBusinessSpan(ctx, "entity.ReloadHomepageState")
+	var err error
+	defer func() { rtobs.EndSpan(span, err) }()
 
-func stringSliceFromAny(value any) []string {
-	switch v := value.(type) {
-	case []string:
-		return cloneStrings(v)
-	case []any:
-		out := make([]string, 0, len(v))
-		for _, item := range v {
-			if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
-				out = append(out, text)
-			}
-		}
-		if len(out) == 0 {
-			return nil
-		}
-		return out
-	default:
-		return nil
+	if s.store == nil {
+		err = errors.New("homepage state store not configured")
+		return ReloadHomepageStateResult{}, err
 	}
-}
-
-func mapSliceFromAny(value any) []map[string]any {
-	switch v := value.(type) {
-	case []map[string]any:
-		return cloneObjectSlice(v)
-	case []any:
-		out := make([]map[string]any, 0, len(v))
-		for _, item := range v {
-			if m, ok := item.(map[string]any); ok {
-				out = append(out, cloneMap(m))
-			}
-		}
-		if len(out) == 0 {
-			return nil
-		}
-		return out
-	default:
-		return nil
+	snapshot, err := s.store.Load(ctx)
+	if err != nil {
+		return ReloadHomepageStateResult{}, err
 	}
-}
-
-func cloneHomepage(in *Homepage) Homepage {
-	if in == nil {
-		return Homepage{}
+	if snapshot == nil {
+		err = errors.New("homepage state snapshot is empty")
+		return ReloadHomepageStateResult{}, err
 	}
-	out := *in
-	out.CategoryTags = cloneStrings(in.CategoryTags)
-	out.Location = cloneGeoPoint(in.Location)
-	out.ReviewSummary = cloneMap(in.ReviewSummary)
-	out.ContentPreview = cloneObjectSlice(in.ContentPreview)
-	out.QuestionPreview = cloneObjectSlice(in.QuestionPreview)
-	out.RelatedGroups = cloneObjectSlice(in.RelatedGroups)
-	out.RelationEdges = cloneObjectSlice(in.RelationEdges)
-	out.AssistantContext = cloneMap(in.AssistantContext)
-	out.IntroductionAssets = cloneIntroductionAssets(in.IntroductionAssets)
-	return out
-}
-
-func cloneIntroductionAssets(assets []HomepageIntroductionAsset) []HomepageIntroductionAsset {
-	if len(assets) == 0 {
-		return nil
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := ReloadHomepageStateResult{
+		HomepagesBefore: len(s.homepages),
+		SnapshotSize:    len(snapshot.Homepages),
 	}
-	out := make([]HomepageIntroductionAsset, len(assets))
-	copy(out, assets)
-	return out
-}
-
-func coverURLFromIntroductionAssets(assets []HomepageIntroductionAsset) string {
-	for _, asset := range assets {
-		if asset.Role == introductionAssetRoleCover && strings.TrimSpace(asset.URL) != "" {
-			return strings.TrimSpace(asset.URL)
-		}
+	current := atomic.LoadUint64(&s.sequence)
+	s.applySnapshot(snapshot)
+	if current > atomic.LoadUint64(&s.sequence) {
+		atomic.StoreUint64(&s.sequence, current)
 	}
-	return ""
-}
-
-func (s *HomepageService) applyViewerFollowStateLocked(homepage *Homepage, viewerID string) {
-	if homepage == nil {
-		return
-	}
-	followers := s.followers[homepage.ID]
-	homepage.FollowerCount = len(followers)
-	viewerID = strings.TrimSpace(viewerID)
-	homepage.ViewerFollows = viewerID != "" && followers != nil && followers[viewerID]
-}
-
-func cloneStrings(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make([]string, len(values))
-	copy(out, values)
-	return out
-}
-
-func cloneGeoPoint(point *GeoPoint) *GeoPoint {
-	if point == nil {
-		return nil
-	}
-	out := *point
-	return &out
-}
-
-func cloneMap(in map[string]any) map[string]any {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string]any, len(in))
-	for key, value := range in {
-		out[key] = value
-	}
-	return out
-}
-
-func cloneObjectSlice(items []map[string]any) []map[string]any {
-	if len(items) == 0 {
-		return nil
-	}
-	out := make([]map[string]any, len(items))
-	for i := range items {
-		out[i] = cloneMap(items[i])
-	}
-	return out
+	result.HomepagesAfter = len(s.homepages)
+	return result, nil
 }
 
 func (s *HomepageService) applySnapshot(snapshot *HomepageStateSnapshot) {

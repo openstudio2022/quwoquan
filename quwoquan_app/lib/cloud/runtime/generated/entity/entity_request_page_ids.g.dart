@@ -17,6 +17,7 @@ class EntityRequestPageIds {
     'GetObjectPageBundle': 'entity.get.object.page.bundle',
     'IntakeHomepageCandidate': 'entity.homepage.candidate.intake',
     'PublishHomepageCandidate': 'entity.homepage.candidate.publish',
+    'ReloadHomepageState': 'entity.reload.homepage.state',
     'ReviewHomepageClaimRequest': 'entity.homepage.claim.review',
     'ReviewHomepageStatusReport': 'entity.homepage.status_report.review',
     'SearchHomepages': 'entity.homepage.search',
@@ -37,6 +38,7 @@ class EntityRequestPageIds {
   static const String getObjectPageBundle = 'entity.get.object.page.bundle';
   static const String intakeHomepageCandidate = 'entity.homepage.candidate.intake';
   static const String publishHomepageCandidate = 'entity.homepage.candidate.publish';
+  static const String reloadHomepageState = 'entity.reload.homepage.state';
   static const String reviewHomepageClaimRequest = 'entity.homepage.claim.review';
   static const String reviewHomepageStatusReport = 'entity.homepage.status_report.review';
   static const String searchHomepages = 'entity.homepage.search';

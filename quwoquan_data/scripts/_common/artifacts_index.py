@@ -1,6 +1,6 @@
 """仓外 artifacts 摘要索引层（index-first，数据输出规范）。
 
-裁定：`QWQ_OUTPUT_ROOT/runs/data/**` 只做镜像索引，不承载权威证据；
+裁定：`QWQ_OUTPUT_ROOT/data/runs/**` 只做镜像索引，不承载权威证据；
 权威证据唯一真相源是 `batch/_shared/**`（见 paths.BATCH_SHARED_AUTHORITATIVE_ENTRIES）、
 仓内 `publish/**` 与 `release/**`。任何 summary 目录必须带 `index.json` 回指：
 
@@ -8,9 +8,9 @@
     phase / contentType / supplyMode / sourceKey / maturity
 
 目录布局（一级维度 = 用户查找维度）：
-    .qwq_output/runs/data/content_runs/{e2e|operations}/{contentType}/{batchId}/
-    .qwq_output/runs/data/pools/{creator|user}/{batchId}/
-    .qwq_output/runs/data/app/{local-gamma|device-matrix|seed-matrix|startup-probes}/
+    .qwq_output/data/runs/content_runs/{e2e|operations}/{contentType}/{batchId}/
+    .qwq_output/data/runs/pools/{creator|user}/{batchId}/
+    .qwq_output/data/runs/app/{local-gamma|device-matrix|seed-matrix|startup-probes}/
 """
 from __future__ import annotations
 

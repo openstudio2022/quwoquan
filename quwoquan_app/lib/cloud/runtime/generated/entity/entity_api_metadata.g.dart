@@ -9,6 +9,7 @@ class EntityApiMetadata {
   static const String domain = 'entity';
   static const List<String> apiPrefixes = <String>[
     '/v1/homepages',
+    '/v1/homepages:reload',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
@@ -24,6 +25,7 @@ class EntityApiMetadata {
     'GetObjectPageBundle': '/v1/homepages/{homepageId}/object-page-bundle',
     'IntakeHomepageCandidate': '/v1/homepages/candidates',
     'PublishHomepageCandidate': '/v1/homepages/candidates/{homepageId}:publish',
+    'ReloadHomepageState': '/v1/homepages:reload',
     'ReviewHomepageClaimRequest': '/v1/homepages/{homepageId}/claim-requests/{claimRequestId}:review',
     'ReviewHomepageStatusReport': '/v1/homepages/{homepageId}/status-reports/{reportId}:review',
     'SearchHomepages': '/v1/homepages/search',
@@ -45,6 +47,7 @@ class EntityApiMetadata {
     'GetObjectPageBundle': 'GET',
     'IntakeHomepageCandidate': 'POST',
     'PublishHomepageCandidate': 'POST',
+    'ReloadHomepageState': 'POST',
     'ReviewHomepageClaimRequest': 'POST',
     'ReviewHomepageStatusReport': 'POST',
     'SearchHomepages': 'GET',
@@ -67,6 +70,7 @@ class EntityApiMetadata {
     'GetObjectPageBundle': 'public',
     'IntakeHomepageCandidate': 'required',
     'PublishHomepageCandidate': 'required',
+    'ReloadHomepageState': 'required',
     'ReviewHomepageClaimRequest': 'required',
     'ReviewHomepageStatusReport': 'required',
     'SearchHomepages': 'required',
@@ -95,6 +99,7 @@ class EntityApiMetadata {
   static const String getObjectPageBundleOperation = 'GetObjectPageBundle';
   static const String intakeHomepageCandidateOperation = 'IntakeHomepageCandidate';
   static const String publishHomepageCandidateOperation = 'PublishHomepageCandidate';
+  static const String reloadHomepageStateOperation = 'ReloadHomepageState';
   static const String reviewHomepageClaimRequestOperation = 'ReviewHomepageClaimRequest';
   static const String reviewHomepageStatusReportOperation = 'ReviewHomepageStatusReport';
   static const String searchHomepagesOperation = 'SearchHomepages';
@@ -169,6 +174,7 @@ class EntityApiMetadata {
       'homepageId': homepageId,
     });
   }
+  static const String reloadHomepageStatePath = '/v1/homepages:reload';
   static const String reviewHomepageClaimRequestPathTemplate = '/v1/homepages/{homepageId}/claim-requests/{claimRequestId}:review';
   static String reviewHomepageClaimRequestPath({required String homepageId, required String claimRequestId}) {
     return _fillPath(reviewHomepageClaimRequestPathTemplate, <String, String>{

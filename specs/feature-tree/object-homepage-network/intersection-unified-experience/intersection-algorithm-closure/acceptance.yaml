@@ -100,7 +100,7 @@ gwt_acceptance:
     - primaryText 在服务端 Explain 管线一次产出，端零句子拼装。
     tests:
       planned:
-      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_service_test.go
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_service__local_contract_test.go
       recorded: []
     status: pending
     test_evidence:
@@ -119,7 +119,7 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_algorithm_closure.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/internal/application/intersection/intersection_service_test.go（primaryText
+    - '[migrated_from_recorded] api_integration quwoquan_service/services/content-service/internal/application/intersection/intersection_service__local_contract_test.go（primaryText
       经 Explain 管线产出 ≥3 个标准 kind 主谓宾句，无 displayText/label 回退，go test ./services/content-service/internal/application/intersection
       green 2026-06-16）'
   GWT_ALG4:
@@ -153,12 +153,12 @@ gwt_acceptance:
     - hydration 在离线物化路径产出 vertical/lifecycle，读路径零额外同步打分（R-IX01 不变量保持）。
     tests:
       planned:
-      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_hydration_vertical_test.go
-      - file: quwoquan_service/services/content-service/internal/application/authorimpact/author_impact_travel_test.go
-      - file: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_hydration_vertical__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/authorimpact/author_impact_travel__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/user/pages/lin_mo_travel_intersection_acceptance__local_contract_test.dart
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_hydration_vertical__local_contract_test.go
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/authorimpact/author_impact_travel__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_hydration_vertical__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/application/authorimpact/author_impact_travel__local_contract_test.go
       - file: quwoquan_app/test/local_contract/ui/user/pages/lin_mo_travel_intersection_acceptance__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/viewer_object_intersection_store_contract__api_integration_test.go
       - file: quwoquan_service/services/content-service/tests/api_integration/intersection_source_contract__api_integration_test.go
@@ -179,7 +179,7 @@ gwt_acceptance:
         envs:
         - gamma
     notes:
-    - '[migrated_from_recorded_artifact] .qwq_output/runs/intersection-travel-debridge-t3/t3_gamma_recap_20260621.json'
+    - '[migrated_from_recorded_artifact] .qwq_output/env/repo/runs/intersection-travel-debridge-t3/t3_gamma_recap_20260621.json'
 execution:
   local_gate:
   - make verify-metadata

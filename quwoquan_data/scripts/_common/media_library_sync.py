@@ -3,8 +3,8 @@
 publish/media/library 是 CAS（content-addressed storage）布局：
   media/objects/sha256/{aa}/{bb}/{fullhash}.{ext}
 
-环境媒体根（gamma-local: .qwq_output/local/gamma-local/media；prod-hosted: host bind 的
-/opt/quwoquan/gamma/.qwq_output/local/gamma-local/media，边缘 root=/srv/media）以同一相对
+环境媒体根（gamma-local: .qwq_output/env/gamma/local/gamma-local/media；prod-hosted: host bind 的
+/opt/quwoquan/gamma/.qwq_output/env/gamma/local/gamma-local/media，边缘 root=/srv/media）以同一相对
 布局承载对象文件，media edge 直接 file_server 提供 `<base>/media/objects/...`。
 
 同步语义（fail closed）：

@@ -41,7 +41,7 @@ def main() -> int:
     envs = [args.env] if args.env else list(ENVIRONMENTS)
 
     for env_name in envs:
-        app_dir = ROOT / ".qwq_output" / "release" / "app" / env_name
+        app_dir = ROOT / ".qwq_output" / "env" / env_name / "release" / "app"
         report_path = app_dir / "report.json"
         cfg_path = app_dir / "app_runtime.yaml"
         if not report_path.is_file():
@@ -63,7 +63,7 @@ def main() -> int:
     for service in services:
         for env_name in envs:
             service_dir = (
-                ROOT / ".qwq_output" / "release" / "service" / service / env_name
+                ROOT / ".qwq_output" / "env" / env_name / "release" / "service" / service
             )
             report_path = service_dir / "report.json"
             cfg_path = service_dir / "config.yaml"

@@ -128,14 +128,14 @@ stages:
 
 **Job 顺序**（单步）：
 
-1. **validate**：校验 `step` 与 `.qwq_output/local/release-state/<service>.state` 中上一步是否衔接；校验 `quwoquan_service/services/<service>/<to_config>.yaml` 存在。
+1. **validate**：校验 `step` 与 `.qwq_output/env/repo/local/release-state/<service>.state` 中上一步是否衔接；校验 `quwoquan_service/services/<service>/<to_config>.yaml` 存在。
 2. **deploy-prod-step**（可选，dry_run=false 时执行）：
    - 真实发布前先 `validate_prod_plane_credentials.py --stage <gray-initial|full>` 硬校验本 stage 适用平面凭据。
    - `deploy_to_prod.sh` 按平面账号 `prod-<plane>-svc` 自登录 prod ECS，`podman compose -p quwoquan-<plane>-<instance>` 拉起本平面 governedWorkloads。
    - rollout 等待以 compose healthcheck 为真相源；失败按 `PREVIOUS_IMAGE_VERSION` 回滚本平面。
    - `gray-initial` 走灰度实例命名空间（`-gray`），`full` 走正式实例（`-prod`）。
    - `gray-initial` 发布后必须执行 `stackctl verify --target prod-hosted --kind topology --tier t4`，页面 smoke 覆盖首页、我的、他人主页、记录列表、视频流；失败视为 post-deploy failure，不得推进 `carry-on/full`。
-3. **gray-rollout-state**：执行 `make config-gray-rollout SERVICE=... FROM_IMAGE=... TO_IMAGE=... FROM_CONFIG=... TO_CONFIG=... STEP=...`，更新 `.qwq_output/local/release-state`。
+3. **gray-rollout-state**：执行 `make config-gray-rollout SERVICE=... FROM_IMAGE=... TO_IMAGE=... FROM_CONFIG=... TO_CONFIG=... STEP=...`，更新 `.qwq_output/env/repo/local/release-state`。
 4. **slo-gate**：执行 `make config-slo-gate ERROR_RATE=... P95_MS=... REDIS_ERROR_RATE=...`。
    - continue：job 成功，输出「本步通过，可进行下一步」。
    - pause：job 失败或 warning，输出「建议暂停，检查监控后再决定是否下一步」。
@@ -143,7 +143,7 @@ stages:
 
 **产出**：
 
-- 更新 `.qwq_output/local/release-state/<service>.state` 与 audit log。
+- 更新 `.qwq_output/env/repo/local/release-state/<service>.state` 与 audit log。
 - 可选：将 state 文件作为 artifact 上传，或提交回仓库（需 token 与谨慎使用）。
 
 ### 2.4 使用方式（运维）
@@ -194,7 +194,7 @@ v*-rc* tag push / main merge
 **版本来源**：
 
 - 由 pre-release tag 解析出 `TO_IMAGE` / `TO_CONFIG`（如从 `v1.0.0-rc.1` 得到 `v1.0.0.rc1`），或从 release 元数据/环境变量读取。
-- `FROM_IMAGE` / `FROM_CONFIG`：从当前 prod 状态读取（如从 `.qwq_output/local/release-state` 的 last 或从集群 annotation/label 拉取），或由 workflow 输入/缓存提供。
+- `FROM_IMAGE` / `FROM_CONFIG`：从当前 prod 状态读取（如从 `.qwq_output/env/repo/local/release-state` 的 last 或从集群 annotation/label 拉取），或由 workflow 输入/缓存提供。
 - 对 prod 而言，所有版本输入都绑定 `APP_ENV=prod`，不允许通过 `prod-gray` 目录/镜像标签/环境变量表达灰度。
 
 **SLO 指标获取**：

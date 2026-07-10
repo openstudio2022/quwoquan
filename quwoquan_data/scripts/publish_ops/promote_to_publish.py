@@ -416,7 +416,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Promote release/task posts to the publish mainline")
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--release-id", help="Assembled release id under release/")
-    src.add_argument("--task", help="Task id under local/data-runtime/tasks/")
+    src.add_argument("--task", help="Task id under data/local/runtime/tasks/")
     parser.add_argument("--batch", help="Batch id (required with --task)")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--skip-index", action="store_true")

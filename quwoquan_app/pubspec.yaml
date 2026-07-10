@@ -192,7 +192,7 @@ flutter:
         - asset: assets/fonts/noto_color_emoji/NotoColorEmoji-Regular.ttf
 
 patrol:
-  test_directory: test/patrol
+  test_directory: test/user_acceptance/patrol
 
 hooks:
   user_defines:

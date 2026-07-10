@@ -56,7 +56,7 @@ REQUIRED_PATHS = [
     DATA_ROOT / "scripts/_common/creator_pool/io.py",
     DATA_ROOT / "scripts/_common/creator_assignment.py",
     DATA_ROOT / "scripts/_common/creator_pool/registry_bridge.py",
-    DATA_ROOT / "tests/fixtures/creator_pool/travel_scale10_verify/golden_creator_bundle.json",
+    DATA_ROOT / "tests/support/fixtures/creator_pool/travel_scale10_verify/golden_creator_bundle.json",
     REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/system-creator-pool/spec.md",
     REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/system-creator-pool/acceptance.yaml",
     REPO_ROOT / "specs/feature-tree/runtime/runtime-data-engineering/system-creator-pool/next-round-plan.md",

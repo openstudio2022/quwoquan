@@ -3,7 +3,7 @@
 import 'package:device_info_plus/src/model/android_device_info.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-part '../model/android_device_info_fake.dart';
+part 'android_device_info_fake.dart';
 
 void main() {
   group('$AndroidDeviceInfo fromMap | toMap', () {

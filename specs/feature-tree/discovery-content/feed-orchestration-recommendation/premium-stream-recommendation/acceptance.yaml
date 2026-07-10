@@ -42,9 +42,9 @@ gwt_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/feed/feed_service_negative_fallback__local_contract_test.go
-      - file: quwoquan_service/services/product-ops-service/tests/local_contract/cmd/api/main__local_contract_test.go
-      - file: quwoquan_app/test/local_contract/components/content/intersection_reason_chip_widget__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/internal/application/feed/feed_service_negative_fallback__local_contract_test.go
+      - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/components/content/intersection_reason_chip_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
     status: partial
     test_evidence:
@@ -99,8 +99,8 @@ gwt_acceptance:
       - file: quwoquan_service/services/content-service/tests/api_integration/recommendation/premium_pool_readpath__api_integration_test.go
       - file: quwoquan_app/test/user_acceptance/discovery/premium_stream_premium_pool__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/infrastructure/recommendation/premium_pool_source__local_contract_test.go
-      - file: quwoquan_service/services/product-ops-service/tests/local_contract/cmd/api/main__local_contract_test.go
+      - file: quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_source__local_contract_test.go
+      - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
     status: partial
     test_evidence:
       primary:

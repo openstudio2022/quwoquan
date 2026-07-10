@@ -38,8 +38,8 @@ gwt_acceptance:
     - 未勾选协议时本地阻断响应时间 < 100ms；一键登录请求版本字段构造不引入额外网络前等待。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:

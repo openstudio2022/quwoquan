@@ -17,7 +17,7 @@
   produce_compose→produce_author→produce_annotate→produce_review→publish。
 - 双类节点：确定性 stage 直接跑既有 handler；Agent checkpoint（source_plan /
   实体主页 / 正文创作）写指引并暂停（退出码 10），物化产物后 `--resume` 自动推进。
-- `task_workflow_state.json` 落 `local/data-runtime/tasks/<人读taskId>/batches/<batch>/_shared/`，
+- `task_workflow_state.json` 落 `data/local/runtime/tasks/<人读taskId>/batches/<batch>/_shared/`，
   记 completed / waitingCheckpoint / reactRewinds，幂等可 resume；`--until` 早停。
 - 在 task handler 注册 `task run`，docstring 同步。
 

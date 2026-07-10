@@ -62,17 +62,17 @@ def _load_multiobjective_models() -> tuple[dict[str, Any] | None, dict[str, floa
     uri = os.environ.get("MONGODB_URI", "mongodb://127.0.0.1:27017/?directConnection=true")
     db_name = os.environ.get("MONGODB_DATABASE", "quwoquan_content")
     try:
-        client = MongoClient(uri, serverSelectionTimeoutMS=3000)
-        db = client[db_name]
-        doc = db["rec_model_registry"].find_one(
-            {"scenario": "content_feed_multiobjective", "modelType": "lgb_multiobjective", "production": True},
-            sort=[("createdAt", -1)],
-        )
-        if not doc:
+        with MongoClient(uri, serverSelectionTimeoutMS=3000) as client:
+            db = client[db_name]
             doc = db["rec_model_registry"].find_one(
-                {"scenario": "content_feed_multiobjective"},
+                {"scenario": "content_feed_multiobjective", "modelType": "lgb_multiobjective", "production": True},
                 sort=[("createdAt", -1)],
             )
+            if not doc:
+                doc = db["rec_model_registry"].find_one(
+                    {"scenario": "content_feed_multiobjective"},
+                    sort=[("createdAt", -1)],
+                )
         if not doc:
             return None, None
 

@@ -229,7 +229,7 @@ def validate_test_ref(
                 failures.add(f"{path.relative_to(ROOT)} {item_id} recorded file missing: {file_path}")
             return
         if artifact:
-            if bucket_name == "recorded" and str(artifact).startswith(".qwq_output/runs/") and not evidence_path_exists(str(artifact)):
+            if bucket_name == "recorded" and str(artifact).startswith(".qwq_output/env/repo/runs/") and not evidence_path_exists(str(artifact)):
                 failures.add(f"{path.relative_to(ROOT)} {item_id} recorded artifact missing: {artifact}")
             return
         if command or artifact:

@@ -114,7 +114,7 @@
   },
   "smokeCases": {
     "assistant_api_protocol_smoke": {
-      "path": "quwoquan_service/services/assistant-service/tests/ops/smoke/run_assistant_runtime_smoke.py",
+      "path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/run_assistant_runtime_smoke.py",
       "runner": "python",
       "tier": "pr",
       "budgetSeconds": 60,
@@ -124,7 +124,7 @@
       "optimizationPlan": "改为 conversation -> turn -> SSE 协议探针，仅校验 turn_started / assistant.model.interaction / final_answer 与非空答案。"
     },
     "assistant_ui_semantic_smoke": {
-      "path": "quwoquan_app/test/common/assistant/assistant_environment_smoke_test.dart",
+      "path": "quwoquan_app/test/local_contract/quality/shared/assistant/assistant_environment_smoke__local_contract_test.dart",
       "runner": "flutter_test",
       "tier": "daily",
       "budgetSeconds": 600,
@@ -134,7 +134,7 @@
       "optimizationPlan": "迁出 PR；保留到 daily/release，并用 profile + idle fail-fast 限制无进展等待。"
     },
     "assistant_alpha_beta_ui_simulator": {
-      "path": "quwoquan_app/test/gamma/assistant_alpha_beta_simulator_test.dart",
+      "path": "quwoquan_app/test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart",
       "runner": "flutter_test",
       "tier": "daily",
       "budgetSeconds": 420,
@@ -144,7 +144,7 @@
       "optimizationPlan": "默认不进入 PR；增加 idle fail-fast 与场景级预算，按专项/日跑执行。"
     },
     "chat_avatar_api_probe": {
-      "path": "quwoquan_service/services/chat-service/tests/ops/smoke/run_chat_avatar_e2e_probe.py",
+      "path": "quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/smoke/run_chat_avatar_e2e_probe.py",
       "runner": "python",
       "tier": "pr",
       "budgetSeconds": 90,
@@ -156,8 +156,8 @@
   },
   "uiJourneys": {
     "content_feed_patrol": {
-      "path": "quwoquan_app/test/patrol/discovery/feed_load_test.dart",
-      "target": "test/patrol/discovery/feed_load_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 120,
@@ -167,8 +167,8 @@
       "optimizationPlan": "PR 不默认执行；daily/full 作为 UI 可用性入口。"
     },
     "content_like_post_patrol": {
-      "path": "quwoquan_app/test/patrol/content/like_post_test.dart",
-      "target": "test/patrol/content/like_post_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/content/like_post__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/content/like_post__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 180,
@@ -178,8 +178,8 @@
       "optimizationPlan": "保留到 daily/release，不纳入 PR。"
     },
     "content_comment_post_patrol": {
-      "path": "quwoquan_app/test/patrol/content/comment_post_test.dart",
-      "target": "test/patrol/content/comment_post_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/content/comment_post__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 240,
@@ -189,8 +189,8 @@
       "optimizationPlan": "保留到 daily/release，不纳入 PR。"
     },
     "content_error_empty_state_patrol": {
-      "path": "quwoquan_app/test/patrol/content/error_empty_state_test.dart",
-      "target": "test/patrol/content/error_empty_state_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/content/error_empty_state__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/content/error_empty_state__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 180,
@@ -200,8 +200,8 @@
       "optimizationPlan": "仅在 daily/full 验证。"
     },
     "content_create_entry_patrol": {
-      "path": "quwoquan_app/test/patrol/content/create_entry_start_actions_e2e_test.dart",
-      "target": "test/patrol/content/create_entry_start_actions_e2e_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/content/create_entry_start_actions_e2e__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/content/create_entry_start_actions_e2e__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 240,
@@ -211,8 +211,8 @@
       "optimizationPlan": "迁出 PR，仅做 daily/release。"
     },
     "content_draft_preservation_patrol": {
-      "path": "quwoquan_app/test/patrol/content/content_draft_preservation_e2e_test.dart",
-      "target": "test/patrol/content/content_draft_preservation_e2e_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/content/content_draft_preservation_e2e__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/content/content_draft_preservation_e2e__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 300,
@@ -222,8 +222,8 @@
       "optimizationPlan": "仅保留到 daily/release。"
     },
     "chat_ime_input_patrol": {
-      "path": "quwoquan_app/test/patrol/chat/chat_ime_input_test.dart",
-      "target": "test/patrol/chat/chat_ime_input_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/chat/chat_ime_input__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/chat/chat_ime_input__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 240,
@@ -233,8 +233,8 @@
       "optimizationPlan": "迁出 PR，在 daily/full 保留。"
     },
     "chat_notification_entry_patrol": {
-      "path": "quwoquan_app/test/patrol/chat/chat_notification_entry_test.dart",
-      "target": "test/patrol/chat/chat_notification_entry_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/chat/chat_notification_entry__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/chat/chat_notification_entry__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 240,
@@ -244,8 +244,8 @@
       "optimizationPlan": "迁出 PR，仅在 daily/release 运行。"
     },
     "chat_orientation_stability_patrol": {
-      "path": "quwoquan_app/test/patrol/chat/chat_orientation_stability_test.dart",
-      "target": "test/patrol/chat/chat_orientation_stability_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/chat/chat_orientation_stability__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/chat/chat_orientation_stability__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 240,
@@ -255,8 +255,8 @@
       "optimizationPlan": "迁出 PR，仅在 daily/release 运行。"
     },
     "ops_event_ingestion_patrol": {
-      "path": "quwoquan_app/test/patrol/ops/event_ingestion_journey_test.dart",
-      "target": "test/patrol/ops/event_ingestion_journey_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/ops/event_ingestion_journey__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/ops/event_ingestion_journey__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 240,
@@ -266,8 +266,8 @@
       "optimizationPlan": "保持在 daily/release，不纳入 PR。"
     },
     "ops_event_reliability_replay_patrol": {
-      "path": "quwoquan_app/test/patrol/ops/event_reliability_replay_test.dart",
-      "target": "test/patrol/ops/event_reliability_replay_test.dart",
+      "path": "quwoquan_app/test/user_acceptance/patrol/ops/event_reliability_replay__user_acceptance_test.dart",
+      "target": "test/user_acceptance/patrol/ops/event_reliability_replay__user_acceptance_test.dart",
       "runner": "patrol",
       "tier": "daily",
       "budgetSeconds": 240,
@@ -309,7 +309,7 @@
       "selfHostedChecks": [
         "gamma_patrol_matrix"
       ],
-      "target": "test/patrol/discovery/feed_load_test.dart"
+      "target": "test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart"
     }
   }
 }

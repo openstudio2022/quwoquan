@@ -20,10 +20,10 @@ docs/               长期工程说明、Codex 工作流、外部依赖登记和
 这些目录可能在开发机上出现，但不是工程源码域，不参与职责划分：
 
 ```text
-node_modules/       Node 依赖缓存。
 .worktrees/         本地 Git worktree 缓存。
 ref/                外部参考实现或资料，不提交。
 .vscode/            本地 IDE 配置。
+quwoquan_ops/portal/node_modules/ Ops Portal Node 依赖缓存。
 quwoquan_app/build/ Flutter 构建缓存。
 quwoquan_app/.dart_tool/ Dart/Flutter 工具缓存。
 ```
@@ -39,13 +39,15 @@ changes, openspec, app_log, runtime, build, tmp, tools, githooks, social_content
 
 - 领域私有资产归领域：服务 Dockerfile、k8s、compose、release config 位于 `quwoquan_service/services/<service>/`；App 发布资产位于 `quwoquan_app/deploy/`；数据发布资产位于 `quwoquan_data/deploy/`。
 - Ops 只放横切能力：统一调度、环境拓扑、跨域策略、gate、CI/CD、全局可观测、runbook 和 Portal。
-- 生成物只进 `.qwq_output/`：`release/**` 保存本地打包结果，`runs/**` 保存 stackctl 报告和观测证据，`local/**` 保存 pid/cache/Caddy data 等本地状态。
+- 根目录不承载工具 workspace：Ops Portal 的 `package.json`、`package-lock.json` 和 `node_modules` 归 `quwoquan_ops/portal/`，根目录不保留 Node workspace。
+- 生成物只进 `.qwq_output/`：环境相关输出按 `.qwq_output/env/<env>/{runs,observability,release,local}` 归位，repo 工具状态按 `.qwq_output/env/repo/local` 归位，数据工程输出按 `.qwq_output/data/{runs,observability,release,local}` 归位。
 
 ## 常用入口
 
 ```bash
 python3 quwoquan_ops/cli/stackctl.py package --env alpha --kind runtime --include-services
 python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
+cd quwoquan_ops/portal && npm test && npm run build
 bash quwoquan_ops/gate/gate_repo.sh
 ```
 

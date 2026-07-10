@@ -44,7 +44,7 @@
   - 风险等级: P2
   - 涉及文件: `quwoquan_app/lib/core/constants/ui_text_constants_values.dart`, `quwoquan_app/lib/ui/user/widgets/other_profile_intersection_card.dart`
   - 状态: 已解决（2026-06-26；文案替换为连接导向空态）
-  - 验证证据: `quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart`
+  - 验证证据: `quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart`
 
 - [x] PROMPT-002 他人主页无交集仍展示查看全部假入口
   - 区域: App
@@ -58,7 +58,7 @@
   - 风险等级: P1
   - 涉及文件: `quwoquan_app/lib/ui/user/widgets/profile_intersection_insight_primitives.dart`, `quwoquan_app/lib/ui/user/widgets/other_profile_intersection_card.dart`
   - 状态: 已解决（2026-06-26；footer action 改为可选，OtherProfileIntersectionCard 仅非空态展示入口）
-  - 验证证据: `quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart`
+  - 验证证据: `quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart`
 
 ## 首页推荐与交集说明（Discovery / Recommendation）
 
@@ -72,6 +72,6 @@
   - 问题类型: 其他
   - 建议方向: `N` 定义为同一证据快照下可点开的交集人数；代表人按联系人/共同联系人 > 关注的人/共同关注的人 > 同圈圈友 > 我曾互动过其内容的用户择优；首页短句具象为来源 + 代表人 + N + 动作摘要，如 `联系人林清越等 8 人：5赞 2评 1转发`；点击列表逐人展示来源与其在当前对象上的动作。
   - 风险等级: P1
-  - 涉及文件: `quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml`, `quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_representative_actor.yaml`, `quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json`, `quwoquan_app/lib/cloud/services/content/mock/generated/home_showcase_core_fixture.g.dart`, `quwoquan_app/test/ui/discovery/home_intersection_multiform_feed_widget_test.dart`
+  - 涉及文件: `quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml`, `quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_representative_actor.yaml`, `quwoquan_service/contracts/metadata/content/test_fixtures/scenarios/content_scenarios.lite.json`, `quwoquan_app/lib/cloud/services/content/mock/generated/home_showcase_core_fixture.g.dart`, `quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart`
   - 状态: 已解决（2026-07-01；新增 IntersectionActorEvidence 逐人来源/动作投影，并在 IntersectionReason 下发 actorEvidenceTotalCount / actorEvidenceCompleteness / actorEvidence；alpha showcase seed 已登记完整人数列表）
   - 验证证据: `make verify-metadata`; `go test ./services/content-service/internal/application/intersection`; `flutter test test/ui/discovery/home_intersection_multiform_feed_widget_test.dart`

@@ -48,7 +48,7 @@
 | 云侧 emergedTags 契约 | `go test ./internal/application/ -run EmergedTags`（assistant-service） | ok（命中汇总去重 + 空结果不伪造） |
 | 端云行为 action 一致性 | `python3 quwoquan_service/scripts/recommendation/verify_behavior_action_consistency.py` | OK（behaviors.yaml ↔ Go SignalWeights ↔ Dart BehaviorAction 三方一致） |
 | codegen 幂等 | `make codegen-app` | `trackAssistantInterest(List<String> tagRefs)`（payload 仅 `type`+`tagRefs`，无 postId） |
-| 端 tracker + 回流 | `flutter test test/cloud/content/content_behavior_tracker_test.dart test/ui/assistant/personal_assistant_stream_controller_test.dart` | All tests passed（33/33） |
+| 端 tracker + 回流 | `flutter test test/local_contract/cloud/content/content_behavior_tracker__local_contract_test.dart test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart` | All tests passed（33/33） |
 | 端侧接线静态分析 | `dart analyze`（接线 3 文件） | 0 error/warning（仅 5 个 pre-existing info 级 lint） |
 
 ## 分层测试映射

@@ -21,7 +21,7 @@
 - `quwoquan_app/lib/app_bootstrap.dart`、`quwoquan_app/lib/quwoquan_app_shell.dart`、`quwoquan_app/lib/main_prod.dart`（prod 数据源锁定）
 - `quwoquan_app/lib/cloud/services/chat/chat_repository_api.dart`、`remote/chat_repository_remote.dart`、`mock/chat_repository_mock.dart`
 - `quwoquan_app/test/support/**`、`quwoquan_app/lib/core/data_source/README.md`
-- `quwoquan_app/test/smoke/app_bootstrap_smoke_test.dart`
+- `quwoquan_app/test/local_contract/app/smoke/app_bootstrap_smoke__local_contract_test.dart`
 - `specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md`
 - `specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md`（**M8**）
 - `specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml`（**slice-6** 已合入 — §5.1 规格/流程基线）

@@ -13,8 +13,8 @@ surfaces:
   owner: chat
   route_id: chat
   source_tests:
-  - quwoquan_app/test/ui/chat/widgets/chat_page_widget_test.dart
-  - quwoquan_app/test/ui/chat/journeys/chat_conversation_list_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_conversation_list_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
   - quwoquan_service/services/chat-service/tests/api_integration/message_sync_contract__api_integration_test.go
@@ -22,8 +22,8 @@ surfaces:
   owner: chat
   route_id: startGroupChat
   source_tests:
-  - quwoquan_app/test/ui/chat/widgets/start_group_chat_page_widget_test.dart
-  - quwoquan_app/test/ui/chat/journeys/chat_group_management_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
   - quwoquan_service/services/chat-service/tests/api_integration/social_contacts_contract__api_integration_test.go
@@ -31,9 +31,9 @@ surfaces:
   owner: chat
   route_id: chatDetail
   source_tests:
-  - quwoquan_app/test/ui/chat/widgets/chat_detail_page_widget_test.dart
-  - quwoquan_app/test/ui/chat/pages/chat_conversation_page_realtime_journey_test.dart
-  - quwoquan_app/test/ui/chat/journeys/chat_message_send_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_detail_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/pages/chat/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_message_send_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
   - quwoquan_service/services/chat-service/tests/api_integration/message_sync_contract__api_integration_test.go
@@ -41,8 +41,8 @@ surfaces:
   owner: chat
   route_id: chatSettings
   source_tests:
-  - quwoquan_app/test/ui/chat/widgets/chat_settings_page_widget_test.dart
-  - quwoquan_app/test/ui/chat/journeys/chat_group_management_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_settings_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
   - quwoquan_service/services/chat-service/tests/api_integration/conversation_error_contract__api_integration_test.go
@@ -50,8 +50,8 @@ surfaces:
   owner: chat
   route_id: chatManage
   source_tests:
-  - quwoquan_app/test/ui/chat/widgets/group_manage_page_widget_test.dart
-  - quwoquan_app/test/ui/chat/journeys/chat_group_management_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/group_manage_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
   - quwoquan_service/services/chat-service/tests/api_integration/conversation_error_contract__api_integration_test.go
@@ -59,8 +59,8 @@ surfaces:
   owner: chat
   route_id: chatAddMembers
   source_tests:
-  - quwoquan_app/test/ui/chat/widgets/start_group_chat_page_widget_test.dart
-  - quwoquan_app/test/ui/chat/journeys/chat_search_navigation_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/start_group_chat_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_search_navigation_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
   - quwoquan_service/services/chat-service/tests/api_integration/social_contacts_contract__api_integration_test.go
@@ -68,8 +68,8 @@ surfaces:
   owner: chat
   route_id: chatTransferOwnership
   source_tests:
-  - quwoquan_app/test/ui/chat/widgets/transfer_ownership_page_widget_test.dart
-  - quwoquan_app/test/ui/chat/journeys/chat_group_management_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/transfer_ownership_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
   - quwoquan_service/services/chat-service/tests/api_integration/conversation_settings_contract__api_integration_test.go
@@ -77,8 +77,8 @@ surfaces:
   owner: chat
   route_id: chatAdmins
   source_tests:
-  - quwoquan_app/test/ui/chat/widgets/group_admins_page_widget_test.dart
-  - quwoquan_app/test/ui/chat/journeys/chat_group_management_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/group_admins_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_group_management_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/chat-service/tests/api_integration/group_lifecycle_contract__api_integration_test.go
   - quwoquan_service/services/chat-service/tests/api_integration/member_management_contract__api_integration_test.go
@@ -86,8 +86,8 @@ surfaces:
   owner: chat
   route_id: chatMemberSearch
   source_tests:
-  - quwoquan_app/test/ui/chat/journeys/chat_search_navigation_journey_test.dart
-  - quwoquan_app/test/ui/chat/widgets/chat_page_widget_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_search_navigation_journey__user_acceptance_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/chat-service/tests/api_integration/social_contacts_contract__api_integration_test.go
   - quwoquan_service/services/chat-service/tests/api_integration/message_sync_contract__api_integration_test.go
@@ -95,53 +95,53 @@ surfaces:
   owner: assistant
   route_id: assistantPersonal
   source_tests:
-  - quwoquan_app/test/ui/assistant/widgets/assistant_half_sheet_personalization_provider_test.dart
-  - quwoquan_app/test/ui/chat/widgets/chat_assistant_ui_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/assistant/widgets/assistant_half_sheet_personalization_provider__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_assistant_ui_widget__local_contract_test.dart
   api_integration_tests:
-  - quwoquan_app/test/api_integration/gamma/assistant_alpha_beta_simulator__api_integration_test.dart
+  - quwoquan_app/test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart
   - quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
 - surface_id: personalAssistantDialog
   owner: assistant
   route_id: assistantPersonal
   source_tests:
-  - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
-  - quwoquan_app/test/ui/assistant/personal_assistant_stream_controller_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
+  - quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
   api_integration_tests:
-  - quwoquan_app/test/api_integration/gamma/assistant_alpha_beta_simulator__api_integration_test.dart
+  - quwoquan_app/test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart
   - quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
 - surface_id: assistantSettings
   owner: assistant
   route_id: chatDetail
   source_tests:
-  - quwoquan_app/test/ui/chat/widgets/chat_detail_page_assistant_ui_regression_test.dart
-  - quwoquan_app/test/ui/assistant/assistant_management_page_consent_test.dart
+  - quwoquan_app/test/local_contract/ui/chat/widgets/chat_detail_page_assistant_ui_regression__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
   api_integration_tests:
-  - quwoquan_app/test/api_integration/gamma/assistant_skill_comparison__api_integration_test.dart
+  - quwoquan_app/test/api_integration/cloud/assistant/assistant_skill_comparison__api_integration_test.dart
   - quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
 - surface_id: assistantHistory
   owner: assistant
   route_id: chatDetail
   source_tests:
-  - quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart
-  - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/assistant/contract/assistant_message_history_contract__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
   api_integration_tests:
-  - quwoquan_app/test/api_integration/gamma/assistant_skill_comparison__api_integration_test.dart
+  - quwoquan_app/test/api_integration/cloud/assistant/assistant_skill_comparison__api_integration_test.dart
   - quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
 - surface_id: assistantFeedback
   owner: assistant
   route_id: chatDetail
   source_tests:
-  - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
-  - quwoquan_app/test/ui/assistant/assistant_turn_message_resolver_transcript_row_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
+  - quwoquan_app/test/local_contract/ui/assistant/assistant_turn_message_resolver_transcript_row__local_contract_test.dart
   api_integration_tests:
-  - quwoquan_app/test/api_integration/gamma/assistant_skill_comparison__api_integration_test.dart
+  - quwoquan_app/test/api_integration/cloud/assistant/assistant_skill_comparison__api_integration_test.dart
   - quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
 - surface_id: globalSearchLanding
   owner: search
   route_id: globalSearch
   source_tests:
-  - quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
-  - quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
   - quwoquan_service/services/search-service/tests/api_integration/storage_ttl_contract__api_integration_test.go
@@ -149,8 +149,8 @@ surfaces:
   owner: search
   route_id: globalSearch
   source_tests:
-  - quwoquan_app/test/ui/search/pages/global_search_page_widget_test.dart
-  - quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/search/pages/global_search_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
   - quwoquan_service/services/search-service/tests/api_integration/search_signal_contract__api_integration_test.go
@@ -158,8 +158,8 @@ surfaces:
   owner: search
   route_id: globalSearchNetworkResults
   source_tests:
-  - quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
-  - quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
   - quwoquan_service/services/search-service/tests/api_integration/search_signal_contract__api_integration_test.go
@@ -167,8 +167,8 @@ surfaces:
   owner: search
   route_id: locationPlaceLanding
   source_tests:
-  - quwoquan_app/test/ui/search/pages/location_place_landing_page_widget_test.dart
-  - quwoquan_app/test/ui/search/journeys/cross_domain_search_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/search/pages/location_place_landing_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/search/cross_domain_search_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
@@ -176,8 +176,8 @@ surfaces:
   owner: entity
   route_id: homepagePicker
   source_tests:
-  - quwoquan_app/test/ui/entity/pages/homepage_picker_page_widget_test.dart
-  - quwoquan_app/test/ui/entity/pages/suggest_homepage_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_picker_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/suggest_homepage_page_widget__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
@@ -185,8 +185,8 @@ surfaces:
   owner: entity
   route_id: suggestHomepage
   source_tests:
-  - quwoquan_app/test/ui/entity/pages/suggest_homepage_page_widget_test.dart
-  - quwoquan_app/test/ui/entity/pages/homepage_picker_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/suggest_homepage_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_picker_page_widget__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
@@ -194,8 +194,8 @@ surfaces:
   owner: entity
   route_id: homepageDetail
   source_tests:
-  - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-  - quwoquan_app/test/components/object_page/object_page_shell_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/components/object_page/object_page_shell__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
@@ -203,8 +203,8 @@ surfaces:
   owner: entity
   route_id: homepageIntroduction
   source_tests:
-  - quwoquan_app/test/ui/entity/pages/homepage_introduction_page_widget_test.dart
-  - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_introduction_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
@@ -212,8 +212,8 @@ surfaces:
   owner: entity
   route_id: homepageClaim
   source_tests:
-  - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
-  - quwoquan_app/test/ui/entity/pages/suggest_homepage_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/suggest_homepage_page_widget__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
@@ -221,8 +221,8 @@ surfaces:
   owner: entity
   route_id: homepageMaintenance
   source_tests:
-  - quwoquan_app/test/ui/entity/pages/homepage_maintenance_page_widget_test.dart
-  - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_maintenance_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
@@ -230,8 +230,8 @@ surfaces:
   owner: entity
   route_id: homepageStatusReport
   source_tests:
-  - quwoquan_app/test/ui/entity/pages/homepage_maintenance_page_widget_test.dart
-  - quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_maintenance_page_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
   - quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
@@ -239,8 +239,8 @@ surfaces:
   owner: circle
   route_id: circleDetail
   source_tests:
-  - quwoquan_app/test/ui/circle/widgets/circle_detail_page_widget_test.dart
-  - quwoquan_app/test/ui/circle/journeys/circle_detail_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/circle/widgets/circle_detail_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/circle/circle_detail_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/circle-service/tests/api_integration/circle_crud_contract__api_integration_test.go
   - quwoquan_service/services/circle-service/tests/api_integration/circle_feed_contract__api_integration_test.go
@@ -248,8 +248,8 @@ surfaces:
   owner: content
   route_id: myFootprint
   source_tests:
-  - quwoquan_app/test/ui/user/pages/my_footprint_page_test.dart
-  - quwoquan_app/test/ui/user/journeys/my_profile_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/my_footprint_page__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
   - quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
@@ -257,8 +257,8 @@ surfaces:
   owner: content
   route_id: localDrafts
   source_tests:
-  - quwoquan_app/test/ui/content/entry/draft_recovery_widget_test.dart
-  - quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/content/entry/widgets/create_entry_sheet_widget__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
   - quwoquan_service/services/content-service/tests/api_integration/post_markdown_contract__api_integration_test.go
@@ -266,10 +266,10 @@ surfaces:
   owner: user
   route_id: userProfile
   source_tests:
-  - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
-  - quwoquan_app/test/ui/user/pages/other_profile_page_test.dart
-  - quwoquan_app/test/ui/user/journeys/my_profile_journey_test.dart
-  - quwoquan_app/test/ui/user/journeys/other_profile_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
   - quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
@@ -277,8 +277,8 @@ surfaces:
   owner: user
   route_id: profileCareerInterests
   source_tests:
-  - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
-  - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
   api_integration_tests:
   - quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
   - quwoquan_service/services/tag-service/tests/api_integration/tag_contract__api_integration_test.go
@@ -286,8 +286,8 @@ surfaces:
   owner: user
   route_id: addContact
   source_tests:
-  - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
-  - quwoquan_app/test/ui/user/journeys/my_profile_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
   - quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go
@@ -295,8 +295,8 @@ surfaces:
   owner: user
   route_id: addContactSearch
   source_tests:
-  - quwoquan_app/test/ui/user/pages/other_profile_page_test.dart
-  - quwoquan_app/test/ui/user/journeys/other_profile_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
   - quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
@@ -304,8 +304,8 @@ surfaces:
   owner: user
   route_id: addContactScan
   source_tests:
-  - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
-  - quwoquan_app/test/ui/user/journeys/other_profile_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
   - quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go
@@ -313,8 +313,8 @@ surfaces:
   owner: user
   route_id: addContactPhone
   source_tests:
-  - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
-  - quwoquan_app/test/ui/user/journeys/my_profile_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go
   - quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
@@ -322,8 +322,8 @@ surfaces:
   owner: user
   route_id: addContactConfirm
   source_tests:
-  - quwoquan_app/test/ui/user/pages/other_profile_page_test.dart
-  - quwoquan_app/test/ui/user/journeys/other_profile_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/other_profile_page__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/other_profile_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
   - quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
@@ -331,8 +331,8 @@ surfaces:
   owner: user
   route_id: myQrCode
   source_tests:
-  - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
-  - quwoquan_app/test/ui/user/journeys/my_profile_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
   api_integration_tests:
   - quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
   - quwoquan_service/services/user-service/tests/api_integration/contact_discovery_contract__api_integration_test.go
@@ -340,136 +340,136 @@ route_only:
 - route_id: welcome
   owner: runtime
   source_tests:
-  - quwoquan_app/test/ui/welcome/welcome_screen_test.dart
-  - quwoquan_app/test/app/app_startup_welcome_test.dart
+  - quwoquan_app/test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart
+  - quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
 - route_id: login
   owner: user
   source_tests:
-  - quwoquan_app/test/ui/user/login_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
 - route_id: legalUserAgreement
   owner: runtime
   source_tests:
-  - quwoquan_app/test/app/app_startup_welcome_test.dart
+  - quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
 - route_id: legalPrivacyPolicy
   owner: runtime
   source_tests:
-  - quwoquan_app/test/app/app_startup_welcome_test.dart
+  - quwoquan_app/test/local_contract/app/app_startup_welcome__local_contract_test.dart
 - route_id: legalPermissions
   owner: runtime
   source_tests:
-  - quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
+  - quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
 - route_id: legalThirdPartySdkList
   owner: runtime
   source_tests:
-  - quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart
+  - quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart
 - route_id: home
   owner: discovery
   source_tests:
-  - quwoquan_app/test/ui/discovery/home_page_widget_test.dart
-  - quwoquan_app/test/ui/discovery/post/journeys/discovery_post_feed_load_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/discovery/home_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/discovery/post/discovery_post_feed_load_journey__user_acceptance_test.dart
 - route_id: circles
   owner: circle
   source_tests:
-  - quwoquan_app/test/ui/circle/widgets/circles_page_widget_test.dart
-  - quwoquan_app/test/ui/circle/journeys/circle_navigation_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/circle/widgets/circles_page_widget__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/circle/circle_navigation_journey__user_acceptance_test.dart
 - route_id: profile
   owner: user
   source_tests:
-  - quwoquan_app/test/ui/user/pages/my_profile_page_test.dart
-  - quwoquan_app/test/ui/user/journeys/my_profile_journey_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/my_profile_page__local_contract_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/my_profile_journey__user_acceptance_test.dart
 - route_id: createEntry
   owner: content
   source_tests:
-  - quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/content/entry/widgets/create_entry_sheet_widget__local_contract_test.dart
 - route_id: create
   owner: content
   source_tests:
-  - quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/content/entry/create_entry_information_architecture_widget__local_contract_test.dart
 - route_id: createEditImage
   owner: content
   source_tests:
-  - quwoquan_app/test/ui/content/entry/article_edit_preview_chrome_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/content/entry/article_edit_preview_chrome_widget__local_contract_test.dart
 - route_id: circleStats
   owner: circle
   source_tests:
-  - quwoquan_app/test/ui/circle/widgets/circle_header_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/circle/widgets/circle_header_widget__local_contract_test.dart
 - route_id: workBrowser
   owner: content
   source_tests:
-  - quwoquan_app/test/ui/discovery/pages/work_browser_entry_page_test.dart
+  - quwoquan_app/test/local_contract/ui/discovery/pages/work_browser_entry_page__local_contract_test.dart
 - route_id: interestMatch
   owner: interest_match
   source_tests:
-  - quwoquan_app/test/local_contract/interest_match/interest_match_page__local_contract_test.dart
+  - quwoquan_app/test/local_contract/ui/interest_match/interest_match_page__local_contract_test.dart
 - route_id: assistant
   owner: assistant
   source_tests:
-  - quwoquan_app/test/ui/chat/journeys/chat_assistant_journey_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
 - route_id: assistantManagement
   owner: assistant
   source_tests:
-  - quwoquan_app/test/ui/assistant/assistant_management_page_consent_test.dart
+  - quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart
 - route_id: assistantSkills
   owner: assistant
   source_tests:
-  - quwoquan_app/test/ui/assistant/pages/assistant_skill_center_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/assistant/pages/assistant_skill_center_page_widget__local_contract_test.dart
 - route_id: settings
   owner: user
   source_tests:
-  - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
 - route_id: settingsPermissions
   owner: user
   source_tests:
-  - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
 - route_id: settingsDarkMode
   owner: user
   source_tests:
-  - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
 - route_id: settingsAbout
   owner: user
   source_tests:
-  - quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
+  - quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
 - route_id: profileEdit
   owner: user
   source_tests:
-  - quwoquan_app/test/ui/user/journeys/edit_profile_journey_test.dart
+  - quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
 - route_id: profilePersonas
   owner: user
   source_tests:
-  - quwoquan_app/test/ui/user/widgets/persona_management_page_test.dart
+  - quwoquan_app/test/local_contract/ui/user/widgets/persona_management_page__local_contract_test.dart
 - route_id: profileComments
   owner: user
   source_tests:
-  - quwoquan_app/test/ui/user/pages/profile_comments_page_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/profile_comments_page__local_contract_test.dart
 - route_id: profileStats
   owner: user
   source_tests:
-  - quwoquan_app/test/ui/user/pages/profile_stats_page_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/profile_stats_page__local_contract_test.dart
 - route_id: myIntersections
   owner: user
   source_tests:
-  - quwoquan_app/test/ui/user/pages/my_intersection_inbox_page_test.dart
+  - quwoquan_app/test/local_contract/ui/user/pages/my_intersection_inbox_page__local_contract_test.dart
 - route_id: objectIntersections
   owner: intersection
   source_tests:
-  - quwoquan_app/test/ui/intersection/pages/object_intersection_list_page_test.dart
+  - quwoquan_app/test/local_contract/ui/intersection/pages/object_intersection_list_page__local_contract_test.dart
 - route_id: rtcOutgoing
   owner: rtc
   source_tests:
-  - quwoquan_app/test/ui/rtc/widgets/call_participant_picker_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
 - route_id: rtcIncoming
   owner: rtc
   source_tests:
-  - quwoquan_app/test/ui/rtc/widgets/call_participant_picker_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
 - route_id: rtcVoice
   owner: rtc
   source_tests:
-  - quwoquan_app/test/ui/rtc/widgets/call_participant_picker_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
 - route_id: rtcVideo
   owner: rtc
   source_tests:
-  - quwoquan_app/test/ui/rtc/widgets/call_participant_picker_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart
 - route_id: rtcPickParticipants
   owner: rtc
   source_tests:
-  - quwoquan_app/test/ui/rtc/widgets/call_participant_picker_page_widget_test.dart
+  - quwoquan_app/test/local_contract/ui/rtc/widgets/call_participant_picker_page_widget__local_contract_test.dart

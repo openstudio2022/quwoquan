@@ -40,8 +40,8 @@ minimum_package:
     - contracts/metadata/entity/homepage/service.yaml
     - contracts/metadata/entity/homepage/errors.yaml
     t2:
-    - services/entity-service/tests/homepage_handler_test.go
-    - ../quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+    - services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
+    - ../quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
     t3:
     - contracts/metadata/entity/homepage/tests/e2e.yaml
     t4: []

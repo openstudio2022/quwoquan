@@ -332,6 +332,22 @@ def test_homepage_only_auto_research_skips_visual_and_article_discovery():
     task = "旅行/地域/测试省/景区/homepage轻量修复"
     batch = "homepage_only_registry_fix"
     entity = "故宫博物院"
+    wiki_image = {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/1/11/Forbidden_City_sample.jpg",
+        "license": "CC BY-SA 4.0",
+        "termsUrl": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "authorizationProof": "https://commons.wikimedia.org/wiki/File:Forbidden_City_sample.jpg",
+        "width": 1600,
+        "height": 1000,
+        "caption": entity,
+        "relevance": entity,
+        "creator": "Wiki contributor",
+        "collectionPageUrl": "https://zh.wikipedia.org/wiki/%E6%95%85%E5%AE%AB%E5%8D%9A%E7%89%A9%E9%99%A2",
+        "platform": "维基百科",
+        "sourceUrl": "https://commons.wikimedia.org/wiki/File:Forbidden_City_sample.jpg",
+        "licenseSnapshot": "CC BY-SA 4.0 snapshot",
+        "usageScope": "app_publish",
+    }
     originals = {
         "_wiki_title_for_entity": research_mod._wiki_title_for_entity,
         "_wiki_related_titles_for_entity": research_mod._wiki_related_titles_for_entity,
@@ -339,6 +355,7 @@ def test_homepage_only_auto_research_skips_visual_and_article_discovery():
         "_wikidata_item_for_entity_search": research_mod._wikidata_item_for_entity_search,
         "_wikidata_entity_aliases": research_mod._wikidata_entity_aliases,
         "_official_website": research_mod._official_website,
+        "_mediawiki_page_images": research_mod._mediawiki_page_images,
         "_verified_image_collections_from_prior_plans": research_mod._verified_image_collections_from_prior_plans,
         "_discover_open_license_image_pools": research_mod._discover_open_license_image_pools,
         "_trusted_external_links": research_mod._trusted_external_links,
@@ -357,6 +374,11 @@ def test_homepage_only_auto_research_skips_visual_and_article_discovery():
         research_mod._wikidata_item_for_entity_search = lambda entity_id: ""
         research_mod._wikidata_entity_aliases = lambda qid: []
         research_mod._official_website = lambda qid: ""
+        research_mod._mediawiki_page_images = (
+            lambda host, title, entity_id, limit=8: [wiki_image]
+            if host == "zh.wikipedia.org" and title == entity and entity_id == entity
+            else []
+        )
         research_mod._verified_image_collections_from_prior_plans = fail_if_called
         research_mod._discover_open_license_image_pools = fail_if_called
         research_mod._trusted_external_links = fail_if_called

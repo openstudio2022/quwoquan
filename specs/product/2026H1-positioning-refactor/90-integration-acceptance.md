@@ -80,8 +80,8 @@
 
 ## 6. C5 环境留证（2026-06-12）
 
-- [x] 本地 gamma T3/T4-dry-run 门禁：`python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 通过，报告 `.qwq_output/runs/gamma/20260612T162426Z-verify-gamma-local`。
-- [ ] hosted gamma full health：仍 BLOCK，`stackctl health --target gamma-hosted --scope full` 仅 `1/7 healthy`，报告 `.qwq_output/runs/gamma/20260612T161458Z-health-gamma-hosted`。
-- [ ] hosted gamma doctor：仍 BLOCK，`stackctl doctor --target gamma-hosted` 报 `health checks are failing`，报告 `.qwq_output/runs/gamma/20260612T162504Z-doctor-gamma-hosted`。
-- [ ] hosted gamma restart：仍 BLOCK，`stackctl roll --target gamma-hosted --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`，报告 `.qwq_output/runs/gamma/20260612T163152Z-roll-gamma-hosted`。
+- [x] 本地 gamma T3/T4-dry-run 门禁：`python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all` 通过，报告 `.qwq_output/env/gamma/runs/20260612T162426Z-verify-gamma-local`。
+- [ ] hosted gamma full health：仍 BLOCK，`stackctl health --target gamma-hosted --scope full` 仅 `1/7 healthy`，报告 `.qwq_output/env/gamma/runs/20260612T161458Z-health-gamma-hosted`。
+- [ ] hosted gamma doctor：仍 BLOCK，`stackctl doctor --target gamma-hosted` 报 `health checks are failing`，报告 `.qwq_output/env/gamma/runs/20260612T162504Z-doctor-gamma-hosted`。
+- [ ] hosted gamma restart：仍 BLOCK，`stackctl roll --target gamma-hosted --mode restart --stage pre` 缺少 `GAMMA_ECS_SSH_KEY` 或 `GAMMA_ECS_PASSWORD`，报告 `.qwq_output/env/gamma/runs/20260612T163152Z-roll-gamma-hosted`。
 - [ ] GHA 恢复：最近 5 个 GitHub Actions run 仍为 failure，需环境恢复后重跑并留证。

@@ -72,7 +72,7 @@ entries:
     test_evidence:
       recorded:
         - "cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（44 过）"
-        - "cd quwoquan_app && flutter test test/components/media/shared/toolbar/immersive_engagement_bar_widget_test.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（18 过）"
+        - "cd quwoquan_app && flutter test test/components/media/shared/toolbar/immersive_engagement_bar_widget_test.dart test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（18 过）"
         - "cd quwoquan_app && flutter test test/components/object_page/intersection_target_navigator_test.dart（8 过）"
         - "cd quwoquan_app && flutter test test/local_contract/ui/content（364 过）"
         - "cd quwoquan_app && flutter analyze <touched dart files>（0 issue）"
@@ -109,10 +109,10 @@ entries:
         sections:
           - "全屏左滑/右滑转换为 pageflip forward/back 输入"
           - "通过 contentSignature 替代 pageBuilder closure identity 作为快照刷新信号"
-      - path: quwoquan_app/test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
         sections:
           - "新增左滑下一页、右滑上一页行为契约"
-      - path: quwoquan_app/test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - path: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
         sections:
           - "Work Browser 图片书测试从组件存在性升级为真实页码变化和末图边界保护"
     impact:
@@ -125,7 +125,7 @@ entries:
       breaking_contract: false
     test_evidence:
       recorded:
-        - "cd quwoquan_app && flutter test test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（5 过）"
+        - "cd quwoquan_app && flutter test test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（5 过）"
         - "cd quwoquan_app && flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（44 过）"
     notes:
       - "本修正不改 components/pageflip 几何核心，不改 ui/content/article_reader/pageflip BACK 主线。"

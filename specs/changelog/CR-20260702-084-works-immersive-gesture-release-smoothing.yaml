@@ -60,8 +60,8 @@ entries:
       breaking_contract: false
     test_evidence:
       recorded:
-        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/gesture/immersive_gesture_intent_controller__local_contract_test.dart test/components/pageflip/release_policy_test.dart（13 过）"
-        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（9 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/shared/gesture/immersive_gesture_intent_controller__local_contract_test.dart test/components/pageflip/release_policy_test.dart（13 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（9 过）"
         - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（55 过）"
         - "cd quwoquan_app && flutter test --no-pub test/ui/content/article_reader（3 过）"
         - "cd quwoquan_app && flutter analyze --no-fatal-infos <touched dart files>（0 error，2 existing infos）"
@@ -97,7 +97,7 @@ entries:
       - path: quwoquan_app/lib/core/constants/discovery_feed_text_constants.dart
         sections:
           - "删除沉浸翻页边界提示文案常量"
-      - path: quwoquan_app/test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
         sections:
           - "新增两张图中心小幅前翻/后翻立即出现动态层契约"
     impact:
@@ -110,9 +110,9 @@ entries:
       breaking_contract: false
     test_evidence:
       recorded:
-        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（10 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（10 过）"
         - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（55 过）"
-        - "cd quwoquan_app && flutter analyze --no-fatal-infos lib/components/media/shared/pageflip/media_page_flip_book.dart lib/ui/discovery/widgets/works_immersive_viewer.dart lib/core/constants/discovery_feed_text_constants.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（No issues found）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos lib/components/media/shared/pageflip/media_page_flip_book.dart lib/ui/discovery/widgets/works_immersive_viewer.dart lib/core/constants/discovery_feed_text_constants.dart test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（No issues found）"
         - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
         - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
         - "make verify-app-page-horizontal-quality（OK）"
@@ -143,7 +143,7 @@ entries:
       - path: quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart
         sections:
           - "文章主交互舞台改用共享 pointer 手势层；tap/hover 与文章 pageflip 宿主语义保留"
-      - path: quwoquan_app/test/local_contract/components/media/shared/gesture/immersive_pointer_gesture_layer__local_contract_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/media/shared/gesture/immersive_pointer_gesture_layer__local_contract_test.dart
         sections:
           - "新增共享手势层 local_contract，覆盖 start/update/end、delta 与 velocityDx"
       - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
@@ -159,8 +159,8 @@ entries:
       breaking_contract: false
     test_evidence:
       recorded:
-        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/gesture/immersive_pointer_gesture_layer__local_contract_test.dart test/local_contract/components/media/shared/gesture/immersive_gesture_intent_controller__local_contract_test.dart（10 过）"
-        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（10 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/shared/gesture/immersive_pointer_gesture_layer__local_contract_test.dart test/local_contract/ui/components/media/shared/gesture/immersive_gesture_intent_controller__local_contract_test.dart（10 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart（10 过）"
         - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（55 过）"
         - "cd quwoquan_app && flutter test --no-pub test/ui/content/article_reader（3 过）"
         - "cd quwoquan_app && flutter analyze --no-fatal-infos <touched gesture/pageflip/article files>（No issues found）"
@@ -189,10 +189,10 @@ entries:
         sections:
           - "直接纹理生成器存在时 `_isPageTextureReady` 恒为 true，ready predicate 仅服务截图捕获路径"
           - "拖动/释放动画期间延后 direct texture refresh，避免加载回调清空 held curl 材质"
-      - path: quwoquan_app/test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
         sections:
           - "新增直接纹理路径不被 ready=false 或加载回调打断跟手的 local_contract"
-      - path: quwoquan_app/test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart
         sections:
           - "新增 ImageBookCanvas 第一页中心左滑立即进入公共翻书跟手层契约"
       - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
@@ -208,9 +208,9 @@ entries:
       breaking_contract: false
     test_evidence:
       recorded:
-        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（16 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（16 过）"
         - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart test/ui/content/article_reader（58 过）"
-        - "cd quwoquan_app && flutter analyze --no-fatal-infos lib/components/media/shared/pageflip/media_page_flip_book.dart lib/components/media/image/book/image_book_canvas.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（No issues found）"
+        - "cd quwoquan_app && flutter analyze --no-fatal-infos lib/components/media/shared/pageflip/media_page_flip_book.dart lib/components/media/image/book/image_book_canvas.dart test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（No issues found）"
         - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
         - "python3 quwoquan_app/scripts/content/verify_content_ui_directory_boundaries.py（passed）"
         - "make verify-app-page-horizontal-quality（OK）"
@@ -238,7 +238,7 @@ entries:
       - path: quwoquan_app/lib/ui/content/article_reader/pageflip/host/article_read_only_book_deck.dart
         sections:
           - "文章宿主同步改为消费父级 intent，不再二次 begin/update 外部 controller"
-      - path: quwoquan_app/test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - path: quwoquan_app/test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart
         sections:
           - "Work Browser 图片首图中心小幅左滑必须立即出现翻页层"
       - path: specs/feature-tree/discovery-content/dual-rail-discovery-redesign/works-immersive-viewer/acceptance.yaml
@@ -255,7 +255,7 @@ entries:
     test_evidence:
       recorded:
         - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart --plain-name '图片作品使用公共翻书组件，首图左滑翻到下一张且不触发退出'（1 过）"
-        - "cd quwoquan_app && flutter test --no-pub test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/content/article_reader（19 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/content/article_reader（19 过）"
         - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart（55 过）"
         - "cd quwoquan_app && flutter analyze --no-fatal-infos <touched files>（No issues found）"
         - "python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）"
@@ -316,7 +316,7 @@ entries:
       breaking_contract: false
     test_evidence:
       recorded:
-        - "cd quwoquan_app && flutter test --no-pub test/components/pageflip/release_policy_test.dart test/local_contract/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/cloud/content/content_behavior_tracker_test.dart test/core/design_system/providers/appearance_runtime_test.dart（60 过）"
+        - "cd quwoquan_app && flutter test --no-pub test/components/pageflip/release_policy_test.dart test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/cloud/content/content_behavior_tracker_test.dart test/core/design_system/providers/appearance_runtime_test.dart（60 过）"
         - "cd quwoquan_app && flutter test --no-pub test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart --plain-name '图片作品使用公共翻书组件，首图左滑翻到下一张且不触发退出'（1 过）"
         - "cd quwoquan_app && flutter test --no-pub test/ui/content/article_reader（3 过）"
         - "cd quwoquan_app && flutter analyze --no-fatal-infos <touched dart files>（0 error；2 个既有 prefer_initializing_formals info）"

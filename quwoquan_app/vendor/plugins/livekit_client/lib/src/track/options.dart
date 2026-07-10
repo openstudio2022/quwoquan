@@ -16,8 +16,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../support/native.dart';
 import '../support/platform.dart';
-import '../track/local/audio.dart';
-import '../track/local/video.dart';
+import 'local/audio.dart';
+import 'local/video.dart';
 import '../types/video_parameters.dart';
 import 'processor.dart';
 import 'processor_native.dart' if (dart.library.js_interop) 'processor_web.dart';

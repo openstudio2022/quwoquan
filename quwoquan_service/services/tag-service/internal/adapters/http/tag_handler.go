@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"quwoquan_service/services/tag-service/internal/application"
 )
@@ -110,7 +111,8 @@ func (h *TagHandler) inverted(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "tagRef is required")
 		return
 	}
-	view, err := h.svc.Inverted(r.Context(), tagRef, q.Get("objectType"), parseLimit(q.Get("limit")))
+	includeDescendants := strings.EqualFold(strings.TrimSpace(q.Get("includeDescendants")), "true")
+	view, err := h.svc.Inverted(r.Context(), tagRef, q.Get("objectType"), parseLimit(q.Get("limit")), includeDescendants)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

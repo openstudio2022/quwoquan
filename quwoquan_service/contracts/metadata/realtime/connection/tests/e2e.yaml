@@ -8,7 +8,7 @@ description: |
 
 scenarios:
   - name: longpoll_recovers_after_transient_failure
-    test_file: ../quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
+    test_file: ../quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart
     steps:
       - client starts long-poll transport
       - network returns transient failures twice
@@ -18,7 +18,7 @@ scenarios:
       - event_delivered_after_recovery
 
   - name: websocket_and_longpoll_contract_share_same_metadata
-    test_file: ../quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
+    test_file: ../quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart
     steps:
       - client derives ws url from generated metadata
       - client derives long-poll path from generated metadata

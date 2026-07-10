@@ -31,8 +31,8 @@ from quwoquan_ops.cli.lib.patrol_cli import resolve_patrol_cli
 
 
 APP_DIR = REPO_ROOT / "quwoquan_app"
-DEFAULT_REPORT = REPO_ROOT / ".qwq_output" / "runs" / "device-matrix" / "gamma-patrol" / "report.json"
-DEFAULT_TARGET = "test/patrol/discovery/feed_load_test.dart"
+DEFAULT_REPORT = REPO_ROOT / ".qwq_output" / "env" / "gamma" / "runs" / "device-matrix" / "gamma-patrol" / "report.json"
+DEFAULT_TARGET = "test/user_acceptance/patrol/discovery/feed_load__user_acceptance_test.dart"
 IOS_SDK_VERSION_PATTERN = re.compile(r"iOS[- ](\d+)(?:[-._](\d+))?")
 XCODE_GLOBAL_PRODUCTS_DIR = Path.home() / "Library" / "Developer" / "Xcode" / "XcodeDerivedData" / "Build" / "Products"
 PATROL_IOS_PRODUCTS_DIR = APP_DIR / "build" / "ios_integ" / "Build" / "Products"

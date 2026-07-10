@@ -48,8 +48,8 @@ gwt_acceptance:
     - no visible jank during route pop animation
     tests:
       planned:
-      - file: quwoquan_app/test/app/navigation/native_back_navigation_policy_test.dart
-      - file: quwoquan_app/test/app/navigation/app_route_page_factory_test.dart
+      - file: quwoquan_app/test/local_contract/app/navigation/native_back_navigation_policy__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/app/navigation/app_route_page_factory__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:

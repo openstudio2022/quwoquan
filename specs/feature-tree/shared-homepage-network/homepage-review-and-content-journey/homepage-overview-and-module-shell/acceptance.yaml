@@ -35,7 +35,7 @@ gwt_acceptance:
       planned: []
       recorded:
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
     status: completed

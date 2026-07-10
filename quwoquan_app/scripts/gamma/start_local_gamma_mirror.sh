@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 COMPOSE_FILE="$ROOT/quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+LOCAL_GAMMA_COMPOSE_PROJECT_NAME="${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-quwoquan_service}"
 if [[ -z "${LOCAL_GAMMA_HTTP_PORT:-}" \
    || -z "${LOCAL_GAMMA_PRODUCT_OPS_PORT:-}" \
    || -z "${LOCAL_GAMMA_PLATFORM_OPS_PORT:-}" \
@@ -74,7 +75,7 @@ DOCKER_LIBRARY_PREFIX="${LOCAL_GAMMA_DOCKER_LIBRARY_PREFIX:-docker.io/library}"
 HOST_READY_TIMEOUT_SECONDS="${LOCAL_GAMMA_HOST_READY_TIMEOUT_SECONDS:-360}"
 FORCE_CLEAN_RECREATE="${LOCAL_GAMMA_FORCE_CLEAN_RECREATE:-0}"
 PRESERVE_POSTGRES_VOLUME="${LOCAL_GAMMA_PRESERVE_POSTGRES_VOLUME:-0}"
-LOCAL_GAMMA_LOCAL_ROOT="${LOCAL_GAMMA_LOCAL_ROOT:-$ROOT/.qwq_output/local/gamma-local}"
+LOCAL_GAMMA_LOCAL_ROOT="${LOCAL_GAMMA_LOCAL_ROOT:-$ROOT/.qwq_output/env/gamma/local/gamma-local}"
 LOCAL_GAMMA_ARTIFACT_ROOT="${LOCAL_GAMMA_ARTIFACT_ROOT:-${LOCAL_GAMMA_LOCAL_ROOT}/app-artifacts}"
 LOCAL_GAMMA_CONFIG_ROOT="${LOCAL_GAMMA_LOCAL_ROOT}/config-root"
 LOCAL_GAMMA_MEDIA_ROOT="${LOCAL_GAMMA_LOCAL_ROOT}/media"
@@ -115,7 +116,7 @@ esac
 if [[ "${LOCAL_GAMMA_SKIP_FIXTURE_SEEDS:-0}" == "1" ]]; then
   ENABLE_FIXTURE_SEEDS=0
 fi
-LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$ROOT/.qwq_output/release/legal-static/${CONFIG_SOURCE_ENV}/current/public}"
+LOCAL_GAMMA_LEGAL_STATIC_ROOT="${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-$ROOT/.qwq_output/env/${CONFIG_SOURCE_ENV}/release/legal-static/current/public}"
 LOCAL_GAMMA_READY_INDEX_STREAM="${LOCAL_GAMMA_READY_INDEX_STREAM:-reliabletask:chat:avatar:ready:${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_GROUP="${LOCAL_GAMMA_READY_INDEX_GROUP:-chat.group_avatar_worker.${LOCAL_GAMMA_READY_INDEX_SUFFIX}}"
 LOCAL_GAMMA_READY_INDEX_QUEUE="${LOCAL_GAMMA_READY_INDEX_QUEUE:-reliabletask.chat.avatar}"
@@ -222,7 +223,7 @@ ensure_docker_gamma_proxy_started() {
 }
 
 local_gamma_has_existing_stack() {
-  if docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null | awk 'NF {found=1} END {exit found ? 0 : 1}'; then
+  if docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps -q 2>/dev/null | awk 'NF {found=1} END {exit found ? 0 : 1}'; then
     return 0
   fi
   if command -v podman >/dev/null 2>&1 && \
@@ -354,8 +355,8 @@ cleanup_existing_gamma_runtime() {
 start_media_origin() {
   # 与 docker `/srv/media` 挂载同源：URL `/media/image/...` 解析为
   # Caddy `root * /srv/media` + `handle /media/*` 同源：URL `/media/image/...` 解析为
-  # `<root>/media/image/...`，curated bundle 实际落在 .qwq_output/local/gamma-local/media/media/...，
-  # 故 origin 静态服务 root 必须为 .qwq_output/local/gamma-local/media（而非其父目录）。
+  # `<root>/media/image/...`，curated bundle 实际落在 .qwq_output/env/gamma/local/gamma-local/media/media/...，
+  # 故 origin 静态服务 root 必须为 .qwq_output/env/gamma/local/gamma-local/media（而非其父目录）。
   # 远端 gamma 已退役、仅保留 gamma-local（本机现代 python3），复用 alpha/prod-sim
   # 同一份支持 HTTP Range(206) 的 origin（quwoquan_ops/cli/lib/local_media_origin.py），
   # 避免内嵌 SimpleHTTPRequestHandler 忽略 Range 导致 iOS AVPlayer 卡在加载/无法播放，
@@ -888,7 +889,7 @@ prepare_media_root() {
     cp -R "$canonical_media_root/." "$media/"
     return 0
   fi
-  echo "[local-gamma] FAIL: curated gamma media bundle is unavailable; sync .qwq_output/local/gamma-local/media first" >&2
+  echo "[local-gamma] FAIL: curated gamma media bundle is unavailable; sync .qwq_output/env/gamma/local/gamma-local/media first" >&2
   return 1
 }
 
@@ -1303,7 +1304,7 @@ PY
 if [[ "$down" == "1" ]]; then
   stop_colima_tunnels
   stop_media_origin
-  docker compose -f "$COMPOSE_FILE" down
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down
   rm -f "$stack_report"
   exit 0
 fi
@@ -1334,7 +1335,7 @@ if docker --version 2>/dev/null | grep -qi 'podman' && command -v podman-compose
   compose_cmd=(podman-compose -f "$COMPOSE_FILE" --podman-build-args=--pull=never --podman-run-args=--pull=never)
   compose_up_args=(up -d --no-build)
 else
-  compose_cmd=(docker compose -f "$COMPOSE_FILE")
+  compose_cmd=(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE")
   compose_up_args=(up -d --remove-orphans)
   if [[ "$skip_build" == "1" ]]; then
     compose_up_args+=(--no-build)
@@ -1781,8 +1782,8 @@ wait_local_gamma_host_ready() {
   curl -kfsS --resolve "${gw_host}:${gw_port}:127.0.0.1" "https://${gw_host}:${gw_port}/healthz" >&2 || true
   curl -kfsS --resolve "${product_ops_host}:${product_ops_public_port}:127.0.0.1" "https://${product_ops_host}:${product_ops_public_port}/healthz" >&2 || true
   curl -kfsS --resolve "${media_host}:${media_edge_port}:127.0.0.1" "https://${media_host}:${media_edge_port}/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" >&2 || true
-  docker compose -f "$COMPOSE_FILE" ps >&2 || true
-  docker compose -f "$COMPOSE_FILE" logs --tail 80 gamma-proxy product-ops-service user-service >&2 || true
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" ps >&2 || true
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" logs --tail 80 gamma-proxy product-ops-service user-service >&2 || true
   return 1
 }
 wait_local_gamma_host_ready

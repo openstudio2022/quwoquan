@@ -27,10 +27,10 @@ ALLOWED_TEST_ROOT_FILES = {"conftest.py"}
 # quwoquan_data 根层 tracked 目录规范（与 docs/pipeline_directory_layout_spec.md 同源）。
 ALLOWED_TRACKED_ROOT_DIRS = {
     "control_plane",  # 任务控制面：tasks 注册表 + families 家族包 + _shared runtime profile
-    "data",           # 静态基础数据（行政区划等）
     "docs",           # 数据工程文档
     "prompts",        # 提示词模板库
     "publish",        # 发布主线（部分版本控制）
+    "reference",      # 长期静态参考数据（行政区划等）
     "schema",         # JSON schema 契约
     "scripts",        # 唯一 CLI 与能力实现
     "sop",            # 内容生产 SOP

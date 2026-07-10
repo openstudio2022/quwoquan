@@ -328,7 +328,7 @@ chat-service 需完整纳入 `make gate` 流水线：
 | chat-service L2 | `go test ./services/chat-service/... -count=1` | 云侧契约测试 |
 | chat L1 | `flutter test test/cloud/chat/ test/ui/chat/` | 端侧 local_contract+local_contract+user_acceptance(L1c) |
 | chat L3 | `make test-api-contract-chat` | gamma HTTP 契约 |
-| chat L4 | `patrol test test/patrol/chat/` | Patrol 真实设备 |
+| chat L4 | `patrol test test/user_acceptance/patrol/chat/` | Patrol 真实设备 |
 
 **需新增**：
 

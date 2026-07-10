@@ -36,7 +36,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/components/content/intersection_reason_chip_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/content/intersection_reason_chip_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -54,7 +54,7 @@ gwt_acceptance:
         envs: *id001
       supporting: []
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/components/content/intersection_reason_chip_widget_test.dart（统一
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/components/content/intersection_reason_chip_widget__local_contract_test.dart（统一
       IntersectionReasonChip 单条蓝色主谓宾句、单行省略、weightTier 轻重分化、无来源不占位、双主题只读，2026-06-16
       green）'
   GWT2:
@@ -74,7 +74,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart
       recorded: []
     status: partial
     test_evidence:
@@ -91,7 +91,7 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.intersection_sentence_unification.gwt2_local_contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/cloud/content/intersection_repository_contract_test.dart（事实交集句无朋友/好友/收藏/同趣违禁词，affinity
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart（事实交集句无朋友/好友/收藏/同趣违禁词，affinity
       明确标注推荐，口径对齐 §17，2026-06-16 green）'
     - '2026-07-06: 旧 green 仅证明概念禁词，未覆盖 raw stats、代表人、typed object、actorEvidence、actionHints
       同源；当前准出必须改用 GWT3 和 strict gamma 语义断言。'
@@ -121,18 +121,18 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_service__local_contract_test.go
-      - file: quwoquan_app/test/local_contract/components/content/intersection_reason_chip_widget__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_service__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/components/content/intersection_reason_chip_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/services/content/intersection_inbox_synthesis__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
       - command: python3 quwoquan_app/scripts/gamma/run_local_gamma_t3.py --strict-all --verification-scope object-homepage-gamma-real-data-closure
       recorded:
-      - file: quwoquan_service/services/content-service/tests/local_contract/internal/application/intersection/intersection_service__local_contract_test.go
-      - file: quwoquan_app/test/local_contract/components/content/intersection_reason_chip_widget__local_contract_test.dart
+      - file: quwoquan_service/services/content-service/internal/application/intersection/intersection_service__local_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/components/content/intersection_reason_chip_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/services/content/intersection_inbox_synthesis__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/discovery/home_intersection_multiform_feed_widget__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
     status: partial
     test_evidence:
       primary:

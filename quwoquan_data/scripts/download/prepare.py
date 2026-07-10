@@ -11,17 +11,15 @@ from _common.paths import (
     batch_shared_dir,
 )
 from _common.io import write_json, write_assistant_task
+from _common.carrier_contract import research_plan_files
 from _common.content_source_registry import build_content_source_guidance
 from _common.source_catalog import source_plan_guidance, vertical_from_task_id
 from _common.source_plan_contract import source_plan_rule_signature
 from _common.source_unit import resolve_entity_object_dir
 from vertical.source_registry import build_travel_source_guidance
 
-RESEARCH_PLAN_FILES = {
-    "homepage": "homepage_source_plan.json",
-    "article": "article_source_plan.json",
-    "image": "image_source_plan.json",
-}
+# lane → download 来源计划文件；唯一真相源在 _common/carrier_contract.py。
+RESEARCH_PLAN_FILES = research_plan_files()
 
 
 def canonical_coverage_entity_types(task_id: str) -> dict[str, str]:

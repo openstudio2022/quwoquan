@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/start_group_from_group_provider.dart';
-import '../../../../common/chat/chat_mock_seed_refs.dart';
+import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
 
 void main() {
   group('从群聊中选择联系人 · Provider local_contract', () {

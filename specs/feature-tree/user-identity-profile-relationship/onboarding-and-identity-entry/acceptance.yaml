@@ -22,8 +22,8 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - file: quwoquan_app/test/core/platform/platform_capabilities_profile_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/platform/platform_capabilities_profile__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:

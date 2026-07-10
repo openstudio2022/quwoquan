@@ -293,10 +293,10 @@ entries:
       - path: quwoquan_app/lib/components/object_page/intersection_statement_row.dart
         sections:
           - "isDisplayableIntersectionActionHint 去掉 requiredGates 一刀切隐藏，navigate(有 target)/assistant 显示"
-      - path: quwoquan_app/test/components/object_page/intersection_target_navigator_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/object_page/intersection_target_navigator__local_contract_test.dart
         sections:
           - "navigate+login 门→导航承接（opened）；message/companion/connect→unsupported；去除 gated 绿断言"
-      - path: quwoquan_app/test/components/object_page/object_intersection_card_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
         sections:
           - "navigate+login 门行动显示为可执行入口（行动优先取代副句）；deferred/connect 不显示；补无可执行行动回落副句用例"
       - path: specs/product/intersection-definition-and-application.md
@@ -416,10 +416,10 @@ entries:
       - path: quwoquan_app/scripts/runtime/verify_concept_naming.py
         sections:
           - "INTERSECTION_FRONTEND_FORBIDDEN 追加「影响力」前台禁用"
-      - path: quwoquan_app/test/ui/circle/widgets/circle_shell_widget_test.dart
+      - path: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
         sections:
           - "objectImpactTitle→objectImpactTitleCircle（3 处）"
-      - path: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - path: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
         sections:
           - "objectImpactTitle→objectImpactTitleEntity"
       - path: specs/00_GLOBAL_TERMINOLOGY.md
@@ -518,7 +518,7 @@ entries:
       - path: quwoquan_app/test/components/object_page/intersection_action_hint_display_test.dart
         sections:
           - "新增诚实红线渲染闸契约 8 例（assistant/navigate/companion 放行矩阵 + message/connect/deferred/空label 拦截）"
-      - path: quwoquan_app/test/components/object_page/object_intersection_section_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_section__local_contract_test.dart
         sections:
           - "新增 companion pill 端到端点击进发起群聊闭环 + message 不渲染整行回退下钻两例"
     impact:
@@ -567,7 +567,7 @@ entries:
       - path: quwoquan_app/lib/cloud/runtime/generated/recommendation/intersection_kind_metadata.g.dart
         sections:
           - "[codegen] intersectionActionKeyMetadata.start_companion.requiredGates 同步去 mutualConsent（make codegen-app）"
-      - path: quwoquan_app/test/components/object_page/intersection_target_navigator_test.dart
+      - path: quwoquan_app/test/local_contract/ui/components/object_page/intersection_target_navigator__local_contract_test.dart
         sections:
           - "companion dispatch 用例 requiredGates 同步去 mutualConsent，与 registry.actionKeyMeta 对齐 + 语义注释"
     impact:

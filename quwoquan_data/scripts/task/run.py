@@ -9,7 +9,7 @@
   * Agent checkpoint：写 assistant_tasks 清单 + 暂停，输出明确指引；Agent 物化产物
     后用 `workflow run --resume` 继续。这是「Agent 会话创作 = 自动化执行者」的接缝，
     不是人手工断点。
-- 可 resume：workflow 状态落 local/data-runtime/tasks/<taskId>/batches/<batch>/task_workflow_state.json，
+- 可 resume：workflow 状态落 data/local/runtime/tasks/<taskId>/batches/<batch>/task_workflow_state.json，
   记录已完成 stage、当前等待的 checkpoint、ReAct 回退指针与 baseline 冻结件。
 DAG（stage 序）：
   download_plan(checkpoint，但默认由 CLI auto_research 自动检索三路 source_plan 后即满足，无需 Agent 暂停)
@@ -9000,6 +9000,32 @@ def _workflow_completion_issues(ctx: PipelineContext, state: dict[str, Any]) -> 
                 and _homepage_targets_all_reasoned_abandoned(ctx)
             )
         if not stale_abandoned_run:
+            # 收口前复核：lastAgentRun 可能是 bridge 基础设施失败留下的陈旧快照，
+            # 对象随后在其它 cycle 成功物化/被 reasoned 放弃，但快照不会被覆盖
+            # （build_homepage 被 completed 集合跳过，不再发起 agent run）。
+            # 与 _handle_managed_infra_budget_exhausted 的 recovered 语义同源：
+            # 用快照所属 stage 的 checkpoint 复核，现在通过则标记 recovered 豁免；
+            # 复核不过（真实缺成品）仍按下方 issue 拦下。
+            run_stage = str(last_agent.get("stage") or "").strip()
+            snapshot_failed = bool(int(last_agent.get("jobCount") or 0)) and (
+                int(last_agent.get("startedCount") or 0) <= 0
+                or int(last_agent.get("finishedCount") or 0)
+                < int(last_agent.get("jobCount") or 0)
+                or int(last_agent.get("infrastructureFailures") or 0) > 0
+            )
+            if snapshot_failed and run_stage:
+                ok_now, _ = _checkpoint_is_done(ctx, run_stage)
+                if ok_now:
+                    recovered_run = dict(last_agent)
+                    recovered_run["recovered"] = True
+                    recovered_run["recoveredAt"] = store.now_iso()
+                    recovered_run["recoveryReason"] = (
+                        f"completion gate: {run_stage} checkpoint re-verified; "
+                        "stale infrastructure failure snapshot"
+                    )
+                    state["lastAgentRun"] = recovered_run
+                    last_agent = {}
+        if isinstance(last_agent, dict) and last_agent and not stale_abandoned_run:
             job_count = int(last_agent.get("jobCount") or 0)
             started = int(last_agent.get("startedCount") or 0)
             finished = int(last_agent.get("finishedCount") or 0)

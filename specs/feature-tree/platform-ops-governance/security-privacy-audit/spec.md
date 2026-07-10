@@ -15,7 +15,7 @@
 ## 约束
 
 - 法律文本与版本是上架硬阻断项；`/legal/user-agreement`、`/legal/privacy-policy`、`/legal/permissions`、`/legal/third-party-sdk-list` 任一 URL 不可达即 No-Go。
-- 协议正文不得放入业务领域服务代码，不随 App、service、内容页或数据工程内容包一起打包；唯一源目录为 `quwoquan_service/services/legal-static/`，发布包为 `.qwq_output/release/legal-static/<env>/<version>/`。
+- 协议正文不得放入业务领域服务代码，不随 App、service、内容页或数据工程内容包一起打包；唯一源目录为 `quwoquan_service/services/legal-static/`，发布包为 `.qwq_output/env/<env>/release/legal-static/<version>/`。
 - alpha / `flutter run` 的 mock gateway 必须同样挂载 `legal-static` 的 `/legal/*` 静态目录，禁止回退到 mock 404 HTML 或业务 API mock 路由。
 - 隐私相关文案与同意版本以 `auth_legal_config.dart` + 登录契约为准，不得在业务代码硬编码第二套版本。
 - 协议页 URL 不可达、HTTP 非成功或 WebView 资源失败时，App 必须展示原生错误态与重试/返回动作；该错误不阻断用户返回登录页、勾选协议与继续验证码登录。
@@ -47,6 +47,6 @@
 最小证据包：
 
 - local_contract：`make verify-app-auth-policy`、`stackctl verify --env gamma --kind legal-static`、错误码/法律版本/权限清单静态校验。
-- local_contract：`quwoquan_app/test/ui/settings/pages/settings_page_appearance_test.dart`、登录门/会话恢复 Widget 与 Provider 测试。
+- local_contract：`quwoquan_app/test/local_contract/ui/settings/pages/settings_page_appearance__local_contract_test.dart`、登录门/会话恢复 Widget 与 Provider 测试。
 - api_integration：user-service `auth_contract_test.go` / `credential_contract_test.go` / `persona_contract_test.go` 以及 App RemoteRepository contract。
 - user_acceptance：Patrol 或真机证据覆盖首次登录、OTP/一键登录、退出登录、会话过期重登、账号注销/撤销、数据导出/撤回同意。

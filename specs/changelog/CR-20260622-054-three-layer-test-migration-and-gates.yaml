@@ -48,7 +48,7 @@ entries:
         `ui_surfaces` / `app_routes` 为唯一页面清单；`page-horizontal-quality` acceptance 建立
         `user_acceptance.page.*` 页面矩阵，不再为 0。
       - 证据与 acceptance：新增 `normalize_acceptance_recorded_paths.py`，回写 66 份 acceptance，
-        `tests.recorded` 只允许 canonical 三层路径或真实 `.qwq_output/runs/tests/**/report.json`。
+        `tests.recorded` 只允许 canonical 三层路径或真实 `.qwq_output/env/repo/runs/tests/**/report.json`。
       - 门禁：`verify-test-no-fake` 与 `verify-test-coverage-map` 从别名升级为独立脚本，并串入
         `Makefile` 与 `quwoquan_ops/gate/gate_repo.sh`；`make gate` / `make gate-full` 收敛到新口径。
       - 二轮收口：新增 `specs/gates/test_legacy_source_allowlist.yaml` 作为存量 legacy 源 ratchet，
@@ -538,13 +538,13 @@ entries:
       - tooling
       - docs
     changed_documents:
-      - path: quwoquan_service/services/assistant-service/internal/adapters/http/handler_test.go
+      - path: quwoquan_service/services/assistant-service/internal/adapters/http/handler__local_contract_test.go
         sections:
           - TestHandleTurnStream_M11LocalScenarios
-      - path: quwoquan_service/services/assistant-service/internal/application/m11_local_scenario_test.go
+      - path: quwoquan_service/services/assistant-service/internal/application/m11_local_scenario__local_contract_test.go
         sections:
           - TestM11ReactiveP0SkillInferenceForBetaQuestions
-      - path: quwoquan_service/services/user-service/tests/error_contract_test.go
+      - path: quwoquan_service/services/user-service/tests/api_integration/error_contract__api_integration_test.go
         sections:
           - TestErrorCode_InvalidArgument
       - path: specs/gates/test_legacy_source_allowlist.yaml
@@ -594,47 +594,47 @@ entries:
       - tooling
       - docs
     changed_documents:
-      - path: quwoquan_service/services/chat-service/tests/testmain_test.go
+      - path: quwoquan_service/services/chat-service/tests/api_integration/testmain_test.go
         sections:
           - requireMongoDB
-      - path: quwoquan_service/services/chat-service/tests/direct_conversation_relationship_gate_test.go
+      - path: quwoquan_service/services/chat-service/tests/api_integration/direct_conversation_relationship_gate__api_integration_test.go
         sections:
           - newGateTestConversationService
-      - path: quwoquan_service/services/chat-service/tests/send_message_relationship_gate_test.go
+      - path: quwoquan_service/services/chat-service/tests/api_integration/send_message_relationship_gate__api_integration_test.go
         sections:
           - newGateTestMessageService
-      - path: quwoquan_service/services/content-service/tests/testmain_test.go
+      - path: quwoquan_service/services/content-service/tests/api_integration/testmain_test.go
         sections:
           - requireMongoDB
           - requireTestRouter
-      - path: quwoquan_service/services/content-service/tests/comment_keyset_explain_bench_test.go
+      - path: quwoquan_service/services/content-service/tests/api_integration/comment_keyset_explain_bench__api_integration_test.go
         sections:
           - TestCommentMongoStore_DeepPageBeyond10kNoTruncation
           - BenchmarkCommentListTopLevel_DeepPage
           - BenchmarkCommentListReplies_DeepPage
           - BenchmarkPostCommentCount_AtomicHotWrite
-      - path: quwoquan_service/services/content-service/tests/intersection_watermark_store_contract_test.go
+      - path: quwoquan_service/services/content-service/tests/api_integration/intersection_watermark_store_contract__api_integration_test.go
         sections:
           - TestIntersectionWatermarkStore_RoundTripAndMonotonic
-      - path: quwoquan_service/services/content-service/tests/post_cache_contract_test.go
+      - path: quwoquan_service/services/content-service/tests/api_integration/post_cache_contract__api_integration_test.go
         sections:
           - TestCacheFindByID_MissThenHit
           - TestCacheInvalidateOnUpdate
-      - path: quwoquan_service/services/content-service/tests/viewer_object_intersection_store_contract_test.go
+      - path: quwoquan_service/services/content-service/tests/api_integration/viewer_object_intersection_store_contract__api_integration_test.go
         sections:
           - TestViewerObjectIntersectionStore_RoundTrip
           - TestViewerObjectIntersectionMaterialization_PersistsGraphLifecycle
           - TestViewerObjectIntersectionReadThrough_FreshHitZeroCompute
-      - path: quwoquan_service/services/content-service/tests/redis_router_contract_test.go
+      - path: quwoquan_service/services/content-service/tests/api_integration/redis_router_contract__api_integration_test.go
         sections:
           - TestRedisRouter_DualSceneIsolation
           - TestRedisRouter_PrefixRoutingToCorrectScene
           - TestRedisRouter_RecSceneBacksMiniredis
           - TestRedisRouter_GeneralSceneBacksMemory
-      - path: quwoquan_service/services/rtc-service/tests/testmain_test.go
+      - path: quwoquan_service/services/rtc-service/tests/api_integration/testmain_test.go
         sections:
           - requireMongoDB
-      - path: quwoquan_service/services/rtc-service/tests/one_to_one_relationship_gate_test.go
+      - path: quwoquan_service/services/rtc-service/tests/api_integration/one_to_one_relationship_gate__api_integration_test.go
         sections:
           - newGateTestOrchestrator
       - path: specs/gates/test_legacy_source_allowlist.yaml
@@ -683,14 +683,14 @@ entries:
       - tooling
       - docs
     changed_documents:
-      - path: quwoquan_service/services/content-service/cmd/import/testmain_test.go
+      - path: quwoquan_service/services/content-service/cmd/import/testmain__local_contract_test.go
         sections:
           - TestMain
           - tryRunMongoContainer
-      - path: quwoquan_service/services/content-service/cmd/import/mongo_import_test.go
+      - path: quwoquan_service/services/content-service/cmd/import/mongo_import__local_contract_test.go
         sections:
           - testDB
-      - path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/http_model_client_test.go
+      - path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/http_model_client__local_contract_test.go
         sections:
           - TestHTTPModelServiceClient_Predict_ContractStable
       - path: specs/gates/test_legacy_source_allowlist.yaml
@@ -740,22 +740,22 @@ entries:
       - tooling
       - docs
     changed_documents:
-      - path: quwoquan_service/services/user-service/tests/testmain_test.go
+      - path: quwoquan_service/services/user-service/tests/api_integration/testmain_test.go
         sections:
           - TestMain
           - bootstrapMongoRuntime
           - rebuildTestHandler
           - requireMongoBackedRuntime
-      - path: quwoquan_service/services/user-service/tests/helpers_test.go
+      - path: quwoquan_service/services/user-service/tests/api_integration/helpers_test.go
         sections:
           - seedPersonaPostHistory
           - seedPersonaCommentHistory
           - seedPersonaChatHistory
           - seedPersonaNotificationHistory
-      - path: quwoquan_service/services/user-service/tests/block_cascade_contract_test.go
+      - path: quwoquan_service/services/user-service/tests/api_integration/block_cascade_contract__api_integration_test.go
         sections:
           - TestBlockCascade_ClearsFollowAndPendingGreeting
-      - path: quwoquan_service/services/user-service/tests/follow_contract_test.go
+      - path: quwoquan_service/services/user-service/tests/api_integration/follow_contract__api_integration_test.go
         sections:
           - TestFollow_Success
           - TestFollow_Idempotent
@@ -767,15 +767,15 @@ entries:
           - TestListFollowers_DoesNotExposeOwnerMapping
           - TestFollow_BlockGateRejectsBothDirections
           - TestFollow_FlagOffPreservesExistingPersonaEdge
-      - path: quwoquan_service/services/user-service/tests/greeting_request_state_machine_test.go
+      - path: quwoquan_service/services/user-service/tests/api_integration/greeting_request_state_machine__api_integration_test.go
         sections:
           - TestGreeting_SendReplyIgnoreCancel
           - TestGreeting_MutualSenderRejected
           - TestGreeting_BlockedSenderRejected
-      - path: quwoquan_service/services/user-service/tests/persona_contract_test.go
+      - path: quwoquan_service/services/user-service/tests/api_integration/persona_contract__api_integration_test.go
         sections:
           - TestGetPersonaLifecycleGuard_RecordsMongoHistoryFallbackMetric
-      - path: quwoquan_service/services/user-service/tests/sub_account_view_contract_test.go
+      - path: quwoquan_service/services/user-service/tests/api_integration/sub_account_view_contract__api_integration_test.go
         sections:
           - TestRelationshipCapabilityView_States
       - path: specs/gates/test_legacy_source_allowlist.yaml
@@ -855,13 +855,13 @@ entries:
       - path: quwoquan_service/services/chat-service/internal/adapters/mq/event_publisher.go
         sections:
           - SupportedEventTypes
-      - path: quwoquan_service/services/chat-service/tests/helpers_test.go
+      - path: quwoquan_service/services/chat-service/tests/api_integration/helpers_test.go
         sections:
           - seedConversationWithAssistantMember
-      - path: quwoquan_service/services/chat-service/tests/member_management_contract_test.go
+      - path: quwoquan_service/services/chat-service/tests/api_integration/member_management_contract__api_integration_test.go
         sections:
           - TestRemoveAssistant
-      - path: quwoquan_service/services/chat-service/tests/event_publish_contract_test.go
+      - path: quwoquan_service/services/chat-service/tests/api_integration/event_publish_contract__api_integration_test.go
         sections:
           - TestEventPublish_AssistantRemoved
           - TestEventPublish_SupportedEventTypesComplete

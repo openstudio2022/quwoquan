@@ -57,6 +57,14 @@
                   "type": "string",
                   "enum": ["pending", "ready", "no_primary_source"],
                   "description": "源就绪状态：pending=未预筛；ready=已有可用百科主源；no_primary_source=暂无主源（不丢弃，留清单等扩源补全）"
+                },
+                "sourceScreenedAt": {
+                  "type": "string",
+                  "description": "可选：最近一次排产前深核验（qwq-data vertical source-screen）UTC 时间戳（ISO 8601）；缺省=仅轻探测/未核验，陈旧核验按时间戳重验"
+                },
+                "sourceScreenEvidence": {
+                  "type": "string",
+                  "description": "可选：深核验证据摘要（命中主源 host:词条 或缺失归因），审计与扩源缺口报告消费"
                 }
               },
               "required": [

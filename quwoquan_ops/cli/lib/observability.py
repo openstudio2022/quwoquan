@@ -6,9 +6,14 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.lib.common import ROOT, utc_now, write_json
+from quwoquan_ops.cli.lib.output_paths import (
+    data_observability_run_dir,
+    env_observability_run_dir,
+    normalize_env,
+)
 
 
-OBSERVABILITY_ROOT = ROOT / ".qwq_output" / "observability"
+OBSERVABILITY_ROOT = ROOT / ".qwq_output"
 OBSERVABILITY_CONTRACT_VERSION = "observability.slim.v1"
 
 ENVS = frozenset({"alpha", "beta", "gamma", "prod", "repo"})
@@ -68,7 +73,10 @@ RECORD_START_PATTERN = re.compile(
 
 
 def run_dir(env_name: str, run_id: str) -> Path:
-    return OBSERVABILITY_ROOT / "runs" / _safe_segment(env_name) / _safe_segment(run_id)
+    env = normalize_env(env_name)
+    if env == "data":
+        return data_observability_run_dir(run_id)
+    return env_observability_run_dir(env, run_id)
 
 
 def run_id_from_report_dir(report_dir: Path) -> str:
@@ -76,6 +84,15 @@ def run_id_from_report_dir(report_dir: Path) -> str:
 
 
 def env_from_report_dir(report_dir: Path, target: str = "") -> str:
+    parts = report_dir.parts
+    if ".qwq_output" in parts:
+        index = parts.index(".qwq_output")
+        if len(parts) > index + 2 and parts[index + 1] == "env":
+            env_segment = parts[index + 2]
+            if env_segment in ENVS:
+                return env_segment
+        if len(parts) > index + 1 and parts[index + 1] == "data":
+            return "data"
     parent = report_dir.parent.name
     if parent in ENVS:
         return parent

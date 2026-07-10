@@ -88,7 +88,7 @@ func resolveSnapshotPath(configRoot, serviceName, instanceID string) string {
 	if strings.TrimSpace(configRoot) != "" {
 		return filepath.Join(configRoot, "runtime-cache", serviceName, instanceID+".json")
 	}
-	return filepath.Join(resolveLocalOutputRoot(), "local", "runtime-cache", serviceName, instanceID+".json")
+	return filepath.Join(resolveLocalOutputRoot(), "env", "repo", "local", "control-plane", serviceName, instanceID+".json")
 }
 
 func resolveLocalOutputRoot() string {

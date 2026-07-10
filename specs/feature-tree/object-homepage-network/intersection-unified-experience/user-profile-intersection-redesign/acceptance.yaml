@@ -34,7 +34,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/widgets/profile_shell_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
     status: partial
@@ -73,7 +73,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/widgets/profile_creations_tab_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_creations_tab__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_creations_tab__local_contract_test.dart
     status: partial
@@ -111,7 +111,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/author_impact_card_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/author_impact_card__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/author_impact_card__local_contract_test.dart
     status: partial
@@ -148,7 +148,7 @@ gwt_acceptance:
     - 我的交集/打动入口读取一次聚合 summary，折叠态最多渲染 3 行维度简报。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/my_intersection_inbox_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/widgets/my_intersection_inbox_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
@@ -170,7 +170,7 @@ gwt_acceptance:
     - '[recorded] local_contract 2026-07-05：`flutter test test/ui/user/widgets/my_intersection_inbox_widget_test.dart
       test/ui/user/widgets/profile_shell_widget_test.dart` 全绿；我的交集/我打动的人入口、≤3 行维度简报、查看更多与
       isMine 视角口径保持通过。'
-    - '[recorded] api_integration 2026-07-06 continue-dev：`flutter test test/api_integration/gamma/intersection_remote_smoke__api_integration_test.dart
+    - '[recorded] api_integration 2026-07-06 continue-dev：`flutter test test/api_integration/ui/intersection/intersection_remote_smoke__api_integration_test.dart
       --dart-define=RUN_LOCAL_GAMMA_REMOTE_SMOKE=true` 2/2 全绿，gamma-local 真实验证了
       `getMyIntersectionSummary` / `listMyIntersections` / `markIntersectionsVisited` 读写链路；prod-hosted
       gray 仍归 R-IX05 继续追踪。'
@@ -196,8 +196,8 @@ gwt_acceptance:
     - 显隐过滤端侧单源一次性过滤，列表路径 mock/remote 共用同一函数，无第二真相源。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/pages/lin_mo_travel_intersection_acceptance_test.dart
-      - file: quwoquan_app/test/ui/user/widgets/my_intersection_inbox_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/pages/lin_mo_travel_intersection_acceptance__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/widgets/my_intersection_inbox_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/user/pages/lin_mo_travel_intersection_acceptance__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/my_intersection_inbox_widget__local_contract_test.dart

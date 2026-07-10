@@ -20,7 +20,7 @@ val androidAbiSplitsEnvVar = "QWQ_ANDROID_ABI_SPLITS"
 val androidAbiSplitsEnabled = envFlagEnabled(androidAbiSplitsEnvVar, false)
 val alphaLocalCaCert =
     repoRootDir.resolve(
-        ".qwq_output/local/alpha-local/tls/ca/root.crt",
+        ".qwq_output/env/alpha/local/alpha-local/tls/ca/root.crt",
     )
 val alphaLocalStackScript =
     repoRootDir.resolve("quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh")

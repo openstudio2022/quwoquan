@@ -36,7 +36,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/chat/widgets/chat_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/chat/widgets/chat_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:

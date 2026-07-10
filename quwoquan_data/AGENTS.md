@@ -1,6 +1,6 @@
 # quwoquan_data Codex Guide
 
-在 `quwoquan_data/` 工作时，除仓库根 `AGENTS.md` 外，先阅读：
+在 `quwoquan_data/` 工作时，除仓库根 `AGENTS.md` 外，先阅读仓库根 `.cursor/rules/` 与数据工程入口：
 
 1. `quwoquan_data/README.md`
 2. `.cursor/rules/01-arch-constraints.mdc` 中关于 `quwoquan_data` 的 CLI-first 约束

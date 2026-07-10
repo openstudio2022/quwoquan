@@ -9,7 +9,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[4]
 CLI = REPO / "quwoquan_data/scripts/cli.py"
-GOLDEN = REPO / "quwoquan_data/tests/fixtures/creator_pool/travel_scale10_verify/golden_creator_bundle.json"
+GOLDEN = REPO / "quwoquan_data/tests/support/fixtures/creator_pool/travel_scale10_verify/golden_creator_bundle.json"
 PYTHON = sys.executable
 
 
@@ -28,7 +28,7 @@ def test_golden_fixture_derivation_policy() -> None:
 
 def test_scale10_workflow_produces_ten_objects(isolated_roots: Path) -> None:
     batch = "travel_scale10_verify_fixtures"
-    fixture = REPO / "quwoquan_data/tests/fixtures/creator_pool/travel_scale10_verify"
+    fixture = REPO / "quwoquan_data/tests/support/fixtures/creator_pool/travel_scale10_verify"
     cmd = [
         PYTHON,
         str(CLI),

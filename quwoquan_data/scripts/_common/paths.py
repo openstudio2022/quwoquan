@@ -38,12 +38,12 @@ DATA_ROOT = Path(os.environ.get("QWQ_DATA_ROOT", _REPO_DATA_ROOT))
 # 目录规范裁定（数据输出规范计划）：
 # - 仓内（版本控制）只保留两类长期真相源：输入契约（tasks/schema/templates/scripts）
 #   与发布主线 publish/**；
-# - 其余一切运行期输出（local/data-runtime 批次树 / release 过程 / runs 摘要索引 / app 验证证据）
+# - 其余一切运行期输出（data/local/runtime 批次树 / release 过程 / runs 摘要索引 / app 验证证据）
 #   统一落到 QWQ_OUTPUT_ROOT，默认 `<repo>/.qwq_output/`（gitignore 隔离，工程内可统一管理）；
 # - 禁止默认写到 /tmp、~/qwq_* 等工程外路径（只允许显式 env 覆盖用于隔离实验）。
-# - release 按工程域分组；data 发布包默认只写 `.qwq_output/release/data/<releaseId>`。
+# - data 发布包默认只写 `.qwq_output/data/release/<releaseId>`。
 # 当 QWQ_DATA_ROOT 被显式覆盖（测试隔离根）时，输出根跟随 DATA_ROOT
-# （local/data-runtime/publish/release 同根隔离）。
+# （data/local/runtime/publish/release 同根隔离）。
 _DEFAULT_OUTPUT_ROOT = REPO_ROOT / ".qwq_output"
 if os.environ.get("QWQ_OUTPUT_ROOT"):
     OUTPUT_ROOT = Path(os.environ["QWQ_OUTPUT_ROOT"])
@@ -52,7 +52,7 @@ elif os.environ.get("QWQ_DATA_ROOT"):
 else:
     OUTPUT_ROOT = _DEFAULT_OUTPUT_ROOT
 
-RUNTIME_ROOT = Path(os.environ.get("QWQ_RUNTIME_ROOT", OUTPUT_ROOT / "local" / "data-runtime"))
+RUNTIME_ROOT = Path(os.environ.get("QWQ_RUNTIME_ROOT", OUTPUT_ROOT / "data" / "local" / "runtime"))
 
 
 def current_runtime_root() -> Path:
@@ -61,10 +61,10 @@ def current_runtime_root() -> Path:
         return Path(runtime_root)
     output_root = os.environ.get("QWQ_OUTPUT_ROOT")
     if output_root:
-        return Path(output_root) / "local" / "data-runtime"
+        return Path(output_root) / "data" / "local" / "runtime"
     data_root = os.environ.get("QWQ_DATA_ROOT")
     if data_root:
-        return Path(data_root) / "local" / "data-runtime"
+        return Path(data_root) / "data" / "local" / "runtime"
     return RUNTIME_ROOT
 
 
@@ -73,12 +73,12 @@ def current_runtime_root() -> Path:
 # entities/posts/index 等由根 .gitignore `quwoquan_data/publish/**` 排除）；
 # 隔离根（QWQ_DATA_ROOT/QWQ_PUBLISH_ROOT）覆盖时才漂移。
 PUBLISH_ROOT = Path(os.environ.get("QWQ_PUBLISH_ROOT", DATA_ROOT / "publish"))
-RELEASE_ROOT = Path(os.environ.get("QWQ_RELEASE_ROOT", OUTPUT_ROOT / "release" / "data"))
+RELEASE_ROOT = Path(os.environ.get("QWQ_RELEASE_ROOT", OUTPUT_ROOT / "data" / "release"))
 SCHEMA_ROOT = Path(os.environ.get("QWQ_SCHEMA_ROOT", _REPO_DATA_ROOT / "schema"))
 SOP_ROOT = DATA_ROOT / "sop"
-# 输出侧摘要索引根（只回指、不承载权威证据）：.qwq_output/runs/data/**。
+# 输出侧摘要索引根（只回指、不承载权威证据）：.qwq_output/data/runs/**。
 OUTPUT_ARTIFACTS_ROOT = Path(
-    os.environ.get("QWQ_OUTPUT_ARTIFACTS_ROOT", OUTPUT_ROOT / "runs" / "data")
+    os.environ.get("QWQ_OUTPUT_ARTIFACTS_ROOT", OUTPUT_ROOT / "data" / "runs")
 )
 
 DEFAULT_SANDBOX_ROOT = _DEFAULT_OUTPUT_ROOT
@@ -163,7 +163,7 @@ TASK_ROOT_LEGACY_COMPAT_ENTRIES = frozenset({
     "changeset",
 })
 
-# ─── 证据面瘦身（数据输出规范）：local/data-runtime/tasks 与 batch/_shared 只保留
+# ─── 证据面瘦身（数据输出规范）：data/local/runtime/tasks 与 batch/_shared 只保留
 #     不可重算真相源；调试/过程态降级为可清理层。 ────────────────────
 # task/_shared 最小证据面：跨批次账本 + explore/baseline 阶段的不可重算决策包。
 TASK_SHARED_ALLOWED_ENTRIES = frozenset({
@@ -260,7 +260,7 @@ WORKSPACE_ROOT_BY_COMMAND = {
 
 # ─── taskId ↔ 目录 互转 ────────────────────────────────────────────
 # taskId 即斜杠路径：<vertical>/<organizeBy>/<key>[/<category>]/<name>
-# committed: tasks/<taskId>/   runtime: local/data-runtime/tasks/<taskId>/（task_root 已支持嵌套）
+# committed: tasks/<taskId>/   runtime: data/local/runtime/tasks/<taskId>/（task_root 已支持嵌套）
 def normalize_task_id(task_id: str) -> str:
     return task_id.strip().strip("/")
 
@@ -500,7 +500,7 @@ def task_tags(task_id: str) -> Path:
 
 # ─── batch 级路径 ─────────────────────────────────────────────────
 # 目录规范（数据输出规范计划）：批次树按「阶段 × 内容类型 × 供给模式」三级主键分层：
-#   local/data-runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/
+#   data/local/runtime/{phase}/{contentType}/{supplyMode}/{intentLabel}-{taskHash}__{batch}/
 # - phase ∈ {e2e, operations}：端到端试跑验证 vs 自动化运营正式跑批（单元测试走 tempfile 根，无批次概念）。
 # - contentType ∈ {homepage, article, image, video}：一批次只跑一种内容类型，禁止混批。
 # - supplyMode ∈ {site_primary, search_supplement}：站点主线 vs 搜索小流量补全，必须分批分路径。
@@ -599,7 +599,7 @@ def clear_intent_label_cache() -> None:
 
 
 def batches_root() -> Path:
-    """当前批次落位根：local/data-runtime/{phase}/{contentType}/{supplyMode}/。
+    """当前批次落位根：data/local/runtime/{phase}/{contentType}/{supplyMode}/。
 
     三级主键由 env 声明（`QWQ_BATCH_PHASE` / `QWQ_BATCH_CONTENT_TYPE` /
     `QWQ_BATCH_SUPPLY_MODE`），一批次运行期内唯一且不可变。

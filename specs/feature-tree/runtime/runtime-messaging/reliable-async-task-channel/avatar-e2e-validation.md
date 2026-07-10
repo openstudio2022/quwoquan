@@ -152,7 +152,7 @@
 
 - `go test ./runtime/reliabletask`
 - `go test ./services/chat-service/tests -run TestGroupAvatar`
-- `flutter test test/cloud/realtime/realtime_avatar_sync_handler_test.dart`
+- `flutter test test/local_contract/cloud/realtime/realtime_avatar_sync_handler__local_contract_test.dart`
 - `python3 -m py_compile quwoquan_ops/avatar/run_chat_avatar_e2e_probe.py quwoquan_ops/avatar/run_chat_avatar_device_matrix.py quwoquan_ops/avatar/run_chat_avatar_device_matrix_ci.py quwoquan_ops/cli/gamma/run_local_gamma_avatar_e2e.py quwoquan_app/scripts/gamma/run_local_gamma_t3.py quwoquan_ops/avatar/verify_chat_avatar_commercial_matrix_evidence.py`
 - `bash -n quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh`
 - `bash -n quwoquan_ops/avatar/run_chat_avatar_commercial_matrix_orchestrator.sh`

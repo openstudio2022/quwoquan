@@ -57,29 +57,29 @@ gwt_acceptance:
     - 入口到媒体工具可交互 warm P95 <= 1.2s。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/content/entry/widgets/create_entry_sheet_widget_test.dart
-      - file: quwoquan_app/test/ui/content/entry/create_entry_information_architecture_widget_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/widgets/create_entry_sheet_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/entry/create_entry_information_architecture_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_video_entry_mode__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_media_mode_split__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_media_picker_dark_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_create_page_surface__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/content/entry/widgets/create_entry_sheet_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/create_entry_information_architecture_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/create_entry_runtime_flag__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/app/shell/main_app_shell_widget__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_video_entry_mode__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/creation_media_mode_split__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_video_entry_mode__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_media_mode_split__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_media_picker_dark_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_create_page_surface__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
     status: completed
     test_evidence:
       primary:
@@ -183,15 +183,15 @@ gwt_acceptance:
     - 杀进程恢复到可继续编辑 P95 <= 2s。
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_page__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_repository__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_draft_autosave_timing__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/localDrafts/localDrafts_page__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_repository__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_local_draft_page__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_draft_autosave_timing__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_repository__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_local_draft_page__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_draft_autosave_timing__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/content/entry/draft_recovery_widget__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
     status: completed

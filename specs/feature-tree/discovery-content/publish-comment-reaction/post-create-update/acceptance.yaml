@@ -50,21 +50,21 @@ gwt_acceptance:
     - 选中/取消/排序反馈 P95 <= 100ms，不能整页缩略图闪烁。
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/media/media_reorderable_view__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_media_picker_commercial_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/media_reorderable_view__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_media_picker_commercial_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_create_page_surface__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/content/entry/photo_picker_reentry_append_journey__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/media/media_reorderable_view__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_media_picker_commercial_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_create_page_surface__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/media_reorderable_view__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/media/image_editor_thumbnail_reorder_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_media_picker_commercial_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_create_page_surface__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/content/entry/photo_picker_reentry_append_journey__user_acceptance_test.dart
     status: partial
     test_evidence:
       primary:
@@ -149,15 +149,15 @@ gwt_acceptance:
     - quwoquan_app/lib/components/media/picker/create_media_picker_page.dart
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_camera_capture_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_camera_hifi_layout__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_camera_capture_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_camera_hifi_layout__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/content/entry/photo_picker_reentry_append_journey__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_camera_capture_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/photo_camera_hifi_layout__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/content/entry/journeys/photo_picker_reentry_append_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_camera_capture_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_camera_hifi_layout__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/content/entry/photo_picker_reentry_append_journey__user_acceptance_test.dart
     status: completed
     test_evidence:
       primary:
@@ -218,12 +218,12 @@ gwt_acceptance:
     - quwoquan_app/lib/ui/content/entry/services/create_page_remote_helpers.dart
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/create/photo_publish_payload_media_refs__local_contract_test.dart
-      - file: quwoquan_app/test/api_integration/gamma/photo_publish_upload_bind_roundtrip__api_integration_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_publish_payload_media_refs__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/ui/content/photo_publish_upload_bind_roundtrip__api_integration_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/create/photo_publish_payload_media_refs__local_contract_test.dart
-      - file: quwoquan_app/test/api_integration/gamma/photo_publish_upload_bind_roundtrip__api_integration_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/photo_publish_payload_media_refs__local_contract_test.dart
+      - file: quwoquan_app/test/api_integration/ui/content/photo_publish_upload_bind_roundtrip__api_integration_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/create/photo_creation_publish_roundtrip__user_acceptance_test.dart
     status: completed
     test_evidence:
@@ -277,23 +277,23 @@ gwt_acceptance:
     - quwoquan_app/lib/ui/content/entry/pages/video_editor_page.dart
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_camera_capture_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_camera_hifi_layout__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/capture_camera_photo_video_independence__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_media_picker_dark_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_camera_capture_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_camera_hifi_layout__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/capture_camera_photo_video_independence__local_contract_test.dart
       - file: quwoquan_service/services/content-service/tests/api_integration/post_crud_contract__api_integration_test.go
       - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/create/creation_mixed_media_picker__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/camera_capture_mode_switch__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/create_entry_media_resolution__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_media_picker_dark_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_camera_capture_flow__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/video_camera_hifi_layout__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/content/create/capture_camera_photo_video_independence__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/creation_mixed_media_picker__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/camera_capture_mode_switch__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/create_entry_media_resolution__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_media_picker_dark_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_camera_capture_flow__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_camera_hifi_layout__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/capture_camera_photo_video_independence__local_contract_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
     status: completed
     test_evidence:
@@ -378,11 +378,11 @@ gwt_acceptance:
     - quwoquan_app/lib/ui/content/entry/providers/create_editor_provider.dart
     tests:
       planned:
-      - file: quwoquan_app/test/local_contract/content/create/video_publish_payload_cover_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_cover_contract__local_contract_test.dart
       - file: quwoquan_app/test/api_integration/gamma/video_publish_cover_roundtrip__api_integration_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/content/create/video_creation_publish_roundtrip__user_acceptance_test.dart
       recorded:
-      - file: quwoquan_app/test/local_contract/content/create/video_publish_payload_cover_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/content/create/video_publish_payload_cover_contract__local_contract_test.dart
     status: pending
     test_evidence:
       primary:

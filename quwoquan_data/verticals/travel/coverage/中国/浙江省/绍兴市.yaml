@@ -56,6 +56,70 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 上虞博物馆
+    canonicalName: 上虞博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 丰惠钱氏大宅院
+    canonicalName: 丰惠钱氏大宅院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 九狮桥
+    canonicalName: 九狮桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 浙东新四军北撤会议旧址
+    canonicalName: 浙东新四军北撤会议旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 百沥海塘
+    canonicalName: 百沥海塘
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 竺可桢故居
+    canonicalName: 竺可桢故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 胡愈之故居
+    canonicalName: 胡愈之故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 萧绍海塘
+    canonicalName: 萧绍海塘
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/上虞区
+    sourceReadiness: pending
+    selectionPriority: 13
 - district: 嵊州市
   leaves:
   - name: 越剧小镇
@@ -100,6 +164,54 @@ districts:
     - 金庭王羲之故居
     selectionPriority: 5
     sourceReadiness: ready
+  - name: 太平邢氏宗祠
+    canonicalName: 太平邢氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/嵊州市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 嵊县城墙
+    canonicalName: 嵊县城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/嵊州市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 嵊县城隍庙
+    canonicalName: 嵊县城隍庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/嵊州市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 灵鹅王氏纯节坊
+    canonicalName: 灵鹅王氏纯节坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/嵊州市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 艇湖塔
+    canonicalName: 艇湖塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/嵊州市
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 长乐钱氏大新屋
+    canonicalName: 长乐钱氏大新屋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/嵊州市
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 新昌县
   leaves:
   - name: 大佛寺
@@ -131,6 +243,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/新昌县
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:22:43Z'
+    sourceScreenEvidence: zh.wikipedia.org:天姥山 extract=277ch
   - name: 沃洲湖
     canonicalName: 沃洲湖
     entityType: 地点/自然景观
@@ -141,6 +255,38 @@ districts:
     - 沃洲湖风景区
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 三坑真君殿
+    canonicalName: 三坑真君殿
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/新昌县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 大佛寺 (新昌)
+    canonicalName: 大佛寺 (新昌)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/新昌县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 新昌城墙
+    canonicalName: 新昌城墙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/新昌县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 王羲之墓
+    canonicalName: 王羲之墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/新昌县
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 柯桥区
   leaves:
   - name: 兰亭
@@ -173,6 +319,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/柯桥区
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:23:02Z'
+    sourceScreenEvidence: zh.wikipedia.org:安昌古镇 extract=312ch
   - name: 鉴湖
     canonicalName: 绍兴鉴湖
     entityType: 地点/自然景观
@@ -181,6 +329,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/柯桥区
     selectionPriority: 4
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:23:07Z'
+    sourceScreenEvidence: zh.wikipedia.org:鉴湖 extract=400ch
   - name: 大香林
     canonicalName: 绍兴大香林
     entityType: 地点/自然景观
@@ -200,6 +350,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/柯桥区
     selectionPriority: 6
     sourceReadiness: pending
+  - name: 太平桥 (绍兴)
+    canonicalName: 太平桥 (绍兴)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/柯桥区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 安昌街道
+    canonicalName: 安昌街道
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/柯桥区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 虹明桥
+    canonicalName: 虹明桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/柯桥区
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 诸暨市
   leaves:
   - name: 西施故里
@@ -213,6 +387,8 @@ districts:
     - 西施故里旅游区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:23:08Z'
+    sourceScreenEvidence: zh.wikipedia.org:西施故里 extract=255ch
   - name: 五泄风景区
     canonicalName: 诸暨五泄
     entityType: 地点/景区
@@ -250,6 +426,30 @@ districts:
     - 斗岩风景区
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 新胜古建筑群
+    canonicalName: 新胜古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/诸暨市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 枫桥大庙
+    canonicalName: 枫桥大庙
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/诸暨市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 藏绿村
+    canonicalName: 藏绿村
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/诸暨市
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 越城区
   leaves:
   - name: 鲁迅故里
@@ -335,6 +535,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
     selectionPriority: 9
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:25:01Z'
+    sourceScreenEvidence: zh.wikipedia.org:秋瑾故居 extract=209ch
   - name: 蔡元培故居
     canonicalName: 绍兴蔡元培故居
     entityType: 地点/遗址
@@ -343,6 +545,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
     selectionPriority: 10
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:25:02Z'
+    sourceScreenEvidence: zh.wikipedia.org:绍兴蔡元培故居 extract=228ch
   - name: 青藤书屋
     canonicalName: 青藤书屋
     entityType: 地点/遗址
@@ -364,3 +568,99 @@ districts:
     - 越王台
     selectionPriority: 12
     sourceReadiness: ready
+  - name: 东湖 (绍兴)
+    canonicalName: 东湖 (绍兴)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 光相桥
+    canonicalName: 光相桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 八字桥历史街区
+    canonicalName: 八字桥历史街区
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 八字橋 (紹興)
+    canonicalName: 八字橋 (紹興)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 布业会馆
+    canonicalName: 布业会馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 广宁桥
+    canonicalName: 广宁桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 泗龙桥
+    canonicalName: 泗龙桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 热诚学堂
+    canonicalName: 热诚学堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 谢公桥
+    canonicalName: 谢公桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 贺知章《龙瑞宫记》摩崖刻石
+    canonicalName: 贺知章《龙瑞宫记》摩崖刻石
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 邵力子故居
+    canonicalName: 邵力子故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 题扇桥
+    canonicalName: 题扇桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/绍兴市/越城区
+    sourceReadiness: pending
+    selectionPriority: 24

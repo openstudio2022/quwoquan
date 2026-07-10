@@ -189,10 +189,7 @@ func setupCommentPinAPIEnv(t *testing.T) *commentPinAPIEnv {
 	if mongoURI == "" {
 		started, err := tryRunMongoContainer(ctx)
 		if err != nil {
-			if os.Getenv("CI") == "true" || os.Getenv("GITHUB_ACTIONS") == "true" {
-				t.Fatalf("CI: failed to start mongo testcontainer: %v", err)
-			}
-			t.Skipf("Docker unavailable, skipping comment pin api_integration: %v", err)
+			t.Fatalf("TEST_MONGO_URI is required or Docker testcontainer must be available for comment pin api_integration: %v", err)
 		}
 		container = started
 		uri, err := container.ConnectionString(ctx)
@@ -437,16 +434,6 @@ func boolField(body map[string]any, key string) bool {
 	default:
 		return false
 	}
-}
-
-func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {
-	defer func() {
-		if recovered := recover(); recovered != nil {
-			err = fmt.Errorf("testcontainers panic (Docker unavailable?): %v", recovered)
-		}
-	}()
-	c, err = mongomod.Run(ctx, "mongo:7-jammy")
-	return
 }
 
 var _ repository.EventPublisher = (*testinfra.EventSpy)(nil)

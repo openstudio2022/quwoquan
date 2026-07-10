@@ -72,7 +72,7 @@ policy:
   assistant_search_weak_typing_ratchet:
     governance: specs/gates/assistant_search_weak_typing_governance.md
     baseline: specs/gates/assistant_search_weak_typing_baseline.json
-    script: quwoquan_service/services/assistant-service/tests/ops/gate/verify_assistant_search_weak_typing_ratchet.py
+    script: quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/gate/verify_assistant_search_weak_typing_ratchet.py
     make_target: verify-app-assistant-search-weak-typing-ratchet
     buckets:
       - assistant_handwritten
@@ -508,7 +508,7 @@ domains:
         Remote 已与 rtc-service generated_routes + call_handler 对齐：Initiate/Answer/Join 嵌套 session 信封、
         ListCalls 使用 cursor 分页、Invite 使用 inviteeIds、ToggleMute/ToggleCamera 使用 POST 与 muted/cameraOn。
         来电 WS 载荷经 RtcCallRingingPayload 解析；RtcTokenDto 已并入 RtcJoinCredentialsDto。
-        质量门禁：RTC 暂无 Patrol 集成测试，回归依赖 test/cloud/rtc 与 test/ui/rtc。
+        质量门禁：RTC 暂无 Patrol 集成测试，回归依赖 test/local_contract/cloud/rtc 与 test/local_contract/ui/rtc。
     ui_pages:
       - path: quwoquan_app/lib/ui/rtc/pages/voice_call_page.dart
         status: compliant

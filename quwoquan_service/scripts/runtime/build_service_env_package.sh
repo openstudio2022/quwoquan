@@ -123,7 +123,7 @@ if service == "chat-service":
             raise SystemExit("prod chat-service group avatar CDN must not use local/test host")
 PY
 
-out_dir=".qwq_output/release/service/${service}/${env_name}"
+out_dir=".qwq_output/env/${env_name}/release/service/${service}"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 cp "$default_cfg" "$out_dir/default_config.yaml"

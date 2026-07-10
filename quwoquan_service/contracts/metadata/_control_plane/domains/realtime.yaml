@@ -26,7 +26,7 @@ minimum_package:
     t1:
       - contracts/metadata/realtime/connection/service.yaml
     t2:
-      - ../quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
+      - ../quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart
     t3:
       - contracts/metadata/realtime/connection/tests/e2e.yaml
     t4: []

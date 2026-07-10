@@ -35,6 +35,7 @@ from publish_ops.build_publish_lookup_indexes import build_publish_lookup_indexe
 
 # 主清单目录注入：从 paths 进程级单例派生（桥壳二次 exec 幂等，不引第二套覆写链）。
 COVERAGE_ROOT = PUBLISH_ROOT.parent / "coverage" / "中国"
+_ORIGINAL_COVERAGE_MASTER_ROOT = coverage_master_list.COVERAGE_MASTER_ROOT
 coverage_master_list.COVERAGE_MASTER_ROOT = COVERAGE_ROOT
 
 GEO_JZG = "Topic/地理/行政区/中国/四川省/阿坝藏族羌族自治州/九寨沟县"
@@ -114,6 +115,7 @@ def _seed() -> None:
         {"district": "九寨沟县", "leaves": [{
             "name": "九寨沟", "canonicalName": "九寨沟", "entityType": "地点/景区",
             "typeTagRefs": ["Entity/地点/景区/5A景区"], "geoTagRef": GEO_JZG,
+            "selectionPriority": 1,
             "sourceReadiness": "ready",
         }]},
     ])
@@ -122,6 +124,7 @@ def _seed() -> None:
             "name": "泸沽湖", "canonicalName": "泸沽湖", "entityType": "地点/景区",
             "typeTagRefs": ["Entity/地点/景区/4A景区"], "geoTagRef": GEO_LGH_SC,
             "geoTagRefs": [GEO_LGH_SC, GEO_LGH_YN],
+            "selectionPriority": 1,
             "sourceReadiness": "ready",
         }]},
     ])
@@ -130,6 +133,7 @@ def _seed() -> None:
             "name": "灌县古城", "canonicalName": "灌县古城", "entityType": "地点/古镇",
             "typeTagRefs": ["Entity/地点/古镇/历史古镇"],
             "geoTagRef": "Topic/地理/行政区/中国/四川省/成都市/都江堰市",
+            "selectionPriority": 1,
             "sourceReadiness": "pending",
         }]},
     ])
@@ -155,7 +159,10 @@ def _seed() -> None:
 
 
 _seed()
-_COUNTS = build_publish_lookup_indexes()
+try:
+    _COUNTS = build_publish_lookup_indexes()
+finally:
+    coverage_master_list.COVERAGE_MASTER_ROOT = _ORIGINAL_COVERAGE_MASTER_ROOT
 
 
 def _coverage_rows(province: str) -> list[dict]:

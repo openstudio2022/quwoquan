@@ -29,9 +29,9 @@ domain_acceptance:
     tests:
       planned: []
       recorded:
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_section__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_page_shell__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_section__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_page_shell__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/widgets/profile_shell_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/user/author_impact_card__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/circle/widgets/circle_shell_widget__local_contract_test.dart
@@ -75,7 +75,7 @@ domain_acceptance:
     - '[migrated_from_planned] quwoquan_app/test/ui/user/profile_object_homepage_widget_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/ui/circle/circle_object_homepage_widget_test.dart'
     - '[migrated_from_planned] quwoquan_app/test/ui/entity/entity_object_homepage_widget_test.dart'
-    - '[migrated_from_planned] quwoquan_app/test/patrol/object_homepage_network_journey_test.dart'
+    - '[migrated_from_planned] quwoquan_app/test/user_acceptance/patrol/object_homepage_network_journey_test.dart'
   DA2:
     title: 对象关系契约与硬债验收
     done_when:
@@ -91,7 +91,7 @@ domain_acceptance:
       planned: []
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/services/content/intersection_inbox_synthesis__local_contract_test.dart
-      - file: quwoquan_app/test/local_contract/components/object_page/object_intersection_card__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/components/object_page/object_intersection_card__local_contract_test.dart
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go
       - file: quwoquan_service/services/user-service/tests/api_integration/homepage_bundle_contract__api_integration_test.go
     status: implemented

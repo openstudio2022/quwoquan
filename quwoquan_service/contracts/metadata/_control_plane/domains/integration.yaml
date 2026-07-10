@@ -35,7 +35,7 @@ minimum_package:
     t1:
     - contracts/metadata/integration/location/service.yaml
     t2:
-    - services/integration-service/internal/adapters/http/location_handler_test.go
+    - services/integration-service/internal/adapters/http/location_handler__local_contract_test.go
     t3:
     - contracts/metadata/integration/location/tests/e2e.yaml
     t4: []

@@ -13,18 +13,20 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[3]
-# 统一输出根：local-gamma 辅助报告属于本地环境状态，正式运行证据由 stackctl 写入 .qwq_output/runs/<env>/<runId>。
+# 统一输出根：local-gamma 辅助报告属于本地环境状态，正式运行证据由 stackctl 写入 .qwq_output/env/<env>/runs/<runId>。
 LOCAL_GAMMA_ARTIFACT_ROOT = Path(
     os.environ.get(
         "LOCAL_GAMMA_ARTIFACT_ROOT",
         Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
+        / "env"
+        / "gamma"
         / "local"
         / "gamma-local"
         / "app-artifacts",
     )
 )
 DEFAULT_REPORT = LOCAL_GAMMA_ARTIFACT_ROOT / "report.json"
-DEFAULT_STACK_REPORT = ROOT / ".qwq_output/local/gamma-local/stack_status.json"
+DEFAULT_STACK_REPORT = ROOT / ".qwq_output/env/gamma/local/gamma-local/stack_status.json"
 START_SCRIPT = ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
 README = ROOT / "quwoquan_ops/environments/local-gamma/README.md"
 

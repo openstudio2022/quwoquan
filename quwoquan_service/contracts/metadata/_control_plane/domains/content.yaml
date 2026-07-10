@@ -44,9 +44,9 @@ minimum_package:
     - contracts/metadata/content/post/tests/contract.yaml
     - contracts/metadata/content/post/tests/mock.yaml
     t2:
-    - services/content-service/tests/post_comment_contract_test.go
-    - services/content-service/tests/post_reaction_contract_test.go
-    - services/content-service/tests/report_crud_contract_test.go
+    - services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go
+    - services/content-service/tests/api_integration/post_reaction_contract__api_integration_test.go
+    - services/content-service/tests/api_integration/report_crud_contract__api_integration_test.go
     t3:
     - contracts/metadata/content/post/tests/e2e.yaml
     t4: []

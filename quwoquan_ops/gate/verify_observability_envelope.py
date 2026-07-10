@@ -18,7 +18,18 @@ from quwoquan_ops.cli.lib.observability import (
 
 def envelope_issues(root: Path = OBSERVABILITY_ROOT, *, max_lines_per_file: int = 200) -> list[str]:
     issues: list[str] = []
-    for path in sorted((root / "runs").rglob(f"*{LOG_FILE_SUFFIX}")) if (root / "runs").exists() else []:
+    log_roots = []
+    env_root = root / "env"
+    if env_root.exists():
+        log_roots.extend(path / "observability" for path in env_root.iterdir() if path.is_dir())
+    data_observability = root / "data" / "observability"
+    if data_observability.exists():
+        log_roots.append(data_observability)
+    for path in sorted(
+        log_path
+        for log_root in log_roots
+        for log_path in log_root.rglob(f"*{LOG_FILE_SUFFIX}")
+    ):
         kind = path.stem
         try:
             lines = path.read_text(encoding="utf-8").splitlines()

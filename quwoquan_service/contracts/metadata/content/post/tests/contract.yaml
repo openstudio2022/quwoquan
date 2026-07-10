@@ -474,17 +474,17 @@ scenarios:
     command: BindMediaAssetsToPost
   - name: get_my_intersection_summary_contract
     operation: GetMyIntersectionSummary
-    go_func: TestIntersectionServiceLocalContractTest
+    go_func: TestIntersectionService_SummaryNewCountAndVisitClears
     command: GetMyIntersectionSummary
   - name: list_my_intersections_contract
     operation: ListMyIntersections
-    go_func: TestIntersectionServiceLocalContractTest
+    go_func: TestIntersectionService_ListFiltersAndPaginates
     command: ListMyIntersections
   - name: mark_intersections_visited_contract
     operation: MarkIntersectionsVisited
-    go_func: TestIntersectionServiceLocalContractTest
+    go_func: TestIntersectionService_SummaryNewCountAndVisitClears
     command: MarkIntersectionsVisited
   - name: get_object_intersections_contract
     operation: GetObjectIntersections
-    go_func: TestIntersectionServiceLocalContractTest
+    go_func: TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength
     command: GetObjectIntersections

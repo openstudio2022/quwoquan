@@ -148,13 +148,13 @@ make gate           ← 每次 PR（阻塞合入）
 
 make gate-full      ← daily CI + pre-release（advisory → pre-release 阻塞发布）
   ├── make gate（以上全部）
-  └── flutter test test/cloud/content/api_contract_runner.dart \
+  └── flutter test test/api_integration/cloud/content/api_contract_runner.dart \
         --dart-define=API_CONTRACT_ENV=gamma \
         --dart-define=API_CONTRACT_BASE_URL=$(GAMMA_BASE_URL) \
         --dart-define=TEST_AUTH_TOKEN=$(GAMMA_TEST_AUTH_TOKEN)   [L3]
 
 Firebase Test Lab   ← pre-release tag 触发（阻塞发布）
-  └── patrol test test/patrol/ \
+  └── patrol test test/user_acceptance/patrol/ \
         --dart-define=APP_RUNTIME_ENV=gamma \
         --dart-define=API_CONTRACT_ENV=gamma                [L4]
 ```
@@ -165,7 +165,7 @@ test-api-contract:
     @if [ -z "$(GAMMA_BASE_URL)" ] || [ -z "$(GAMMA_PRODUCT_OPS_BASE_URL)" ]; then \
         echo "[L3] FAIL: set GAMMA_BASE_URL and GAMMA_PRODUCT_OPS_BASE_URL"; exit 2; \
     fi
-    cd quwoquan_app && flutter test test/cloud/content/api_contract_runner.dart \
+    cd quwoquan_app && flutter test test/api_integration/cloud/content/api_contract_runner.dart \
         --dart-define=API_CONTRACT_ENV=gamma \
         --dart-define=API_CONTRACT_BASE_URL=$(GAMMA_BASE_URL) \
         --dart-define=TEST_AUTH_TOKEN=$(GAMMA_TEST_AUTH_TOKEN)

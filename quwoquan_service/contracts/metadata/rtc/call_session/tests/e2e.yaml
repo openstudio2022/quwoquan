@@ -18,7 +18,7 @@ scenarios:
   - name: rtc_call_reconnect_after_network_jitter
     description: 建连成功后发生短暂抖动，RTC 服务恢复会话并保持控制面策略一致
     test_type: ui_journey
-    patrol_flow: test/patrol/chat/rtc_call_reconnect_test.dart
+    patrol_flow: rtc_call_reconnect user_acceptance pending PlatformAutomator scenario
     actors:
       app: lib/ui/chat/pages/chat_detail_page.dart
       gateway: realtime-gateway websocket upgrade

@@ -23,7 +23,7 @@ def isolated_roots(tmp_path: Path, monkeypatch):
 
 def _run_scale10(isolated_roots: Path) -> str:
     batch = "travel_scale10_readiness_test"
-    fixture = REPO / "quwoquan_data/tests/fixtures/creator_pool/travel_scale10_verify"
+    fixture = REPO / "quwoquan_data/tests/support/fixtures/creator_pool/travel_scale10_verify"
     cmd = [
         PYTHON,
         str(CLI),

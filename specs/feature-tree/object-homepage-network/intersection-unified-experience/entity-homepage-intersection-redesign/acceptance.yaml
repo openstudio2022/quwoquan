@@ -40,7 +40,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
     status: partial
@@ -59,7 +59,7 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（交集卡走
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart（交集卡走
       ObjectIntersectionSection/objectBType=homepage，旧推荐标题单结论句，无交集三态降级，2026-06-16
       green）'
     - '[recorded] PENDING api_integration 2026-06-25：gamma-local 静态拓扑已包含 entity-service
@@ -82,7 +82,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
     status: partial
@@ -100,7 +100,7 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（「关于这里」卡：2~4
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart（「关于这里」卡：2~4
       行正文 + 缩略图 + 查看更多介绍，介绍缺省不展示，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma entity homepage fields
       介绍真实链路待 WP-D。'
@@ -121,7 +121,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
     status: partial
@@ -141,7 +141,7 @@ gwt_acceptance:
     notes:
     - '[recorded] local_contract 2026-06-25：`flutter test test/ui/entity/pages/homepage_detail_page_widget_test.dart`
       6/6 green；记录/讨论/相关圈子 Tab、相关圈子「打开圈子」卡、内部字段不外露断言已覆盖。'
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（一级
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart（一级
       tab 记录/讨论/相关圈子、记录流双列瀑布、二级过滤右侧非胶囊、每卡至多一条交集句，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma entity 记录流真实 PostBaseDto
       + intersectionReasons 待 WP-D。'
@@ -162,7 +162,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
     status: partial
@@ -180,7 +180,7 @@ gwt_acceptance:
         - local_contract.object_homepage_network.intersection_unified_experience.entity_homepage_intersection_redesign.contract
         envs: *id001
     notes:
-    - '[migrated_from_recorded] local_contract quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart（头部头像簇
+    - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart（头部头像簇
       +「N 关注」单计数 + 认证标识 + 成立年份，verified/年份缺省优雅降级，2026-06-16 green）'
     - '[migrated_from_recorded] PENDING api_integration：gamma entity homepage fields
       关注计数/认证/年份真实链路待 WP-D。'
@@ -202,7 +202,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/entity/contract/homepage_repository_contract__local_contract_test.dart
@@ -246,7 +246,7 @@ gwt_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart
     status: partial

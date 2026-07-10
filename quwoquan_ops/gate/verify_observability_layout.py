@@ -9,50 +9,62 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.observability import (
-    ENVS,
     LOG_FILE_SUFFIX,
     LOG_KINDS,
     OBSERVABILITY_ROOT,
 )
+from quwoquan_ops.cli.lib.output_paths import ENV_SEGMENTS
 
 ALLOWED_RUN_ENTRIES = frozenset({"manifest.json", "logs", "metrics", "traces", "attachments"})
 ALLOWED_METRICS_FILES = frozenset({"snapshot.json", "prometheus.prom"})
 ALLOWED_TRACE_FILES = frozenset({"links.json"})
 ALLOWED_ATTACHMENT_FILES = frozenset({"stdout.log", "stderr.log"})
 ALLOWED_ATTACHMENT_DIRS = frozenset({"screenshots"})
+ALLOWED_OBSERVABILITY_PARENTS = frozenset({"env", "data"})
 
 
 def layout_issues(root: Path = OBSERVABILITY_ROOT) -> list[str]:
     issues: list[str] = []
-    runs_root = root / "runs"
     if not root.exists():
         return issues
-    root_names = {path.name for path in root.iterdir()}
-    unknown_root = root_names - {"runs"}
-    if unknown_root:
-        issues.append(f"{_rel(root)}: unknown entries {sorted(unknown_root)}")
-    if not runs_root.is_dir():
-        return [f"{_rel(root)}: observability root may only contain runs/"]
-    for entry in sorted(runs_root.iterdir()):
-        if not entry.is_dir():
-            issues.append(f"{_rel(entry)}: runs/ only allows env directories")
-    for env_dir in sorted(path for path in runs_root.iterdir() if path.is_dir()):
-        if env_dir.name not in ENVS:
-            issues.append(f"{_rel(env_dir)}: unknown env segment")
-        for entry in sorted(env_dir.iterdir()):
+    old_root = root / "observability"
+    if old_root.exists():
+        issues.append(f"{_rel(old_root)}: old observability root is forbidden; use env/<env>/observability or data/observability")
+
+    env_root = root / "env"
+    data_root = root / "data"
+    if env_root.exists():
+        for entry in sorted(env_root.iterdir()):
             if not entry.is_dir():
-                issues.append(f"{_rel(entry)}: env segment only allows run directories")
-        for run_dir in sorted(path for path in env_dir.iterdir() if path.is_dir()):
-            names = {path.name for path in run_dir.iterdir()}
-            unknown = names - ALLOWED_RUN_ENTRIES
-            if unknown:
-                issues.append(f"{_rel(run_dir)}: unknown entries {sorted(unknown)}")
-            if "manifest.json" not in names:
-                issues.append(f"{_rel(run_dir)}: missing manifest.json")
-            issues.extend(_logs_issues(run_dir / "logs"))
-            issues.extend(_metrics_issues(run_dir / "metrics"))
-            issues.extend(_traces_issues(run_dir / "traces"))
-            issues.extend(_attachments_issues(run_dir / "attachments"))
+                issues.append(f"{_rel(entry)}: env/ only allows environment directories")
+                continue
+            if entry.name not in ENV_SEGMENTS:
+                issues.append(f"{_rel(entry)}: unknown env segment")
+                continue
+            issues.extend(_observability_runs_issues(entry / "observability"))
+    if data_root.exists():
+        issues.extend(_observability_runs_issues(data_root / "observability"))
+    return issues
+
+
+def _observability_runs_issues(observability_root: Path) -> list[str]:
+    issues: list[str] = []
+    if not observability_root.exists():
+        return issues
+    for entry in sorted(observability_root.iterdir()):
+        if not entry.is_dir():
+            issues.append(f"{_rel(entry)}: observability only allows run directories")
+            continue
+        names = {path.name for path in entry.iterdir()}
+        unknown = names - ALLOWED_RUN_ENTRIES
+        if unknown:
+            issues.append(f"{_rel(entry)}: unknown entries {sorted(unknown)}")
+        if "manifest.json" not in names:
+            issues.append(f"{_rel(entry)}: missing manifest.json")
+        issues.extend(_logs_issues(entry / "logs"))
+        issues.extend(_metrics_issues(entry / "metrics"))
+        issues.extend(_traces_issues(entry / "traces"))
+        issues.extend(_attachments_issues(entry / "attachments"))
     return issues
 
 

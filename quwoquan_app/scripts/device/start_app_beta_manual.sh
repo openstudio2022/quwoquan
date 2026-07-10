@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 APP_DIR="$ROOT_DIR/quwoquan_app"
 ASSISTANT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/assistant-service"
 CHAT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/chat-service"
-LOG_DIR="$ROOT_DIR/.qwq_output/local/beta-local"
+LOG_DIR="$ROOT_DIR/.qwq_output/env/beta/local/beta-local"
 MANIFEST="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json"
 
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
@@ -37,6 +37,7 @@ CHAT_MONGO_URI="${CHAT_MONGO_URI:-mongodb://localhost:27017/?directConnection=tr
 CHAT_MONGO_DATABASE="${CHAT_MONGO_DATABASE:-quwoquan_chat_local}"
 CHAT_REDIS_ADDR="${CHAT_REDIS_ADDR:-localhost:6379}"
 LOCAL_GAMMA_COMPOSE_FILE="$ROOT_DIR/quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
+LOCAL_GAMMA_COMPOSE_PROJECT_NAME="${LOCAL_GAMMA_COMPOSE_PROJECT_NAME:-quwoquan_service}"
 LOCAL_GAMMA_MONGO_PORT="${LOCAL_GAMMA_MONGO_PORT}"
 LOCAL_GAMMA_REDIS_PORT="${LOCAL_GAMMA_REDIS_PORT}"
 GATEWAY_BASE_URL_EXPLICIT=0
@@ -70,7 +71,7 @@ BETA_MANUAL_LOG_DIR="$LOG_DIR"
 INSTANCE_NAMESPACE="${INSTANCE_NAMESPACE:-beta-local}"
 BETA_MANUAL_OWNER_ID="${BETA_MANUAL_STACK_NAME}-$$-$(date +%s)"
 export BETA_MANUAL_OWNER_ID
-source "$ROOT_DIR/quwoquan_ops/lib/beta_manual_lifecycle.sh"
+source "$ROOT_DIR/quwoquan_ops/cli/lib/beta_manual_lifecycle.sh"
 TLS_PROXY_NAME="quwoquan_beta_tls_proxy"
 TLS_PROXY_CADDYFILE="$LOG_DIR/beta-public-plane.Caddyfile"
 TLS_PROXY_DATA_DIR="$LOG_DIR/caddy/data"
@@ -269,7 +270,7 @@ beta_manual_compose_up_chat_backing_services() {
     return 1
   fi
   echo "[app-beta-manual] starting fallback mongodb/redis via local gamma compose"
-  docker compose -f "$LOCAL_GAMMA_COMPOSE_FILE" up -d mongodb mongo-init redis >/dev/null
+  docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" -f "$LOCAL_GAMMA_COMPOSE_FILE" up -d mongodb mongo-init redis >/dev/null
 }
 
 beta_manual_ensure_docker_daemon() {
@@ -639,7 +640,7 @@ echo "[app-beta-manual] model: ${ASSISTANT_BETA_MODEL_REF:-unknown} (${ASSISTANT
 echo "[app-beta-manual] verify mode: $VERIFY_MODE"
 echo "[app-beta-manual] media mode: $MEDIA_PREP_MODE"
 if [[ "$VERIFY_MODE" == "full" ]]; then
-  python3 quwoquan_service/services/chat-service/tests/ops/gate/verify_avatar_user_pool_consistency.py >/dev/null
+  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/chat-service/gate/verify_avatar_user_pool_consistency.py >/dev/null
 else
   echo "[app-beta-manual] fast mode: skip full shared-pool consistency verification"
 fi
@@ -779,7 +780,7 @@ beta_manual_start_process \
   "gateway" \
   "$GATEWAY_LOG" \
   "$ROOT_DIR" \
-  python3 quwoquan_service/services/assistant-service/tests/ops/smoke/dev_assistant_beta_gateway.py \
+  python3 quwoquan_ops/tests/acceptance/user_acceptance/service_ops/assistant-service/smoke/dev_assistant_beta_gateway.py \
     --listen-host 127.0.0.1 \
     --listen-port "$CONTENT_PORT" \
     --assistant-upstream-host 127.0.0.1 \

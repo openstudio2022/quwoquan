@@ -1,14 +1,22 @@
 # Observability output contract
 
 Runtime observability has three durable signal families: logs, metrics, and
-trace links. Local runs write them under `.qwq_output/observability/runs/`;
-online environments should attach the same context through collector labels and
-the run `manifest.json`.
+trace links. Local environment runs write them under
+`.qwq_output/env/<env>/observability/<runId>/`; data workflow runs write them
+under `.qwq_output/data/observability/<runId>/`. Online environments should
+attach the same context through collector labels and the run `manifest.json`.
 
 ## Run layout
 
 ```text
-.qwq_output/observability/runs/<env>/<runId>/
+.qwq_output/env/<env>/observability/<runId>/
+  manifest.json
+  logs/
+  metrics/
+  traces/
+  attachments/
+
+.qwq_output/data/observability/<runId>/
   manifest.json
   logs/
   metrics/
@@ -64,7 +72,9 @@ belong in the trace backend.
 
 ## Artifacts boundary
 
-`.qwq_output/runs/` is not an observability sink. `.qwq_output/runs/<env>/<runId>/`
-may only keep `report.json`, `summary.json`, `summary.md`, and `links.json`.
-Raw stdout/stderr, logs, trace dumps, and ad-hoc statistics belong under
-`.qwq_output/observability/**` or the external observability backend.
+`.qwq_output/env/<env>/runs/`, `.qwq_output/env/repo/runs/`, and
+`.qwq_output/data/runs/` are report/evidence roots, not observability sinks.
+Run report directories may only keep `report.json`, `summary.json`,
+`summary.md`, and `links.json`. Raw stdout/stderr, logs, trace dumps, and
+ad-hoc statistics belong under the matching `observability/<runId>/` directory
+or the external observability backend.

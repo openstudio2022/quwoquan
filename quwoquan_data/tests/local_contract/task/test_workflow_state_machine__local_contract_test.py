@@ -802,3 +802,65 @@ def test_download_plan_stale_source_rules_override_pending_repair(monkeypatch):
     assert result.status == "done"
     assert captured == {"entity_ids": [_EID], "force": True}
     assert "过期 source_plan" in result.message
+
+def _stale_infra_last_agent_run() -> dict:
+    return {
+        "stage": "build_homepage",
+        "jobCount": 1,
+        "startedCount": 0,
+        "finishedCount": 0,
+        "infrastructureFailures": 1,
+        "refs": [],
+        "outcomes": [
+            {
+                "started": False,
+                "status": "error",
+                "error": "Bridge request failed: ConnectError: Connection refused",
+                "retryable": True,
+            }
+        ],
+    }
+
+def test_completion_gate_recovers_stale_infra_snapshot_when_checkpoint_reverified(monkeypatch):
+    """收口 gate 的 lastAgentRun 复核契约（WP5 乐山沙湾/市中区实测根因）。
+
+    时序：build_homepage 的 agent run 因 bridge 基础设施失败留下 refs=[] 失败
+    快照；随后对象在其它 cycle 成功物化（或被 reasoned 放弃），stage 进入
+    completed 集合后不再发起 agent run，快照永远不会被成功 run 覆盖。最终
+    resume 落入 completion gate 时必须用快照所属 stage 的 checkpoint 复核：
+    现在通过 → 标记 recovered 豁免，不得据陈旧快照打 manual_required。
+    """
+    task_id = _make_task()
+    batch_id = "gate_recovers_stale_infra_snapshot"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["lastAgentRun"] = _stale_infra_last_agent_run()
+
+    monkeypatch.setattr(run_mod, "_checkpoint_is_done", lambda _ctx, _stage: (True, []))
+
+    issues = run_mod._workflow_completion_issues(ctx, state)
+
+    assert issues == []
+    recovered = state["lastAgentRun"]
+    assert recovered["recovered"] is True
+    assert "checkpoint re-verified" in recovered["recoveryReason"]
+
+def test_completion_gate_keeps_infra_snapshot_issues_when_checkpoint_still_failing(monkeypatch):
+    """复核不过（成品真实缺失）时，陈旧快照豁免不得放行。"""
+    task_id = _make_task()
+    batch_id = "gate_keeps_real_infra_failure"
+    ctx = _ctx(task_id, batch_id)
+    state = run_mod.load_workflow_state(task_id, batch_id)
+    state["lastAgentRun"] = _stale_infra_last_agent_run()
+
+    monkeypatch.setattr(
+        run_mod,
+        "_checkpoint_is_done",
+        lambda _ctx, _stage: (False, ["实体主页 page.md 缺失"]),
+    )
+
+    issues = run_mod._workflow_completion_issues(ctx, state)
+
+    assert "lastAgentRun.infrastructureFailures=1" in issues
+    assert "lastAgentRun has jobs but no started workers" in issues
+    assert not state["lastAgentRun"].get("recovered")

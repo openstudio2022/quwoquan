@@ -1,10 +1,10 @@
 """仓外输出根隔离门契约（数据输出规范）。
 
 覆盖 verify_output_root_isolation 的五道子门：
-1. repo allowlist：local/data-runtime/release/.qwq_output/.qwq_sandbox 不得被 git 追踪；
+1. repo allowlist：data/local/runtime/release/.qwq_output/.qwq_sandbox 不得被 git 追踪；
 2. 仓内阶段树：quwoquan_data/runtime 不得保留 canonical 或 legacy 运行残留；
 3. 批次轴：canonical 批次 manifest 轴与目录层级一致 + committed task 回指存在；
-4. 摘要索引：.qwq_output/runs/content_runs 批次目录 index-first；
+4. 摘要索引：.qwq_output/data/runs/content_runs 批次目录 index-first；
 5. artifacts 根隔离：data-owned 根文件/旧目录/legacy marker 一律阻断。
 """
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from verify import verify_output_root_isolation as output_gate
 from verify.verify_output_root_isolation import (
     artifacts_index_gate_issues,
     canonical_batch_axis_issues,
@@ -71,6 +72,42 @@ def test_batch_axis_gate_requires_manifest(tmp_path):
     assert len(issues) == 1 and "缺 batch_manifest.json" in issues[0]
 
 
+def test_batch_axis_gate_reports_active_runtime_block_instead_of_missing_manifest(
+    tmp_path,
+    monkeypatch,
+):
+    runtime = tmp_path / "runtime"
+    batch_dir = runtime / "e2e" / "homepage" / "site_primary" / "活跃批次-abc__b_active"
+    protection_dir = batch_dir / "_shared"
+    protection_dir.mkdir(parents=True)
+    (protection_dir / "runtime_protection.json").write_text(
+        json.dumps(
+            {
+                "batchId": "b_active",
+                "taskId": "旅行/地域/测试省/景区/活跃批次",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        output_gate,
+        "_current_process_lines",
+        lambda: [
+            (
+                "12345 python3 quwoquan_data/scripts/cli.py task run-recipe "
+                "content/travel/homepage/test --batch b_active"
+            )
+        ],
+    )
+
+    issues = canonical_batch_axis_issues(runtime)
+
+    assert len(issues) == 1
+    assert "GATE_BLOCK active data runtime" in issues[0]
+    assert "缺 batch_manifest.json" not in issues[0]
+
+
 def test_artifacts_index_gate_requires_index_for_report_dirs(tmp_path):
     artifacts = tmp_path / "artifacts"
     batch_dir = artifacts / "content_runs" / "e2e" / "article" / "b3"
@@ -96,7 +133,7 @@ def test_data_artifacts_root_gate_blocks_data_owned_entries(tmp_path):
 
     issues = data_root_artifact_issues(repo)
     assert len(issues) == 6
-    assert all("data 运行残留不得落 repo .qwq_output/runs/ 根" in issue for issue in issues)
+    assert all("data 运行残留不得落 repo artifacts 根" in issue for issue in issues)
     assert not any("stackctl" in issue or "legal-static-packages" in issue for issue in issues)
 
 

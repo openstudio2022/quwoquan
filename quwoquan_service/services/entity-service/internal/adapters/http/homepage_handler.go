@@ -31,8 +31,24 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("/v1/homepages/search", h.handleSearchHomepages)
 	mux.HandleFunc("/v1/homepages/candidates", h.handleCandidates)
 	mux.HandleFunc("/v1/homepages/candidates/suggest", h.handleSuggestCandidate)
+	mux.HandleFunc("/v1/homepages:reload", h.handleReloadState)
 	mux.HandleFunc(homepagesPrefix, h.handleHomepageRoute)
 	return mux
+}
+
+// handleReloadState 免停服重载：homepage importer 直写运行库后由 ops 触发，
+// 将存储快照合并进内存主档（metadata operation: ReloadHomepageState）。
+func (h *Handler) handleReloadState(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeRuntimeNotFound(w, r)
+		return
+	}
+	result, err := h.service.ReloadHomepageState(r.Context())
+	if err != nil {
+		writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) handleSearchHomepages(w http.ResponseWriter, r *http.Request) {

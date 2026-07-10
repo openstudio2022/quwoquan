@@ -23,7 +23,7 @@ def isolated_roots(tmp_path: Path, monkeypatch):
 
 def test_creator_pool_workflow_dry_run(isolated_roots: Path) -> None:
     batch = "travel_scale10_verify_fixtures"
-    fixture = REPO / "quwoquan_data/tests/fixtures/creator_pool/travel_scale10_verify"
+    fixture = REPO / "quwoquan_data/tests/support/fixtures/creator_pool/travel_scale10_verify"
     cmd = [
         PYTHON,
         str(CLI),

@@ -46,7 +46,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--report",
-        default=".qwq_output/runs/gamma-readiness/report.json",
+        default=".qwq_output/env/gamma/runs/gamma-readiness/report.json",
     )
     parser.add_argument("--wait-seconds", type=int, default=90)
     parser.add_argument("--poll-interval-seconds", type=float, default=5.0)

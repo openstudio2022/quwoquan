@@ -55,6 +55,10 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_output_root_isolation import main as output_root_isolation_main
 
         raise SystemExit(output_root_isolation_main())
+    if cmd == "data-layout":
+        from verify.verify_data_layout import main as data_layout_main
+
+        raise SystemExit(data_layout_main())
     if cmd == "coverage-master-list":
         from verify.verify_coverage_master_list import main as coverage_master_list_main
 
@@ -408,6 +412,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     sub.add_parser("content-supply-production", help="校验生产级内容供给 current 契约与队列/envelope/账本闭环")
     sub.add_parser("works-classification", help="校验作品 vs 随记判定 schema/config/registry 一致性 + 判定 smoke")
     sub.add_parser("output-root-isolation", help="仓外输出根隔离门：repo allowlist/阶段树/批次轴/摘要索引")
+    sub.add_parser("data-layout", help="校验数据工程源码目录归一化与退休路径")
     sub.add_parser("coverage-master-list", help="全国地点主清单门禁：目录归属/schema/类型 scope/行政区叶子/canonicalName 全局唯一")
     pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用与跨作品资产溯源完整性")
     pri.add_argument("--release", required=True, help="Release ID under release/")

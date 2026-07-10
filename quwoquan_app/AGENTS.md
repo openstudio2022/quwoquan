@@ -1,6 +1,6 @@
 # quwoquan_app Codex Guide
 
-在 `quwoquan_app/` 工作时，除仓库根 `AGENTS.md` 外，默认补读以下规则：
+在 `quwoquan_app/` 工作时，除仓库根 `AGENTS.md` 外，默认补读仓库根 `.cursor/rules/` 下的以下规则：
 
 1. `.cursor/rules/02-dart-coding.mdc`
 2. `.cursor/rules/01-arch-constraints.mdc`

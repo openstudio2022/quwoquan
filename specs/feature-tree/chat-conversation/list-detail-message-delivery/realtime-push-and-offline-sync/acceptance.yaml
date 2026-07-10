@@ -46,11 +46,11 @@ gwt_acceptance:
     - mock 追加消息目标在 400ms 内可见，足够支撑 alpha 演示和 widget 自动化测试。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/realtime/mock_realtime_delegate_test.dart
-      - file: quwoquan_app/test/ui/chat/pages/chat_conversation_page_realtime_journey_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/mock_realtime_delegate__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation_page_realtime_journey__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/realtime/mock_realtime_delegate__local_contract_test.dart
-      - file: quwoquan_app/test/user_acceptance/ui/chat/pages/chat_conversation_page_realtime_journey__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation_page_realtime_journey__user_acceptance_test.dart
       - file: quwoquan_service/services/chat-service/tests/api_integration/contract_fixture_seed_contract__api_integration_test.go
     status: implemented
     test_evidence:
@@ -101,7 +101,7 @@ gwt_acceptance:
     - 单个 realtime 事件应同步插入 provider，不引入额外轮询等待。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/realtime/realtime_member_joined_handler_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_member_joined_handler__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_member_joined_handler__local_contract_test.dart
     status: implemented
@@ -145,10 +145,10 @@ gwt_acceptance:
     - 状态切换不引入重复 transport 实例或 leaked reconnect timer。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/realtime/remote_realtime_lifecycle_test.dart
-      - file: quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart
-      - file: quwoquan_app/test/cloud/realtime/realtime_lifecycle_mapping_test.dart
-      - file: quwoquan_app/test/cloud/realtime/realtime_root_startup_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/remote_realtime_lifecycle__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_lifecycle_mapping__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_root_startup__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/realtime/remote_realtime_lifecycle__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart
@@ -196,7 +196,7 @@ gwt_acceptance:
     - 模式切换后不保留旧 timer，避免开发者设置页频繁切换导致异常堆积。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/realtime/realtime_provider_mode_switch_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_provider_mode_switch__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/cloud/realtime/realtime_provider_mode_switch__local_contract_test.dart
     status: implemented

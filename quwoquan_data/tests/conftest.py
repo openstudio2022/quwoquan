@@ -25,9 +25,9 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
 REPO_ROOT = DATA_ROOT.parent
 _REAL_OUTPUT_ROOT = REPO_ROOT / ".qwq_output"
 _REAL_DATA_OUTPUT_ROOTS = (
-    _REAL_OUTPUT_ROOT / "local" / "data-runtime",
-    _REAL_OUTPUT_ROOT / "runs" / "data",
-    _REAL_OUTPUT_ROOT / "release" / "data",
+    _REAL_OUTPUT_ROOT / "data" / "local" / "runtime",
+    _REAL_OUTPUT_ROOT / "data" / "runs",
+    _REAL_OUTPUT_ROOT / "data" / "release",
 )
 
 if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
@@ -49,9 +49,13 @@ if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     # paths 常量也只会冻结在这里，绝不落真实根。
     _ISOLATED_ROOT = tempfile.mkdtemp(prefix="qwq_pytest_isolated_")
     os.environ["QWQ_DATA_ROOT"] = _ISOLATED_ROOT
+    os.environ["QWQ_RUNTIME_ROOT"] = str(Path(_ISOLATED_ROOT) / "data" / "local" / "runtime")
     os.environ["QWQ_PUBLISH_ROOT"] = str(Path(_ISOLATED_ROOT) / "publish")
+    os.environ["QWQ_RELEASE_ROOT"] = str(Path(_ISOLATED_ROOT) / "data" / "release")
+    os.environ["QWQ_OUTPUT_ARTIFACTS_ROOT"] = str(Path(_ISOLATED_ROOT) / "data" / "runs")
+    os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(Path(_ISOLATED_ROOT) / "control_plane" / "tasks")
     # startup probe cache 是运行期降本缓存；pytest 默认关闭，避免环境预检类测试
-    # 误把 cache 写入真实 .qwq_output/local/data-runtime/env。
+    # 误把 cache 写入真实 .qwq_output/data/local/runtime/env。
     os.environ.setdefault("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "0")
 
 

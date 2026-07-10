@@ -53,6 +53,8 @@ DEFAULT_TARGET_BY_ENV = {
 LOCAL_ROOT_CA_BY_TARGET = {
     "alpha-local": ROOT
     / ".qwq_output"
+    / "env"
+    / "alpha"
     / "local"
     / "alpha-local"
     / "tls"
@@ -60,6 +62,8 @@ LOCAL_ROOT_CA_BY_TARGET = {
     / "root.crt",
     "beta-local": ROOT
     / ".qwq_output"
+    / "env"
+    / "beta"
     / "local"
     / "beta-local"
     / "caddy"
@@ -71,6 +75,8 @@ LOCAL_ROOT_CA_BY_TARGET = {
     / "root.crt",
     "gamma-local": ROOT
     / ".qwq_output"
+    / "env"
+    / "gamma"
     / "local"
     / "gamma-local"
     / "caddy"
@@ -298,7 +304,7 @@ def _resolve_local_root_ca(target_name: str, explicit_cacert: str) -> Path:
     if direct.is_file():
         return direct
     env_prefix = target_name.split("-", maxsplit=1)[0]
-    candidates = sorted((ROOT / ".qwq_output" / "local").glob(f"*{env_prefix}*/**/root.crt"))
+    candidates = sorted((ROOT / ".qwq_output" / "env" / env_prefix / "local").glob("**/root.crt"))
     return candidates[0] if candidates else direct
 
 

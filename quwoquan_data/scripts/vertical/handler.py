@@ -78,6 +78,65 @@ def handle_master_list_probe(args: argparse.Namespace) -> None:
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 
+def handle_source_screen(args: argparse.Namespace) -> None:
+    from vertical.source_screen import screen_master_list_sources
+
+    provinces = _provinces_arg(args)
+    if not provinces:
+        print("[vertical source-screen] ERROR: 需要 --provinces 省份列表（逗号分隔）")
+        raise SystemExit(2)
+    report = screen_master_list_sources(
+        provinces=provinces,
+        limit=int(getattr(args, "limit", 0) or 0),
+        sleep_seconds=float(getattr(args, "sleep_seconds", 0.5) or 0.0),
+        max_age_days=int(getattr(args, "max_age_days", 30) or 30),
+        only_ready=bool(getattr(args, "only_ready", False)),
+    )
+    summary = {k: v for k, v in report.items() if k != "expansionGaps"}
+    summary["expansionGapCount"] = len(report.get("expansionGaps") or [])
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+def handle_coverage_discover(args: argparse.Namespace) -> None:
+    from vertical.coverage_expand import discover_candidates
+
+    provinces = _provinces_arg(args)
+    if not provinces:
+        print("[vertical coverage-discover] ERROR: 需要 --provinces 省份列表（逗号分隔）")
+        raise SystemExit(2)
+    sources = [s.strip() for s in str(args.sources or "wiki_category,osm_poi").split(",") if s.strip()]
+    cities = [c.strip() for c in str(getattr(args, "cities", "") or "").split(",") if c.strip()]
+    report = discover_candidates(
+        provinces,
+        sources=sources,
+        cities=cities or None,
+        limit=int(getattr(args, "limit", 0) or 0),
+        sleep_seconds=float(getattr(args, "sleep_seconds", 0.5) or 0.0),
+    )
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+
+
+def handle_coverage_merge(args: argparse.Namespace) -> None:
+    from pathlib import Path
+
+    from vertical.coverage_expand import merge_candidates
+
+    provinces = _provinces_arg(args)
+    if not provinces:
+        print("[vertical coverage-merge] ERROR: 需要 --provinces 省份列表（逗号分隔）")
+        raise SystemExit(2)
+    files = [Path(p.strip()) for p in str(args.candidates or "").split(",") if p.strip()]
+    missing = [str(p) for p in files if not p.is_file()]
+    if not files or missing:
+        print(f"[vertical coverage-merge] ERROR: 候选文件缺失: {missing or '未提供 --candidates'}")
+        raise SystemExit(2)
+    report = merge_candidates(provinces, candidate_files=files, apply=bool(args.apply))
+    summary = {k: v for k, v in report.items() if k not in ("appendedItems", "gapItems")}
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if args.apply and report.get("writtenFiles"):
+        print("[vertical coverage-merge] 已写回，请跑: qwq-data verify coverage-master-list")
+
+
 def handle_governance(args: argparse.Namespace) -> None:
     issues = verify_vertical_script_governance()
     if issues:
@@ -160,6 +219,37 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     pmp.add_argument("--sleep-seconds", dest="sleep_seconds", type=float, default=0.5, help="请求间节流秒数")
     pmp.add_argument("--recheck", action="store_true", help="重探已 ready/no_primary_source 的叶子")
     pmp.set_defaults(handler=handle_master_list_probe)
+
+    pss = sub.add_parser(
+        "source-screen",
+        help="排产前深核验：升级探测口径（非消歧义+实质正文），回写三态+核验时间戳，出 ready 折扣率",
+    )
+    pss.add_argument("--provinces", required=True, help="省份列表（逗号分隔）")
+    pss.add_argument("--limit", type=int, default=0, help="本次最多核验叶子数（0=不限，断点续跑）")
+    pss.add_argument("--sleep-seconds", dest="sleep_seconds", type=float, default=0.5, help="请求间节流秒数")
+    pss.add_argument("--max-age-days", dest="max_age_days", type=int, default=30, help="核验新鲜期（天），超期重验")
+    pss.add_argument("--only-ready", dest="only_ready", action="store_true", help="只核验当前 ready 存量（折扣率实测）")
+    pss.set_defaults(handler=handle_source_screen)
+
+    pcd = sub.add_parser(
+        "coverage-discover",
+        help="主清单扩容·发现：从公开来源（wiki 分类树/OSM POI）发现候选，落 NDJSON 不写回",
+    )
+    pcd.add_argument("--provinces", required=True, help="省份列表（逗号分隔）")
+    pcd.add_argument("--sources", default="wiki_category,osm_poi", help="来源列表（wiki_category,osm_poi,...）")
+    pcd.add_argument("--cities", help="市州过滤（逗号分隔；仅 osm_poi 消费，分批跑用）")
+    pcd.add_argument("--limit", type=int, default=0, help="每省每源候选上限（0=不限）")
+    pcd.add_argument("--sleep-seconds", dest="sleep_seconds", type=float, default=0.5, help="请求间节流秒数")
+    pcd.set_defaults(handler=handle_coverage_discover)
+
+    pcm = sub.add_parser(
+        "coverage-merge",
+        help="主清单扩容·合并：去重+类型/地理打标+写回市州 YAML（缺省 dry-run，--apply 写回）",
+    )
+    pcm.add_argument("--provinces", required=True, help="省份列表（逗号分隔）")
+    pcm.add_argument("--candidates", required=True, help="候选 NDJSON 文件列表（逗号分隔）")
+    pcm.add_argument("--apply", action="store_true", help="写回市州 YAML（缺省只出报告）")
+    pcm.set_defaults(handler=handle_coverage_merge)
 
     pg = sub.add_parser("governance", help="校验垂类/任务脚本未在公共 scripts 平铺")
     pg.set_defaults(handler=handle_governance)

@@ -17,8 +17,8 @@ except ImportError:  # pragma: no cover
 ROOT = Path(__file__).resolve().parents[3]
 ACCESS_MANIFEST = ROOT / "quwoquan_ops/environments/prod_plane_access_isolation.yaml"
 TOPOLOGY_MANIFEST = ROOT / "quwoquan_ops/environments/environment_topology_manifest.yaml"
-STATE_GAMMA_CONFIG_ROOT = ROOT / ".qwq_output" / "local" / "gamma-local" / "config-root"
-DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output" / "local" / "prod-plane-stack"
+STATE_GAMMA_CONFIG_ROOT = ROOT / ".qwq_output" / "env" / "gamma" / "local" / "gamma-local" / "config-root"
+DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output" / "env" / "prod" / "local" / "prod-plane-stack"
 
 CONFIG_PACKAGE_ALIAS = {
     "recommendation-service": "rec-model-service",
@@ -85,13 +85,13 @@ def _rewrite_volume_with_layout(
     if raw == "local-gamma-model-cache:/app/cache":
         return f"{_compose_bind_source(model_cache_root)}:/app/cache"
     return (
-        raw.replace("../.qwq_output/local/gamma-local/config-root", _compose_bind_source(config_root))
-        .replace("../.qwq_output/local/gamma-local/media", _compose_bind_source(media_root))
+        raw.replace("../.qwq_output/env/gamma/local/gamma-local/config-root", _compose_bind_source(config_root))
+        .replace("../.qwq_output/env/gamma/local/gamma-local/media", _compose_bind_source(media_root))
         .replace(
-            "${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-../.qwq_output/release/legal-static/gamma/current/public}",
+            "${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-../.qwq_output/env/gamma/release/legal-static/current/public}",
             _compose_bind_source(legal_root),
         )
-        .replace("../.qwq_output/local/gamma-local/Caddyfile", _compose_bind_source(caddyfile_path))
+        .replace("../.qwq_output/env/gamma/local/gamma-local/Caddyfile", _compose_bind_source(caddyfile_path))
     )
 
 
@@ -277,7 +277,7 @@ def _write_config_tree(
     config_root = output_root / "runtime" / "config-root"
     for service in config_services:
         package_service = CONFIG_PACKAGE_ALIAS.get(service, service)
-        package_dir = ROOT / ".qwq_output" / "release" / "service" / package_service / "prod"
+        package_dir = ROOT / ".qwq_output" / "env" / "prod" / "release" / "service" / package_service
         if not package_dir.is_dir():
             raise SystemExit(f"FAIL: missing prod service package for {service}: {package_dir}")
         default_src = package_dir / "default_config.yaml"
@@ -621,7 +621,7 @@ def main() -> int:
     output_root.mkdir(parents=True, exist_ok=True)
     if not Path(media_root).is_absolute():
         (output_root / media_root).mkdir(parents=True, exist_ok=True)
-    legal_package_public = ROOT / ".qwq_output" / "release" / "legal-static" / "prod" / "current" / "public"
+    legal_package_public = ROOT / ".qwq_output" / "env" / "prod" / "release" / "legal-static" / "current" / "public"
     legal_output_root = output_root / legal_root
     if legal_output_root.exists():
         shutil.rmtree(legal_output_root)

@@ -1,6 +1,6 @@
 # quwoquan_service Codex Guide
 
-在 `quwoquan_service/` 工作时，除仓库根 `AGENTS.md` 外，先阅读：
+在 `quwoquan_service/` 工作时，除仓库根 `AGENTS.md` 外，先阅读仓库根 `.cursor/rules/` 与服务契约入口：
 
 1. `quwoquan_service/contracts/metadata/README.md`
 2. `.cursor/rules/01-arch-constraints.mdc`

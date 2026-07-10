@@ -109,7 +109,7 @@ def test_cursor_startup_probe_cache_path_follows_isolated_data_root(monkeypatch,
     monkeypatch.setenv("QWQ_DATA_ROOT", str(isolated))
 
     assert pr._cursor_startup_probe_cache_path() == (
-        isolated / "local" / "data-runtime" / "env" / "cursor_startup_probe_cache.json"
+        isolated / "data" / "local" / "runtime" / "env" / "cursor_startup_probe_cache.json"
     )
 
 
@@ -121,7 +121,7 @@ def test_cursor_startup_probe_cache_path_prefers_explicit_output_root(monkeypatc
     monkeypatch.setenv("QWQ_OUTPUT_ROOT", str(output_root))
 
     assert pr._cursor_startup_probe_cache_path() == (
-        output_root / "local" / "data-runtime" / "env" / "cursor_startup_probe_cache.json"
+        output_root / "data" / "local" / "runtime" / "env" / "cursor_startup_probe_cache.json"
     )
 
 

@@ -4,7 +4,7 @@ layer: app_side
 
 description: |
   端侧独立测试场景（不依赖云端）。
-  执行：flutter test test/cloud/user/
+  执行：flutter test test/local_contract/cloud/user/
 
 scenarios:
   - name: user_profile_dto_parse

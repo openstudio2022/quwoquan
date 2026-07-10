@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
-STATE_ROOT="${APP_INSTANCE_STATE_ROOT:-$ROOT_DIR/.qwq_output/local/app-instances}"
+STATE_ROOT="${APP_INSTANCE_STATE_ROOT:-$ROOT_DIR/.qwq_output/env/repo/local/app-instances}"
 
 ENV_NAME=""
 JSON_OUTPUT=0

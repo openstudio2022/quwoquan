@@ -35,16 +35,16 @@ gwt_acceptance:
     - 历史账号摘要只作为展示线索，真实登录态必须来自服务端 token 刷新。
     - redirect/AuthContinuation 目标态与登录关闭安全态均被测试覆盖。
     contract_refs:
-    - quwoquan_app/test/ui/user/login_page_widget_test.dart
-    - quwoquan_app/test/core/auth/auth_session_store_test.dart
-    - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+    - quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
+    - quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
     performance_points:
     - 历史账号二次登录过程中页面必须保持可恢复加载态，不出现本地假登录闪回。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - file: quwoquan_app/test/core/auth/auth_session_store_test.dart
-      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/auth_session_store__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
       recorded: []
     status: pending_evidence
     test_evidence:
@@ -88,14 +88,14 @@ gwt_acceptance:
     - App 只消费服务端返回的登录结果并写入 remembered summary。
     contract_refs:
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    - quwoquan_service/services/user-service/tests/auth_contract_test.go
-    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
+    - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
     performance_points:
     - 本机号码 hint 与登录链路必须有超时降级，不阻塞其它登录方式。
     tests:
       planned:
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       recorded: []
     status: pending_evidence
     test_evidence:
@@ -134,13 +134,13 @@ gwt_acceptance:
     - returningAccount 与 carrierPhone 两状态共享同一 LoginFrame 信息架构。
     - 移动、平板与 Web 宽屏下关键区域不重叠、不拉伸、不漂移。
     contract_refs:
-    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
     - quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart
     performance_points:
     - 状态切换不得触发布局大跳动，首屏登录框即时可见。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       recorded: []
     status: partial
     test_evidence:
@@ -176,15 +176,15 @@ gwt_acceptance:
     - 任一失败状态都不会绕过结构化错误语义或触发登录回环。
     contract_refs:
     - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
-    - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
-    - quwoquan_service/services/user-service/tests/auth_contract_test.go
+    - quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart
+    - quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
     performance_points:
     - provider 不可用或超时降级目标 <= 1.2s。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
-      - file: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
+      - file: quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart
       recorded: []
     status: pending_evidence
     test_evidence:
@@ -226,14 +226,14 @@ gwt_acceptance:
     - 无历史摘要且运营商不可用时，用户在同一 LoginFrame 内可继续用手机号验证码登录。
     - 关闭、其它登录方式和手机号输入错误态均不触发二次登录弹窗。
     contract_refs:
-    - quwoquan_app/test/ui/user/login_page_widget_test.dart
-    - quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+    - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+    - quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart
     performance_points:
     - 运营商不可用时应快速落到手机号输入态，不显示长时间空白加载。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - file: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -264,13 +264,13 @@ gwt_acceptance:
     - 手机号验证码 12 状态在同一布局骨架内完成，不发生控件错位。
     - 验证码输入、粘贴、退格与错误恢复均有 widget 或 golden 证据。
     contract_refs:
-    - quwoquan_app/test/ui/user/login_page_widget_test.dart
+    - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
     - quwoquan_app/test/ui/user/login_page_responsive_golden_test.dart
     performance_points:
     - 验证码状态切换不得重建整页导致输入焦点丢失。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:
@@ -304,15 +304,15 @@ gwt_acceptance:
     - 修改手机号会清空验证码与错误，关闭和成功目标态不回环。
     contract_refs:
     - quwoquan_service/contracts/metadata/user/user_profile/errors.yaml
-    - quwoquan_app/test/ui/user/login_page_widget_test.dart
-    - quwoquan_service/services/user-service/tests/auth_contract_test.go
+    - quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+    - quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
     performance_points:
     - 错误态恢复必须就近完成，避免弹窗阻断和重复请求。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - file: quwoquan_app/test/core/auth/auth_gate_matrix_contract_test.dart
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/core/auth/auth_gate_matrix_contract__local_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:
@@ -350,15 +350,15 @@ gwt_acceptance:
     - 创建与恢复账号的服务端副作用可由真实存储 contract 测试证明。
     contract_refs:
     - quwoquan_service/contracts/metadata/user/user_profile/service.yaml
-    - quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-    - quwoquan_service/services/user-service/tests/auth_contract_test.go
+    - quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+    - quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
     performance_points:
     - OTP 登录提交时必须保持 loading、防重复提交和结构化失败恢复。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-      - file: quwoquan_app/test/ui/user/login_page_widget_test.dart
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_app/test/local_contract/ui/user/login_page_widget__local_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:
@@ -395,8 +395,8 @@ contract_acceptance:
     tests:
       planned:
       - command: make verify-app-auth-policy
-      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded: []
     status: pending_evidence
     test_evidence:
@@ -426,8 +426,8 @@ contract_acceptance:
     - otp mismatch 保留验证码，otp expired 进入重新获取。
     tests:
       planned:
-      - file: quwoquan_app/test/cloud/user/contract/auth_repository_contract_test.dart
-      - file: quwoquan_service/services/user-service/tests/auth_contract_test.go
+      - file: quwoquan_app/test/local_contract/cloud/user/contract/auth_repository_contract__local_contract_test.dart
+      - file: quwoquan_service/services/user-service/tests/api_integration/auth_contract__api_integration_test.go
       recorded: []
     status: pending
     test_evidence:

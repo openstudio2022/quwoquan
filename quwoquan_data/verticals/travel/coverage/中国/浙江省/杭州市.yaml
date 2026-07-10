@@ -19,6 +19,8 @@ districts:
     - 河坊街
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:11:47Z'
+    sourceScreenEvidence: zh.wikipedia.org:河坊街 extract=205ch
   - name: 吴山
     canonicalName: 杭州吴山
     entityType: 地点/自然景观
@@ -77,6 +79,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
     selectionPriority: 7
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:12:24Z'
+    sourceScreenEvidence: zh.wikipedia.org:杭州凤凰寺 extract=506ch
   - name: 南宋御街
     canonicalName: 南宋御街
     entityType: 地点/打卡地
@@ -95,6 +99,334 @@ districts:
     - 皋亭山景区
     selectionPriority: 9
     sourceReadiness: ready
+  - name: 丁家花园
+    canonicalName: 丁家花园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 丁鹤年墓亭
+    canonicalName: 丁鹤年墓亭
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 万松书院
+    canonicalName: 万松书院
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 三堡船闸
+    canonicalName: 三堡船闸
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 严官巷御街遗址
+    canonicalName: 严官巷御街遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 中国丝绸博物馆
+    canonicalName: 中国丝绸博物馆
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 中国共产党杭州历史馆
+    canonicalName: 中国共产党杭州历史馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 中国杭帮菜博物馆
+    canonicalName: 中国杭帮菜博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 中国财税博物馆
+    canonicalName: 中国财税博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 于子三墓
+    canonicalName: 于子三墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 于谦故居
+    canonicalName: 于谦故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 凤山门
+    canonicalName: 凤山门
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 华家池
+    canonicalName: 华家池
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 南宋太庙遗址
+    canonicalName: 南宋太庙遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 南宋宫城
+    canonicalName: 南宋宫城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 24
+  - name: 吴汉月墓
+    canonicalName: 吴汉月墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 25
+  - name: 大韩民国临时政府杭州旧址纪念馆
+    canonicalName: 大韩民国临时政府杭州旧址纪念馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 26
+  - name: 天龙寺造像
+    canonicalName: 天龙寺造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 27
+  - name: 宝成寺麻曷葛剌造像
+    canonicalName: 宝成寺麻曷葛剌造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 28
+  - name: 德寿宫遗址
+    canonicalName: 德寿宫遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 29
+  - name: 恭圣仁烈皇后宅遗址
+    canonicalName: 恭圣仁烈皇后宅遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 30
+  - name: 杭州基督教青年会旧址
+    canonicalName: 杭州基督教青年会旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 31
+  - name: 杭州市城市规划展览馆
+    canonicalName: 杭州市城市规划展览馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 32
+  - name: 杭州碑林
+    canonicalName: 杭州碑林
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 33
+  - name: 杭州笕桥抗战纪念馆
+    canonicalName: 杭州笕桥抗战纪念馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 34
+  - name: 梵天寺经幢
+    canonicalName: 梵天寺经幢
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 35
+  - name: 浙江体育会摩崖题记
+    canonicalName: 浙江体育会摩崖题记
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 36
+  - name: 浙江实业银行杭州分行旧址
+    canonicalName: 浙江实业银行杭州分行旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 37
+  - name: 浙江省電話局舊址
+    canonicalName: 浙江省電話局舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 38
+  - name: 清河坊
+    canonicalName: 清河坊
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 39
+  - name: 清泰第二旅馆旧址
+    canonicalName: 清泰第二旅馆旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 40
+  - name: 潘天寿故居 (杭州)
+    canonicalName: 潘天寿故居 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 41
+  - name: 澄庐
+    canonicalName: 澄庐
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 42
+  - name: 白塔公园
+    canonicalName: 白塔公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 43
+  - name: 胡慶餘堂
+    canonicalName: 胡慶餘堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 44
+  - name: 西湖南山造像
+    canonicalName: 西湖南山造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 45
+  - name: 通玄观造像
+    canonicalName: 通玄观造像
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 46
+  - name: 钱塘第一井
+    canonicalName: 钱塘第一井
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 47
+  - name: 钱学森故居
+    canonicalName: 钱学森故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 48
+  - name: 龙山闸
+    canonicalName: 龙山闸
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 49
+  - name: 龚自珍纪念馆
+    canonicalName: 龚自珍纪念馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/上城区
+    sourceReadiness: pending
+    selectionPriority: 50
 - district: 临安区
   leaves:
   - name: 天目山
@@ -108,6 +440,8 @@ districts:
     - 西天目山
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:12:41Z'
+    sourceScreenEvidence: zh.wikipedia.org:天目山 extract=223ch
   - name: 大明山
     canonicalName: 临安大明山
     entityType: 地点/自然景观
@@ -162,6 +496,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临安区
     selectionPriority: 7
     sourceReadiness: pending
+  - name: 大明山 (浙江省)
+    canonicalName: 大明山 (浙江省)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临安区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 昱岭关
+    canonicalName: 昱岭关
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临安区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 青山湖 (浙江省)
+    canonicalName: 青山湖 (浙江省)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临安区
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 临平区
   leaves:
   - name: 塘栖古镇
@@ -184,6 +542,78 @@ districts:
     - 超山风景区
     selectionPriority: 2
     sourceReadiness: ready
+  - name: 中国江南水乡文化博物馆
+    canonicalName: 中国江南水乡文化博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 临平山
+    canonicalName: 临平山
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 临平湖
+    canonicalName: 临平湖
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/水体
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 乔司千人坑
+    canonicalName: 乔司千人坑
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 塘栖乾隆御碑与水利通判厅遗址
+    canonicalName: 塘栖乾隆御碑与水利通判厅遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 广济桥 (杭州市)
+    canonicalName: 广济桥 (杭州市)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 玉架山考古博物馆
+    canonicalName: 玉架山考古博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 玉架山遗址
+    canonicalName: 玉架山遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 长福桥 (杭州)
+    canonicalName: 长福桥 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/临平区
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 余杭区
   leaves:
   - name: 良渚古城遗址
@@ -197,6 +627,8 @@ districts:
     - 良渚古城遗址公园
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:13:21Z'
+    sourceScreenEvidence: zh.wikipedia.org:良渚古城遗址 extract=316ch
   - name: 良渚博物院
     canonicalName: 良渚博物院
     entityType: 地点/博物馆
@@ -215,6 +647,8 @@ districts:
     - 径山万寿禅寺
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:13:26Z'
+    sourceScreenEvidence: zh.wikipedia.org:径山寺 extract=204ch
   - name: 山沟沟
     canonicalName: 杭州山沟沟
     entityType: 地点/自然景观
@@ -225,6 +659,38 @@ districts:
     - 山沟沟景区
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 东明寺
+    canonicalName: 东明寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/余杭区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 安乐塔
+    canonicalName: 安乐塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/余杭区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 徑山
+    canonicalName: 徑山
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/余杭区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 舒公塔
+    canonicalName: 舒公塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/余杭区
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 富阳区
   leaves:
   - name: 龙门古镇
@@ -243,6 +709,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/富阳区
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:13:27Z'
+    sourceScreenEvidence: zh.wikipedia.org:杭州野生动物世界 extract=219ch
   - name: 黄公望隐居地
     canonicalName: 黄公望隐居地
     entityType: 地点/遗址
@@ -261,6 +729,40 @@ districts:
     - 鹳山风景区
     selectionPriority: 4
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:13:32Z'
+    sourceScreenEvidence: zh.wikipedia.org:鹳山 extract=210ch
+  - name: 两浙公所
+    canonicalName: 两浙公所
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/富阳区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 双烈园
+    canonicalName: 双烈园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/富阳区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 恩波桥
+    canonicalName: 恩波桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/富阳区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 龙门镇 (杭州市)
+    canonicalName: 龙门镇 (杭州市)
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/富阳区
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 建德市
   leaves:
   - name: 大慈岩
@@ -300,6 +802,54 @@ districts:
     - 严州古城
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 上吴方村
+    canonicalName: 上吴方村
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/建德市
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 严州城墙
+    canonicalName: 严州城墙
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/建德市
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 大慈岩镇
+    canonicalName: 大慈岩镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/建德市
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 建德市博物馆
+    canonicalName: 建德市博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/建德市
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 李村 (建德市)
+    canonicalName: 李村 (建德市)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/建德市
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 白沙大桥 (浙江省)
+    canonicalName: 白沙大桥 (浙江省)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/建德市
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 拱墅区
   leaves:
   - name: 京杭大运河杭州段
@@ -321,6 +871,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:13:40Z'
+    sourceScreenEvidence: zh.wikipedia.org:拱宸桥 extract=230ch
   - name: 桥西历史街区
     canonicalName: 杭州桥西历史街区
     entityType: 地点/打卡地
@@ -345,6 +897,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
     selectionPriority: 5
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:13:50Z'
+    sourceScreenEvidence: zh.wikipedia.org:杭州香积寺 extract=452ch
   - name: 富义仓
     canonicalName: 富义仓
     entityType: 地点/遗址
@@ -353,6 +907,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
     selectionPriority: 6
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:13:51Z'
+    sourceScreenEvidence: zh.wikipedia.org:富义仓 extract=336ch
   - name: 半山国家森林公园
     canonicalName: 杭州半山国家森林公园
     entityType: 地点/自然景观
@@ -362,6 +918,94 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
     selectionPriority: 7
     sourceReadiness: ready
+  - name: 司徒雷登故居
+    canonicalName: 司徒雷登故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 拱墅运河体育公园
+    canonicalName: 拱墅运河体育公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 杭州圣母无原罪主教座堂
+    canonicalName: 杭州圣母无原罪主教座堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 杭州工艺美术博物馆
+    canonicalName: 杭州工艺美术博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 浙江展览馆
+    canonicalName: 浙江展览馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 浙江省高等法院及杭县地方法院旧址
+    canonicalName: 浙江省高等法院及杭县地方法院旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 西湖文化广场
+    canonicalName: 西湖文化广场
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 14
+  - name: 西湖时代广场
+    canonicalName: 西湖时代广场
+    entityType: 地点/打卡地
+    typeTagRefs:
+    - Entity/地点/打卡地
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 香积寺 (杭州)
+    canonicalName: 香积寺 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 马寅初故居 (杭州)
+    canonicalName: 马寅初故居 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 高家花园
+    canonicalName: 高家花园
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/拱墅区
+    sourceReadiness: pending
+    selectionPriority: 18
 - district: 桐庐县
   leaves:
   - name: 瑶琳仙境
@@ -391,6 +1035,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:14:06Z'
+    sourceScreenEvidence: zh.wikipedia.org:严子陵钓台 extract=221ch
   - name: 大奇山国家森林公园
     canonicalName: 大奇山国家森林公园
     entityType: 地点/自然景观
@@ -409,6 +1055,78 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 保庆堂
+    canonicalName: 保庆堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 引坑钟氏大屋
+    canonicalName: 引坑钟氏大屋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 方家洲遗址
+    canonicalName: 方家洲遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 深澳建筑群
+    canonicalName: 深澳建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 深澳村
+    canonicalName: 深澳村
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 申屠氏宗祠
+    canonicalName: 申屠氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 石舍古建筑群
+    canonicalName: 石舍古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    sourceReadiness: pending
+    selectionPriority: 12
+  - name: 翙岗古建筑群
+    canonicalName: 翙岗古建筑群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    sourceReadiness: pending
+    selectionPriority: 13
+  - name: 荻浦咸和堂
+    canonicalName: 荻浦咸和堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/桐庐县
+    sourceReadiness: pending
+    selectionPriority: 14
 - district: 淳安县
   leaves:
   - name: 千岛湖
@@ -422,6 +1140,8 @@ districts:
     - 千岛湖风景区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:14:07Z'
+    sourceScreenEvidence: zh.wikipedia.org:千岛湖 extract=264ch
   - name: 文渊狮城
     canonicalName: 文渊狮城
     entityType: 地点/打卡地
@@ -430,6 +1150,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/淳安县
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 芹川王氏宗祠
+    canonicalName: 芹川王氏宗祠
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/淳安县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 茶山会议旧址
+    canonicalName: 茶山会议旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/淳安县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 遂安县城
+    canonicalName: 遂安县城
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/淳安县
+    sourceReadiness: pending
+    selectionPriority: 5
 - district: 滨江区
   leaves:
   - name: 西兴古镇
@@ -450,6 +1194,16 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/滨江区
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:14:16Z'
+    sourceScreenEvidence: zh.wikipedia.org:中国动漫博物馆 extract=271ch
+  - name: 西兴过塘行码头
+    canonicalName: 西兴过塘行码头
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/世界遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/滨江区
+    sourceReadiness: pending
+    selectionPriority: 3
 - district: 萧山区
   leaves:
   - name: 湘湖
@@ -487,6 +1241,62 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/萧山区
     selectionPriority: 4
     sourceReadiness: ready
+  - name: 二桥书屋
+    canonicalName: 二桥书屋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/萧山区
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 务本堂
+    canonicalName: 务本堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/萧山区
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 杭州市萧山区博物馆
+    canonicalName: 杭州市萧山区博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/萧山区
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 杭州长乔极地海洋公园
+    canonicalName: 杭州长乔极地海洋公园
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/萧山区
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 欢潭老洋房
+    canonicalName: 欢潭老洋房
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/萧山区
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 蕭山中學舊址紀念館
+    canonicalName: 蕭山中學舊址紀念館
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/萧山区
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 钱江世纪公园
+    canonicalName: 钱江世纪公园
+    entityType: 地点/公园
+    typeTagRefs:
+    - Entity/地点/公园
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/萧山区
+    sourceReadiness: pending
+    selectionPriority: 11
 - district: 西湖区
   leaves:
   - name: 西湖
@@ -501,6 +1311,8 @@ districts:
     - 西湖风景名胜区
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:14:39Z'
+    sourceScreenEvidence: zh.wikipedia.org:杭州西湖 extract=512ch
   - name: 灵隐寺
     canonicalName: 灵隐寺
     entityType: 地点/宗教场所
@@ -545,6 +1357,8 @@ districts:
     - 飞来峰造像
     selectionPriority: 5
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T12:15:24Z'
+    sourceScreenEvidence: zh.wikipedia.org:飞来峰造像 extract=251ch
   - name: 六和塔
     canonicalName: 六和塔
     entityType: 地点/遗址
@@ -623,6 +1437,238 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
     selectionPriority: 14
     sourceReadiness: ready
+  - name: 中国国际设计博物馆
+    canonicalName: 中国国际设计博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 15
+  - name: 中山公园 (杭州)
+    canonicalName: 中山公园 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 16
+  - name: 于谦墓
+    canonicalName: 于谦墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 17
+  - name: 保俶塔
+    canonicalName: 保俶塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 18
+  - name: 俞樾墓
+    canonicalName: 俞樾墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 19
+  - name: 北高峰
+    canonicalName: 北高峰
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 20
+  - name: 南屏山
+    canonicalName: 南屏山
+    entityType: 地点/自然景观
+    typeTagRefs:
+    - Entity/地点/自然景观/山岳
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 21
+  - name: 卫匡国墓
+    canonicalName: 卫匡国墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 22
+  - name: 周恩来农村工作联系点旧址
+    canonicalName: 周恩来农村工作联系点旧址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 23
+  - name: 国民革命军第二十一师北伐阵亡将士墓
+    canonicalName: 国民革命军第二十一师北伐阵亡将士墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 24
+  - name: 国民革命军陆军第八十八师淞沪抗日阵亡将士纪念坊
+    canonicalName: 国民革命军陆军第八十八师淞沪抗日阵亡将士纪念坊
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 25
+  - name: 张苍水墓
+    canonicalName: 张苍水墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 26
+  - name: 弥陀寺 (杭州)
+    canonicalName: 弥陀寺 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 27
+  - name: 放鹤亭 (杭州)
+    canonicalName: 放鹤亭 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 28
+  - name: 新新饭店
+    canonicalName: 新新饭店
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 29
+  - name: 昭庆寺
+    canonicalName: 昭庆寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 30
+  - name: 杨公堤
+    canonicalName: 杨公堤
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 31
+  - name: 杭州辛亥革命烈士墓群
+    canonicalName: 杭州辛亥革命烈士墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 32
+  - name: 林风眠故居 (杭州)
+    canonicalName: 林风眠故居 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 33
+  - name: 湖心亭 (杭州)
+    canonicalName: 湖心亭 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 34
+  - name: 秋瑾墓
+    canonicalName: 秋瑾墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 35
+  - name: 章太炎墓
+    canonicalName: 章太炎墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 36
+  - name: 蒋庄
+    canonicalName: 蒋庄
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 37
+  - name: 蒋经国旧居 (杭州)
+    canonicalName: 蒋经国旧居 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 38
+  - name: 西湖博览会博物馆
+    canonicalName: 西湖博览会博物馆
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 39
+  - name: 郭庄
+    canonicalName: 郭庄
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 40
+  - name: 阮公墩
+    canonicalName: 阮公墩
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 41
+  - name: 静逸别墅 (杭州)
+    canonicalName: 静逸别墅 (杭州)
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 42
+  - name: 龚隹育墓
+    canonicalName: 龚隹育墓
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/浙江省/杭州市/西湖区
+    sourceReadiness: pending
+    selectionPriority: 43
 - district: 钱塘区
   leaves:
   - name: 金沙湖

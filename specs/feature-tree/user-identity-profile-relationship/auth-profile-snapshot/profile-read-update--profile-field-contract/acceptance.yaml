@@ -48,11 +48,11 @@ gwt_acceptance:
       planned: []
       recorded:
         - file: quwoquan_data/tests/local_contract/publish/test_admin_region_tags__local_contract_test.py
-        - file: quwoquan_service/services/tag-service/tests/local_contract/internal/application/tag_service__local_contract_test.go
+        - file: quwoquan_service/services/tag-service/internal/application/tag_service__local_contract_test.go
         - file: quwoquan_service/services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go
         - file: quwoquan_service/services/user-service/tests/local_contract/internal/infrastructure/integration/tag_service_region_resolver__local_contract_test.go
         - file: quwoquan_app/test/local_contract/cloud/tag/tag_repository_consistency__local_contract_test.dart
-        - file: quwoquan_app/test/user_acceptance/ui/user/journeys/edit_profile_journey__user_acceptance_test.dart
+        - file: quwoquan_app/test/user_acceptance/journeys/user/edit_profile_journey__user_acceptance_test.dart
     status: implemented
     test_evidence:
       primary:

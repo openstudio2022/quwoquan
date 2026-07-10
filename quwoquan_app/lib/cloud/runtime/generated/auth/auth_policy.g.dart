@@ -230,6 +230,7 @@ class AuthApiPolicy {
     'RejectProposal': 'public',
     'RelatedObjects': 'public',
     'RelatedTags': 'public',
+    'ReloadHomepageState': 'required',
     'RemoveAssistant': 'required',
     'RemoveMember': 'required',
     'ReplyGreetingRequest': 'required',

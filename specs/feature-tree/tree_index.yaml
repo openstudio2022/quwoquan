@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-07-05T03:40:45.357937Z
+updated_at: 2026-07-09T10:17:47.734302Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -1226,6 +1226,21 @@ features:
               name: media-status-pipeline--media-processing-state-machine
               level: L3_story
               path: discovery-content/media-processing-helper-read/media-status-pipeline--media-processing-state-machine
+              domain: ""
+              status: specified
+              tags: []
+        - id: object-homepage-coverage-scaling
+          name: object-homepage-coverage-scaling
+          level: L2_business_capability
+          path: discovery-content/object-homepage-coverage-scaling
+          domain: ""
+          status: specified
+          tags: []
+          children:
+            - id: zhejiang-sichuan-province-coverage
+              name: zhejiang-sichuan-province-coverage
+              level: L3_story
+              path: discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage
               domain: ""
               status: specified
               tags: []

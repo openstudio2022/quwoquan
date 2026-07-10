@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-STATE_DIR="$ROOT_DIR/.qwq_output/local/beta-local"
+STATE_DIR="$ROOT_DIR/.qwq_output/env/beta/local/beta-local"
 ENV_FILE="$ROOT_DIR/.env.beta.local"
 APP_BETA="$ROOT_DIR/quwoquan_app/scripts/device/start_app_beta_manual.sh"
 OPS_PORTAL_DIR="$ROOT_DIR/quwoquan_ops/portal"

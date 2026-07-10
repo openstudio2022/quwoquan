@@ -82,7 +82,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
     )
     pb.add_argument("--map", required=True, help="受版本控制的回填映射 yaml")
     pb.add_argument("--apply", action="store_true", help="写回 _entity.json 并重建索引（缺省 dry-run）")
-    pb.add_argument("--report", help="回填报告输出路径（默认 .qwq_output/runs/data/ 下）")
+    pb.add_argument("--report", help="回填报告输出路径（默认 .qwq_output/data/runs/ 下）")
     pb.set_defaults(handler=handle_entity_tag_backfill)
 
     def _dispatch(args: argparse.Namespace) -> None:

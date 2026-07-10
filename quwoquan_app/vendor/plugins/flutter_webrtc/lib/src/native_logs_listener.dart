@@ -1,6 +1,6 @@
 import 'package:logger/logger.dart';
 
-import './native/utils.dart';
+import 'native/utils.dart';
 import 'native/event_channel.dart';
 
 class NativeLogsListener {

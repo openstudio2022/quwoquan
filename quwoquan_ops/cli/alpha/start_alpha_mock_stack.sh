@@ -2,9 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-STATE_DIR="$ROOT_DIR/.qwq_output/local/alpha-local"
+STATE_DIR="$ROOT_DIR/.qwq_output/env/alpha/local/alpha-local"
 MEDIA_DIR="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
-LEGAL_STATIC_ROOT="$ROOT_DIR/.qwq_output/release/legal-static/alpha/current/public"
+LEGAL_STATIC_ROOT="$ROOT_DIR/.qwq_output/env/alpha/release/legal-static/current/public"
 
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile alpha-local --format shell-defaults)"
 

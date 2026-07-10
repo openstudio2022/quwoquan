@@ -21,6 +21,8 @@ districts:
     - 野人海
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:49:31Z'
+    sourceScreenEvidence: zh.wikipedia.org:木格措 extract=209ch
   - name: 贡嘎山
     canonicalName: 贡嘎山
     entityType: 地点/自然景观
@@ -32,6 +34,8 @@ districts:
     - 蜀山之王
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:49:32Z'
+    sourceScreenEvidence: zh.wikipedia.org:贡嘎山 extract=211ch
   - name: 新都桥
     canonicalName: 新都桥
     entityType: 地点/打卡地
@@ -68,6 +72,8 @@ districts:
     - 折多山垭口
     selectionPriority: 6
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:49:37Z'
+    sourceScreenEvidence: zh.wikipedia.org:折多山 extract=200ch
   - name: 跑马山
     canonicalName: 康定跑马山
     entityType: 地点/自然景观
@@ -77,6 +83,14 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/康定市
     selectionPriority: 7
     sourceReadiness: pending
+  - name: 木雅經堂
+    canonicalName: 木雅經堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/康定市
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 泸定县
   leaves:
   - name: 海螺沟
@@ -120,6 +134,54 @@ districts:
     - 贡嘎山燕子沟
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 化林坪茶馬古道
+    canonicalName: 化林坪茶馬古道
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/泸定县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 大渡河懸索橋
+    canonicalName: 大渡河懸索橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/泸定县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 嵐安蘇維埃政府舊址
+    canonicalName: 嵐安蘇維埃政府舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/泸定县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 朱德同志長征途經瀘定居住舊址
+    canonicalName: 朱德同志長征途經瀘定居住舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/泸定县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 磨西安納堂
+    canonicalName: 磨西安納堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/泸定县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 紅軍飛奪瀘定橋戰前動員會舊址
+    canonicalName: 紅軍飛奪瀘定橋戰前動員會舊址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/泸定县
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 丹巴县
   leaves:
   - name: 甲居藏寨
@@ -167,6 +229,62 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/丹巴县
     selectionPriority: 5
     sourceReadiness: pending
+  - name: 丹巴縣古碉群
+    canonicalName: 丹巴縣古碉群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/丹巴县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 墨爾多山摩崖石刻
+    canonicalName: 墨爾多山摩崖石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/丹巴县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 巴底土司官寨
+    canonicalName: 巴底土司官寨
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/丹巴县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 曲登沙寺
+    canonicalName: 曲登沙寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/丹巴县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 甲居镇
+    canonicalName: 甲居镇
+    entityType: 地点/景区
+    typeTagRefs:
+    - Entity/地点/景区/4A景区
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/丹巴县
+    sourceReadiness: pending
+    selectionPriority: 10
+  - name: 罕额依新石器时代文化遗址和汉代石棺葬墓群
+    canonicalName: 罕额依新石器时代文化遗址和汉代石棺葬墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/丹巴县
+    sourceReadiness: pending
+    selectionPriority: 11
+  - name: 雍仲佐欽嶺寺
+    canonicalName: 雍仲佐欽嶺寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/丹巴县
+    sourceReadiness: pending
+    selectionPriority: 12
 - district: 九龙县
   leaves:
   - name: 伍须海
@@ -185,6 +303,22 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/九龙县
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 中古經堂
+    canonicalName: 中古經堂
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/九龙县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 九龍吉日寺
+    canonicalName: 九龍吉日寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/九龙县
+    sourceReadiness: pending
+    selectionPriority: 4
 - district: 雅江县
   leaves:
   - name: 帕姆岭寺
@@ -215,6 +349,32 @@ districts:
     - 剪子弯山垭口
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:49:53Z'
+    sourceScreenEvidence: zh.wikipedia.org:剪子弯山 extract=204ch
+  - name: 亞多寺
+    canonicalName: 亞多寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/雅江县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 南真寺
+    canonicalName: 南真寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/雅江县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 郭崗頂遺址
+    canonicalName: 郭崗頂遺址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/雅江县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 道孚县
   leaves:
   - name: 惠远寺
@@ -225,6 +385,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/道孚县
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:49:57Z'
+    sourceScreenEvidence: zh.wikipedia.org:惠远寺 extract=225ch
   - name: 墨石公园
     canonicalName: 中国墨石公园
     entityType: 地点/自然景观
@@ -254,6 +416,22 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/道孚县
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 道孚古碉
+    canonicalName: 道孚古碉
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/道孚县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 靈雀寺
+    canonicalName: 靈雀寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/道孚县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 炉霍县
   leaves:
   - name: 寿灵寺
@@ -272,6 +450,22 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/炉霍县
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 靈龍寺
+    canonicalName: 靈龍寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/炉霍县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 鮮水河流域石棺墓葬群
+    canonicalName: 鮮水河流域石棺墓葬群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/炉霍县
+    sourceReadiness: pending
+    selectionPriority: 4
 - district: 甘孜县
   leaves:
   - name: 甘孜寺
@@ -298,6 +492,14 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/甘孜县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 東谷寺
+    canonicalName: 東谷寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/甘孜县
+    sourceReadiness: pending
+    selectionPriority: 4
 - district: 新龙县
   leaves:
   - name: 措卡湖
@@ -320,6 +522,54 @@ districts:
     - 拉日马石板藏寨
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 嘎絨寺
+    canonicalName: 嘎絨寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/新龙县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 土木寺
+    canonicalName: 土木寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/新龙县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 拉日馬石板藏寨
+    canonicalName: 拉日馬石板藏寨
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/新龙县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 波日桥
+    canonicalName: 波日桥
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/新龙县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 益西寺
+    canonicalName: 益西寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/新龙县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 羌堆寺
+    canonicalName: 羌堆寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/新龙县
+    sourceReadiness: pending
+    selectionPriority: 8
 - district: 德格县
   leaves:
   - name: 德格印经院
@@ -333,6 +583,8 @@ districts:
     - 德格吉祥聚慧院
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:50:10Z'
+    sourceScreenEvidence: zh.wikipedia.org:德格印经院 extract=367ch
   - name: 新路海
     canonicalName: 新路海
     entityType: 地点/自然景观
@@ -343,6 +595,8 @@ districts:
     - 玉隆拉措
     selectionPriority: 2
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:50:11Z'
+    sourceScreenEvidence: zh.wikipedia.org:新路海 extract=361ch
   - name: 雀儿山
     canonicalName: 雀儿山
     entityType: 地点/自然景观
@@ -352,6 +606,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/德格县
     selectionPriority: 3
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:50:12Z'
+    sourceScreenEvidence: zh.wikipedia.org:雀儿山 extract=665ch
   - name: 更庆寺
     canonicalName: 德格更庆寺
     entityType: 地点/宗教场所
@@ -360,6 +616,54 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/德格县
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 佐钦寺
+    canonicalName: 佐钦寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/德格县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 八邦寺
+    canonicalName: 八邦寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/德格县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 更慶寺
+    canonicalName: 更慶寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/德格县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 滿金寺
+    canonicalName: 滿金寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/德格县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 登青寺
+    canonicalName: 登青寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/德格县
+    sourceReadiness: pending
+    selectionPriority: 9
+  - name: 雪謙寺
+    canonicalName: 雪謙寺
+    entityType: 地点/宗教场所
+    typeTagRefs:
+    - Entity/地点/宗教场所
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/德格县
+    sourceReadiness: pending
+    selectionPriority: 10
 - district: 白玉县
   leaves:
   - name: 亚青寺
@@ -398,6 +702,22 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/白玉县
     selectionPriority: 4
     sourceReadiness: ready
+  - name: 安章寺
+    canonicalName: 安章寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/白玉县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 山岩民居
+    canonicalName: 山岩民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/白玉县
+    sourceReadiness: pending
+    selectionPriority: 6
 - district: 石渠县
   leaves:
   - name: 色须寺
@@ -408,6 +728,8 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/石渠县
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:50:38Z'
+    sourceScreenEvidence: zh.wikipedia.org:色须寺 extract=230ch
   - name: 巴格嘛呢石经墙
     canonicalName: 巴格嘛呢石经墙
     entityType: 地点/宗教场所
@@ -426,6 +748,14 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/石渠县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 照阿娜姆石刻
+    canonicalName: 照阿娜姆石刻
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/石渠县
+    sourceReadiness: pending
+    selectionPriority: 4
 - district: 色达县
   leaves:
   - name: 色达喇荣五明佛学院
@@ -439,6 +769,8 @@ districts:
     - 色达佛学院
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:50:39Z'
+    sourceScreenEvidence: zh.wikipedia.org:色达喇荣五明佛学院 extract=416ch
   - name: 金马草原
     canonicalName: 色达金马草原
     entityType: 地点/自然景观
@@ -447,6 +779,62 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/色达县
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 大則寺
+    canonicalName: 大則寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/色达县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 拉則寺
+    canonicalName: 拉則寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/色达县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 普吾寺
+    canonicalName: 普吾寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/色达县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 洞嘎寺
+    canonicalName: 洞嘎寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/色达县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 色爾壩藏寨
+    canonicalName: 色爾壩藏寨
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/色达县
+    sourceReadiness: pending
+    selectionPriority: 7
+  - name: 色达县格萨尔博物馆
+    canonicalName: 色达县格萨尔博物馆
+    entityType: 地点/博物馆
+    typeTagRefs:
+    - Entity/地点/博物馆
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/色达县
+    sourceReadiness: pending
+    selectionPriority: 8
+  - name: 鄧登曲登佛塔
+    canonicalName: 鄧登曲登佛塔
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/色达县
+    sourceReadiness: pending
+    selectionPriority: 9
 - district: 理塘县
   leaves:
   - name: 长青春科尔寺
@@ -488,6 +876,30 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/理塘县
     selectionPriority: 4
     sourceReadiness: pending
+  - name: 七世達賴故居
+    canonicalName: 七世達賴故居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/理塘县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 冷古寺
+    canonicalName: 冷古寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/理塘县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 麻通寺
+    canonicalName: 麻通寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/理塘县
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 巴塘县
   leaves:
   - name: 措普沟
@@ -519,6 +931,38 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/巴塘县
     selectionPriority: 3
     sourceReadiness: pending
+  - name: 巴塘關帝廟
+    canonicalName: 巴塘關帝廟
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/巴塘县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 康寧寺
+    canonicalName: 康寧寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/巴塘县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 措普寺
+    canonicalName: 措普寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/巴塘县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 鸚哥嘴石刻群
+    canonicalName: 鸚哥嘴石刻群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/巴塘县
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 乡城县
   leaves:
   - name: 桑披岭寺
@@ -541,6 +985,46 @@ districts:
     - 白色藏乡
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 曲批寺
+    canonicalName: 曲批寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/乡城县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 桑披寺
+    canonicalName: 桑披寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/乡城县
+    sourceReadiness: pending
+    selectionPriority: 4
+  - name: 洞松木因石棺墓群
+    canonicalName: 洞松木因石棺墓群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/乡城县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 白依丁真嶺寺
+    canonicalName: 白依丁真嶺寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/乡城县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 鄉城古碉群
+    canonicalName: 鄉城古碉群
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/文化遗产
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/乡城县
+    sourceReadiness: pending
+    selectionPriority: 7
 - district: 得荣县
   leaves:
   - name: 得荣太阳谷
@@ -559,6 +1043,22 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/得荣县
     selectionPriority: 2
     sourceReadiness: pending
+  - name: 翁佳寺
+    canonicalName: 翁佳寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/得荣县
+    sourceReadiness: pending
+    selectionPriority: 3
+  - name: 賀龍橋
+    canonicalName: 賀龍橋
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/得荣县
+    sourceReadiness: pending
+    selectionPriority: 4
 - district: 稻城县
   leaves:
   - name: 稻城亚丁
@@ -574,6 +1074,8 @@ districts:
     - 最后的香格里拉
     selectionPriority: 1
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:50:54Z'
+    sourceScreenEvidence: zh.wikipedia.org:稻城亚丁 extract=497ch
   - name: 海子山
     canonicalName: 稻城海子山
     entityType: 地点/景区
@@ -601,3 +1103,29 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/稻城县
     selectionPriority: 4
     sourceReadiness: ready
+    sourceScreenedAt: '2026-07-09T11:50:59Z'
+    sourceScreenEvidence: zh.wikipedia.org:著杰寺 extract=244ch
+  - name: 皮洛遗址
+    canonicalName: 皮洛遗址
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/稻城县
+    sourceReadiness: pending
+    selectionPriority: 5
+  - name: 紮朗寺
+    canonicalName: 紮朗寺
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/稻城县
+    sourceReadiness: pending
+    selectionPriority: 6
+  - name: 自麥民居
+    canonicalName: 自麥民居
+    entityType: 地点/遗址
+    typeTagRefs:
+    - Entity/地点/遗址/历史建筑
+    geoTagRef: Topic/地理/行政区/中国/四川省/甘孜藏族自治州/稻城县
+    sourceReadiness: pending
+    selectionPriority: 7

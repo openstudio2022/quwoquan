@@ -64,6 +64,82 @@ def test_scaled_e2e_run_sequences_prepare_author_finalize_verify():
     assert finalize.force_clean_workspace_agent_state is True
 
 
+def test_scaled_e2e_run_download_prefetch_runs_between_dispatch_and_author(monkeypatch):
+    """两段流水线：--download-prefetch>0 时在 fanout-author（dispatch）之后、
+    首个 author cycle 之前对已物化分区并发预跑 download 段。"""
+    calls: list[argparse.Namespace] = []
+    prefetch_calls: list[dict] = []
+
+    def invoke(ns):
+        calls.append(ns)
+
+    def fake_prefetch(plan_id, *, concurrency, cwd=None, runner=None):
+        prefetch_calls.append({"plan": plan_id, "concurrency": concurrency, "cwd": cwd})
+        return {"prefetched": 3, "skipped": 0, "failures": 0}
+
+    monkeypatch.setattr(scaled_e2e, "_download_prefetch", fake_prefetch)
+    scaled_e2e._handle_scaled_e2e_run(
+        _args(cycles=1, download_prefetch=8), invoke=invoke
+    )
+    assert prefetch_calls == [{"plan": "plan_1", "concurrency": 8, "cwd": "/tmp/workspace"}]
+    assert [ns.scaled_e2e_command for ns in calls][:3] == [
+        "prepare", "fanout-author", "author-runner",
+    ], "prefetch 不得改变既有编排序列"
+
+
+def test_scaled_e2e_run_download_prefetch_disabled_by_default():
+    """download_prefetch 缺省 0：不触发预跑（向后兼容既有 recipe）。"""
+    calls: list[argparse.Namespace] = []
+
+    def invoke(ns):
+        calls.append(ns)
+
+    scaled_e2e._handle_scaled_e2e_run(_args(cycles=1), invoke=invoke)
+    assert [ns.scaled_e2e_command for ns in calls] == [
+        "prepare", "fanout-author", "author-runner", "rollup", "finalize", "rollup", "verify",
+    ]
+
+
+def test_download_prefetch_skips_unmaterialized_and_counts_failures(monkeypatch, tmp_path):
+    """download 预跑：未物化分区跳过；rc 0/10 视为推进成功，其余计失败。"""
+    from _common import fanout_plan as fp
+
+    plan = {
+        "planId": "p1",
+        "status": "frozen",
+        "sourceTaskId": "src",
+    }
+    units = [
+        {"taskId": "t1", "batchId": "b1"},
+        {"taskId": "t2", "batchId": "b2"},
+        {"taskId": "t3", "batchId": "b3"},
+    ]
+    monkeypatch.setattr(fp, "load_plan", lambda plan_id: plan)
+    from _common import fanout_strategies as fs
+
+    monkeypatch.setattr(fs, "expand_units", lambda p: units)
+
+    def fake_load_spec(task_id):
+        if task_id == "t2":
+            raise FileNotFoundError(task_id)
+        return {"taskId": task_id}
+
+    monkeypatch.setattr(scaled_e2e.store, "load_spec", fake_load_spec)
+    seen: list[list[str]] = []
+
+    def runner(argv):
+        seen.append(argv)
+        # t1 → rc 10（推进到 checkpoint 暂停，预期）；t3 → rc 2（失败）。
+        return 10 if "t1" in argv else 2
+
+    report = scaled_e2e._download_prefetch("p1", concurrency=4, runner=runner)
+    assert report == {"prefetched": 2, "skipped": 1, "failures": 1}
+    assert len(seen) == 2
+    for argv in seen:
+        assert "--until" in argv and argv[argv.index("--until") + 1] == "download_fetch"
+        assert "--resume" in argv, "断点基线：已完成 stage 必须可幂等跳过"
+
+
 def test_scaled_e2e_run_propagates_source_task_target():
     calls: list[argparse.Namespace] = []
 

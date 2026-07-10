@@ -193,7 +193,7 @@ def normalize_test_ref(raw: Any) -> tuple[dict[str, Any] | None, str | None]:
         return {"artifact": text.split(":", 1)[1].strip()}, None
     if any(text.startswith(prefix) for prefix in COMMAND_PREFIXES):
         return {"command": text}, None
-    if text.startswith(".qwq_output/runs/"):
+    if text.startswith(".qwq_output/env/repo/runs/"):
         return {"artifact": text}, None
     if path_exists(text):
         return {"file": text}, None

@@ -44,7 +44,7 @@ gwt_acceptance:
       - file: quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
       - file: quwoquan_app/test/local_contract/ui/search/retrieve_request_mapper__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/search_repository__local_contract_test.dart
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/service__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/service__local_contract_test.go
     status: completed
     test_evidence:
       primary:
@@ -85,11 +85,11 @@ gwt_acceptance:
     - result 首批分组 P95 ≤ 1.5s；单域失败不阻塞整页。
     tests:
       planned:
-      - file: quwoquan_app/test/ui/search/pages/search_network_results_page_widget_test.dart
+      - file: quwoquan_app/test/local_contract/ui/search/pages/search_network_results_page_widget__local_contract_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/search/retrieve_request_mapper__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/search/search_repository__local_contract_test.dart
-      - file: quwoquan_service/services/assistant-service/tests/local_contract/internal/application/tool/registry_retrieve_contract__local_contract_test.go
+      - file: quwoquan_service/services/assistant-service/internal/application/tool/registry_retrieve_contract__local_contract_test.go
     status: implemented
     notes:
     - App remote 接线（R-S06）以 scoped dart analyze + 部署验证器为证据；App 全量 widget 测试受并发 intersection
