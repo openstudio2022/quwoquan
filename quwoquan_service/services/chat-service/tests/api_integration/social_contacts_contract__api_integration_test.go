@@ -66,25 +66,26 @@ func TestListContacts_IncludesSocialContactSources(t *testing.T) {
 	defer socialServer.Close()
 
 	chatStore := persistence.NewMongoChatStore(mongoDB)
+	chatStorage := chatStoragePorts(chatStore)
 	convCache := cache.NewConversationCache(redisRouter.Scene("general"))
 	profiles := testProfileResolver{}
 	memberSvc := application.NewMemberService(
-		chatStore,
+		chatStorage,
 		convCache,
-		nil,
+		eventPublisherForContractTest(),
 		profiles,
 		nil,
 		nil,
-		nil,
+		groupAvatarSchedulerForContractTest(),
 		application.WithSocialContactResolver(
 			chathttp.NewUserSocialContactResolver(socialServer.URL, socialServer.Client()),
 		),
 	)
 	handler := chathttp.NewChatHandler(
-		application.NewConversationService(chatStore, convCache, nil, profiles, application.DenyRelationshipGate(), nil, nil, nil),
-		application.NewMessageService(chatStore, convCache, nil, application.DenyRelationshipGate()),
+		application.NewConversationService(chatStorage, convCache, eventPublisherForContractTest(), profiles, application.DenyRelationshipGate(), nil, nil, groupAvatarSchedulerForContractTest()),
+		application.NewMessageService(chatStorage, convCache, eventPublisherForContractTest(), application.DenyRelationshipGate(), testMediaAssetDeliveryReader{}),
 		memberSvc,
-		application.NewInboxService(chatStore),
+		application.NewInboxService(chatStorage),
 		nil,
 	).Routes()
 
@@ -184,27 +185,30 @@ func TestListContacts_FiltersBlockedContacts(t *testing.T) {
 	defer socialServer.Close()
 
 	chatStore := persistence.NewMongoChatStore(mongoDB)
+	chatStorage := chatStoragePorts(chatStore)
 	convCache := cache.NewConversationCache(redisRouter.Scene("general"))
 	memberSvc := application.NewMemberService(
-		chatStore,
+		chatStorage,
 		convCache,
-		nil,
+		eventPublisherForContractTest(),
 		testProfileResolver{},
 		nil,
 		nil,
-		nil,
-		application.WithRelationshipGate(stubRelationshipGate{
-			cap: application.RelationshipCapability{IsBlocked: true, IsBlockedBy: true},
-		}),
+		groupAvatarSchedulerForContractTest(),
+		application.WithRelationshipGate(relationshipGateForContractTest(
+			t,
+			application.RelationshipCapability{IsBlocked: true, IsBlockedBy: true},
+			nil,
+		)),
 		application.WithSocialContactResolver(
 			chathttp.NewUserSocialContactResolver(socialServer.URL, socialServer.Client()),
 		),
 	)
 	handler := chathttp.NewChatHandler(
-		application.NewConversationService(chatStore, convCache, nil, testProfileResolver{}, application.DenyRelationshipGate(), nil, nil, nil),
-		application.NewMessageService(chatStore, convCache, nil, application.DenyRelationshipGate()),
+		application.NewConversationService(chatStorage, convCache, eventPublisherForContractTest(), testProfileResolver{}, application.DenyRelationshipGate(), nil, nil, groupAvatarSchedulerForContractTest()),
+		application.NewMessageService(chatStorage, convCache, eventPublisherForContractTest(), application.DenyRelationshipGate(), testMediaAssetDeliveryReader{}),
 		memberSvc,
-		application.NewInboxService(chatStore),
+		application.NewInboxService(chatStorage),
 		nil,
 	).Routes()
 

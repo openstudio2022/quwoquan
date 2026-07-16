@@ -1,0 +1,21 @@
+schemaVersion: quwoquan.content.preset
+presetId: content/travel/video/base
+title: 旅行视频作品内容基线
+defaults:
+  content:
+    angles: [体验]
+    audiences: [通用]
+    carriers: [video]
+    modalityContract: separated_research
+    research:
+      lanes: [video]
+      maxConcurrency: 4
+      laneConcurrency:
+        video: 4
+      allowAiImages: false
+    quotas:
+      entityHomepagesPerTarget: 0
+      entityArticlesPerTarget: 0
+      imageWorksPerTarget: 0
+      videoWorksPerTarget: 1
+      routeArticles: 0

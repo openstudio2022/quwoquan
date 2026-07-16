@@ -3,11 +3,9 @@ entity: FollowingSubject
 backend: mongodb
 
 collections:
-  following_subject_visit_states:
-    entity: FollowingSubjectVisitState
+  following_subjects:
+    entity: FollowingSubjectItemView
+    role: projection
     indexes:
-      - name: idx_viewer_subject_unique
-        keys: { viewerSubAccountId: 1, subjectType: 1, subjectId: 1 }
-        unique: true
-      - name: idx_viewer_updated
-        keys: { viewerSubAccountId: 1, updatedAt: -1 }
+      - { name: idx_following_subject_viewer_type_changed, keys: { viewerSubAccountId: 1, subjectType: 1, latestChangedAt: -1 } }
+      - { name: idx_following_subject_viewer_subject, keys: { viewerSubAccountId: 1, subjectType: 1, subjectId: 1 }, unique: true }

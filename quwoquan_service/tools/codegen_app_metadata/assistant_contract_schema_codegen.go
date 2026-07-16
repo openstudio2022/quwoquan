@@ -2,8 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -49,34 +47,26 @@ type assistantSchemaHeader struct {
 }
 
 func readAssistantContractSchema(path string) (*assistantContractSchema, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
 	var parsed assistantContractSchema
-	return &parsed, yaml.Unmarshal(data, &parsed)
+	return &parsed, decodeMetadataDocument(path, &parsed)
 }
 
-func loadAssistantContractIndex(metadataDir string) (*assistantContractIndex, error) {
-	baseDir := filepath.Join(metadataDir, "assistant")
-	entries, err := os.ReadDir(baseDir)
-	if err != nil {
-		return nil, err
-	}
+func loadAssistantContractIndex(_ string) (*assistantContractIndex, error) {
 	index := &assistantContractIndex{
 		libraryByClass: map[string]string{},
 		fieldsByClass:  map[string][]assistantContractField{},
 	}
-	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), "_") {
+	for _, schemaPath := range metadataDocumentPaths("assistant", "/schema.yaml") {
+		relative, err := metadataDocumentPath(schemaPath)
+		if err != nil {
+			return nil, err
+		}
+		segments := strings.Split(relative, "/")
+		if len(segments) != 3 || strings.HasPrefix(segments[1], "_") {
 			continue
 		}
-		schemaPath := filepath.Join(baseDir, entry.Name(), "schema.yaml")
-		data, err := os.ReadFile(schemaPath)
+		data, err := readMetadataDocument(schemaPath)
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
 			return nil, err
 		}
 		var header assistantSchemaHeader

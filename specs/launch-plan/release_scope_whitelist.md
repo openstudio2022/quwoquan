@@ -2,7 +2,7 @@
 
 > 真相源：本文件是首发“可公开主推 / 可降级 / 保底不主推”范围与对外命名的冻结单。
 > 与本文件冲突的页面文案、入口、宣发口径以本文件为准；变更需走发布负责人评审。
-> 关联：`[.cursor/plans/三周双引擎发布_ddae7322.plan.md]`、`specs/launch-plan/three_week_dual_engine_launch_plan.md`、`specs/feature-tree/spec.md`、`specs/00_PRODUCT_CONCEPT_SYSTEM.md`。
+> 关联：`[.cursor/plans/三周双引擎发布_ddae7322.content.execution.planning.md]`、`specs/launch-plan/three_week_dual_engine_launch_plan.md`、`specs/feature-tree/spec.md`、`specs/00_PRODUCT_CONCEPT_SYSTEM.md`。
 
 ## 1. 主线定位（冻结）
 
@@ -22,7 +22,7 @@
 | 分享（基础）                   | 内容详情更多面板                            | 分享归因落库为 P0 数据项       |
 | 搜索                       | global_search_page                  | 网络建议不得伪造             |
 | 个人主页 + Creator Impact v0 | my_profile_page                     | 影响力叙事，真实计数           |
-| 基础聊天                     | chat_detail_page                    | 真实 WS；首发仅承诺基础会话主链，不宣称成熟社交消息体系 |
+| 基础聊天                     | chat_conversation_page                    | 真实 WS；首发仅承诺基础会话主链，不宣称成熟社交消息体系 |
 | 基础圈子                     | circle pages                        |                      |
 | 基础助手（小趣解释）               | assistant half-sheet / conversation |                      |
 | 治理入口                     | 举报/拉黑（内容级 + 用户级）                    | 用户级已接 Remote         |
@@ -41,7 +41,7 @@
 ## 4. P2 保底不主推（隐藏或仅保留兜底）
 
 - 一切演示型、实验型、内部调试型入口
-- 未完成迁移的能力（prototype_mock_data 链路、@Deprecated AppContentRepository 路径）
+- 未完成迁移的能力（`prototype_mock_data` 链路；`AppContentRepository` 已于 2026-07-15 删除）
 - 未实现的第三方登录入口（微信/微博/QQ/支付宝在 release 隐藏或标注）
 
 ## 5. 对外命名统一（外显口径）
@@ -91,4 +91,3 @@
 
 - 若 W1 周三外部合规/上架物料仍 not_ready → `Android 先行` 或 `邀请制受控开放`。
 - 若 Creator Impact v0 / 分享归因 / ACK 演练任一未达标 → Go/No-Go 降级开放或继续内测。
-

@@ -1,6 +1,6 @@
 # 内容多形态统一 · 严格准入门清单（内容多形态统一 + 创作打标）
 
-> **【2026-06-29 撤销说明｜以此为准】** 经用户冻结口径，当前内容类型只有 **图片(image)/视频(video)/文章(article)**（micro=微趣属类型轴、moment 属身份轴，均保留）。**口碑（review）内容类型已整体撤销**（见 [CR-20260629-076](../../../changelog/CR-20260629-076-content-type-triad-purge-review.yaml)，撤销 [CR-20260530-023](../../../changelog/CR-20260530-023-review-content-type.yaml) 的 review 部分）：`ContentType.review`、`rating/reviewAspects`、3 个 review 错误码、2 个 review 索引、`review_aspect` 投影与 feature-tree 节点 `review-content-type` 均已删除。**本清单中所有与口碑（review）相关的 B1 / B2 / C1 / C3 条目（含其 “CLEARED” 标记）一律作废，不再作为准入依据**；`creation-tagging-ia`（创作打标 IA）与 `publish/tags` tagRef 真相源不在撤销范围、仍生效。
+> **【2026-06-29 撤销说明｜以此为准】** 经用户冻结口径，当前内容类型只有 **图片(image)/视频(video)/文章(article)**（micro=微趣属类型轴、moment 属身份轴，均保留）。**口碑（review）内容类型已整体撤销**（见 [CR-20260629-076](../../../changelog/CR-20260629-076-content-type-triad-purge-review.yaml)，撤销 [CR-20260530-023](../../../changelog/CR-20260530-023-review-content-type.yaml) 的 review 部分）：`ContentType.review`、`rating/reviewAspects`、3 个 review 错误码、2 个 review 索引、`review_aspect` 投影与 feature-tree 节点 `review-content-type` 均已删除。**本清单中所有与口碑（review）相关的 B1 / B2 / C1 / C3 条目（含其 “CLEARED” 标记）一律作废，不再作为准入依据**；`creation-tagging-ia`（创作打标 IA）与 `control_plane/governance/taxonomy` tagRef 真相源不在撤销范围、仍生效。
 
 > 适用范围：本清单是「内容多形态统一」开工（`/dev`）前的严格准入门，挂 L2 [content-type-framework](spec.md)。
 > 硬规则：**首页交集驱动改版未决项必须先清零（Block A 全绿），且内容多形态统一自身规格/metadata 冻结（Block B/C 全绿）+ 严格准入门（§Gate）全勾选 + 门禁无 BLOCKING，方可进入内容多形态统一 `/dev`。不允许任何未决项带入下一阶段。**
@@ -23,7 +23,7 @@
 | app 门禁（含 6 个回归测试） | **全绿**：`gate_repo.sh --scope app` `[gate] OK`，无 FAIL/BLOCK | **D5 CLEARED** |
 | 口碑内容类型 metadata | **已落盘**：ContentType+review、rating/reviewAspects、3 错误码、2 索引；`verify-metadata`+codegen 绿，Go build 绿 | **C1 CLEARED** |
 | 创作侧打标（tagRef 打标 UI + payload 注入） | **IA 已冻结**：内联编辑页可选打标、自动打标辅助、首发子集芯片+C2 后搜索灰度；payload wire 已通。端侧实现属 /dev | **B3 CLEARED（IA 冻结）** |
-| tagRef 真相源 `publish/tags` | **已发布**：路径制四分组树（activeVersion 1，2026-05-15）；首发 launch 子集 6 个 tagRef 目标 100% 覆盖；`verify_tag_tree.py` 0 错误、`verify_tag_ref_source_of_truth.py` 门禁绿 | **C2 CLEARED** |
+| tagRef 真相源 `control_plane/governance/taxonomy` | 路径制四分组树受版本控制，metadata tagRef 可解析；`verify_tag_tree.py` 与 `verify_tag_ref_source_of_truth.py` 门禁绿 | **C2 CLEARED** |
 | 商用/环境前置（SLO/权限/生命周期/覆盖矩阵/灰度回滚/env-seed） | **已汇总冻结**：SLO·权限·生命周期·覆盖矩阵·灰度回滚落 `review-content-type` spec；三环境 seed manifest + 生产隔离门禁全绿；修复 content fixture `contentType: moment→micro` 残留（77 处） | **C3 CLEARED** |
 
 ---
@@ -126,7 +126,7 @@
 ### B3. 创作打标 IA — **CLEARED（IA 冻结，端侧实现属 /dev）**
 - 决策与口径已落 [`creation-tagging-ia/spec.md`](creation-tagging-ia/spec.md)（B3-D1~D7）；详见 [CR-20260530-023](../../../changelog/CR-20260530-023-review-content-type.yaml) rev2。
 - [x] 创作侧 tagRef 打标 UI：**内联各类型编辑页**、打标全类型**可选不强制**、IA 归属 content/entry；自动打标（转发识别+内容识别）辅助，手动作确认/修正层。
-- [x] 选择范围=首发标签子集（唯一引用 `tag_ref_migration` `launch` 项）芯片 + 自动建议多选≤5；C2 后 flag 灰度搜索补充（检索源唯一 publish/tags）。
+- [x] 选择范围=tag-service 常用标签 + 自动建议多选≤5；搜索入口由 flag 控制，端侧不维护标签 catalog。
 - [x] payload 注入路径：`CreatePost`/`UpdatePost` `writable_fields.tagRefs`（wire 已通），验收以发布后 content.tagRefs 一致为准。
 - [x] 打标 → 内容 tagRefs → 交集 `IntersectionReason.tagRefs` 归因可还原（验收 GWT5，local_contract/api_integration）。
 
@@ -135,12 +135,12 @@
 ## Block C — 依赖与商用/环境前置（冻结时同步确认）
 
 - [x] **C1 口碑 metadata 设计完成**并通过 `make verify-metadata` + codegen/codegen-app（types.yaml+review、fields rating/reviewAspects、service 3 处 writable、errors 3 码、storage 2 索引；Go content-service build 绿）。详见 [CR-20260530-023](../../../changelog/CR-20260530-023-review-content-type.yaml)。
-- [x] **C2 tagRef 真相源 `publish/tags` 发布**：路径制四分组树已发布（activeVersion 1）；`_shared/tag_ref_migration.yaml` 全部 `status: launch` 目标（Topic/旅行·摄影·美食餐饮·地理、Entity/机构、Format/内容载体）100% 命中树节点；`deferred` 项按设计延后回填，不进首发召回。`verify_tag_tree.py` 0 错误（21 条非阻断 R4/R9 警告），`verify_tag_ref_source_of_truth.py` 门禁绿。
+- [x] **C2 tagRef 真相源收口**：`control_plane/governance/taxonomy` 是唯一可编辑路径制四分组树；tag-service 导入 serving projection，`publish/tags` 只保存内容发布所引用的 consumer snapshot。`verify_tag_tree.py` 与 `verify_tag_ref_source_of_truth.py` 共同阻断第二真相源。
 - [x] **C3a benchmark / SLO·KPI / 弱网·并发·容量**：口碑发布 P99 复用 publish 链路 SLO（≤ 既有 CreatePost P99）、POI 聚合读 SLO 与 KPI 已冻结于 [`review-content-type/spec.md`](review-content-type/spec.md) §SLO/KPI；打标为可选内联交互、无独立网络 SLO（复用 publish）。
 - [x] **C3b 权限边界、可见性、删除撤销时效**：口碑写=登录用户对 POI 可发、遵循统一 `visibility`+`moderationStatus`；删=作者软删+tombstone+即时聚合补偿；仅自己可见口碑不计入公开聚合。已冻结于 [`review-content-type/spec.md`](review-content-type/spec.md) §权限边界与可见性 / §数据生命周期合同。
 - [x] **C3c 覆盖矩阵与优先级**：口碑与既有内容类型 Story 的覆盖关系已在 [`review-content-type/spec.md`](review-content-type/spec.md) §覆盖矩阵 声明（复用 publish/召回/统一展示，不与既有冲突）。
 - [x] **C3d 迁移灰度回滚**：feature flag 控发布入口曝光与 POI 聚合展示、读路径对未知 `contentType` 安全降级、关闭 flag 即停新增（已写 review 作普通内容可读）。已冻结于 [`review-content-type/spec.md`](review-content-type/spec.md) §迁移/灰度/回滚；打标搜索为 C2 后 flag 灰度（见 [`creation-tagging-ia/spec.md`](creation-tagging-ia/spec.md)）。
-- [x] **C3e 单一真相源（path/operation/surface/route/decoder/tagRef）**：口碑复用 `content/post/service.yaml` 写链路、`publish/tags` 唯一检索源；UI/Router 不维护第二套规则表（约束已写入两份 spec 的 §约束）。
+- [x] **C3e 单一真相源（path/operation/surface/route/decoder/tagRef）**：口碑复用 `content/post/service.yaml` 写链路、tag-service serving projection 是唯一在线检索源；UI/Router 不维护第二套规则表（约束已写入两份 spec 的 §约束）。
 - [x] **C3f env-seed manifest + 单一真相源回填**：`app_{alpha,beta,gamma}_seed_manifest.json` 三环境通过 `verify_app_seed_manifests.py`（生产 seed 隔离 13 文件已检），`verify_business_env_data_inventory.py`（26 seedRefs）、`verify_contract_mock_data_inventory.py` 全绿。**修复 E1 残留**：content 三套 scenario fixture（`content_scenarios.json/.gamma-curated/.lite`）`contentType/type: moment → micro`（共 77 处，identity 轴 moment 保留），消除「micro 内容被 `postBaseDtoFromMap` 默认落到 `PhotoPostDto`」的隐性错配。口碑 review fixture 属 `review-content-type` /dev 范围（env-seed-first 在故事内补 alpha mock + beta/gamma remote seed），不阻断准入出口。
 
 ---

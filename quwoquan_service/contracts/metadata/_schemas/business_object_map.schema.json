@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/business_object_map.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["domain", "decision_refs", "bounded_contexts", "objects"],
+  "properties": {
+    "domain": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+    "decision_refs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "bounded_contexts": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/boundedContext" }
+    },
+    "objects": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/businessObject" }
+    }
+  },
+  "$defs": {
+    "boundedContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["context_id", "name", "role", "access_policy"],
+      "properties": {
+        "context_id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$" },
+        "name": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["core", "supporting", "generic"] },
+        "access_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commands", "queries", "child_objects", "cross_context"],
+          "properties": {
+            "commands": { "const": "aggregate_facade_only" },
+            "queries": { "const": "named_reader_slice_only" },
+            "child_objects": { "const": "aggregate_root_only" },
+            "cross_context": { "const": "public_contract_only" }
+          }
+        }
+      }
+    },
+    "businessObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_object",
+        "bounded_context",
+        "object_kind",
+        "identity",
+        "invariant_refs",
+        "member_bounds",
+        "storage_role",
+        "mutation_entrypoints",
+        "event_consumers",
+        "lifecycle_refs",
+        "access",
+        "relationships",
+        "field_roles"
+      ],
+      "properties": {
+        "canonical_object": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
+        "bounded_context": { "type": "string", "minLength": 1 },
+        "object_kind": {
+          "enum": [
+            "aggregate_root",
+            "owned_entity",
+            "value_object",
+            "append_only_fact",
+            "projection",
+            "external_reference",
+            "runtime_session"
+          ]
+        },
+        "aggregate_owner": { "type": "string", "minLength": 1 },
+        "identity": { "$ref": "#/$defs/objectIdentity" },
+        "invariant_refs": { "$ref": "#/$defs/nonEmptyStrings" },
+        "member_bounds": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[A-Z][A-Za-z0-9]*$" },
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        },
+        "storage_role": {
+          "enum": ["authoritative", "owned", "append_only", "projection", "external", "runtime"]
+        },
+        "storage_backend": { "type": "string", "minLength": 1 },
+        "mutation_entrypoints": { "$ref": "#/$defs/nonEmptyStrings" },
+        "event_consumers": { "$ref": "#/$defs/nonEmptyStrings" },
+        "lifecycle_refs": { "$ref": "#/$defs/nonEmptyStrings" },
+        "source_document": { "type": "string", "minLength": 1 },
+        "source_entity": { "type": "string", "minLength": 1 },
+        "access": { "$ref": "#/$defs/objectAccess" },
+        "relationships": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/relationship" }
+        },
+        "field_roles": { "$ref": "#/$defs/fieldRoles" },
+        "local_identity_reasons": {
+          "type": "object",
+          "propertyNames": { "type": "string", "minLength": 1 },
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "objectIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields", "version_source"],
+      "properties": {
+        "fields": { "$ref": "#/$defs/fieldNames" },
+        "version_source": {
+          "enum": ["field", "store_commit", "owner", "immutable", "checkpoint", "external", "session"]
+        },
+        "version_field": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "version_source": { "const": "field" } }, "required": ["version_source"] },
+          "then": { "required": ["version_field"] }
+        }
+      ]
+    },
+    "objectAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commands", "queries", "cross_context"],
+      "properties": {
+        "commands": { "enum": ["aggregate_facade", "via_aggregate_root", "append_only_sink", "session_facade", "none"] },
+        "queries": { "enum": ["named_reader", "via_aggregate_projection", "external_port", "none"] },
+        "cross_context": { "enum": ["public_contract_only", "event_only", "forbidden"] }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "reference_fields", "kind", "cardinality", "consistency", "access", "on_delete"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "target_object": { "type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$" },
+        "target_objects": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$" }
+        },
+        "reference_fields": { "$ref": "#/$defs/fieldNames" },
+        "kind": { "enum": ["owned", "reference", "event_source", "projection_source", "external"] },
+        "cardinality": { "enum": ["1:1", "1:N", "N:1", "N:N"] },
+        "consistency": { "enum": ["strong", "eventual", "runtime"] },
+        "access": { "enum": ["aggregate_root", "command_facade", "named_reader", "event", "external_port", "none"] },
+        "on_delete": { "enum": ["cascade", "restrict", "tombstone", "retain", "detach"] }
+      },
+      "oneOf": [
+        { "required": ["target_object"] },
+        { "required": ["target_objects"] }
+      ]
+    },
+    "fieldRoles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authoritative_state", "owned_value", "reference", "append_only_fact", "projection", "transport_only"],
+      "properties": {
+        "authoritative_state": { "$ref": "#/$defs/fieldNames" },
+        "owned_value": { "$ref": "#/$defs/fieldNames" },
+        "reference": { "$ref": "#/$defs/fieldNames" },
+        "append_only_fact": { "$ref": "#/$defs/fieldNames" },
+        "projection": { "$ref": "#/$defs/fieldNames" },
+        "transport_only": { "$ref": "#/$defs/fieldNames" }
+      }
+    },
+    "fieldNames": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "nonEmptyStrings": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common.paths import PUBLISH_ROOT
+from core.paths import PUBLISH_ROOT
 
 ENTITIES_ROOT = PUBLISH_ROOT / "entities" / "机构" / "学校"
 POSTS_ROOT = PUBLISH_ROOT / "posts" / "article"

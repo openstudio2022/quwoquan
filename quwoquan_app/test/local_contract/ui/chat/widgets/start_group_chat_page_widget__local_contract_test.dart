@@ -19,7 +19,9 @@ import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/pages/start_group_chat_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_contacts_rows_provider.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_inbox_provider.dart';
+import 'package:quwoquan_runtime_errors/runtime_errors.dart';
 import '../../../../support/fixtures/chat/chat_mock_seed_refs.dart';
+import '../../../../support/runtime_failure_fixtures.dart';
 
 void _suppressImageErrors() {
   final original = FlutterError.onError;
@@ -270,6 +272,10 @@ void main() {
         statusCode: 403,
         code: 'CHAT.USER.group_member_not_mutual',
         userMessage: serverMessage,
+        runtimeFailure: testRuntimeFailure(
+          code: 'CHAT.USER.group_member_not_mutual',
+          kind: RuntimeFailureKind.permission,
+        ),
       ),
     );
     final container = _buildContainer(repository);
@@ -398,6 +404,10 @@ void main() {
         statusCode: 403,
         code: 'CHAT.USER.group_member_not_mutual',
         userMessage: '只能邀请互相关注的好友加入群聊',
+        runtimeFailure: testRuntimeFailure(
+          code: 'CHAT.USER.group_member_not_mutual',
+          kind: RuntimeFailureKind.permission,
+        ),
       ),
     );
     final container = _buildContainer(repository, analytics: analytics);

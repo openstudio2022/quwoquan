@@ -3,6 +3,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart'
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 enum AppForwardSubjectKind {
   profileQr,
@@ -49,18 +50,30 @@ class AppForwardPayload {
     return title.trim();
   }
 
-  Map<String, Object?> toCardPayload({String message = ''}) {
-    return <String, Object?>{
-      'forwardKind': kind.name,
-      'title': title,
-      'subtitle': subtitle,
-      'thumbnailUrl': thumbnailUrl,
-      'deeplink': deeplink,
-      'landingUrl': landingUrl,
-      'shareText': shareText,
-      if (message.trim().isNotEmpty) 'message': message.trim(),
-      if (extra.isNotEmpty) 'extra': extra,
-    };
+  ChatMessageCardCommand toMessageCardCommand({String message = ''}) {
+    return ChatMessageCardCommand(
+      kind: kind.name,
+      title: title,
+      subtitle: subtitle,
+      thumbnailUrl: thumbnailUrl,
+      deeplink: deeplink,
+      landingUrl: landingUrl,
+      shareText: shareText,
+      message: message,
+      attributes: extra.entries
+          .where(
+            (entry) =>
+                entry.key.trim().isNotEmpty &&
+                entry.value != null &&
+                entry.value.toString().trim().isNotEmpty,
+          )
+          .map(
+            (entry) => ChatMessageCardAttribute(
+              name: entry.key,
+              value: entry.value.toString(),
+            ),
+          ),
+    );
   }
 }
 

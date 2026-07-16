@@ -82,6 +82,39 @@ _PLATFORM_CONFIG_SCHEMA_JSON = r'''{
       "ui_editable": true
     },
     {
+      "default": 0.1,
+      "key": "sys.user.auth.success_detail_sample_ratio",
+      "owner": "user-identity",
+      "reload": "hot",
+      "risk_level": "high",
+      "rollout": "progressive",
+      "scope": "environment",
+      "type": "float",
+      "ui_editable": true
+    },
+    {
+      "default": 30,
+      "key": "sys.user.auth.raw_event_retention_days",
+      "owner": "user-identity",
+      "reload": "restart",
+      "risk_level": "high",
+      "rollout": "progressive",
+      "scope": "environment",
+      "type": "int",
+      "ui_editable": true
+    },
+    {
+      "default": 180,
+      "key": "sys.user.auth.aggregate_metric_retention_days",
+      "owner": "user-identity",
+      "reload": "restart",
+      "risk_level": "medium",
+      "rollout": "progressive",
+      "scope": "environment",
+      "type": "int",
+      "ui_editable": true
+    },
+    {
       "default": 16,
       "key": "sys.content.worker.concurrency",
       "owner": "platform-ops",

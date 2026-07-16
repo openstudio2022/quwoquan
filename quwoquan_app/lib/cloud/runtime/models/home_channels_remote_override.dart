@@ -32,8 +32,8 @@ class HomeChannelsRemoteOverride {
           phoneColumns: _asInt(m['phone_columns']),
           supportsFullSpanModules:
               _asBool(m['supports_full_span_modules']) ?? false,
-          intersectionModulePolicy:
-              (m['intersection_module_policy'] ?? '').toString(),
+          intersectionModulePolicy: (m['intersection_module_policy'] ?? '')
+              .toString(),
           contentCardPolicy: (m['content_card_policy'] ?? '').toString(),
           feedQuery: _parseFeedQuery(m['feed_query']),
           moodCopyKey: (m['mood_copy_key'] ?? '').toString(),

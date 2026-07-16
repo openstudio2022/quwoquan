@@ -8,13 +8,20 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/services/circle-service/internal/application"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 )
 
-// MongoCircleStore implements CircleStore backed by MongoDB.
+// MongoCircleStore 以 MongoDB 实现圈子主记录、指标与版块端口。
 type MongoCircleStore struct {
 	coll *mongo.Collection
 }
+
+var (
+	_ application.CircleRecordStore  = (*MongoCircleStore)(nil)
+	_ application.CircleMetricsStore = (*MongoCircleStore)(nil)
+	_ application.CircleSectionStore = (*MongoCircleStore)(nil)
+)
 
 func NewMongoCircleStore(coll *mongo.Collection) *MongoCircleStore {
 	return &MongoCircleStore{coll: coll}
@@ -43,7 +50,7 @@ func (s *MongoCircleStore) FindByID(ctx context.Context, id string) (*model.Circ
 	return &c, true
 }
 
-func (s *MongoCircleStore) List(ctx context.Context, opts ListCirclesOpts) ([]model.Circle, string) {
+func (s *MongoCircleStore) List(ctx context.Context, opts application.ListCirclesQuery) ([]model.Circle, string) {
 	if opts.Limit <= 0 {
 		opts.Limit = 20
 	}
@@ -97,29 +104,6 @@ func (s *MongoCircleStore) Archive(ctx context.Context, id string) bool {
 		return false
 	}
 	return result.MatchedCount > 0
-}
-
-func (s *MongoCircleStore) IncrementMemberCount(ctx context.Context, id string, delta int64) error {
-	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
-		"$inc": bson.M{"memberCount": delta},
-		"$set": bson.M{"updatedAt": time.Now()},
-	})
-	return err
-}
-
-func (s *MongoCircleStore) IncrementPostCount(ctx context.Context, id string, delta int64) error {
-	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
-		"$inc": bson.M{"postCount": delta},
-		"$set": bson.M{"updatedAt": time.Now()},
-	})
-	return err
-}
-
-func (s *MongoCircleStore) UpdateWeeklyActiveCount(ctx context.Context, id string, count int64) error {
-	_, err := s.coll.UpdateOne(ctx, bson.M{"_id": id}, bson.M{
-		"$set": bson.M{"weeklyActiveCount": count, "updatedAt": time.Now()},
-	})
-	return err
 }
 
 func (s *MongoCircleStore) UpdateStorageUsed(ctx context.Context, id string, deltaBytes int64) error {

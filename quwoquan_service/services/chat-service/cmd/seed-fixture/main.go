@@ -13,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"quwoquan_service/runtime/contractfixture"
+	messagemodel "quwoquan_service/services/chat-service/internal/domain/chat/message/model"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 )
 
@@ -65,15 +66,18 @@ type chatFixtureConversation struct {
 }
 
 type chatFixtureMessage struct {
-	ID             string `json:"_id"`
-	MessageID      string `json:"messageId"`
-	ConversationID string `json:"conversationId"`
-	SenderID       string `json:"senderId"`
-	Type           string `json:"type"`
-	MessageType    string `json:"messageType"`
-	Content        string `json:"content"`
-	Seq            int64  `json:"seq"`
-	CreatedAt      string `json:"createdAt"`
+	ID                        string `json:"id"`
+	ConversationID            string `json:"conversationId"`
+	ClientMessageID           string `json:"clientMsgId"`
+	SenderID                  string `json:"senderId"`
+	SenderDisplayNameSnapshot string `json:"senderDisplayNameSnapshot"`
+	SenderAvatarURLSnapshot   string `json:"senderAvatarUrlSnapshot"`
+	Type                      string `json:"type"`
+	Content                   string `json:"content"`
+	MediaAssetID              string `json:"mediaAssetId"`
+	Seq                       int64  `json:"seq"`
+	Status                    string `json:"status"`
+	Timestamp                 string `json:"timestamp"`
 }
 
 type chatFixtureMember struct {
@@ -180,7 +184,7 @@ func seedChatFixtureRefs(
 				if _, exists := seenMembers[member.ID]; exists {
 					continue
 				}
-				if _, err := db.Collection("conversation_members").InsertOne(ctx, member); err != nil {
+				if _, err := db.Collection("conversation_memberships").InsertOne(ctx, member); err != nil {
 					return counts, fmt.Errorf("insert member %s: %w", member.ID, err)
 				}
 				seenMembers[member.ID] = struct{}{}
@@ -222,7 +226,7 @@ func resetChatFixtureNamespace(ctx context.Context, db *mongo.Database) error {
 	for _, name := range []string{
 		"conversations",
 		"messages",
-		"conversation_members",
+		"conversation_memberships",
 		"conversation_user_states",
 		"message_receipts",
 	} {
@@ -265,25 +269,21 @@ func chatConversationFromFixture(fc chatFixtureConversation) *model.Conversation
 	}
 }
 
-func chatMessageFromFixture(conversationID string, fm chatFixtureMessage) *model.Message {
-	id := strings.TrimSpace(fm.ID)
-	if id == "" {
-		id = strings.TrimSpace(fm.MessageID)
-	}
-	msgType := strings.TrimSpace(fm.Type)
-	if msgType == "" {
-		msgType = strings.TrimSpace(fm.MessageType)
-	}
-	return &model.Message{
-		ID:             id,
-		ConversationId: conversationID,
-		Seq:            fm.Seq,
-		ClientMsgId:    id + "_client",
-		SenderId:       fm.SenderID,
-		Type:           msgType,
-		Content:        fm.Content,
-		Status:         "sent",
-		Timestamp:      parseFixtureTime(fm.CreatedAt),
+func chatMessageFromFixture(conversationID string, fm chatFixtureMessage) *messagemodel.Message {
+	return &messagemodel.Message{
+		ID:                        strings.TrimSpace(fm.ID),
+		ConversationID:            conversationID,
+		Seq:                       fm.Seq,
+		ClientMessageID:           strings.TrimSpace(fm.ClientMessageID),
+		SenderID:                  strings.TrimSpace(fm.SenderID),
+		SenderDisplayNameSnapshot: strings.TrimSpace(fm.SenderDisplayNameSnapshot),
+		SenderAvatarURLSnapshot:   strings.TrimSpace(fm.SenderAvatarURLSnapshot),
+		Type:                      strings.TrimSpace(fm.Type),
+		Content:                   fm.Content,
+		MediaAssetID:              strings.TrimSpace(fm.MediaAssetID),
+		Status:                    strings.TrimSpace(fm.Status),
+		Timestamp:                 parseFixtureTime(fm.Timestamp),
+		Version:                   1,
 	}
 }
 

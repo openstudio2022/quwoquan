@@ -423,10 +423,6 @@ files:
     zone: ui
     material_import: full
     imports_cupertino: true
-  - path: quwoquan_app/lib/ui/chat/pages/chat_detail_page.dart
-    zone: ui
-    material_import: none
-    imports_cupertino: false
   - path: quwoquan_app/lib/ui/chat/pages/chat_display_fallbacks.dart
     zone: ui
     material_import: none

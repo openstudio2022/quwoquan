@@ -1,11 +1,10 @@
 # 全国地点主清单 · 四川省广安市（discovery_seed/2，WP2 区县级全量枚举）
-# schema: quwoquan_data/schema/coverage/master_list.schema.json
-# 门禁: qwq-data verify coverage-master-list
+# schema: quwoquan_data/schema/governance/master_list.schema.json
+# 门禁: qwq-data verify coverage-static-identity
 schemaVersion: quwoquan_data.discovery_seed/2
 country: 中国
 province: 四川省
 city: 广安市
-generatedBy: wp2_enumeration_20260708
 districts:
 - district: 广安区
   leaves:
@@ -20,9 +19,6 @@ districts:
     - 邓小平故里旅游景区
     - 邓小平故居
     selectionPriority: 1
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:41:46Z'
-    sourceScreenEvidence: zh.wikipedia.org:邓小平故居 extract=234ch
   - name: 神龙山巴人石头城
     canonicalName: 神龙山巴人石头城
     entityType: 地点/景区
@@ -32,7 +28,6 @@ districts:
     aliases:
     - 神龙山
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 肖溪古镇
     canonicalName: 广安肖溪古镇
     entityType: 地点/古镇
@@ -40,7 +35,6 @@ districts:
     - Entity/地点/古镇/历史古镇
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 广安白塔
     canonicalName: 广安白塔
     entityType: 地点/遗址
@@ -48,7 +42,6 @@ districts:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 思源广场
     canonicalName: 广安思源广场
     entityType: 地点/打卡地
@@ -56,14 +49,12 @@ districts:
     - Entity/地点/打卡地
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
     selectionPriority: 5
-    sourceReadiness: pending
   - name: 北山小學堂
     canonicalName: 北山小學堂
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 協興萬春橋
     canonicalName: 協興萬春橋
@@ -71,7 +62,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 廣安文廟
     canonicalName: 廣安文廟
@@ -79,7 +69,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 廣安白塔
     canonicalName: 廣安白塔
@@ -87,7 +76,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 廣安縣立高等小學堂舊址
     canonicalName: 廣安縣立高等小學堂舊址
@@ -95,7 +83,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 沖相寺
     canonicalName: 沖相寺
@@ -103,7 +90,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 11
   - name: 淡氏墓
     canonicalName: 淡氏墓
@@ -111,7 +97,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 12
   - name: 石凹口觀音岩摩崖造像
     canonicalName: 石凹口觀音岩摩崖造像
@@ -119,7 +104,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 13
   - name: 翰林院子
     canonicalName: 翰林院子
@@ -127,7 +111,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 14
   - name: 興國寺大殿
     canonicalName: 興國寺大殿
@@ -135,7 +118,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 15
   - name: 蠶房院子
     canonicalName: 蠶房院子
@@ -143,7 +125,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 16
   - name: 邓小平青少年时代活动旧址
     canonicalName: 邓小平青少年时代活动旧址
@@ -151,7 +132,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 17
   - name: 鄧紹昌墓
     canonicalName: 鄧紹昌墓
@@ -159,7 +139,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/广安区
-    sourceReadiness: pending
     selectionPriority: 18
 - district: 前锋区
   leaves:
@@ -172,7 +151,6 @@ districts:
     aliases:
     - 欢喜坪
     selectionPriority: 1
-    sourceReadiness: ready
   - name: 大良田园
     canonicalName: 前锋大良田园
     entityType: 地点/景区
@@ -180,7 +158,6 @@ districts:
     - Entity/地点/景区/3A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/前锋区
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 大良城
     canonicalName: 广安大良城
     entityType: 地点/遗址
@@ -190,14 +167,12 @@ districts:
     aliases:
     - 大良城古寨
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 代市牌坊
     canonicalName: 代市牌坊
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/前锋区
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 永光儀器廠舊址
     canonicalName: 永光儀器廠舊址
@@ -205,7 +180,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/前锋区
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 獨愚子墓
     canonicalName: 獨愚子墓
@@ -213,7 +187,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/前锋区
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 觀閣黎氏宗祠
     canonicalName: 觀閣黎氏宗祠
@@ -221,7 +194,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/前锋区
-    sourceReadiness: pending
     selectionPriority: 7
 - district: 华蓥市
   leaves:
@@ -237,9 +209,6 @@ districts:
     - 华蓥山旅游区
     - 华蓥山石林
     selectionPriority: 1
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:41:58Z'
-    sourceScreenEvidence: zh.wikipedia.org:华蓥山 extract=222ch
   - name: 安丙家族墓地
     canonicalName: 安丙家族墓地
     entityType: 地点/遗址
@@ -249,7 +218,6 @@ districts:
     aliases:
     - 安丙墓
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 天池湖
     canonicalName: 华蓥天池湖
     entityType: 地点/自然景观
@@ -257,14 +225,12 @@ districts:
     - Entity/地点/自然景观/水体
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/华蓥市
     selectionPriority: 3
-    sourceReadiness: ready
   - name: 五星橋
     canonicalName: 五星橋
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/华蓥市
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 代家嘴遺址
     canonicalName: 代家嘴遺址
@@ -272,7 +238,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/华蓥市
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 新華日報紙廠舊址
     canonicalName: 新華日報紙廠舊址
@@ -280,7 +245,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/华蓥市
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 華光儀器廠舊址
     canonicalName: 華光儀器廠舊址
@@ -288,7 +252,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/华蓥市
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 褒先寺
     canonicalName: 褒先寺
@@ -296,7 +259,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/华蓥市
-    sourceReadiness: pending
     selectionPriority: 8
 - district: 岳池县
   leaves:
@@ -309,7 +271,6 @@ districts:
     aliases:
     - 岳池农家
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 翠湖
     canonicalName: 岳池翠湖
     entityType: 地点/自然景观
@@ -317,7 +278,6 @@ districts:
     - Entity/地点/自然景观/水体
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
     selectionPriority: 2
-    sourceReadiness: ready
   - name: 顾县古镇
     canonicalName: 岳池顾县古镇
     entityType: 地点/古镇
@@ -325,14 +285,12 @@ districts:
     - Entity/地点/古镇/历史古镇
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 岳池彌勒寺
     canonicalName: 岳池彌勒寺
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 岳池文廟
     canonicalName: 岳池文廟
@@ -340,7 +298,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 岳池白塔
     canonicalName: 岳池白塔
@@ -348,7 +305,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 岳池高寺
     canonicalName: 岳池高寺
@@ -356,7 +312,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 廖玉璧烈士墓
     canonicalName: 廖玉璧烈士墓
@@ -364,7 +319,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 王字樓
     canonicalName: 王字樓
@@ -372,7 +326,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 雲門寺瘞窟群
     canonicalName: 雲門寺瘞窟群
@@ -380,7 +333,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 顧縣川主廟
     canonicalName: 顧縣川主廟
@@ -388,7 +340,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/岳池县
-    sourceReadiness: pending
     selectionPriority: 11
 - district: 武胜县
   leaves:
@@ -402,7 +353,6 @@ districts:
     aliases:
     - 宝箴塞旅游区
     selectionPriority: 1
-    sourceReadiness: ready
   - name: 白坪—飞龙旅游区
     canonicalName: 武胜白坪—飞龙旅游区
     entityType: 地点/景区
@@ -412,7 +362,6 @@ districts:
     aliases:
     - 白坪—飞龙乡村旅游度假区
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 沿口古镇
     canonicalName: 武胜沿口古镇
     entityType: 地点/古镇
@@ -420,9 +369,6 @@ districts:
     - Entity/地点/古镇/历史古镇
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
     selectionPriority: 3
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:42:31Z'
-    sourceScreenEvidence: zh.wikipedia.org:沿口古镇 extract=218ch
   - name: 永寿寺
     canonicalName: 武胜永寿寺
     entityType: 地点/宗教场所
@@ -431,14 +377,12 @@ districts:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
     selectionPriority: 4
-    sourceReadiness: pending
   - name: 7002井
     canonicalName: 7002井
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 勝天渡槽
     canonicalName: 勝天渡槽
@@ -446,7 +390,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 南溪村墓群
     canonicalName: 南溪村墓群
@@ -454,7 +397,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 印山公园
     canonicalName: 印山公园
@@ -462,7 +404,6 @@ districts:
     typeTagRefs:
     - Entity/地点/公园
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 寶箴塞
     canonicalName: 寶箴塞
@@ -470,7 +411,6 @@ districts:
     typeTagRefs:
     - Entity/地点/景区/4A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 插旗山摩崖造像
     canonicalName: 插旗山摩崖造像
@@ -478,7 +418,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 10
   - name: 武勝中心鎮古建築群
     canonicalName: 武勝中心鎮古建築群
@@ -486,7 +425,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 11
   - name: 武勝石佛寺摩崖造像
     canonicalName: 武勝石佛寺摩崖造像
@@ -494,7 +432,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 12
   - name: 武勝觀音寺
     canonicalName: 武勝觀音寺
@@ -502,7 +439,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 13
   - name: 沿口千佛岩摩崖造像
     canonicalName: 沿口千佛岩摩崖造像
@@ -510,7 +446,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 14
   - name: 清平陳家寨民居
     canonicalName: 清平陳家寨民居
@@ -518,7 +453,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 15
   - name: 烈面湖南會館
     canonicalName: 烈面湖南會館
@@ -526,7 +460,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 16
   - name: 真静书岩
     canonicalName: 真静书岩
@@ -534,7 +467,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 17
   - name: 觀音寨吳氏家族墓
     canonicalName: 觀音寨吳氏家族墓
@@ -542,7 +474,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 18
   - name: 飛龍武廟
     canonicalName: 飛龍武廟
@@ -550,7 +481,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 19
   - name: 飞龙镇 (武胜县)
     canonicalName: 飞龙镇 (武胜县)
@@ -558,7 +488,6 @@ districts:
     typeTagRefs:
     - Entity/地点/景区/4A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/武胜县
-    sourceReadiness: pending
     selectionPriority: 20
 - district: 邻水县
   leaves:
@@ -572,7 +501,6 @@ districts:
     aliases:
     - 天意谷景区
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 五华山
     canonicalName: 邻水五华山
     entityType: 地点/景区
@@ -583,14 +511,12 @@ districts:
     aliases:
     - 五华山旅游区
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 唐湾山崖墓群
     canonicalName: 唐湾山崖墓群
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/邻水县
-    sourceReadiness: pending
     selectionPriority: 3
   - name: 靈寶山石刻及古石橋
     canonicalName: 靈寶山石刻及古石橋
@@ -598,7 +524,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/邻水县
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 黃陵寺摩崖造像及石刻
     canonicalName: 黃陵寺摩崖造像及石刻
@@ -606,5 +531,4 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/广安市/邻水县
-    sourceReadiness: pending
     selectionPriority: 5

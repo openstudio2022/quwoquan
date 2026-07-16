@@ -1,0 +1,24 @@
+version: 1
+domain: recommendation
+entity: RecommendationIntersectionVisitState
+object_kind: aggregate_root
+description: persona 与推荐主题交集的已访问生命周期；写入只经 Recommendation Command Facade。
+storage_backend: mongodb
+cache_layer: redis
+cache_ttl_seconds: 300
+capabilities: [commandable, queryable]
+business_rules:
+  - personaId + targetType + targetId 唯一
+  - visitedAt 只能单调推进，重复 idempotency key 返回同一版本
+lifecycle:
+  states: [active]
+  optimistic_concurrency: version
+  idempotency: command_receipt
+taggable: false
+vector_enabled: false
+ddd_layer_mapping:
+  domain_model: internal/domain/recommendation/intersection
+  repository: internal/domain/recommendation/ports
+  application: internal/application/recommendation
+  adapter_rest: internal/adapter/rest/recommendation
+  adapter_event: internal/adapter/event/recommendation

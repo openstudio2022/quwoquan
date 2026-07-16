@@ -8,6 +8,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 
+	platformredis "quwoquan_service/internal/platform/redis"
 	rtredis "quwoquan_service/runtime/redis"
 )
 
@@ -17,7 +18,7 @@ func TestRedisReadyIndexStandaloneStreamsClaimAck(t *testing.T) {
 		mr := miniredis.RunT(t)
 		redisAddr = mr.Addr()
 	}
-	router := rtredis.MustNewRouter(rtredis.RouterConfig{
+	router := platformredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
 			"reliabletask": {Mode: "standalone", Addr: redisAddr},
 		},
@@ -27,7 +28,7 @@ func TestRedisReadyIndexStandaloneStreamsClaimAck(t *testing.T) {
 
 	index, err := NewRedisReadyIndex(RedisReadyIndexConfig{
 		Client: router.Scene("reliabletask"),
-		Stream: "reliabletask:chat:avatar:ready:test:" + newID("stream"),
+		Stream: "reliabletask:chat:avatar:ready:test:" + NewRecordID("stream"),
 		Group:  "chat.group_avatar_worker.alpha",
 		Queue:  "reliabletask.chat.avatar",
 	})

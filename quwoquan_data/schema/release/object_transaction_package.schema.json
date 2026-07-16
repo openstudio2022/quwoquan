@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/object_transaction_package.schema.json",
+  "title": "永久 publish freeze 下的单对象发布事务输入包",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "transactionId",
+    "executionId",
+    "sourcePolicyRevision",
+    "target",
+    "closure",
+    "review",
+    "objectClosureDigest"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "quwoquan_data.object_transaction_package/1"
+    },
+    "transactionId": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/\\\\]+$"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+    },
+    "sourcePolicyRevision": {
+      "const": "encyclopedia-primary-v2"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layoutSchema",
+        "objectKind",
+        "objectRef",
+        "objectSchema",
+        "packageObjectRef"
+      ],
+      "properties": {
+        "layoutSchema": {
+          "const": "quwoquan_data.canonical_publish/3"
+        },
+        "objectKind": {
+          "enum": ["creators", "entities", "posts"]
+        },
+        "objectRef": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        },
+        "objectSchema": {
+          "enum": [
+            "quwoquan_data.creator_object/1",
+            "quwoquan_data.entity_object/1",
+            "quwoquan_data.post_object/1"
+          ]
+        },
+        "packageObjectRef": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+        }
+      }
+    },
+    "closure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "creatorRefs",
+        "tagRefs",
+        "sourceCatalogRef",
+        "rightsRef",
+        "casRefs"
+      ],
+      "properties": {
+        "creatorRefs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "tagRefs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "sourceCatalogRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rightsRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "casRefs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sourceRef", "objectKey", "sha256", "bytes"],
+            "properties": {
+              "sourceRef": {
+                "type": "string",
+                "minLength": 1
+              },
+              "objectKey": {
+                "type": "string",
+                "pattern": "^media/objects/sha256/[0-9a-f]{2}/[0-9a-f]{2}/[0-9a-f]{64}\\.[A-Za-z0-9]+$"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attestationRef", "evidenceIndexRef"],
+      "properties": {
+        "attestationRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceIndexRef": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "objectClosureDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

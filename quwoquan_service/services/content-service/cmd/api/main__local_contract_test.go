@@ -76,36 +76,14 @@ func TestApplyRedisSceneEnv_NoEnvSet_NoChange(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// applyEnvOverrides — backward compat (CONTENT_REDIS_ADDR → rec.addr)
-// ---------------------------------------------------------------------------
-
-func TestApplyEnvOverrides_CurrentAddr(t *testing.T) {
-	t.Setenv("CONTENT_REDIS_ADDR", "current-host:6379")
+func TestApplyEnvOverrides_RetiredSingleSceneEnvIgnored(t *testing.T) {
+	t.Setenv("CONTENT_REDIS_ADDR", "retired-host:6379")
+	t.Setenv("CONTENT_REDIS_PASSWORD", "retired-password")
+	t.Setenv("CONTENT_REDIS_DB", "9")
 	cfg := config{}
 	applyEnvOverrides(&cfg)
-	if cfg.Redis.Rec.Addr != "current-host:6379" {
-		t.Errorf("current CONTENT_REDIS_ADDR should map to Redis.Rec.Addr, got %q", cfg.Redis.Rec.Addr)
-	}
-}
-
-func TestApplyEnvOverrides_CurrentAddrNotOverrideExisting(t *testing.T) {
-	t.Setenv("CONTENT_REDIS_ADDR", "current-host:6379")
-	cfg := config{}
-	cfg.Redis.Rec.Addr = "already-set:6379"
-	applyEnvOverrides(&cfg)
-	// Current env must NOT overwrite a value already set from new env/config
-	if cfg.Redis.Rec.Addr != "already-set:6379" {
-		t.Errorf("current addr should not overwrite existing cfg.Redis.Rec.Addr")
-	}
-}
-
-func TestApplyEnvOverrides_CurrentPassword(t *testing.T) {
-	t.Setenv("CONTENT_REDIS_PASSWORD", "current-pass")
-	cfg := config{}
-	applyEnvOverrides(&cfg)
-	if cfg.Redis.Rec.Password != "current-pass" {
-		t.Errorf("current CONTENT_REDIS_PASSWORD should map to Redis.Rec.Password")
+	if cfg.Redis.Rec.Addr != "" || cfg.Redis.Rec.Password != "" || cfg.Redis.Rec.DB != 0 {
+		t.Fatalf("retired single-scene Redis env must not affect rec config: %+v", cfg.Redis.Rec)
 	}
 }
 
@@ -158,19 +136,19 @@ func TestToSceneConfig_StandaloneWithAddr(t *testing.T) {
 	}
 }
 
-func TestToSceneConfig_StandaloneNoAddrFallsToMemory(t *testing.T) {
+func TestToSceneConfig_StandaloneNoAddrDoesNotFallbackToMemory(t *testing.T) {
 	r := redisSceneCfg{Mode: "standalone"}
 	sc := toSceneConfig(r)
-	if sc.Mode != "memory" {
-		t.Errorf("empty standalone addr should fallback to memory, got %q", sc.Mode)
+	if sc.Mode != "standalone" {
+		t.Errorf("production composition must preserve invalid standalone config for preflight, got %q", sc.Mode)
 	}
 }
 
-func TestToSceneConfig_ClusterNoAddrsFallsToMemory(t *testing.T) {
+func TestToSceneConfig_ClusterNoAddrsDoesNotFallbackToMemory(t *testing.T) {
 	r := redisSceneCfg{Mode: "cluster"}
 	sc := toSceneConfig(r)
-	if sc.Mode != "memory" {
-		t.Errorf("cluster with no addrs should fallback to memory, got %q", sc.Mode)
+	if sc.Mode != "cluster" {
+		t.Errorf("production composition must preserve invalid cluster config for preflight, got %q", sc.Mode)
 	}
 }
 
@@ -292,4 +270,75 @@ func TestPreflightConfig_ClusterRequiresAddrs(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "requires redis.rec.addrs") {
 		t.Fatalf("expected cluster addrs error, got %v", err)
 	}
+}
+
+func TestPreflightConfig_RejectsMemoryScene(t *testing.T) {
+	cfg := validCommercialConfig()
+	cfg.Redis.General.Mode = "memory"
+	if err := preflightConfig(cfg, "gamma"); err == nil || !strings.Contains(err.Error(), "memory is forbidden") {
+		t.Fatalf("expected memory scene rejection, got %v", err)
+	}
+}
+
+func TestPreflightConfig_RequiresCommercialDataDependencies(t *testing.T) {
+	cfg := validCommercialConfig()
+	cfg.Mongo.URI = ""
+	if err := preflightConfig(cfg, "gamma"); err == nil || !strings.Contains(err.Error(), "requires mongo.uri") {
+		t.Fatalf("expected Mongo requirement, got %v", err)
+	}
+
+	cfg = validCommercialConfig()
+	cfg.Postgres.ReportDSN = ""
+	if err := preflightConfig(cfg, "gamma"); err == nil || !strings.Contains(err.Error(), "requires postgres.report_dsn") {
+		t.Fatalf("expected PostgreSQL requirement, got %v", err)
+	}
+
+	cfg = validCommercialConfig()
+	cfg.OSS.AccessKeySecret = ""
+	if err := preflightConfig(cfg, "gamma"); err == nil || !strings.Contains(err.Error(), "CONTENT_OSS_ACCESS_KEY_SECRET") {
+		t.Fatalf("expected OSS credential requirement, got %v", err)
+	}
+}
+
+func TestPreflightConfig_RequiresEnabledSearchEndpoint(t *testing.T) {
+	cfg := validCommercialConfig()
+	cfg.ES.Enabled = true
+	if err := preflightConfig(cfg, "gamma"); err == nil || !strings.Contains(err.Error(), "SEARCH_ES_ENDPOINTS") {
+		t.Fatalf("expected ES endpoint requirement, got %v", err)
+	}
+}
+
+func TestPreflightConfig_AcceptsCompleteCommercialComposition(t *testing.T) {
+	cfg := validCommercialConfig()
+	if err := preflightConfig(cfg, "gamma"); err != nil {
+		t.Fatalf("expected complete commercial composition, got %v", err)
+	}
+}
+
+func TestContentOSSEndpointHonorsExplicitTransport(t *testing.T) {
+	if got := contentOSSEndpoint("minio:9000", false); got != "http://minio:9000" {
+		t.Fatalf("expected local MinIO HTTP endpoint, got %q", got)
+	}
+	if got := contentOSSEndpoint("minio:9000", true); got != "https://minio:9000" {
+		t.Fatalf("expected TLS object-storage endpoint, got %q", got)
+	}
+	if got := contentOSSEndpoint("https://oss.example.test/", false); got != "https://oss.example.test" {
+		t.Fatalf("explicit endpoint scheme must be authoritative, got %q", got)
+	}
+}
+
+func validCommercialConfig() config {
+	cfg := config{}
+	for _, scene := range []*redisSceneCfg{&cfg.Redis.Rec, &cfg.Redis.General, &cfg.Redis.Realtime} {
+		scene.Mode = "standalone"
+		scene.Addr = "redis:6379"
+	}
+	cfg.Mongo.URI = "mongodb://mongodb:27017"
+	cfg.Postgres.ReportDSN = "postgres://content:content@postgres:5432/content?sslmode=disable"
+	cfg.OSS.Endpoint = "minio:9000"
+	cfg.OSS.Bucket = "quwoquan-media"
+	cfg.OSS.Region = "us-east-1"
+	cfg.OSS.AccessKeyID = "content-test-key"
+	cfg.OSS.AccessKeySecret = "content-test-secret"
+	return cfg
 }

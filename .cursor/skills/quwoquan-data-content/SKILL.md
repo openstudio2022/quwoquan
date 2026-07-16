@@ -1,191 +1,115 @@
 ---
 name: quwoquan-data-content
-description: Produce truthful, richly-illustrated, narrative travel/route content via the qwq-data CLI (plan -> download -> produce -> media check-images -> verify). Use when the user asks about 内容生产、冷启动文章、游记/线路成稿、图片安全/水印/人脸、画报载体、selutel data pipeline, 数据工程出稿, or quwoquan_data content quality.
+description: Run the canonical quwoquan data content workflow from reusable inputs through one execution work package, immutable release, environment import, and App UAT.
 ---
 # quwoquan Data Content
 
-本仓库的数据内容生产必须通过统一 CLI `qwq-data`（= `python3 quwoquan_data/scripts/cli.py`）。
-脚本只做 IO 准备与校验，语义加工在 Agent 会话内完成；禁止为单个场景新写孤立可执行脚本。
+数据内容生产只有一个入口：
 
-## 唯一入口（CLI-first）
-
-```
+```bash
 python3 quwoquan_data/scripts/cli.py <command> ...
 ```
 
-| 命令 | 作用 |
-|---|---|
-| `plan` | 把内容指令解析为 compose_brief（含叙事契约/imagePlan/imagePolicy） |
-| `download` | 多平台素材获取 + 来源质量评分 + 匿名化 |
-| `produce --stage compose-brief` | 准备阶段：analyze 证据 → 选图 → 落「写作契约」`writing_pack.json` + `prompt.md` + 占位 `article.md`（**不拼正文**） |
-| `produce --stage review` | 校验阶段：读会话模型写回的 `article.md` → 三道门 + 既有质量门 → 裁决 |
-| `produce --stage review --materialize` | review 通过后将 approved 结果落地为 post package（含账本/实体 sidecar） |
-| `media check-images` | 真实 CV 图片门：人脸/水印/OCR 文叠/感知去重 |
-| `annotate` | Human-in-loop 标注：发布前对账本图片/事实/文章下人判定、打分、置发布态、记再加工 |
-| `ship` | 一键发布：promote→重建索引→按环境确定性采样写 sample bundle→(可选)调用服务侧 importer 灌库 |
-| `verify` | 收紧范围校验 post package（schema + 语义 + 图片 + 三道门） |
-| `verify scale-readiness` | 商用放量证据门：来源充分率、workflow 状态、队列后端、TokenLedger、release/import、吞吐和首轮通过率 |
-| `env ready` | 一键准备 data venv，并检查 `cursor_sdk`、CV/OCR 依赖、`CURSOR_API_KEY` 和网络可达性 |
-| `env preflight` | 只做运行前环境验收，不安装依赖 |
-| `task decompose load --master-list --provinces <省,...>` | 枚举 SOP 阶段 A：主清单目录投影省→市州→区县分区树进 fanout plan，冻结前叠加地理覆盖发现门 |
-| `vertical master-list-stats` | 全国地点主清单统计（规模/类型分布/源就绪/跨省地点） |
-| `vertical master-list-probe-sources --provinces <省,...>` | 源可用性预筛：轻探百科主源有无并回填 `sourceReadiness`（节流+断点续跑，`--recheck` 重探） |
-| `verify coverage-master-list` | 主清单门禁 C1-C9（目录归属/schema/行政区树/类型 scope/canonicalName 全局唯一） |
-| `template lint` | 模板蓝图门禁（含 route 叙事契约 / gallery imagePolicy） |
-| `task run-recipe <ref>` | 按家族包配方跑批（`ensure-task → 契约门 → 执行 → readiness` 四段唯一主干；配方在 `control_plane/families/**.recipe.yaml`，如 `content/travel/homepage/h100`） |
+脚本负责 IO、契约、下载、校验、发布与证据；正文语义创作只由 Agent 完成。禁止新增直跑业务脚本、静态任务实例、分片运行根或第二套发布流程。
 
-## 任务控制面（control_plane）
+## 三段职责
 
-任务实例、家族 preset/recipe、共享运行 profile 统一在 `quwoquan_data/control_plane/`：
-`tasks/<taskId>/task.yaml`（任务注册表）+ `families/<家族路径>/*.preset.yaml|*.recipe.yaml|*.instructions.md`
-（家族包）+ `_shared/*.runtime.yaml`（运行环境 profile）。任务默认值唯一来源是
-`task.yaml.presetRef`；批量运行编排唯一入口是 `qwq-data task run-recipe`，禁止再写
-runner shell 或第二套编排脚本。详见 `quwoquan_data/docs/pipeline_directory_layout_spec.md` §0.5。
+### 1. 可复用工程输入
 
-## 正文创作只能由会话模型完成（禁止脚本拼正文 / 拼主页）
+只允许进入版本库：
 
-`compose` 阶段已**彻底删除**所有脚本拼接正文（`_compose_*_article`/`_render_*`/`_pad_*`/`_fact_sentence`/`_emotion_sentence` 等不复存在）。
-正文必须由**当前会话模型（Agent）**基于 `writing_pack.json` 与 `prompt.md` 语义创作，写回 `produce/drafts/{ref}.article.md`，并以 `generator=agent` 写 `draft_meta.json`。
-
-**实体主页 `page.md` 同样禁止脚本拼正文**：`build_homepage` 只下发人读 `4.draft/prompt.md` + 占位 `4.draft/page.md`，
-主页正文必须由会话模型在底稿基础上轻改创作（≥800字、逐句改写不照搬、不脱离底稿从零另写、不机械模板凑字），写回 `4.draft/page.md`；
-finalize 只据正文注入封面 `asset://`、映射结构化 `summary/conditionProfile` 并写 `generator=agent` 的 `manifest.json`，**不得**合成正文。
-严禁重新引入 `_compose_*page* / _render_*page_body / _build_*page_body / _pad_*page* / _homepage_body* / _homepage_paragraph*` 等机械骨架函数；
-读取/解析 agent 正文的辅助（`_render_entity_page_prompt` 渲染 prompt、`_homepage_summary` 映射、贴合度/模板指纹门）不在禁列。
-
-### 草稿 IO 契约（`produce/<task>/<batch>/drafts/`）
-
-| 文件 | 产出方 | 内容 |
-|---|---|---|
-| `{ref}.writing_pack.json` | CLI compose-brief | 证据点/图资源/mustIncludeFacts/叙事约束/分节意图/source 路径 |
-| `{ref}.prompt.md` | CLI compose-brief | 给会话模型的人类可读写作指令 |
-| `{ref}.article.md` | **会话模型** | 创作的正文（compose-brief 先写占位，待 Agent 覆盖） |
-| `{ref}.draft_meta.json` | **会话模型** | `generator=agent` / `model` / `citedSourcePaths` / `coveredFacts` |
-
-`generator` 仅 `agent` 能进入交付面；`template`（脚本拼接）与 `pending`（未创作）一律被门禁拒绝。
-
-## 标准三段式（每个步骤强制）
-
-`[CLI compose-brief：IO+选图+写作契约] → [Agent semantic：会话模型创作正文写回草稿] → [CLI review/materialize+gate]`
-
-- CLI 负责 IO/拉取/落盘/打分/校验/落写作契约；语义创作只在会话模型内完成；
-- 每个 stage 必落 stage result + gate report，失败写 repair report 并按 `fallbackStage` 回退重跑直至全绿（provenance/traceability/叙事问题回退到 `agent_compose` 重新创作）。
-
-## 来源权利分层
-
-- `licensed_adaptation`：仅限自有、明确授权、CC 或公版材料；保存许可、署名、条款和授权快照，可在许可范围内改编。
-- `factual_reference_only`：普通官网、百科、攻略和游记经 source gate 准入后，可作为一篇一用的 `baseSourceRef` 底稿；生产阶段仍以底稿为骨架轻量润色、事实校正、PII/平台痕迹清理和人设适配。
-- `blocked`：权利不明、禁止商用、抓取失败、探针页或平台发现页；不得进入 content_plan。
-- `baseDraftFidelity` 对所有 article/route 底稿生效。普通网页不得只当事实提纲另写一篇；统一受底稿贴合度、事实回溯、来源痕迹、PII 和跨稿重复门约束。
-- 主证据仍执行一源一稿；同一来源可作为其它作品的补充事实证据，但不得重复充当 `baseSourceRef`。
-
-## 三道真实性门（review + verify 交付面强制）
-
-1. **generator 出处门**：`draft_meta`/manifest 必须 `generator=agent` 且带 `model` 与 `citedSourceRefs`；非 agent 直接 `revision_needed`，`materialize` 拒绝落地。
-2. **模板指纹门**：扫描旧脚本模板的强/弱指纹短语（`_common/template_fingerprints.py`），命中即判为机械拼接并阻断。
-3. **事实可回溯门**：`mustIncludeFacts` 必须在正文出现；正文中带单位的关键数值（票价/海拔/时长等）必须能在 source 证据中回溯。
-4. **底稿贴合度门 `baseDraftFidelity`**：对所有 article/route 底稿生效，**以整篇单一底稿为分母**（不再按 writingIntent/实体收窄底稿）；下限防脱离底稿从零另写，上限仅兜底零加工整篇照搬。普通网页也必须在底稿基础上轻改，不得总结式重写。
-
-## Human-in-loop 标注 + 发布门（账本驱动）
-
-review 阶段对每张图片/关键事实/文章产出 **agent 判定+打分**，写 `produce/review/ledger/{ref}.json`，
-并把抽取的专有实体写 `produce/review/entities/{ref}.json`（无主页者自动生成关联实体主页 `page.md`）。
-materialize 把账本与实体 sidecar 随 post 拷入 `posts/.../review/`。
-
-发布态（`_common/review_ledger.py` 状态机，统一推导不持久化为事实）：
-- 人裁定优先：`humanOverride=publishable/discard`，或 `humanJudgment=credible` / `humanScore>=3` → 可发布；`doubtful` → fix。
-- 人未裁定看 agent：`agentJudgment=doubtful` 必须人确认（`requireHumanWhenDoubtful`）；`credible` 且 `agentScore>=3` → 可发布，否则 fix。
-- 低质量（分低）可再加工，`reprocessCount` 累计，超 `maxAttempts(3)` 锁定，除非人裁定可发布。
-
-含人脸/后端缺失的图片**不再硬阻断 review**，而是记账本存疑、转 annotate，由发布门兜底（`promote` 过滤）。
-
-```bash
-# 查看待人工处理队列（fix 态 / 需人确认）
-python3 quwoquan_data/scripts/cli.py annotate --task <task> --batch <batch> --list
-# 人判定 + 打分
-python3 quwoquan_data/scripts/cli.py annotate --task <task> --batch <batch> --ref <ref> --kind image --target <assetId> --judgment credible --score 4
-# 直接置发布态 / 记一次再加工
-python3 quwoquan_data/scripts/cli.py annotate --task <task> --batch <batch> --ref <ref> --kind image --target <assetId> --override discard
-python3 quwoquan_data/scripts/cli.py annotate --task <task> --batch <batch> --ref <ref> --kind article --target <ref> --reprocess
+```text
+quwoquan_data/control_plane/families/content/<vertical>/<contentType>/
+quwoquan_data/verticals/
+quwoquan_data/reference/
+quwoquan_data/prompts/
+quwoquan_data/templates/
+quwoquan_data/schema/
 ```
 
-`promote_to_publish` / `ship` 的发布门据账本：文章须 publishable；discard 图从 manifest/articleAssetManifest/正文剔除；
-无主页的 entityRef 过滤；任一处于 fix 则跳过该 post 并报告。
+- family recipe 只声明可复用规模、runtime 和质量参数，不包含省份、日期、实体、executionId 或输出路径。
+- 省市范围、discovery、limit、milestone 和 executionId 只通过 CLI 参数进入执行。
+- 实体类型只读 taxonomy/schema；内容结构和语言规则只读 template/prompt。
+- 默认凭证源是仓外且权限为 `0600` 的 `~/.config/quwoquan/cursor_api_key`；
+  `QWQ_CURSOR_API_KEY_FILE` 只允许受控测试或显式替换该位置。任何输出不得包含
+  key、片段或指纹。
 
-## 一键发布 + 按环境采样 + 服务侧灌库 importer
+### 2. 单任务 execution 工作包
 
-`publish/` 是单一发布主线（无版本目录，prod 全量）。`ship` 按 `quwoquan_ops/environments/content_sampling_manifest.yaml`
-对每个环境**确定性采样**（`rank=sha1(salt|ref)`，`<sampleRatio` 入选 + bucket cap + max），产出端云桥契约
-`publish/sample_bundles/{env}.json`（选中的 postRef/entityRef）。
+每次内容任务只写：
 
-服务侧 importer 真正把 posts/entities 灌进运行库（mongo），消费 publish 主线 + sample bundle，幂等 upsert：
-
-```bash
-# 数据侧：发布 + 全环境采样
-python3 quwoquan_data/scripts/cli.py ship --task <task> --batch <batch> --copy-entities
-# 仅对现有主线重采样某环境
-python3 quwoquan_data/scripts/cli.py ship --skip-promote --env gamma,beta
-# 采样后直接灌库（调用服务侧 importer）
-python3 quwoquan_data/scripts/cli.py ship --task <task> --batch <batch> --import --mongo-uri mongodb://localhost:27017
-
-# 服务侧 importer（也可独立运行）：posts→content 库、entities→entity 库
-cd quwoquan_service && go run ./services/content-service/cmd/import \
-  --publish-root ../quwoquan_data/publish \
-  --sample-bundle ../quwoquan_data/publish/sample_bundles/gamma.json \
-  --mongo-uri mongodb://localhost:27017 --env gamma
-
-# 真实 mongo 写入路径测试（起一次性 mongod，跑完销毁，不碰已有数据）
-bash quwoquan_service/scripts/content/run_content_import_mongo_test.sh
+```text
+.qwq_output/data/tasks/<executionId>/
+  execution_manifest.json
+  0.plan/
+  sources/
+  entities/**/1.content.source..5.review/
+  posts/<kind>/**/1.content.source..5.review/
+  _shared/
+  evidence/
+  publish_ref.json
 ```
 
-## 关键命令示例
+`executionId` 必须符合：
 
-```bash
-# 托管/真实 Agent 工作流启动前必须先过环境门；其它助手也统一使用这条入口
-python3 quwoquan_data/scripts/cli.py env ready
-
-# 1) 准备写作契约（不产出正文）
-python3 quwoquan_data/scripts/cli.py produce --task <task> --batch <batch> --content-type article --stage compose-brief
-
-# 2) 会话模型按 produce/<task>/<batch>/drafts/<ref>.prompt.md + writing_pack.json 创作正文，
-#    写回 drafts/<ref>.article.md 与 draft_meta.json(generator=agent)。此步在 Agent 会话内完成。
-
-# 3) 校验三道门 + 既有质量门；通过则落地
-python3 quwoquan_data/scripts/cli.py produce --task <task> --batch <batch> --content-type article --stage review --materialize
-
-# 图片安全门（unsafe=水印/平台文字 即阻断；含人脸 -> 人工复核）
-python3 quwoquan_data/scripts/cli.py media check-images --task <task> --batch <batch>
-
-# 校验：批量审计只针对交付面 release/（current=当前 schema 门禁默认；all=全部 release）。
-# runtime 中间批次不进批量审计（由 produce review 门禁产出时把关），需要时用 --task/--batch 显式校验。
-python3 quwoquan_data/scripts/cli.py verify --scope current   # 门禁默认：当前 schema release
-python3 quwoquan_data/scripts/cli.py verify --scope all       # 全部 release（含旧 schema）
-python3 quwoquan_data/scripts/cli.py verify --task <task> --batch <batch>  # 显式校验某中间批次（仍严格）
-python3 quwoquan_data/scripts/cli.py verify --release <release_id>
-python3 quwoquan_data/scripts/cli.py verify scale-readiness --task <task> --batch <batch> --daily-target 10000
+```text
+YYYYMMDD--<vertical>-<contentType>-<intent>--<scope>--<canary|m1|m2|m3>-<sequence>
 ```
 
-## 硬约束（违反即门禁拦截）
+同一 ID 只允许 resume。新尝试递增 sequence，并在根 manifest 中声明 `retryOf`。不允许 taskId、batchId、planId、workerId 或其它平行身份。
 
-1. **正文只由会话模型创作**：禁止任何脚本拼接/模板填充正文（文章 `drafts/{ref}.article.md` 与实体主页 `4.draft/page.md` 同等约束）。CLI 只产出写作契约与占位，正文必须由 Agent 写回并以 `generator=agent` 落 meta；`verify_no_runtime_draft_kit.py` 静态拦截 `agent_draft_kit` 复用、`write_agent_draft` 直调与机械主页骨架函数（`_compose_*page*`/`_render_*page_body`/`_build_*page_body`/`_pad_*page*`/`_homepage_body*`/`_homepage_paragraph*`）的回归。
-2. **CLI 优先 + Skill 只暴露 CLI**：新能力一律实现为 `<command>/handler.py`(`register_parser`+`handle_*`) + 可选 `gate.py`，复用逻辑沉到 `_common/`。禁止新增 `scripts/**` 下可直接 `__main__` 运行的业务入口脚本（旧脚本只能留薄壳委托 CLI）。
-3. **真相源**：路径/错误码/字段/叙事契约/imagePolicy 先改 metadata/blueprint/schema，再 `template lint` / 业务逻辑；codegen 与 schema 不手绕。
-4. **三道真实性门**：generator 出处门 + 模板指纹门 + 事实可回溯门，review 与 verify 交付面强制；非 agent / 命中指纹 / 数值不可回溯一律阻断。
-5. **图片治理**：发布图必须过 `media check-images`；unsafe→改稿，needs_review(人脸/后端缺失)→人工复核，近重复→去重。
-6. **载体路由按底稿形态判定 + 全载体单源**：图片集合为主、只有标题或少量配文的底稿 → `image` 图片作品；图文混合编排且源图随正文共同构成底稿 → `article`；Wiki/百科/官方/政府/文旅等介绍实体本身的底稿 → entity homepage。不能只按目标内容类型混用来源。**article/image/video 一律一源一作品**：文章正文与源图、图片/视频作品的素材都必须和该作品的**单一 source unit**（`baseSourceRef`/`sourceCollectionId` 指向同一来源单元）同源，禁止跨 source unit 拼接，image/video **不再豁免** one-source-one-work。
-7. **修辞/结构骨架=软门（仅建议+降分，不阻断）**：开篇钩子、显式喜欢/不喜欢、取舍判断、口语化标题、章节镜像、分节形态等不再硬阻断忠实轻改稿；硬门保留真实性/反抄袭/反雷同/数值可回溯/图片/联系方式/语域/载体/路线覆盖/底稿贴合度。
-8. **Mock/来源隔离**：不泄露平台名/作者名/用户名/水印；来源痕迹必须改写。
-9. **证据后置篇目（content_plan，源即单位）**：download+build 后枚举**合格 source unit**，每个合格源 1:1 落一个 `content_plan_packet` item（不再按 `entityArticlesPerTarget`×`writingIntent` 角度配额 fan-out）；ref/title 由底稿派生（标题取自底稿），禁止 download 前预置营销 ref。实体主页仅取**百科/官方源**最佳一份。
-10. **Ralph 准出**：每阶段必须 hook-check gate；FAIL 写 repair 并 re-inject，禁止无 gate 证据 `--resume`。
-11. **人读与语气**：普通网页/百科/攻略进入底稿后也必须以底稿为骨架轻改，保留主要自然段、叙述顺序和关键细节；禁止把普通网页只当事实提纲另写一篇。禁止百科罗列、机械收尾、独立「实用信息」清单、统一模板小标题。
-14. **实体主页 = 多来源事实综合 + 必图 + 章节语义**：主页必须综合多个来源独立表达；SOP `guide.md` 的章节要点只是规范化参考，可按事实增减/合并；`概况`必备、其余章节有真实内容才写、无内容省略；`历史沿革`必须是真实历史。每个实体主页须配 ≥1 张权利和安全门均通过的真实图。
-12. **tagRefs 对齐 publish**：`brief.json` / manifest 的 `tagRefs` 必须指向 `publish/tags/**` 已发布路径（地理/玩法/内容角度等），禁止扁平省名/品类名；ship 前自检 `intersectionHints` 含 content+interest。
-13. **底稿中心 1:1（源即单位）**：每个作品（article/image/video）只来自**单一 source unit**，禁跨底稿拼接；标题取自底稿（文章源无法提取标题→上游弃稿），实体为**多标签**（底稿提及的实体集合）。`writingIntent` **降级为底稿派生的可选分类标签**（攻略/体验/游记等），仅作内容角度提示与软评分，**不再作硬阻断门**，也不再驱动配额 fan-out；结构跟随底稿自身形态轻改。垂类写法（题材矩阵、版面、语域禁忌）见垂类 SOP（`quwoquan_data/sop/**`），本批特例只写任务 `notes.md`，公共层不写具体 region/实体/batch。
+标准阶段为：
 
-## 门禁
+```text
+0.plan -> sources -> 1.download -> 2.quality -> 3.compose -> 4.draft -> 5.review
+```
 
-- `bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh`（template lint 系列 + `verify --scope current`）。
-- `python3 quwoquan_data/scripts/verify/verify_cli_first.py`（拦截新增直跑业务入口脚本）。
-- 契约测试：`quwoquan_data/tests/quality/test_image_safety_gate.py`、`test_route_assets_layout.py`、`test_gallery_carrier.py`、`test_travelogue_density.py`、`test_review_image_gate.py`、`test_route_brief_and_evidence.py`、`test_entity_composer.py`、`test_verify_pilot_gwt.py`、`test_article_markdown_contract.py`、`test_hitl_pipeline.py`（manifest 最小化+账本+实体主页）、`test_annotate_publish_filter.py`（标注 CLI+发布门）、`test_ship_sampling.py`（确定性采样+ship e2e）、`test_mixed_layout_gate.py`（图文混编门）、`test_review_ledger_state_machine.py`、`test_asset_id_stability.py`。
-- 服务侧 importer 测试：`loader_test.go`（publish→doc 加载 + sample bundle 过滤）+ `mongo_import_test.go`（真实 mongo 写入：插入/字段/幂等重跑/唯一索引/load→upsert 子集，由 `quwoquan_service/scripts/content/run_content_import_mongo_test.sh` 起临时 mongod 跑）。
-- 去版本化/去区域硬编码门禁：`python3 quwoquan_data/scripts/verify/verify_no_legacy_hardcode.py`（禁止 `publish/v{N}` / `/v{N}/` objectKey / `chuanxi` 等回归）。
+阶段 packet 只携带 `executionId` 关联根 manifest；recipe、参数、源码、prompt 和来源 revision 不在每个对象重复写入。
+
+正文和实体主页只能由 Agent 基于 source、writing pack 与 prompt 创作。脚本不得生成、拼接或填充正文。图片、事实、权利、creator、tag、实体与 review 决策必须可回溯。
+
+## 3. 发布与环境输出
+
+approved 对象先原子写入 canonical：
+
+```text
+quwoquan_data/publish/{creators,entities,posts,media,tags}/
+```
+
+canonical 只含最终业务对象，不得包含 raw source、草稿、prompt、日志、报告、SOP、环境回执或运行状态。
+
+静态 release 与环境证据分离：
+
+```text
+.qwq_output/data/releases/<releaseId>/
+.qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/
+```
+
+`ship apply|rollback` 只读 canonical 和 immutable release desired state。导入回执、API 核验、回滚与重放证据写环境 run；禁止修改 canonical，禁止 dual-read 或旧路径 fallback。
+
+## 唯一任务门面
+
+```bash
+python3 quwoquan_data/scripts/cli.py task geo-homepages --execution-id <id> ...
+```
+
+`geo-homepages` 是唯一任务门面，聚合 target selection、执行、readiness、publish 与 ship，不建立独立 schema、runner 或输出根。
+
+## 浙江四川准出
+
+顺序固定：浙江金丝雀、四川金丝雀、M1、M2、M3 两省全覆盖。任何前序未绿不得启动后序。
+
+每个金丝雀必须完成：真实百科 source v2、逐图权利、Agent 主页、review、canonical 原子发布、Gamma 幂等导入、服务 API 核验、动态 App UAT、回滚与重放。
+
+最终执行：
+
+```bash
+python3 quwoquan_data/scripts/cli.py task preflight --json
+python3 quwoquan_data/scripts/cli.py verify content-execution-layout
+python3 quwoquan_data/scripts/cli.py verify publish-purity
+python3 quwoquan_data/scripts/cli.py verify two-province-coverage-release --release <releaseId>
+python3 quwoquan_data/scripts/cli.py verify all
+python3 quwoquan_ops/cli/stackctl.py verify --env gamma --kind all --tier all
+```
+
+凭证、来源、权利、Gamma、API 或 App 任一真实证据缺失，必须返回带 executionId 的 `GATE_BLOCK`，不得用 fixture、skip、历史数据或估算报告替代。

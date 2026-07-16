@@ -2,6 +2,7 @@ package searchindex
 
 import (
 	"context"
+	"fmt"
 
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/content-service/internal/application/searchprojection"
@@ -42,7 +43,10 @@ func Backfill(ctx context.Context, indexer BulkIndexer, reader PostReader, batch
 		return report, err
 	}
 
-	posts := reader.ListAll(ctx)
+	posts, err := reader.ListAll(ctx)
+	if err != nil {
+		return report, fmt.Errorf("list posts: %w", err)
+	}
 	report.TotalPosts = len(posts)
 	batch := make([]es.ChangeEvent, 0, batchSize)
 	flush := func() error {

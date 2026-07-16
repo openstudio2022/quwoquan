@@ -31,7 +31,7 @@ class CommentThreadView extends ConsumerStatefulWidget {
 
   final String postId;
   final ScrollController? scrollController;
-  final ValueChanged<CommentDto>? onReplySelected;
+  final ValueChanged<ContentCommentListItem>? onReplySelected;
 
   /// 深链定位目标一级评论 id：列表加载后自动滚动到该评论并短暂高亮
   /// （我的-互动 / 通知中心点进评论使用）。
@@ -161,7 +161,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
       await ref.read(commentProviderFamily(widget.postId).notifier).loadMore();
       if (!mounted) return;
       final after = ref.read(commentProviderFamily(widget.postId));
-      if (after.appendError != null) break;
+      if (after.appendFailure != null) break;
       if (after.comments.length == lengthBefore && after.hasMore) {
         // 可能与滚动触发的翻页竞争：让出一帧再重试，避免空转。
         await WidgetsBinding.instance.endOfFrame;
@@ -199,7 +199,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
       await ref.read(commentProviderFamily(widget.postId).notifier).loadMore();
       if (!mounted) return;
       final after = ref.read(commentProviderFamily(widget.postId));
-      if (after.appendError != null) break;
+      if (after.appendFailure != null) break;
       if (after.comments.length == lengthBefore && after.hasMore) {
         await WidgetsBinding.instance.endOfFrame;
       }
@@ -207,12 +207,13 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
     _reportHighlightMiss(replyId, key);
   }
 
-  ({CommentDto? parent, CommentDto? reply}) _locateReply(
+  ({ContentCommentListItem? parent, ContentCommentListItem? reply})
+  _locateReply(
     CommentState state, {
     required String replyId,
     required String? parentId,
   }) {
-    CommentDto? parent;
+    ContentCommentListItem? parent;
     for (final comment in state.comments) {
       for (final item in comment.replyPreview) {
         if (item.id == replyId) {
@@ -392,7 +393,7 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
     return Column(
       key: TestKeys.commentThreadView,
       children: [
-        if (state.rawError != null && state.comments.isNotEmpty)
+        if (state.failure != null && state.comments.isNotEmpty)
           AppTransientErrorNotice(
             semantic: const UiErrorSemantic(
               category: UiErrorCategory.backgroundAction,
@@ -426,41 +427,36 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
     if (state.status == CommentListStatus.error && state.comments.isEmpty) {
       final resolved = runtimeErrorSemantic(
         context,
-        error:
-            state.rawError ??
-            StateError(
-              state.errorMessage ?? UITextConstants.commentLoadFailedTitle,
-            ),
+        error: state.failure!,
         category: UiErrorCategory.sectionLoad,
         scope: UiErrorScope.section,
       );
-      return Center(
-        child: Padding(
-          padding: EdgeInsets.all(AppSpacing.containerMd),
-          child: AppSectionErrorCard(
-            semantic: UiErrorSemantic(
-              category: resolved.category,
-              scope: resolved.scope,
-              title: UITextConstants.commentLoadFailedTitle,
-              message: resolved.message,
-              secondaryMessage: resolved.secondaryMessage,
-              primaryAction: resolved.primaryAction,
-              secondaryAction: resolved.secondaryAction,
-              sourceCode: resolved.sourceCode,
-              failureKind: resolved.failureKind,
-              copyKey: 'commentLoadFailedTitle',
-              recoveryAction: resolved.recoveryAction,
-              presentation: resolved.presentation,
-              tone: resolved.tone,
-            ),
-            margin: EdgeInsets.zero,
-            onAction: (_) async {
-              await ref
-                  .read(commentProviderFamily(widget.postId).notifier)
-                  .loadComments();
-            },
-          ),
+      return AppSectionErrorState(
+        semantic: UiErrorSemantic(
+          category: resolved.category,
+          scope: resolved.scope,
+          title: UITextConstants.commentLoadFailedTitle,
+          message: resolved.message,
+          secondaryMessage: resolved.secondaryMessage,
+          primaryAction:
+              resolved.primaryAction ??
+              const UiErrorAction(
+                type: UiErrorActionType.retry,
+                label: UITextConstants.tryAgain,
+              ),
+          secondaryAction: resolved.secondaryAction,
+          sourceCode: resolved.sourceCode,
+          failureKind: resolved.failureKind,
+          copyKey: 'commentLoadFailedTitle',
+          recoveryAction: resolved.recoveryAction,
+          presentation: UiErrorPresentation.emptyPage,
+          tone: resolved.tone,
         ),
+        onAction: (_) async {
+          await ref
+              .read(commentProviderFamily(widget.postId).notifier)
+              .loadComments();
+        },
       );
     }
     if (state.comments.isEmpty) {
@@ -492,15 +488,15 @@ class _CommentThreadViewState extends ConsumerState<CommentThreadView> {
       itemCount:
           state.comments.length +
           (state.status == CommentListStatus.loadingMore ||
-                  state.appendError != null
+                  state.appendFailure != null
               ? 1
               : 0),
       itemBuilder: (context, index) {
         if (index >= state.comments.length) {
-          if (state.appendError != null) {
+          if (state.appendFailure != null) {
             final resolved = runtimeErrorSemantic(
               context,
-              error: state.appendError!,
+              error: state.appendFailure!,
               category: UiErrorCategory.listAppend,
               scope: UiErrorScope.section,
               presentation: UiErrorPresentation.appendFooter,

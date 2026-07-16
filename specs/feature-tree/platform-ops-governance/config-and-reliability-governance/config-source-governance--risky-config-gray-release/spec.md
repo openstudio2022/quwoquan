@@ -13,6 +13,24 @@
   服务作为灌数生产者写入共享 ES/OpenSearch 集群，端点与凭据经部署密钥注入，
   开启/端点/TLS 校验属基础设施敏感项，必须经灰度发布而非全量直发）
 
+## 当前变更的准出边界
+
+当前服务配置已把若干过去的本地回退显式化：Assistant 的 PostgreSQL/Mongo/Redis
+连接与 Notification command endpoint、Content 的 realtime Redis 和持久化端口、Chat
+的 OSS 上传边界、Integration 的外部回调通道，以及 User 的一键登录 resolver。
+这些字段中的 `mode`、`addr`、`addrs`、`password`、`tls` 与任何等价的连接/路由开关
+都属于本节点的高风险配置；空值只是“尚未注入”，不是可以跳过发布校验的激活态。
+
+本轮只完成配置契约与服务本地配置版本的收口，**不代表**任一生产连接、第三方
+provider 或 hosted rollout 已完成。任何激活必须同时满足：
+
+1. 服务自有 `configs/releases/<version>.yaml` 已生成并经 package provenance 校验；
+2. secret 仅由部署密钥系统注入，源码和 release snapshot 均不得保存凭据正文；
+3. 先在 gamma 以 stable/canary 双实例绑定不同 `CONFIG_VERSION` 验证连接、错误率、P95、
+   日志脱敏和审计，再逐阶段进入 prod `gray-initial -> carry-on -> full`；
+4. 每阶段必须保留同一 run 的 SLO、回滚目标和回滚演练证据；任一依赖不可用即停止，
+   不得把默认空值、内存实现或 dry-run 当作成功。
+
 ## 发布策略
 
 - 5% -> 25% -> 50% -> 100% 渐进

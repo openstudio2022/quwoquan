@@ -1,0 +1,32 @@
+id: CR-20260716-106-zhejiang-sichuan-frozen-rollout-contract
+title: 浙川 2899 主页冻结目标与累计放量合同收口
+date: 2026-07-16
+area: Data
+domain: discovery-content
+type: contract
+summary: >
+  将浙川主页放量从可替换的批处理模型收口为 execution manifest 单一身份、冻结目标集、
+  四档确定性增量和累计 full-sync release；旧工作包不迁移，金丝雀至 M3 必须逐档完成
+  Gamma 导入、API、App UAT、回滚与 replay。
+feature_tree:
+  journey: 内容发现到实体主页消费
+  l1: discovery-content
+  l2: object-homepage-coverage-scaling
+  l3: zhejiang-sichuan-province-coverage
+acceptance_intent:
+  - contract
+  - SIT
+  - UAT
+changes:
+  - path: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage/spec.md
+    sections: [放量数量合同, 约束]
+  - path: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/zhejiang-sichuan-province-coverage/acceptance.yaml
+    sections: [rollout_contract, GWT1, GWT4, GWT5]
+  - path: quwoquan_data/schema/execution/content_execution_manifest.schema.json
+  - path: quwoquan_data/schema/execution/target_set.schema.json
+  - path: quwoquan_data/schema/execution/runtime_state.schema.json
+verification:
+  - local_contract: execution identity, frozen target set, five-stage layout, typed issue control flow
+  - api_integration: cumulative release import, API closure, rollback and replay
+  - user_acceptance: deterministic Gamma App shards
+status: in_progress

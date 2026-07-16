@@ -31,5 +31,6 @@ class CircleDetailPayload {
   CircleDetailWireDto get viewerWire =>
       CircleDetailWireDto.fromViewerWire(_wire);
 
-  Map<String, dynamic> repositoryMergeBase() => Map<String, dynamic>.from(_wire);
+  Map<String, dynamic> repositoryMergeBase() =>
+      Map<String, dynamic>.from(_wire);
 }

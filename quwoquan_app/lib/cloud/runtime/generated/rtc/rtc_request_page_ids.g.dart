@@ -15,9 +15,9 @@ class RtcRequestPageIds {
     'LeaveCall': 'rtc.leave.call',
     'ListCalls': 'rtc.history',
     'RejectCall': 'rtc.reject',
-    'StartRecording': 'rtc.recording.start',
+    'StartCallRecording': 'rtc.start.call.recording',
     'StartScreenShare': 'rtc.screenShare.start',
-    'StopRecording': 'rtc.recording.stop',
+    'StopCallRecording': 'rtc.stop.call.recording',
     'StopScreenShare': 'rtc.screenShare.stop',
     'ToggleCamera': 'rtc.camera',
     'ToggleMute': 'rtc.mute',
@@ -33,9 +33,9 @@ class RtcRequestPageIds {
   static const String leaveCall = 'rtc.leave.call';
   static const String listCalls = 'rtc.history';
   static const String rejectCall = 'rtc.reject';
-  static const String startRecording = 'rtc.recording.start';
+  static const String startCallRecording = 'rtc.start.call.recording';
   static const String startScreenShare = 'rtc.screenShare.start';
-  static const String stopRecording = 'rtc.recording.stop';
+  static const String stopCallRecording = 'rtc.stop.call.recording';
   static const String stopScreenShare = 'rtc.screenShare.stop';
   static const String toggleCamera = 'rtc.camera';
   static const String toggleMute = 'rtc.mute';

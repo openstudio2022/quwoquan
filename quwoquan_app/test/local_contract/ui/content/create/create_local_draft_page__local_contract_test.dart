@@ -17,6 +17,7 @@ import 'package:quwoquan_app/ui/content/entry/pages/local_draft_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 class _FakeFileStorageGateway implements FileStorageGateway {
   const _FakeFileStorageGateway();
@@ -124,7 +125,7 @@ Widget _buildApp() {
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
-      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      ...mockContentFacetOverrides(MockContentRepository()),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       fileStorageGatewayProvider.overrideWithValue(
         const _FakeFileStorageGateway(),

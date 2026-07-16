@@ -1,0 +1,9 @@
+version: 1
+entity: RecentSearchState
+events:
+  - name: RecentSearchStateChanged
+    producer: search-service
+    consumers: []
+    channel: event_store
+    payload_entity: RecentSearchState
+    payload_fields: [id, personaId, scope, entries, version, updatedAt]

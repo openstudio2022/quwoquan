@@ -28,9 +28,9 @@ func (s *PgOtpChallengeStore) CreateChallenge(ctx context.Context, challenge app
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO otp_challenges (
 			challenge_id, request_id, phone, phone_hash, code_hash, status,
-			idempotency_key, expires_at, consumed_at, created_at, updated_at
+			idempotency_key, expires_at, consumed_at, created_at, updated_at, failed_attempts
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9, $10, 0)
 		ON CONFLICT (idempotency_key) DO UPDATE SET
 			updated_at = EXCLUDED.updated_at
 	`, challenge.ChallengeID, challenge.RequestID, challenge.Phone, challenge.PhoneHash, challenge.CodeHash, challenge.Status,
@@ -41,7 +41,7 @@ func (s *PgOtpChallengeStore) CreateChallenge(ctx context.Context, challenge app
 func (s *PgOtpChallengeStore) FindLatestChallenge(ctx context.Context, phone string, now time.Time) (*application.OtpChallenge, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT challenge_id, request_id, phone, phone_hash, code_hash, status,
-		       idempotency_key, expires_at, consumed_at, created_at, updated_at
+		       idempotency_key, expires_at, consumed_at, created_at, updated_at, failed_attempts
 		FROM otp_challenges
 		WHERE phone = $1 AND expires_at > $2 AND consumed_at IS NULL
 		ORDER BY created_at DESC
@@ -78,6 +78,28 @@ func (s *PgOtpChallengeStore) ConsumeChallenge(ctx context.Context, challengeID 
 	return err
 }
 
+func (s *PgOtpChallengeStore) RecordFailedAttempt(
+	ctx context.Context,
+	challengeID string,
+	maxAttempts int,
+	now time.Time,
+) (int, bool, error) {
+	var attempts int
+	var status string
+	err := s.pool.QueryRow(ctx, `
+		UPDATE otp_challenges
+		SET failed_attempts = failed_attempts + 1,
+		    status = CASE WHEN failed_attempts + 1 >= $2 THEN $3 ELSE status END,
+		    updated_at = $4
+		WHERE challenge_id = $1 AND consumed_at IS NULL AND expires_at > $4
+		RETURNING failed_attempts, status
+	`, challengeID, maxAttempts, application.OtpChallengeStatusFailed, now.UTC()).Scan(&attempts, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, true, nil
+	}
+	return attempts, status == application.OtpChallengeStatusFailed, err
+}
+
 func scanOtpChallenge(row pgx.Row) (*application.OtpChallenge, error) {
 	var challenge application.OtpChallenge
 	var consumedAt *time.Time
@@ -93,6 +115,7 @@ func scanOtpChallenge(row pgx.Row) (*application.OtpChallenge, error) {
 		&consumedAt,
 		&challenge.CreatedAt,
 		&challenge.UpdatedAt,
+		&challenge.FailedAttempts,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil

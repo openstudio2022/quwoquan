@@ -1,6 +1,7 @@
 package api_integration
 
 import (
+	"net/http"
 	"testing"
 )
 
@@ -16,7 +17,7 @@ func TestConversation_NotFound_Returns404(t *testing.T) {
 func TestSendMessage_InvalidBody_Returns400(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"error test"}`)
+	conv := createConversation(t, `{"type":"direct","title":"error test","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
 	req := doPost(t, "/v1/chat/conversations/"+convId+"/messages",
@@ -31,13 +32,19 @@ func TestAddMembers_ExceedsMaxGroupSize(t *testing.T) {
 	convId := conv["_id"].(string)
 
 	doPost(t, "/v1/chat/conversations/"+convId+"/members",
-		`{"userIds":["user_b","user_c","user_d"]}`, "user_test_001", 200)
+		`{"userIds":["user_b","user_c","user_d"]}`, "user_test_001", http.StatusBadRequest)
 
 	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/members?limit=50", "user_test_001")
 	if code != 200 {
 		t.Fatalf("expected 200, got %d", code)
 	}
-	_ = result
+	items, ok := result["items"].([]any)
+	if !ok {
+		t.Fatalf("response missing items: %+v", result)
+	}
+	if len(items) != 1 {
+		t.Fatalf("超限请求不得产生部分成员写入，got %d members: %+v", len(items), items)
+	}
 }
 
 func TestListContacts_Empty(t *testing.T) {

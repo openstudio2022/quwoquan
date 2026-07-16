@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/target_set.schema.json",
+  "description": "One immutable target set bound to a content execution manifest.",
+  "type": "object",
+  "required": [
+    "contractVersion",
+    "executionId",
+    "selectionPolicy",
+    "sourceRef",
+    "targetCount",
+    "targetRefs",
+    "targets"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "contractVersion": { "const": "content-target-set-v1" },
+    "executionId": {
+      "type": "string",
+      "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$"
+    },
+    "selectionPolicy": { "const": "frozen" },
+    "sourceRef": { "type": "string", "minLength": 1 },
+    "targetCount": { "type": "integer", "minimum": 1 },
+    "targetRefs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "entityType"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "entityType": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+          "region": { "type": "string" },
+          "sourceName": { "type": "string" },
+          "geoTagRef": { "type": "string" },
+          "geoTagRefs": { "type": "array", "items": { "type": "string" } },
+          "typeTagRefs": { "type": "array", "items": { "type": "string" } },
+          "aliases": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

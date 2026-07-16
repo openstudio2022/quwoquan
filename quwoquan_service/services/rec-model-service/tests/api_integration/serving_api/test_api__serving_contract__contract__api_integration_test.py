@@ -1,5 +1,5 @@
 """
-API tests for POST /v1/score and GET /health.
+API tests for the ModelRelease scoring Reader and GET /health.
 Run from services/rec-model-service: python -m pytest tests/ -v
 Requires: pip install fastapi uvicorn pydantic httpx httpx2 pytest
 """
@@ -16,13 +16,27 @@ if str(_TESTS_ROOT) not in sys.path:
     sys.path.insert(0, str(_TESTS_ROOT))
 
 from support.path_setup import ensure_rec_model_paths
+from support.service_token import (
+    ServiceAuthorizedTestClient,
+    configure_test_auth_environment,
+    service_token,
+)
 
 ensure_rec_model_paths()
+configure_test_auth_environment()
 
+from generated.api.operations import (
+    BATCH_SCORE_RECOMMENDATION_CANDIDATES_PATH,
+    SCORE_RECOMMENDATION_CANDIDATES_PATH,
+)
 from main import app
 
 
-client = TestClient(app)
+client = ServiceAuthorizedTestClient(app)
+raw_client = TestClient(app)
+
+SCORE_PATH = SCORE_RECOMMENDATION_CANDIDATES_PATH
+BATCH_SCORE_PATH = BATCH_SCORE_RECOMMENDATION_CANDIDATES_PATH
 
 
 def test_health() -> None:
@@ -50,7 +64,7 @@ def test_score_content_feed_returns_scores() -> None:
             {"contentId": "c2", "contentType": "video", "ageHours": 24.0, "likeCount": 5},
         ],
     }
-    r = client.post("/v1/score", json=body)
+    r = client.post(SCORE_PATH, json=body)
     assert r.status_code == 200
     data = r.json()
     assert "scores" in data
@@ -77,20 +91,11 @@ def test_score_accepts_entity_refs() -> None:
             }
         ],
     }
-    r = client.post("/v1/score", json=body)
+    r = client.post(SCORE_PATH, json=body)
     assert r.status_code == 200
     data = r.json()
     assert len(data["scores"]) == 1
     assert data["scores"][0]["contentId"] == "c1"
-
-
-def test_reload_endpoint_returns_versions() -> None:
-    r = client.post("/v1/model/reload")
-    assert r.status_code == 200
-    data = r.json()
-    assert data["status"] == "reloaded"
-    assert isinstance(data.get("versions"), dict)
-    assert data["versions"]
 
 
 def test_score_unsupported_scenario_400() -> None:
@@ -100,12 +105,48 @@ def test_score_unsupported_scenario_400() -> None:
         "sessionId": "s1",
         "candidates": [{"contentId": "c1"}],
     }
-    r = client.post("/v1/score", json=body)
+    r = client.post(SCORE_PATH, json=body)
     assert r.status_code == 400
 
 
 def test_score_empty_candidates_returns_empty_scores() -> None:
     body = {"scenario": "content_feed", "userId": "u1", "sessionId": "s1", "candidates": []}
-    r = client.post("/v1/score", json=body)
+    r = client.post(SCORE_PATH, json=body)
     assert r.status_code == 200
     assert r.json() == {"scores": []}
+
+
+def test_scoring_requires_service_identity_and_scope() -> None:
+    body = {"scenario": "content_feed", "userId": "u1", "sessionId": "s1", "candidates": []}
+    missing = raw_client.post(SCORE_PATH, json=body)
+    assert missing.status_code == 401
+    assert missing.json()["detail"]["code"] == "RECOMMENDATION.USER.unauthorized"
+
+    wrong_scope = raw_client.post(
+        SCORE_PATH,
+        json=body,
+        headers={"Authorization": f"Bearer {service_token(scopes=['content.read'])}"},
+    )
+    assert wrong_scope.status_code == 403
+    assert wrong_scope.json()["detail"]["code"] == "RECOMMENDATION.USER.forbidden"
+
+
+def test_batch_scoring_uses_same_authoritative_reader() -> None:
+    request = {"scenario": "content_feed", "userId": "u1", "sessionId": "s1", "candidates": []}
+    response = client.post(BATCH_SCORE_PATH, json={"requests": [request, request]})
+    assert response.status_code == 200
+    assert response.json() == {"results": [{"scores": []}, {"scores": []}]}
+
+
+def test_retired_score_route_is_not_compatible() -> None:
+    response = client.post(
+        "/v1/score",
+        json={"scenario": "content_feed", "userId": "u1", "sessionId": "s1", "candidates": []},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("path", ["/v1/model/reload", "/v1/model/status"])
+def test_undocumented_model_lifecycle_routes_do_not_exist(path: str) -> None:
+    response = client.post(path) if path.endswith("reload") else client.get(path)
+    assert response.status_code == 404

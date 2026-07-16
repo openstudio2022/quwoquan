@@ -30,7 +30,7 @@ class _PersonaManagementPageState extends ConsumerState<PersonaManagementPage> {
     return UiErrorSemantic(
       category: resolved.category,
       scope: resolved.scope,
-      title: '分身管理暂不可用',
+      title: UITextConstants.personaManagementLoadFailedTitle,
       message: resolved.message,
       secondaryMessage: resolved.secondaryMessage,
       primaryAction:

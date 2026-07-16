@@ -1,30 +1,16 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // loadProjectionReadModels 收集全仓 projections/*.yaml 的 read_model 闭集（跨域可见），
 // 作为 service.yaml operation response_body 的唯一指向性真相源。
 func (v *validator) loadProjectionReadModels() {
 	v.projectionReadModels = map[string]bool{}
-	_ = filepath.WalkDir(v.metadataDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() || !strings.HasSuffix(d.Name(), ".yaml") {
-			return nil
-		}
-		if filepath.Base(filepath.Dir(path)) != "projections" {
-			return nil
-		}
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return nil
+	for _, path := range v.source.Paths("", ".yaml") {
+		if !strings.Contains("/"+path, "/projections/") {
+			continue
 		}
 		var parsed struct {
 			ReadModel        string `yaml:"read_model"`
@@ -32,8 +18,8 @@ func (v *validator) loadProjectionReadModels() {
 				DartClass string `yaml:"dart_class"`
 			} `yaml:"client_projection"`
 		}
-		if yaml.Unmarshal(data, &parsed) != nil {
-			return nil
+		if v.source.Decode(path, &parsed) != nil {
+			continue
 		}
 		if rm := strings.TrimSpace(parsed.ReadModel); rm != "" {
 			v.projectionReadModels[rm] = true
@@ -42,6 +28,5 @@ func (v *validator) loadProjectionReadModels() {
 		if dc := strings.TrimSpace(parsed.ClientProjection.DartClass); dc != "" {
 			v.projectionReadModels[dc] = true
 		}
-		return nil
-	})
+	}
 }

@@ -7,11 +7,11 @@ import (
 	"log/slog"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/runtime/repository"
 )
 
-// RedisEventPublisher implements repository.EventPublisher using Redis Pub/Sub.
+// RedisEventPublisher implements runtimemessaging.EventPublisher using Redis Pub/Sub.
 // Events are published to channels named "events.content.{eventType}".
 type RedisEventPublisher struct {
 	redis   rtredis.Client
@@ -26,19 +26,21 @@ func NewRedisEventPublisher(redis rtredis.Client, serviceName string, logger *sl
 	return &RedisEventPublisher{redis: redis, service: serviceName, logger: logger}
 }
 
-func (p *RedisEventPublisher) Publish(ctx context.Context, event repository.DomainEvent) error {
+func (p *RedisEventPublisher) Publish(ctx context.Context, event runtimemessaging.DomainEvent) error {
 	channel := fmt.Sprintf("events.content.%s", event.Type)
 
 	envelope := map[string]any{
 		"meta": map[string]any{
-			"topic":   channel,
-			"src":     event.AggregateType + "/" + event.AggregateID,
-			"sentAt":  time.Now().UTC().Format(time.RFC3339Nano),
+			"messageId": event.EventID,
+			"topic":     channel,
+			"src":       event.AggregateType + "/" + event.AggregateID,
+			"sentAt":    time.Now().UTC().Format(time.RFC3339Nano),
 			"producer": map[string]string{
 				"service": p.service,
 			},
 		},
 		"payload": map[string]any{
+			"eventId":       event.EventID,
 			"type":          event.Type,
 			"aggregateType": event.AggregateType,
 			"aggregateId":   event.AggregateID,

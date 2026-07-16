@@ -575,6 +575,35 @@ func (m *memoryClient) XAck(_ context.Context, stream string, group string, ids 
 	return nil
 }
 
+func (m *memoryClient) XAutoClaim(
+	_ context.Context,
+	stream string,
+	group string,
+	consumer string,
+	minIdle time.Duration,
+	start string,
+	count int64,
+) ([]StreamMessage, string, error) {
+	_ = consumer
+	_ = minIdle
+	_ = start
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ms := m.ensureStream(stream)
+	g := ms.groups[group]
+	if g == nil {
+		return nil, "0-0", nil
+	}
+	out := make([]StreamMessage, 0)
+	for _, message := range g.pending {
+		out = append(out, message)
+		if count > 0 && int64(len(out)) >= count {
+			break
+		}
+	}
+	return out, "0-0", nil
+}
+
 func (m *memoryClient) ensureStream(stream string) *memStream {
 	ms := m.streams[stream]
 	if ms == nil {

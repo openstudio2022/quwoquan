@@ -8,7 +8,10 @@ node:
   parent_business_capability: content-service-cloud-production
 scope:
   summary: content service cloud production 验收范围。
-  in_scope: []
+  in_scope:
+  - homepage/article/image/video 五阶段执行产物与 immutable execution identity
+  - execution/release/env/publish 生命周期隔离
+  - release create-once 与 compact attestation/evidence index
   out_of_scope: []
 sit_acceptance:
   SIT1:
@@ -16,10 +19,29 @@ sit_acceptance:
     story_refs: []
     done_when:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
+    - 四种 contentType 共用同一五阶段 required-artifact 契约且严格 Schema fail-closed。
+    - executionId 对 immutable core 确定、敏感，resume 只追加 checkpoint/log。
+    - Prompt 快照可重放、哈希可校验且拒绝密钥形变量。
+    - release 同 ID 二次装配失败，且不含 Prompt、draft、repair、raw log 或完整 5.review。
+    - canonical 仅含自治 creators/entities/posts/tags/media objects，全部对象引用闭包且环境中立。
+    - release create-once；环境执行只读 desired state 并把证据 append-only 写入 env run。
+    - importer 拒绝缺 release、路径逃逸与悬挂引用。
     performance_points: []
     tests:
-      planned: []
-      recorded: []
+      planned:
+      - quwoquan_data/tests/local_contract/release/test_stage_artifact_contract__behavior__functional__local_contract_test.py
+      - quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
+      - quwoquan_data/tests/local_contract/release/test_release_create_once__behavior__functional__local_contract_test.py
+      - quwoquan_data/tests/local_contract/release/test_object_transaction__behavior__functional__local_contract_test.py
+      - quwoquan_service/services/content-service/cmd/import/mongo_import__api_integration_test.go
+      - quwoquan_data/tests/local_contract/release/test_release_first_consumers__behavior__contract__local_contract_test.py
+      recorded:
+      - file: quwoquan_data/tests/local_contract/release/test_stage_artifact_contract__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_release_create_once__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_object_transaction__behavior__functional__local_contract_test.py
+      - file: quwoquan_service/services/content-service/cmd/import/mongo_import__api_integration_test.go
+      - file: quwoquan_data/tests/local_contract/release/test_release_first_consumers__behavior__contract__local_contract_test.py
     status: pending
     test_evidence:
       primary:

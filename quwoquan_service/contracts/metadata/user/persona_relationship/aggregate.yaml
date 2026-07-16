@@ -1,0 +1,31 @@
+version: 1
+domain: user
+aggregate_root: PersonaRelationship
+object_kind: aggregate_root
+description: 规范化 persona pair 的关系聚合，同时维护两个有界方向的 follow/block 状态。
+storage_backend: postgres
+members:
+  - entity: RelationshipDirection
+    object_kind: owned_entity
+    aggregate_owner: PersonaRelationship
+    relation: 1:N
+    max_cardinality: 2
+capabilities: [queryable, idempotent_commands, transactional_outbox]
+business_rules:
+  - lowerPersonaId 必须小于 upperPersonaId，且 source/target 只能来自该 pair
+  - directions 最多两个，每个方向唯一
+  - 任一方向 block 必须在同一事务清除双方 following
+  - unblock 只清除 blocked，不恢复历史 following
+  - 所有写入在 canonical pair 行锁内串行提交，并以 version 单调递增和 idempotency receipt 保证可重放
+lifecycle:
+  states: [active, tombstoned]
+  write_serialization: canonical_pair_row_lock
+  versioning: monotonic
+  idempotency: command_receipt
+ddd_layer_mapping:
+  domain_model: internal/domain/relationship/persona_relationship/model
+  ports: internal/domain/relationship/persona_relationship/ports
+  application: internal/application/relationship/persona_relationship
+  persistence: internal/infrastructure/relationship/persona_relationship/persistence
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/adapters/mq

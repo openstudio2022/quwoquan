@@ -14,6 +14,7 @@ class ContentShareAction {
 
 class ContentShareTemplate {
   const ContentShareTemplate({
+    required this.postId,
     required this.profileId,
     required this.layout,
     required this.permission,
@@ -32,6 +33,7 @@ class ContentShareTemplate {
     this.notice,
   });
 
+  final String postId;
   final String profileId;
   final String layout;
   final String permission;
@@ -57,16 +59,8 @@ class ContentShareTemplateBuilder {
 
   /// 应用内 scheme 链接（`quwoquan://…`），仅作为打开 App 的目标。
   /// 站外复制/系统分享默认必须使用 [publicPostUrl]。
-  static String appSchemePostUrl(
-    String postId, {
-    String visibility = 'public',
-  }) {
-    final permission = _normalizeVisibility(visibility);
-    return AppLinkTemplates.postAppDeepLink(
-      postId,
-      visibilityIsCircleVisible: permission == 'circle_visible',
-    );
-  }
+  static String appSchemePostUrl(String postId) =>
+      AppLinkTemplates.postAppDeepLink(postId);
 
   /// 站外公开 HTTPS 链接，作为复制链接/系统分享的默认 URL。
   static String publicPostUrl(String postId) =>
@@ -76,12 +70,12 @@ class ContentShareTemplateBuilder {
     required ContentSurfaceView surfaceView,
     required bool enableIdentityTemplate,
     String visibility = 'public',
-    List<String> circleNames = const <String>[],
   }) {
     final permission = _normalizeVisibility(visibility);
     if (permission == 'private') {
       final blockedSeed = _shareSeedForSurfaceView(surfaceView);
       return ContentShareTemplate(
+        postId: surfaceView.postId,
         profileId: surfaceView.contentIdentity,
         layout: 'blocked',
         permission: permission,
@@ -103,10 +97,7 @@ class ContentShareTemplateBuilder {
 
     final profile = _profileForIdentity(surfaceView.contentIdentity);
     final shareSeed = _shareSeedForSurfaceView(surfaceView);
-    final deeplink = AppLinkTemplates.postAppDeepLink(
-      surfaceView.postId,
-      visibilityIsCircleVisible: permission == 'circle_visible',
-    );
+    final deeplink = AppLinkTemplates.postAppDeepLink(surfaceView.postId);
     // 注入单次分享归因（share_id + UTM），使站外回流可按 share_id/渠道归因。
     final attribution = ShareAttribution.forShareEvent(
       utmSource: ShareAttribution.sourceApp,
@@ -115,9 +106,7 @@ class ContentShareTemplateBuilder {
     final landingUrl = attribution.applyTo(publicPostUrl(surfaceView.postId));
     final summary = _decorateSummary(
       base: shareSeed.summary,
-      includeCircleContext: profile.includeCircleContext,
       includeTimeContext: profile.includeTimeContext,
-      circleNames: circleNames,
       createdAt: surfaceView.createdAt,
     );
     final tags = surfaceView.tags;
@@ -126,6 +115,7 @@ class ContentShareTemplateBuilder {
         : summary;
 
     return ContentShareTemplate(
+      postId: surfaceView.postId,
       profileId: profile.id,
       layout: profile.layout,
       permission: permission,
@@ -153,9 +143,7 @@ class ContentShareTemplateBuilder {
       ],
       isIdentityTemplate: enableIdentityTemplate,
       isBlocked: false,
-      notice: permission == 'circle_visible'
-          ? UITextConstants.shareCircleVisibilityNotice
-          : null,
+      notice: null,
     );
   }
 
@@ -171,12 +159,14 @@ class ContentShareTemplateBuilder {
     switch (normalized) {
       case 'private':
         return 'private';
-      case 'circle-visible':
-      case 'circle_visible':
-      case 'circle':
-        return 'circle_visible';
-      default:
+      case 'public':
         return 'public';
+      default:
+        throw ArgumentError.value(
+          visibility,
+          'visibility',
+          'Post visibility must be public or private',
+        );
     }
   }
 
@@ -232,17 +222,12 @@ class ContentShareTemplateBuilder {
 
   static String _decorateSummary({
     required String base,
-    required bool includeCircleContext,
     required bool includeTimeContext,
-    required List<String> circleNames,
     required DateTime createdAt,
   }) {
     final parts = <String>[];
     if (base.isNotEmpty) {
       parts.add(base);
-    }
-    if (includeCircleContext && circleNames.isNotEmpty) {
-      parts.add(circleNames.join(' / '));
     }
     if (includeTimeContext && createdAt.millisecondsSinceEpoch > 0) {
       final month = createdAt.month.toString().padLeft(2, '0');

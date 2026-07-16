@@ -1,8 +1,0 @@
-# 本地 Cursor SDK 运行环境 profile（跨家族共享；recipe.runtimeProfile 引用）。
-schemaVersion: quwoquan.task.runtime_profile
-profileId: cursor_local
-env:
-  QWQ_MANAGED_LOCAL_CURSOR_MAX_WORKERS: "1"
-  QWQ_MANAGED_AGENT_TIMEOUT_SECONDS: "1200"
-  QWQ_ORCHESTRATE_AGENT_TIMEOUT_SECONDS: "1200"
-  QWQ_CURSOR_WARM_ATTEMPTS: "6"

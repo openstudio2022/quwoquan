@@ -54,7 +54,7 @@
 
 18. **修复发送链路**：图片选择/拍照后通过 `MediaUploadManager` 上传，以 `type='image'` + `media={url, thumbnailUrl, width, height, mimeType, fileSizeBytes}` 发送（替代当前文本占位）
 19. **聊天图片全屏查看**：点击图片气泡转场至全屏图片查看器（缩放/滑动切换/保存到相册）
-20. **多图发送**：支持一次选择多张图片，逐张上传发送（复用 `media.items[]` 后续增强）
+20. **多图发送**：支持一次选择多张图片，逐张上传发送（复用 `content.source.media.items[]` 后续增强）
 
 ### F4 Emoji 体验增强
 

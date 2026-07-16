@@ -9,7 +9,9 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	metacontrolplane "quwoquan_service/internal/metadata/controlplane"
+	"quwoquan_service/internal/metadata/validate"
 )
 
 type portalShellFile struct {
@@ -156,6 +158,8 @@ type configItem struct {
 	UIEditable bool        `yaml:"ui_editable" json:"ui_editable"`
 }
 
+var compileContractSource = contractcodegen.NewSource
+
 func main() {
 	var metadataDir string
 	var portalDir string
@@ -164,12 +168,14 @@ func main() {
 	flag.StringVar(&portalDir, "portal-dir", "../quwoquan_ops/portal", "ops portal root directory")
 	flag.Parse()
 
-	controlPlaneRoot := filepath.Join(metadataDir, "_control_plane")
+	source, err := compileContractSource(metadataDir, validate.ProfileBaseline)
+	must(err)
+	const controlPlaneRoot = "_control_plane"
 	outDir := filepath.Join(portalDir, "src", "generated", "control-plane")
 	must(os.MkdirAll(outDir, 0o755))
 
-	shell := readYAML[portalShellFile](filepath.Join(controlPlaneRoot, "portal_shell.yaml"))
-	menu := readYAML[portalMenuFile](filepath.Join(controlPlaneRoot, "portal_menu.yaml"))
+	shell := readYAML[portalShellFile](source, filepath.Join(controlPlaneRoot, "portal_shell.yaml"))
+	menu := readYAML[portalMenuFile](source, filepath.Join(controlPlaneRoot, "portal_menu.yaml"))
 	writeTSModule(filepath.Join(outDir, "portalShell.generated.ts"), "portalShell", shell)
 	writeTSModule(filepath.Join(outDir, "portalMenu.generated.ts"), "portalMenu", menu)
 
@@ -177,43 +183,43 @@ func main() {
 		"export * from './portalShell.generated.js';",
 		"export * from './portalMenu.generated.js';",
 	}
-	if fileExists(filepath.Join(controlPlaneRoot, "domain_onboarding_schema.yaml")) {
-		schema := readYAML[map[string]any](filepath.Join(controlPlaneRoot, "domain_onboarding_schema.yaml"))
+	if source.Has(filepath.Join(controlPlaneRoot, "domain_onboarding_schema.yaml")) {
+		schema := readYAML[map[string]any](source, filepath.Join(controlPlaneRoot, "domain_onboarding_schema.yaml"))
 		writeTSModule(filepath.Join(outDir, "domainOnboardingSchema.generated.ts"), "domainOnboardingSchema", schema)
 		indexExports = append(indexExports, "export * from './domainOnboardingSchema.generated.js';")
 	}
-	if fileExists(filepath.Join(controlPlaneRoot, "domains")) {
-		domains := readOnboardingDomains(filepath.Join(controlPlaneRoot, "domains"))
+	if len(source.Paths(filepath.Join(controlPlaneRoot, "domains"), ".yaml")) > 0 {
+		domains := readOnboardingDomains(source, filepath.Join(controlPlaneRoot, "domains"))
 		writeTSModule(filepath.Join(outDir, "domainOnboardingDomains.generated.ts"), "domainOnboardingDomains", domains)
 		indexExports = append(indexExports, "export * from './domainOnboardingDomains.generated.js';")
 	}
 
 	for _, domain := range []string{"product", "platform"} {
 		baseDir := filepath.Join(controlPlaneRoot, domain)
-		if !fileExists(baseDir) {
+		if len(source.Paths(baseDir, ".yaml")) == 0 {
 			continue
 		}
 
-		if fileExists(filepath.Join(baseDir, "control_plane.yaml")) {
-			data := readYAML[controlPlaneFile](filepath.Join(baseDir, "control_plane.yaml"))
+		if source.Has(filepath.Join(baseDir, "control_plane.yaml")) {
+			data := readResolvedControlPlane(source, filepath.Join(baseDir, "control_plane.yaml"))
 			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sControlPlane.generated.ts", domain)), domain+"ControlPlane", data)
 			indexExports = append(indexExports, fmt.Sprintf("export * from './%sControlPlane.generated.js';", domain))
 		}
 
-		if fileExists(filepath.Join(baseDir, "workflow.yaml")) {
-			data := readYAML[workflowFile](filepath.Join(baseDir, "workflow.yaml"))
+		if source.Has(filepath.Join(baseDir, "workflow.yaml")) {
+			data := readYAML[workflowFile](source, filepath.Join(baseDir, "workflow.yaml"))
 			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sWorkflow.generated.ts", domain)), domain+"Workflow", data)
 			indexExports = append(indexExports, fmt.Sprintf("export * from './%sWorkflow.generated.js';", domain))
 		}
 
-		if fileExists(filepath.Join(baseDir, "audit_schema.yaml")) {
-			data := readYAML[auditSchemaFile](filepath.Join(baseDir, "audit_schema.yaml"))
+		if source.Has(filepath.Join(baseDir, "audit_schema.yaml")) {
+			data := readYAML[auditSchemaFile](source, filepath.Join(baseDir, "audit_schema.yaml"))
 			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sAudit.generated.ts", domain)), domain+"AuditSchema", data)
 			indexExports = append(indexExports, fmt.Sprintf("export * from './%sAudit.generated.js';", domain))
 		}
 
-		if fileExists(filepath.Join(baseDir, "config_schema.yaml")) {
-			data := readYAML[configSchemaFile](filepath.Join(baseDir, "config_schema.yaml"))
+		if source.Has(filepath.Join(baseDir, "config_schema.yaml")) {
+			data := readYAML[configSchemaFile](source, filepath.Join(baseDir, "config_schema.yaml"))
 			writeTSModule(filepath.Join(outDir, fmt.Sprintf("%sConfig.generated.ts", domain)), domain+"ConfigSchema", data)
 			indexExports = append(indexExports, fmt.Sprintf("export * from './%sConfig.generated.js';", domain))
 		}
@@ -223,29 +229,29 @@ func main() {
 	writeFile(filepath.Join(outDir, "index.ts"), strings.Join(indexExports, "\n")+"\n")
 }
 
-func readYAML[T any](path string) T {
-	data, err := os.ReadFile(path)
-	must(err)
+func readResolvedControlPlane(source *contractcodegen.Source, path string) map[string]any {
+	data := readYAML[map[string]any](source, path)
+	must(metacontrolplane.HydrateOperationReferences(data, source.Graph()))
+	return data
+}
 
+func readYAML[T any](source *contractcodegen.Source, path string) T {
 	var out T
-	must(yaml.Unmarshal(data, &out))
+	must(source.Decode(path, &out))
 	return out
 }
 
-func readOnboardingDomains(dir string) map[string]any {
-	entries, err := os.ReadDir(dir)
-	must(err)
-
+func readOnboardingDomains(
+	source *contractcodegen.Source,
+	dir string,
+) map[string]any {
 	out := map[string]any{}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
-			continue
-		}
-		path := filepath.Join(dir, entry.Name())
-		data := readYAML[map[string]any](path)
+	for _, path := range source.Paths(dir, ".yaml") {
+		data := readYAML[map[string]any](source, path)
 		domain := fmt.Sprint(data["domain"])
 		if strings.TrimSpace(domain) == "" {
-			domain = strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))
+			name := filepath.Base(path)
+			domain = strings.TrimSuffix(name, filepath.Ext(name))
 		}
 		out[domain] = data
 	}
@@ -265,11 +271,6 @@ func writeFile(path, content string) {
 	must(os.MkdirAll(filepath.Dir(path), 0o755))
 	must(os.WriteFile(path, []byte(content), 0o644))
 	fmt.Printf("generated: %s\n", path)
-}
-
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir() || err == nil
 }
 
 func toPascalCase(s string) string {

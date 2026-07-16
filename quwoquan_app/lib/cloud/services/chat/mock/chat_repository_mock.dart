@@ -1,11 +1,8 @@
-import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_contact_search_item_dto.g.dart';
@@ -94,7 +91,6 @@ class MockChatRepository implements ChatRepository {
     _materializeSeededGroupAvatarMetadata();
   }
 
-  int _seqCounter = 100;
   late final List<ConversationCacheRecord> _conversationCache;
   late final List<ChatContactRowDto> _contactRows;
   late final List<String> _contactCircleIds;
@@ -637,69 +633,6 @@ class MockChatRepository implements ChatRepository {
       }
     }
     return results;
-  }
-
-  @override
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    CloudJsonMap? media,
-    CloudJsonMap? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? personaContextVersion,
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    required String clientMsgId,
-  }) async {
-    final conversation = _findConversation(conversationId);
-    if (conversation != null && conversation.status == 'blocked') {
-      throw StateError(ChatErrorCode.blocked.code);
-    }
-    _seqCounter += 1;
-    final now = DateTime.now().toUtc();
-    final message = ChatMessageDto(
-      id: 'msg_mock_${now.microsecondsSinceEpoch}',
-      conversationId: conversationId,
-      seq: _seqCounter,
-      clientMsgId: clientMsgId,
-      senderId: senderSubAccountId ?? ChatMockData.currentUserProfileId,
-      senderName: senderDisplayNameSnapshot,
-      senderAvatar: senderAvatarUrlSnapshot,
-      senderSubAccountId: senderSubAccountId,
-      type: type,
-      content: content,
-      mediaUrl: mediaUrl,
-      media: media,
-      cardPayload: cardPayload,
-      replyToMessageId: replyToMessageId,
-      mentions: mentions,
-      status: 'sent',
-      timestamp: now,
-    );
-    final messages = _messagesFor(conversationId)..add(message);
-    final record = _findConversation(conversationId);
-    if (record != null) {
-      final next = record.copyWith(
-        maxSeq: _seqCounter,
-        lastSeq: _seqCounter,
-        messageCount: messages.length,
-        lastMessagePreview: content,
-        lastMessageType: type,
-        lastMessageAt: now.toIso8601String(),
-        updatedAt: now.toIso8601String(),
-      );
-      _replaceConversation(next);
-      _syncInboxFromConversation(next);
-    }
-    return SendMessageResponse(
-      id: message.id,
-      seq: message.seq,
-      timestamp: now,
-    );
   }
 
   @override

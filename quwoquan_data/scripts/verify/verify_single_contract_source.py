@@ -15,21 +15,14 @@ ROOT = Path(__file__).resolve().parents[3]
 DATA_ROOT = ROOT / "quwoquan_data"
 
 SCAN_PATHS = [
-    DATA_ROOT / "schema/task",
-    DATA_ROOT / "scripts/task/production_contracts.py",
-    DATA_ROOT / "scripts/task/object_queue.py",
-    DATA_ROOT / "scripts/task/content_supply.py",
-    DATA_ROOT / "scripts/task/target_selection.py",
-    DATA_ROOT / "scripts/task/run.py",
-    DATA_ROOT / "scripts/_common/batch_manifest.py",
-    DATA_ROOT / "scripts/download/gate.py",
-    DATA_ROOT / "scripts/download/handler.py",
-    DATA_ROOT / "scripts/publish/gate.py",
-    DATA_ROOT / "scripts/_common/content_plan.py",
-    DATA_ROOT / "scripts/_common/command_packet.py",
-    DATA_ROOT / "scripts/verify/verify_content_supply_production.py",
+    DATA_ROOT / "schema/execution",
+    DATA_ROOT / "schema/content",
+    DATA_ROOT / "schema/release",
+    DATA_ROOT / "scripts/content",
+    DATA_ROOT / "scripts/core/content_plan.py",
+    DATA_ROOT / "scripts/core/command_packet.py",
+    DATA_ROOT / "scripts/verify/verify_content_execution_production.py",
     DATA_ROOT / "scripts/verify/handler.py",
-    DATA_ROOT / "scripts/verify/verify_quwoquan_data.sh",
 ]
 
 FORBIDDEN_PATTERNS = [

@@ -1,19 +1,26 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 )
 
-// HTTP mutation wires for entity/homepage/service.yaml (writable_fields per operation).
+// HTTP mutation wires for entity homepage-related business-object service metadata.
 
-func emitEntityHomepageMutationWiresFile(outPath string, svc *serviceFile) {
-	if svc == nil {
-		return
+func emitEntityHomepageMutationWiresFile(outPath string, services map[string]*serviceFile) error {
+	rendered, err := renderEntityHomepageMutationWires(services)
+	if err != nil {
+		return err
 	}
+	writeFile(outPath, rendered)
+	return nil
+}
+
+func renderEntityHomepageMutationWires(services map[string]*serviceFile) (string, error) {
 	var b strings.Builder
 	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
-	b.WriteString("// Source: contracts/metadata/entity/homepage/service.yaml (writable_fields per operation).\n")
+	b.WriteString("// Source: contracts/metadata/entity/{homepage,homepage_claim_request,homepage_status_report}/service.yaml (writable_fields per operation).\n")
 	b.WriteString("// Regenerate: make codegen-app\n\n")
 
 	b.WriteString(`Map<String, dynamic> _entityHomepageMutationPutOpt(Map<String, dynamic> m, String k, Object? v) {
@@ -25,19 +32,65 @@ func emitEntityHomepageMutationWiresFile(outPath string, svc *serviceFile) {
 `)
 
 	type spec struct {
-		op        string
-		className string
+		operation             string
+		className             string
+		sourceObject          string
+		requiresWritableField bool
 	}
 	for _, sp := range []spec{
-		{op: "ReviewHomepageClaimRequest", className: "ReviewHomepageClaimRequestWire"},
-		{op: "ReviewHomepageStatusReport", className: "ReviewHomepageStatusReportWire"},
-		{op: "PublishHomepageCandidate", className: "PublishHomepageCandidateWire"},
+		{
+			operation:             "ReviewHomepageClaimRequest",
+			className:             "ReviewHomepageClaimRequestWire",
+			sourceObject:          "homepage_claim_request",
+			requiresWritableField: true,
+		},
+		{
+			operation:             "ReviewHomepageStatusReport",
+			className:             "ReviewHomepageStatusReportWire",
+			sourceObject:          "homepage_status_report",
+			requiresWritableField: true,
+		},
+		{
+			operation:    "PublishHomepageCandidate",
+			className:    "PublishHomepageCandidateWire",
+			sourceObject: "homepage",
+		},
 	} {
-		fields := findWritableFields(svc.APIRoutes, sp.op)
+		svc := services[sp.sourceObject]
+		if svc == nil {
+			return "", fmt.Errorf(
+				"entity homepage mutation wire source service missing: %s",
+				sp.sourceObject,
+			)
+		}
+		fields, found := entityHomepageMutationWritableFields(svc.APIRoutes, sp.operation)
+		if !found {
+			return "", fmt.Errorf(
+				"entity homepage mutation operation missing: %s in %s",
+				sp.operation,
+				sp.sourceObject,
+			)
+		}
+		if sp.requiresWritableField && len(fields) == 0 {
+			return "", fmt.Errorf(
+				"entity homepage mutation writable_fields missing: %s in %s",
+				sp.operation,
+				sp.sourceObject,
+			)
+		}
 		renderEntityHomepageMutationWireClass(&b, sp.className, fields)
 	}
 
-	writeFile(outPath, b.String())
+	return b.String(), nil
+}
+
+func entityHomepageMutationWritableFields(routes []routeDef, operation string) ([]string, bool) {
+	for _, route := range routes {
+		if strings.EqualFold(route.Operation, operation) {
+			return route.WritableFields, true
+		}
+	}
+	return nil, false
 }
 
 func renderEntityHomepageMutationWireClass(b *strings.Builder, className string, fields []string) {
@@ -105,12 +158,24 @@ func renderEntityHomepageMutationWireClass(b *strings.Builder, className string,
 	b.WriteString("    );\n  }\n}\n\n")
 }
 
-func writeEntityHomepageMutationWiresFromMetadata(metadataDir, appDir string) {
-	homeSvcPath := filepath.Join(metadataDir, "entity", "homepage", "service.yaml")
-	entHomeSvc, err := readService(homeSvcPath)
-	if err != nil {
-		return
+func writeEntityHomepageMutationWiresFromMetadata(metadataDir, appDir string) error {
+	services := make(map[string]*serviceFile, 3)
+	for _, objectName := range []string{
+		"homepage",
+		"homepage_claim_request",
+		"homepage_status_report",
+	} {
+		svcPath := filepath.Join(metadataDir, "entity", objectName, "service.yaml")
+		svc, err := readService(svcPath)
+		if err != nil {
+			return fmt.Errorf(
+				"read entity homepage mutation source %s: %w",
+				objectName,
+				err,
+			)
+		}
+		services[objectName] = svc
 	}
 	out := filepath.Join(appDir, "lib", "cloud", "runtime", "generated", "entity", "entity_homepage_mutation_wires.g.dart")
-	emitEntityHomepageMutationWiresFile(out, entHomeSvc)
+	return emitEntityHomepageMutationWiresFile(out, services)
 }

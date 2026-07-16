@@ -64,7 +64,7 @@ func (s *MemberService) ListSelectableGroupConversations(
 		return rows, nil
 	}
 
-	conversations, err := s.repo.ListConversationsByUser(ctx, userID, 500, "")
+	conversations, err := s.conversations.ListConversationsByUser(ctx, userID, 500, "")
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,10 @@ func (s *MemberService) ListSelectableGroupConversations(
 		if normalizedQuery != "" && !strings.Contains(strings.ToLower(conv.Title), normalizedQuery) {
 			continue
 		}
-		members, err := s.repo.ListMembers(ctx, conv.ID, 1000, "", "", "joined_asc")
+		members, err := s.members.ListMembers(ctx, conv.ID, ListMembersQuery{
+			Limit: 1000,
+			Sort:  MemberListSortJoinedAsc,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +120,7 @@ func (s *MemberService) ListSelectableGroupContactMembers(
 		return nil, rterr.NewInvalidArgument(rterr.ModuleChat, "缺少会话标识", "conversationId is required")
 	}
 
-	conv, err := s.repo.FindConversationByID(ctx, conversationID)
+	conv, err := s.conversations.FindConversationByID(ctx, conversationID)
 	if err != nil {
 		if errors.Is(err, model.ErrConversationNotFound) {
 			return nil, generated.AppErrorFromConversationNotFound("conversation not found: " + conversationID)
@@ -133,7 +136,10 @@ func (s *MemberService) ListSelectableGroupContactMembers(
 		return nil, err
 	}
 
-	members, err := s.repo.ListMembers(ctx, conversationID, 1000, "", "", "display_name_asc")
+	members, err := s.members.ListMembers(ctx, conversationID, ListMembersQuery{
+		Limit: 1000,
+		Sort:  MemberListSortDisplayNameAsc,
+	})
 	if err != nil {
 		return nil, err
 	}

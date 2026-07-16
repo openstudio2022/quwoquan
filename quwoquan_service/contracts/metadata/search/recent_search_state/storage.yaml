@@ -1,0 +1,10 @@
+version: 1
+entity: RecentSearchState
+backend: mongodb
+collections:
+  recent_search_states:
+    entity: RecentSearchState
+    role: authoritative
+    indexes:
+      - { name: uq_recent_search_subject_scope, keys: { personaId: 1, scope: 1 }, unique: true }
+      - { name: idx_recent_search_updated, keys: { updatedAt: -1 } }

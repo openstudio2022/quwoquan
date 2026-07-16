@@ -7,6 +7,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
+import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
+import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
@@ -20,6 +22,7 @@ import 'package:quwoquan_app/ui/settings/pages/settings_about_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_dark_mode_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_page.dart';
 import 'package:quwoquan_app/ui/settings/pages/settings_permissions_page.dart';
+import '../../../../support/fakes/test_auth_repository.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -271,8 +274,15 @@ void main() {
     testWidgets('退出登录默认走软退出：不远端吊销、不清本机凭证', (tester) async {
       final store = _SpyAuthSessionStore();
       final repo = _SpyAuthRepository();
+      final behavior = _SpyBehaviorRepository();
+      final ops = _SpyOpsEventRepository();
       await tester.pumpWidget(
-        _buildSettingsApp(store: store, authRepository: repo),
+        _buildSettingsApp(
+          store: store,
+          authRepository: repo,
+          behaviorRepository: behavior,
+          opsEventRepository: ops,
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -307,14 +317,23 @@ void main() {
       expect(store.softLogoutCount, 1);
       expect(store.clearSessionCount, 0);
       expect(repo.logoutCount, 0);
+      expect(behavior.clearPendingCount, 1);
+      expect(ops.clearPendingCount, 1);
       await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('退出并清除本机登录信息：远端吊销 + 清本机凭证', (tester) async {
       final store = _SpyAuthSessionStore();
       final repo = _SpyAuthRepository();
+      final behavior = _SpyBehaviorRepository();
+      final ops = _SpyOpsEventRepository();
       await tester.pumpWidget(
-        _buildSettingsApp(store: store, authRepository: repo),
+        _buildSettingsApp(
+          store: store,
+          authRepository: repo,
+          behaviorRepository: behavior,
+          opsEventRepository: ops,
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -331,6 +350,8 @@ void main() {
       expect(repo.logoutCount, 1);
       expect(store.clearSessionCount, 1);
       expect(store.softLogoutCount, 0);
+      expect(behavior.clearPendingCount, 1);
+      expect(ops.clearPendingCount, 1);
       await tester.pump(const Duration(seconds: 4));
     });
   });
@@ -354,6 +375,8 @@ void _useTallViewport(WidgetTester tester) {
 Widget _buildSettingsApp({
   AuthSessionStore? store,
   AuthRepository? authRepository,
+  BehaviorRepository? behaviorRepository,
+  OpsEventRepository? opsEventRepository,
 }) {
   return ProviderScope(
     overrides: [
@@ -368,6 +391,10 @@ Widget _buildSettingsApp({
       ),
       if (authRepository != null)
         authRepositoryProvider.overrideWithValue(authRepository),
+      if (behaviorRepository != null)
+        behaviorRepositoryProvider.overrideWithValue(behaviorRepository),
+      if (opsEventRepository != null)
+        opsEventRepositoryProvider.overrideWithValue(opsEventRepository),
     ],
     child: MaterialApp.router(
       routerConfig: GoRouter(
@@ -487,6 +514,11 @@ class _SpyAuthSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
+
+  @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
 
   @override
@@ -506,12 +538,32 @@ class _SpyAuthSessionStore implements AuthSessionStore {
   Future<void> markForegroundAuthCheckNow() async {}
 }
 
-class _SpyAuthRepository extends MockAuthRepository {
+class _SpyAuthRepository extends TestAuthRepository {
   int logoutCount = 0;
 
   @override
   Future<void> logout({String? refreshToken, String? deviceId}) async {
     logoutCount += 1;
+  }
+}
+
+final class _SpyBehaviorRepository extends MockBehaviorRepository {
+  int clearPendingCount = 0;
+
+  @override
+  Future<void> clearPendingForLogout() async {
+    clearPendingCount += 1;
+    await super.clearPendingForLogout();
+  }
+}
+
+final class _SpyOpsEventRepository extends MockOpsEventRepository {
+  int clearPendingCount = 0;
+
+  @override
+  Future<void> clearPendingForLogout() async {
+    clearPendingCount += 1;
+    await super.clearPendingForLogout();
   }
 }
 

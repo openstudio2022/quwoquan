@@ -30,11 +30,11 @@
 # 1) 起 local-gamma 镜像栈（含 tag-service）
 bash quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh
 
-# 2) 灌入路径制 taxonomy → tag_nodes（幂等可重跑；唯一真相源 publish/tags）
+# 2) 灌入路径制 taxonomy → tag_nodes（幂等可重跑）
 cd quwoquan_service && \
   TAG_MONGO_PORT="$(python3 ../quwoquan_ops/cli/print_local_port_profile.py --profile gamma-local --format json | python3 -c 'import json,sys;print(json.load(sys.stdin)["ports"]["mongodb"])')" && \
   go run ./services/tag-service/cmd/import \
-    --tags-dir ../quwoquan_data/publish/tags \
+    --tags-dir ../quwoquan_data/control_plane/governance/taxonomy \
     --mongo-uri "mongodb://127.0.0.1:${TAG_MONGO_PORT}/?directConnection=true" \
     --db quwoquan_tag
 
@@ -59,17 +59,17 @@ curl -s "$GW/v1/tag/search?q=旅"
 - **patrol（user_acceptance）**：`dart pub global activate patrol_cli` + 启动 iOS/Android 模拟器，
   交集 user_acceptance case 经 `quwoquan_ops/cli/gamma/run_gamma_patrol_matrix_ci.py` 矩阵执行。
 
-## 4. 受控后续项（已登记，进 V5 后处理）
+## 4. 当前能力边界
 
-- **object_tag_index 对象打标 seed**：[已闭合 · V5/S2] 新增写能力与离线导入工具，gamma 自动灌库：
+- **object_tag_index 对象打标 seed**：新增写能力与离线导入工具，gamma 自动灌库：
   - 写能力：`repository.ObjectTagIndexWriter.UpsertObjectTags` + `MongoObjectTagIndexStore.UpsertObjectTags`
     （按 `{objectId, objectType}` 唯一键幂等 upsert，派生倒排可重建）。
   - 导入工具：`services/tag-service/cmd/import-objects`，从 manifest（contract fixture 或数据工程扁平 manifest）
     幂等灌入 `object_tag_index`；默认源为 `contracts/metadata/tag/test_fixtures/scenarios/tag_scenarios.json`，
     与契约测试 / app mock 同源。
   - gamma 自动化：`start_local_gamma_mirror.sh` 在 host ready 后 `seed_tag_service_data()` 自动灌
-    `tag_nodes`（publish/tags）+ `object_tag_index`（fixture），失败仅告警不中断。
-  - 端到端真数据对齐（灌入对象 ID ↔ gamma user seed 真实 userId）与交集卡真数据验证在 V5/S5 闭合。
+    `tag_nodes`（control-plane taxonomy）+ `object_tag_index`（fixture）；导入失败必须阻断环境就绪。
+  - 端到端真数据对齐以 gamma user seed 的真实 userId 和交集卡动态验证为准。
 - **`feedback` 写路径**：`POST /v1/tag/feedback` 保留 501。它是写操作（点击/忽略/修正），与
   tag-service「只读消费导入产物」定位冲突，落地需新增写存储或路由到 behavior/recommendation 域，
   待架构评审；前端 `MockTagRepository.feedback` 为 alpha 乐观占位，Remote 为休眠代码、无 UI 消费。

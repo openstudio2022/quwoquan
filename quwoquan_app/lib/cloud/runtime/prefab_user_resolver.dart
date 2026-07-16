@@ -1,10 +1,10 @@
 import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
+import 'package:quwoquan_app/cloud/user/generated/prefab_user_metadata.g.dart';
 
-/// 预制用户双轨 resolver：creator_pool 优先，archive alias 兼容。
+/// 创作者规模 fixture 身份解析器。
 class PrefabUserResolver {
   PrefabUserResolver._();
 
-  static Map<String, dynamic>? _manifestCache;
   static Map<String, dynamic>? _creatorSliceCache;
 
   static String resolveUserId(String userId) {
@@ -26,21 +26,11 @@ class PrefabUserResolver {
   }
 
   static String get currentUserVariantSubAccountId {
-    final slot = _manifest()?['currentUserVariant'] as Map<String, dynamic>?;
-    final sub = slot?['subAccountId'] as String?;
-    if (sub != null && sub.isNotEmpty) {
-      return sub;
-    }
-    return 'fixture_sub_current';
+    return PrefabUserMetadata.currentSubAccountId;
   }
 
   static String get currentUserVariantUserId {
-    final slot = _manifest()?['currentUserVariant'] as Map<String, dynamic>?;
-    final userId = slot?['userId'] as String?;
-    if (userId != null && userId.isNotEmpty) {
-      return userId;
-    }
-    return 'fixture_user_current';
+    return PrefabUserMetadata.currentUserId;
   }
 
   static Map<String, dynamic>? creatorProfileWireFor(String id) {
@@ -89,15 +79,14 @@ class PrefabUserResolver {
   }
 
   static bool isOwnerLikeSubAccountId(String subAccountId) {
-    const archiveOwnerLike = {'me', 'fixture_user_current'};
-    if (archiveOwnerLike.contains(subAccountId)) {
+    if (subAccountId == 'me') {
       return true;
     }
     return isCurrentUserVariantId(subAccountId);
   }
 
   static Map<String, Map<String, dynamic>> _creatorIndex() {
-    final users = (_creatorSlice()?['users'] as List<dynamic>? ?? const []);
+    final users = (_creatorSlice()['users'] as List<dynamic>? ?? const []);
     final index = <String, Map<String, dynamic>>{};
     for (final raw in users) {
       if (raw is! Map<String, dynamic>) continue;
@@ -130,19 +119,17 @@ class PrefabUserResolver {
     return '';
   }
 
-  static Map<String, dynamic>? _manifest() {
-    return _manifestCache ??= _readFixtureJson(
-      '_shared/test_fixtures/user_pool.manifest.travel_photo_1k_v1.json',
-    );
-  }
-
-  static Map<String, dynamic>? _creatorSlice() {
-    return _creatorSliceCache ??= _readFixtureJson(
+  static Map<String, dynamic> _creatorSlice() {
+    return _creatorSliceCache ??= _readRequiredFixtureJson(
       '_shared/test_fixtures/user_pool.creator_pool.travel_photo_1k_v1.json',
     );
   }
 
-  static Map<String, dynamic>? _readFixtureJson(String relativePath) {
-    return ContractFixtureRuntimeLoader.metadataJson(relativePath);
+  static Map<String, dynamic> _readRequiredFixtureJson(String relativePath) {
+    final value = ContractFixtureRuntimeLoader.metadataJson(relativePath);
+    if (value == null) {
+      throw StateError('missing contract fixture: $relativePath');
+    }
+    return value;
   }
 }

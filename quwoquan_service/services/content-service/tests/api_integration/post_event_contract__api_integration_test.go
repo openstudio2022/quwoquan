@@ -2,7 +2,6 @@
 package api_integration
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -37,35 +36,18 @@ func TestPostCreatedEvent(t *testing.T) {
 
 func TestCommentDeletedEvent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
+	cleanPosts(t)
 	eventSpy.Reset()
 
-	created := createPost(t, `{"contentType":"image","title":"Event delete test","mediaUrls":["https://example.com/img.jpg"]}`)
-	postID, _ := created["_id"].(string)
-
+	postID := createCommentTestPost(t, "event-post-owner")
+	comment := createCommentThroughAPI(t, postID, "event-comment-owner", "to be deleted for event", "")
 	eventSpy.Reset()
 
-	body := `{"content":"to be deleted for event"}`
-	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts/"+postID+"/comments", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-User-Id", "event_user")
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create comment: %d", rec.Code)
-	}
-	var createResp map[string]any
-	json.Unmarshal(rec.Body.Bytes(), &createResp)
-	comment, _ := createResp["comment"].(map[string]any)
-	commentID, _ := comment["_id"].(string)
-
-	eventSpy.Reset()
-
-	delReq := httptest.NewRequest(http.MethodDelete, "/v1/content/posts/"+postID+"/comments/"+commentID, nil)
-	delReq.Header.Set("X-Client-User-Id", "event_user")
-	delRec := httptest.NewRecorder()
-	testHandler.ServeHTTP(delRec, delReq)
-	if delRec.Code != http.StatusNoContent {
-		t.Fatalf("delete comment: %d", delRec.Code)
+	deleted := commentAPIRequest(t, http.MethodDelete,
+		"/v1/content/posts/"+postID+"/comments/"+comment.ID,
+		"event-comment-owner", map[string]any{"version": comment.Version})
+	if deleted.Code != http.StatusOK {
+		t.Fatalf("delete Comment: %d body=%s", deleted.Code, deleted.Body.String())
 	}
 
 	events := eventSpy.EventsOfType("CommentDeleted")
@@ -73,11 +55,11 @@ func TestCommentDeletedEvent(t *testing.T) {
 		t.Fatalf("expected 1 CommentDeleted event, got %d", len(events))
 	}
 	ev := events[0]
-	if ev.AggregateType != "Post" {
+	if ev.AggregateType != "Comment" {
 		t.Errorf("aggregateType: %s", ev.AggregateType)
 	}
-	if ev.Payload["commentId"] != commentID {
-		t.Errorf("payload.commentId: want %s, got %v", commentID, ev.Payload["commentId"])
+	if ev.AggregateID != comment.ID || ev.Payload["commentId"] != comment.ID {
+		t.Errorf("CommentDeleted identity: want %s, got aggregate=%s payload=%v", comment.ID, ev.AggregateID, ev.Payload["commentId"])
 	}
 }
 
@@ -95,7 +77,7 @@ func TestPostSettingsUpdatedEvent(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPatch,
 		"/v1/content/posts/"+postID+"/settings",
-		strings.NewReader(`{"visibility":"public","assistantUsePolicy":"exclude","circleIds":["settings_circle_a"]}`),
+		strings.NewReader(`{"visibility":"public","assistantUsePolicy":"exclude"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "settings_event_author")
@@ -116,9 +98,8 @@ func TestPostSettingsUpdatedEvent(t *testing.T) {
 	if ev.Payload["visibility"] != "public" {
 		t.Errorf("payload.visibility: %v", ev.Payload["visibility"])
 	}
-	added, ok := ev.Payload["addedCircleIds"].([]string)
-	if !ok || len(added) != 1 || added[0] != "settings_circle_a" {
-		t.Fatalf("payload.addedCircleIds = %#v", ev.Payload["addedCircleIds"])
+	if _, exists := ev.Payload["addedCircleIds"]; exists {
+		t.Fatalf("PostSettingsUpdated must not carry CirclePostPlacement state: %#v", ev.Payload)
 	}
 }
 
@@ -162,8 +143,7 @@ func TestPostDeletedEvent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := createPostWithAuthor(t, "delete_event_author", `{
 		"contentType":"image",
-		"circleIds":["circle_delete_event"],
-		"visibility":"circle_visible",
+		"visibility":"public",
 		"mediaUrls":["https://example.com/img.jpg"]
 	}`)
 	postID, _ := created["_id"].(string)
@@ -192,9 +172,8 @@ func TestPostDeletedEvent(t *testing.T) {
 	if ev.Payload["status"] != "published" {
 		t.Fatalf("payload.status should keep pre-delete status, got %#v", ev.Payload["status"])
 	}
-	circleIDs, ok := ev.Payload["circleIds"].([]string)
-	if !ok || len(circleIDs) != 1 || circleIDs[0] != "circle_delete_event" {
-		t.Fatalf("payload.circleIds = %#v", ev.Payload["circleIds"])
+	if _, exists := ev.Payload["circleIds"]; exists {
+		t.Fatalf("PostDeleted must not carry CirclePostPlacement state: %#v", ev.Payload)
 	}
 }
 

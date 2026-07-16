@@ -47,6 +47,10 @@
       "plane": "media",
       "slotOffset": 120
     },
+    "object-storage-edge": {
+      "plane": "media",
+      "slotOffset": 130
+    },
     "chat-service": {
       "plane": "service",
       "slotOffset": 200
@@ -90,6 +94,26 @@
     "circle-service": {
       "plane": "service",
       "slotOffset": 300
+    },
+    "integration-service": {
+      "plane": "service",
+      "slotOffset": 310
+    },
+    "notification-service": {
+      "plane": "service",
+      "slotOffset": 320
+    },
+    "recommendation-service": {
+      "plane": "service",
+      "slotOffset": 330
+    },
+    "realtime-gateway": {
+      "plane": "service",
+      "slotOffset": 340
+    },
+    "rtc-service": {
+      "plane": "service",
+      "slotOffset": 350
     },
     "postgres": {
       "plane": "dataDebug",

@@ -113,17 +113,6 @@ func (s *MongoBehaviorEventStore) ListUserFootprint(ctx context.Context, userID 
 	return out, nil
 }
 
-// NoopBehaviorEventStore discards events (used when MongoDB is not available).
-type NoopBehaviorEventStore struct{}
-
-func (NoopBehaviorEventStore) InsertBatch(_ context.Context, _ []RawBehaviorEvent) error {
-	return nil
-}
-
-func (NoopBehaviorEventStore) ListUserFootprint(_ context.Context, _ string, _ []string, _ time.Time, _ int) ([]RawBehaviorEvent, error) {
-	return nil, nil
-}
-
 // MongoWishlistEventStore persists explicit want-to-go intent facts consumed by
 // MongoIntersectionSource.coWishlistedEntityReason.
 type MongoWishlistEventStore struct {
@@ -208,11 +197,5 @@ func (s *MongoWishlistEventStore) UpsertWishlistEvent(ctx context.Context, event
 		}
 		return err
 	}
-	return nil
-}
-
-type NoopWishlistEventStore struct{}
-
-func (NoopWishlistEventStore) UpsertWishlistEvent(_ context.Context, _ WishlistEvent) error {
 	return nil
 }

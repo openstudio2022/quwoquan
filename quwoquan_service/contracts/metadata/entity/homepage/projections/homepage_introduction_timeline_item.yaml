@@ -35,9 +35,3 @@ client_projection:
       nullable: true
       source: assetUrl
       aliases: [assetUrl, imageUrl]
-
-    - name: sourceRef
-      dart_type: String
-      nullable: true
-      source: sourceRef
-      aliases: [sourceRef]

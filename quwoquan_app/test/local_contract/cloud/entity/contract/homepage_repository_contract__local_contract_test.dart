@@ -7,14 +7,62 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
+import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/entity_homepage_mutation_wires.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_introduction.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/mock/homepage_mock_data.dart';
 
 void main() {
+  test('HomepageRelatedGroupSummary 只接受 canonical circleId 与证据快照', () {
+    final group = HomepageRelatedGroupSummary.fromMap(<String, dynamic>{
+      'circleId': 'fixture_circle_photo',
+      'name': '契约摄影社',
+      'memberCount': 128,
+      'ownerUserId': 'fixture_user_owner',
+      'ownerDisplayNameSnapshot': '契约摄影社主理人',
+      'ownerAvatarUrlSnapshot': '',
+      'evidenceSnapshotId': 'circle:fixture_circle_photo:members:v1',
+    });
+    expect(group.circleId, 'fixture_circle_photo');
+    expect(group.ownerUserId, 'fixture_user_owner');
+    expect(group.ownerDisplayNameSnapshot, '契约摄影社主理人');
+    expect(group.evidenceSnapshotId, isNotEmpty);
+
+    final unscoped = HomepageRelatedGroupSummary.fromMap(<String, dynamic>{
+      'id': 'unscoped_circle_alias',
+      'name': '旧别名',
+    });
+    expect(unscoped.circleId, isEmpty);
+  });
+
+  test('HomepageIntroduction 只解码公开来源，不保留内部 sourceRefs', () {
+    final introduction = HomepageIntroduction.fromMap(<String, dynamic>{
+      'homepageId': 'homepage_sight_west_lake',
+      'displayName': '西湖',
+      'homepageType': 'sight',
+      'summary': '摘要',
+      'sections': <dynamic>[],
+      'relatedObjects': <dynamic>[],
+      'primarySource': <String, dynamic>{
+        'sourceKind': 'wikipedia',
+        'sourceUrl': 'https://zh.wikipedia.org/wiki/西湖',
+        'title': '西湖',
+        'policyRevision': 'encyclopedia-primary-v2',
+      },
+      'sourceUrls': <String>['https://zh.wikipedia.org/wiki/西湖'],
+      'sourceRefs': <String>['internal/source/unit-1'],
+    });
+    expect(introduction.primarySource?.sourceKind, 'wikipedia');
+    expect(introduction.sourceUrls, <String>[
+      'https://zh.wikipedia.org/wiki/西湖',
+    ]);
+    expect(introduction.toMap().containsKey('sourceRefs'), isFalse);
+  });
+
   test(
     'CloudResponseDecoder.mapListFirstPresent 优先使用 groups 而非 relatedGroups',
     () {
@@ -319,7 +367,7 @@ void main() {
       },
     );
 
-    test('getHomepageRelatedGroups 解析 groups 并跳过非 Map 元素', () async {
+    test('getHomepageRelatedGroups 遇到坏 groups 元素必须失败关闭', () async {
       final client = MockClient((request) async {
         if (request.url.path.endsWith('/related-groups')) {
           return http.Response(
@@ -339,11 +387,16 @@ void main() {
         httpClient: CloudHttpClient(client: client),
         baseUrl: 'https://gw.test',
       );
-      final groups = await repo.getHomepageRelatedGroups('h1');
-      expect(groups, hasLength(1));
-      expect(groups.single.circleId, 'c1');
-      expect(groups.single.name, 'G1');
-      expect(groups.single.memberCount, 3);
+      await expectLater(
+        repo.getHomepageRelatedGroups('h1'),
+        throwsA(
+          isA<CloudException>().having(
+            (error) => error.runtimeFailure.code,
+            'runtimeFailure.code',
+            'APP.CONTRACT.invalid_response',
+          ),
+        ),
+      );
     });
 
     test('getHomepageRelatedGroups 缺省或空 groups 返回空列表', () async {

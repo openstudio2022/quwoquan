@@ -65,21 +65,6 @@ class ClientStateSyncOutboxNotifier
     );
   }
 
-  void enqueuePostShare({
-    required String postId,
-    required bool isShared,
-    bool flushImmediately = false,
-  }) {
-    _upsertEntry(
-      objectType: 'post',
-      objectId: postId,
-      intentType: 'share',
-      currentBoolValue: null,
-      desiredBoolValue: isShared,
-      flushImmediately: flushImmediately,
-    );
-  }
-
   Future<void> flushNow() async {
     final config = ref.read(contentRuntimeConfigProvider).clientStateSync;
     final now = DateTime.now();
@@ -147,19 +132,13 @@ class ClientStateSyncOutboxNotifier
         }
         return;
       case 'post:like':
-        final repo = ref.read(contentRepositoryProvider);
+        final repo = ref.read(contentPostReactionFacetProvider);
         if (entry.desiredBoolValue) {
-          await repo.likePost(postId: entry.objectId);
+          await repo.likePost(LikeContentPostCommand(postId: entry.objectId));
         } else {
-          await repo.unlikePost(postId: entry.objectId);
-        }
-        return;
-      case 'post:share':
-        final repo = ref.read(contentRepositoryProvider);
-        if (entry.desiredBoolValue) {
-          await repo.sharePost(postId: entry.objectId);
-        } else {
-          await repo.unsharePost(postId: entry.objectId);
+          await repo.unlikePost(
+            UnlikeContentPostCommand(postId: entry.objectId),
+          );
         }
         return;
     }
@@ -322,25 +301,58 @@ final clientStateSyncOutboxProvider =
 
 final assistantRepositoryProvider = Provider<AssistantRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
+  final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
+  final personaId = ref.watch(currentUserIdProvider).trim();
+  final consentActorScope = '$accountId/$personaId';
   return cloudRepositoryImplForMode(
     mode,
     remote: () => RemoteAssistantRepository(
       httpClient: ref.watch(cloudHttpClientProvider),
+      consentActorScope: consentActorScope,
     ),
-    mock: MockAssistantRepository.new,
+    mock: () => MockAssistantRepository(
+      store: AssistantConsentStore(actorScope: consentActorScope),
+    ),
   );
 });
 
-final appMessageRepositoryProvider = Provider<AppMessageRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteAppMessageRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-    ),
-    mock: MockAppMessageRepository.new,
+final _remoteAppMessageAdapterProvider = Provider<RemoteAppMessageAdapter>((
+  ref,
+) {
+  return RemoteAppMessageAdapter(
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId) =>
+        _notificationInvocationContext(ref, clientPageId: clientPageId),
   );
 });
+
+/// Production composition is Remote-only. Alpha/test adapters must override
+/// these Facets from their physically separate composition root.
+final appMessageQueryProvider = Provider<AppMessageQuery>(
+  (ref) => ref.watch(_remoteAppMessageAdapterProvider),
+);
+
+final appMessageCommandWriterProvider = Provider<AppMessageCommandWriter>(
+  (ref) => ref.watch(_remoteAppMessageAdapterProvider),
+);
+
+CloudOperationInvocationContext _notificationInvocationContext(
+  Ref ref, {
+  required String clientPageId,
+}) {
+  final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
+  final persona = ref.read(activePersonaContextProvider).asData?.value;
+  final personaId = persona?.subAccountId.trim() ?? '';
+  return CloudOperationInvocationContext(
+    surfaceId: AppUiSurfaces.personalAssistantDialog.id,
+    clientPageId: clientPageId,
+    routeId: AppUiSurfaces.personalAssistantDialog.routeId,
+    actor: CloudOperationActorContext(
+      accountId: accountId.isEmpty ? null : accountId,
+      personaId: personaId.isEmpty ? null : personaId,
+    ),
+  );
+}
 
 final personalContentAccessProvider =
     NotifierProvider<PersonalContentAccessNotifier, PersonalContentAccessState>(
@@ -396,59 +408,6 @@ class _AppLogCacheTelemetrySink implements CacheTelemetrySink {
   }
 }
 
-/// Content Repository（按业务对象组织的端侧入口）
-final contentRepositoryProvider = Provider<ContentRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  final delegate = cloudRepositoryImplForMode(
-    mode,
-    remote: () =>
-        RemoteContentRepository(httpClient: ref.watch(cloudHttpClientProvider)),
-    mock: MockContentRepository.new,
-  );
-  return CachedContentRepository(
-    delegate: delegate,
-    postCache: ref.watch(postObjectCacheProvider),
-    querySnapshotStore: ref.watch(contentQuerySnapshotStoreProvider),
-    userProfileCache: ref.watch(userProfileCacheProvider),
-    telemetrySink: ref.watch(cacheTelemetrySinkProvider),
-  );
-});
-
-final profileMediaUploadGatewayProvider = Provider<ProfileMediaUploadGateway>((
-  ref,
-) {
-  return cloudRepositoryImplForMode(
-    ref.watch(appDataSourceModeProvider),
-    remote: () =>
-        ContentProfileMediaUploadGateway(ref.watch(contentRepositoryProvider)),
-    mock: () => const MockProfileMediaUploadGateway(),
-  );
-});
-
-/// Content 子接口 Provider（R02）。
-///
-/// `ContentRepository` 由 6 个 ≤10 方法子接口组合，同一实例同时满足全部子接口。
-/// 新消费方应只依赖所需窄接口（Read/Write/Reaction/Comment/Media/Config），
-/// 减少对上帝接口的耦合。
-final contentReadRepositoryProvider = Provider<ContentReadRepository>(
-  (ref) => ref.watch(contentRepositoryProvider),
-);
-final contentWriteRepositoryProvider = Provider<ContentWriteRepository>(
-  (ref) => ref.watch(contentRepositoryProvider),
-);
-final contentReactionRepositoryProvider = Provider<ContentReactionRepository>(
-  (ref) => ref.watch(contentRepositoryProvider),
-);
-final contentCommentRepositoryProvider = Provider<ContentCommentRepository>(
-  (ref) => ref.watch(contentRepositoryProvider),
-);
-final contentMediaRepositoryProvider = Provider<ContentMediaRepository>(
-  (ref) => ref.watch(contentRepositoryProvider),
-);
-final contentConfigRepositoryProvider = Provider<ContentConfigRepository>(
-  (ref) => ref.watch(contentRepositoryProvider),
-);
-
 /// Homepage Repository（主页搜索、详情、认领与治理）
 final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
@@ -458,18 +417,6 @@ final homepageRepositoryProvider = Provider<HomepageRepository>((ref) {
       httpClient: ref.watch(cloudHttpClientProvider),
     ),
     mock: MockHomepageRepository.new,
-  );
-});
-
-/// Integration Repository（外部能力集成：位置 nearby / search）
-final integrationRepositoryProvider = Provider<IntegrationRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () => RemoteIntegrationRepository(
-      httpClient: ref.watch(cloudHttpClientProvider),
-    ),
-    mock: () => const MockIntegrationRepository(),
   );
 });
 
@@ -498,7 +445,33 @@ final chatRepositoryProvider = Provider<ChatRepository>((ref) {
   );
 });
 
-/// Realtime 连接（Mock / Remote 透明切换；UI 禁止 import mock 实现目录）。
+/// Message command production composition is Remote-only. Alpha and tests
+/// override this Facet from their separate composition roots.
+final chatMessageCommandWriterProvider = Provider<ChatMessageCommandWriter>((
+  ref,
+) {
+  return RemoteChatMessageCommandWriter(
+    client: ref.watch(generatedCloudOperationClientProvider),
+    invocationContext: (clientPageId, idempotencyKey) {
+      final accountId = ref.read(resolvedOwnerUserIdProvider).trim();
+      final persona = ref.read(activePersonaContextProvider).asData?.value;
+      final personaId = persona?.subAccountId.trim() ?? '';
+      return CloudOperationInvocationContext(
+        surfaceId: AppUiSurfaces.chatDetail.id,
+        clientPageId: clientPageId,
+        routeId: AppUiSurfaces.chatDetail.routeId,
+        actor: CloudOperationActorContext(
+          accountId: accountId.isEmpty ? null : accountId,
+          personaId: personaId.isEmpty ? null : personaId,
+        ),
+        idempotencyKey: idempotencyKey,
+      );
+    },
+  );
+});
+
+/// Production realtime 连接：固定 Remote-only。
+/// Alpha fixture 只能由独立 runner 在 composition root 覆盖整个 notifier。
 final realtimeConnectionManagerProvider =
     NotifierProvider<RealtimeConnectionNotifier, TransportState>(
       () => RealtimeConnectionNotifier(
@@ -653,32 +626,6 @@ final activePersonaContextProvider =
       }
     });
 
-/// Auth Repository（登录/凭证/子账号管理）
-final authRepositoryProvider = Provider<AuthRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () =>
-        RemoteAuthRepository(httpClient: ref.watch(cloudHttpClientProvider)),
-    mock: MockAuthRepository.new,
-  );
-});
-
-final oneTapLoginClientProvider = Provider<OneTapLoginClient>((ref) {
-  return MethodChannelOneTapLoginClient();
-});
-
-/// Invite Repository（邀请归因）
-final inviteRepositoryProvider = Provider<InviteRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () =>
-        RemoteInviteRepository(httpClient: ref.watch(cloudHttpClientProvider)),
-    mock: MockInviteRepository.new,
-  );
-});
-
 /// ContactDiscovery Repository（通讯录批量哈希匹配）
 final contactDiscoveryRepositoryProvider = Provider<ContactDiscoveryRepository>(
   (ref) {
@@ -698,10 +645,19 @@ final behaviorRepositoryProvider = Provider<BehaviorRepository>((ref) {
   final mode = ref.watch(appDataSourceModeProvider);
   if (mode == AppDataSourceMode.remote) {
     final feedSessionNotifier = ref.read(feedSessionProvider.notifier);
+    final accountId = ref.watch(resolvedOwnerUserIdProvider).trim();
+    final personaId = ref.watch(currentUserIdProvider).trim();
     final repo = RemoteBehaviorRepository(
       httpClient: ref.watch(cloudHttpClientProvider),
       eventRepository: ref.watch(opsEventRepositoryProvider),
-      currentUserId: ref.watch(currentUserIdProvider),
+      currentUserId: personaId,
+      queuePartition: ActorQueuePartition(
+        environment: CloudRuntimeConfig.appRuntimeEnv,
+        accountId: accountId,
+        personaId: personaId,
+        deviceId: CloudRequestHeaders.deviceActorId ?? '',
+      ),
+      queueStorage: ref.watch(actorQueueStorageProvider),
       experimentBucket: ref
           .watch(contentRuntimeConfigProvider)
           .experimentBucket,
@@ -751,16 +707,6 @@ final blockRepositoryProvider = Provider<BlockRepository>((ref) {
     remote: () =>
         RemoteBlockRepository(httpClient: ref.watch(cloudHttpClientProvider)),
     mock: MockBlockRepository.new,
-  );
-});
-
-final reportRepositoryProvider = Provider<ReportRepository>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return cloudRepositoryImplForMode(
-    mode,
-    remote: () =>
-        RemoteReportRepository(httpClient: ref.watch(cloudHttpClientProvider)),
-    mock: MockReportRepository.new,
   );
 });
 
@@ -820,9 +766,10 @@ final searchRepositoryProvider = Provider<SearchRepository>((ref) {
   // mock 模式都复用它；remote 结果模式由 RemoteSearchRepository 接管云侧 /v1/search。
   final localFanout = buildAppSearchRepository(
     circleRepository: ref.watch(circleRepositoryProvider),
-    contentRepository: ref.watch(contentRepositoryProvider),
+    circleGroupQuery: ref.watch(globalSearchCircleGroupQueryProvider),
+    contentPostSearchRepository: ref.watch(contentPostSearchRepositoryProvider),
     homepageRepository: ref.watch(homepageRepositoryProvider),
-    integrationRepository: ref.watch(integrationRepositoryProvider),
+    locationSearchReader: ref.watch(globalSearchLocationReaderProvider),
     userProfileRepository: ref.watch(userProfileRepositoryProvider),
     localChatSearchStore: ref.watch(localChatSearchStoreProvider),
     localChatSearchSyncService: ref.watch(localChatSearchSyncProvider),
@@ -914,7 +861,16 @@ final tagRepositoryProvider = Provider<TagRepository>((ref) {
 
 /// Media Upload Manager（统一媒体上传队列 + 并发 + 重试 + 离线恢复）
 final mediaUploadManagerProvider = Provider<MediaUploadManager>((ref) {
-  final manager = MediaUploadManager();
+  final coordinator = ContentMediaUploadCoordinator(
+    media: ref.watch(chatDetailContentMediaFacetProvider),
+    fileStorage: ref.watch(fileStorageGatewayProvider),
+    uploadObject: ref.watch(contentMediaObjectUploadProvider),
+  );
+  final manager = MediaUploadManager(
+    coordinator: coordinator,
+    sourceReader: ref.watch(contentMediaSourceReaderProvider),
+    uploadStream: ref.watch(contentMediaStreamObjectUploadProvider),
+  );
   manager.startOfflineMonitor();
   ref.onDispose(manager.dispose);
   return manager;

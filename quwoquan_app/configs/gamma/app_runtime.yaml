@@ -8,7 +8,7 @@ runtime:
   mediaAvatarCdnBaseUrl: https://gamma-avatar.quwoquan-env.test:19100
   mediaImageCdnBaseUrl: https://gamma-image.quwoquan-env.test:19100
   mediaVideoCdnBaseUrl: https://gamma-video.quwoquan-env.test:19100
-  mediaUploadBaseUrl: https://gamma-upload.quwoquan-env.test:19100
+  mediaUploadBaseUrl: https://gamma-upload.quwoquan-env.test:19130
   currentUserId: fixture_user_current
 seed:
   enabled: false

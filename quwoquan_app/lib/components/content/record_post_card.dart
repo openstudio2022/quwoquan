@@ -101,6 +101,7 @@ class RecordPostCard extends ConsumerWidget {
         referralSource: referralSource,
         contextObjectName: _intersectionObjectName,
         contextObjectTarget: IntersectionTarget(
+          objectType: 'post',
           objectId: post.id,
           objectKind: 'content',
           routeId: 'workBrowser',

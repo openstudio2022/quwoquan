@@ -6,8 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_conversation_created_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/link_templates.g.dart';
@@ -23,10 +21,15 @@ import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/trackers/comment_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
+import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
+import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_interaction_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_shell.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 import '../../../../support/harness/profile_shell_scroll_utils.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/cloud_services/test_content_comment_facet.dart';
 
 /// 互动 Tab：切换后渲染 ProfileInteractionTab，二级子页（赞/评论/分享）可见。
 class _NoNetworkHttpOverrides extends HttpOverrides {}
@@ -71,62 +74,16 @@ class _InteractionContractRepository extends MockUserProfileRepository {
   }
 }
 
-/// 记录型 content 仓库桩：断言内联「赞 / 回复评论」真实调用 content 仓库（T2）。
-class _RecordingContentRepository extends MockContentRepository {
-  int reactCalls = 0;
-  String? lastReactCommentId;
-  String? lastReactReaction;
-  int createCommentCalls = 0;
-  String? lastCreatePostId;
-  String? lastCreateContent;
-  String? lastCreateReplyToCommentId;
-
-  @override
-  Future<CommentDto> reactToComment({
-    required String commentId,
-    required String reaction,
-  }) {
-    reactCalls++;
-    lastReactCommentId = commentId;
-    lastReactReaction = reaction;
-    return super.reactToComment(commentId: commentId, reaction: reaction);
-  }
-
-  @override
-  Future<CommentDto> createComment({
-    required String postId,
-    required String content,
-    String? replyToCommentId,
-    List<String> attachmentMediaIds = const <String>[],
-    List<Map<String, dynamic>> mentions = const <Map<String, dynamic>>[],
-    String? subAccountId,
-    String? personaContextVersion,
-  }) {
-    createCommentCalls++;
-    lastCreatePostId = postId;
-    lastCreateContent = content;
-    lastCreateReplyToCommentId = replyToCommentId;
-    return super.createComment(
-      postId: postId,
-      content: content,
-      replyToCommentId: replyToCommentId,
-      attachmentMediaIds: attachmentMediaIds,
-      mentions: mentions,
-      subAccountId: subAccountId,
-      personaContextVersion: personaContextVersion,
-    );
-  }
-}
-
 /// 记录型 chat 仓库桩：断言内联「私信」真实调用 chat 仓库发送预置感谢私信（T2）。
 class _RecordingChatRepository extends MockChatRepository {
+  final _RecordingMessageWriter writer = _RecordingMessageWriter();
   int createConversationCalls = 0;
   String? lastConversationType;
   List<String>? lastInitialMemberIds;
-  int sendMessageCalls = 0;
-  String? lastSentConversationId;
-  String? lastSentType;
-  String? lastSentContent;
+  int get sendMessageCalls => writer.sendMessageCalls;
+  String? get lastSentConversationId => writer.lastCommand?.conversationId;
+  String? get lastSentType => writer.lastCommand?.type;
+  String? get lastSentContent => writer.lastCommand?.content;
 
   @override
   Future<ChatConversationCreatedDto> createConversation({
@@ -155,48 +112,29 @@ class _RecordingChatRepository extends MockChatRepository {
       initialMemberIds: initialMemberIds,
     );
   }
+}
+
+class _RecordingMessageWriter implements ChatMessageCommandWriter {
+  int sendMessageCalls = 0;
+  ChatSendMessageCommand? lastCommand;
 
   @override
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    CloudJsonMap? media,
-    CloudJsonMap? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? personaContextVersion,
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    required String clientMsgId,
-  }) {
+  Future<ChatSendMessageResult> sendMessage(
+    ChatSendMessageCommand command,
+  ) async {
     sendMessageCalls++;
-    lastSentConversationId = conversationId;
-    lastSentType = type;
-    lastSentContent = content;
-    return super.sendMessage(
-      conversationId: conversationId,
-      type: type,
-      content: content,
-      mediaUrl: mediaUrl,
-      media: media,
-      cardPayload: cardPayload,
-      replyToMessageId: replyToMessageId,
-      mentions: mentions,
-      senderSubAccountId: senderSubAccountId,
-      personaContextVersion: personaContextVersion,
-      senderDisplayNameSnapshot: senderDisplayNameSnapshot,
-      senderAvatarUrlSnapshot: senderAvatarUrlSnapshot,
-      clientMsgId: clientMsgId,
+    lastCommand = command;
+    return ChatSendMessageResult(
+      messageId: 'message-${command.clientMsgId}',
+      seq: sendMessageCalls,
+      timestamp: DateTime.utc(2026, 7, 15),
     );
   }
 }
 
 Widget _interactionTabActionsApp(
   _InteractionContractRepository repository, {
-  _RecordingContentRepository? contentRepository,
+  TestContentCommentFacet? commentFacet,
   _RecordingChatRepository? chatRepository,
 }) {
   return ProviderScope(
@@ -205,10 +143,27 @@ Widget _interactionTabActionsApp(
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
       ),
-      if (contentRepository != null)
-        contentRepositoryProvider.overrideWithValue(contentRepository),
+      if (commentFacet != null)
+        ...mockContentFacetOverrides(
+          MockContentRepository(),
+          commentFacet: commentFacet,
+        ),
       if (chatRepository != null)
         chatRepositoryProvider.overrideWithValue(chatRepository),
+      if (chatRepository != null)
+        chatMessageCommandWriterProvider.overrideWithValue(
+          chatRepository.writer,
+        ),
+      if (chatRepository != null)
+        activePersonaContextProvider.overrideWith(
+          (ref) async => ActivePersonaContextViewData.fallback(
+            subAccountId: 'profile_owner_persona',
+            ownerUserId: 'profile_owner',
+            displayName: '主页测试分身',
+            avatarUrl: '',
+            personaContextVersion: '3',
+          ),
+        ),
     ],
     child: MaterialApp(
       theme: ThemeData.light(),
@@ -436,6 +391,18 @@ Future<void> _pumpFrames(WidgetTester tester, {int count = 20}) async {
   }
 }
 
+Future<void> _showInteractionSubTab(
+  WidgetTester tester,
+  InteractionSubTab subTab,
+) async {
+  final tab = find.byType(ProfileInteractionTab);
+  final container = ProviderScope.containerOf(tester.element(tab));
+  container
+      .read(profileNotifierProvider('profile_owner').notifier)
+      .setInteractionSubTab(subTab);
+  await _pumpFrames(tester);
+}
+
 Future<void> _tapPreviewSurface(WidgetTester tester, String activityId) async {
   final finder = find.byKey(
     ValueKey<String>('profile-interaction-preview-button-$activityId'),
@@ -480,7 +447,7 @@ void main() {
         of: find.byKey(
           const ValueKey<String>('profile-interaction-secondary-tabs'),
         ),
-        matching: find.text(UITextConstants.interactionSubAll),
+        matching: find.text(UITextConstants.interactionSubComments),
       ),
       findsOneWidget,
     );
@@ -516,22 +483,22 @@ void main() {
             _interaction(
               id: 'like',
               primaryText: '契约主句：点赞',
-              filterKeys: const <String>['all', 'likes'],
+              filterKeys: const <String>['likes'],
             ),
             _interaction(
               id: 'comment',
               primaryText: '契约主句：评论',
-              filterKeys: const <String>['all', 'comments'],
+              filterKeys: const <String>['comments'],
             ),
             _interaction(
               id: 'share',
               primaryText: '契约主句：转发',
-              filterKeys: const <String>['all', 'shares'],
+              filterKeys: const <String>['shares'],
             ),
             _interaction(
               id: 'view',
               primaryText: '契约主句：浏览',
-              filterKeys: const <String>['all', 'views'],
+              filterKeys: const <String>['views'],
             ),
           ],
           sent: const <ProfileInteractionActivityViewData>[],
@@ -541,9 +508,9 @@ void main() {
     await _pumpFrames(tester);
 
     expect(find.text('契约主句：点赞'), findsOneWidget);
-    expect(find.text('契约主句：评论'), findsOneWidget);
-    expect(find.text('契约主句：转发'), findsOneWidget);
-    expect(find.text('契约主句：浏览'), findsOneWidget);
+    expect(find.text('契约主句：评论'), findsNothing);
+    expect(find.text('契约主句：转发'), findsNothing);
+    expect(find.text('契约主句：浏览'), findsNothing);
     expect(find.text('旧字段不应作为主句'), findsNothing);
     expect(find.byIcon(CupertinoIcons.chevron_forward), findsNothing);
 
@@ -569,19 +536,6 @@ void main() {
       AppTypography.regular,
     );
 
-    await tester.tap(
-      find
-          .ancestor(
-            of: find.text(UITextConstants.interactionSubShares),
-            matching: find.byType(CupertinoButton),
-          )
-          .first,
-    );
-    await _pumpFrames(tester);
-
-    expect(find.text('契约主句：转发'), findsOneWidget);
-    expect(find.text('契约主句：评论'), findsNothing);
-
     await _tapInteractionSubTab(tester, UITextConstants.interactionSubVisitors);
     await _pumpFrames(tester);
 
@@ -592,7 +546,7 @@ void main() {
     expect(find.text('契约主句：转发'), findsNothing);
   });
 
-  testWidgets('互动二级 Tab 不渲染方向开关，避免挤压二级分类', (tester) async {
+  testWidgets('赞二级 Tab 不渲染方向开关，避免挤压分类', (tester) async {
     _setPhoneSize(tester);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -604,7 +558,7 @@ void main() {
             _interaction(
               id: 'received',
               primaryText: '收到方向主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
             ),
           ],
           sent: [
@@ -612,7 +566,7 @@ void main() {
               id: 'sent',
               direction: 'sent',
               primaryText: '发出方向主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
             ),
           ],
         ),
@@ -641,14 +595,14 @@ void main() {
             _interaction(
               id: 'unknown',
               primaryText: '未知预览主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
               previewMediaKind: 'audio',
               previewText: '未知预览文本',
             ),
             _interaction(
               id: 'unavailable',
               primaryText: '失效预览主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
               previewMediaKind: 'none',
               previewText: '',
               previewUnavailable: true,
@@ -679,7 +633,7 @@ void main() {
             _interaction(
               id: 'broken-image',
               primaryText: '损坏图片主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
               targetContentType: 'image',
               previewMediaKind: 'image',
               previewImageUrl: 'https://invalid.invalid/missing.jpg',
@@ -743,7 +697,7 @@ void main() {
             _interaction(
               id: 'video-without-cover',
               primaryText: '无封面视频主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
               targetContentType: 'video',
               previewMediaKind: 'video',
               previewImageUrl: '',
@@ -774,7 +728,7 @@ void main() {
             _interaction(
               id: 'image',
               primaryText: '图片记录主句',
-              filterKeys: const <String>['all', 'likes'],
+              filterKeys: const <String>['likes'],
               previewMediaKind: 'image',
               previewImageUrl: 'media/content/test/image.jpg',
               previewText: '图片记录',
@@ -782,21 +736,21 @@ void main() {
             _interaction(
               id: 'video',
               primaryText: '视频记录主句',
-              filterKeys: const <String>['all', 'likes'],
+              filterKeys: const <String>['likes'],
               previewMediaKind: 'video',
               previewText: '视频记录',
             ),
             _interaction(
               id: 'text',
               primaryText: '文字记录主句',
-              filterKeys: const <String>['all', 'shares'],
+              filterKeys: const <String>['likes'],
               previewMediaKind: 'text',
               previewText: '文字记录预览',
             ),
             _interaction(
               id: 'article',
               primaryText: '文章记录主句',
-              filterKeys: const <String>['all', 'comments'],
+              filterKeys: const <String>['comments'],
               targetContentType: 'article',
               previewMediaKind: 'text',
               previewText: '长文预览标题',
@@ -804,7 +758,7 @@ void main() {
             _interaction(
               id: 'comment-ref',
               primaryText: '评论了你的记录：写得真好',
-              filterKeys: const <String>['all', 'comments'],
+              filterKeys: const <String>['comments'],
               contextText: '引用评论：写得真好',
               commentKind: 'comment',
               previewMediaKind: 'text',
@@ -813,7 +767,7 @@ void main() {
             _interaction(
               id: 'reply-ref',
               primaryText: '回复了你：我也喜欢',
-              filterKeys: const <String>['all', 'comments'],
+              filterKeys: const <String>['comments'],
               contextText: '你说：这组颜色像旧电影',
               commentKind: 'reply',
               previewMediaKind: 'text',
@@ -822,7 +776,7 @@ void main() {
             _interaction(
               id: 'deleted',
               primaryText: '删除态主句',
-              filterKeys: const <String>['all', 'comments'],
+              filterKeys: const <String>['comments'],
               previewMediaKind: 'none',
               previewText: '',
               previewUnavailable: true,
@@ -847,6 +801,9 @@ void main() {
       findsWidgets,
     );
     expect(find.text('文字记录预览'), findsOneWidget);
+
+    await _showInteractionSubTab(tester, InteractionSubTab.comments);
+
     expect(
       tester.widget<Text>(find.text('长文预览标题')).style?.fontWeight,
       AppTypography.regular,
@@ -871,14 +828,14 @@ void main() {
             _interaction(
               id: 'other',
               primaryText: '他人主页收到主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
             ),
           ],
           sent: [
             _interaction(
               id: 'other-sent',
               primaryText: '他人主页不应展示发出',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
             ),
           ],
         ),
@@ -909,7 +866,7 @@ void main() {
             _interaction(
               id: 'clickable',
               primaryText: '可点击主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
               displaySubAccountId: 'u_target',
               displayName: '可点击用户',
               previewMediaKind: 'text',
@@ -933,7 +890,7 @@ void main() {
             _interaction(
               id: 'clickable',
               primaryText: '可点击主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
               targetContentType: 'article',
               previewMediaKind: 'text',
               previewText: '可点击长文预览',
@@ -962,7 +919,7 @@ void main() {
             _interaction(
               id: 'video-clickable',
               primaryText: '可点击视频主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
               targetContentType: 'video',
               previewMediaKind: 'video',
             ),
@@ -990,7 +947,7 @@ void main() {
             _interaction(
               id: 'image-clickable',
               primaryText: '可点击图片主句',
-              filterKeys: const <String>['all'],
+              filterKeys: const <String>['likes'],
               targetContentType: 'image',
               previewMediaKind: 'image',
             ),
@@ -1027,7 +984,7 @@ void main() {
             _interaction(
               id: 'comment-deeplink',
               primaryText: '评论了你的记录：写得真好',
-              filterKeys: const <String>['all', 'comments'],
+              filterKeys: const <String>['comments'],
               commentKind: 'comment',
               commentId: 'comment_top_1',
               targetContentType: 'image',
@@ -1041,6 +998,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showInteractionSubTab(tester, InteractionSubTab.comments);
 
     await _tapPreviewSurface(tester, 'comment-deeplink');
     await tester.pumpAndSettle();
@@ -1076,7 +1034,7 @@ void main() {
             _interaction(
               id: 'reply-deeplink',
               primaryText: '回复了你：完全同意',
-              filterKeys: const <String>['all', 'comments'],
+              filterKeys: const <String>['comments'],
               commentKind: 'reply',
               commentId: 'comment_reply_9',
               parentCommentId: 'comment_top_1',
@@ -1091,6 +1049,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showInteractionSubTab(tester, InteractionSubTab.comments);
 
     await _tapPreviewSurface(tester, 'reply-deeplink');
     await tester.pumpAndSettle();
@@ -1113,7 +1072,9 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final content = _RecordingContentRepository();
+    final comments = TestContentCommentFacet(
+      items: <ContentCommentListItem>[testCommentItem(id: 'comment_top_1')],
+    );
     await tester.pumpWidget(
       _interactionTabActionsApp(
         _InteractionContractRepository(
@@ -1121,7 +1082,7 @@ void main() {
             _interaction(
               id: 'cmt',
               primaryText: '评论了你的记录：写得真好',
-              filterKeys: const <String>['all', 'comments'],
+              filterKeys: const <String>['comments'],
               commentKind: 'comment',
               commentId: 'comment_top_1',
               previewMediaKind: 'text',
@@ -1130,10 +1091,11 @@ void main() {
           ],
           sent: const <ProfileInteractionActivityViewData>[],
         ),
-        contentRepository: content,
+        commentFacet: comments,
       ),
     );
     await _pumpFrames(tester);
+    await _showInteractionSubTab(tester, InteractionSubTab.comments);
 
     final likeKey = const ValueKey<String>('profile-interaction-like-cmt');
     expect(find.byKey(likeKey), findsOneWidget);
@@ -1145,9 +1107,12 @@ void main() {
     await tester.tap(find.byKey(likeKey));
     await _pumpFrames(tester);
 
-    expect(content.reactCalls, 1);
-    expect(content.lastReactCommentId, 'comment_top_1');
-    expect(content.lastReactReaction, 'like');
+    expect(comments.reactionCalls, 1);
+    expect(comments.lastReactionCommand?.commentId, 'comment_top_1');
+    expect(
+      comments.lastReactionCommand?.reaction,
+      ContentCommentReactionValue.like,
+    );
     expect(
       find.text(UITextConstants.profileInteractionCommentLiked),
       findsOneWidget,
@@ -1172,7 +1137,7 @@ void main() {
             _interaction(
               id: 'cmt',
               primaryText: '评论了你的记录：写得真好',
-              filterKeys: const <String>['all', 'comments'],
+              filterKeys: const <String>['comments'],
               commentKind: 'comment',
               commentId: 'comment_top_1',
               previewObjectId: 'post_target_9',
@@ -1185,6 +1150,7 @@ void main() {
       ),
     );
     await _pumpFrames(tester);
+    await _showInteractionSubTab(tester, InteractionSubTab.comments);
 
     final replyChipKey = const ValueKey<String>(
       'profile-interaction-reply-cmt',
@@ -1216,7 +1182,7 @@ void main() {
             _interaction(
               id: 'like',
               primaryText: '赞了你的记录',
-              filterKeys: const <String>['all', 'likes'],
+              filterKeys: const <String>['likes'],
               displaySubAccountId: 'u_liker',
               previewMediaKind: 'image',
               previewImageUrl: 'media/content/test/image.jpg',
@@ -1265,7 +1231,7 @@ void main() {
             _interaction(
               id: 'like',
               primaryText: '赞了你的记录',
-              filterKeys: const <String>['all', 'likes'],
+              filterKeys: const <String>['likes'],
               displaySubAccountId: 'u_liker',
               previewMediaKind: 'image',
               previewImageUrl: 'media/content/test/image.jpg',

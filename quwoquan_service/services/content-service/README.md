@@ -12,7 +12,6 @@ Available endpoints:
 
 - `GET /healthz`
 - `GET /v1/content/feed`
-- `GET /v1/orch/discovery/feed` (alias for app integration)
 - `GET /v1/content/posts/{postId}`
 
 Codegen commands:

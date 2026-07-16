@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 cd "$ROOT"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 
 echo "[verify] config gray parallel binding"
 
@@ -21,9 +22,9 @@ for f in \
   fi
 done
 
-state_file="$ROOT/.qwq_output/env/repo/local/release-state/$SERVICE.state"
-audit_file="$ROOT/.qwq_output/env/repo/local/release-state/$SERVICE.audit.log"
-mkdir -p "$ROOT/.qwq_output/env/repo/local/release-state"
+state_file="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/$SERVICE.state"
+audit_file="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/$SERVICE.audit.log"
+mkdir -p "$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state"
 backup_state=""
 backup_audit=""
 if [[ -f "$state_file" ]]; then

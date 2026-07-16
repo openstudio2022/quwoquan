@@ -1,19 +1,29 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/services/realtime/mock/mock_realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/remote_realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/di/cloud_repository_binding.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
 
 typedef RealtimeCurrentUserIdResolver = String Function(Ref ref);
+typedef RealtimeConnectionDelegateFactory =
+    RealtimeConnectionDelegate Function({
+      required Ref ref,
+      required RealtimeConnectionStateListener onStateChanged,
+      required RealtimeCurrentUserIdResolver currentUserIdResolver,
+    });
 
-/// UI 唯一入口：按 [AppDataSourceMode] 透明切换 Mock / Remote delegate。
+/// UI 唯一入口。production 默认装配只能创建 Remote delegate。
+///
+/// alpha/test 如需 fixture，必须从独立 composition root 显式注入 factory；
+/// production 不读取运行时 mode，也不存在失败回退或 Mock 热切换路径。
 class RealtimeConnectionNotifier extends Notifier<TransportState> {
   RealtimeConnectionNotifier({
     RealtimeCurrentUserIdResolver? currentUserIdResolver,
+    RealtimeConnectionDelegateFactory? delegateFactory,
   }) : _currentUserIdResolver =
-           currentUserIdResolver ?? _defaultCurrentUserIdResolver;
+           currentUserIdResolver ?? _defaultCurrentUserIdResolver,
+       _delegateFactory = delegateFactory ?? _createRemoteDelegate;
 
   static String _defaultCurrentUserIdResolver(Ref ref) {
     final authSession = ref.read(authSessionControllerProvider);
@@ -25,25 +35,32 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
   }
 
   final RealtimeCurrentUserIdResolver _currentUserIdResolver;
+  final RealtimeConnectionDelegateFactory _delegateFactory;
   RealtimeConnectionDelegate? _delegate;
+
+  static RealtimeConnectionDelegate _createRemoteDelegate({
+    required Ref ref,
+    required RealtimeConnectionStateListener onStateChanged,
+    required RealtimeCurrentUserIdResolver currentUserIdResolver,
+  }) {
+    return RemoteRealtimeConnectionDelegate(
+      read: ref.read,
+      invalidate: ref.invalidate,
+      currentUserIdResolver: () => currentUserIdResolver(ref),
+      authTokenProvider: ProviderBackedCloudAuthTokenProvider(
+        () => ref.read(authSessionControllerProvider).accessToken,
+      ),
+      onStateChanged: onStateChanged,
+    );
+  }
 
   @override
   TransportState build() {
-    final mode = ref.watch(appDataSourceModeProvider);
     _silentlyDisposeDelegate(_delegate);
-    _delegate = cloudRepositoryImplForMode(
-      mode,
-      remote: () => RemoteRealtimeConnectionDelegate(
-        read: ref.read,
-        invalidate: ref.invalidate,
-        currentUserIdResolver: () => _currentUserIdResolver(ref),
-        onStateChanged: _syncDelegateState,
-      ),
-      mock: () => MockRealtimeConnectionDelegate(
-        read: ref.read,
-        invalidate: ref.invalidate,
-        onStateChanged: _syncDelegateState,
-      ),
+    _delegate = _delegateFactory(
+      ref: ref,
+      onStateChanged: _syncDelegateState,
+      currentUserIdResolver: _currentUserIdResolver,
     );
     ref.onDispose(() {
       _silentlyDisposeDelegate(_delegate);
@@ -54,7 +71,41 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
 
   void _syncDelegateState() {
     final delegate = _delegate;
-    if (delegate != null && state != delegate.state) {
+    if (delegate == null) {
+      return;
+    }
+    final schedulerBinding = _schedulerBindingOrNull();
+    if (schedulerBinding == null) {
+      _applyDelegateState(delegate);
+      return;
+    }
+    final phase = schedulerBinding.schedulerPhase;
+    if (phase != SchedulerPhase.idle &&
+        phase != SchedulerPhase.postFrameCallbacks) {
+      schedulerBinding.addPostFrameCallback((_) {
+        if (!ref.mounted || !identical(_delegate, delegate)) {
+          return;
+        }
+        _applyDelegateState(delegate);
+      });
+      return;
+    }
+    _applyDelegateState(delegate);
+  }
+
+  SchedulerBinding? _schedulerBindingOrNull() {
+    try {
+      return SchedulerBinding.instance;
+    } on FlutterError {
+      // Pure provider/local-contract execution has no Flutter binding. There is
+      // no widget build phase in that environment, so state can be applied
+      // synchronously without weakening the production frame guard.
+      return null;
+    }
+  }
+
+  void _applyDelegateState(RealtimeConnectionDelegate delegate) {
+    if (state != delegate.state) {
       state = delegate.state;
     }
   }
@@ -69,13 +120,13 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
     _syncDelegateState();
   }
 
-  void onEnterChatDetail(String conversationId) {
-    _delegate?.onEnterChatDetail(conversationId);
+  void onEnterConversation(String conversationId) {
+    _delegate?.onEnterConversation(conversationId);
     _syncDelegateState();
   }
 
-  void onLeaveChatDetail() {
-    _delegate?.onLeaveChatDetail();
+  void onLeaveConversation() {
+    _delegate?.onLeaveConversation();
     _syncDelegateState();
   }
 
@@ -87,7 +138,7 @@ class RealtimeConnectionNotifier extends Notifier<TransportState> {
     _delegate = null;
     try {
       if (current?.state == TransportState.active) {
-        current?.onLeaveChatDetail();
+        current?.onLeaveConversation();
       }
       if (current?.state != null &&
           current!.state != TransportState.disconnected) {

@@ -55,12 +55,12 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
         ],
         "t2": [
           "runtime/controlplane/assistant_seedbox_contract_test.go",
-          "../quwoquan_app/test/ui/assistant/contract/assistant_message_history_contract_test.dart",
-          "../quwoquan_app/test/ui/chat/widgets/chat_assistant_ui_widget_test.dart"
+          "../quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart",
+          "../quwoquan_app/test/local_contract/ui/chat/widgets/chat_assistant_ui_widget__local_contract_test.dart"
         ],
         "t3": [
-          "../quwoquan_app/test/common/assistant/assistant_environment_smoke_test.dart",
-          "../quwoquan_app/test/gamma/assistant_alpha_beta_simulator_test.dart"
+          "../quwoquan_app/test/local_contract/quality/shared/assistant/assistant_environment_smoke__local_contract_test.dart",
+          "../quwoquan_app/test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart"
         ],
         "t4": []
       }
@@ -130,8 +130,8 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/messages/conversation/service.yaml"
         ],
         "t2": [
-          "services/chat-service/tests/message_crud_contract_test.go",
-          "services/chat-service/tests/message_sync_contract_test.go"
+          "services/chat-service/tests/api_integration/message_crud_contract__api_integration_test.go",
+          "services/chat-service/tests/api_integration/message_sync_contract__api_integration_test.go"
         ],
         "t3": [
           "contracts/metadata/messages/conversation/tests/e2e.yaml"
@@ -187,7 +187,10 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     "display_name": "Circle",
     "domain": "circle",
     "metadata_paths": [
-      "social/circle"
+      "social/circle",
+      "social/circle_behavior_fact",
+      "social/circle_membership",
+      "social/circle_post_placement"
     ],
     "minimum_package": {
       "codegen_targets": [
@@ -204,8 +207,8 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/social/circle/service.yaml"
         ],
         "t2": [
-          "services/circle-service/tests/circle_crud_contract_test.go",
-          "services/circle-service/tests/circle_member_contract_test.go"
+          "services/circle-service/tests/api_integration/circle_crud_contract__api_integration_test.go",
+          "services/circle-service/tests/api_integration/circle_membership__api_integration_test.go"
         ],
         "t3": [
           "contracts/metadata/social/circle/tests/e2e.yaml"
@@ -286,9 +289,9 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/content/post/tests/mock.yaml"
         ],
         "t2": [
-          "services/content-service/tests/post_comment_contract_test.go",
-          "services/content-service/tests/post_reaction_contract_test.go",
-          "services/content-service/tests/report_crud_contract_test.go"
+          "services/content-service/tests/api_integration/post_comment_contract__api_integration_test.go",
+          "services/content-service/tests/api_integration/post_reaction_contract__api_integration_test.go",
+          "services/content-service/tests/api_integration/report_crud_contract__api_integration_test.go"
         ],
         "t3": [
           "contracts/metadata/content/post/tests/e2e.yaml"
@@ -369,8 +372,8 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/entity/homepage/errors.yaml"
         ],
         "t2": [
-          "services/entity-service/tests/homepage_handler_test.go",
-          "../quwoquan_app/test/ui/entity/pages/homepage_detail_page_widget_test.dart"
+          "services/entity-service/tests/api_integration/homepage_handler__api_integration_test.go",
+          "../quwoquan_app/test/local_contract/ui/entity/pages/homepage_detail_page_widget__local_contract_test.dart"
         ],
         "t3": [
           "contracts/metadata/entity/homepage/tests/e2e.yaml"
@@ -442,7 +445,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/integration/location/service.yaml"
         ],
         "t2": [
-          "services/integration-service/internal/adapters/http/location_handler_test.go"
+          "services/integration-service/internal/adapters/http/location_handler__local_contract_test.go"
         ],
         "t3": [
           "contracts/metadata/integration/location/tests/e2e.yaml"
@@ -514,28 +517,30 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/notification/notification/service.yaml"
         ],
         "t2": [
-          "../quwoquan_app/test/cloud/notification/notification_metadata_contract_test.dart"
+          "../quwoquan_app/test/local_contract/cloud/notification/notification_metadata_contract__local_contract_test.dart",
+          "services/notification-service/tests/api_integration/app_message_lifecycle__api_integration_test.go",
+          "services/notification-service/tests/api_integration/notification_delivery_mongo_integration__reliability__api_integration_test.go"
         ],
         "t3": [
           "contracts/metadata/notification/notification/tests/e2e.yaml"
         ],
         "t4": [
-          "../quwoquan_app/test/patrol/chat/chat_notification_entry_test.dart"
+          "../quwoquan_app/test/user_acceptance/patrol/chat/chat_notification_entry__user_acceptance_test.dart"
         ]
       }
     },
     "replication": {
       "copy_notes": [
-        "Notification lacks a dedicated service implementation, so onboarding stays declarative until the domain service is carved out."
+        "Notification is the second object counterexample with a dedicated service, Mongo aggregate plus transactional outbox, typed App facets, external delivery ledger, rate limiting, operator metrics, and dead-letter recovery."
       ],
       "next_copy_targets": [],
       "source_template": "content"
     },
-    "rollout_group": "wave_2_backfill",
+    "rollout_group": "wave_1_copy",
     "service_names": [
-      "seed-box"
+      "notification-service"
     ],
-    "template_role": "backlog_candidate",
+    "template_role": "replica_ready",
     "version": 1
   },
   "ops": {
@@ -574,7 +579,8 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     "display_name": "Ops",
     "domain": "ops",
     "metadata_paths": [
-      "ops/experiment_bucket",
+      "ops/experiment",
+      "ops/experiment_assignment_fact",
       "ops/visit_record"
     ],
     "minimum_package": {
@@ -584,21 +590,25 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
         "ops_portal"
       ],
       "metadata_files": [
-        "contracts/metadata/ops/experiment_bucket/service.yaml",
+        "contracts/metadata/ops/experiment/service.yaml",
+        "contracts/metadata/ops/experiment_assignment_fact/service.yaml",
         "contracts/metadata/ops/visit_record/service.yaml",
-        "contracts/metadata/ops/experiment_bucket/tests/e2e.yaml",
+        "contracts/metadata/ops/experiment/tests/e2e.yaml",
+        "contracts/metadata/ops/experiment_assignment_fact/tests/e2e.yaml",
         "contracts/metadata/ops/visit_record/tests/e2e.yaml"
       ],
       "test_evidence": {
         "t1": [
-          "contracts/metadata/ops/experiment_bucket/service.yaml",
+          "contracts/metadata/ops/experiment/service.yaml",
+          "contracts/metadata/ops/experiment_assignment_fact/service.yaml",
           "contracts/metadata/ops/visit_record/service.yaml"
         ],
         "t2": [
-          "services/product-ops-service/cmd/api/main_test.go"
+          "services/product-ops-service/cmd/api/main__local_contract_test.go"
         ],
         "t3": [
-          "contracts/metadata/ops/experiment_bucket/tests/e2e.yaml",
+          "contracts/metadata/ops/experiment/tests/e2e.yaml",
+          "contracts/metadata/ops/experiment_assignment_fact/tests/e2e.yaml",
           "contracts/metadata/ops/visit_record/tests/e2e.yaml"
         ],
         "t4": []
@@ -668,7 +678,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/realtime/connection/service.yaml"
         ],
         "t2": [
-          "../quwoquan_app/test/cloud/realtime/realtime_transport_contract_test.dart"
+          "../quwoquan_app/test/local_contract/cloud/realtime/realtime_transport_contract__local_contract_test.dart"
         ],
         "t3": [
           "contracts/metadata/realtime/connection/tests/e2e.yaml"
@@ -725,6 +735,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     "display_name": "Recommendation",
     "domain": "recommendation",
     "metadata_paths": [
+      "recommendation/model_release",
       "recommendation/rec_model"
     ],
     "minimum_package": {
@@ -734,15 +745,15 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
         "ops_portal"
       ],
       "metadata_files": [
-        "contracts/metadata/recommendation/rec_model/service.yaml",
+        "contracts/metadata/recommendation/model_release/service.yaml",
         "contracts/metadata/recommendation/rec_model/tests/e2e.yaml"
       ],
       "test_evidence": {
         "t1": [
-          "contracts/metadata/recommendation/rec_model/service.yaml"
+          "contracts/metadata/recommendation/model_release/service.yaml"
         ],
         "t2": [
-          "services/rec-model-service/tests/test_runtime_contract.py"
+          "services/rec-model-service/tests/local_contract/model_contract/test_runtime_contract__runtime_payload__contract__local_contract_test.py"
         ],
         "t3": [
           "contracts/metadata/recommendation/rec_model/tests/e2e.yaml"
@@ -815,7 +826,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/rtc/call_session/service.yaml"
         ],
         "t2": [
-          "services/rtc-service/tests/room_management_contract_test.go"
+          "services/rtc-service/tests/api_integration/room_management_contract__api_integration_test.go"
         ],
         "t3": [
           "contracts/metadata/rtc/call_session/tests/e2e.yaml"
@@ -882,10 +893,10 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/tag/service.yaml"
         ],
         "t2": [
-          "services/tag-service/internal/application/tag_service_test.go"
+          "services/tag-service/internal/application/tag_service__local_contract_test.go"
         ],
         "t3": [
-          "services/tag-service/tests/tag_contract_test.go"
+          "services/tag-service/tests/api_integration/tag_contract__api_integration_test.go"
         ],
         "t4": []
       }
@@ -893,7 +904,7 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
     "replication": {
       "copy_notes": [
         "只读标签服务；复用 codegen_storage manifest 模式生成 domain/store/migrator。",
-        "标签真相源为数据工程 publish/tags，tag-service 只读消费导入产物，不写不产事件。"
+        "标签真相源为数据工程 control_plane/governance/taxonomy，tag-service 只读消费发布导入投影，不写不产事件。"
       ],
       "next_copy_targets": [],
       "source_template": "entity"
@@ -957,8 +968,8 @@ _DOMAIN_ONBOARDING_DOMAINS_JSON = r'''{
           "contracts/metadata/user/user_profile/service.yaml"
         ],
         "t2": [
-          "services/user-service/tests/profile_crud_contract_test.go",
-          "services/user-service/tests/follow_contract_test.go"
+          "services/user-service/tests/api_integration/profile_crud_contract__api_integration_test.go",
+          "services/user-service/tests/api_integration/follow_contract__api_integration_test.go"
         ],
         "t3": [
           "contracts/metadata/user/user_profile/tests/e2e.yaml"

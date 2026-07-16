@@ -25,12 +25,6 @@ entities:
     storage: mongodb
     description: AI assistant session run
 
-  - name: RecModel
-    domain: recommendation
-    canonical: contracts/metadata/recommendation/rec_model/
-    storage: mongodb
-    description: Recommendation model entity
-
   - name: LocationPoi
     domain: integration
     canonical: contracts/metadata/integration/location/aggregate.yaml

@@ -13,7 +13,7 @@ import 'package:quwoquan_app/core/services/active_call_service.dart';
 import 'package:quwoquan_app/ui/rtc/models/call_state.dart';
 import 'package:quwoquan_app/ui/rtc/providers/call_participants_provider.dart';
 import 'package:quwoquan_app/ui/rtc/widgets/call_quality_indicator.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 
 class CallSessionState {
   final CallSessionDto? session;
@@ -108,6 +108,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   StreamSubscription<void>? _participantsSub;
   StreamSubscription<lk.DisconnectReason?>? _disconnectSub;
   LiveKitRoomService? _connectionListenerRoom;
+  String? _recordingId;
 
   @override
   CallSessionState build() => const CallSessionState();
@@ -438,7 +439,7 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
     final callId = state.session?.id;
     if (callId == null) return;
     try {
-      await _repo.startRecording(callId);
+      _recordingId = await _repo.startRecording(callId);
       state = state.copyWith(isRecording: true);
     } catch (e) {
       state = state.copyWith(error: runtimeErrorDisplayMessage(e));
@@ -446,10 +447,11 @@ class CallSessionNotifier extends Notifier<CallSessionState> {
   }
 
   Future<void> stopRecording() async {
-    final callId = state.session?.id;
-    if (callId == null) return;
+    final recordingId = _recordingId;
+    if (recordingId == null || recordingId.isEmpty) return;
     try {
-      await _repo.stopRecording(callId);
+      await _repo.stopRecording(recordingId);
+      _recordingId = null;
       state = state.copyWith(isRecording: false);
     } catch (e) {
       state = state.copyWith(error: runtimeErrorDisplayMessage(e));

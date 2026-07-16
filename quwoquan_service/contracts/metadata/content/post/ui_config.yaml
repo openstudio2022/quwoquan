@@ -205,7 +205,6 @@ share_template_profiles:
     cover_strategy: first_media_or_gradient
     include_author: true
     include_time_context: true
-    include_circle_context: true
     include_tags: false
 
   - id: work
@@ -215,7 +214,6 @@ share_template_profiles:
     cover_strategy: cover_or_first_media
     include_author: true
     include_time_context: false
-    include_circle_context: false
     include_tags: true
 
 # ── 1.46、article 分发 / 阅读 / 模板配置 ────────────────────────────────────

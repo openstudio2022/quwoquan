@@ -30,6 +30,7 @@ import (
 	rtimpact "quwoquan_service/runtime/impact"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	contentmessaging "quwoquan_service/services/content-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
@@ -138,6 +139,8 @@ func TestGetMyFootprintContract(t *testing.T) {
 	}`, userID, postID, userID)
 	reportReq := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
 	reportReq.Header.Set("Content-Type", "application/json")
+	reportReq.Header.Set("X-Client-User-Id", userID)
+	reportReq.Header.Set("X-Client-Sub-Account-Id", userID)
 	reportRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(reportRec, reportReq)
 	if reportRec.Code != http.StatusNoContent {
@@ -360,12 +363,14 @@ func TestBehaviorBatchWishlistProjectsEntityWishlistEvent(t *testing.T) {
 				"displayName":"西湖日落机位",
 				"sourceSurface":"object_homepage",
 				"referralSource":"entity_page",
-				"feedRequestId":"frq_wishlist_http_001"
+			"feedRequestId":"frq_wishlist_http_001"
 			}
 		]
 	}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/behaviors", strings.NewReader(payload))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-User-Id", "user_wishlist_http_001")
+	req.Header.Set("X-Client-Sub-Account-Id", "user_wishlist_http_001")
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
@@ -402,9 +407,13 @@ func TestBehaviorBatchAssistantInterestProjectsTagInteraction(t *testing.T) {
 	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		behaviorapp.WithBehaviorProjector(&recommendOnlyProjectorAdapter{
-			p: recinfra.NewRecommendFeatureProjector(mongoDB),
-		}),
+		behaviorapp.WithBehaviorEventPublisher(
+			contentmessaging.NewInProcessProjectorPublisher(
+				&recommendOnlyProjectorAdapter{
+					p: recinfra.NewRecommendFeatureProjector(mongoDB),
+				},
+			),
+		),
 	)
 
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{
@@ -446,9 +455,13 @@ func TestBehaviorBatchSevenStateImpressionExcludesVisibleCountsClick(t *testing.
 	behaviorService := behaviorapp.NewBehaviorService(
 		rtrec.NewHotPath(rtredis.NewRecAdapter(testRouter.Scene("rec"))),
 		persistence.NewMongoPostStore(mongoDB.Collection("posts")),
-		behaviorapp.WithBehaviorProjector(&recommendOnlyProjectorAdapter{
-			p: recinfra.NewRecommendFeatureProjector(mongoDB),
-		}),
+		behaviorapp.WithBehaviorEventPublisher(
+			contentmessaging.NewInProcessProjectorPublisher(
+				&recommendOnlyProjectorAdapter{
+					p: recinfra.NewRecommendFeatureProjector(mongoDB),
+				},
+			),
+		),
 	)
 
 	err := behaviorService.ProcessBatch(ctx, []behaviorapp.BehaviorEventInput{

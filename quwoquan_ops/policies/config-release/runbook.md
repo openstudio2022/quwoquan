@@ -32,4 +32,4 @@ quwoquan_ops/cli/prod/config_release_rollback.sh \
   --to-config-version v2026.02.27.1
 ```
 
-Rollback is idempotent and writes an audit line to `.qwq_output/env/repo/local/release-state/<service>.audit.log`.
+Rollback is idempotent and writes an audit line to `QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/<service>.audit.log`.

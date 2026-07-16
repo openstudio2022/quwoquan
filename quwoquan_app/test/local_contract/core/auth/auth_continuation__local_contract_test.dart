@@ -10,6 +10,7 @@ import 'package:quwoquan_app/core/auth/auth_gate.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/l10n.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('AuthContinuationController', () {
@@ -20,13 +21,31 @@ void main() {
 
       expect(container.read(authContinuationProvider), isNull);
 
-      controller.set(
-        const SubmitCommentContinuation(
+      final accepted = controller.set(
+        SubmitCommentContinuation(
           content: '游客想说的话',
           replyToCommentId: 'c1',
+          attachmentMediaIds: const <String>['media-1'],
+          mentions: <ContentCommentMention>[
+            ContentCommentMention(
+              subjectType: 'assistant',
+              subjectId: 'assistant_xiaoqu',
+              displayName: '小趣',
+            ),
+          ],
         ),
+        ownerToken: 'comment-action-1',
       );
+      expect(accepted, isTrue);
+      expect(controller.ownerToken, 'comment-action-1');
       expect(container.read(authContinuationProvider), isNotNull);
+
+      final overwritten = controller.set(
+        const JoinCircleContinuation(circleId: 'circle-2'),
+        ownerToken: 'circle-action-2',
+      );
+      expect(overwritten, isFalse, reason: '第二个受限动作不得覆盖首个续接所有者');
+      expect(controller.ownerToken, 'comment-action-1');
 
       // 类型不匹配不取出、不清空。
       expect(controller.take<JoinCircleContinuation>(), isNull);
@@ -36,6 +55,8 @@ void main() {
       expect(taken, isNotNull);
       expect(taken!.content, '游客想说的话');
       expect(taken.replyToCommentId, 'c1');
+      expect(taken.attachmentMediaIds, const <String>['media-1']);
+      expect(taken.mentions.single.subjectId, 'assistant_xiaoqu');
       // 取出后清空，二次 take 为空（杜绝重复续接）。
       expect(container.read(authContinuationProvider), isNull);
       expect(controller.take<SubmitCommentContinuation>(), isNull);

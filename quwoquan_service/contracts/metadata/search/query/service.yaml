@@ -1,10 +1,14 @@
 version: 1
-aggregate: SearchQuery
 
 service:
   name: search-service
   domain: search
   owner: backend-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: SEARCH_QUERY_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   description: |
     云侧统一搜索服务。承载 canonical search(request) 的 POST /v1/search
     （mode=suggest|result）与 POST /v1/search/feedback，复用 runtime/search.Retrieve
@@ -14,6 +18,13 @@ api_routes:
   - method: POST
     path: /v1/search
     operation: SearchQuery
+    actor: persona_or_device
+    application:
+      kind: query
+      facet: SearchFacade
+      method: search
+      reader: ObjectSearchReader
+      slice: SearchResponseView
     description: 统一对象检索（mode=suggest|result）；query 为主输入，objectTypes/filters 为受控收窄条件
     request_entity: SearchQuery
     writable_fields: [query, mode, objectTypes, limit]
@@ -23,6 +34,14 @@ api_routes:
   - method: POST
     path: /v1/search/feedback
     operation: ReportSearchFeedback
+    actor: persona_or_device
+    application:
+      kind: command
+      facet: SearchFeedbackCommandFacade
+      method: reportFeedback
+      append_sink: SearchQuery
+      mutation_target: SearchQuery
+      invariant_target: SearchQuery
     description: 上报搜索结果交互反馈（impression/click/dwell/refine/zero_result/degrade），驱动排序信号与 relevance 评测
     request_entity: SearchFeedbackEvent
     writable_fields: [searchRequestId, eventType, objectId, target, rankPosition, referralSource, feedRequestId, dwellMs]

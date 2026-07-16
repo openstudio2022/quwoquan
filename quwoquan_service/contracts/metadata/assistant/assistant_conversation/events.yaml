@@ -1,0 +1,15 @@
+version: 1
+aggregate: AssistantConversation
+events:
+  - name: AssistantConversationCreated
+    producer: assistant-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: AssistantConversation
+    payload_fields: [conversationId]
+  - name: AssistantConversationArchived
+    producer: assistant-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: AssistantConversation
+    payload_fields: [conversationId]

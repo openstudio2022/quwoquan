@@ -4,6 +4,9 @@
 # PR 默认 pr_light profile（alpha/beta, allow_missing）；显式或 nightly 调用时可传 nightly_full / manual_full。
 name: 05. App Env Device Matrix
 
+env:
+  QWQ_OUTPUT_ROOT: ${{ github.workspace }}/.qwq_output
+
 on:
   pull_request:
     branches:
@@ -383,8 +386,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          CACHE_ROOT="${HOME}/.cache/quwoquan-mobile-matrix"
-          REPO_DIR="${CACHE_ROOT}/repo"
+          CACHE_ROOT="$QWQ_OUTPUT_ROOT/env/repo/local/mobile-matrix/cache"
+          REPO_DIR="${CACHE_ROOT}/checkout"
           AUTH_HEADER="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64)"
           mkdir -p "${CACHE_ROOT}"
           rm -rf "${REPO_DIR}"
@@ -464,10 +467,10 @@ jobs:
           START_APP: "0"
         run: |
           set -euo pipefail
-          python3 quwoquan_ops/cli/stackctl.py package --env beta --include-services --report-dir .qwq_output/runs/beta/mainline-package
-          python3 quwoquan_ops/cli/stackctl.py up --target beta-local --report-dir .qwq_output/runs/beta/mainline-up
-          python3 quwoquan_ops/cli/stackctl.py health --target beta-local --scope full --report-dir .qwq_output/runs/beta/mainline-health
-          python3 quwoquan_ops/cli/stackctl.py inspect --target beta-local --scope all --report-dir .qwq_output/runs/beta/mainline-inspect
+          python3 quwoquan_ops/cli/stackctl.py package --env beta --include-services --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-package"
+          python3 quwoquan_ops/cli/stackctl.py up --target beta-local --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-up"
+          python3 quwoquan_ops/cli/stackctl.py health --target beta-local --scope full --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-health"
+          python3 quwoquan_ops/cli/stackctl.py inspect --target beta-local --scope all --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-inspect"
       - id: run_matrix
         name: Run mobile matrix environments
         working-directory: ${{ github.workspace }}/repo
@@ -564,7 +567,7 @@ jobs:
                       --media-base-url "${smoke_media_base_url}" \
                       --test-auth-token "${GAMMA_TEST_AUTH_TOKEN:-local-${env_name}-token}" \
                       --platform "${platform}" \
-                      --report ".qwq_output/runs/${env_name}/device-matrix/environment-smoke-${platform}.json"
+                      --report "$QWQ_OUTPUT_ROOT/env/${env_name}/runs/device-matrix/environment-smoke-${platform}.json"
                     matrix_exit_code=$?
                   else
                     matrix_exit_code=2
@@ -625,8 +628,8 @@ jobs:
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
-            ${{ github.workspace }}/repo/.qwq_output/runs/*/device-matrix/**
-            ${{ github.workspace }}/repo/.qwq_output/runs/beta/**
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/*/runs/device-matrix/**
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**
           if-no-files-found: ignore
           compression-level: 0
       - name: Teardown beta-local stack after mainline auto prod
@@ -636,7 +639,7 @@ jobs:
         run: |
           python3 quwoquan_ops/cli/stackctl.py down \
             --target beta-local \
-            --report-dir .qwq_output/runs/beta/mainline-down
+            --report-dir "$QWQ_OUTPUT_ROOT/env/beta/runs/mainline-down"
       - name: Retry mobile matrix report upload
         if: always() && steps.upload_mobile_matrix_report.outcome == 'failure'
         continue-on-error: true
@@ -644,8 +647,8 @@ jobs:
         with:
           name: app-env-device-matrix-${{ needs.discover_devices.outputs.artifact_key }}-mobile
           path: |
-            ${{ github.workspace }}/repo/.qwq_output/runs/*/device-matrix/**
-            ${{ github.workspace }}/repo/.qwq_output/runs/beta/**
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/*/runs/device-matrix/**
+            ${{ env.QWQ_OUTPUT_ROOT }}/env/beta/runs/**
           if-no-files-found: ignore
           compression-level: 0
           overwrite: true
@@ -689,7 +692,7 @@ jobs:
               --critical-path-seconds 0 \
               --phase "pr_default_skip=0" \
               --note "PR 默认跳过 self-hosted mobile matrix；启用后以 discover + 设备矩阵 artifacts 为准。" \
-              --write-json ".qwq_output/runs/ci-timing/app-env-device-matrix-summary.json" \
+              --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
               --write-step-summary
           else
             CRITICAL_PATH_SECONDS=$(( ${DISCOVER_SECONDS:-0} + ${MOBILE_SECONDS:-0} ))
@@ -701,7 +704,7 @@ jobs:
               --phase "discover_devices=${DISCOVER_SECONDS:-0}" \
               --phase "mobile_matrix=${MOBILE_SECONDS:-0}" \
               --note "self-hosted matrix 已统一为单 runner 单 checkout 的 mobile job；PR 默认允许缺席平台跳过，已发现的平台必须成功，详细耗时保存在 device-matrix artifacts。" \
-              --write-json ".qwq_output/runs/ci-timing/app-env-device-matrix-summary.json" \
+              --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/app-env-device-matrix-summary.json" \
               --write-step-summary
           fi
       - name: 汇总并阻断失败项
@@ -754,6 +757,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-env-device-matrix-timing-summary
-          path: .qwq_output/runs/ci-timing/app-env-device-matrix-summary.json
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/app-env-device-matrix-summary.json
           if-no-files-found: error
           compression-level: 0

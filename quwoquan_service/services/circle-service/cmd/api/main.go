@@ -13,19 +13,37 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	rtmongo "quwoquan_service/internal/platform/mongodb"
+	platformredis "quwoquan_service/internal/platform/redis"
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	"quwoquan_service/runtime/controlplane"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
-	rtmongo "quwoquan_service/runtime/mongodb"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
 	httpadapter "quwoquan_service/services/circle-service/internal/adapters/http"
 	"quwoquan_service/services/circle-service/internal/application"
+	behaviorfactapp "quwoquan_service/services/circle-service/internal/application/circle/circle_behavior_fact"
+	fileapp "quwoquan_service/services/circle-service/internal/application/circle/circle_file"
+	groupapp "quwoquan_service/services/circle-service/internal/application/circle/circle_group"
+	groupmembershipapp "quwoquan_service/services/circle-service/internal/application/circle/circle_group_membership"
+	membershipapp "quwoquan_service/services/circle-service/internal/application/circle/circle_membership"
+	placementapp "quwoquan_service/services/circle-service/internal/application/circle/circle_post_placement"
+	placementports "quwoquan_service/services/circle-service/internal/domain/circle/circle_post_placement/ports"
 	"quwoquan_service/services/circle-service/internal/infrastructure/cache"
+	behaviorfactpersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_behavior_fact/persistence"
+	fileexternal "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_file/external"
+	filepersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_file/persistence"
+	groupersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_group/persistence"
+	groupmembershippersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_group_membership/persistence"
+	membershippersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_membership/persistence"
+	placementpersistence "quwoquan_service/services/circle-service/internal/infrastructure/circle/circle_post_placement/persistence"
 	"quwoquan_service/services/circle-service/internal/infrastructure/messaging"
 	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
 	"quwoquan_service/services/circle-service/internal/infrastructure/searchindex"
@@ -109,9 +127,21 @@ func main() {
 
 	db := mongoClient.Database(mongoDBName)
 	circleStore := persistence.NewMongoCircleStore(db.Collection("circles"))
-	memberStore := persistence.NewMongoMemberStore(db.Collection("circle_members"))
-	fileStore := persistence.NewMongoFileStore(db.Collection("circle_files"))
-	groupStore := persistence.NewMongoGroupStore(db.Collection("circle_groups"))
+	fileStore := filepersistence.NewMongoAggregateStore(db)
+	if err := fileStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle file indexes failed: %v", err)
+	}
+	fileReaders := filepersistence.NewMongoReaders(db)
+	groupStore := groupersistence.NewMongoAggregateStore(db)
+	if err := groupStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle group indexes failed: %v", err)
+	}
+	groupReaders := groupersistence.NewMongoReaders(db)
+	groupMembershipStore := groupmembershippersistence.NewMongoAggregateStore(db)
+	if err := groupMembershipStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle group membership indexes failed: %v", err)
+	}
+	groupMembershipReaders := groupmembershippersistence.NewMongoReaders(db)
 
 	// Redis (via runtime Router)
 	router := buildRedisRouter(cfg)
@@ -119,12 +149,37 @@ func main() {
 	if err := router.PingAll(ctx); err != nil {
 		log.Printf("WARN: circle-service redis ping: %v", err)
 	}
-	var store persistence.CircleStore = circleStore
 	redisClient := router.Scene("general")
-	store = cache.NewCachedCircleStore(circleStore, redisClient)
+	cachedCircleStore := cache.NewCachedCircleStore(
+		circleStore,
+		circleStore,
+		circleStore,
+		redisClient,
+	)
+	circleStorage := application.CircleStoragePorts{
+		Records: cachedCircleStore, Metrics: cachedCircleStore, Sections: cachedCircleStore,
+		IDs: persistence.ObjectIDGenerator{},
+	}
 	log.Printf("circle-service redis cache enabled via runtime router")
 
 	feedStore := persistence.NewMongoFeedStore(db.Collection("posts"))
+	placementStore := placementpersistence.NewMongoAggregateStore(db)
+	if err := placementStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle post placement indexes failed: %v", err)
+	}
+	placementReaders := placementpersistence.NewMongoPolicyReaders(db)
+	if err := placementReaders.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle post placement policy indexes failed: %v", err)
+	}
+	membershipStore := membershippersistence.NewMongoAggregateStore(db)
+	if err := membershipStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle membership indexes failed: %v", err)
+	}
+	membershipReaders := membershippersistence.NewMongoReaders(db)
+	behaviorFactStore := behaviorfactpersistence.NewMongoAppendSink(db)
+	if err := behaviorFactStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle behavior fact indexes failed: %v", err)
+	}
 
 	// Assemble the write-time search index. ES endpoints/credentials come from the
 	// shared SEARCH_ES_* env (same cluster/index as search-service); when ES is
@@ -133,7 +188,7 @@ func main() {
 	// reads circles back through the same (cached) store the service writes
 	// through, so reconciles see the just-written state.
 	searchindex.ApplyESEnvOverrides(&cfg.ES)
-	searchBuilt, err := searchindex.Build(cfg.ES, store)
+	searchBuilt, err := searchindex.Build(cfg.ES, circleStorage.Records)
 	if err != nil {
 		log.Fatalf("circle-service search index build failed: %v", err)
 	}
@@ -144,17 +199,118 @@ func main() {
 	// Application services
 	circleOpts := []application.CircleServiceOption{
 		application.WithFeedStore(feedStore),
-		application.WithGroupStore(groupStore),
 	}
 	if searchBuilt.Projector != nil {
 		circleOpts = append(circleOpts, application.WithEventPublisher(searchBuilt.Projector))
 	}
-	circleService := application.NewCircleService(store, memberStore, fileStore, circleOpts...)
-	fileService := application.NewFileService(fileStore, store)
-	contentPostConsumer := messaging.NewContentPostConsumer(redisClient, store, nil)
-	go contentPostConsumer.Run(ctx)
+	circleService := application.NewCircleService(circleStorage, circleOpts...)
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("access token config invalid: %v", err)
+	}
+	contentCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig, "circle-service", []string{"content.media.reference.read"},
+	)
+	if err != nil {
+		log.Fatalf("content-service credential init failed: %v", err)
+	}
+	mediaAssetReader, err := fileexternal.NewMediaAssetOwnerReader(
+		os.Getenv("CONTENT_SERVICE_BASE_URL"), contentCredentials, nil,
+	)
+	if err != nil {
+		log.Fatalf("content-service MediaAsset reader invalid: %v", err)
+	}
+	fileCommands := fileapp.NewCommandFacade(fileStore, fileReaders, mediaAssetReader)
+	fileQueries := fileapp.NewQueryFacade(fileReaders, fileReaders)
+	groupCommands := groupapp.NewCommandFacade(groupStore, groupReaders)
+	groupQueries := groupapp.NewQueryFacade(groupReaders, groupReaders)
+	groupMembershipCommands := groupmembershipapp.NewCommandFacade(
+		groupMembershipStore, groupMembershipReaders, groupMembershipReaders, groupMembershipReaders,
+	)
+	groupMembershipQueries := groupmembershipapp.NewQueryFacade(groupMembershipReaders, groupMembershipReaders)
+	placementCommands := placementapp.NewCommandFacade(placementStore, placementPortsFrom(placementReaders))
+	membershipCommands := membershipapp.NewCommandFacade(membershipStore, membershipReaders, membershipReaders)
+	membershipQueries := membershipapp.NewQueryFacade(membershipReaders, membershipReaders)
+	behaviorFactWriter := behaviorfactapp.NewWriter(behaviorFactStore, behaviorFactStore)
+	postLifecycleProjection := placementpersistence.NewMongoPostLifecycleProjection(db)
+	if err := postLifecycleProjection.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("circle Post lifecycle projection indexes failed: %v", err)
+	}
+	instanceID, _ := os.Hostname()
+	contentPostConsumer := messaging.NewContentPostConsumer(
+		redisClient, postLifecycleProjection, postLifecycleProjection, instanceID, nil,
+	)
+	placementCountRelay := placementapp.NewOutboxRelay(
+		placementStore, placementStore,
+		placementpersistence.NewMongoPostCountProjector(db, redisClient),
+		"circle-post-count",
+	)
+	placementStreamRelay := placementapp.NewOutboxRelay(
+		placementStore, placementStore,
+		messaging.NewCirclePostPlacementStreamPublisher(redisClient),
+		"circle-post-placement-stream",
+	)
+	membershipCountRelay := membershipapp.NewOutboxRelay(
+		membershipStore, membershipStore,
+		membershippersistence.NewMongoMemberCountProjector(db, redisClient),
+		"circle-member-count",
+	)
+	membershipStreamRelay := membershipapp.NewOutboxRelay(
+		membershipStore, membershipStore,
+		messaging.NewCircleMembershipStreamPublisher(redisClient),
+		"circle-membership-stream",
+	)
+	behaviorWeeklyActiveRelay := behaviorfactapp.NewOutboxRelay(
+		behaviorFactStore, behaviorFactStore,
+		behaviorfactpersistence.NewMongoWeeklyActiveProjector(db, redisClient),
+		"circle-weekly-active",
+	)
+	behaviorStreamRelay := behaviorfactapp.NewOutboxRelay(
+		behaviorFactStore, behaviorFactStore,
+		messaging.NewCircleBehaviorFactStreamPublisher(redisClient),
+		"circle-behavior-fact-stream",
+	)
+	groupStreamRelay := groupapp.NewOutboxRelay(
+		groupStore, groupStore,
+		messaging.NewCircleGroupStreamPublisher(redisClient),
+		"circle-group-stream",
+	)
+	groupOwnerMembershipRelay := groupapp.NewOutboxRelay(
+		groupStore, groupStore,
+		groupmembershipapp.NewCircleGroupOwnerProjector(groupMembershipCommands),
+		"circle-group-owner-membership",
+	)
+	groupMembershipStreamRelay := groupmembershipapp.NewOutboxRelay(
+		groupMembershipStore, groupMembershipStore,
+		messaging.NewCircleGroupMembershipStreamPublisher(redisClient),
+		"circle-group-membership-stream",
+	)
+	fileStreamRelay := fileapp.NewOutboxRelay(
+		fileStore, fileStore,
+		messaging.NewCircleFileStreamPublisher(redisClient),
+		"circle-file-stream",
+	)
 
-	handler := httpadapter.NewCircleHandler(circleService, fileService).Routes()
+	handler := httpadapter.NewCircleHandler(
+		circleService, fileCommands, fileQueries, behaviorFactWriter, groupCommands, groupQueries,
+		groupMembershipCommands, groupMembershipQueries,
+		membershipCommands, membershipQueries, placementCommands,
+	).Routes()
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("access token verifier invalid: %v", err)
+	}
+	deviceTicketConfig, err := rtauth.LoadDeviceTicketConfig(runtimeconfig.EnvRuntimeConfigProvider{})
+	if err != nil {
+		log.Fatalf("device ticket config invalid: %v", err)
+	}
+	deviceTicketVerifier, err := rtauth.NewHS256Verifier(deviceTicketConfig)
+	if err != nil {
+		log.Fatalf("device ticket verifier invalid: %v", err)
+	}
+	generatedOperationGuard := rtauth.RequireGeneratedOperationAuthorization(
+		operationsecurity.ForDomain("circle"),
+	)(handler)
 
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("mongodb", func(hctx context.Context) error {
@@ -166,12 +322,95 @@ func main() {
 	if ping := searchBuilt.HealthPing(); ping != nil {
 		healthChecker.Register("search-es", ping)
 	}
+	healthChecker.Register("content-post-owner-projection", func(_ context.Context) error {
+		return contentPostConsumer.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-post-count-projection", func(_ context.Context) error {
+		return placementCountRelay.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-post-placement-stream", func(_ context.Context) error {
+		return placementStreamRelay.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-member-count-projection", func(_ context.Context) error {
+		return membershipCountRelay.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-membership-stream", func(_ context.Context) error {
+		return membershipStreamRelay.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-weekly-active-projection", func(_ context.Context) error {
+		return behaviorWeeklyActiveRelay.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-behavior-fact-stream", func(_ context.Context) error {
+		return behaviorStreamRelay.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-group-stream", func(_ context.Context) error {
+		return groupStreamRelay.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-group-owner-membership", func(_ context.Context) error {
+		return groupOwnerMembershipRelay.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-group-membership-stream", func(_ context.Context) error {
+		return groupMembershipStreamRelay.Healthy(5 * time.Second)
+	})
+	healthChecker.Register("circle-file-stream", func(_ context.Context) error {
+		return fileStreamRelay.Healthy(5 * time.Second)
+	})
+	go contentPostConsumer.Run(ctx, 250*time.Millisecond)
+	go func() {
+		if err := placementCountRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle post-count projection stopped: %v", err)
+		}
+	}()
+	go func() {
+		if err := placementStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle post-placement stream relay stopped: %v", err)
+		}
+	}()
+	go func() {
+		if err := membershipCountRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle member-count projection stopped: %v", err)
+		}
+	}()
+	go func() {
+		if err := membershipStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle membership stream relay stopped: %v", err)
+		}
+	}()
+	go func() {
+		if err := behaviorWeeklyActiveRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle weekly-active projection stopped: %v", err)
+		}
+	}()
+	go func() {
+		if err := behaviorStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle behavior-fact stream relay stopped: %v", err)
+		}
+	}()
+	go func() {
+		if err := groupStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle group stream relay stopped: %v", err)
+		}
+	}()
+	go func() {
+		if err := groupOwnerMembershipRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle group owner-membership relay stopped: %v", err)
+		}
+	}()
+	go func() {
+		if err := groupMembershipStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle group membership stream relay stopped: %v", err)
+		}
+	}()
+	go func() {
+		if err := fileStreamRelay.Run(ctx, 250*time.Millisecond); err != nil && ctx.Err() == nil {
+			log.Printf("circle file stream relay stopped: %v", err)
+		}
+	}()
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle("/", handler)
+	outerMux.Handle("/", generatedOperationGuard)
 
-	instanceID, _ := os.Hostname()
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
 	processLogger, err := robs.NewProcessTraceLogger(os.Stdout, os.Stderr, "info", nil)
 	if err != nil {
@@ -192,8 +431,10 @@ func main() {
 	go startConfigSyncLoop(serviceName, appEnv, configRoot, configVersion, imageVersion, instanceID, hotConfigStore, rateLimiter)
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(observed)
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           rateLimited,
+		Addr: addr,
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier: accessVerifier, DeviceTicketVerifier: deviceTicketVerifier,
+		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -201,6 +442,12 @@ func main() {
 	log.Printf("circle-service listening on %s (env=%s)", addr, appEnv)
 	if err := rthttp.ListenAndServeGraceful(server, 15*time.Second); err != nil {
 		log.Fatalf("circle-service: %v", err)
+	}
+}
+
+func placementPortsFrom(readers *placementpersistence.MongoPolicyReaders) placementports.PolicyReaders {
+	return placementports.PolicyReaders{
+		Circles: readers, Groups: readers, Posts: readers, Memberships: readers,
 	}
 }
 
@@ -317,7 +564,7 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
 		DefaultScene: rtredis.GeneratedDefaultScene,
 	}
-	return rtredis.MustNewRouter(routerCfg)
+	return platformredis.MustNewRouter(routerCfg)
 }
 
 func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {

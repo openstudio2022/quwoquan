@@ -1,17 +1,19 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_setting_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_setting_model.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
 
 class _StubUserRepository implements UserRepository {
-  _StubUserRepository(this._items);
+  _StubUserRepository(this._items, {this.summaryFailure});
 
   final List<Map<String, dynamic>> _items;
+  Object? summaryFailure;
+  int summaryLoadCount = 0;
   int syncAppliedCount = 0;
   int deleteCount = 0;
 
@@ -85,6 +87,11 @@ class _StubUserRepository implements UserRepository {
 
   @override
   Future<PersonaManagementSummaryViewData> getPersonaManagementSummary() async {
+    summaryLoadCount++;
+    final failure = summaryFailure;
+    if (failure != null) {
+      throw failure;
+    }
     return PersonaManagementSummaryViewData(
       items: _items
           .map(PersonaManagementItemViewData.fromMap)
@@ -100,16 +107,16 @@ class _StubUserRepository implements UserRepository {
   }
 
   @override
-  Future<UserSettingDto> getNotificationSettings() async {
-    return UserSettingDto.fromJson(<String, dynamic>{
+  Future<UserSettingModel> getNotificationSettings() async {
+    return UserSettingModel.fromWire(<String, dynamic>{
       'userId': '',
       'enablePush': true,
     });
   }
 
   @override
-  Future<UserSettingDto> getPrivacySettings() async {
-    return UserSettingDto.fromJson(<String, dynamic>{
+  Future<UserSettingModel> getPrivacySettings() async {
+    return UserSettingModel.fromWire(<String, dynamic>{
       'userId': '',
       'profileVisibility': 'public',
     });
@@ -219,6 +226,31 @@ void main() {
       expect(find.text('主分身'), findsWidgets);
       expect(find.textContaining('用户号: main_handle'), findsOneWidget);
       expect(find.textContaining('手机号: 13800000000'), findsWidgets);
+    });
+
+    testWidgets('分身首屏失败只保留顶栏返回与恢复动作', (tester) async {
+      final repo = _StubUserRepository(
+        _seed(),
+        summaryFailure: StateError('persona summary unavailable'),
+      );
+      await tester.pumpWidget(_wrap(repo));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text(UITextConstants.personaManagementLoadFailedTitle),
+        findsOneWidget,
+      );
+      expect(find.byIcon(CupertinoIcons.back), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
+      expect(find.text(UITextConstants.back), findsNothing);
+      expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+
+      repo.summaryFailure = null;
+      await tester.tap(find.text(UITextConstants.tryAgain));
+      await tester.pumpAndSettle();
+
+      expect(repo.summaryLoadCount, 2);
+      expect(find.text('主分身'), findsWidgets);
     });
 
     testWidgets('编辑资料后出现同步建议', (tester) async {

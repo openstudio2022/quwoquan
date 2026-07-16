@@ -1,0 +1,547 @@
+import '../operation_request_payload.dart';
+
+enum ContentMediaType { image, video, audio, file }
+
+enum ContentMediaAccessPolicy { ownerOnly, referencedPost, public }
+
+enum ContentMediaUploadStatus { pending, completed, aborted }
+
+enum ContentMediaProcessingStatus { processing, ready, rejected, deleted }
+
+enum ContentMediaOriginalAccessPurpose { view, save }
+
+extension on ContentMediaAccessPolicy {
+  String get wireName => switch (this) {
+    ContentMediaAccessPolicy.ownerOnly => 'owner_only',
+    ContentMediaAccessPolicy.referencedPost => 'referenced_post',
+    ContentMediaAccessPolicy.public => 'public',
+  };
+}
+
+final class InitContentMediaUploadCommand {
+  InitContentMediaUploadCommand({
+    required this.mediaType,
+    required String contentType,
+    required this.fileSize,
+    required String expectedSha256,
+  }) : contentType = _requiredText(contentType, 'contentType'),
+       expectedSha256 = _normalizeSHA256(expectedSha256) {
+    if (fileSize <= 0) {
+      throw ArgumentError.value(fileSize, 'fileSize', 'must be > 0');
+    }
+  }
+
+  final ContentMediaType mediaType;
+  final String contentType;
+  final int fileSize;
+  final String expectedSha256;
+}
+
+final class CompleteContentMediaUploadCommand {
+  CompleteContentMediaUploadCommand({
+    required String sessionId,
+    this.accessPolicy = ContentMediaAccessPolicy.ownerOnly,
+  }) : sessionId = _requiredText(sessionId, 'sessionId');
+
+  final String sessionId;
+  final ContentMediaAccessPolicy accessPolicy;
+}
+
+final class AbortContentMediaUploadCommand {
+  AbortContentMediaUploadCommand({required String sessionId})
+    : sessionId = _requiredText(sessionId, 'sessionId');
+
+  final String sessionId;
+}
+
+final class GetContentMediaUploadSessionQuery {
+  GetContentMediaUploadSessionQuery({required String sessionId})
+    : sessionId = _requiredText(sessionId, 'sessionId');
+
+  final String sessionId;
+}
+
+final class GetContentMediaAssetQuery {
+  GetContentMediaAssetQuery({required String mediaId})
+    : mediaId = _requiredText(mediaId, 'mediaId');
+
+  final String mediaId;
+}
+
+final class RequestContentMediaOriginalAccessCommand {
+  RequestContentMediaOriginalAccessCommand({
+    required String mediaId,
+    this.purpose = ContentMediaOriginalAccessPurpose.view,
+  }) : mediaId = _requiredText(mediaId, 'mediaId');
+
+  final String mediaId;
+  final ContentMediaOriginalAccessPurpose purpose;
+}
+
+final class SelectAutoContentMediaCoverCommand {
+  SelectAutoContentMediaCoverCommand({required String mediaId})
+    : mediaId = _requiredText(mediaId, 'mediaId');
+
+  final String mediaId;
+}
+
+final class SelectManualContentMediaCoverCommand {
+  SelectManualContentMediaCoverCommand({
+    required String mediaId,
+    String? coverAssetId,
+    this.coverFrameTimeMs = 0,
+  }) : mediaId = _requiredText(mediaId, 'mediaId'),
+       coverAssetId = _optionalText(coverAssetId) {
+    if (this.coverAssetId == null && coverFrameTimeMs < 0) {
+      throw ArgumentError.value(
+        coverFrameTimeMs,
+        'coverFrameTimeMs',
+        'must be >= 0',
+      );
+    }
+    if (this.coverAssetId != null && coverFrameTimeMs != 0) {
+      throw ArgumentError(
+        'coverAssetId and coverFrameTimeMs are mutually exclusive',
+      );
+    }
+  }
+
+  final String mediaId;
+  final String? coverAssetId;
+  final int coverFrameTimeMs;
+}
+
+final class BindContentPostMediaAssetsCommand {
+  BindContentPostMediaAssetsCommand({
+    required String postId,
+    required Iterable<String> assetIds,
+  }) : postId = _requiredText(postId, 'postId'),
+       assetIds = List<String>.unmodifiable(
+         assetIds.map((value) => _requiredText(value, 'assetId')).toSet(),
+       ) {
+    if (this.assetIds.isEmpty) {
+      throw ArgumentError.value(assetIds, 'assetIds', 'must not be empty');
+    }
+  }
+
+  final String postId;
+  final List<String> assetIds;
+}
+
+final class ContentMediaUploadSessionCommandResult {
+  const ContentMediaUploadSessionCommandResult({
+    required this.sessionId,
+    required this.assetId,
+    required this.status,
+    required this.objectKey,
+    required this.uploadUrl,
+    required this.cdnUrl,
+    required this.expiresAt,
+    required this.replayed,
+  });
+
+  final String sessionId;
+  final String? assetId;
+  final ContentMediaUploadStatus status;
+  final String? objectKey;
+  final Uri? uploadUrl;
+  final Uri? cdnUrl;
+  final DateTime expiresAt;
+  final bool replayed;
+}
+
+final class ContentMediaUploadSessionSlice {
+  const ContentMediaUploadSessionSlice({
+    required this.sessionId,
+    required this.version,
+    required this.objectKey,
+    required this.mediaType,
+    required this.contentType,
+    required this.fileSize,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.expiresAt,
+  });
+
+  final String sessionId;
+  final int version;
+  final String objectKey;
+  final ContentMediaType mediaType;
+  final String contentType;
+  final int fileSize;
+  final ContentMediaUploadStatus status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime expiresAt;
+}
+
+final class ContentMediaAssetSlice {
+  const ContentMediaAssetSlice({
+    required this.assetId,
+    required this.version,
+    required this.mediaType,
+    required this.contentType,
+    required this.fileSize,
+    required this.status,
+    required this.accessPolicy,
+    required this.cdnUrl,
+  });
+
+  final String assetId;
+  final int version;
+  final ContentMediaType mediaType;
+  final String contentType;
+  final int fileSize;
+  final ContentMediaProcessingStatus status;
+  final ContentMediaAccessPolicy accessPolicy;
+  final Uri cdnUrl;
+}
+
+final class ContentMediaOriginalAccessGrant {
+  const ContentMediaOriginalAccessGrant({
+    required this.mediaId,
+    required this.status,
+    required this.originalUrl,
+    required this.format,
+    required this.sizeBytes,
+    required this.expiresAt,
+    required this.ttlSeconds,
+    required this.auditId,
+  });
+
+  final String mediaId;
+  final String status;
+  final Uri originalUrl;
+  final String format;
+  final int sizeBytes;
+  final DateTime expiresAt;
+  final int ttlSeconds;
+  final String auditId;
+}
+
+final class ContentMediaCoverSelectionResult {
+  const ContentMediaCoverSelectionResult({
+    required this.mediaId,
+    required this.coverStrategy,
+    required this.manualCoverAssetId,
+    required this.coverFrameTimeMs,
+    required this.thumbnailUrl,
+    required this.coverUrl,
+  });
+
+  final String mediaId;
+  final String coverStrategy;
+  final String? manualCoverAssetId;
+  final int coverFrameTimeMs;
+  final Uri thumbnailUrl;
+  final Uri coverUrl;
+}
+
+final class BindContentPostMediaAssetsResult {
+  BindContentPostMediaAssetsResult({
+    required String postId,
+    required Iterable<String> boundAssetIds,
+    required this.boundCount,
+  }) : postId = _requiredText(postId, 'postId'),
+       boundAssetIds = List<String>.unmodifiable(boundAssetIds) {
+    if (boundCount != this.boundAssetIds.length) {
+      throw const FormatException('boundCount must equal boundAssetIds.length');
+    }
+  }
+
+  final String postId;
+  final List<String> boundAssetIds;
+  final int boundCount;
+}
+
+CloudOperationRequestPayload encodeInitContentMediaUploadCommand(
+  InitContentMediaUploadCommand command,
+) => CloudOperationRequestPayload(
+  body: <String, Object?>{
+    'mediaType': command.mediaType.name,
+    'contentType': command.contentType,
+    'fileSize': command.fileSize,
+    'expectedSha256': command.expectedSha256,
+  },
+);
+
+CloudOperationRequestPayload encodeCompleteContentMediaUploadCommand(
+  CompleteContentMediaUploadCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'sessionId': command.sessionId},
+  body: <String, Object?>{'accessPolicy': command.accessPolicy.wireName},
+);
+
+CloudOperationRequestPayload encodeAbortContentMediaUploadCommand(
+  AbortContentMediaUploadCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'sessionId': command.sessionId},
+);
+
+CloudOperationRequestPayload encodeGetContentMediaUploadSessionQuery(
+  GetContentMediaUploadSessionQuery query,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'sessionId': query.sessionId},
+);
+
+CloudOperationRequestPayload encodeGetContentMediaAssetQuery(
+  GetContentMediaAssetQuery query,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'mediaId': query.mediaId},
+);
+
+CloudOperationRequestPayload encodeRequestContentMediaOriginalAccessCommand(
+  RequestContentMediaOriginalAccessCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'mediaId': command.mediaId},
+  body: <String, Object?>{'purpose': command.purpose.name},
+);
+
+CloudOperationRequestPayload encodeSelectAutoContentMediaCoverCommand(
+  SelectAutoContentMediaCoverCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'mediaId': command.mediaId},
+);
+
+CloudOperationRequestPayload encodeSelectManualContentMediaCoverCommand(
+  SelectManualContentMediaCoverCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'mediaId': command.mediaId},
+  body: <String, Object?>{
+    if (command.coverAssetId != null) 'coverAssetId': command.coverAssetId,
+    'coverFrameTimeMs': command.coverFrameTimeMs,
+  },
+);
+
+CloudOperationRequestPayload encodeBindContentPostMediaAssetsCommand(
+  BindContentPostMediaAssetsCommand command,
+) => CloudOperationRequestPayload(
+  pathParameters: <String, String>{'postId': command.postId},
+  body: <String, Object?>{'assetIds': command.assetIds},
+);
+
+ContentMediaUploadSessionCommandResult
+decodeContentMediaUploadSessionCommandResult(Object? value) {
+  final map = _object(value, 'ContentMediaUploadSessionCommandResult');
+  return ContentMediaUploadSessionCommandResult(
+    sessionId: _string(map, 'sessionId'),
+    assetId: _optionalString(map, 'assetId'),
+    status: _uploadStatus(map, 'status'),
+    objectKey: _optionalString(map, 'objectKey'),
+    uploadUrl: _optionalUri(map, 'uploadUrl'),
+    cdnUrl: _optionalUri(map, 'cdnUrl'),
+    expiresAt: _timestamp(map, 'expiresAt'),
+    replayed: _boolean(map, 'replayed'),
+  );
+}
+
+ContentMediaUploadSessionSlice decodeContentMediaUploadSessionSlice(
+  Object? value,
+) {
+  final map = _object(value, 'ContentMediaUploadSessionSlice');
+  return ContentMediaUploadSessionSlice(
+    sessionId: _string(map, 'sessionId'),
+    version: _positiveInteger(map, 'version'),
+    objectKey: _string(map, 'objectKey'),
+    mediaType: _mediaType(map, 'mediaType'),
+    contentType: _string(map, 'contentType'),
+    fileSize: _positiveInteger(map, 'fileSize'),
+    status: _uploadStatus(map, 'status'),
+    createdAt: _timestamp(map, 'createdAt'),
+    updatedAt: _timestamp(map, 'updatedAt'),
+    expiresAt: _timestamp(map, 'expiresAt'),
+  );
+}
+
+ContentMediaAssetSlice decodeContentMediaAssetSlice(Object? value) {
+  final map = _object(value, 'ContentMediaAssetSlice');
+  return ContentMediaAssetSlice(
+    assetId: _string(map, 'assetId'),
+    version: _positiveInteger(map, 'version'),
+    mediaType: _mediaType(map, 'mediaType'),
+    contentType: _string(map, 'contentType'),
+    fileSize: _positiveInteger(map, 'fileSize'),
+    status: _processingStatus(map, 'status'),
+    accessPolicy: _accessPolicy(map, 'accessPolicy'),
+    cdnUrl: _uri(map, 'cdnUrl'),
+  );
+}
+
+ContentMediaOriginalAccessGrant decodeContentMediaOriginalAccessGrant(
+  Object? value,
+) {
+  final map = _object(value, 'ContentMediaOriginalAccessGrant');
+  final status = _string(map, 'status');
+  if (status != 'granted') {
+    throw FormatException('status must be granted, got $status');
+  }
+  return ContentMediaOriginalAccessGrant(
+    mediaId: _string(map, 'mediaId'),
+    status: status,
+    originalUrl: _uri(map, 'originalUrl'),
+    format: _string(map, 'format'),
+    sizeBytes: _positiveInteger(map, 'sizeBytes'),
+    expiresAt: _timestamp(map, 'expiresAt'),
+    ttlSeconds: _positiveInteger(map, 'ttlSeconds'),
+    auditId: _string(map, 'auditId'),
+  );
+}
+
+ContentMediaCoverSelectionResult decodeContentMediaCoverSelectionResult(
+  Object? value,
+) {
+  final map = _object(value, 'ContentMediaCoverSelectionResult');
+  return ContentMediaCoverSelectionResult(
+    mediaId: _string(map, 'mediaId'),
+    coverStrategy: _string(map, 'coverStrategy'),
+    manualCoverAssetId: _optionalString(map, 'manualCoverAssetId'),
+    coverFrameTimeMs: _nonNegativeInteger(map, 'coverFrameTimeMs'),
+    thumbnailUrl: _uri(map, 'thumbnailUrl'),
+    coverUrl: _uri(map, 'coverUrl'),
+  );
+}
+
+BindContentPostMediaAssetsResult decodeBindContentPostMediaAssetsResult(
+  Object? value,
+) {
+  final map = _object(value, 'BindContentPostMediaAssetsResult');
+  return BindContentPostMediaAssetsResult(
+    postId: _string(map, 'postId'),
+    boundAssetIds: _stringList(map, 'boundAssetIds'),
+    boundCount: _positiveInteger(map, 'boundCount'),
+  );
+}
+
+Map<String, Object?> _object(Object? value, String context) {
+  if (value is! Map) {
+    throw FormatException('$context must be an object');
+  }
+  return value.map((key, item) => MapEntry(key.toString(), item));
+}
+
+String _string(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('$key must be a non-empty string');
+  }
+  return value.trim();
+}
+
+String? _optionalString(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value == null) return null;
+  if (value is! String) throw FormatException('$key must be a string');
+  return _optionalText(value);
+}
+
+int _integer(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! int) throw FormatException('$key must be an integer');
+  return value;
+}
+
+int _positiveInteger(Map<String, Object?> map, String key) {
+  final value = _integer(map, key);
+  if (value <= 0) throw FormatException('$key must be > 0');
+  return value;
+}
+
+int _nonNegativeInteger(Map<String, Object?> map, String key) {
+  final value = _integer(map, key);
+  if (value < 0) throw FormatException('$key must be >= 0');
+  return value;
+}
+
+bool _boolean(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! bool) throw FormatException('$key must be a boolean');
+  return value;
+}
+
+DateTime _timestamp(Map<String, Object?> map, String key) {
+  final parsed = DateTime.tryParse(_string(map, key));
+  if (parsed == null) throw FormatException('$key must be RFC3339');
+  return parsed.toUtc();
+}
+
+Uri _uri(Map<String, Object?> map, String key) {
+  final uri = Uri.tryParse(_string(map, key));
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    throw FormatException('$key must be an absolute URL');
+  }
+  return uri;
+}
+
+Uri? _optionalUri(Map<String, Object?> map, String key) {
+  final value = _optionalString(map, key);
+  if (value == null) return null;
+  final uri = Uri.tryParse(value);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) {
+    throw FormatException('$key must be an absolute URL');
+  }
+  return uri;
+}
+
+List<String> _stringList(Map<String, Object?> map, String key) {
+  final value = map[key];
+  if (value is! List || value.any((item) => item is! String)) {
+    throw FormatException('$key must be a string array');
+  }
+  return value
+      .cast<String>()
+      .map((item) => _requiredText(item, key))
+      .toList(growable: false);
+}
+
+ContentMediaType _mediaType(Map<String, Object?> map, String key) =>
+    _enumValue(ContentMediaType.values, _string(map, key), key);
+
+ContentMediaUploadStatus _uploadStatus(Map<String, Object?> map, String key) =>
+    _enumValue(ContentMediaUploadStatus.values, _string(map, key), key);
+
+ContentMediaProcessingStatus _processingStatus(
+  Map<String, Object?> map,
+  String key,
+) => _enumValue(ContentMediaProcessingStatus.values, _string(map, key), key);
+
+ContentMediaAccessPolicy _accessPolicy(Map<String, Object?> map, String key) {
+  final raw = _string(map, key);
+  return switch (raw) {
+    'owner_only' => ContentMediaAccessPolicy.ownerOnly,
+    'referenced_post' => ContentMediaAccessPolicy.referencedPost,
+    'public' => ContentMediaAccessPolicy.public,
+    _ => throw FormatException('$key has unsupported value $raw'),
+  };
+}
+
+T _enumValue<T extends Enum>(List<T> values, String raw, String key) {
+  for (final value in values) {
+    if (value.name == raw) return value;
+  }
+  throw FormatException('$key has unsupported value $raw');
+}
+
+String _normalizeSHA256(String value) {
+  final normalized = value.trim().toLowerCase();
+  final raw = normalized.startsWith('sha256:')
+      ? normalized.substring('sha256:'.length)
+      : normalized;
+  if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(raw)) {
+    throw ArgumentError.value(value, 'expectedSha256', 'must be SHA-256');
+  }
+  return 'sha256:$raw';
+}
+
+String _requiredText(String value, String name) {
+  final normalized = value.trim();
+  if (normalized.isEmpty) {
+    throw ArgumentError.value(value, name, 'must not be empty');
+  }
+  return normalized;
+}
+
+String? _optionalText(String? value) {
+  final normalized = value?.trim() ?? '';
+  return normalized.isEmpty ? null : normalized;
+}

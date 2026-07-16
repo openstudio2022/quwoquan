@@ -5,6 +5,8 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_api_query_defaults.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/recommendation_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/recommendation_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_dimension_tally.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
@@ -25,7 +27,7 @@ import 'package:quwoquan_app/core/constants/discovery_feed_text_constants.dart';
 /// 对应云侧路由（contracts/metadata/content/post/service.yaml）：
 ///   GET  /v1/content/intersections/summary   我的交集聚合摘要
 ///   GET  /v1/content/intersections           我的交集分维度列表（自上次新增在前）
-///   POST /v1/content/intersections/visit      推进已读水位，清零未读红点
+///   POST /v1/recommendation/intersections/visit 推进已读水位，清零未读红点
 abstract class IntersectionRepository {
   Future<IntersectionInboxSummary> getMyIntersectionSummary();
 
@@ -727,8 +729,10 @@ class RemoteIntersectionRepository implements IntersectionRepository {
   Future<void> markIntersectionsVisited({String? dimension}) async {
     final body = <String, dynamic>{'dimension': (dimension ?? '').trim()};
     await _httpClient.postJson(
-      _uri(ContentApiMetadata.markIntersectionsVisitedPath),
-      headers: _headers(ContentRequestPageIds.markIntersectionsVisited),
+      _uri(RecommendationApiMetadata.markRecommendationIntersectionsVisitedPath),
+      headers: _headers(
+        RecommendationRequestPageIds.markRecommendationIntersectionsVisited,
+      ),
       body: body,
     );
   }

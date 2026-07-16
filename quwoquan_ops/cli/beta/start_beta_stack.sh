@@ -2,14 +2,21 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-STATE_DIR="$ROOT_DIR/.qwq_output/env/beta/local/beta-local"
-ENV_FILE="$ROOT_DIR/.env.beta.local"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
+ACTION="${1:-up}"
+eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
+  --env beta --target beta-local --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
+RUNTIME_CONFIG_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process/config"
+STATE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process"
+LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
+ENV_FILE="${RUNTIME_CONFIG_DIR}/beta.env"
 APP_BETA="$ROOT_DIR/quwoquan_app/scripts/device/start_app_beta_manual.sh"
 OPS_PORTAL_DIR="$ROOT_DIR/quwoquan_ops/portal"
 
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
+eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
+eval "$(PYTHONPATH="$ROOT_DIR" python3 -m quwoquan_ops.cli.lib.local_gamma_auth --shell)"
 
-ACTION="${1:-up}"
 if [[ $# -gt 0 ]]; then
   shift
 fi
@@ -19,6 +26,7 @@ PLATFORM_OPS_PORT="${PLATFORM_OPS_PORT}"
 OPS_PORTAL_PORT="${OPS_PORTAL_PORT}"
 CONTENT_PORT="${CONTENT_PORT}"
 PRODUCT_OPS_SERVICE_PORT="${PRODUCT_OPS_SERVICE_PORT}"
+OPS_POSTGRES_DSN="${OPS_POSTGRES_DSN:-postgres://quwoquan:quwoquan@127.0.0.1:${LOCAL_GAMMA_POSTGRES_PORT}/quwoquan?sslmode=disable}"
 CDN_DOMAIN="${CDN_DOMAIN:-cdn.beta.local}"
 DEVICE_ID="${DEVICE_ID:-}"
 START_APP="${START_APP:-1}"
@@ -30,7 +38,7 @@ MEDIA_BASE_URL="${MEDIA_BASE_URL:-}"
 GATEWAY_BASE_URL_OVERRIDE="${GATEWAY_BASE_URL_OVERRIDE:-}"
 DEV_UP_HELPER="$ROOT_DIR/quwoquan_ops/cli/lib/dev_up.py"
 
-mkdir -p "$STATE_DIR"
+mkdir -p "$RUNTIME_CONFIG_DIR" "$STATE_DIR" "$LOG_DIR" "$QWQ_RUN_ROOT"
 
 usage() {
   cat <<EOF
@@ -130,7 +138,9 @@ EOF
 start_bg() {
   local name="$1"
   shift
-  python3 - "$STATE_DIR/${name}.pid" "$STATE_DIR/${name}.pgid" "$STATE_DIR/${name}.log" "$@" <<'PY'
+  python3 - "$STATE_DIR/${name}.pid" "$STATE_DIR/${name}.pgid" \
+    "$ROOT_DIR/quwoquan_ops/cli/lib/runtime_log_process.py" \
+    "$LOG_DIR/${name}/local/runtime.log" "$name" "$@" <<'PY'
 import os
 import subprocess
 import sys
@@ -138,20 +148,19 @@ from pathlib import Path
 
 pid_path = Path(sys.argv[1])
 pgid_path = Path(sys.argv[2])
-log_path = Path(sys.argv[3])
-argv = sys.argv[4:]
-
-log_path.parent.mkdir(parents=True, exist_ok=True)
-with log_path.open("wb", buffering=0) as log:
-    proc = subprocess.Popen(
-        argv,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-        stdin=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    pid_path.write_text(f"{proc.pid}\n", encoding="utf-8")
-    pgid_path.write_text(f"{os.getpgid(proc.pid)}\n", encoding="utf-8")
+wrapper = sys.argv[3]
+log_path = sys.argv[4]
+event = sys.argv[5]
+argv = sys.argv[6:]
+proc = subprocess.Popen(
+    [sys.executable, wrapper, "--log-file", log_path, "--event", event, "--", *argv],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    stdin=subprocess.DEVNULL,
+    start_new_session=True,
+)
+pid_path.write_text(f"{proc.pid}\n", encoding="utf-8")
+pgid_path.write_text(f"{os.getpgid(proc.pid)}\n", encoding="utf-8")
 PY
   local pid pgid
   pid="$(cat "$STATE_DIR/${name}.pid")"
@@ -249,7 +258,16 @@ maybe_open_ops() {
 }
 
 build_app_beta_command() {
-  APP_BETA_CMD=(env CDN_DOMAIN="${CDN_DOMAIN}" "$APP_BETA" --restart)
+  APP_BETA_CMD=(
+    env
+    QWQ_OUTPUT_ROOT="$QWQ_OUTPUT_ROOT"
+    QWQ_OUTPUT_ROOT="$QWQ_OUTPUT_ROOT"
+    QWQ_OBSERVABILITY_RUN_ROOT="$QWQ_OBSERVABILITY_RUN_ROOT"
+    QWQ_RUN_ROOT="$QWQ_RUN_ROOT"
+    CDN_DOMAIN="${CDN_DOMAIN}"
+    "$APP_BETA"
+    --restart
+  )
   if [[ "$START_APP" != "1" ]]; then
     APP_BETA_CMD+=(--skip-app)
   fi
@@ -301,9 +319,9 @@ case "$ACTION" in
     # beta services alive while launching Flutter separately.
     build_app_beta_command
     start_bg app-beta "${APP_BETA_CMD[@]}"
-    start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/platform-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$ROOT_DIR/.qwq_output' APP_ENV='beta' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+    start_bg platform-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/platform-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' PLATFORM_OPS_SERVICE_ADDR='127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
     wait_service_ok platform-ops "http://127.0.0.1:${PLATFORM_OPS_PORT}/healthz" 60 || true
-    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$ROOT_DIR/.qwq_output' APP_ENV='beta' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
+    start_bg product-ops bash -lc "cd '$ROOT_DIR/quwoquan_service/services/product-ops-service' && REPO_ROOT='$ROOT_DIR' QWQ_OUTPUT_ROOT='$QWQ_OUTPUT_ROOT' APP_ENV='beta' POSTGRES_DSN='$OPS_POSTGRES_DSN' AUTH_JWT_SECRET='$AUTH_JWT_SECRET' AUTH_JWT_ISSUER='$AUTH_JWT_ISSUER' AUTH_JWT_AUDIENCE='$AUTH_JWT_AUDIENCE' AUTH_JWT_TOKEN_VERSION='$AUTH_JWT_TOKEN_VERSION' AUTH_DEVICE_TICKET_SECRET='$AUTH_DEVICE_TICKET_SECRET' AUTH_DEVICE_TICKET_ISSUER='$AUTH_DEVICE_TICKET_ISSUER' AUTH_DEVICE_TICKET_AUDIENCE='$AUTH_DEVICE_TICKET_AUDIENCE' AUTH_DEVICE_TICKET_TOKEN_VERSION='$AUTH_DEVICE_TICKET_TOKEN_VERSION' PRODUCT_OPS_SERVICE_ADDR='127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}' PLATFORM_OPS_BASE_URL='http://127.0.0.1:${PLATFORM_OPS_PORT}' go run ./cmd/api"
     start_bg ops-portal env VITE_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}" VITE_PLATFORM_OPS_BASE_URL="http://127.0.0.1:${PLATFORM_OPS_PORT}" VITE_GATEWAY_BASE_URL="http://127.0.0.1:${CONTENT_PORT}" npm --prefix "$OPS_PORTAL_DIR" run dev -- --host 127.0.0.1 --port "${OPS_PORTAL_PORT}"
     wait_service_ok product-ops "http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}/healthz" 60 || true
     wait_service_ok ops-portal "http://127.0.0.1:${OPS_PORTAL_PORT}/" 60 || true

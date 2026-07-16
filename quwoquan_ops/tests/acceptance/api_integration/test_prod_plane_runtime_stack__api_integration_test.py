@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import os
 import subprocess
 import tempfile
 import unittest
@@ -13,9 +15,61 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 class ProdPlaneRuntimeStackTest(unittest.TestCase):
+    @staticmethod
+    def _render_env(tmp: str) -> tuple[dict[str, str], Path]:
+        output_root = Path(tmp) / ".qwq_output"
+        artifact_manifest = Path(tmp) / "release-artifact-manifest.json"
+        artifact_manifest.write_text("{}\n", encoding="utf-8")
+        service_names = [
+            "rec-model-service",
+            "content-service",
+            "chat-service",
+            "user-service",
+            "assistant-service",
+            "product-ops-service",
+            "tag-service",
+            "entity-service",
+        ]
+        for service in service_names:
+            package = output_root / "env/prod/release/service" / service
+            package.mkdir(parents=True, exist_ok=True)
+            default_config = package / "default_config.yaml"
+            environment_config = package / "config.yaml"
+            default_config.write_text("{}\n", encoding="utf-8")
+            environment_config.write_text("{}\n", encoding="utf-8")
+            release = package / "releases/local-gamma-v1.yaml"
+            release.parent.mkdir(parents=True, exist_ok=True)
+            release.write_text("config:\n  version: local-gamma-v1\n", encoding="utf-8")
+            digest = lambda path: "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+            (package / "report.json").write_text(
+                json.dumps(
+                    {
+                        "provenance": {
+                            "files": {
+                                "defaultConfig": digest(default_config),
+                                "environmentConfig": digest(environment_config),
+                            },
+                            "releaseFiles": {release.name: digest(release)},
+                            "releaseArtifact": {
+                                "manifest": str(artifact_manifest),
+                                "manifestSha256": digest(artifact_manifest),
+                                "configVersion": "local-gamma-v1",
+                            },
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+        legal = output_root / "env/prod/release/legal-static/current/public"
+        legal.mkdir(parents=True, exist_ok=True)
+        env = dict(os.environ)
+        env["QWQ_OUTPUT_ROOT"] = str(output_root)
+        return env, output_root
+
     def test_render_service_plane_outputs_onebox_subset(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp) / "service"
+            env, output_root = self._render_env(tmp)
             result = subprocess.run(
                 [
                     "python3",
@@ -32,12 +86,13 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     str(out_dir),
                 ],
                 cwd=str(ROOT),
+                env=env,
                 text=True,
                 capture_output=True,
                 check=False,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            report = json.loads((out_dir / "render_report.json").read_text(encoding="utf-8"))
+            report = json.loads((out_dir / "provenance.json").read_text(encoding="utf-8"))
             self.assertEqual(report["plane"], "service")
             self.assertEqual(
                 report["governedComposeServices"],
@@ -58,12 +113,15 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertIn("content-service", compose)
             self.assertIn("host.containers.internal", compose)
             self.assertIn("directConnection=true", compose)
-            self.assertIn("/opt/quwoquan/gamma/.qwq_output/env/gamma/local/gamma-local/media:/srv/media:ro", compose)
             self.assertIn(
-                "${LOCAL_GAMMA_LEGAL_STATIC_ROOT:-../../../.qwq_output/env/gamma/release/legal-static/current/public}:/srv/legal:ro",
+                f"{output_root / 'env/prod/local/prod-hosted/process/volumes/media'}:/srv/media:ro",
                 compose,
             )
-            self.assertNotIn("./runtime/media", compose)
+            self.assertIn(
+                "./runtime/legal-static:/srv/legal:ro",
+                compose,
+            )
+            self.assertNotIn("gamma/local/gamma-local", compose)
             self.assertNotIn("\n  postgres:\n", compose)
             self.assertNotIn("\n  mongodb:\n", compose)
             self.assertNotIn("\n  redis:\n", compose)
@@ -85,10 +143,18 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             caddy_text = (out_dir / "runtime/Caddyfile").read_text(encoding="utf-8")
             self.assertIn("handle /v1/config/app", caddy_text)
             self.assertIn("@api_tag path /v1/tag*", caddy_text)
-            self.assertIn("@pub_user path /v1/user* /v1/me /v1/me/*", caddy_text)
+            self.assertIn(
+                "@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*",
+                caddy_text,
+            )
             self.assertIn("@api_entity path /v1/homepages*", caddy_text)
             self.assertIn("@pub_entity path /v1/homepages*", caddy_text)
             self.assertEqual(caddy_text.count("reverse_proxy entity-service:18084"), 2)
+            self.assertEqual(caddy_text.count("handle /legal/manifest.json {"), 2)
+            self.assertEqual(
+                caddy_text.count('Content-Type "text/html; charset=utf-8"'),
+                2,
+            )
             content_prod = yaml.safe_load(
                 (out_dir / "runtime/config-root/configs/content-service/prod/config.yaml").read_text(
                     encoding="utf-8"
@@ -116,6 +182,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
     def test_render_gray_instance_uses_non_prod_ports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out_dir = Path(tmp) / "service-gray"
+            env, _ = self._render_env(tmp)
             result = subprocess.run(
                 [
                     "python3",
@@ -132,6 +199,7 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
                     str(out_dir),
                 ],
                 cwd=str(ROOT),
+                env=env,
                 text=True,
                 capture_output=True,
                 check=False,
@@ -143,6 +211,30 @@ class ProdPlaneRuntimeStackTest(unittest.TestCase):
             self.assertIn("LOCAL_GAMMA_CONTENT_PORT=29220", env_text)
             self.assertIn("LOCAL_GAMMA_ENTITY_PORT=29290", env_text)
             self.assertIn("LOCAL_GAMMA_POSTGRES_PORT=29400", env_text)
+
+    def test_render_rejects_package_without_release_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "service"
+            env, _ = self._render_env(tmp)
+            report = Path(tmp) / ".qwq_output/env/prod/release/service/content-service/report.json"
+            report.write_text("{}\n", encoding="utf-8")
+            result = subprocess.run(
+                [
+                    "python3",
+                    "quwoquan_ops/cli/prod/render_prod_plane_stack.py",
+                    "--config-version",
+                    "local-gamma-v1",
+                    "--output-dir",
+                    str(out_dir),
+                ],
+                cwd=str(ROOT),
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("invalid package provenance", result.stdout + result.stderr)
 
     def test_load_prod_plane_images_dry_run_reports_localhost_images(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

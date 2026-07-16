@@ -59,13 +59,6 @@
           "backupProvider": "mock_push",
           "maxAttempts": 3
         }
-      },
-      "passThroughDebt": {
-        "enabled": true,
-        "debtId": "TECHDEBT-SMS-OTP-PASSTHROUGH-001",
-        "owner": "backend-team",
-        "expiresAt": "2026-08-31",
-        "prodAllowed": false
       }
     }
   },

@@ -1,4 +1,4 @@
-/// 圈子成员列表行投影（ListCircleMembers / Mock 富集字段）。
+/// 圈子成员列表行投影（ListCircleMemberships / Mock 富集字段）。
 /// 合约：`quwoquan_service/contracts/metadata/social/circle/projections/circle_member_roster_row.yaml`
 ///
 /// 对齐 [circleStatsMemberRowFromWireMap] 所读键，并保留 CircleMember 实体常见键。
@@ -37,8 +37,7 @@ class CircleMemberRosterItemDto {
     Map<String, dynamic> m, {
     String circleId = '',
   }) {
-    final uid =
-        (m['userId'] ?? m['id'] ?? m['_id'] ?? '').toString();
+    final uid = (m['userId'] ?? m['id'] ?? m['_id'] ?? '').toString();
     final memId = (m['_id'] ?? m['id'] ?? uid).toString();
     return CircleMemberRosterItemDto(
       membershipId: memId.isNotEmpty ? memId : uid,
@@ -60,21 +59,20 @@ class CircleMemberRosterItemDto {
   }
 
   Map<String, dynamic> toMap() => {
-        'id': membershipId,
-        'circleId': circleId,
-        'userId': userId,
-        'role': role,
-        'joinedAt': joinedAt.toIso8601String(),
-        if (displayName != null) 'displayName': displayName,
-        if (avatarUrl != null) 'avatarUrl': avatarUrl,
-        if (worksCountLabel != null) 'worksCountLabel': worksCountLabel,
-        if (fansCountLabel != null) 'fansCountLabel': fansCountLabel,
-        if (likesCountLabel != null) 'likesCountLabel': likesCountLabel,
-        'isFollowed': isFollowed,
-        if (lastActiveAt != null)
-          'lastActiveAt': lastActiveAt!.toIso8601String(),
-        'contribution': contribution,
-      };
+    'id': membershipId,
+    'circleId': circleId,
+    'userId': userId,
+    'role': role,
+    'joinedAt': joinedAt.toIso8601String(),
+    if (displayName != null) 'displayName': displayName,
+    if (avatarUrl != null) 'avatarUrl': avatarUrl,
+    if (worksCountLabel != null) 'worksCountLabel': worksCountLabel,
+    if (fansCountLabel != null) 'fansCountLabel': fansCountLabel,
+    if (likesCountLabel != null) 'likesCountLabel': likesCountLabel,
+    'isFollowed': isFollowed,
+    if (lastActiveAt != null) 'lastActiveAt': lastActiveAt!.toIso8601String(),
+    'contribution': contribution,
+  };
 
   static String? _label(dynamic a, dynamic b) {
     if (a != null) return a.toString();

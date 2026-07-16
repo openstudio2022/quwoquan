@@ -1,5 +1,5 @@
 version: 1
-entity: TagNode
+entity: TagNodeView
 
-# 只读服务：标签数据来自数据工程 publish/tags 离线导入，不产生领域事件。
+# 只读服务：标签数据来自 control_plane/governance/taxonomy 的发布导入，不产生领域事件。
 events: []

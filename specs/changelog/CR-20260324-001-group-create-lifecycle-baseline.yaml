@@ -40,7 +40,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/chat-conversation/group-creation-member-management/plan.yaml
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -63,7 +63,7 @@ entries:
         sections:
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/plan.yaml
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-create-flow/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -84,7 +84,7 @@ entries:
         sections:
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/plan.yaml
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/member-add-remove-policy/content.execution.planning.yaml
         sections:
           - P1
           - P2

@@ -43,7 +43,7 @@
 ## 环境集成
 
 - alpha: App mock fixture 与 Service local_contract 使用同一标签根和校验规则。
-- beta/gamma: tag-service import 加载 `quwoquan_data/publish/tags`；user-service 保存前走 `ValidateTagRefs`；`object_tag_index` 支持 import/backfill 与写时投影。
+- beta/gamma: tag-service import 加载 `quwoquan_data/control_plane/governance/taxonomy` 的发布包；user-service 保存前走 `ValidateTagRefs`；`object_tag_index` 支持 import/backfill 与写时投影。
 - prod: 发布包包含同一标签树、幂等 import/backfill 入口、可回滚的派生索引重建路径。
 
 ## 观测与运营

@@ -5,10 +5,14 @@ class NativeStartupProcessSegments {
   const NativeStartupProcessSegments({
     this.androidActivityOnCreateMs,
     this.androidFlutterEngineConfiguredMs,
+    this.elapsedSinceProcessStartMs,
+    this.deadlineOrigin,
   });
 
   final int? androidActivityOnCreateMs;
   final int? androidFlutterEngineConfiguredMs;
+  final int? elapsedSinceProcessStartMs;
+  final String? deadlineOrigin;
 }
 
 abstract interface class StartupTimingsNativeBridge {
@@ -43,6 +47,8 @@ class MethodChannelStartupTimingsNativeBridge
         androidFlutterEngineConfiguredMs: _asInt(
           raw['androidFlutterEngineConfiguredMs'],
         ),
+        elapsedSinceProcessStartMs: _asInt(raw['elapsedSinceProcessStartMs']),
+        deadlineOrigin: raw['deadlineOrigin']?.toString(),
       );
     } on MissingPluginException {
       return null;

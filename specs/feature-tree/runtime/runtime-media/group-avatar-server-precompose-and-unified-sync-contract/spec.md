@@ -30,8 +30,8 @@
 - **服务端预合成规则**：仅取前 9 成员、按加入顺序、生成群头像派生资源。
 - **重算触发**：
   - `ConversationCreated`
-  - `MemberJoined`
-  - `MemberLeft`
+  - `ConversationMemberAdded`
+  - `ConversationMemberRemoved`
   - 前 9 成员之一收到 `UserAvatarUpdated`
 - **sourceHash**：以 `top9UserIdsInOrder + top9AvatarAssetIds + top9AvatarVersions + top9AvatarUrls + layoutVersion` 计算 `groupAvatarSourceHash`，未变化则跳过重算。
 - **对象标识合同**：群头像、用户头像与聊天/内容媒体统一使用 `AssetRef / MediaAsset`，数据库主存 `assetId + version`。

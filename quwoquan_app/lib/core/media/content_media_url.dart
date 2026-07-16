@@ -232,7 +232,13 @@ List<String> _resolveAbsoluteContentMediaUrlCandidates(
         imageCdnBaseUrl: imageCdnBaseUrl,
         videoCdnBaseUrl: videoCdnBaseUrl,
       )) {
-    return candidates.isEmpty ? <String>[source] : candidates;
+    final resolved = candidates.isEmpty ? <String>[source] : candidates;
+    return _alignCandidatesToConfiguredTransport(
+      resolved,
+      gatewayBaseUrl: gatewayBaseUrl,
+      imageCdnBaseUrl: imageCdnBaseUrl,
+      videoCdnBaseUrl: videoCdnBaseUrl,
+    );
   }
   if (!_isTrustedRuntimeHost(
     uri,
@@ -240,9 +246,19 @@ List<String> _resolveAbsoluteContentMediaUrlCandidates(
     imageCdnBaseUrl: imageCdnBaseUrl,
     videoCdnBaseUrl: videoCdnBaseUrl,
   )) {
-    return candidates;
+    return _alignCandidatesToConfiguredTransport(
+      candidates,
+      gatewayBaseUrl: gatewayBaseUrl,
+      imageCdnBaseUrl: imageCdnBaseUrl,
+      videoCdnBaseUrl: videoCdnBaseUrl,
+    );
   }
-  return _uniqueNonEmpty(<String>[source, ...candidates]);
+  return _alignCandidatesToConfiguredTransport(
+    _uniqueNonEmpty(<String>[source, ...candidates]),
+    gatewayBaseUrl: gatewayBaseUrl,
+    imageCdnBaseUrl: imageCdnBaseUrl,
+    videoCdnBaseUrl: videoCdnBaseUrl,
+  );
 }
 
 List<String> _contentMediaUrlCandidatesForPath(
@@ -257,9 +273,65 @@ List<String> _contentMediaUrlCandidatesForPath(
     imageCdnBaseUrl: imageCdnBaseUrl,
     videoCdnBaseUrl: videoCdnBaseUrl,
   );
-  return _uniqueNonEmpty(
-    orderedBases.map((base) => _joinBaseAndPath(base, path)),
+  return _alignCandidatesToConfiguredTransport(
+    _uniqueNonEmpty(orderedBases.map((base) => _joinBaseAndPath(base, path))),
+    gatewayBaseUrl: gatewayBaseUrl,
+    imageCdnBaseUrl: imageCdnBaseUrl,
+    videoCdnBaseUrl: videoCdnBaseUrl,
   );
+}
+
+/// When dart-defines / launcher already selected loopback transport
+/// (`localhost` / `127.0.0.1` / `*.localhost`), keep candidates on that plane.
+///
+/// Canonical `*.quwoquan-env.test` remains the topology truth source and is
+/// still expanded when runtime bases are those hosts (iOS simulator / Mac).
+/// Physical Android + adb reverse must not fall through to unresolvable
+/// canonical DNS after loopback TLS/tunnel failures.
+List<String> _alignCandidatesToConfiguredTransport(
+  List<String> candidates, {
+  required String gatewayBaseUrl,
+  required String imageCdnBaseUrl,
+  required String videoCdnBaseUrl,
+}) {
+  if (!_configuredBasesPreferLoopbackTransport(
+    gatewayBaseUrl: gatewayBaseUrl,
+    imageCdnBaseUrl: imageCdnBaseUrl,
+    videoCdnBaseUrl: videoCdnBaseUrl,
+  )) {
+    return candidates;
+  }
+  return _uniqueNonEmpty(
+    candidates.where((candidate) {
+      final host = Uri.tryParse(candidate)?.host.toLowerCase() ?? '';
+      return host.isEmpty || !_isLocalEnvTestHost(host);
+    }),
+  );
+}
+
+bool _configuredBasesPreferLoopbackTransport({
+  required String gatewayBaseUrl,
+  required String imageCdnBaseUrl,
+  required String videoCdnBaseUrl,
+}) {
+  final hosts = <String>{
+    _hostFromBase(gatewayBaseUrl),
+    _hostFromBase(imageCdnBaseUrl),
+    _hostFromBase(videoCdnBaseUrl),
+  }..remove('');
+  if (hosts.isEmpty) {
+    return false;
+  }
+  return hosts.every(_isLoopbackTransportHost);
+}
+
+bool _isLoopbackTransportHost(String host) {
+  final lower = host.toLowerCase();
+  return lower == 'localhost' ||
+      lower == '127.0.0.1' ||
+      lower == '::1' ||
+      lower == '10.0.2.2' ||
+      lower.endsWith('.localhost');
 }
 
 List<String> _orderedBasesForPath(
@@ -388,10 +460,7 @@ bool _looksLikeBareHostUrl(String source) {
 bool _isPrivateDevHost(String host) {
   final lower = host.toLowerCase();
   return _isLocalEnvTestHost(lower) ||
-      lower == 'localhost' ||
-      lower == '127.0.0.1' ||
-      lower == '::1' ||
-      lower == '10.0.2.2' ||
+      _isLoopbackTransportHost(lower) ||
       lower.startsWith('192.168.');
 }
 
@@ -401,61 +470,64 @@ List<String> _localHostBaseCandidates(String base) {
     return const <String>[];
   }
   final uri = Uri.tryParse(normalized);
-  final host = uri?.host.toLowerCase() ?? '';
+  if (uri == null || uri.host.isEmpty) {
+    return <String>[normalized];
+  }
+  final host = uri.host.toLowerCase();
   if (_isLocalEnvTestHost(host)) {
+    // Canonical topology host: expand to literal loopback for Android reverse.
+    // When configured bases are already loopback, align strips these `.test`
+    // URLs; when bases are still canonical (iOS/Mac), keep original last.
     return _uniqueNonEmpty(<String>[
-      uri!
-          .replace(host: 'localhost')
-          .toString()
-          .replaceFirst(RegExp(r'/+$'), ''),
-      uri
-          .replace(host: '127.0.0.1')
-          .toString()
-          .replaceFirst(RegExp(r'/+$'), ''),
+      _rewriteHost(uri, '127.0.0.1'),
+      _rewriteHost(uri, 'localhost'),
       normalized,
     ]);
   }
-  if (uri == null || !_isPrivateDevHost(uri.host)) {
+  if (!_isPrivateDevHost(uri.host)) {
     return <String>[normalized];
   }
   final effectiveUri = uri.scheme.toLowerCase() == 'http'
       ? uri.replace(scheme: 'https')
       : uri;
-  final effectiveNormalized = effectiveUri.toString().replaceFirst(
-    RegExp(r'/+$'),
-    '',
-  );
-  if (effectiveUri.scheme.toLowerCase() == 'https') {
-    // 10.0.2.2 是 Android emulator 寻址别名；本地 HTTPS 媒体走 adb-reversed loopback。
+  final effectiveNormalized = effectiveUri
+      .toString()
+      .replaceFirst(RegExp(r'/+$'), '');
+  final effectiveHost = effectiveUri.host.toLowerCase();
+
+  // Prefixed *.localhost matches Caddy SAN — do not expand to bare localhost.
+  if (effectiveHost.endsWith('.localhost')) {
+    return <String>[effectiveNormalized];
+  }
+
+  // Literal localhost / ::1: prefer IPv4 to avoid ::1 bypassing adb reverse.
+  if (effectiveHost == 'localhost' || effectiveHost == '::1') {
     return _uniqueNonEmpty(<String>[
-      if (host == '10.0.2.2')
-        effectiveUri
-            .replace(host: 'localhost')
-            .toString()
-            .replaceFirst(RegExp(r'/+$'), ''),
-      if (host == '10.0.2.2')
-        effectiveUri
-            .replace(host: '127.0.0.1')
-            .toString()
-            .replaceFirst(RegExp(r'/+$'), ''),
-      if (host != '10.0.2.2') effectiveNormalized,
-      if (host != 'localhost' && host != '10.0.2.2')
-        effectiveUri
-            .replace(host: 'localhost')
-            .toString()
-            .replaceFirst(RegExp(r'/+$'), ''),
-      if (host != '127.0.0.1' && host != '10.0.2.2')
-        effectiveUri
-            .replace(host: '127.0.0.1')
-            .toString()
-            .replaceFirst(RegExp(r'/+$'), ''),
+      _rewriteHost(effectiveUri, '127.0.0.1'),
+      _rewriteHost(effectiveUri, 'localhost'),
     ]);
   }
-  return _uniqueNonEmpty(<String>[
-    normalized,
-    for (final host in const <String>['127.0.0.1', 'localhost', '10.0.2.2'])
-      uri.replace(host: host).toString().replaceFirst(RegExp(r'/+$'), ''),
-  ]);
+
+  if (effectiveHost == '127.0.0.1') {
+    return _uniqueNonEmpty(<String>[
+      effectiveNormalized,
+      _rewriteHost(effectiveUri, 'localhost'),
+    ]);
+  }
+
+  // 10.0.2.2 is the Android emulator host-loopback alias.
+  if (effectiveHost == '10.0.2.2') {
+    return _uniqueNonEmpty(<String>[
+      _rewriteHost(effectiveUri, '127.0.0.1'),
+      _rewriteHost(effectiveUri, 'localhost'),
+    ]);
+  }
+
+  return <String>[effectiveNormalized];
+}
+
+String _rewriteHost(Uri uri, String host) {
+  return uri.replace(host: host).toString().replaceFirst(RegExp(r'/+$'), '');
 }
 
 bool _isTrustedRuntimeHost(

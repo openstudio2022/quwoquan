@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
+import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.dart';
 
@@ -40,6 +42,10 @@ class _GuestAuthStore implements AuthSessionStore {
     required String accessToken,
     required String refreshToken,
   }) async {}
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
   @override
@@ -78,7 +84,17 @@ void main() {
   });
 
   group('CloudRequestHeaders 设备头注入', () {
-    tearDown(() => AppTraceContextStore.instance.deviceActorId = null);
+    setUp(() {
+      CloudClientContextRegistry.configure(
+        const AppCloudClientContextProvider(),
+      );
+    });
+    tearDown(() {
+      AppTraceContextStore.instance.deviceActorId = null;
+      CloudClientContextRegistry.configure(
+        const FallbackCloudClientContextProvider(),
+      );
+    });
 
     test('设置 deviceActorId 后注入 X-Client-Device-Actor-Id', () {
       AppTraceContextStore.instance.deviceActorId = 'devactor123';

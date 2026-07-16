@@ -1,0 +1,70 @@
+version: 1
+entity: Comment
+
+scenarios:
+  - name: comment_create_outbox_and_post_projection
+    operation: CreateComment
+    go_func: TestCommentWithNotification
+    evidence: api_integration
+    assertions:
+      - comments、comment_command_receipts、comment_outbox 在同一 Mongo transaction 提交
+      - CommentCreated 由独立 durable relay 投递
+      - Post.commentCount 只由独立 checkpoint 的 projection relay 重建
+
+  - name: comment_keyset_page
+    operation: ListComments
+    go_func: TestCommentListPagination
+    evidence: api_integration
+    assertions:
+      - pinned-first、createdAt、id 构成稳定 keyset 全序
+      - 页间无重叠且 nextCursor 在耗尽时为空
+      - winningPlan 使用 idx_comments_post_page 且无 COLLSCAN 或 blocking SORT
+
+  - name: comment_reply_page
+    operation: ListCommentReplies
+    go_func: TestCommentListPagination
+    evidence: api_integration
+    assertions:
+      - 回复只允许同 Post active Comment 目标
+      - parentCommentId 归一为一级线程根
+
+  - name: comment_delete_version_cas
+    operation: DeleteComment
+    go_func: TestDeleteComment
+    evidence: api_integration
+    assertions:
+      - request 必须携带当前 Comment version
+      - stale version 返回 CONTENT.USER.version_conflict
+      - 成功软删产生 CommentDeleted 且 active reader 与 Post count projection 收敛
+
+  - name: comment_pin_version_cas
+    operation: PinComment
+    go_func: TestCommentPinContractApiIntegration
+    evidence: api_integration
+    assertions:
+      - 仅被引用 Post 作者可置顶一级 Comment
+      - stale version、非作者与回复目标均 fail closed
+
+  - name: comment_unpin_version_cas
+    operation: UnpinComment
+    go_func: TestCommentPinContractApiIntegration
+    evidence: api_integration
+    assertions:
+      - unpin 使用 PinComment 返回的新版本
+      - 成功后 CommentPage 不再包含 isPinned=true
+
+  - name: comment_author_page
+    operation: ListCommentsByAuthor
+    go_func: TestListCommentsByAuthor
+    evidence: api_integration
+    assertions:
+      - actor 仅来自 verified persona principal
+      - Reader 只返回当前 persona 的 typed Slice
+
+  - name: comment_received_page
+    operation: ListCommentsForPostAuthor
+    go_func: TestListCommentsForPostAuthorContract
+    evidence: api_integration
+    assertions:
+      - owned Post IDs 由 PostOwnershipReader 获取
+      - 不接受任意 authorId 查询参数

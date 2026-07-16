@@ -44,7 +44,7 @@ sit_acceptance:
       recorded:
       - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart
       - file: quwoquan_service/services/entity-service/tests/api_integration/homepage_search_contract__api_integration_test.go
-      - file: quwoquan_data/tests/local_contract/verify/test_directory_evidence_gate__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_directory_evidence_gate__behavior__functional__local_contract_test.py
       - file: quwoquan_ops/tests/acceptance/user_acceptance/test_stackctl_up_runtime__user_acceptance_test.py
     status: implemented
     test_evidence:
@@ -70,7 +70,9 @@ sit_acceptance:
         - user_acceptance.runtime.runtime_testinfra.sit1.page_matrix
         envs:
         - gamma_local
-        - prod_gray_initial
+        - prod
+        rollout_stages:
+        - gray_initial
       - layer: local_contract
         suite: runtime_testinfra_no_fake_guard
         cases:

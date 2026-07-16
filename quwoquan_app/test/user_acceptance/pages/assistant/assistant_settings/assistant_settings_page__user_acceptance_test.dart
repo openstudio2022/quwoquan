@@ -16,31 +16,34 @@ void main() {
     const owner = 'assistant';
     const routeId = 'chatDetail';
     const sourceEvidence = <String>[
-    'quwoquan_app/test/local_contract/ui/chat/widgets/chat_detail_page_assistant_ui_regression__local_contract_test.dart',
-    'quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart',
-  ];
+      'quwoquan_app/test/local_contract/ui/chat/widgets/assistant_message_bubble_regression__local_contract_test.dart',
+      'quwoquan_app/test/local_contract/ui/assistant/assistant_management_page_consent__local_contract_test.dart',
+    ];
     const apiEvidence = <String>[
-    'quwoquan_app/test/api_integration/cloud/assistant/assistant_skill_comparison__api_integration_test.dart',
-    'quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go',
-  ];
+      'quwoquan_app/test/api_integration/cloud/assistant/assistant_skill_comparison__api_integration_test.dart',
+      'quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go',
+    ];
     const requiredCaseIds = <String>[
-    'user_acceptance.page.assistantSettings.load_success',
-    'user_acceptance.page.assistantSettings.empty_permission_error',
-    'user_acceptance.page.assistantSettings.primary_cta',
-    'user_acceptance.page.assistantSettings.trace_context',
-  ];
+      'user_acceptance.page.assistantSettings.load_success',
+      'user_acceptance.page.assistantSettings.empty_permission_error',
+      'user_acceptance.page.assistantSettings.primary_cta',
+      'user_acceptance.page.assistantSettings.trace_context',
+    ];
 
     expect(surfaceId, isNotEmpty);
     expect(owner, isNotEmpty);
     expect(routeId, isNotEmpty);
     expect(sourceEvidence, isNotEmpty);
     expect(apiEvidence, isNotEmpty);
-    expect(requiredCaseIds, containsAll(<String>[
-      'user_acceptance.page.$surfaceId.load_success',
-      'user_acceptance.page.$surfaceId.empty_permission_error',
-      'user_acceptance.page.$surfaceId.primary_cta',
-      'user_acceptance.page.$surfaceId.trace_context',
-    ]));
+    expect(
+      requiredCaseIds,
+      containsAll(<String>[
+        'user_acceptance.page.$surfaceId.load_success',
+        'user_acceptance.page.$surfaceId.empty_permission_error',
+        'user_acceptance.page.$surfaceId.primary_cta',
+        'user_acceptance.page.$surfaceId.trace_context',
+      ]),
+    );
 
     for (final path in <String>[...sourceEvidence, ...apiEvidence]) {
       expect(_repoFile(path).existsSync(), isTrue, reason: path);

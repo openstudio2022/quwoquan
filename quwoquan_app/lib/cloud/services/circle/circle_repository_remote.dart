@@ -105,260 +105,6 @@ class RemoteCircleRepository implements CircleRepository {
     );
   }
 
-  // -- Membership ------------------------------------------------------------
-
-  @override
-  Future<void> joinCircle(
-    String circleId, {
-    String? ownerUserId,
-    String? subAccountId,
-    String? subAccountContextVersion,
-  }) async {
-    await _postVoid(
-      _uri(CircleApiMetadata.joinCirclePath(circleId: circleId)),
-      CloudRequestHeaders.withOwnerSubAccountContext(
-        CloudRequestHeaders.forPage(CircleRequestPageIds.joinCircle),
-        ownerUserId: ownerUserId,
-        subAccountId: subAccountId,
-        subAccountContextVersion: subAccountContextVersion,
-      ),
-    );
-  }
-
-  @override
-  Future<void> leaveCircle(
-    String circleId, {
-    String? ownerUserId,
-    String? subAccountId,
-    String? subAccountContextVersion,
-  }) async {
-    await _postVoid(
-      _uri(CircleApiMetadata.leaveCirclePath(circleId: circleId)),
-      CloudRequestHeaders.withOwnerSubAccountContext(
-        CloudRequestHeaders.forPage(CircleRequestPageIds.leaveCircle),
-        ownerUserId: ownerUserId,
-        subAccountId: subAccountId,
-        subAccountContextVersion: subAccountContextVersion,
-      ),
-    );
-  }
-
-  @override
-  Future<List<CircleMemberRosterItemDto>> listMembers(
-    String circleId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final query = <String, String>{'limit': '$limit'};
-    if (cursor != null) query['cursor'] = cursor;
-
-    final list = await _getList(
-      _uri(
-        CircleApiMetadata.listCircleMembersPath(circleId: circleId),
-        queryParameters: query,
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.listCircleMembers),
-    );
-    return list
-        .map((m) => CircleMemberRosterItemDto.fromMap(m, circleId: circleId))
-        .toList(growable: false);
-  }
-
-  @override
-  Future<void> updateMemberRole(
-    String circleId,
-    String userId,
-    String role,
-  ) async {
-    await _patchVoid(
-      _uri(
-        CircleApiMetadata.updateMemberRolePath(
-          circleId: circleId,
-          userId: userId,
-        ),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.updateMemberRole),
-      <String, dynamic>{'role': role},
-    );
-  }
-
-  // -- Circle Groups ----------------------------------------------------------
-
-  @override
-  Future<List<CircleGroupDto>> listCircleGroups(
-    String circleId, {
-    String? groupType,
-    String? visibility,
-    String? parentGroupId,
-    String? nodeType,
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final query = <String, String>{'limit': '$limit'};
-    if (groupType != null && groupType.isNotEmpty) {
-      query['groupType'] = groupType;
-    }
-    if (visibility != null && visibility.isNotEmpty) {
-      query['visibility'] = visibility;
-    }
-    if (parentGroupId != null && parentGroupId.isNotEmpty) {
-      query['parentGroupId'] = parentGroupId;
-    }
-    if (nodeType != null && nodeType.isNotEmpty) query['nodeType'] = nodeType;
-    if (cursor != null && cursor.isNotEmpty) query['cursor'] = cursor;
-    final list = await _getList(
-      _uri(
-        CircleApiMetadata.listCircleGroupsPath(circleId: circleId),
-        queryParameters: query,
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.listCircleGroups),
-    );
-    return list.map(CircleGroupDto.fromMap).toList(growable: false);
-  }
-
-  @override
-  Future<List<CircleGroupDto>> searchCircleGroups(
-    String circleId, {
-    required String query,
-    String? visibility,
-    String? groupType,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final list = await _getList(
-      _uri(
-        CircleApiMetadata.searchCircleGroupsPath(circleId: circleId),
-        queryParameters: <String, String>{
-          'query': query,
-          if (visibility != null && visibility.isNotEmpty)
-            'visibility': visibility,
-          if (groupType != null && groupType.isNotEmpty) 'groupType': groupType,
-          'limit': '$limit',
-        },
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.searchCircleGroups),
-    );
-    return list.map(CircleGroupDto.fromMap).toList(growable: false);
-  }
-
-  @override
-  Future<CircleGroupDto> getCircleGroup(String circleId, String groupId) async {
-    final obj = await _getObject(
-      _uri(
-        CircleApiMetadata.getCircleGroupPath(
-          circleId: circleId,
-          groupId: groupId,
-        ),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleGroup),
-    );
-    return CircleGroupDto.fromMap(obj);
-  }
-
-  @override
-  Future<CircleGroupDto> createCircleGroup(
-    String circleId,
-    CircleGroupCreateWireDto data,
-  ) async {
-    final obj = await _postObject(
-      _uri(CircleApiMetadata.createCircleGroupPath(circleId: circleId)),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.createCircleGroup),
-      data.toMap(),
-    );
-    return CircleGroupDto.fromMap(obj);
-  }
-
-  @override
-  Future<CircleGroupDto> updateCircleGroup(
-    String circleId,
-    String groupId,
-    CircleGroupUpdateWireDto data,
-  ) async {
-    final obj = await _patchObject(
-      _uri(
-        CircleApiMetadata.updateCircleGroupPath(
-          circleId: circleId,
-          groupId: groupId,
-        ),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircleGroup),
-      data.toMap(),
-    );
-    return CircleGroupDto.fromMap(obj);
-  }
-
-  @override
-  Future<void> applyJoinCircleGroup(String circleId, String groupId) async {
-    await _postVoid(
-      _uri(
-        CircleApiMetadata.applyJoinCircleGroupPath(
-          circleId: circleId,
-          groupId: groupId,
-        ),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.applyJoinCircleGroup),
-    );
-  }
-
-  @override
-  Future<List<CircleGroupMemberDto>> listCircleGroupMembers(
-    String circleId,
-    String groupId, {
-    String? status,
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final query = <String, String>{'limit': '$limit'};
-    if (status != null && status.isNotEmpty) query['status'] = status;
-    if (cursor != null && cursor.isNotEmpty) query['cursor'] = cursor;
-    final list = await _getList(
-      _uri(
-        CircleApiMetadata.listCircleGroupMembersPath(
-          circleId: circleId,
-          groupId: groupId,
-        ),
-        queryParameters: query,
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.listCircleGroupMembers),
-    );
-    return list.map(CircleGroupMemberDto.fromMap).toList(growable: false);
-  }
-
-  @override
-  Future<void> approveCircleGroupMember(
-    String circleId,
-    String groupId,
-    String userId,
-  ) async {
-    await _postVoid(
-      _uri(
-        CircleApiMetadata.approveCircleGroupMemberPath(
-          circleId: circleId,
-          groupId: groupId,
-          userId: userId,
-        ),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.approveCircleGroupMember),
-    );
-  }
-
-  @override
-  Future<void> rejectCircleGroupMember(
-    String circleId,
-    String groupId,
-    String userId,
-  ) async {
-    await _postVoid(
-      _uri(
-        CircleApiMetadata.rejectCircleGroupMemberPath(
-          circleId: circleId,
-          groupId: groupId,
-          userId: userId,
-        ),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.rejectCircleGroupMember),
-    );
-  }
-
   // -- Feed ------------------------------------------------------------------
 
   @override
@@ -388,39 +134,6 @@ class RemoteCircleRepository implements CircleRepository {
     return _decodeCircleFeedMaps(list);
   }
 
-  @override
-  Future<void> pinPost(
-    String circleId,
-    String postId, {
-    required bool pinned,
-  }) async {
-    await _patchVoid(
-      _uri(
-        CircleApiMetadata.pinCirclePostPath(circleId: circleId, postId: postId),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.pinCirclePost),
-      <String, dynamic>{'pinned': pinned},
-    );
-  }
-
-  @override
-  Future<void> featurePost(
-    String circleId,
-    String postId, {
-    required bool featured,
-  }) async {
-    await _patchVoid(
-      _uri(
-        CircleApiMetadata.featureCirclePostPath(
-          circleId: circleId,
-          postId: postId,
-        ),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.featureCirclePost),
-      <String, dynamic>{'featured': featured},
-    );
-  }
-
   // -- Stats -----------------------------------------------------------------
 
   @override
@@ -441,89 +154,6 @@ class RemoteCircleRepository implements CircleRepository {
     return CircleImpactSummary.fromMap(obj);
   }
 
-  // -- Files -----------------------------------------------------------------
-
-  @override
-  Future<List<CircleFileDto>> listFiles(
-    String circleId, {
-    String? parentId,
-    String? sort,
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final query = <String, String>{'limit': '$limit'};
-    if (parentId != null) query['parentId'] = parentId;
-    if (sort != null) query['sort'] = sort;
-    if (cursor != null) query['cursor'] = cursor;
-
-    final list = await _getList(
-      _uri(
-        CircleApiMetadata.listCircleFilesPath(circleId: circleId),
-        queryParameters: query,
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.listCircleFiles),
-    );
-    return list
-        .map((m) => CircleFileDto.fromMap({...m, 'circleId': circleId}))
-        .toList(growable: false);
-  }
-
-  @override
-  Future<CircleFileDto> createFile(
-    String circleId,
-    CircleFileCreateWireDto data,
-  ) async {
-    final obj = await _postObject(
-      _uri(CircleApiMetadata.createCircleFilePath(circleId: circleId)),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.createCircleFile),
-      data.toMap(),
-    );
-    return CircleFileDto.fromMap({...obj, 'circleId': circleId});
-  }
-
-  @override
-  Future<CircleFileDto> getFile(String circleId, String fileId) async {
-    final obj = await _getObject(
-      _uri(
-        CircleApiMetadata.getCircleFilePath(circleId: circleId, fileId: fileId),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.getCircleFile),
-    );
-    return CircleFileDto.fromMap({...obj, 'circleId': circleId});
-  }
-
-  @override
-  Future<CircleFileDto> updateFile(
-    String circleId,
-    String fileId,
-    CircleFileUpdateWireDto data,
-  ) async {
-    final obj = await _patchObject(
-      _uri(
-        CircleApiMetadata.updateCircleFilePath(
-          circleId: circleId,
-          fileId: fileId,
-        ),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircleFile),
-      data.toMap(),
-    );
-    return CircleFileDto.fromMap({...obj, 'circleId': circleId});
-  }
-
-  @override
-  Future<void> deleteFile(String circleId, String fileId) async {
-    await _deleteVoid(
-      _uri(
-        CircleApiMetadata.deleteCircleFilePath(
-          circleId: circleId,
-          fileId: fileId,
-        ),
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.deleteCircleFile),
-    );
-  }
-
   // -- Sections --------------------------------------------------------------
 
   @override
@@ -536,17 +166,6 @@ class RemoteCircleRepository implements CircleRepository {
       _uri(CircleApiMetadata.updateCircleSectionsPath(circleId: circleId)),
       CloudRequestHeaders.forPage(CircleRequestPageIds.updateCircleSections),
       <String, dynamic>{'sections': payload},
-    );
-  }
-
-  // -- Behavior --------------------------------------------------------------
-
-  @override
-  Future<void> reportBehavior(CircleBehaviorReportWireDto report) async {
-    await _postVoid(
-      _uri(CircleApiMetadata.reportCircleBehaviorPath),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.reportCircleBehavior),
-      report.toMap(),
     );
   }
 
@@ -571,28 +190,9 @@ class RemoteCircleRepository implements CircleRepository {
   @override
   Future<Map<String, CircleCategoryTabConfigDto>>
   getCircleCategoryConfig() async {
-    return CircleCategoryTabsLoader.loadFromAsset();
-  }
-
-  // -- User Circles ----------------------------------------------------------
-
-  @override
-  Future<List<CircleDto>> listUserCircles(
-    String userId, {
-    String? cursor,
-    int limit = CloudApiDefaults.pageLimit,
-  }) async {
-    final query = <String, String>{'limit': '$limit'};
-    if (cursor != null) query['cursor'] = cursor;
-
-    final list = await _getList(
-      _uri(
-        CircleApiMetadata.listUserCirclesPath(userId: userId),
-        queryParameters: query,
-      ),
-      CloudRequestHeaders.forPage(CircleRequestPageIds.listUserCircles),
+    return Map<String, CircleCategoryTabConfigDto>.from(
+      CircleCategoryTabDefaults.remoteStyleFallback,
     );
-    return list.map(CircleDto.fromMap).toList(growable: false);
   }
 
   // -- HTTP pipeline (统一走 CloudHttpClient + CloudErrorMapper) ----------------
@@ -623,16 +223,12 @@ class RemoteCircleRepository implements CircleRepository {
     Map<String, String> headers, [
     Map<String, dynamic> body = const <String, dynamic>{},
   ]) async {
-    final decoded = await _httpClient.postJson(uri, headers: headers, body: body);
+    final decoded = await _httpClient.postJson(
+      uri,
+      headers: headers,
+      body: body,
+    );
     return _unwrapObject(decoded, uri.path);
-  }
-
-  Future<void> _postVoid(
-    Uri uri,
-    Map<String, String> headers, [
-    Map<String, dynamic> body = const <String, dynamic>{},
-  ]) async {
-    await _httpClient.postJson(uri, headers: headers, body: body);
   }
 
   Future<Map<String, dynamic>> _patchObject(

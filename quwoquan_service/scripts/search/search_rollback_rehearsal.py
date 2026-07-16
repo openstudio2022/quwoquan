@@ -17,14 +17,29 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 
 SEARCH_BASE = "http://localhost:19280"
 ES_HEALTH = "http://localhost:19430/_cluster/health"
+DEFAULT_REPORT = (
+    Path(
+        os.environ.get(
+            "QWQ_OUTPUT_ROOT",
+            Path(__file__).resolve().parents[3] / ".qwq_output",
+        )
+    )
+    / "env"
+    / "gamma"
+    / "observability"
+    / "search-rollback"
+    / "search_rollback_rehearsal_report.json"
+)
 
 CONTAINERS = {
     "search": "quwoquan_service-search-service-1",
@@ -187,7 +202,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--out",
-        default=".qwq_output/env/gamma/local/gamma-local/search_rollback_rehearsal_report.json",
+        default=str(DEFAULT_REPORT),
     )
     parser.add_argument(
         "--only",

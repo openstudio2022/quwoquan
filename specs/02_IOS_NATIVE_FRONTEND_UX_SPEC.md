@@ -423,7 +423,7 @@
 必备产出：
 
 - `design.md`
-- `plan.yaml`
+- `content.execution.planning.yaml`
 - 组件级 token 映射、浅深色对应关系、断点调整边界
 - 受影响组件的响应式回归点清单
 

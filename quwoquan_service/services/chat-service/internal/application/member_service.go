@@ -9,15 +9,17 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	event "quwoquan_service/services/chat-service/internal/domain/conversation/event"
+	membershipevent "quwoquan_service/services/chat-service/internal/domain/chat/conversation_membership/event"
+	conversationevent "quwoquan_service/services/chat-service/internal/domain/chat/event"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
-	"quwoquan_service/services/chat-service/internal/infrastructure/cache"
-	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
 type MemberService struct {
-	repo           persistence.ChatRepository
-	cache          *cache.ConversationCache
+	transactions   TransactionRunner
+	conversations  ConversationStore
+	members        MemberStore
+	userStates     UserStateStore
+	cache          ConversationCache
 	publisher      EventPublisher
 	profiles       ProfileSnapshotResolver
 	relationships  RelationshipGate
@@ -58,8 +60,8 @@ func WithRelationshipGate(gate RelationshipGate) MemberServiceOption {
 }
 
 func NewMemberService(
-	repo persistence.ChatRepository,
-	cache *cache.ConversationCache,
+	storage ChatStoragePorts,
+	cache ConversationCache,
 	publisher EventPublisher,
 	profiles ProfileSnapshotResolver,
 	media GroupAvatarAssetizer,
@@ -67,17 +69,22 @@ func NewMemberService(
 	scheduler GroupAvatarTaskScheduler,
 	opts ...MemberServiceOption,
 ) *MemberService {
-	if publisher == nil {
-		publisher = NoopEventPublisher()
-	}
+	publisher = requireEventPublisher(publisher)
 	if profiles == nil {
 		profiles = noopProfileResolver{}
 	}
-	if scheduler == nil {
-		scheduler = NoopGroupAvatarTaskScheduler()
-	}
+	scheduler = requireGroupAvatarTaskScheduler(scheduler)
 	svc := &MemberService{
-		repo: repo, cache: cache, publisher: publisher, profiles: profiles, media: media, syncPublisher: syncPublisher, scheduler: scheduler,
+		transactions:   storage.Transactions,
+		conversations:  storage.Conversations,
+		members:        storage.Members,
+		userStates:     storage.UserStates,
+		cache:          cache,
+		publisher:      publisher,
+		profiles:       profiles,
+		media:          media,
+		syncPublisher:  syncPublisher,
+		scheduler:      scheduler,
 		socialContacts: noopSocialContactResolver{},
 		circles:        noopCircleListResolver{},
 		relationships:  nil,
@@ -101,12 +108,16 @@ type ListMembersRequest struct {
 }
 
 func (s *MemberService) ListMembers(ctx context.Context, req ListMembersRequest) ([]model.ConversationMember, error) {
-	sort := persistence.NormalizeMemberListSort(req.Sort)
-	return s.repo.ListMembers(ctx, req.ConversationId, req.Limit, req.Cursor, req.Role, sort)
+	return s.members.ListMembers(ctx, req.ConversationId, ListMembersQuery{
+		Limit:  req.Limit,
+		Cursor: req.Cursor,
+		Role:   req.Role,
+		Sort:   NormalizeMemberListSort(req.Sort),
+	})
 }
 
 func (s *MemberService) GetMember(ctx context.Context, conversationId, userId string) (*model.ConversationMember, error) {
-	return s.repo.FindMember(ctx, conversationId, userId)
+	return s.members.FindMember(ctx, conversationId, userId)
 }
 
 func (s *MemberService) scheduleRosterUpdatedPublish(conversationId string) {
@@ -130,12 +141,15 @@ func (s *MemberService) flushRosterUpdated(ctx context.Context, conversationId s
 	delete(s.rosterTimers, conversationId)
 	s.rosterMu.Unlock()
 
-	conv, err := s.repo.FindConversationByID(ctx, conversationId)
+	conv, err := s.conversations.FindConversationByID(ctx, conversationId)
 	if err != nil {
+		if errors.Is(err, model.ErrConversationNotFound) {
+			return
+		}
 		slog.Error("flushRosterUpdated", "err", err, "conversationId", conversationId)
 		return
 	}
-	if err := s.publisher.PublishDomainEvent(ctx, event.ConversationRosterUpdated, conversationId, "", map[string]any{
+	if err := s.publisher.PublishDomainEvent(ctx, conversationevent.ConversationRosterUpdated, conversationId, "", map[string]any{
 		"membersRosterRevision": conv.MembersRosterRevision,
 		"updatedAt":             conv.UpdatedAt,
 		"aspects":               []string{"members"},
@@ -151,7 +165,7 @@ type AddMembersRequest struct {
 }
 
 func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) error {
-	conv, err := s.repo.FindConversationByID(ctx, req.ConversationId)
+	conv, err := s.conversations.FindConversationByID(ctx, req.ConversationId)
 	if err != nil {
 		return err
 	}
@@ -164,14 +178,14 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 	}
 	userIDs := dedupeUserIDs(req.UserIds)
 
-	currentCount, err := s.repo.CountMembers(ctx, req.ConversationId)
+	currentCount, err := s.members.CountMembers(ctx, req.ConversationId)
 	if err != nil {
 		return err
 	}
 
 	newUserIDs := make([]string, 0, len(userIDs))
 	for _, userId := range userIDs {
-		if _, err := s.repo.FindMember(ctx, req.ConversationId, userId); err == nil {
+		if _, err := s.members.FindMember(ctx, req.ConversationId, userId); err == nil {
 			continue
 		}
 		newUserIDs = append(newUserIDs, userId)
@@ -220,18 +234,18 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 	}
 
 	newCount := currentCount + len(membersToCreate)
-	if err := s.repo.RunInTransaction(ctx, func(txCtx context.Context) error {
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
 		for _, member := range membersToCreate {
-			if err := s.repo.CreateMember(txCtx, member); err != nil {
+			if err := s.members.CreateMember(txCtx, member); err != nil {
 				return err
 			}
 		}
 		for _, state := range statesToCreate {
-			if err := s.repo.UpsertUserState(txCtx, state); err != nil {
+			if err := s.userStates.UpsertUserState(txCtx, state); err != nil {
 				return err
 			}
 		}
-		if err := s.repo.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
+		if err := s.members.BumpMembersRosterRevision(txCtx, req.ConversationId, &newCount); err != nil {
 			return err
 		}
 		return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
@@ -243,6 +257,22 @@ func (s *MemberService) AddMembers(ctx context.Context, req AddMembersRequest) e
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
+	go func(members []*model.ConversationMember, memberCount int) {
+		for _, member := range members {
+			if err := s.publisher.PublishDomainEvent(context.Background(), membershipevent.ConversationMemberAdded, req.ConversationId, req.InvitedBy, map[string]any{
+				"memberId":    member.ID,
+				"userId":      member.UserId,
+				"displayName": member.DisplayName,
+				"memberType":  member.MemberType,
+				"role":        member.Role,
+				"invitedBy":   member.InvitedBy,
+				"memberCount": memberCount,
+				"joinedAt":    member.JoinedAt,
+			}); err != nil {
+				slog.Error("publish ConversationMemberAdded failed", "err", err, "conversationId", req.ConversationId, "userId", member.UserId)
+			}
+		}
+	}(membersToCreate, newCount)
 
 	s.scheduleRosterUpdatedPublish(req.ConversationId)
 
@@ -256,7 +286,7 @@ type TransferOwnershipRequest struct {
 }
 
 func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwnershipRequest) error {
-	currentOwner, err := s.repo.FindMember(ctx, req.ConversationId, req.OperatorId)
+	currentOwner, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil || currentOwner.Role != "owner" {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
@@ -267,7 +297,7 @@ func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwner
 	if strings.TrimSpace(req.NewOwnerId) == "" {
 		return rterr.NewInvalidArgument(rterr.ModuleChat, "新群主不能为空", "missing new owner id")
 	}
-	nextOwner, err := s.repo.FindMember(ctx, req.ConversationId, req.NewOwnerId)
+	nextOwner, err := s.members.FindMember(ctx, req.ConversationId, req.NewOwnerId)
 	if err != nil {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "not_found"),
@@ -278,13 +308,13 @@ func (s *MemberService) TransferOwnership(ctx context.Context, req TransferOwner
 	if nextOwner.Role == "owner" {
 		return nil
 	}
-	if err := s.repo.UpdateMemberRole(ctx, req.ConversationId, req.OperatorId, "member"); err != nil {
+	if err := s.members.UpdateMemberRole(ctx, req.ConversationId, req.OperatorId, "member"); err != nil {
 		return err
 	}
-	if err := s.repo.UpdateMemberRole(ctx, req.ConversationId, req.NewOwnerId, "owner"); err != nil {
+	if err := s.members.UpdateMemberRole(ctx, req.ConversationId, req.NewOwnerId, "owner"); err != nil {
 		return err
 	}
-	if err := s.repo.BumpMembersRosterRevision(ctx, req.ConversationId, nil); err != nil {
+	if err := s.members.BumpMembersRosterRevision(ctx, req.ConversationId, nil); err != nil {
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
@@ -299,7 +329,7 @@ type UpdateGroupAdminsRequest struct {
 }
 
 func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAdminsRequest) error {
-	operator, err := s.repo.FindMember(ctx, req.ConversationId, req.OperatorId)
+	operator, err := s.members.FindMember(ctx, req.ConversationId, req.OperatorId)
 	if err != nil || operator.Role != "owner" {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleChat, rterr.KindUser, "forbidden"),
@@ -311,7 +341,10 @@ func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAd
 	if len(adminIDs) > 3 {
 		return rterr.NewInvalidArgument(rterr.ModuleChat, "管理员数量超过上限", "too many admins")
 	}
-	members, err := s.repo.ListMembers(ctx, req.ConversationId, 1000, "", "", persistence.SortMembersJoinedAsc)
+	members, err := s.members.ListMembers(ctx, req.ConversationId, ListMembersQuery{
+		Limit: 1000,
+		Sort:  MemberListSortJoinedAsc,
+	})
 	if err != nil {
 		return err
 	}
@@ -327,11 +360,11 @@ func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAd
 		if _, ok := adminSet[member.UserId]; ok {
 			role = "admin"
 		}
-		if err := s.repo.UpdateMemberRole(ctx, req.ConversationId, member.UserId, role); err != nil {
+		if err := s.members.UpdateMemberRole(ctx, req.ConversationId, member.UserId, role); err != nil {
 			return err
 		}
 	}
-	if err := s.repo.BumpMembersRosterRevision(ctx, req.ConversationId, nil); err != nil {
+	if err := s.members.BumpMembersRosterRevision(ctx, req.ConversationId, nil); err != nil {
 		return err
 	}
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
@@ -341,16 +374,16 @@ func (s *MemberService) UpdateGroupAdmins(ctx context.Context, req UpdateGroupAd
 
 func (s *MemberService) RemoveMember(ctx context.Context, conversationId, userId string) error {
 	var newCount int
-	if err := s.repo.RunInTransaction(ctx, func(txCtx context.Context) error {
-		if err := s.repo.DeleteMember(txCtx, conversationId, userId); err != nil {
+	if err := s.transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.members.DeleteMember(txCtx, conversationId, userId); err != nil {
 			return err
 		}
-		count, err := s.repo.CountMembers(txCtx, conversationId)
+		count, err := s.members.CountMembers(txCtx, conversationId)
 		if err != nil {
 			return err
 		}
 		newCount = count
-		if err := s.repo.BumpMembersRosterRevision(txCtx, conversationId, &newCount); err != nil {
+		if err := s.members.BumpMembersRosterRevision(txCtx, conversationId, &newCount); err != nil {
 			return err
 		}
 		return s.scheduler.EnqueueRecompute(txCtx, GroupAvatarRecomputeTask{
@@ -365,10 +398,13 @@ func (s *MemberService) RemoveMember(ctx context.Context, conversationId, userId
 	_ = s.cache.InvalidateConversation(ctx, conversationId)
 
 	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), event.MemberLeft, conversationId, userId, map[string]any{
+		if err := s.publisher.PublishDomainEvent(context.Background(), membershipevent.ConversationMemberRemoved, conversationId, userId, map[string]any{
+			"userId":      userId,
+			"memberType":  "user",
+			"removedBy":   userId,
 			"memberCount": newCount,
 		}); err != nil {
-			slog.Error("publish MemberLeft failed", "err", err, "conversationId", conversationId, "userId", userId)
+			slog.Error("publish ConversationMemberRemoved failed", "err", err, "conversationId", conversationId, "userId", userId)
 		}
 	}()
 
@@ -384,7 +420,7 @@ type InviteAssistantRequest struct {
 }
 
 func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistantRequest) error {
-	existing, _ := s.repo.FindAssistantMember(ctx, req.ConversationId)
+	existing, _ := s.members.FindAssistantMember(ctx, req.ConversationId)
 	if existing != nil {
 		return errors.New("assistant already in conversation")
 	}
@@ -400,27 +436,32 @@ func (s *MemberService) InviteAssistant(ctx context.Context, req InviteAssistant
 		InvitedBy:        req.InvitedBy,
 		JoinedAt:         now,
 	}
-	if err := s.repo.CreateMember(ctx, member); err != nil {
+	if err := s.members.CreateMember(ctx, member); err != nil {
 		return err
 	}
 
-	newCount, err := s.repo.CountMembers(ctx, req.ConversationId)
+	newCount, err := s.members.CountMembers(ctx, req.ConversationId)
 	if err != nil {
 		return err
 	}
-	if err := s.repo.BumpMembersRosterRevision(ctx, req.ConversationId, &newCount); err != nil {
+	if err := s.members.BumpMembersRosterRevision(ctx, req.ConversationId, &newCount); err != nil {
 		return err
 	}
 
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
 
 	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), event.AssistantInvited, req.ConversationId, req.InvitedBy, map[string]any{
-			"assistantMemberId": member.ID,
-			"assistantSkillId":  req.SkillId,
-			"invitedBy":         req.InvitedBy,
+		if err := s.publisher.PublishDomainEvent(context.Background(), membershipevent.ConversationMemberAdded, req.ConversationId, req.InvitedBy, map[string]any{
+			"memberId":         member.ID,
+			"userId":           member.UserId,
+			"memberType":       member.MemberType,
+			"role":             member.Role,
+			"assistantSkillId": member.AssistantSkillId,
+			"invitedBy":        member.InvitedBy,
+			"memberCount":      newCount,
+			"joinedAt":         member.JoinedAt,
 		}); err != nil {
-			slog.Error("publish AssistantInvited failed", "err", err, "conversationId", req.ConversationId)
+			slog.Error("publish ConversationMemberAdded failed", "err", err, "conversationId", req.ConversationId)
 		}
 	}()
 
@@ -435,32 +476,35 @@ type RemoveAssistantRequest struct {
 }
 
 func (s *MemberService) RemoveAssistant(ctx context.Context, req RemoveAssistantRequest) error {
-	assistant, err := s.repo.FindAssistantMember(ctx, req.ConversationId)
+	assistant, err := s.members.FindAssistantMember(ctx, req.ConversationId)
 	if err != nil {
 		return errors.New("no assistant in conversation")
 	}
 
-	if err := s.repo.DeleteMember(ctx, req.ConversationId, assistant.UserId); err != nil {
+	if err := s.members.DeleteMember(ctx, req.ConversationId, assistant.UserId); err != nil {
 		return err
 	}
 
-	newCount, err := s.repo.CountMembers(ctx, req.ConversationId)
+	newCount, err := s.members.CountMembers(ctx, req.ConversationId)
 	if err != nil {
 		return err
 	}
-	if err := s.repo.BumpMembersRosterRevision(ctx, req.ConversationId, &newCount); err != nil {
+	if err := s.members.BumpMembersRosterRevision(ctx, req.ConversationId, &newCount); err != nil {
 		return err
 	}
 
 	_ = s.cache.InvalidateConversation(ctx, req.ConversationId)
 
 	go func() {
-		if err := s.publisher.PublishDomainEvent(context.Background(), event.AssistantRemoved, req.ConversationId, req.RemovedBy, map[string]any{
-			"assistantMemberId": assistant.ID,
-			"assistantSkillId":  assistant.AssistantSkillId,
-			"removedBy":         req.RemovedBy,
+		if err := s.publisher.PublishDomainEvent(context.Background(), membershipevent.ConversationMemberRemoved, req.ConversationId, req.RemovedBy, map[string]any{
+			"memberId":         assistant.ID,
+			"userId":           assistant.UserId,
+			"memberType":       assistant.MemberType,
+			"assistantSkillId": assistant.AssistantSkillId,
+			"removedBy":        req.RemovedBy,
+			"memberCount":      newCount,
 		}); err != nil {
-			slog.Error("publish AssistantRemoved failed", "err", err, "conversationId", req.ConversationId)
+			slog.Error("publish ConversationMemberRemoved failed", "err", err, "conversationId", req.ConversationId)
 		}
 	}()
 
@@ -504,7 +548,10 @@ func (s *MemberService) ListGroupCandidates(
 	limit = clampSearchLimit(limit, 100)
 	locked := map[string]struct{}{strings.TrimSpace(userID): {}}
 	if strings.TrimSpace(conversationID) != "" {
-		members, err := s.repo.ListMembers(ctx, conversationID, 1000, "", "", "joined_asc")
+		members, err := s.members.ListMembers(ctx, conversationID, ListMembersQuery{
+			Limit: 1000,
+			Sort:  MemberListSortJoinedAsc,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -707,81 +754,6 @@ func (s *MemberService) canExposeContact(
 		return true
 	}
 	return !capability.IsBlocked && !capability.IsBlockedBy
-}
-
-func (s *MemberService) conversationContactHits(
-	ctx context.Context,
-	userID string,
-	query string,
-	limit int,
-) ([]ContactSearchHit, error) {
-	conversations, err := listUserConversations(ctx, s.repo, userID)
-	if err != nil {
-		return nil, err
-	}
-	results := make([]ContactSearchHit, 0, limit)
-	seen := make(map[string]struct{}, limit)
-	for _, conversation := range conversations {
-		if conversation.Type != "direct" {
-			continue
-		}
-		members, err := s.repo.ListMembers(ctx, conversation.ID, 10, "", "", persistence.SortMembersJoinedAsc)
-		if err != nil {
-			continue
-		}
-		contactID := ""
-		displayName := strings.TrimSpace(conversation.Title)
-		avatarURL := strings.TrimSpace(conversation.AvatarUrl)
-		for _, member := range members {
-			if strings.TrimSpace(member.UserId) == strings.TrimSpace(userID) {
-				continue
-			}
-			contactID = strings.TrimSpace(member.UserId)
-			if name := strings.TrimSpace(member.DisplayName); name != "" {
-				displayName = name
-			}
-			if avatar := strings.TrimSpace(member.AvatarUrl); avatar != "" {
-				avatarURL = avatar
-			}
-			break
-		}
-		if contactID == "" {
-			contactID = strings.TrimSpace(conversation.ID)
-		}
-		if displayName == "" {
-			displayName = contactID
-		}
-		if _, ok := seen[contactID]; ok {
-			continue
-		}
-		hit := ContactSearchHit{
-			ContactID:        contactID,
-			DisplayName:      displayName,
-			AvatarURL:        avatarURL,
-			Bio:              strings.TrimSpace(conversation.LastMessagePreview),
-			MetFrom:          "会话",
-			LastInteraction:  conversation.LastMessageTime.UTC().Format(time.RFC3339),
-			RelationState:    "not_following",
-			ConversationID:   conversation.ID,
-			ConversationType: strings.TrimSpace(conversation.Type),
-			Source:           "conversation",
-			Subtitle:         conversation.LastMessagePreview,
-			HighlightText:    displayName,
-			MatchedField:     "displayName",
-		}
-		if query != "" && !matchesContactQuery(hit, query) {
-			continue
-		}
-		if query != "" {
-			hit.HighlightText = highlightContactHit(hit, query)
-		}
-		results = append(results, hit)
-		seen[contactID] = struct{}{}
-		if len(results) >= limit {
-			break
-		}
-	}
-	return results, nil
 }
 
 func (s *MemberService) socialContactHits(

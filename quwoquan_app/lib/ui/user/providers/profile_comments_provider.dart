@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 
 class ProfileCommentsState {
-  final List<CommentDto> comments;
+  final List<ContentCommentListItem> comments;
   final String? nextCursor;
   final bool isLoading;
   final bool isLoadingMore;
@@ -23,7 +23,7 @@ class ProfileCommentsState {
       rawError == null ? null : runtimeErrorDisplayMessage(rawError!).trim();
 
   ProfileCommentsState copyWith({
-    List<CommentDto>? comments,
+    List<ContentCommentListItem>? comments,
     String? Function()? nextCursor,
     bool? isLoading,
     bool? isLoadingMore,
@@ -46,9 +46,9 @@ class SentCommentsNotifier extends Notifier<ProfileCommentsState> {
   Future<void> load() async {
     if (state.isLoading) return;
     state = state.copyWith(isLoading: true, rawError: () => null);
-    final repo = ref.read(contentRepositoryProvider);
+    final repo = ref.read(profileCommentsContentCommentFacetProvider);
     try {
-      final page = await repo.listCommentsByAuthor();
+      final page = await repo.listByAuthor();
       if (!ref.mounted) return;
       state = state.copyWith(
         comments: page.items,
@@ -64,9 +64,9 @@ class SentCommentsNotifier extends Notifier<ProfileCommentsState> {
   Future<void> loadMore() async {
     if (!state.hasMore || state.isLoadingMore) return;
     state = state.copyWith(isLoadingMore: true);
-    final repo = ref.read(contentRepositoryProvider);
+    final repo = ref.read(profileCommentsContentCommentFacetProvider);
     try {
-      final page = await repo.listCommentsByAuthor(cursor: state.nextCursor);
+      final page = await repo.listByAuthor(cursor: state.nextCursor);
       if (!ref.mounted) return;
       state = state.copyWith(
         comments: [...state.comments, ...page.items],
@@ -87,9 +87,9 @@ class ReceivedCommentsNotifier extends Notifier<ProfileCommentsState> {
   Future<void> load() async {
     if (state.isLoading) return;
     state = state.copyWith(isLoading: true, rawError: () => null);
-    final repo = ref.read(contentRepositoryProvider);
+    final repo = ref.read(profileCommentsContentCommentFacetProvider);
     try {
-      final page = await repo.listCommentsForPostAuthor();
+      final page = await repo.listReceived();
       if (!ref.mounted) return;
       state = state.copyWith(
         comments: page.items,
@@ -105,11 +105,9 @@ class ReceivedCommentsNotifier extends Notifier<ProfileCommentsState> {
   Future<void> loadMore() async {
     if (!state.hasMore || state.isLoadingMore) return;
     state = state.copyWith(isLoadingMore: true);
-    final repo = ref.read(contentRepositoryProvider);
+    final repo = ref.read(profileCommentsContentCommentFacetProvider);
     try {
-      final page = await repo.listCommentsForPostAuthor(
-        cursor: state.nextCursor,
-      );
+      final page = await repo.listReceived(cursor: state.nextCursor);
       if (!ref.mounted) return;
       state = state.copyWith(
         comments: [...state.comments, ...page.items],

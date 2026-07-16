@@ -5,8 +5,9 @@ import "context"
 type Provider string
 
 const (
-	ProviderBaidu Provider = "baidu"
-	ProviderAMap  Provider = "amap"
+	ProviderBaidu   Provider = "baidu"
+	ProviderAMap    Provider = "amap"
+	ProviderCatalog Provider = "catalog"
 )
 
 type POI struct {

@@ -17,8 +17,6 @@ class PostSearchItemView {
     this.authorId,
     this.authorDisplayName,
     this.authorAvatarUrl,
-    this.circleId,
-    this.circleName,
     this.categoryId,
     this.subCategory,
     this.likeCount = 0,
@@ -38,8 +36,6 @@ class PostSearchItemView {
   final String? authorId;
   final String? authorDisplayName;
   final String? authorAvatarUrl;
-  final String? circleId;
-  final String? circleName;
   final String? categoryId;
   final String? subCategory;
   final int likeCount;
@@ -80,8 +76,6 @@ class PostSearchItemView {
                   map['authorAvatarUrlSnapshot'] ??
                   map['avatarUrl'])
               ?.toString(),
-      circleId: map['circleId']?.toString(),
-      circleName: map['circleName']?.toString(),
       categoryId: map['categoryId']?.toString(),
       subCategory: map['subCategory']?.toString(),
       likeCount: _postSearchWireParseInt(map['likeCount']) ?? 0,

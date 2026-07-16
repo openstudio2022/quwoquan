@@ -15,7 +15,6 @@ from test_directory_inventory_lib import (
     REQUIRED_PAGE_CASE_SUFFIXES,
     ROOT,
     iter_canonical_files,
-    page_wrapper_target_path,
     recorded_file_is_canonical,
 )
 
@@ -225,6 +224,15 @@ def canonical_layer_from_path(path_text: str) -> str | None:
             if path_text.startswith(f"quwoquan_app/test/{layer}/"):
                 return layer
         return None
+    if path_text.startswith("quwoquan_app/packages/"):
+        parts = Path(path_text).parts
+        if len(parts) >= 6 and parts[3] == "test" and parts[4] in {
+            "local_contract",
+            "api_integration",
+            "user_acceptance",
+        }:
+            return parts[4]
+        return None
     if path_text.startswith("quwoquan_data/tests/"):
         for layer in ("local_contract", "api_integration", "user_acceptance"):
             if path_text.startswith(f"quwoquan_data/tests/{layer}/"):
@@ -236,13 +244,17 @@ def canonical_layer_from_path(path_text: str) -> str | None:
         return "api_integration"
     if path_text.startswith("quwoquan_ops/tests/acceptance/user_acceptance/"):
         return "user_acceptance"
-    if path_text.startswith("quwoquan_service/services/"):
+    if path_text.startswith("quwoquan_service/"):
+        if "/tests/support/" in path_text:
+            return None
         if "/tests/local_contract/" in path_text:
             return "local_contract"
         if "/tests/api_integration/" in path_text:
             return "api_integration"
         if path_text.endswith("__local_contract_test.go"):
             return "local_contract"
+        if path_text.endswith("__api_integration_test.go"):
+            return "api_integration"
     return None
 
 
@@ -431,10 +443,6 @@ def verify_page_inventory(failures: Failures) -> None:
                     failures.add(f"surface {surface_id} api_integration test not canonical: {api_text}")
                 elif not (ROOT / api_text).exists():
                     failures.add(f"surface {surface_id} api_integration test missing: {api_text}")
-        wrapper_path = ROOT / page_wrapper_target_path(owner, surface_id)
-        if not wrapper_path.exists():
-            failures.add(f"surface {surface_id} page wrapper missing: {wrapper_path.relative_to(ROOT)}")
-
     meta_route_ids = {str(item["id"]) for item in routes_meta if isinstance(item, dict) and item.get("id")}
     covered_route_ids = surface_route_ids | route_only_ids
     missing_routes = sorted(meta_route_ids - covered_route_ids)

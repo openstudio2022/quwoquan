@@ -11,7 +11,7 @@ artifacts:
   - specs/gates/mock_data_cloud_integration_policy.md
   - .cursor/rules/08-mock-data-isolation.mdc
   - .cursor/commands/verify.md
-  - .cursor/commands/explore.md
+  - .cursor/commands/content.source.discovery.md
   - .cursor/commands/commit.md
   - specs/00_MASTER_DEVELOPMENT_FLOW.md
   - specs/gates/page_horizontal_quality_pr_checklist.md
@@ -19,5 +19,5 @@ artifacts:
   - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/spec.md
   - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/design.md
   - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/acceptance.yaml
-  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/content.execution.planning.yaml
   - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/tasks.md

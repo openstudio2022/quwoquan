@@ -1,20 +1,17 @@
 version: 1
-entity: UserWork
 
 service:
   name: user-service
   domain: user
+  owner: user-platform
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: USER_USER_WORK_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
 
-api_routes:
-  - method: GET
-    path: /v1/users/{userId}/works
-    operation: ListUserWorks
-    description: 用户作品集列表
-    query_params: [cursor, limit]
-    response_entity: UserWork
-    response_body: UserWork
-    response_body_kind: page
+api_routes: []
 
-consumers:
-  - name: app
-    capabilities: [read_works]
+# UserWork 是 Post 派生投影，不拥有公开 API。
+# 页面经 user_profile/service.yaml 的 canonical query Slice 读取。
+consumers: []

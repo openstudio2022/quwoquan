@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"quwoquan_service/runtime/search/es"
+	"quwoquan_service/services/circle-service/internal/application"
 )
 
 // ESConfig mirrors the configs/<env>/config.yaml `es:` section. It is the same
@@ -40,7 +41,7 @@ type Built struct {
 // Build assembles the write-time search index from config. When ES is disabled or
 // has no endpoints it returns an empty (no-op) Built so the circle write path is
 // unchanged. reader is the live circle store used to read circles back on events.
-func Build(cfg ESConfig, reader CircleReader, opts ...Option) (Built, error) {
+func Build(cfg ESConfig, reader application.CircleReader, opts ...Option) (Built, error) {
 	if !cfg.Enabled || len(cfg.Endpoints) == 0 {
 		return Built{}, nil
 	}

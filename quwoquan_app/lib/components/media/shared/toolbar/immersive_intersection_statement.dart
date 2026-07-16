@@ -26,7 +26,10 @@ class ImmersiveIntersectionStatement extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayReason = displayReadyIntersectionReason(reason);
+    final displayReason = displayReadyIntersectionReason(
+      reason,
+      contextObjectTarget: contextObjectTarget,
+    );
     if (displayReason == null) {
       return const SizedBox.shrink();
     }

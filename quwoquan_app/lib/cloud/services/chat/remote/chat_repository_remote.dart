@@ -2,7 +2,6 @@
 
 import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_api_metadata.g.dart';
@@ -24,7 +23,6 @@ import 'package:quwoquan_app/cloud/chat/models/chat_contact_tab_row_dtos.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_conversation_timestamp_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/chat_message_receipt_dto.dart';
 import 'package:quwoquan_app/cloud/chat/models/conversation_dto.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
 import 'package:quwoquan_app/cloud/chat/models/sync_response.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_group_settings_extensions.dart';
@@ -348,62 +346,6 @@ class RemoteChatRepository implements ChatRepository {
         operationId: ChatApiMetadata.searchMessagesOperation,
       ),
       fromMap: MessageSearchItemView.fromMap,
-    );
-  }
-
-  @override
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    CloudJsonMap? media,
-    CloudJsonMap? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? personaContextVersion,
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    required String clientMsgId,
-  }) async {
-    final uri = _uri(
-      ChatApiMetadata.sendMessagePath(conversationId: conversationId),
-    );
-    final decoded = await _httpClient.postJson(
-      uri,
-      headers: await _resolveHeaders(
-        AppUiSurfaces.chatDetail,
-        operationId: ChatApiMetadata.sendMessageOperation,
-        clientPageId: ChatRequestPageIds.sendMessage,
-      ),
-      body: {
-        'type': type,
-        'content': content,
-        'clientMsgId': clientMsgId,
-        if (mediaUrl != null && mediaUrl.isNotEmpty) 'mediaUrl': mediaUrl,
-        'media': ?media,
-        'cardPayload': ?cardPayload,
-        if (replyToMessageId != null && replyToMessageId.isNotEmpty)
-          'replyToMessageId': replyToMessageId,
-        if (mentions != null && mentions.isNotEmpty) 'mentions': mentions,
-        if (senderSubAccountId != null && senderSubAccountId.isNotEmpty)
-          'senderSubAccountId': senderSubAccountId,
-        if (personaContextVersion != null && personaContextVersion.isNotEmpty)
-          'personaContextVersion': personaContextVersion,
-        if (senderDisplayNameSnapshot != null &&
-            senderDisplayNameSnapshot.isNotEmpty)
-          'senderDisplayNameSnapshot': senderDisplayNameSnapshot,
-        if (senderAvatarUrlSnapshot != null &&
-            senderAvatarUrlSnapshot.isNotEmpty)
-          'senderAvatarUrlSnapshot': senderAvatarUrlSnapshot,
-      },
-    );
-    return SendMessageResponse.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: ChatRequestPageIds.sendMessage,
-      ),
     );
   }
 

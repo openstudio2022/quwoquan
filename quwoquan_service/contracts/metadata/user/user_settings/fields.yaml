@@ -1,0 +1,184 @@
+version: 1
+aggregate: UserSettings
+
+entities:
+  UserSetting:
+    description: 通知 + 隐私 + 来电设置
+    fields:
+      - name: userId
+        type: string
+        constraints: [PK, FK_user_profiles_CASCADE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 1:1 关联
+
+      - name: enablePush
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: enableMarketing
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_FALSE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: quietHoursStart
+        type: time
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: quietHoursEnd
+        type: time
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: defaultIncomingCallRingtoneId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 默认来电铃声 ID（仅支持官方铃声库）
+
+      - name: allowCallerRingtoneOverride
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 是否允许使用发起方配置的专属呼叫铃声替换默认铃声
+
+      - name: enableCallVibration
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 来电时是否振动
+
+      - name: enableGroupCallRing
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 群语音/视频邀请是否按来电方式响铃提醒
+
+      - name: allowStrangerMsg
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: profileVisibility
+        type: enum
+        enum_ref: ProfileVisibility
+        constraints: [NOT_NULL, DEFAULT_PUBLIC]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: contentLanguage
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 内容语言偏好（超前）
+
+      - name: feedPreference
+        type: enum
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: recommend/chronological（超前）
+
+      - name: assistantEnabled
+        type: bool
+        constraints: [NOT_NULL, DEFAULT_TRUE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 小趣助手开关
+
+      - name: defaultThemeMode
+        type: enum
+        enum_ref: ThemeModeSetting
+        constraints: [NOT_NULL]
+        default_value: system
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: owner 默认主题模式
+
+      - name: defaultFontSizePreset
+        type: enum
+        enum_ref: FontSizePreset
+        constraints: [NOT_NULL]
+        default_value: md
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: owner 默认字号预设
+
+      - name: appearanceVersion
+        type: int
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: appearance 设置版本号（LWW 最终一致性判定基线）
+
+      - name: appearanceUpdatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: owner 默认 appearance 最后更新时间
+
+      - name: blockedKeywords
+        type: "string[]"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 用户级内容屏蔽词（命中过滤，不参与公开画像）
+
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read

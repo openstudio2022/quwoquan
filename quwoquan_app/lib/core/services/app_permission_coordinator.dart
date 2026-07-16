@@ -6,7 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:photo_manager/photo_manager.dart';
 import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:quwoquan_app/cloud/runtime/startup_deferred_plugins.dart';
+import 'package:quwoquan_app/core/platform/startup_deferred_plugins.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
@@ -249,7 +249,13 @@ class AppPermissionCoordinator with WidgetsBindingObserver {
     void Function(bool granted)? onReturn,
   }) async {
     markSettingsVisitPending(kind, onReturn: onReturn);
-    return settingsOpener();
+    final opened = await settingsOpener();
+    if (!opened) {
+      final session = _sessionFor(kind);
+      session.settingsVisitPending = false;
+      session.onSettingsReturn = null;
+    }
+    return opened;
   }
 
   Future<AppPermissionEnsureOutcome> ensure(

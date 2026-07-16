@@ -47,7 +47,7 @@ entries:
       - path: specs/feature-tree/chat-conversation/group-creation-member-management/design.md
         sections:
           - 关键设计决策 KD-8~KD-12
-      - path: specs/feature-tree/chat-conversation/group-creation-member-management/plan.yaml
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/content.execution.planning.yaml
         sections:
           - P7~P11
       - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync/spec.md
@@ -59,7 +59,7 @@ entries:
       - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync/acceptance.yaml
         sections:
           - all
-      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync/plan.yaml
+      - path: specs/feature-tree/chat-conversation/group-creation-member-management/group-member-roster-version-sync/content.execution.planning.yaml
         sections:
           - all
       - path: quwoquan_service/services/chat-service/internal/domain/conversation/model/conversation.go

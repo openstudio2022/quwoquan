@@ -20,7 +20,7 @@ var objectMetaTypes = map[string]bool{
 //	object / GeoPoint → CloudJsonMap?（如 articleAssetManifest/location/primaryHomepageSnapshot/deviceInfo）
 //	标量(string/int/enum/ObjectId/...) 及缺失字段 → String?（wire 沿用 stringify 标量语义）
 //
-// fieldTypes 缺失的写入字段（如 CreatePost 的判别字段 type）回退 String?，与既有行为一致。
+// fieldTypes 缺失的 metadata writable 字段回退 String?，与既有标量 wire 行为一致。
 func dartMutationWireFieldType(field string, fieldTypes map[string]string) string {
 	metaType := strings.TrimSpace(fieldTypes[field])
 	switch {
@@ -75,26 +75,25 @@ List<CloudJsonMap>? _mutationMapList(Object? v) {
 `)
 
 	type spec struct {
-		op          string
-		className   string
-		extraFields []string
+		op        string
+		className string
 	}
 	for _, sp := range []spec{
-		{op: "CreatePost", className: "CreatePostRequestWire", extraFields: []string{"type"}},
-		{op: "UpdatePost", className: "UpdatePostRequestWire", extraFields: nil},
-		{op: "PublishPost", className: "PublishPostRequestWire", extraFields: nil},
-		{op: "UpdatePostSettings", className: "UpdatePostSettingsRequestWire", extraFields: nil},
-		{op: "PromotePostToWork", className: "PromotePostToWorkRequestWire", extraFields: nil},
+		{op: "CreatePost", className: "CreatePostRequestWire"},
+		{op: "UpdatePost", className: "UpdatePostRequestWire"},
+		{op: "PublishPost", className: "PublishPostRequestWire"},
+		{op: "UpdatePostSettings", className: "UpdatePostSettingsRequestWire"},
+		{op: "PromotePostToWork", className: "PromotePostToWorkRequestWire"},
 	} {
 		fields := findWritableFields(svc.APIRoutes, sp.op)
-		renderMutationWireClass(&b, sp.className, fields, sp.extraFields, fieldTypes)
+		renderMutationWireClass(&b, sp.className, fields, fieldTypes)
 	}
 
 	writeFile(outPath, b.String())
 }
 
-func renderMutationWireClass(b *strings.Builder, className string, fields []string, extra []string, fieldTypes map[string]string) {
-	all := append(append([]string{}, extra...), fields...)
+func renderMutationWireClass(b *strings.Builder, className string, fields []string, fieldTypes map[string]string) {
+	all := append([]string{}, fields...)
 	seen := map[string]bool{}
 	ordered := make([]string, 0, len(all))
 	for _, f := range all {

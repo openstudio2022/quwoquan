@@ -26,7 +26,11 @@ alwaysApply: false
 - produce/build/finalize/release 门禁必须校验：产物存在性 + 非占位 + 真实创作 + 资产授权。**禁止**定义了却不接入主校验函数的「形同虚设」检查（典型：空 `check_image_relevance`、定义但未调用的水印/快照关键词）。
 - 检查所需依赖缺失时（如缺 PIL 做分辨率/人脸检测）必须降级为**显式告警或阻断**，**禁止静默跳过**伪装通过。
 - scale-readiness / 准出聚合必须能因「无真实产物」而 BLOCK，不得只看 checkpoint 状态位。
-- **验收作用域必须收敛到本次冻结计划成员**：放量 verify 校验 `run_matrix` 时，必须按冻结计划的 `(taskId,batchId)` 成员集过滤编排记录，**禁止直接信任按 `batchId` 跨任务聚合的 `summary`**。历史/并行任务复用同一 `planId`（→ 同一 fanout `batchId`）时，其 `attemptFailures`/未达 checkpoint 记录会被混入，导致对「别的任务」失败的**假阴性**或对已收敛重试的**假阳性**。放量必须用**唯一 planId**，对象队列/编排状态跨运行隔离或清理。
+- **验收作用域必须收敛到本次冻结 execution 成员**：放量 verify 只能读取
+  `.qwq_output/data/tasks/<executionId>/0.plan/target_freeze.json` 中的目标集合与摘要，
+  并逐项核对同一工作包内的阶段证据。禁止跨 execution 聚合运行状态、复用目标冻结文件，
+  或把其他 execution 的失败/成功混入当前结论。重试必须使用新 sequence，并在 manifest
+  通过 `retryOf` 指向前一次 execution。
 - **content_object_index 是对象坐标唯一真相，孤儿残骸必须剪枝而非纵容**：agent authoring 期可能先用临时标题落地阶段证据，最终改派坐标后旧目录成死残骸（未登记 + 无 manifest + 无成品）。materialize 后必须按索引剪除这类纯阶段残骸（放量 agent 重组合/改标题会复现），否则目录证据链孤儿门 BLOCK。带 manifest/成品的未登记对象属更严重不一致，**保留交给孤儿门显式 BLOCK，绝不静默删真实成品**。
 
 ## 4. 优雅降级语义端到端一致（GATE_BLOCK）
@@ -51,10 +55,10 @@ alwaysApply: false
 - `author-runner --orchestrate` 是**唯一创作引擎**：负责把各分区驱动到 orchestrator checkpoint 并把所有 leaf author job（文章/主页正文 agent 创作）跑到终态；`finalize` **只做** review / materialize / publish，**不创作**正文。含未创作文章的分区在 finalize 下只会停在 `waiting_agent`，不会被补写。
 - 正确放量序列固定为：`author-runner(orchestrate 至所有 leaf job 终态) → finalize(review/publish) → verify`。**禁止**在 author 未跑满前 finalize，也**禁止**把 finalize 当作创作补偿。
 - `stopped_at_until` 是「leaf job 已终态、等待 finalize」的**正常稳态**，不是「仍在忙」。监管/supervisor 收敛判定**禁止**把 `stopped_at_until` 计入「活跃需继续 orchestrate」，否则会与 finalize 触发互锁形成死锁（实证：scale-50 因此跑 2h20m、38 分区离 succeeded 仅差一步却 0 succeeded）。收敛条件应基于 **leaf job 是否全部终态**，达到后即触发 finalize。
-- 全弃稿 / image-only 分区必须有「空收尾→succeeded（诚实 shortfall）」路径，不得卡在 `produce_author`。
+- 全弃稿 / image-only 分区必须有「空收尾→succeeded（诚实 shortfall）」路径，不得卡在 `post_author`。
 
 ## 门禁
 
-- `bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh`（cli-first + template lint + verify --scope current）。
+- `python3 quwoquan_data/scripts/cli.py verify all`（仓内静态契约；真实 release 另显式运行环境验证）。
 - `python3 quwoquan_data/scripts/verify/verify_content_quality.py`、`scale_readiness.py`（产物质量 / 准出，须能因无产物或占位 BLOCK）。
 - 触及内容生产闭环时：端到端跑 `scaled-e2e prepare/author-runner/finalize/verify`，以真实 release 产物（非占位、entityRefs 指代、carrier-aware 降级）为验收证据。

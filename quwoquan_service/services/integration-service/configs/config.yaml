@@ -3,6 +3,10 @@ service:
   http:
     addr: ":18086"
 
+mongodb:
+  uri: ""
+  database: "quwoquan_integration"
+
 integration:
   location:
     provider: "baidu"
@@ -11,3 +15,17 @@ integration:
     timeout_ms: 1200
     default_latitude: 30.6586
     default_longitude: 104.0648
+  external_interaction:
+    callback_secret: ""
+    sms:
+      enabled: false
+      provider: "aliyun_sms"
+      endpoint: ""
+      token: ""
+      timeout_ms: 2000
+    push:
+      enabled: false
+      provider: "vendor_push"
+      endpoint: ""
+      token: ""
+      timeout_ms: 2000

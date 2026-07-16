@@ -27,7 +27,7 @@ sit_acceptance:
       - command: stackctl verify --env gamma --kind legal-static
       - command: curl -I /legal/user-agreement && curl -I /legal/privacy-policy && curl -I /legal/permissions && curl -I /legal/third-party-sdk-list
       - command: python3 -m unittest quwoquan_ops.tests.test_dev_up
-      - command: cd quwoquan_app && flutter test test/ui/user/legal_document_page_test.dart
+      - command: cd quwoquan_app && flutter test test/local_contract/ui/user/legal_document_page__local_contract_test.dart
       recorded: []
     status: pending
     test_evidence:

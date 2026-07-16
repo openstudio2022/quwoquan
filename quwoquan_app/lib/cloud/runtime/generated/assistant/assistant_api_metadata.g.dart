@@ -8,15 +8,15 @@ class AssistantApiMetadata {
 
   static const String domain = 'assistant';
   static const List<String> apiPrefixes = <String>[
+    '/internal/v1',
     '/v1/assistant',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
     'CreateAssistantConversation': '/v1/assistant/conversations',
-    'CreateAssistantTurn': '/v1/assistant/conversations/{conversationId}/turns',
     'CreateSkillSubscription': '/v1/assistant/skill-subscriptions',
     'GetAssistantConversation': '/v1/assistant/conversations/{conversationId}',
-    'GetAssistantTurn': '/v1/assistant/turns/{turnId}',
+    'GetAssistantRun': '/v1/assistant/runs/{runId}',
     'GetEntryPersonalization': '/v1/assistant/personalization',
     'GetLearningOpsSummary': '/v1/assistant/ops/learning-summary',
     'GetPolicy': '/v1/assistant/policy',
@@ -30,21 +30,21 @@ class AssistantApiMetadata {
     'ListSkills': '/v1/assistant/skills',
     'ReportInteractionEvent': '/v1/assistant/learning/events',
     'ReportPageContext': '/v1/assistant/page-context',
-    'ReportScorecard': '/v1/assistant/learning/scorecards',
+    'ReportScorecard': '/internal/v1/assistant/learning/scorecards',
     'RevokeSkillConsent': '/v1/assistant/skills/{skillId}/consent',
     'SearchXiaoquResults': '/v1/assistant/search/xiaoqu',
-    'StreamAssistantTurn': '/v1/assistant/turns/{turnId}/stream',
+    'StartAssistantRun': '/v1/assistant/conversations/{conversationId}/runs',
+    'StreamAssistantRunEvents': '/v1/assistant/runs/{runId}/events',
     'SuggestCreationAssistance': '/v1/assistant/skills/creation-suggest',
-    'TickSkillSubscriptionCron': '/v1/assistant/skill-subscriptions/cron/tick',
+    'TickSkillSubscriptionCron': '/internal/v1/assistant/skill-subscriptions:tick',
     'UpdateSkillSubscriptionStatus': '/v1/assistant/skill-subscriptions/{subscriptionId}/status',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
     'CreateAssistantConversation': 'POST',
-    'CreateAssistantTurn': 'POST',
     'CreateSkillSubscription': 'POST',
     'GetAssistantConversation': 'GET',
-    'GetAssistantTurn': 'GET',
+    'GetAssistantRun': 'GET',
     'GetEntryPersonalization': 'GET',
     'GetLearningOpsSummary': 'GET',
     'GetPolicy': 'GET',
@@ -61,7 +61,8 @@ class AssistantApiMetadata {
     'ReportScorecard': 'POST',
     'RevokeSkillConsent': 'DELETE',
     'SearchXiaoquResults': 'POST',
-    'StreamAssistantTurn': 'POST',
+    'StartAssistantRun': 'POST',
+    'StreamAssistantRunEvents': 'GET',
     'SuggestCreationAssistance': 'POST',
     'TickSkillSubscriptionCron': 'POST',
     'UpdateSkillSubscriptionStatus': 'PATCH',
@@ -70,33 +71,33 @@ class AssistantApiMetadata {
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
     'CreateAssistantConversation': 'required',
-    'CreateAssistantTurn': 'required',
     'CreateSkillSubscription': 'required',
     'GetAssistantConversation': 'required',
-    'GetAssistantTurn': 'required',
+    'GetAssistantRun': 'required',
     'GetEntryPersonalization': 'required',
     'GetLearningOpsSummary': 'required',
-    'GetPolicy': 'public',
+    'GetPolicy': 'required',
     'GetSkillSubscription': 'required',
     'GetSuggestedActions': 'required',
     'GrantSkillConsent': 'required',
     'ListAssistantMemories': 'required',
     'ListAssistantTasks': 'required',
-    'ListConsents': 'public',
+    'ListConsents': 'required',
     'ListSkillSubscriptions': 'required',
-    'ListSkills': 'public',
+    'ListSkills': 'required',
     'ReportInteractionEvent': 'required',
     'ReportPageContext': 'required',
     'ReportScorecard': 'required',
     'RevokeSkillConsent': 'required',
     'SearchXiaoquResults': 'required',
-    'StreamAssistantTurn': 'required',
+    'StartAssistantRun': 'required',
+    'StreamAssistantRunEvents': 'required',
     'SuggestCreationAssistance': 'required',
     'TickSkillSubscriptionCron': 'required',
     'UpdateSkillSubscriptionStatus': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
   };
 
@@ -105,10 +106,9 @@ class AssistantApiMetadata {
   };
 
   static const String createAssistantConversationOperation = 'CreateAssistantConversation';
-  static const String createAssistantTurnOperation = 'CreateAssistantTurn';
   static const String createSkillSubscriptionOperation = 'CreateSkillSubscription';
   static const String getAssistantConversationOperation = 'GetAssistantConversation';
-  static const String getAssistantTurnOperation = 'GetAssistantTurn';
+  static const String getAssistantRunOperation = 'GetAssistantRun';
   static const String getEntryPersonalizationOperation = 'GetEntryPersonalization';
   static const String getLearningOpsSummaryOperation = 'GetLearningOpsSummary';
   static const String getPolicyOperation = 'GetPolicy';
@@ -125,18 +125,13 @@ class AssistantApiMetadata {
   static const String reportScorecardOperation = 'ReportScorecard';
   static const String revokeSkillConsentOperation = 'RevokeSkillConsent';
   static const String searchXiaoquResultsOperation = 'SearchXiaoquResults';
-  static const String streamAssistantTurnOperation = 'StreamAssistantTurn';
+  static const String startAssistantRunOperation = 'StartAssistantRun';
+  static const String streamAssistantRunEventsOperation = 'StreamAssistantRunEvents';
   static const String suggestCreationAssistanceOperation = 'SuggestCreationAssistance';
   static const String tickSkillSubscriptionCronOperation = 'TickSkillSubscriptionCron';
   static const String updateSkillSubscriptionStatusOperation = 'UpdateSkillSubscriptionStatus';
 
   static const String createAssistantConversationPath = '/v1/assistant/conversations';
-  static const String createAssistantTurnPathTemplate = '/v1/assistant/conversations/{conversationId}/turns';
-  static String createAssistantTurnPath({required String conversationId}) {
-    return _fillPath(createAssistantTurnPathTemplate, <String, String>{
-      'conversationId': conversationId,
-    });
-  }
   static const String createSkillSubscriptionPath = '/v1/assistant/skill-subscriptions';
   static const String getAssistantConversationPathTemplate = '/v1/assistant/conversations/{conversationId}';
   static String getAssistantConversationPath({required String conversationId}) {
@@ -144,10 +139,10 @@ class AssistantApiMetadata {
       'conversationId': conversationId,
     });
   }
-  static const String getAssistantTurnPathTemplate = '/v1/assistant/turns/{turnId}';
-  static String getAssistantTurnPath({required String turnId}) {
-    return _fillPath(getAssistantTurnPathTemplate, <String, String>{
-      'turnId': turnId,
+  static const String getAssistantRunPathTemplate = '/v1/assistant/runs/{runId}';
+  static String getAssistantRunPath({required String runId}) {
+    return _fillPath(getAssistantRunPathTemplate, <String, String>{
+      'runId': runId,
     });
   }
   static const String getEntryPersonalizationPath = '/v1/assistant/personalization';
@@ -173,7 +168,7 @@ class AssistantApiMetadata {
   static const String listSkillsPath = '/v1/assistant/skills';
   static const String reportInteractionEventPath = '/v1/assistant/learning/events';
   static const String reportPageContextPath = '/v1/assistant/page-context';
-  static const String reportScorecardPath = '/v1/assistant/learning/scorecards';
+  static const String reportScorecardPath = '/internal/v1/assistant/learning/scorecards';
   static const String revokeSkillConsentPathTemplate = '/v1/assistant/skills/{skillId}/consent';
   static String revokeSkillConsentPath({required String skillId}) {
     return _fillPath(revokeSkillConsentPathTemplate, <String, String>{
@@ -181,14 +176,20 @@ class AssistantApiMetadata {
     });
   }
   static const String searchXiaoquResultsPath = '/v1/assistant/search/xiaoqu';
-  static const String streamAssistantTurnPathTemplate = '/v1/assistant/turns/{turnId}/stream';
-  static String streamAssistantTurnPath({required String turnId}) {
-    return _fillPath(streamAssistantTurnPathTemplate, <String, String>{
-      'turnId': turnId,
+  static const String startAssistantRunPathTemplate = '/v1/assistant/conversations/{conversationId}/runs';
+  static String startAssistantRunPath({required String conversationId}) {
+    return _fillPath(startAssistantRunPathTemplate, <String, String>{
+      'conversationId': conversationId,
+    });
+  }
+  static const String streamAssistantRunEventsPathTemplate = '/v1/assistant/runs/{runId}/events';
+  static String streamAssistantRunEventsPath({required String runId}) {
+    return _fillPath(streamAssistantRunEventsPathTemplate, <String, String>{
+      'runId': runId,
     });
   }
   static const String suggestCreationAssistancePath = '/v1/assistant/skills/creation-suggest';
-  static const String tickSkillSubscriptionCronPath = '/v1/assistant/skill-subscriptions/cron/tick';
+  static const String tickSkillSubscriptionCronPath = '/internal/v1/assistant/skill-subscriptions:tick';
   static const String updateSkillSubscriptionStatusPathTemplate = '/v1/assistant/skill-subscriptions/{subscriptionId}/status';
   static String updateSkillSubscriptionStatusPath({required String subscriptionId}) {
     return _fillPath(updateSkillSubscriptionStatusPathTemplate, <String, String>{

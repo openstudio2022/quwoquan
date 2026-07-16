@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
 	"quwoquan_service/services/integration-service/internal/application"
 	"quwoquan_service/services/integration-service/internal/domain/location/model"
@@ -31,15 +33,60 @@ func (f *fakeProviderClient) Search(_ context.Context, q model.SearchQuery) ([]m
 	return f.searchFn(q)
 }
 
+type testExternalProvider struct{}
+
+func (testExternalProvider) Send(
+	_ context.Context,
+	request reliabletask.ExternalInteractionRequest,
+	_ reliabletask.ReliableAsyncTask,
+) (reliabletask.ExternalInteractionResult, error) {
+	return reliabletask.ExternalInteractionResult{
+		RequestID:         request.RequestID,
+		Operation:         request.Operation,
+		Status:            reliabletask.ExternalInteractionStatusDelivered,
+		Provider:          "test_sms",
+		ProviderRequestID: "test-provider-" + request.RequestID,
+		OccurredAt:        time.Now().UTC(),
+	}, nil
+}
+
+type testCallbackSender struct{}
+
+type testOTPReferenceStore struct{}
+
+func (testOTPReferenceStore) Put(context.Context, otpseal.StoredReference) error { return nil }
+func (testOTPReferenceStore) Get(context.Context, string, string) (otpseal.StoredReference, error) {
+	return otpseal.StoredReference{}, otpseal.ErrReferenceNotFound
+}
+func (testOTPReferenceStore) Delete(context.Context, string, string) error { return nil }
+
+func (testCallbackSender) SendExternalInteractionResult(
+	context.Context,
+	reliabletask.ExternalInteractionResult,
+) error {
+	return nil
+}
+
 func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T) {
 	store := reliabletask.NewMemoryStore()
-	external := application.NewExternalInteractionService(
+	external, err := application.NewExternalInteractionService(
 		store,
 		map[string]reliabletask.ExternalProvider{
-			"mock_sms": application.MockSMSProvider{},
+			"test_sms": testExternalProvider{},
 		},
-		nil,
+		map[string]reliabletask.ProviderPolicy{
+			reliabletask.ExternalInteractionOperationSmsOTP: {
+				Providers:   []string{"test_sms"},
+				Timeout:     time.Second,
+				RetryPolicy: reliabletask.DefaultRetryPolicy(),
+			},
+		},
+		testCallbackSender{},
+		testOTPReferenceStore{},
 	)
+	if err != nil {
+		t.Fatalf("construct external interaction service: %v", err)
+	}
 	svc := application.NewService(
 		model.ProviderBaidu,
 		model.ProviderAMap,
@@ -57,7 +104,7 @@ func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T)
 		"payloadDigest":"digest",
 		"sensitivity":"secret",
 		"expiresAt":"2030-01-01T00:00:00Z",
-		"payload":{"challengeId":"ch-1","phoneHash":"hash","maskedRecipient":"180****3909"}
+		"payload":{"challengeId":"ch-1","codeRef":"otpref.test","phoneHash":"hash","maskedRecipient":"180****3909"}
 	}`)
 	req := httptest.NewRequest(http.MethodPost, externalRequestsPath, bytes.NewReader(body))
 	rr := httptest.NewRecorder()
@@ -79,7 +126,7 @@ func TestSubmitExternalInteractionReturnsAcceptedAndRecordsAttempt(t *testing.T)
 	if err != nil {
 		t.Fatalf("list attempts: %v", err)
 	}
-	if len(attempts) != 1 || attempts[0].Provider != "mock_sms" {
+	if len(attempts) != 1 || attempts[0].Provider != "test_sms" {
 		t.Fatalf("unexpected attempts: %#v", attempts)
 	}
 }

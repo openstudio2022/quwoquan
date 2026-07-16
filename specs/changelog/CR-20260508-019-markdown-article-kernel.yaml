@@ -45,7 +45,7 @@ entries:
           - A6
           - A7
           - A8
-      - path: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/plan.yaml
+      - path: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/content.execution.planning.yaml
         sections:
           - slices
       - path: specs/feature-tree/discovery-content/content-type-framework/markdown-article-kernel/metadata-change-draft.yaml

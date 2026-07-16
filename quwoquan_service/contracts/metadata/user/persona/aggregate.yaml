@@ -1,0 +1,25 @@
+version: 1
+domain: user
+aggregate_root: Persona
+object_kind: aggregate_root
+description: 面向其他上下文公开的用户身份、资料、可见性和退役生命周期聚合。
+storage_backend: postgres
+capabilities: [commandable, queryable, idempotent_commands]
+members: []
+business_rules:
+  - accountId 与 personaId 创建后不可变且 userHandle 全局唯一
+  - 公开资料只属于 Persona，UserAccount 不保存可写资料副本
+  - 一个 Account 至少保留一个 active Persona，primary 切换必须原子校验
+  - retired 为终态且跨上下文只保留 tombstone identity
+  - profile sync 只应用明确允许继承且未被 override 的字段
+  - avatar/background 只保存 MediaAsset identity，delivery URL 不属于权威状态
+  - 每个 command 必须以 expectedVersion 提交 state、receipt 与 outbox
+lifecycle:
+  states: [active, inactive, retired]
+  optimistic_concurrency: version
+  idempotency: command_receipt
+ddd_layer_mapping:
+  domain_model: internal/domain/persona/persona/model
+  ports: internal/domain/persona/persona/ports
+  application: internal/application/persona/persona
+  persistence: internal/infrastructure/persona/persona/persistence

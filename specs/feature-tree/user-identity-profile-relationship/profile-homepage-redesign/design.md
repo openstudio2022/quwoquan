@@ -637,6 +637,52 @@ double _springDampedOffset(double raw, double maxPull) {
 
 ---
 
+### KD13: 互动转发双向读模型与状态机
+
+**边界**：主页壳层只负责一级 Tab、共享外层滚动与二级控制行；`ShareInteractionList`
+只消费 `direction` 和对应 Provider，不拥有任何 Tab。点赞、评论、浏览继续走原通用行。
+
+```text
+ProfileInteractionTab
+  -> ProfileSecondaryTabBar(trailing: direction switch)
+  -> ShareInteractionList(direction)
+  -> shareInteractionProvider(subAccountId, direction)
+  -> UserProfileRepository(existing received/sent operation, type=share)
+  -> durable ShareInteractionOccurrence read model
+```
+
+**双桶状态**：
+
+- key 固定为 `subAccountId + received|initiated`。
+- 每桶保存 items、nextCursor、scrollOffset、loading/refresh/loadMore、lastFetchedAt、
+  RuntimeFailure 与 requestGeneration。
+- TTL 为 5 分钟；有缓存先画缓存，过期在后台刷新。generation 不一致的结果不得写回。
+- ProfileShell 只在 active sub-tab 为 shares 时把共享外层 ScrollController 的 offset
+  写回当前桶，方向切换后恢复目标桶 offset。
+- active sub-account 变化时 invalidate 全部桶并递增 generation。
+
+**服务真相源**：
+
+- 复用现有 received/sent operation，增加 `type=share`，过滤必须发生在 cursor 分页前。
+- `ShareInteractionOccurrence` 是不可变事件，`occurredAt` 不得来自 post.updatedAt；
+  稳定全序为 `occurredAt DESC, interactionId DESC`。
+- seen/read 是 owner + active sub-account + interactionId 维度的幂等状态。
+- impact 文案由服务端完整输出；App 既不计算数字也不拼接文案。
+
+**导航与权限**：
+
+- 行与预览共享 resolver：可用 shareRecord、可用原目标、失效不跳转。
+- 他人主页不构建 share Provider；HTTP 边界仍校验 authenticated principal 对 active
+  sub-account 的所有权。impact destination 只允许 metadata 枚举路由。
+
+**观测与准出**：
+
+- 列表浏览事件与执行转发行为事件分离，统一 source=`profile_interaction_share`。
+- 监控 API p95、错误率、cursor 重复/遗漏、缓存命中、seen/read 失败和越权拒绝。
+- alpha/beta/gamma/prod 使用同源 fixture/seed；发布采用版本回滚，不保留旧 UI 并行分支。
+
+---
+
 ## 存量带规划任务
 
 见 树内任务文档 「搁置任务」和「未来演进任务」章节。

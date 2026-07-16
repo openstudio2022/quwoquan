@@ -19,7 +19,7 @@ func TestResolveSnapshotPathUsesConfigRoot(t *testing.T) {
 func TestResolveSnapshotPathUsesLocalCacheWhenConfigRootMissing(t *testing.T) {
 	t.Setenv("QWQ_OUTPUT_ROOT", "/tmp/qwq-output")
 	got := resolveSnapshotPath("", "product-ops-service", "product-ops-service-beta-control-a-0")
-	want := "/tmp/qwq-output/env/repo/local/control-plane/product-ops-service/product-ops-service-beta-control-a-0.json"
+	want := "/tmp/qwq-output/env/repo/local/control-plane/process/product-ops-service/product-ops-service-beta-control-a-0.json"
 	if got != want {
 		t.Fatalf("expected %q, got %q", want, got)
 	}
@@ -28,7 +28,7 @@ func TestResolveSnapshotPathUsesLocalCacheWhenConfigRootMissing(t *testing.T) {
 func TestResolveSnapshotPathUsesRepoOutputRootWhenEnvMissing(t *testing.T) {
 	t.Setenv("QWQ_OUTPUT_ROOT", "")
 	got := resolveSnapshotPath("", "product-ops-service", "product-ops-service-beta-control-a-0")
-	wantSuffix := "/.qwq_output/env/repo/local/control-plane/product-ops-service/product-ops-service-beta-control-a-0.json"
+	wantSuffix := "/.qwq_output/env/repo/local/control-plane/process/product-ops-service/product-ops-service-beta-control-a-0.json"
 	if !strings.HasSuffix(filepath.ToSlash(got), wantSuffix) {
 		t.Fatalf("expected repo output root path ending %q, got %q", wantSuffix, got)
 	}

@@ -2,30 +2,9 @@ version: 1
 entity: Notification
 
 events:
-  - name: NotificationCreated
-    description: 通知创建（内部事件，由其他域事件触发）
+  - name: NotificationPushRequested
+    description: AppMessage aggregate 创建后请求可靠外部投递；由同库 outbox 发布。
     producer: notification-service
-    consumers: []
+    consumers: [notification-delivery-worker]
     channel: internal
-    payload_fields: [_id, userId, type, source, sourceId, title, targetType, targetId]
-
-  - name: AppMessageAcked
-    description: 统一应用消息已被端侧确认收到，不等价于已读
-    producer: notification-service
-    consumers: []
-    channel: internal
-    payload_fields: [_id, userId, ackedAt]
-
-  - name: NotificationRead
-    description: 通知已读
-    producer: notification-service
-    consumers: []
-    channel: internal
-    payload_fields: [_id, userId]
-
-  - name: PushSent
-    description: 推送已发送
-    producer: notification-service
-    consumers: []
-    channel: internal
-    payload_fields: [_id, userId, pushSent]
+    payload_fields: [_id, userId, messageType, title, summary, target]

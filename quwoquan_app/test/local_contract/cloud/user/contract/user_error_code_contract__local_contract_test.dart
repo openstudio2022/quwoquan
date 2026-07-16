@@ -24,7 +24,13 @@ void main() {
     });
 
     test('user/**/errors.yaml 聚合错误码均已覆盖', () {
-      expect(UserErrorCode.values.length, 63);
+      final codes = UserErrorCode.values
+          .map((value) => value.code)
+          .toList(growable: false);
+      expect(codes.toSet(), hasLength(codes.length));
+      for (final value in UserErrorCode.values) {
+        expect(UserErrorCode.fromCode(value.code), value);
+      }
       expect(
         UserErrorCode.contactDiscoveryRateLimited.code,
         'USER.CONTACT.rate_limited',

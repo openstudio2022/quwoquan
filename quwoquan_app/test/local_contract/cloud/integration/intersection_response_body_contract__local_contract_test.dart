@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/recommendation_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_inbox_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
@@ -64,7 +65,11 @@ void main() {
       expect(kinds[ContentApiMetadata.getMyIntersectionSummaryOperation], 'object');
       expect(kinds[ContentApiMetadata.listMyIntersectionsOperation], 'page');
       expect(kinds[ContentApiMetadata.getObjectIntersectionsOperation], 'page');
-      expect(kinds[ContentApiMetadata.markIntersectionsVisitedOperation], 'ack');
+      expect(
+        RecommendationApiMetadata
+            .operationToResponseKind[RecommendationApiMetadata.markRecommendationIntersectionsVisitedOperation],
+        'ack',
+      );
     });
 
     test('object 形态：getMyIntersectionSummary 解码类型 == 声明读模型', () async {
@@ -102,8 +107,9 @@ void main() {
 
     test('ack 形态：markIntersectionsVisited 无读模型且返回 void', () async {
       expect(
-        ContentApiMetadata.operationToResponseModel
-            .containsKey(ContentApiMetadata.markIntersectionsVisitedOperation),
+        RecommendationApiMetadata.operationToResponseModel.containsKey(
+          RecommendationApiMetadata.markRecommendationIntersectionsVisitedOperation,
+        ),
         isFalse,
       );
       // ack 仅状态确认，端返回 void；调用不应抛错。

@@ -5,7 +5,7 @@ import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/video_editor_page.dart';
 
 void main() {
-  testWidgets('视频编辑页在本地视频不可读时展示返回与再试一次', (tester) async {
+  testWidgets('视频编辑页在本地视频不可读时由宿主导航返回', (tester) async {
     await tester.pumpWidget(
       CupertinoApp(
         home: VideoEditorPage(
@@ -27,7 +27,8 @@ void main() {
 
     expect(find.byType(AppPageErrorState), findsOneWidget);
     expect(find.text('视频预览暂不可用'), findsOneWidget);
-    expect(find.text(UITextConstants.back), findsOneWidget);
+    expect(find.text(UITextConstants.back), findsNothing);
+    expect(find.byIcon(CupertinoIcons.chevron_left), findsOneWidget);
     expect(find.text(UITextConstants.tryAgain), findsOneWidget);
   });
 }

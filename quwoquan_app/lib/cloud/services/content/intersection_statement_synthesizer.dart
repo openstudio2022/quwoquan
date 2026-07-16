@@ -13,12 +13,20 @@ import 'package:quwoquan_app/cloud/services/content/intersection_kind_mapping.da
 final RegExp _rawInteractionStatsPattern = RegExp(r'[0-9０-９]+\s*(赞|评|转|转发)');
 final RegExp _countSubjectPattern = RegExp(r'[0-9０-９]+\s*(人|位)');
 
+const String intersectionDisplayBindingExplicitLink = 'explicit_link';
+const String intersectionDisplayBindingHostImplicit = 'host_implicit';
+const String intersectionDisplayBindingHostPlain = 'host_plain';
+const String intersectionDisplayBindingHidden = 'hidden';
+
 const Set<String> _bannedDisplayStatementFragments = <String>{
   '共同好友',
   '都来这里互动过',
   '在这里互动过',
   '同读者',
   '相近主题',
+  '这条记录',
+  '这篇内容',
+  '当前内容',
   'TA的内容',
   '相关圈子',
   '我的'
@@ -50,23 +58,47 @@ IntersectionReason normalizeDisplayReason(
 }
 
 /// 返回可展示的云侧交集句；不合格则返回 null。
-IntersectionReason? displayReadyIntersectionReason(IntersectionReason reason) {
-  return isDisplayableIntersectionReason(reason) ? reason : null;
+IntersectionReason? displayReadyIntersectionReason(
+  IntersectionReason reason, {
+  IntersectionTarget? contextObjectTarget,
+}) {
+  return isDisplayableIntersectionReason(
+        reason,
+        contextObjectTarget: contextObjectTarget,
+      )
+      ? reason
+      : null;
 }
 
-bool isDisplayableIntersectionReason(IntersectionReason reason) {
+bool isDisplayableIntersectionReason(
+  IntersectionReason reason, {
+  IntersectionTarget? contextObjectTarget,
+}) {
   final primary = reason.primaryText.trim();
+  final binding = _normalizedDisplayBinding(reason.displayBinding);
+  if (binding == intersectionDisplayBindingHidden) {
+    return false;
+  }
   if (!_displayStatementTextAllowed(reason, primary)) {
     return false;
   }
   final spans = reason.primarySpans;
   if (spans.isEmpty) {
-    return false;
+    // primaryText 是云侧结论句真相源。结构化 spans 缺省时只降级为纯文本，
+    // 不推断 target、不合成链接；hidden/banned/representative 规则仍已在上方执行。
+    return true;
   }
   if (spans.map((span) => span.text).join() != primary) {
     return false;
   }
-  var hasPrimaryObjectTarget = false;
+  final reasonTarget = _targetForReasonObject(reason);
+  if (!_displayObjectTargetAllowed(reasonTarget)) {
+    return false;
+  }
+  final isHostReason =
+      contextObjectTarget != null &&
+      _sameIntersectionTarget(contextObjectTarget, reasonTarget);
+  var hasReasonObjectTarget = false;
   for (final span in spans) {
     final role = span.role.trim();
     final target = span.target;
@@ -80,13 +112,27 @@ bool isDisplayableIntersectionReason(IntersectionReason reason) {
       if (!_displayObjectTargetAllowed(target)) {
         return false;
       }
-      if (reason.actionTargetId.trim().isEmpty ||
-          target!.objectId.trim() == reason.actionTargetId.trim()) {
-        hasPrimaryObjectTarget = true;
+      if (contextObjectTarget != null &&
+          _sameIntersectionTarget(target!, contextObjectTarget)) {
+        return false;
+      }
+      if (_sameIntersectionTarget(target!, reasonTarget)) {
+        hasReasonObjectTarget = true;
       }
     }
   }
-  return hasPrimaryObjectTarget;
+  switch (binding) {
+    case intersectionDisplayBindingExplicitLink:
+      if (isHostReason) {
+        return false;
+      }
+      return hasReasonObjectTarget;
+    case intersectionDisplayBindingHostImplicit:
+    case intersectionDisplayBindingHostPlain:
+      return isHostReason && !hasReasonObjectTarget;
+    default:
+      return false;
+  }
 }
 
 bool _displayStatementTextAllowed(IntersectionReason reason, String text) {
@@ -123,6 +169,56 @@ bool _displayObjectTargetAllowed(IntersectionTarget? target) {
     default:
       return false;
   }
+}
+
+String _normalizedDisplayBinding(String raw) {
+  switch (raw.trim()) {
+    case intersectionDisplayBindingHostImplicit:
+      return intersectionDisplayBindingHostImplicit;
+    case intersectionDisplayBindingHostPlain:
+      return intersectionDisplayBindingHostPlain;
+    case intersectionDisplayBindingHidden:
+      return intersectionDisplayBindingHidden;
+    case intersectionDisplayBindingExplicitLink:
+    case '':
+      return intersectionDisplayBindingExplicitLink;
+    default:
+      return intersectionDisplayBindingHidden;
+  }
+}
+
+IntersectionTarget _targetForReasonObject(IntersectionReason reason) {
+  final objectKind = reason.objectKind.trim();
+  final routeId = intersectionRouteIdForObjectKind(objectKind);
+  final objectId = reason.actionTargetId.trim().isNotEmpty
+      ? reason.actionTargetId.trim()
+      : reason.relationObjectId.trim();
+  return IntersectionTarget(
+    objectType: _objectTypeForTarget(objectKind: objectKind, routeId: routeId),
+    objectId: objectId,
+    objectKind: objectKind,
+    routeId: routeId,
+  );
+}
+
+bool _sameIntersectionTarget(
+  IntersectionTarget? left,
+  IntersectionTarget? right,
+) {
+  if (left == null || right == null) {
+    return false;
+  }
+  final leftId = left.objectId.trim();
+  final rightId = right.objectId.trim();
+  if (leftId.isEmpty || rightId.isEmpty || leftId != rightId) {
+    return false;
+  }
+  final leftType = left.objectType.trim();
+  final rightType = right.objectType.trim();
+  if (leftType.isNotEmpty && rightType.isNotEmpty && leftType != rightType) {
+    return false;
+  }
+  return true;
 }
 
 bool _displayStatementNeedsRepresentative(

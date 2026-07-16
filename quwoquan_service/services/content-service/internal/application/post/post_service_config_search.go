@@ -37,16 +37,6 @@ func (s *PostService) GetAppConfig() map[string]any {
 			"kill_switches": "immediate",
 		},
 		"content": map[string]any{
-			// 评论客户端配置真相源：contracts/metadata/content/post/projections/
-			// content_app_config_client.yaml#comment_defaults（端 CommentRemoteConfig 消费）。
-			"comment": map[string]any{
-				"max_length":                   s.commentMaxLen,
-				"reply_preview_count":          1,
-				"reply_first_expand_page_size": 5,
-				"reply_expand_page_size":       10,
-				"fold_line_count":              3,
-				"attachment":                   map[string]any{"max_images": 1},
-			},
 			"feature_flags": featureFlags,
 			"gray_release": map[string]any{
 				"experiment_bucket": runtimeConfig.ExperimentBucket,
@@ -84,8 +74,15 @@ func (s *PostService) GetCounters(ctx context.Context, postID string) (map[strin
 	// 评论数取 DB 权威 count（含二级、排除软删），与 ListComments.totalCount 同源；
 	// post.CommentCount 仅作 feed/详情页去规范化加速器。读路径机会式自愈：发现加速器
 	// 与权威 count 漂移时按权威值单 $set 收敛（无整文档改写），保证最终一致。
+	if s.commentCounts == nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"互动计数加载失败，请稍后重试",
+			"Comment CountReader is required",
+		)
+	}
 	commentCount := post.CommentCount
-	if n, err := s.commentStore.CountByPost(ctx, post.ID); err == nil {
+	if n, err := s.commentCounts.CountByPost(ctx, post.ID); err == nil {
 		commentCount = n
 		if n != post.CommentCount {
 			if _, serr := s.store.SetCommentCount(ctx, post.ID, n); serr != nil {
@@ -100,99 +97,6 @@ func (s *PostService) GetCounters(ctx context.Context, postID string) (map[strin
 		"comment": commentCount,
 		"share":   post.ShareCount,
 	}, nil
-}
-
-// GetCommentCountsDelta returns an explainable incremental comment-count report
-// for a post relative to a client baseline `since`. It answers "since you last
-// synced, N comments were created and M were removed; the authoritative total is
-// now T". The interval is half-open (since, watermark]: createdSinceCount counts
-// comments whose createdAt falls in the window (regardless of later deletion),
-// deletedSinceCount counts comments soft-deleted (status=deleted) whose deletedAt
-// falls in the window, and currentTotal is the authoritative non-deleted count.
-// watermark is a monotonic UTC timestamp the client passes as the next `since`,
-// so consecutive deltas never double-count nor skip an event. A zero `since`
-// (first sync) is treated as unbounded-below to seed the baseline.
-func (s *PostService) GetCommentCountsDelta(ctx context.Context, postID string, since time.Time) (map[string]any, error) {
-	postID = strings.TrimSpace(postID)
-	if _, ok := s.store.FindByID(ctx, postID); !ok {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
-	}
-	// 水位线取本次查询时刻；下次以此为 since，半开区间 (since, watermark] 保证
-	// 相邻两次 delta 既不重复也不遗漏。
-	watermark := time.Now().UTC()
-	since = since.UTC()
-	created, err := s.commentStore.CountCreatedBetween(ctx, postID, since, watermark)
-	if err != nil {
-		return nil, rterr.NewUnavailable(
-			rterr.ModuleContent, "评论计数加载失败，请稍后重试", "count created between failed: "+err.Error(),
-		)
-	}
-	deleted, err := s.commentStore.CountDeletedBetween(ctx, postID, since, watermark)
-	if err != nil {
-		return nil, rterr.NewUnavailable(
-			rterr.ModuleContent, "评论计数加载失败，请稍后重试", "count deleted between failed: "+err.Error(),
-		)
-	}
-	currentTotal, err := s.commentStore.CountByPost(ctx, postID)
-	if err != nil {
-		return nil, rterr.NewUnavailable(
-			rterr.ModuleContent, "评论计数加载失败，请稍后重试", "current total count failed: "+err.Error(),
-		)
-	}
-	sinceWire := ""
-	if !since.IsZero() {
-		sinceWire = since.Format(time.RFC3339Nano)
-	}
-	return map[string]any{
-		"createdSinceCount": created,
-		"deletedSinceCount": deleted,
-		"currentTotal":      currentTotal,
-		"watermark":         watermark.Format(time.RFC3339Nano),
-		"since":             sinceWire,
-	}, nil
-}
-
-func (s *PostService) ListUserPosts(
-	ctx context.Context,
-	authorID, viewerID string,
-	viewerCircleIDs []string,
-	identity, requestedType, cursor string,
-	limit int,
-) ([]postmodel.Post, string, error) {
-	if limit <= 0 {
-		limit = 20
-	}
-	posts := s.store.ListByAuthor(ctx, strings.TrimSpace(authorID), limit*5, cursor)
-	filtered := make([]postmodel.Post, 0, len(posts))
-	expectedIdentity := normalizeRequestedIdentity(identity)
-	expectedType := normalizeRequestType(requestedType)
-	for _, stored := range posts {
-		post := *normalizePostForRead(&stored)
-		if !canViewPost(&post, viewerID, viewerCircleIDs) {
-			continue
-		}
-		postIdentity := strings.TrimSpace(strings.ToLower(post.ContentIdentity))
-		if expectedIdentity != "" && postIdentity != expectedIdentity {
-			continue
-		}
-		if expectedType != "" {
-			viewType := mapContentTypeToViewType(post.ContentType)
-			if expectedIdentity != "moment" && viewType != expectedType {
-				continue
-			}
-		}
-		filtered = append(filtered, post)
-	}
-	nextCursor := ""
-	if len(filtered) > limit {
-		nextCursor = filtered[limit-1].ID
-		filtered = filtered[:limit]
-	}
-	return filtered, nextCursor, nil
 }
 
 type SearchPostsRequest struct {
@@ -302,13 +206,6 @@ func (s *PostService) SearchPosts(
 			continue
 		}
 		post := item.post
-		primaryCircleID := strings.TrimSpace(post.CircleId)
-		if primaryCircleID == "" {
-			circleIDs := asStringSlice(post.CircleIds)
-			if len(circleIDs) > 0 {
-				primaryCircleID = strings.TrimSpace(circleIDs[0])
-			}
-		}
 		results = append(results, postmodel.PostSearchItemView{
 			PostId:            post.ID,
 			ContentType:       post.ContentType,
@@ -319,8 +216,6 @@ func (s *PostService) SearchPosts(
 			AuthorId:          post.AuthorId,
 			AuthorDisplayName: post.AuthorDisplayNameSnapshot,
 			AuthorAvatarUrl:   post.AuthorAvatarUrlSnapshot,
-			CircleId:          primaryCircleID,
-			CircleName:        "",
 			CategoryId:        item.categoryID,
 			SubCategory:       item.subCategory,
 			LikeCount:         post.LikeCount,

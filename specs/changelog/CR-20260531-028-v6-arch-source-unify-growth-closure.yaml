@@ -90,8 +90,8 @@ entries:
       T3 passed + T4 passed（iPhone 17 Pro gamma-patrol-matrix）+ verify passed；make test-contract
       0 失败 19 包 ok（testcontainers L2 无 rootless docker 优雅 skip）。修复 4 处运行态镜像阻塞：
       start_media_origin media_root 对齐 /srv/media、Makefile 导出 LOCAL_GAMMA_USER_PORT=19210、
-      colima 隧道补 user_port、compose healthcheck start_period 10s→240s。证据归档
-      .qwq_output/env/repo/runs/v7-evidence/RUNTIME_GATE_EVIDENCE.md。
+      colima 隧道补 user_port、compose healthcheck start_period 10s→240s。证据已迁移 canonical run evidence
+      （RUNTIME_GATE_EVIDENCE.md）。
       T4 git 远程实删（原 S5 待人工确认项）：人工核对 fix/08 隐私修复 5d40c6f7 → dev1.0 已独立更完整实现
       （setting_service blockedKeywords round-trip + settings_contract_test TestPrivacySettings_BlockedKeywordsRoundTrip
       + 迁移整合 005），判定不 cherry-pick；实删 7 个远程分支（dev1.1 / feat/openspec / fix/kustomize /

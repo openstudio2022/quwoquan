@@ -18,9 +18,7 @@ class PostEngagementCounters {
 
     return PostEngagementCounters(
       likeCount: n(m['likeCount'] ?? m['likesCount'] ?? m['likes']),
-      commentCount: n(
-        m['commentCount'] ?? m['commentsCount'] ?? m['comments'],
-      ),
+      commentCount: n(m['commentCount'] ?? m['commentsCount'] ?? m['comments']),
       shareCount: n(m['shareCount'] ?? m['shares']),
     );
   }

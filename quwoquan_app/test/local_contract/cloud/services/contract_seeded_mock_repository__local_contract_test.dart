@@ -8,12 +8,11 @@ import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
-import 'package:quwoquan_app/cloud/services/app_content/app_content_repository_mock.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
@@ -34,33 +33,22 @@ void main() {
     );
   });
 
-  test('prod-sim Patrol smoke 可显式使用 mock 数据源但 release prod 仍锁 remote', () {
+  test('beta/gamma/prod 始终锁定 remote 且未知环境启动失败', () {
+    for (final env in ['beta', 'gamma', 'prod']) {
+      expect(
+        resolveAppDataSourceModeForEnvironment(
+          runtimeEnv: env,
+          explicitDataSource: 'mock',
+        ),
+        AppDataSourceMode.remote,
+      );
+    }
     expect(
-      resolveAppDataSourceModeForEnvironment(
-        runtimeEnv: 'prod',
+      () => resolveAppDataSourceModeForEnvironment(
+        runtimeEnv: 'prod-sim',
         explicitDataSource: 'mock',
-        releaseMode: false,
-        runPatrolT4: true,
       ),
-      AppDataSourceMode.mock,
-    );
-    expect(
-      resolveAppDataSourceModeForEnvironment(
-        runtimeEnv: 'prod',
-        explicitDataSource: 'mock',
-        releaseMode: true,
-        runPatrolT4: true,
-      ),
-      AppDataSourceMode.remote,
-    );
-    expect(
-      resolveAppDataSourceModeForEnvironment(
-        runtimeEnv: 'gamma',
-        explicitDataSource: 'mock',
-        releaseMode: false,
-        runPatrolT4: false,
-      ),
-      AppDataSourceMode.remote,
+      throwsStateError,
     );
   });
 
@@ -126,30 +114,6 @@ void main() {
     final repo = MockContentRepository();
     final feed = await repo.listDiscoveryFeed(category: 'all');
     expect(feed.map((item) => item.id), contains('fixture_photo_001'));
-  });
-
-  test('content mock repository 的真实评论入口复用高保回复磁度', () async {
-    final repo = MockContentRepository();
-    final feed = await repo.listDiscoveryFeed(category: 'all', limit: 0);
-    final feedById = {for (final post in feed) post.id: post};
-    expect(feedById['fixture_photo_001']?.commentCount, 182);
-    final showcaseDetail = await repo.getPost(postId: 'alpha_moment_grid_1');
-    expect(showcaseDetail.post.commentCount, 182);
-
-    for (final postId in const <String>[
-      'fixture_photo_001',
-      'alpha_moment_grid_1',
-    ]) {
-      final page = await repo.listComments(postId: postId, limit: 100);
-      final byId = {for (final comment in page.items) comment.id: comment};
-      expect(page.totalCount, 182, reason: postId);
-      expect(byId['fixture_comment_thread_empty']?.replyCount, 0);
-      expect(byId['fixture_comment_parent_001']?.replyCount, 1);
-      expect(byId['fixture_comment_thread_five']?.replyCount, 5);
-      expect(byId['fixture_comment_thread_ten']?.replyCount, 10);
-      expect(byId['fixture_comment_thread_fifty']?.replyCount, 50);
-      expect(byId['fixture_comment_thread_hundred']?.replyCount, 110);
-    }
   });
 
   test('circle mock repository 可由 contracts fixture 初始化', () async {
@@ -220,18 +184,6 @@ void main() {
     final repo = MockHomepageRepository();
     final items = await repo.searchHomepages(query: '契约');
     expect(items.map((item) => item.id), contains('fixture_homepage_author'));
-  });
-
-  test('app content mock repository 默认优先读取 contract fixture', () {
-    final repo = MockAppContentRepository();
-    expect(
-      repo.discoveryPhotoData.map((item) => item.id),
-      contains('fixture_photo_001'),
-    );
-    expect(
-      repo.discoveryArticleData.map((item) => item.id),
-      contains('fixture_article_001'),
-    );
   });
 
   test('user profile mock repository 默认优先读取 contract fixture', () async {

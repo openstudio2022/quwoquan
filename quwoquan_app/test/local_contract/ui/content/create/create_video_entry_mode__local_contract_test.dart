@@ -13,6 +13,7 @@ import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 void main() {
   setUp(() {
@@ -108,7 +109,7 @@ Widget _buildHarness({
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
       startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
-      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      ...mockContentFacetOverrides(MockContentRepository()),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
     ],
@@ -177,6 +178,11 @@ class _AuthedSessionStore implements AuthSessionStore {
     required String accessToken,
     required String refreshToken,
   }) async {}
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
 
   @override
   Future<void> softLogout() async {}

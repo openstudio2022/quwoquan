@@ -15,6 +15,12 @@ import 'package:quwoquan_app/core/trackers/content_behavior_tracker.dart';
 /// 任务 B 测试用：可控失败的行为仓储，验证 flush 失败路径的结构化兜底。
 class _FlakyBehaviorRepository extends BehaviorRepository {
   final List<BehaviorEvent> recorded = <BehaviorEvent>[];
+
+  @override
+  Future<void> clearPendingForLogout() async {
+    recorded.clear();
+  }
+
   bool shouldThrow = false;
 
   @override

@@ -72,7 +72,6 @@ ALLOWLIST_PREFIXES = {
     "quwoquan_app/vendor/",
     "quwoquan_data/runtime/",
     "quwoquan_data/publish/",
-    "quwoquan_data/release/",
     "quwoquan_data/sop/",
     "quwoquan_data/docs/",
     "quwoquan_data/data/",
@@ -93,7 +92,6 @@ ALLOWLIST_PATHS = {
     "quwoquan_app/scripts/runtime/verify_retired_terms_zero.py",
     "quwoquan_data/tools/catalog_iteration.py",
     "quwoquan_data/tools/semantic_entity_resolution.py",
-    ".cursor/commands/data-explore.md",
     ".cursor/commands/infra-plan.md",
     # 数据内容流水线技能文档：唯一命中来自引用 quwoquan_data/scripts/ 下一个反硬编码
     # 门禁脚本的真实文件名（该脚本职责即检测被禁用语，自身已由前缀 allowlist），非用户可见。
@@ -103,7 +101,6 @@ ALLOWLIST_PATHS = {
     "quwoquan_data/README.md",
     "quwoquan_data/schema/tag/tag_policy.yaml",
     "quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_admin_regions.py",
-    "quwoquan_data/verticals/campus/scripts/bootstrap_school_entities.py",
     "quwoquan_data/scripts/bootstrap_sop.py",
     "quwoquan_data/scripts/bootstrap/taxonomy/bootstrap_tags.py",
     "quwoquan_data/scripts/e2e_smoke_v4.py",

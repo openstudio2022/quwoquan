@@ -97,5 +97,5 @@ entries:
       data_migration: false
     notes:
       - object_tag_index 为派生倒排数据，可由离线回填管道幂等重建；交集卡在打标产物缺失时自动空兜底（契约正确、不报错）。
-      - CR-20260318-001 的 journey/scenario 物理迁移（拆出 profile-shell-ui-unification / profile-motion-and-sticky-coordination 新 Scenario 节点）依赖 plan.yaml（当前分支已不存在），且对 V5 功能闭环零贡献、强行创建半成品节点会触发 verify_feature_tree_refactor 告警；故 V5 不在本会话执行物理迁移，保留为 CR-20260318-001 下的独立后续项。
+      - CR-20260318-001 的 journey/scenario 物理迁移（拆出 profile-shell-ui-unification / profile-motion-and-sticky-coordination 新 Scenario 节点）依赖 content.execution.planning.yaml（当前分支已不存在），且对 V5 功能闭环零贡献、强行创建半成品节点会触发 verify_feature_tree_refactor 告警；故 V5 不在本会话执行物理迁移，保留为 CR-20260318-001 下的独立后续项。
       - 事件驱动增量打标（content Post*/circle Circle*/user InterestTagsUpdated）为本 CR 的收敛后续，需在落地前完成 user_profile/events.yaml 的 InterestTagsUpdated 契约评审。

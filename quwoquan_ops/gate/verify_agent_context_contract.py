@@ -30,10 +30,6 @@ CONTEXT_REFERENCES = [
 ]
 
 DATA_COMMAND_FILES = [
-    ".cursor/commands/data-baseline.md",
-    ".cursor/commands/data-build-entities-tags.md",
-    ".cursor/commands/data-source-fetch.md",
-    ".cursor/commands/data-trace-source.md",
     ".cursor/commands/crawl.md",
     ".cursor/commands/crawl-topic.md",
 ]
@@ -74,8 +70,6 @@ SIMULATION_COMMAND_TOKENS = [
     "/infra",
     "/obs",
     "/rec",
-    "data-baseline",
-    "data-build-entities-tags",
     "crawl",
     "crawl-topic",
 ]

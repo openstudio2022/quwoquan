@@ -1,0 +1,19 @@
+version: 1
+aggregate: HomepageStatusReport
+
+entities:
+  HomepageStatusReport:
+    description: 共享主页下线或纠错上报及其审核状态
+    fields:
+      - { name: _id, type: ObjectId, constraints: [PK], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: version, type: int, constraints: [NOT_NULL, DEFAULT_1], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: homepageId, type: ObjectId, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: reporterPersonaId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: read, ops_exposure: read }
+      - { name: reason, type: enum, enum_ref: HomepageStatusReportReason, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read_write, ops_exposure: read }
+      - { name: description, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: mask, api_exposure: read_write, ops_exposure: read }
+      - { name: evidenceUrls, type: "[]string", constraints: [NULLABLE], classification: SENSITIVE, log_policy: drop, api_exposure: read_write, ops_exposure: read }
+      - { name: status, type: enum, enum_ref: HomepageStatusReportStatus, constraints: [NOT_NULL, DEFAULT_PENDING_REVIEW], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read_write }
+      - { name: reviewerAccountId, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
+      - { name: reviewNote, type: string, constraints: [NULLABLE], classification: PRIVATE, log_policy: mask, api_exposure: read, ops_exposure: read_write }
+      - { name: createdAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+      - { name: reviewedAt, type: timestamp, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }

@@ -1,7 +1,6 @@
 package impact
 
 import (
-	"strconv"
 	"strings"
 )
 
@@ -15,63 +14,6 @@ const (
 	ActorTA   ActorPerspective = "ta"
 	ActorSelf ActorPerspective = "self"
 )
-
-// PrimaryText instantiates the shared cloud-side impact conclusion sentence.
-// App surfaces must render this value directly instead of rebuilding text.
-func PrimaryText(helpType string, action string, count int64, perspective ActorPerspective) string {
-	if count <= 0 {
-		return ""
-	}
-	subject := representativeSubject(count)
-	switch strings.TrimSpace(helpType) {
-	case HelpRelationship:
-		switch strings.TrimSpace(action) {
-		case "establish_connection":
-			return subject + "在这里建立了新连接"
-		default:
-			return subject + "通过" + actorPronoun(perspective) + "建立了新连接"
-		}
-	case HelpCommunity:
-		switch strings.TrimSpace(action) {
-		case "start_discussion":
-			return subject + "带起了新的讨论"
-		default:
-			return subject + "加入了相关圈子"
-		}
-	case HelpDecision:
-		switch strings.TrimSpace(action) {
-		case "visit_place":
-			return subject + "通过" + actorPronoun(perspective) + "的记录去了相关地点"
-		default:
-			return subject + "通过" + actorPronoun(perspective) + "的记录关注了相关对象"
-		}
-	case HelpKnowledge:
-		switch strings.TrimSpace(action) {
-		case "quote_answer":
-			return subject + "引用了" + actorPronoun(perspective) + "的回答"
-		default:
-			return subject + "读完了" + actorPronoun(perspective) + "的记录"
-		}
-	case HelpSpread:
-		switch strings.TrimSpace(action) {
-		case "active_participation":
-			return subject + "最近参与了这里"
-		default:
-			return subject + "转发了" + actorPronoun(perspective) + "的记录"
-		}
-	case HelpAudience:
-		return subject + "看过" + actorPronoun(perspective) + "的记录"
-	default:
-		return ""
-	}
-}
-
-func representativeSubject(count int64) string {
-	if count <= 1 {
-		return "一位用户"
-	}
-	return "一位用户等" + strconv.FormatInt(count, 10) + "人"
-}
 
 func actorPronoun(perspective ActorPerspective) string {
 	if perspective == ActorSelf {

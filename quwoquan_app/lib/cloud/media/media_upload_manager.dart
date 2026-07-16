@@ -1,17 +1,10 @@
 import 'dart:async';
 import 'dart:collection';
-import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:http/http.dart' as http;
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// Upload task state.
 enum UploadStatus { pending, uploading, completed, failed }
@@ -22,13 +15,8 @@ class UploadTask {
   final MediaCategory category;
   final String contentType;
   final int fileSize;
-  final String ownerId;
-  final String fileName;
-  final Map<String, dynamic>? completionMetadata;
 
   UploadStatus status;
-  String? sessionId;
-  String? presignUrl;
   String? cdnUrl;
   String? assetId;
   String? error;
@@ -39,9 +27,6 @@ class UploadTask {
     required this.category,
     required this.contentType,
     required this.fileSize,
-    required this.ownerId,
-    required this.fileName,
-    this.completionMetadata,
     this.status = UploadStatus.pending,
     this.retryCount = 0,
   });
@@ -50,24 +35,22 @@ class UploadTask {
 /// Manages media upload queue with concurrency limits, retry, and offline support.
 class MediaUploadManager {
   MediaUploadManager({
-    CloudHttpClient? httpClient,
-    http.Client? rawClient,
+    required this.coordinator,
+    required this.sourceReader,
+    required this.uploadStream,
     this._maxConcurrent = 3,
     this._maxRetries = 3,
-  }) : _httpClient =
-           httpClient ?? CloudHttpClient(client: rawClient ?? http.Client()),
-       _rawClient = rawClient ?? http.Client();
+  });
 
-  final CloudHttpClient _httpClient;
-  final http.Client _rawClient;
+  final ContentMediaUploadCoordinator coordinator;
+  final ContentMediaSourceReader sourceReader;
+  final ContentMediaStreamObjectUpload uploadStream;
   final int _maxConcurrent;
   final int _maxRetries;
   final Queue<UploadTask> _queue = Queue<UploadTask>();
   final List<UploadTask> _active = [];
   final _controller = StreamController<UploadTask>.broadcast();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
-
-  String get _baseUrl => CloudRuntimeConfig.gatewayBaseUrl;
 
   Stream<UploadTask> get onTaskUpdate => _controller.stream;
 
@@ -104,20 +87,22 @@ class MediaUploadManager {
     _controller.add(task);
 
     try {
-      final session = await _initUpload(task);
-      task
-        ..sessionId = session.sessionId
-        ..presignUrl = session.presignUrl ?? session.uploadUrl;
-
-      await _uploadToOSS(task);
-
-      final asset = await _completeUpload(task);
+      final source = await sourceReader.prepare(task.localPath);
+      if (source.fileSize != task.fileSize) {
+        throw StateError('upload source size changed');
+      }
+      final asset = await coordinator.uploadPreparedSource(
+        source: source,
+        mediaType: _mediaTypeForCategory(task.category),
+        contentType: task.contentType,
+        uploadStream: uploadStream,
+      );
       task
         ..status = UploadStatus.completed
-        ..cdnUrl = asset.cdnUrl
-        ..assetId = asset.assetId ?? asset.sessionId;
+        ..cdnUrl = asset.cdnUrl?.toString()
+        ..assetId = asset.assetId;
       _controller.add(task);
-    } catch (e) {
+    } catch (_) {
       task.retryCount++;
       if (task.retryCount <= _maxRetries) {
         task.status = UploadStatus.pending;
@@ -125,82 +110,13 @@ class MediaUploadManager {
       } else {
         task
           ..status = UploadStatus.failed
-          ..error = e.toString();
+          ..error = 'upload_failed';
         _controller.add(task);
       }
     } finally {
       _active.remove(task);
       _processQueue();
     }
-  }
-
-  Future<ContentMediaInitUploadResponseDto> _initUpload(UploadTask task) async {
-    final uri = Uri.parse('$_baseUrl${ChatApiMetadata.initChatUploadPath}');
-    final decoded = await _httpClient.postJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(ChatRequestPageIds.initChatUpload),
-      body: {
-        'mediaType': _mediaTypeForCategory(task.category),
-        'ownerId': task.ownerId,
-        'fileName': task.fileName,
-        'contentType': task.contentType,
-        'fileSize': task.fileSize,
-        'assetScope': 'draft',
-        'sourceKind': 'chat_attachment',
-      },
-    );
-    return ContentMediaInitUploadResponseDto.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: ChatRequestPageIds.initChatUpload,
-      ),
-    );
-  }
-
-  Future<void> _uploadToOSS(UploadTask task) async {
-    final presignUrl = task.presignUrl;
-    if (presignUrl == null || presignUrl.isEmpty) {
-      throw StateError('No presign URL for upload');
-    }
-
-    final file = File(task.localPath);
-    final bytes = await file.readAsBytes();
-
-    final response = await _rawClient.put(
-      Uri.parse(presignUrl),
-      headers: {'Content-Type': task.contentType},
-      body: bytes,
-    );
-
-    if (response.statusCode != 200 && response.statusCode != 201) {
-      throw HttpException('OSS upload failed: ${response.statusCode}');
-    }
-  }
-
-  Future<ContentMediaCompleteUploadResponseDto> _completeUpload(
-    UploadTask task,
-  ) async {
-    final uri = Uri.parse('$_baseUrl${ChatApiMetadata.completeChatUploadPath}');
-    final body = <String, dynamic>{
-      'sessionId': task.sessionId ?? '',
-      'mediaType': _mediaTypeForCategory(task.category),
-      'assetScope': 'draft',
-      'sourceKind': 'chat_attachment',
-      ...?task.completionMetadata,
-    };
-    final decoded = await _httpClient.postJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(
-        ChatRequestPageIds.completeChatUpload,
-      ),
-      body: body,
-    );
-    return ContentMediaCompleteUploadResponseDto.fromMap(
-      CloudResponseDecoder.asObject(
-        decoded,
-        context: ChatRequestPageIds.completeChatUpload,
-      ),
-    );
   }
 
   /// Starts listening for network changes to retry failed uploads.
@@ -236,11 +152,11 @@ class MediaUploadManager {
   int get activeCount => _active.length;
 }
 
-String _mediaTypeForCategory(MediaCategory category) {
+ContentMediaType _mediaTypeForCategory(MediaCategory category) {
   return switch (category) {
-    MediaCategory.chatVoice => 'audio',
-    MediaCategory.chatVideo => 'video',
-    MediaCategory.chatFile => 'file',
-    _ => 'image',
+    MediaCategory.chatVoice => ContentMediaType.audio,
+    MediaCategory.chatVideo => ContentMediaType.video,
+    MediaCategory.chatFile => ContentMediaType.file,
+    _ => ContentMediaType.image,
   };
 }

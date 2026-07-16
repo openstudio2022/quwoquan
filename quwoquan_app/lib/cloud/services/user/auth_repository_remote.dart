@@ -10,6 +10,18 @@ class RemoteAuthRepository implements AuthRepository {
 
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
+  Map<String, String> _headersForOperation(String operationId) {
+    final pageId = UserRequestPageIds.operationToPageId[operationId];
+    if (pageId == null || pageId.isEmpty) {
+      throw StateError('Missing generated request page id for $operationId');
+    }
+    return CloudRequestHeaders.forSurfaceOperation(
+      surfaceId: pageId,
+      operationId: operationId,
+      clientPageId: pageId,
+    );
+  }
+
   String _loginPathForCredentialType(String credentialType) {
     switch (credentialType.trim().toLowerCase()) {
       case 'phone':
@@ -20,8 +32,6 @@ class RemoteAuthRepository implements AuthRepository {
         return UserApiMetadata.loginWithAlipayPath;
       case 'qq':
         return UserApiMetadata.loginWithQqPath;
-      case 'apple':
-        return UserApiMetadata.loginWithApplePath;
       default:
         throw ArgumentError.value(
           credentialType,
@@ -41,8 +51,6 @@ class RemoteAuthRepository implements AuthRepository {
         return UserRequestPageIds.loginWithAlipay;
       case 'qq':
         return UserRequestPageIds.loginWithQq;
-      case 'apple':
-        return UserRequestPageIds.loginWithApple;
       default:
         throw ArgumentError.value(
           credentialType,
@@ -69,7 +77,7 @@ class RemoteAuthRepository implements AuthRepository {
     final context = UserRequestPageIds.sendOtp;
     final resp = await _client.postJson(
       _uri(UserApiMetadata.sendOtpPath),
-      headers: CloudRequestHeaders.forPage(context),
+      headers: _headersForOperation(UserApiMetadata.sendOtpOperation),
       body: <String, dynamic>{
         'phone': phone,
         if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
@@ -126,11 +134,6 @@ class RemoteAuthRepository implements AuthRepository {
         if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
         if (platform != null && platform.isNotEmpty) 'platform': platform,
       },
-      'apple' => <String, dynamic>{
-        'appleIdToken': credentialKey,
-        if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
-        if (platform != null && platform.isNotEmpty) 'platform': platform,
-      },
       _ => throw ArgumentError.value(
         credentialType,
         'credentialType',
@@ -142,9 +145,13 @@ class RemoteAuthRepository implements AuthRepository {
     }
     final resp = await _client.postJson(
       _uri(_loginPathForCredentialType(credentialType)),
-      headers: CloudRequestHeaders.forPage(
-        _loginPageIdForCredentialType(credentialType),
-      ),
+      headers: _headersForOperation(switch (normalizedType) {
+        'phone' => UserApiMetadata.loginWithPhoneOperation,
+        'wechat' => UserApiMetadata.loginWithWechatOperation,
+        'alipay' => UserApiMetadata.loginWithAlipayOperation,
+        'qq' => UserApiMetadata.loginWithQqOperation,
+        _ => throw StateError('Unsupported credential type'),
+      }),
       body: body,
     );
     return _authResultFromResponse(
@@ -166,7 +173,7 @@ class RemoteAuthRepository implements AuthRepository {
     final context = UserRequestPageIds.loginOneTap;
     final resp = await _client.postJson(
       _uri(UserApiMetadata.loginOneTapPath),
-      headers: CloudRequestHeaders.forPage(context),
+      headers: _headersForOperation(UserApiMetadata.loginOneTapOperation),
       body: <String, dynamic>{
         'vendor': vendor,
         'carrierToken': carrierToken,
@@ -192,7 +199,9 @@ class RemoteAuthRepository implements AuthRepository {
     final context = UserRequestPageIds.resolveOneTapLoginHint;
     final resp = await _client.postJson(
       _uri(UserApiMetadata.resolveOneTapLoginHintPath),
-      headers: CloudRequestHeaders.forPage(context),
+      headers: _headersForOperation(
+        UserApiMetadata.resolveOneTapLoginHintOperation,
+      ),
       body: <String, dynamic>{
         'vendor': vendor,
         'carrierToken': carrierToken,
@@ -216,7 +225,7 @@ class RemoteAuthRepository implements AuthRepository {
     final context = UserRequestPageIds.loginWithWechat;
     final resp = await _client.postJson(
       _uri(UserApiMetadata.loginWithWechatPath),
-      headers: CloudRequestHeaders.forPage(context),
+      headers: _headersForOperation(UserApiMetadata.loginWithWechatOperation),
       body: <String, dynamic>{
         'wechatCode': wechatCode,
         'deviceId': deviceId,
@@ -235,7 +244,7 @@ class RemoteAuthRepository implements AuthRepository {
     final context = UserRequestPageIds.loginWithAlipay;
     final resp = await _client.postJson(
       _uri(UserApiMetadata.loginWithAlipayPath),
-      headers: CloudRequestHeaders.forPage(context),
+      headers: _headersForOperation(UserApiMetadata.loginWithAlipayOperation),
       body: <String, dynamic>{
         'alipayAuthCode': alipayAuthCode,
         'deviceId': deviceId,
@@ -254,52 +263,11 @@ class RemoteAuthRepository implements AuthRepository {
     final context = UserRequestPageIds.loginWithQq;
     final resp = await _client.postJson(
       _uri(UserApiMetadata.loginWithQqPath),
-      headers: CloudRequestHeaders.forPage(context),
+      headers: _headersForOperation(UserApiMetadata.loginWithQqOperation),
       body: <String, dynamic>{
         'qqAuthCode': qqAuthCode,
         'deviceId': deviceId,
         'platform': platform,
-      },
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<AuthLoginResultDto> loginApple({
-    required String appleIdToken,
-    required String deviceId,
-    required String platform,
-  }) async {
-    final context = UserRequestPageIds.loginWithApple;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.loginWithApplePath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'appleIdToken': appleIdToken,
-        'deviceId': deviceId,
-        'platform': platform,
-      },
-    );
-    return _authResultFromResponse(resp, context);
-  }
-
-  @override
-  Future<AuthLoginResultDto> loginPasskey({
-    required String passkeyAssertion,
-    required String deviceId,
-    required String platform,
-    String? displayLabel,
-  }) async {
-    final context = UserRequestPageIds.loginWithPasskey;
-    final resp = await _client.postJson(
-      _uri(UserApiMetadata.loginWithPasskeyPath),
-      headers: CloudRequestHeaders.forPage(context),
-      body: <String, dynamic>{
-        'passkeyAssertion': passkeyAssertion,
-        'deviceId': deviceId,
-        'platform': platform,
-        if (displayLabel != null && displayLabel.isNotEmpty)
-          'displayLabel': displayLabel,
       },
     );
     return _authResultFromResponse(resp, context);
@@ -315,7 +283,7 @@ class RemoteAuthRepository implements AuthRepository {
     final context = UserRequestPageIds.loginAnonymous;
     final resp = await _client.postJson(
       _uri(UserApiMetadata.loginAnonymousPath),
-      headers: CloudRequestHeaders.forPage(context),
+      headers: _headersForOperation(UserApiMetadata.loginAnonymousOperation),
       body: <String, dynamic>{
         'installId': installId,
         'deviceFingerprintHash': deviceFingerprintHash,
@@ -331,7 +299,7 @@ class RemoteAuthRepository implements AuthRepository {
     final context = UserRequestPageIds.refreshToken;
     final resp = await _client.postJson(
       _uri(UserApiMetadata.refreshTokenPath),
-      headers: CloudRequestHeaders.forPage(context),
+      headers: _headersForOperation(UserApiMetadata.refreshTokenOperation),
       body: <String, dynamic>{'refreshToken': refreshToken},
     );
     return _authResultFromResponse(resp, context);

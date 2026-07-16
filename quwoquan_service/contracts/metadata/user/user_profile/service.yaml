@@ -1,746 +1,799 @@
-version: 1
-aggregate: UserProfile
-
-service:
-  name: user-service
-  domain: user
-  owner: backend-team
-  description: 用户档案、认证、设备、设置与分身管理
-
 api_routes:
-  # ── 认证（OwnerAccount 主控） ──────────────────────────────────────────────
+- actor: account
+  application:
+    facet: CredentialQueryFacade
+    kind: query
+    method: listCredentials
+    reader: ListCredentialsReader
+    slice: ListCredentialsSlice
+  description: 查看已绑定的凭证列表（脱敏展示）
+  method: GET
+  operation: ListCredentials
+  path: /v1/owner/credentials
+  response_entity: CredentialBinding
+  response_fields:
+  - id
+  - credentialType
+  - displayLabel
+  - isActive
+  - boundAt
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: account
+  application:
+    facet: PersonaManagementQueryFacade
+    kind: query
+    method: listPersonas
+    reader: ListPersonasReader
+    slice: ListPersonasSlice
+  description: 查看自己所有分身列表
+  method: GET
+  operation: ListPersonas
+  path: /v1/user/personas
+  response_entity: PersonaManagementItemView
+  response_fields:
+  - subAccountId
+  - displayName
+  - userHandle
+  - phone
+  - email
+  - avatarUrl
+  - backgroundUrl
+  - bio
+  - isolationLevel
+  - isActive
+  - isPrimary
+  - status
+  - retiredAt
+  - inheritsProfileFromOwner
+  - overriddenProfileFields
+  - lastProfileSyncAt
+  - lastProfileSyncSource
+  - profileVisibility
+  - purposeHint
+  - hasAttributedHistory
+  - updatedAt
+  - lastActivatedAt
+  - version
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: account
+  application:
+    facet: PersonaManagementQueryFacade
+    kind: query
+    method: getPersonaManagementSummary
+    reader: GetPersonaManagementSummaryReader
+    slice: GetPersonaManagementSummarySlice
+  description: 获取分身管理台摘要（数量、配额、主分身与当前激活分身）
+  method: GET
+  operation: GetPersonaManagementSummary
+  path: /v1/user/personas/summary
+  response_entity: PersonaManagementQuotaView
+  response_fields:
+  - ownerUserId
+  - totalCount
+  - quotaLimit
+  - remainingCount
+  - activeSubAccountId
+  - primarySubAccountId
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: account
+  application:
+    facet: PersonaManagementQueryFacade
+    kind: query
+    method: getActivePersonaContext
+    reader: GetActivePersonaContextReader
+    slice: GetActivePersonaContextSlice
+  description: 获取当前激活分身上下文快照（供跨域动作主体透传）
+  method: GET
+  operation: GetActivePersonaContext
+  path: /v1/user/personas/active
+  response_entity: ActivePersonaContextView
+  response_fields:
+  - ownerUserId
+  - subAccountId
+  - isolationLevel
+  - profileVisibility
+  - contextVersion
+  - personaSnapshotVersion
+  - sourceSurfaceId
+  - explicitOverride
+  - switchedAt
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: account
+  application:
+    facet: PersonaManagementQueryFacade
+    kind: query
+    method: getPersonaLifecycleGuard
+    reader: GetPersonaLifecycleGuardReader
+    slice: GetPersonaLifecycleGuardSlice
+  description: 获取该分身当前可否删除/退役的保护状态
+  method: GET
+  operation: GetPersonaLifecycleGuard
+  path: /v1/user/personas/{subAccountId}/lifecycle-guard
+  response_entity: PersonaLifecycleGuardView
+  response_fields:
+  - subAccountId
+  - requestedAction
+  - allowed
+  - reason
+  - hasAttributedHistory
+  - requiresSuccessor
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona_or_device
+  application:
+    facet: PublicProfileQueryFacade
+    kind: query
+    method: getSubAccountProfile
+    reader: GetSubAccountProfileReader
+    slice: GetSubAccountProfileSlice
+  description: 公开用户主页（按 userHandle 读取，兼容既有分身 ID 引用）
+  method: GET
+  note: 不暴露 owner 映射字段；IsolationLevel 是公开访问真相源，strict 时返回 404
+  operation: GetSubAccountProfile
+  path: /v1/user/{subAccountId}
+  response_entity: SubAccountProfileView
+  response_fields:
+  - subAccountId
+  - subjectType
+  - userHandle
+  - username
+  - displayName
+  - nicknameCustomized
+  - avatarUrl
+  - backgroundUrl
+  - bio
+  - identityTags
+  - followerCount
+  - followingCount
+  - postCount
+  - circleCount
+  - likeCount
+  - isolationLevel
+  - profileVisibility
+  - inheritsFromOwner
+  - overriddenFields
+  - updatedAt
+- actor: persona_or_device
+  application:
+    facet: PublicProfileQueryFacade
+    kind: query
+    method: getUserHomepageBundle
+    reader: GetUserHomepageBundleReader
+    slice: GetUserHomepageBundleSlice
+  auth: optional
+  description: '主页首屏聚合（锁定决策 #1）：一次返回身份域真相 profile/stats/relationshipCapability/
 
-  - method: POST
-    path: /v1/auth/otp/send
-    operation: SendOtp
-    description: 下发手机号验证码（发码冷却 + 每小时配额），非生产返回调试码
-    auth_required: false
-    request_fields: [phone, deviceId, platform, appVersion, sourceOperation]
-    response_fields: [maskedPhone, expiresInSeconds, deliveryStatus, requestId, challengeId, retryAfterSeconds, debugCode]
+    tabCounts/viewerContext/cacheVersion，消除首屏串行阻塞。交集与影响力 evidence 仍由 content
 
-  - method: POST
-    path: /v1/auth/login/phone
-    operation: LoginWithPhone
-    description: 手机号 + OTP 登录，创建或恢复 OwnerAccount
-    auth_required: false
-    request_fields: [phone, otpCode, deviceId, platform, appVersion, agreementVersion, privacyVersion]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, accountHint, sessionRememberTtlSeconds]
+    域接口端侧并发拉取，user 域不聚合 content/intersection 事实。陌生人 strict 隔离返回 404。
 
-  - method: POST
-    path: /v1/auth/login/wechat
-    operation: LoginWithWechat
-    description: 微信授权码登录；App 只上传短期 code，服务端置换 openid/unionid 与公开资料并首次同步昵称头像
-    auth_required: false
-    request_fields: [wechatCode, deviceId, platform, appVersion]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
+    '
+  method: GET
+  note: viewer 由鉴权头解析；本人态返回 viewerContext.isOwner=true，游客可读公开档案
+  operation: GetUserHomepageBundle
+  path: /v1/user/sub-accounts/{subAccountId}/homepage-bundle
+  response_body: UserHomepageBundleWire
+  response_body_kind: object
+  response_entity: UserHomepageBundleWire
+  response_fields:
+  - profile
+  - stats
+  - relationshipCapability
+  - tabCounts
+  - viewerContext
+  - cacheVersion
+- actor: persona
+  application:
+    facet: ProfileQueryFacade
+    kind: query
+    method: getMeProfile
+    reader: GetMeProfileReader
+    slice: GetMeProfileSlice
+  description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）
+  method: GET
+  operation: GetMeProfile
+  path: /v1/me
+  commercial:
+    status: ready
+  authorization:
+    principal: persona
+    ownership_policy: active_persona_profile
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes: [USER.USER.unauthorized, USER.USER.not_found, USER.SYSTEM.internal_error]
+  privacy:
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+    log_policy: metadata_only
+  telemetry:
+    metric: user_me_profile_get
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  response_entity: SubAccountProfileView
+  response_fields:
+  - subAccountId
+  - ownerUserId
+  - subjectType
+  - userHandle
+  - username
+  - displayName
+  - nicknameCustomized
+  - avatarUrl
+  - backgroundUrl
+  - bio
+  - identityTags
+  - followerCount
+  - followingCount
+  - postCount
+  - circleCount
+  - likeCount
+  - isolationLevel
+  - profileVisibility
+  - inheritsFromOwner
+  - overriddenFields
+  - updatedAt
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    facet: SocialRelationSearchQueryFacade
+    kind: query
+    method: searchSocialRelations
+    reader: SearchSocialRelationsReader
+    slice: SearchSocialRelationsSlice
+  auth: required
+  description: '全局搜索社交关系结果，统一承接“人”的搜索对象。匹配规则：先按趣我圈号(userHandle)精确命中并置顶 （隐私 strict 分身不暴露，与 GetSubAccountProfile strict→404 一致），再按昵称/资料模糊匹配补全去重。 不支持按手机号查人（隐私默认），手机号匹配仅走 contact_discovery 批量哈希。
 
-  - method: POST
-    path: /v1/auth/login/alipay
-    operation: LoginWithAlipay
-    description: 支付宝授权码登录；App 只上传短期 authCode，服务端置换 userId/openid 与公开资料并首次同步昵称头像
-    auth_required: false
-    request_fields: [alipayAuthCode, deviceId, platform, appVersion]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
-
-  - method: POST
-    path: /v1/auth/login/qq
-    operation: LoginWithQq
-    description: QQ 授权码登录；App 只上传短期 accessToken/code，服务端置换 openid/unionid 与公开资料并首次同步昵称头像
-    auth_required: false
-    request_fields: [qqAuthCode, deviceId, platform, appVersion]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
-
-  - method: POST
-    path: /v1/auth/login/apple
-    operation: LoginWithApple
-    description: Apple ID token 登录
-    auth_required: false
-    request_fields: [appleIdToken, deviceId, platform]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
-
-  - method: POST
-    path: /v1/auth/login/passkey
-    operation: LoginWithPasskey
-    description: passkey assertion 登录；客户端只透传 assertion/ticket，服务端完成 challenge 校验与会话签发
-    auth_required: false
-    request_fields: [passkeyAssertion, deviceId, platform, displayLabel]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
-
-  - method: POST
-    path: /v1/auth/login/one-tap
-    operation: LoginOneTap
-    description: 运营商一键登录；App 只提交授权 token，服务端向认证厂商置换真实手机号后创建或恢复 OwnerAccount
-    auth_required: false
-    request_fields: [vendor, carrierToken, deviceId, platform, appVersion, agreementVersion, privacyVersion]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, accountHint, sessionRememberTtlSeconds]
-
-  - method: POST
-    path: /v1/auth/login/one-tap/hint
-    operation: ResolveOneTapLoginHint
-    description: 运营商一键登录提示；服务端置换短期授权 token 后返回脱敏手机号与账号摘要，不签发 token
-    auth_required: false
-    request_fields: [vendor, carrierToken, deviceId, platform, appVersion]
-    response_fields: [state, maskedPhone, registered, accountHint, expiresInSeconds, providerRequestId]
-
-  - method: POST
-    path: /v1/auth/login/anonymous
-    operation: LoginAnonymous
-    description: 基于 installId + deviceFingerprintHash 匿名引导，复用同设备稳定 owner/subAccount
-    auth_required: false
-    request_fields: [installId, deviceFingerprintHash, platform, appVersion]
-    response_fields: [accessToken, refreshToken, ownerId, activeSub, subAccountCount, accountState, identityOrigin, logicalShard, anonymousRetentionPolicy, sessionRememberTtlSeconds]
-
-  - method: POST
-    path: /v1/auth/token/refresh
-    operation: RefreshToken
-    # 云侧子任务：登录/刷新响应需下发 sessionRememberTtlSeconds（快速登录有效期，秒，
-    # 默认 2592000=30 天，可由系统配置调整）；端侧据此推算软退出后免验证码快速登录过期时间。
-    description: 刷新 access token（滑动延期）
-    auth_required: false
-    request_fields: [refreshToken]
-    response_fields: [accessToken, refreshToken, sessionRememberTtlSeconds]
-
-  - method: POST
-    path: /v1/auth/logout
-    operation: Logout
-    description: 登出（吊销 refresh token）
-    request_fields: [refreshToken, deviceId]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  # ── 凭证管理（OwnerAccount 视图，需登录） ────────────────────────────────
-
-  - method: GET
-    path: /v1/owner/credentials
-    operation: ListCredentials
-    description: 查看已绑定的凭证列表（脱敏展示）
-    response_entity: CredentialBinding
-    response_fields: [id, credentialType, displayLabel, isActive, boundAt]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/owner/credentials/bind
-    operation: BindCredential
-    description: 绑定新凭证（wechat/alipay/qq/apple/passkey 等非手机号凭证；手机号必须走专用 OTP/运营商绑定契约）
-    request_fields: [credentialType, credentialKey, displayLabel]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/owner/credentials/phone/bind
-    operation: BindPhoneCredential
-    description: 绑定手机号；必须先通过 SendOtp(sourceOperation=bind_phone) 下发并校验 OTP
-    request_fields: [phone, otpCode, displayLabel]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/owner/credentials/carrier-phone/bind
-    operation: BindCarrierPhoneCredential
-    description: 绑定运营商本机号码；App 只上传 carrierToken，服务端置换真实手机号并写入 carrier_phone 凭证
-    request_fields: [vendor, carrierToken, deviceId, platform, displayLabel]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: DELETE
-    path: /v1/owner/credentials/{credentialType}
-    operation: UnbindCredential
-    description: 解绑凭证（不能解绑最后一个）
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  # ── 分身管理（用户私有视图，需登录） ───────────────────────────────────
-
-  - method: GET
-    path: /v1/user/personas
-    operation: ListPersonas
-    description: 查看自己所有分身列表
-    response_entity: PersonaManagementItemView
-    response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/user/personas/summary
-    operation: GetPersonaManagementSummary
-    description: 获取分身管理台摘要（数量、配额、主分身与当前激活分身）
-    response_entity: PersonaManagementQuotaView
-    response_fields: [ownerUserId, totalCount, quotaLimit, remainingCount, activeSubAccountId, primarySubAccountId]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/user/personas/active
-    operation: GetActivePersonaContext
-    description: 获取当前激活分身上下文快照（供跨域动作主体透传）
-    response_entity: ActivePersonaContextView
-    response_fields: [ownerUserId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/user/personas
-    operation: CreatePersona
-    description: 创建新分身；userHandle/趣我圈号由服务端按 subAccountId 系统分配，客户端不提交
-    request_entity: Persona
-    request_fields: [displayName, avatarUrl, isolationLevel, purposeHint]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-    response_entity: PersonaManagementItemView
-    response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
-
-  - method: PATCH
-    path: /v1/user/personas/{subAccountId}
-    operation: UpdatePersona
-    description: 更新分身资料或隔离等级；userHandle/趣我圈号只读，不允许客户端修改
-    request_entity: SubAccountProfileMutation
-    request_fields: [displayName, phone, email, avatarUrl, isolationLevel, purposeHint, applyScope, syncTargetIds, fieldsMask]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-    response_entity: PersonaManagementItemView
-    response_fields: [subAccountId, displayName, userHandle, phone, email, avatarUrl, backgroundUrl, bio, isolationLevel, isActive, isPrimary, status, retiredAt, inheritsProfileFromOwner, overriddenProfileFields, lastProfileSyncAt, lastProfileSyncSource, profileVisibility, purposeHint, hasAttributedHistory, updatedAt, lastActivatedAt]
-
-  - method: POST
-    path: /v1/user/personas/{subAccountId}/profile-sync
-    operation: ApplyPersonaProfileSync
-    description: 将某个分身的资料字段同步到全部或指定其它分身
-    request_entity: SubAccountProfileMutation
-    request_fields: [applyScope, syncTargetIds, fieldsMask]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/user/personas/{subAccountId}/lifecycle-guard
-    operation: GetPersonaLifecycleGuard
-    description: 获取该分身当前可否删除/退役的保护状态
-    response_entity: PersonaLifecycleGuardView
-    response_fields: [subAccountId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/user/personas/{subAccountId}/retire
-    operation: RetirePersona
-    description: 退役已有记录归因的分身，保留记录对象作者归因
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-    response_entity: PersonaLifecycleGuardView
-    response_fields: [subAccountId, requestedAction, allowed, reason, hasAttributedHistory, requiresSuccessor]
-
-  - method: DELETE
-    path: /v1/user/personas/{subAccountId}/delete-empty
-    operation: DeleteEmptyPersona
-    description: 删除无记录归因的空白分身
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/user/personas/{subAccountId}/activate
-    operation: ActivatePersona
-    description: 切换激活分身（强一致，排他写）
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-    response_entity: ActivePersonaContextView
-    response_fields: [ownerUserId, subAccountId, isolationLevel, profileVisibility, contextVersion, personaSnapshotVersion, sourceSurfaceId, explicitOverride, switchedAt]
-
-  # ── 用户主页（公开身份视图） ─────────────────────────────────────────────
-
-  - method: GET
-    path: /v1/user/{subAccountId}
-    operation: GetSubAccountProfile
-    description: 公开用户主页（按 userHandle 读取，兼容既有分身 ID 引用）
-    response_entity: SubAccountProfileView
-    response_fields: [subAccountId, subjectType, userHandle, username, displayName, nicknameCustomized, avatarUrl, backgroundUrl, bio, identityTags, followerCount, followingCount, postCount, circleCount, likeCount, isolationLevel, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
-    note: 不暴露 owner 映射字段；IsolationLevel 是公开访问真相源，strict 时返回 404
-
-  - method: GET
-    path: /v1/user/sub-accounts/{subAccountId}/homepage-bundle
-    operation: GetUserHomepageBundle
-    description: |
-      主页首屏聚合（锁定决策 #1）：一次返回身份域真相 profile/stats/relationshipCapability/
-      tabCounts/viewerContext/cacheVersion，消除首屏串行阻塞。交集与影响力 evidence 仍由 content
-      域接口端侧并发拉取，user 域不聚合 content/intersection 事实。陌生人 strict 隔离返回 404。
-    response_entity: UserHomepageBundleWire
-    response_body: UserHomepageBundleWire
-    response_body_kind: object
-    response_fields: [profile, stats, relationshipCapability, tabCounts, viewerContext, cacheVersion]
-    auth: optional
-    note: viewer 由鉴权头解析；本人态返回 viewerContext.isOwner=true，游客可读公开档案
-
-  - method: GET
-    path: /v1/me
-    operation: GetMeProfile
-    description: 当前激活子账号快捷视图（等同于 GetSubAccountProfile(activeSub)）
-    response_entity: SubAccountProfileView
-    response_fields: [subAccountId, ownerUserId, subjectType, userHandle, username, displayName, nicknameCustomized, avatarUrl, backgroundUrl, bio, identityTags, followerCount, followingCount, postCount, circleCount, likeCount, isolationLevel, profileVisibility, inheritsFromOwner, overriddenFields, updatedAt]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/user/search/social-relations
-    operation: SearchSocialRelations
-    description: >
-      全局搜索社交关系结果，统一承接“人”的搜索对象。匹配规则：先按趣我圈号(userHandle)精确命中并置顶
-      （隐私 strict 分身不暴露，与 GetSubAccountProfile strict→404 一致），再按昵称/资料模糊匹配补全去重。
-      不支持按手机号查人（隐私默认），手机号匹配仅走 contact_discovery 批量哈希。
-    query_params: [query, cursor, limit]
-    response_entity: SocialRelationSearchItemView
-    auth: required
-
-  - method: GET
-    path: /v1/user/search/recent
-    operation: ListRecentSearches
-    description: 获取当前账号最近搜索记录
-    response_entity: RecentSearchEntryView
-    auth: required
-
-  - method: PUT
-    path: /v1/user/search/recent/{entryId}
-    operation: UpsertRecentSearch
-    description: 新增或更新最近搜索记录
-    request_entity: RecentSearchEntryView
-    request_fields: [query, scope, facet, updatedAt]
-    response_entity: RecentSearchEntryView
-    auth: required
-
-  - method: DELETE
-    path: /v1/user/search/recent/{entryId}
-    operation: DeleteRecentSearch
-    description: 删除单条最近搜索记录
-    auth: required
-
-  - method: DELETE
-    path: /v1/user/search/recent
-    operation: ClearRecentSearches
-    description: 清空当前账号最近搜索记录
-    auth: required
-
-  - method: POST
-    path: /v1/user/sync
-    operation: PullUserSync
-    description: 拉取当前用户资料与头像相关的增量同步补丁
-    request_fields: [afterSeq, limit]
-    response_fields: [patches, latestSyncSeq, hasMore, requiresResync]
-    auth: required
-
-  # ── 其它用户域 API ───────────────────────────────────────────────────────
-
-  - method: GET
-    path: /v1/user/profile/{userId}
-    operation: GetUserProfile
-    description: "[已有] 主控账号档案读取（内部使用，ownerAccount 视角）"
-    response_entity: UserProfile
-    join_path: owner_full_snapshot
-    deprecated: false
-
-  - method: GET
-    path: /v1/user/profile/edit-snapshot
-    operation: GetProfileEditSnapshot
-    description: 当前登录 owner/active persona 的私有资料编辑快照；包含手机号凭证摘要与系统分配 userHandle，只供本人编辑页使用
-    response_entity: ProfileEditSnapshotWire
-    response_fields: [ownerUserId, subAccountId, avatarUrl, avatarAssetId, avatarVersion, backgroundUrl, backgroundAssetId, nickname, displayName, gender, birthDate, region, regionTagRef, userHandle, bio, identityTags, occupationTagRef, interestTagRefs, phoneCredential, qrCard, updatedAt]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/user/profile/qr-card
-    operation: GetProfileQrCard
-    description: 返回我的二维码卡片渲染所需快照与可撤销 QR token 摘要；二维码 payload 为公开主页 HTTPS link，不编码手机号或 bearer token
-    response_entity: ProfileQrCardWire
-    response_fields: [publicProfileUrl, qrPayload, qrTokenId, styleVersion, avatarUrl, displayName, region, shareText, expiresAt]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/public/profile/qr/resolve
-    operation: ResolveProfileQrToken
-    description: 公开扫码落地解析入口；校验 HTTPS payload 中的 opaque QR token，记录扫码观测后返回规范主页目标
-    response_entity: ProfileQrResolveWire
-    response_fields: [subAccountId, userHandle, publicProfileUrl, scanStatus]
-    security:
-      auth_mode: optional
-      principal: user
-      token_transport: bearer
-      anonymous_policy: allow
-      visibility: public
-
-  - method: PATCH
-    path: /v1/user/profile
-    operation: UpdateUserProfile
-    description: "[已有] 更新主控账号资料"
-    request_entity: SubAccountProfileMutation
-    request_fields: [nickname, displayName, avatarAssetId, avatarUrl, backgroundAssetId, backgroundUrl, bio, gender, birthDate, regionTagRef, occupationTagRef, interestTagRefs, identityTags, profileVisibility, applyScope, syncTargetIds, fieldsMask]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/user/settings/notifications
-    operation: GetNotificationSettings
-    response_entity: UserSetting
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: PATCH
-    path: /v1/user/settings/notifications
-    operation: UpdateNotificationSettings
-    request_entity: UserSetting
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/user/settings/privacy
-    operation: GetPrivacySettings
-    response_entity: UserSetting
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: PATCH
-    path: /v1/user/settings/privacy
-    operation: UpdatePrivacySettings
-    request_entity: UserSetting
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/user/settings/calls
-    operation: GetCallSettings
-    description: 获取来电与铃声设置
-    response_entity: UserSetting
-    response_fields: [defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: PATCH
-    path: /v1/user/settings/calls
-    operation: UpdateCallSettings
-    description: 更新来电与铃声设置（仅支持官方铃声库 ID）
-    request_entity: UserSetting
-    request_fields: [defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/user/settings/appearance
-    operation: GetAppearanceSettings
-    description: 获取 owner 默认值与当前子账号 override 聚合后的外观与字号设置
-    response_entity: AppearanceSettingsView
-    response_fields: [themeMode, fontSizePreset, source, ownerDefaultThemeMode, ownerDefaultFontSizePreset, hasSubAccountOverride, version, updatedAt]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: PATCH
-    path: /v1/user/settings/appearance
-    operation: UpdateAppearanceSettings
-    description: 更新外观与字号设置；支持全账号同步、当前子账号覆盖、恢复继承 owner 默认
-    request_entity: AppearanceSettingsMutation
-    request_fields: [themeMode, fontSizePreset, applyScope]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-    response_entity: AppearanceSettingsView
-    response_fields: [themeMode, fontSizePreset, source, ownerDefaultThemeMode, ownerDefaultFontSizePreset, hasSubAccountOverride, version, updatedAt]
-
-  - method: GET
-    path: /v1/users/{userId}/works
-    operation: ListUserWorks
-    description: 用户作品集列表（用户主页-创作 Tab 作品子分类）
-    query_params: [cursor, limit]
-    response_entity: UserWork
-    response_body: UserWork
-    response_body_kind: page
-
-  - method: GET
-    path: /v1/users/{userId}/life-items
-    operation: ListUserLifeItems
-    description: 用户生活记录列表（用户主页-生活 Tab）
-    query_params: [category, cursor, limit]
-    response_entity: UserLifeItem
-    response_body: UserLifeItem
-    response_body_kind: page
-
-  - method: GET
-    path: /v1/users/{userId}/likes
-    operation: ListUserLikes
-    description: 用户获赞列表（用户主页-统计-获赞）
-    query_params: [cursor, limit]
-
-  - method: GET
-    path: /v1/users/{userId}/interest-profile
-    operation: GetUserInterestProfile
-    description: 读取用户派生兴趣画像（topN 兴趣 + 维度 tops + 生命周期分层 + 新鲜度 + 规则人群 segment）；由 content 基于 rm_recommend_feature 四维 affinities 派生并匹配 segments.yaml 规则人群，经 UserInterestRecomputed 事件投影到 rm_user_profile_view.interestProfile/segments（user 域单一真相源）。供 assistant 主动服务与 recommendation 策略自调消费
-    response_fields: [userId, topInterests, dimensionTops, lifecycleStage, freshnessDays, decayHalfLifeDays, recomputedAt, segments]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: POST
-    path: /v1/user/devices/push-tokens
-    operation: RegisterDevice
-    request_entity: UserDevice
-
-  - method: POST
-    path: /v1/user/profile/proposals/{id}/confirm
-    operation: ConfirmProposal
-    description: 确认资料修改提案
-
-  - method: POST
-    path: /v1/user/profile/proposals/{id}/apply
-    operation: ApplyProposal
-    description: 应用资料修改提案
-
-  - method: POST
-    path: /v1/user/profile/proposals/{id}/reject
-    operation: RejectProposal
-    description: 拒绝资料修改提案
-
+    '
+  method: GET
+  operation: SearchSocialRelations
+  path: /v1/user/search/social-relations
+  query_params:
+  - query
+  - cursor
+  - limit
+  response_entity: SocialRelationSearchItemView
+- actor: account
+  application:
+    facet: UserSyncQueryFacade
+    kind: query
+    method: pullUserSync
+    reader: PullUserSyncReader
+    slice: PullUserSyncSlice
+  authorization:
+    ownership_policy: current_account_sync_stream
+    principal: account
+  commercial:
+    status: ready
+  description: 拉取当前用户资料与头像相关的增量同步补丁
+  error_codes:
+  - USER.USER.invalid_argument
+  - USER.SYSTEM.internal_error
+  method: POST
+  operation: PullUserSync
+  path: /v1/user/sync
+  privacy:
+    log_policy: metadata_only
+    request_classification: PII
+    response_classification: INTERNAL
+  reliability:
+    cancellation: supported
+    idempotency: none
+    max_attempts: 2
+    retry_mode: idempotent
+    timeout_ms: 1500
+  request_fields:
+  - afterSeq
+  - limit
+  response_fields:
+  - patches
+  - latestSyncSeq
+  - hasMore
+  - requiresResync
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: account
+    token_transport: bearer
+    visibility: private
+  slo:
+    availability_percent: 99.9
+    latency_p95_ms: 500
+  telemetry:
+    attributes:
+    - afterSeq
+    - limit
+    - outcome
+    metric: user_sync_pull
+    trace: true
+- actor: account
+  application:
+    facet: ProfileQueryFacade
+    kind: query
+    method: getUserProfile
+    reader: GetUserProfileReader
+    slice: GetUserProfileSlice
+  deprecated: false
+  description: '[已有] 主控账号档案读取（内部使用，ownerAccount 视角）'
+  join_path: owner_full_snapshot
+  method: GET
+  operation: GetUserProfile
+  path: /v1/user/profile/{userId}
+  authorization:
+    principal: public
+    ownership_policy: public_profile_visibility
+  reliability:
+    timeout_ms: 1500
+    cancellation: supported
+    retry_mode: idempotent
+    max_attempts: 2
+    idempotency: none
+  error_codes: [USER.USER.not_found, USER.USER.forbidden, USER.SYSTEM.internal_error]
+  privacy:
+    request_classification: PUBLIC
+    response_classification: PUBLIC
+    log_policy: metadata_only
+  telemetry:
+    metric: user_profile_get
+    trace: true
+    attributes: [outcome]
+  slo:
+    latency_p95_ms: 500
+    availability_percent: 99.9
+  security:
+    anonymous_policy: allow
+    auth_mode: optional
+    principal: public
+    token_transport: bearer
+    visibility: public
+  response_entity: UserAccount
+- actor: persona
+  application:
+    facet: ProfileQueryFacade
+    kind: query
+    method: getProfileEditSnapshot
+    reader: GetProfileEditSnapshotReader
+    slice: GetProfileEditSnapshotSlice
+  description: 当前登录 owner/active persona 的私有资料编辑快照；包含手机号凭证摘要与系统分配 userHandle，只供本人编辑页使用
+  method: GET
+  operation: GetProfileEditSnapshot
+  path: /v1/user/profile/edit-snapshot
+  response_entity: ProfileEditSnapshotWire
+  response_fields:
+  - ownerUserId
+  - subAccountId
+  - avatarUrl
+  - avatarAssetId
+  - avatarVersion
+  - backgroundUrl
+  - backgroundAssetId
+  - nickname
+  - displayName
+  - gender
+  - birthDate
+  - region
+  - regionTagRef
+  - userHandle
+  - bio
+  - identityTags
+  - occupationTagRef
+  - interestTagRefs
+  - phoneCredential
+  - qrCard
+  - updatedAt
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    facet: ProfileQueryFacade
+    kind: query
+    method: getProfileQrCard
+    reader: GetProfileQrCardReader
+    slice: GetProfileQrCardSlice
+  description: 返回我的二维码卡片渲染所需快照与可撤销 QR token 摘要；二维码 payload 为公开主页 HTTPS link，不编码手机号或 bearer token
+  method: GET
+  operation: GetProfileQrCard
+  path: /v1/user/profile/qr-card
+  response_entity: ProfileQrCardWire
+  response_fields:
+  - publicProfileUrl
+  - qrPayload
+  - qrTokenId
+  - styleVersion
+  - avatarUrl
+  - displayName
+  - region
+  - shareText
+  - expiresAt
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona_or_device
+  application:
+    facet: PublicProfileQueryFacade
+    kind: query
+    method: resolveProfileQrToken
+    reader: ResolveProfileQrTokenReader
+    slice: ResolveProfileQrTokenSlice
+  description: 公开扫码落地解析入口；校验 HTTPS payload 中的 opaque QR token，记录扫码观测后返回规范主页目标
+  method: GET
+  operation: ResolveProfileQrToken
+  path: /v1/public/profile/qr/resolve
+  response_entity: ProfileQrResolveWire
+  response_fields:
+  - subAccountId
+  - userHandle
+  - publicProfileUrl
+  - scanStatus
+  security:
+    anonymous_policy: allow
+    auth_mode: optional
+    principal: user
+    token_transport: bearer
+    visibility: public
+- actor: account
+  application:
+    facet: UserSettingsQueryFacade
+    kind: query
+    method: getNotificationSettings
+    reader: GetNotificationSettingsReader
+    slice: GetNotificationSettingsSlice
+  method: GET
+  operation: GetNotificationSettings
+  path: /v1/user/settings/notifications
+  response_entity: UserSetting
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: account
+  application:
+    facet: UserSettingsQueryFacade
+    kind: query
+    method: getPrivacySettings
+    reader: GetPrivacySettingsReader
+    slice: GetPrivacySettingsSlice
+  method: GET
+  operation: GetPrivacySettings
+  path: /v1/user/settings/privacy
+  response_entity: UserSetting
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: account
+  application:
+    facet: UserSettingsQueryFacade
+    kind: query
+    method: getCallSettings
+    reader: GetCallSettingsReader
+    slice: GetCallSettingsSlice
+  description: 获取来电与铃声设置
+  method: GET
+  operation: GetCallSettings
+  path: /v1/user/settings/calls
+  response_entity: UserSetting
+  response_fields:
+  - defaultIncomingCallRingtoneId
+  - allowCallerRingtoneOverride
+  - enableCallVibration
+  - enableGroupCallRing
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: account
+  application:
+    facet: UserSettingsQueryFacade
+    kind: query
+    method: getAppearanceSettings
+    reader: GetAppearanceSettingsReader
+    slice: GetAppearanceSettingsSlice
+  description: 获取 owner 默认值与当前子账号 override 聚合后的外观与字号设置
+  method: GET
+  operation: GetAppearanceSettings
+  path: /v1/user/settings/appearance
+  response_entity: AppearanceSettingsView
+  response_fields:
+  - themeMode
+  - fontSizePreset
+  - source
+  - ownerDefaultThemeMode
+  - ownerDefaultFontSizePreset
+  - hasSubAccountOverride
+  - version
+  - updatedAt
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona_or_device
+  application:
+    facet: ProfileContentQueryFacade
+    kind: query
+    method: listUserWorks
+    reader: ListUserWorksReader
+    slice: ListUserWorksSlice
+  description: 用户作品集列表（用户主页-创作 Tab 作品子分类）
+  method: GET
+  operation: ListUserWorks
+  path: /v1/users/{userId}/works
+  query_params:
+  - cursor
+  - limit
+  response_body: UserWork
+  response_body_kind: page
+  response_entity: UserWork
+- actor: persona_or_device
+  application:
+    facet: ProfileContentQueryFacade
+    kind: query
+    method: listUserLifeItems
+    reader: ListUserLifeItemsReader
+    slice: ListUserLifeItemsSlice
+  description: 用户生活记录列表（用户主页-生活 Tab）
+  method: GET
+  operation: ListUserLifeItems
+  path: /v1/users/{userId}/life-items
+  query_params:
+  - category
+  - cursor
+  - limit
+  response_body: UserLifeItem
+  response_body_kind: page
+  response_entity: UserLifeItem
+- actor: persona_or_device
+  application:
+    facet: ProfileContentQueryFacade
+    kind: query
+    method: listUserLikes
+    reader: ListUserLikesReader
+    slice: ListUserLikesSlice
+  description: 用户获赞列表（用户主页-统计-获赞）
+  method: GET
+  operation: ListUserLikes
+  path: /v1/users/{userId}/likes
+  query_params:
+  - cursor
+  - limit
+- actor: persona
+  application:
+    facet: ProfileQueryFacade
+    kind: query
+    method: getUserInterestProfile
+    reader: GetUserInterestProfileReader
+    slice: GetUserInterestProfileSlice
+  description: 读取用户派生兴趣画像（topN 兴趣 + 维度 tops + 生命周期分层 + 新鲜度 + 规则人群 segment）；由 content 基于 rm_recommend_feature 四维 affinities 派生并匹配 segments.yaml 规则人群，经 UserInterestRecomputed 事件投影到 rm_user_profile_view.interestProfile/segments（user 域单一真相源）。供 assistant 主动服务与 recommendation 策略自调消费
+  method: GET
+  operation: GetUserInterestProfile
+  path: /v1/users/{userId}/interest-profile
+  response_fields:
+  - userId
+  - topInterests
+  - dimensionTops
+  - lifecycleStage
+  - freshnessDays
+  - decayHalfLifeDays
+  - recomputedAt
+  - segments
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
 consumers:
-  - name: app
-    capabilities: [read_profile, write_profile, manage_persona, manage_settings, manage_device]
-  - name: platform-ops
-    capabilities: [read_profile, write_status, review_proposals]
-  - name: recommendation-engine
-    capabilities: [read_profile, read_tags, read_interest_profile]
-  - name: assistant-service
-    capabilities: [read_profile, read_settings, create_proposals, read_interest_profile]
-  - name: notification-service
-    capabilities: [read_device, read_settings]
-
+- capabilities:
+  - read_profile
+  - write_profile
+  - manage_persona
+  - manage_settings
+  - manage_device
+  name: app
+- capabilities:
+  - read_profile
+  - write_status
+  - review_proposals
+  name: platform-ops
+- capabilities:
+  - read_profile
+  - read_tags
+  - read_interest_profile
+  name: recommendation-engine
+- capabilities:
+  - read_profile
+  - read_settings
+  - create_proposals
+  - read_interest_profile
+  name: assistant-service
+- capabilities:
+  - read_device
+  - read_settings
+  name: notification-service
 contract_test:
-  description: |
-    基于接口契约的隔离测试：端侧 mock 云端、服务侧 mock 外部依赖。
+  coverage_requirements:
+  - all api_routes have at least one scenario
+  - all state_machine transitions covered
+  - all unique_constraints have violation test
+  - all SECRET fields verified not exposed in API responses
+  - all events verified published with correct payload_fields
+  description: '基于接口契约的隔离测试：端侧 mock 云端、服务侧 mock 外部依赖。
+
     元数据驱动：从 fields.yaml + service.yaml 自动生成 mock 数据和断言。
 
+    '
   mock_strategy:
     app_side:
-      description: App 自身不依赖云端的测试
-      mock_target: user-service API
       data_source: fields.yaml
+      description: App 自身不依赖云端的测试
       generation: 从 fields.yaml 生成符合 constraints/classification 的 mock JSON
+      mock_target: user-service API
       scenarios:
-        - name: get_profile_success
-          route: GET /v1/user/profile/{userId}
-          mock_response: auto_from_fields
-          assertions: [status_200, response_matches_schema, pii_fields_filtered]
-
-        - name: update_profile_success
-          route: PATCH /v1/user/profile
-          mock_request: auto_from_writable_fields
-          assertions: [status_200, updated_fields_reflected]
-
-        - name: persona_activate
-          route: POST /v1/user/personas/{subAccountId}/activate
-          assertions: [status_200, only_one_active]
-
-        - name: login_flow
-          route: POST /v1/user/auth/login
-          assertions: [status_200, tokens_returned]
-
-        - name: proposal_state_machine
-          routes:
-            - POST /v1/user/profile/proposals/{id}/confirm
-            - POST /v1/user/profile/proposals/{id}/apply
-          assertions: [status_transitions_valid]
-
-        - name: get_appearance_settings
-          route: GET /v1/user/settings/appearance
-          mock_response: auto_from_fields
-          assertions: [status_200, response_matches_schema]
-
-        - name: update_appearance_settings
-          route: PATCH /v1/user/settings/appearance
-          mock_request: auto_from_writable_fields
-          assertions: [status_200, updated_fields_reflected]
-
+      - assertions:
+        - status_200
+        - response_matches_schema
+        - pii_fields_filtered
+        mock_response: auto_from_fields
+        name: get_profile_success
+        route: GET /v1/user/profile/{userId}
+      - assertions:
+        - status_200
+        - updated_fields_reflected
+        mock_request: auto_from_writable_fields
+        name: update_profile_success
+        route: PATCH /v1/user/profile
+      - assertions:
+        - status_200
+        - only_one_active
+        name: persona_activate
+        route: POST /v1/user/personas/{subAccountId}/activate
+      - assertions:
+        - status_200
+        - tokens_returned
+        name: login_flow
+        route: POST /v1/user/auth/login
+      - assertions:
+        - status_200
+        - response_matches_schema
+        mock_response: auto_from_fields
+        name: get_appearance_settings
+        route: GET /v1/user/settings/appearance
+      - assertions:
+        - status_200
+        - updated_fields_reflected
+        mock_request: auto_from_writable_fields
+        name: update_appearance_settings
+        route: PATCH /v1/user/settings/appearance
     service_side:
+      data_management:
+        cleanup: TRUNCATE user_profiles, personas, user_auth, user_devices, user_settings, profile_update_proposals CASCADE
+        redis_cleanup: miniredis.FlushAll()
+        seed: 从 fields.yaml 生成 fixture 工厂预制到真实 PG
       description: 服务只依赖自身，使用真实测试数据库，不 mock 存储层
+      mock_targets:
+      - cross_service_clients
       real_engines:
         postgres: embedded-postgres
         redis: miniredis/v2
-      spy_targets: [event_publisher]
-      mock_targets: [cross_service_clients]
-      data_management:
-        seed: 从 fields.yaml 生成 fixture 工厂预制到真实 PG
-        cleanup: TRUNCATE user_profiles, personas, user_auth, user_devices, user_settings, profile_update_proposals CASCADE
-        redis_cleanup: miniredis.FlushAll()
       scenarios:
-        - name: create_user_aggregate
-          command: RegisterUser
-          seed: [fixture.NewUserAuth()]
-          assertions:
-            - "SELECT * FROM user_profiles WHERE user_id = ? → row exists"
-            - "SELECT * FROM user_auth WHERE user_id = ? → row exists"
-            - "SELECT * FROM user_settings WHERE user_id = ? → defaults correct"
-            - "eventSpy.AssertPublished('UserRegistered', {userId, nickname})"
-
-        - name: update_profile_version
-          command: UpdateUserProfile
-          seed: [fixture.NewUserProfile()]
-          assertions:
-            - "SELECT profile_version FROM user_profiles → incremented by 1"
-            - "miniredis.Get('cache:user_profile:{id}') → key deleted (invalidated)"
-            - "eventSpy.AssertPublished('UserProfileUpdated', {userId, profileVersion})"
-
-        - name: persona_activation_exclusivity
-          command: ActivatePersona
-          seed: [fixture.NewUserProfile(), fixture.NewPersona(active=true), fixture.NewPersona(active=false)]
-          assertions:
-            - "SELECT COUNT(*) FROM personas WHERE user_id=? AND is_active=true → exactly 1"
-            - "SELECT id FROM personas WHERE is_active=true → matches new persona ID"
-            - "eventSpy.AssertPublished('PersonaActivated', {userId, id})"
-
-        - name: proposal_state_machine
-          command: ConfirmProposal → ApplyProposal
-          seed: [fixture.NewUserProfile(), fixture.NewProfileUpdateProposal(status='created')]
-          assertions:
-            - "SELECT status FROM profile_update_proposals → 'confirmed' after confirm"
-            - "SELECT version FROM profile_update_proposals → incremented"
-            - "SELECT status FROM profile_update_proposals → 'applied' after apply"
-            - "SELECT nickname FROM user_profiles → matches proposedChanges"
-            - "eventSpy.AssertPublished('ProfileProposalResolved')"
-
-        - name: update_appearance_all_accounts
-          command: UpdateAppearanceSettings(applyScope='all_accounts')
-          seed: [fixture.NewUserProfile(), fixture.NewUserSetting(), fixture.NewPersona(active=true), fixture.NewPersona(active=false)]
-          assertions:
-            - "SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → updated to requested values"
-            - "SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? → all NULL"
-            - "SELECT appearance_version FROM user_settings WHERE user_id=? → incremented by 1"
-            - "eventSpy.AssertPublished('UserAppearanceSettingsChanged', {userId, version})"
-
-        - name: update_appearance_current_sub_account
-          command: UpdateAppearanceSettings(applyScope='current_sub_account')
-          seed: [fixture.NewUserProfile(), fixture.NewUserSetting(), fixture.NewPersona(active=true)]
-          assertions:
-            - "SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? AND is_active=true → updated to requested values"
-            - "SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → unchanged"
-            - "GET /v1/user/settings/appearance → source='sub_override'"
-
-        - name: login_fail_lockout
-          command: Login (5x wrong password)
-          seed: [fixture.NewUserProfile(), fixture.NewUserAuth()]
-          assertions:
-            - "SELECT login_fail_count FROM user_auth → 5"
-            - "SELECT locked_until FROM user_auth → NOT NULL, future timestamp"
-            - "miniredis.Get('login_fail:{userId}') → count exists"
-
-  coverage_requirements:
-    - all api_routes have at least one scenario
-    - all state_machine transitions covered
-    - all unique_constraints have violation test
-    - all SECRET fields verified not exposed in API responses
-    - all events verified published with correct payload_fields
+      - assertions:
+        - SELECT * FROM user_profiles WHERE user_id = ? → row exists
+        - SELECT * FROM user_auth WHERE user_id = ? → row exists
+        - SELECT * FROM user_settings WHERE user_id = ? → defaults correct
+        - eventSpy.AssertPublished('UserRegistered', {userId, nickname})
+        command: RegisterUser
+        name: create_user_aggregate
+        seed:
+        - fixture.NewUserAuth()
+      - assertions:
+        - SELECT profile_version FROM user_profiles → incremented by 1
+        - miniredis.Get('cache:user_profile:{id}') → key deleted (invalidated)
+        - eventSpy.AssertPublished('UserProfileUpdated', {userId, profileVersion})
+        command: UpdateUserProfile
+        name: update_profile_version
+        seed:
+        - fixture.NewUserProfile()
+      - assertions:
+        - SELECT COUNT(*) FROM personas WHERE user_id=? AND is_active=true → exactly 1
+        - SELECT id FROM personas WHERE is_active=true → matches new persona ID
+        - eventSpy.AssertPublished('PersonaActivated', {userId, id})
+        command: ActivatePersona
+        name: persona_activation_exclusivity
+        seed:
+        - fixture.NewUserProfile()
+        - fixture.NewPersona(active=true)
+        - fixture.NewPersona(active=false)
+      - assertions:
+        - SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → updated to requested values
+        - SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? → all NULL
+        - SELECT appearance_version FROM user_settings WHERE user_id=? → incremented by 1
+        - eventSpy.AssertPublished('UserAppearanceSettingsChanged', {userId, version})
+        command: UpdateAppearanceSettings(applyScope='all_accounts')
+        name: update_appearance_all_accounts
+        seed:
+        - fixture.NewUserProfile()
+        - fixture.NewUserSetting()
+        - fixture.NewPersona(active=true)
+        - fixture.NewPersona(active=false)
+      - assertions:
+        - SELECT theme_mode_override, font_size_preset_override FROM personas WHERE user_id=? AND is_active=true → updated to requested values
+        - SELECT default_theme_mode, default_font_size_preset FROM user_settings WHERE user_id=? → unchanged
+        - GET /v1/user/settings/appearance → source='sub_override'
+        command: UpdateAppearanceSettings(applyScope='current_sub_account')
+        name: update_appearance_current_sub_account
+        seed:
+        - fixture.NewUserProfile()
+        - fixture.NewUserSetting()
+        - fixture.NewPersona(active=true)
+      - assertions:
+        - SELECT login_fail_count FROM user_auth → 5
+        - SELECT locked_until FROM user_auth → NOT NULL, future timestamp
+        - miniredis.Get('login_fail:{userId}') → count exists
+        command: Login (5x wrong password)
+        name: login_fail_lockout
+        seed:
+        - fixture.NewUserProfile()
+        - fixture.NewUserAuth()
+      spy_targets:
+      - event_publisher
+service:
+  commercial_defaults:
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: USER_USER_PROFILE_COMMERCIAL_EVIDENCE
+    status: blocked
+    target_story: app-cloud-business-object-commercial-closure
+  description: 用户档案、认证、设备、设置与分身管理
+  domain: user
+  name: user-service
+  owner: backend-team
+version: 1

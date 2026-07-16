@@ -52,7 +52,7 @@ func DerivePlaceRef(post postmodel.Post) (PlaceRef, bool) {
 		return PlaceRef{}, false
 	}
 	// Bound to a canonical entity / homepage => entity.homepage carries it.
-	if strings.TrimSpace(post.CanonicalEntityId) != "" || strings.TrimSpace(post.PrimaryHomepageId) != "" {
+	if strings.TrimSpace(post.PrimaryHomepageId) != "" {
 		return PlaceRef{}, false
 	}
 	var geo *rtsearch.GeoPoint

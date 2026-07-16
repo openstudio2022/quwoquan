@@ -8,10 +8,12 @@ class TagApiMetadata {
 
   static const String domain = 'tag';
   static const List<String> apiPrefixes = <String>[
+    '/internal/v1',
     '/v1/tag',
   ];
 
   static const Map<String, String> operationToPathTemplate = <String, String>{
+    'ActivateTagTaxonomyRelease': '/internal/v1/tag/taxonomy-releases/{releaseId}:activate',
     'InvertedObjects': '/v1/tag/inverted',
     'ListDimensions': '/v1/tag/dimensions',
     'ListTagChildren': '/v1/tag/children',
@@ -21,13 +23,14 @@ class TagApiMetadata {
     'SearchByTags': '/v1/tag/search-by-tags',
     'SearchTags': '/v1/tag/search',
     'SharedTags': '/v1/tag/shared-tags',
+    'StageTagTaxonomyRelease': '/internal/v1/tag/taxonomy-releases',
     'SuggestTags': '/v1/tag/suggest',
     'TagCooccurrence': '/v1/tag/graph/cooccurrence',
-    'TagFeedback': '/v1/tag/feedback',
     'ValidateTagRefs': '/v1/tag/validate',
   };
 
   static const Map<String, String> operationToMethod = <String, String>{
+    'ActivateTagTaxonomyRelease': 'POST',
     'InvertedObjects': 'GET',
     'ListDimensions': 'GET',
     'ListTagChildren': 'GET',
@@ -37,30 +40,31 @@ class TagApiMetadata {
     'SearchByTags': 'POST',
     'SearchTags': 'GET',
     'SharedTags': 'GET',
+    'StageTagTaxonomyRelease': 'POST',
     'SuggestTags': 'GET',
     'TagCooccurrence': 'GET',
-    'TagFeedback': 'POST',
     'ValidateTagRefs': 'POST',
   };
 
   /// 鉴权模式：public | optional | required（security.auth_mode 真相源）。
   static const Map<String, String> operationToAuthMode = <String, String>{
-    'InvertedObjects': 'public',
-    'ListDimensions': 'public',
-    'ListTagChildren': 'public',
-    'RelatedObjects': 'public',
-    'RelatedTags': 'public',
-    'ResolveTag': 'public',
-    'SearchByTags': 'public',
-    'SearchTags': 'public',
-    'SharedTags': 'public',
-    'SuggestTags': 'public',
-    'TagCooccurrence': 'public',
-    'TagFeedback': 'public',
-    'ValidateTagRefs': 'public',
+    'ActivateTagTaxonomyRelease': 'required',
+    'InvertedObjects': 'required',
+    'ListDimensions': 'required',
+    'ListTagChildren': 'required',
+    'RelatedObjects': 'required',
+    'RelatedTags': 'required',
+    'ResolveTag': 'required',
+    'SearchByTags': 'required',
+    'SearchTags': 'required',
+    'SharedTags': 'required',
+    'StageTagTaxonomyRelease': 'required',
+    'SuggestTags': 'required',
+    'TagCooccurrence': 'required',
+    'ValidateTagRefs': 'required',
   };
 
-  /// 响应读模型：operation -> 端侧 DTO 类名（service.yaml response_body 真相源，仅 object/page 形态）。
+  /// 已绑定端侧强类型的响应读模型：operation -> Dart 契约类名。
   static const Map<String, String> operationToResponseModel = <String, String>{
   };
 
@@ -68,6 +72,7 @@ class TagApiMetadata {
   static const Map<String, String> operationToResponseKind = <String, String>{
   };
 
+  static const String activateTagTaxonomyReleaseOperation = 'ActivateTagTaxonomyRelease';
   static const String invertedObjectsOperation = 'InvertedObjects';
   static const String listDimensionsOperation = 'ListDimensions';
   static const String listTagChildrenOperation = 'ListTagChildren';
@@ -77,11 +82,17 @@ class TagApiMetadata {
   static const String searchByTagsOperation = 'SearchByTags';
   static const String searchTagsOperation = 'SearchTags';
   static const String sharedTagsOperation = 'SharedTags';
+  static const String stageTagTaxonomyReleaseOperation = 'StageTagTaxonomyRelease';
   static const String suggestTagsOperation = 'SuggestTags';
   static const String tagCooccurrenceOperation = 'TagCooccurrence';
-  static const String tagFeedbackOperation = 'TagFeedback';
   static const String validateTagRefsOperation = 'ValidateTagRefs';
 
+  static const String activateTagTaxonomyReleasePathTemplate = '/internal/v1/tag/taxonomy-releases/{releaseId}:activate';
+  static String activateTagTaxonomyReleasePath({required String releaseId}) {
+    return _fillPath(activateTagTaxonomyReleasePathTemplate, <String, String>{
+      'releaseId': releaseId,
+    });
+  }
   static const String invertedObjectsPath = '/v1/tag/inverted';
   static const String listDimensionsPath = '/v1/tag/dimensions';
   static const String listTagChildrenPath = '/v1/tag/children';
@@ -91,8 +102,16 @@ class TagApiMetadata {
   static const String searchByTagsPath = '/v1/tag/search-by-tags';
   static const String searchTagsPath = '/v1/tag/search';
   static const String sharedTagsPath = '/v1/tag/shared-tags';
+  static const String stageTagTaxonomyReleasePath = '/internal/v1/tag/taxonomy-releases';
   static const String suggestTagsPath = '/v1/tag/suggest';
   static const String tagCooccurrencePath = '/v1/tag/graph/cooccurrence';
-  static const String tagFeedbackPath = '/v1/tag/feedback';
   static const String validateTagRefsPath = '/v1/tag/validate';
+
+  static String _fillPath(String template, Map<String, String> params) {
+    var path = template;
+    params.forEach((key, value) {
+      path = path.replaceAll('{$key}', Uri.encodeComponent(value));
+    });
+    return path;
+  }
 }

@@ -226,6 +226,10 @@ class _LegalDocumentPageState extends ConsumerState<LegalDocumentPage> {
                     type: UiErrorActionType.retry,
                     label: UITextConstants.tryAgain,
                   ),
+                  secondaryAction: UiErrorAction(
+                    type: UiErrorActionType.dismiss,
+                    label: UITextConstants.back,
+                  ),
                   copyKey: 'legalUnavailable',
                 ),
                 onAction: (action) async {
@@ -234,7 +238,7 @@ class _LegalDocumentPageState extends ConsumerState<LegalDocumentPage> {
                     await _retry();
                     return;
                   }
-                  if (action.type == UiErrorActionType.back) {
+                  if (action.type == UiErrorActionType.dismiss) {
                     _goBack();
                   }
                 },

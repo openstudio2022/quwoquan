@@ -9,10 +9,16 @@ class ProfileInteractionActivityWireDto {
   final String actorDisplayName;
   final String actorAvatarUrl;
   final int actorAvatarVersion;
+  final String counterpartSubAccountId;
+  final String counterpartDisplayName;
+  final String counterpartAvatarUrl;
   final String targetSubAccountId;
   final String targetContentId;
   final String targetContentType;
   final String targetContentSummary;
+  final String targetKind;
+  final String targetAvailability;
+  final int targetReplyCount;
   final String displaySubAccountId;
   final String displayName;
   final String displayAvatarUrl;
@@ -26,12 +32,19 @@ class ProfileInteractionActivityWireDto {
   final bool previewUnavailable;
   final String previewObjectId;
   final String previewRouteId;
+  final String outboundShareEventId;
+  final String shareText;
+  final String impactPrimaryText;
+  final String impactDeepLink;
   final List<String> filterKeys;
   final String commentKind;
   final String commentId;
   final String parentCommentId;
   final String viewerReaction;
   final DateTime? createdAt;
+  final DateTime? occurredAt;
+  final DateTime? seenAt;
+  final DateTime? readAt;
 
   ProfileInteractionActivityWireDto({
     this.activityId = '',
@@ -41,10 +54,16 @@ class ProfileInteractionActivityWireDto {
     this.actorDisplayName = '',
     this.actorAvatarUrl = '',
     this.actorAvatarVersion = 0,
+    this.counterpartSubAccountId = '',
+    this.counterpartDisplayName = '',
+    this.counterpartAvatarUrl = '',
     this.targetSubAccountId = '',
     this.targetContentId = '',
     this.targetContentType = '',
     this.targetContentSummary = '',
+    this.targetKind = 'record',
+    this.targetAvailability = 'active',
+    this.targetReplyCount = 0,
     this.displaySubAccountId = '',
     this.displayName = '',
     this.displayAvatarUrl = '',
@@ -58,12 +77,19 @@ class ProfileInteractionActivityWireDto {
     this.previewUnavailable = false,
     this.previewObjectId = '',
     this.previewRouteId = '',
+    this.outboundShareEventId = '',
+    this.shareText = '',
+    this.impactPrimaryText = '',
+    this.impactDeepLink = '',
     this.filterKeys = const <String>[],
     this.commentKind = 'none',
     this.commentId = '',
     this.parentCommentId = '',
     this.viewerReaction = 'none',
     this.createdAt,
+    this.occurredAt,
+    this.seenAt,
+    this.readAt,
   });
 
   factory ProfileInteractionActivityWireDto.fromMap(Map<String, dynamic> m) {
@@ -75,10 +101,16 @@ class ProfileInteractionActivityWireDto {
       actorDisplayName: m['actorDisplayName']?.toString() ?? m['nickname']?.toString() ?? m['displayName']?.toString() ?? '',
       actorAvatarUrl: m['actorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? '',
       actorAvatarVersion: (m['actorAvatarVersion'] as num?)?.toInt() ?? (m['avatarVersion'] as num?)?.toInt() ?? 0,
+      counterpartSubAccountId: m['counterpartSubAccountId']?.toString() ?? m['targetSubAccountId']?.toString() ?? '',
+      counterpartDisplayName: m['counterpartDisplayName']?.toString() ?? '',
+      counterpartAvatarUrl: m['counterpartAvatarUrl']?.toString() ?? '',
       targetSubAccountId: m['targetSubAccountId']?.toString() ?? m['targetUserId']?.toString() ?? '',
       targetContentId: m['targetContentId']?.toString() ?? m['postId']?.toString() ?? '',
       targetContentType: m['targetContentType']?.toString() ?? m['contentType']?.toString() ?? '',
       targetContentSummary: m['targetContentSummary']?.toString() ?? m['targetTitle']?.toString() ?? '',
+      targetKind: m['targetKind']?.toString() ?? 'record',
+      targetAvailability: m['targetAvailability']?.toString() ?? m['availability']?.toString() ?? 'active',
+      targetReplyCount: (m['targetReplyCount'] as num?)?.toInt() ?? (m['replyCount'] as num?)?.toInt() ?? 0,
       displaySubAccountId: m['displaySubAccountId']?.toString() ?? m['actorSubAccountId']?.toString() ?? m['userId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['actorDisplayName']?.toString() ?? m['nickname']?.toString() ?? '',
       displayAvatarUrl: m['displayAvatarUrl']?.toString() ?? m['actorAvatarUrl']?.toString() ?? m['avatarUrl']?.toString() ?? '',
@@ -92,12 +124,19 @@ class ProfileInteractionActivityWireDto {
       previewUnavailable: m['previewUnavailable'] as bool? ?? false,
       previewObjectId: m['previewObjectId']?.toString() ?? m['targetContentId']?.toString() ?? m['postId']?.toString() ?? '',
       previewRouteId: m['previewRouteId']?.toString() ?? '',
+      outboundShareEventId: m['outboundShareEventId']?.toString() ?? '',
+      shareText: m['shareText']?.toString() ?? '',
+      impactPrimaryText: m['impactPrimaryText']?.toString() ?? '',
+      impactDeepLink: m['impactDeepLink']?.toString() ?? '',
       filterKeys: _parseStringList(m['filterKeys']) ?? const <String>['all'],
       commentKind: m['commentKind']?.toString() ?? 'none',
       commentId: m['commentId']?.toString() ?? '',
       parentCommentId: m['parentCommentId']?.toString() ?? '',
       viewerReaction: m['viewerReaction']?.toString() ?? 'none',
       createdAt: _parseDateTime(m['createdAt']) ?? null,
+      occurredAt: _parseDateTime(m['occurredAt']) ?? _parseDateTime(m['createdAt']) ?? null,
+      seenAt: _parseDateTime(m['seenAt']) ?? null,
+      readAt: _parseDateTime(m['readAt']) ?? null,
     );
   }
 
@@ -110,10 +149,16 @@ class ProfileInteractionActivityWireDto {
       'actorDisplayName': actorDisplayName,
       'actorAvatarUrl': actorAvatarUrl,
       'actorAvatarVersion': actorAvatarVersion,
+      'counterpartSubAccountId': counterpartSubAccountId,
+      'counterpartDisplayName': counterpartDisplayName,
+      'counterpartAvatarUrl': counterpartAvatarUrl,
       'targetSubAccountId': targetSubAccountId,
       'targetContentId': targetContentId,
       'targetContentType': targetContentType,
       'targetContentSummary': targetContentSummary,
+      'targetKind': targetKind,
+      'targetAvailability': targetAvailability,
+      'targetReplyCount': targetReplyCount,
       'displaySubAccountId': displaySubAccountId,
       'displayName': displayName,
       'displayAvatarUrl': displayAvatarUrl,
@@ -127,12 +172,19 @@ class ProfileInteractionActivityWireDto {
       'previewUnavailable': previewUnavailable,
       'previewObjectId': previewObjectId,
       'previewRouteId': previewRouteId,
+      'outboundShareEventId': outboundShareEventId,
+      'shareText': shareText,
+      'impactPrimaryText': impactPrimaryText,
+      'impactDeepLink': impactDeepLink,
       'filterKeys': filterKeys,
       'commentKind': commentKind,
       'commentId': commentId,
       'parentCommentId': parentCommentId,
       'viewerReaction': viewerReaction,
       'createdAt': createdAt,
+      'occurredAt': occurredAt,
+      'seenAt': seenAt,
+      'readAt': readAt,
     };
   }
 
@@ -144,10 +196,16 @@ class ProfileInteractionActivityWireDto {
     String? actorDisplayName,
     String? actorAvatarUrl,
     int? actorAvatarVersion,
+    String? counterpartSubAccountId,
+    String? counterpartDisplayName,
+    String? counterpartAvatarUrl,
     String? targetSubAccountId,
     String? targetContentId,
     String? targetContentType,
     String? targetContentSummary,
+    String? targetKind,
+    String? targetAvailability,
+    int? targetReplyCount,
     String? displaySubAccountId,
     String? displayName,
     String? displayAvatarUrl,
@@ -161,12 +219,19 @@ class ProfileInteractionActivityWireDto {
     bool? previewUnavailable,
     String? previewObjectId,
     String? previewRouteId,
+    String? outboundShareEventId,
+    String? shareText,
+    String? impactPrimaryText,
+    String? impactDeepLink,
     List<String>? filterKeys,
     String? commentKind,
     String? commentId,
     String? parentCommentId,
     String? viewerReaction,
     DateTime? createdAt,
+    DateTime? occurredAt,
+    DateTime? seenAt,
+    DateTime? readAt,
   }) {
     return ProfileInteractionActivityWireDto(
       activityId: activityId ?? this.activityId,
@@ -176,10 +241,16 @@ class ProfileInteractionActivityWireDto {
       actorDisplayName: actorDisplayName ?? this.actorDisplayName,
       actorAvatarUrl: actorAvatarUrl ?? this.actorAvatarUrl,
       actorAvatarVersion: actorAvatarVersion ?? this.actorAvatarVersion,
+      counterpartSubAccountId: counterpartSubAccountId ?? this.counterpartSubAccountId,
+      counterpartDisplayName: counterpartDisplayName ?? this.counterpartDisplayName,
+      counterpartAvatarUrl: counterpartAvatarUrl ?? this.counterpartAvatarUrl,
       targetSubAccountId: targetSubAccountId ?? this.targetSubAccountId,
       targetContentId: targetContentId ?? this.targetContentId,
       targetContentType: targetContentType ?? this.targetContentType,
       targetContentSummary: targetContentSummary ?? this.targetContentSummary,
+      targetKind: targetKind ?? this.targetKind,
+      targetAvailability: targetAvailability ?? this.targetAvailability,
+      targetReplyCount: targetReplyCount ?? this.targetReplyCount,
       displaySubAccountId: displaySubAccountId ?? this.displaySubAccountId,
       displayName: displayName ?? this.displayName,
       displayAvatarUrl: displayAvatarUrl ?? this.displayAvatarUrl,
@@ -193,12 +264,19 @@ class ProfileInteractionActivityWireDto {
       previewUnavailable: previewUnavailable ?? this.previewUnavailable,
       previewObjectId: previewObjectId ?? this.previewObjectId,
       previewRouteId: previewRouteId ?? this.previewRouteId,
+      outboundShareEventId: outboundShareEventId ?? this.outboundShareEventId,
+      shareText: shareText ?? this.shareText,
+      impactPrimaryText: impactPrimaryText ?? this.impactPrimaryText,
+      impactDeepLink: impactDeepLink ?? this.impactDeepLink,
       filterKeys: filterKeys ?? this.filterKeys,
       commentKind: commentKind ?? this.commentKind,
       commentId: commentId ?? this.commentId,
       parentCommentId: parentCommentId ?? this.parentCommentId,
       viewerReaction: viewerReaction ?? this.viewerReaction,
       createdAt: createdAt ?? this.createdAt,
+      occurredAt: occurredAt ?? this.occurredAt,
+      seenAt: seenAt ?? this.seenAt,
+      readAt: readAt ?? this.readAt,
     );
   }
 }

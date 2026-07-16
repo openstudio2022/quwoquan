@@ -14,7 +14,7 @@
 |------|---------|
 | spec.md | F1~F5 功能范围清晰，O1~O8 边界明确 |
 | acceptance.yaml | A1~A18 覆盖端云链路、存储缓存、codegen、部署、四层测试、工程质量，每条均有 SMART 判定条件 |
-| 阻断项 | **无**。metadata 完整，runtime 能力就绪（`ModuleUser` 已定义、`Repository[T]` + `EventPublisher` + `UnitOfWork` 可用、`NewUserClient()` 已存在） |
+| 阻断项 | 必须先按 D0 把 UserAccount/Persona/Relationship operation 绑定到对象 command/query Facade、Store/Reader 与 typed Slice；不得沿用旧动态 CRUD 假设 |
 | 补充项 | 需新增 `user-service/internal/generated/errors.go`（codegen 产物），需更新 Makefile/CI |
 
 ## 对标分析
@@ -26,9 +26,9 @@
 | 启动流程 | `resolveRuntimeIdentity → loadRuntimeConfig → validate → 依赖注入 → Handler.Routes() → ListenAndServe` | 完全复用，增加 PG/Mongo/Redis 三路初始化 |
 | Handler | `ContentHandler` 注入 3 个 Service，`Routes()` 返回 `http.Handler` | `UserHandler` 注入 6 个 Service |
 | 路由注册 | `RegisterGeneratedRoutes` + `generatedRouteTable` 匹配 method + pathTemplate | 生成 `generated_routes.go`，20+ 路由 |
-| Service | 依赖 `persistence.PostRepository` 接口，Option 注入 | 依赖 `persistence.XxxRepository` 接口 + `repository.UnitOfWork` |
+| Application | Post command/query Facade 依赖对象 Store/Reader port | UserAccount/Persona/Relationship 分别定义 Facade 与端口 |
 | Model | codegen `DO NOT EDIT`，json + bson tag | user 实体 codegen，PG 用 json tag（无 bson） |
-| 存储 | `PostStore`（内存）+ `MongoPostStore`（MongoDB） | PG Store + Mongo Store，按实体选择 |
+| 存储 | 对象专属 Mongo/PG adapter，由 composition root 显式装配 | UserAccount/Persona/Relationship 按 port 注入真实 adapter |
 | 测试 | `TestMain` 启动 testcontainers mongo + miniredis，`testHandler` 供契约测试 | 复用 `testinfra.NewSuite(WithPostgres, WithMongo, WithRedis)` |
 | 错误码 | `generated/errors.go` 定义 `Err*` sentinel | 生成 `Err*` + `AppErrorFrom*`（与 integration-service 模式一致） |
 
@@ -45,8 +45,8 @@ services/user-service/
 ├── cmd/api/main.go
 ├── internal/
 │   ├── domain/{user,follow,block}/model/   # codegen 实体
-│   ├── domain/{user,follow,block}/repository/  # codegen 接口
-│   ├── domain/{user,follow,block}/event/   # codegen 事件
+│   ├── domain/{user,follow,block}/ports/   # 对象专属 Store port
+│   ├── domain/{user,follow,block}/event/   # typed codegen 事件
 │   ├── application/                        # 手写用例
 │   ├── adapters/http/                      # Handler + generated_routes
 │   ├── generated/                          # codegen 错误码
@@ -55,9 +55,10 @@ services/user-service/
 └── configs/
 ```
 
-**方案 B：runtime/repository.Factory 驱动（metadata-first 极致化）**
+**方案 B：跨对象动态 CRUD（禁止）**
 
-由 `runtime/repository.Factory.Create(entityName)` 按 metadata 自动创建 Repository，无需手写 Store。
+该路线已由 D0 零兼容裁决退役：它把聚合不变量、查询 Slice 与存储路由压成
+动态 CRUD，禁止恢复。
 
 **方案 C：扁平化（无子域分包）**
 
@@ -68,7 +69,8 @@ services/user-service/
 理由：
 1. 与 content-service 模式完全一致，团队认知成本为零
 2. user 域有 3 个子域（user/follow/block），分包清晰
-3. `runtime/repository.Factory`（方案 B）尚未被任何服务实际采用，在 user-service 上首次使用风险过高
+3. 跨对象动态 CRUD 无法表达 UserAccount/Persona/Relationship 的
+   owner、version、idempotency 和 Slice，架构上禁止
 4. 扁平化（方案 C）在实体数量多时文件组织混乱
 
 ---
@@ -114,7 +116,7 @@ Write:
 
 | 方案 | 优点 | 缺点 | 选型 |
 |------|------|------|------|
-| A: `runtime/repository.NewCachedRepository` 装饰器 | 自动化，codegen 可生成 | 仅支持单实体缓存，不支持 join 视图 | -- |
+| A: 跨对象缓存装饰器 | 不能表达对象 Slice 与精确失效 | 形成第二数据访问主线 | **禁止** |
 | **B: 手写 Cache 层** | 灵活支持 `user_full_snapshot`（join profile+persona+setting） | 多一层代码 | **选定** |
 | C: Application 层内联缓存 | 无额外层 | 缓存逻辑与业务逻辑耦合 | -- |
 

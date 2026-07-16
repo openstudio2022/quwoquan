@@ -152,6 +152,13 @@ globs: **/*_test.dart,**/test/**/*.dart,**/*_test.go,**/tests/**/*.go,**/accepta
 验收项必须包含：
 
 ```yaml
+quality_facets: [functional, reliability, observability]
+test_object: application_service
+slo_refs:
+  - specs or SLO document path
+observability_refs:
+  - metric, log, trace or dashboard reference
+security_refs: []
 test_evidence:
   primary:
     - layer: local_contract
@@ -159,12 +166,16 @@ test_evidence:
       cases:
         - local_contract.domain.capability.story.case
       envs: [local]
+      test_object: application_service
+      quality_facet: functional
   supporting:
     - layer: api_integration
       suite: suite_id
       cases:
         - api_integration.domain.operation.case
       envs: [beta, gamma]
+      test_object: api_operation
+      quality_facet: contract
     - layer: user_acceptance
       suite: suite_id
       cases:

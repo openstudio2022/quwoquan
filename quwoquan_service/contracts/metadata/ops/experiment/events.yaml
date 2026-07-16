@@ -1,0 +1,11 @@
+version: 1
+aggregate: Experiment
+
+events:
+  - name: ExperimentRolloutUpdated
+    description: 实验变体、流量或启停状态完成一次带版本的原子更新。
+    producer: product-ops-service
+    consumers: [recommendation-engine, platform-ops]
+    channel: transactional_outbox
+    payload_entity: Experiment
+    payload_fields: [id, key, version, status, variants, startsAt, endsAt, updatedAt]

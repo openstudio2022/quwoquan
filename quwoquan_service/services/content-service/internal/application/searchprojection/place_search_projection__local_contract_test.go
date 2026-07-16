@@ -46,13 +46,13 @@ func TestDerivePlaceRefEligibility(t *testing.T) {
 	}
 
 	bound := base
-	bound.CanonicalEntityId = "entity_123"
+	bound.PrimaryHomepageId = "homepage_123"
 	if _, ok := DerivePlaceRef(bound); ok {
 		t.Fatalf("a place bound to a canonical entity must NOT derive a place (entity.homepage carries it)")
 	}
 
 	homed := base
-	homed.PrimaryHomepageId = "home_123"
+	homed.PrimaryHomepageId = "homepage_456"
 	if _, ok := DerivePlaceRef(homed); ok {
 		t.Fatalf("a place bound to a primary homepage must NOT derive a place")
 	}

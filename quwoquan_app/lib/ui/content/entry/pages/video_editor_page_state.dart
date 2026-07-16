@@ -123,10 +123,6 @@ class _VideoEditorPageState extends State<VideoEditorPage> {
             type: UiErrorActionType.retry,
             label: UITextConstants.tryAgain,
           ),
-          secondaryAction: const UiErrorAction(
-            type: UiErrorActionType.back,
-            label: UITextConstants.back,
-          ),
           dismissible: false,
         );
       });

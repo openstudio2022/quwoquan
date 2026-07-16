@@ -1,0 +1,10 @@
+config:
+  version: "v2026.07.12.0"
+  min_image_version: "0.0.1"
+  max_image_version: "9.9.9"
+
+service:
+  name: entity-service
+
+# Homepage import evidence now follows the canonical environment-scoped
+# .qwq_output run layout.

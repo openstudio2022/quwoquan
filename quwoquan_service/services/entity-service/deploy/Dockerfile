@@ -1,8 +1,6 @@
 # Multi-stage build for entity-service
 # Build context: quwoquan_service/
-# entity-service is its own Go module (replace quwoquan_service => ../..),
-# so the parent module must be present in the build context, mirroring how
-# seed-box builds integration-service.
+# 服务保持独立部署二进制，依赖图由根 quwoquan_service/go.mod 统一管理。
 
 ARG GO_BASE_IMAGE=golang:1.24-bookworm
 ARG ALPINE_BASE_IMAGE=alpine:3.19
@@ -16,13 +14,10 @@ ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
 WORKDIR /build
 COPY go.mod go.sum ./
-COPY services/entity-service/go.mod services/entity-service/go.sum ./services/entity-service/
-RUN go mod download && \
-    cd services/entity-service && go mod download
+RUN go mod download
 COPY . .
-RUN cd services/entity-service && \
-    CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-    go build ${GO_BUILD_FLAGS} -o /entity-service ./cmd/api/
+RUN CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+    go build ${GO_BUILD_FLAGS} -o /entity-service ./services/entity-service/cmd/api/
 
 FROM ${ALPINE_BASE_IMAGE}
 RUN if command -v apk >/dev/null 2>&1; then \

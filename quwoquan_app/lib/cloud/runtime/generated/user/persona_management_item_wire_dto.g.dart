@@ -23,6 +23,7 @@ class PersonaManagementItemWireDto {
   final String lastProfileSyncSource;
   final DateTime? lastActivatedAt;
   final String subjectType;
+  final int version;
 
   PersonaManagementItemWireDto({
     this.subAccountId = '',
@@ -46,6 +47,7 @@ class PersonaManagementItemWireDto {
     this.lastProfileSyncSource = '',
     this.lastActivatedAt,
     this.subjectType = 'persona',
+    this.version = 1,
   });
 
   factory PersonaManagementItemWireDto.fromMap(Map<String, dynamic> m) {
@@ -71,6 +73,7 @@ class PersonaManagementItemWireDto {
       lastProfileSyncSource: m['lastProfileSyncSource']?.toString() ?? '',
       lastActivatedAt: _parseDateTime(m['lastActivatedAt']) ?? null,
       subjectType: m['subjectType']?.toString() ?? 'persona',
+      version: (m['version'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -97,6 +100,7 @@ class PersonaManagementItemWireDto {
       'lastProfileSyncSource': lastProfileSyncSource,
       'lastActivatedAt': lastActivatedAt,
       'subjectType': subjectType,
+      'version': version,
     };
   }
 
@@ -122,6 +126,7 @@ class PersonaManagementItemWireDto {
     String? lastProfileSyncSource,
     DateTime? lastActivatedAt,
     String? subjectType,
+    int? version,
   }) {
     return PersonaManagementItemWireDto(
       subAccountId: subAccountId ?? this.subAccountId,
@@ -145,6 +150,7 @@ class PersonaManagementItemWireDto {
       lastProfileSyncSource: lastProfileSyncSource ?? this.lastProfileSyncSource,
       lastActivatedAt: lastActivatedAt ?? this.lastActivatedAt,
       subjectType: subjectType ?? this.subjectType,
+      version: version ?? this.version,
     );
   }
 }

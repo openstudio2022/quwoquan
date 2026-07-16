@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
 // recPatchContract mirrors content/post/projections/recommendation_realtime_patch.yaml.
@@ -54,12 +51,8 @@ type recPatchEnvelopeField struct {
 }
 
 func readRecPatchContract(path string) (*recPatchContract, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
 	var out recPatchContract
-	if err := yaml.Unmarshal(raw, &out); err != nil {
+	if err := decodeMetadataDocument(path, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil
@@ -82,8 +75,8 @@ func (c *recPatchContract) enumClassFor(ref string) string {
 // parser for the recommendation realtime patch envelope (commercial stage 7 §G).
 func writeRecommendationFeedPatches(appDir, metadataDir string) error {
 	contractPath := filepath.Join(metadataDir, "content", "post", "projections", "recommendation_realtime_patch.yaml")
-	if _, err := os.Stat(contractPath); err != nil {
-		return fmt.Errorf("recommendation realtime patch contract: %w", err)
+	if !hasMetadataDocument(contractPath) {
+		return fmt.Errorf("recommendation realtime patch contract is absent")
 	}
 	contract, err := readRecPatchContract(contractPath)
 	if err != nil {

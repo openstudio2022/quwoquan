@@ -6,7 +6,9 @@ class EntityRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'CreateHomepageClaimRequest': 'entity.homepage.claim.create',
+    'CreateHomepageReview': 'entity.create.homepage.review',
     'CreateHomepageStatusReport': 'entity.homepage.status_report.create',
+    'DeleteHomepageReview': 'entity.delete.homepage.review',
     'FollowHomepage': 'entity.follow.homepage',
     'GetEntityImpact': 'entity.get.entity.impact',
     'GetHomepageDetail': 'entity.homepage.detail',
@@ -24,10 +26,13 @@ class EntityRequestPageIds {
     'SuggestHomepageCandidate': 'entity.homepage.suggest',
     'UnfollowHomepage': 'entity.unfollow.homepage',
     'UpdateClaimedHomepageBasics': 'entity.homepage.basics.update',
+    'UpdateHomepageReview': 'entity.update.homepage.review',
   };
 
   static const String createHomepageClaimRequest = 'entity.homepage.claim.create';
+  static const String createHomepageReview = 'entity.create.homepage.review';
   static const String createHomepageStatusReport = 'entity.homepage.status_report.create';
+  static const String deleteHomepageReview = 'entity.delete.homepage.review';
   static const String followHomepage = 'entity.follow.homepage';
   static const String getEntityImpact = 'entity.get.entity.impact';
   static const String getHomepageDetail = 'entity.homepage.detail';
@@ -45,4 +50,5 @@ class EntityRequestPageIds {
   static const String suggestHomepageCandidate = 'entity.homepage.suggest';
   static const String unfollowHomepage = 'entity.unfollow.homepage';
   static const String updateClaimedHomepageBasics = 'entity.homepage.basics.update';
+  static const String updateHomepageReview = 'entity.update.homepage.review';
 }

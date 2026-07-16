@@ -172,7 +172,7 @@ func (c Catalog) DeclareRequestForTask(taskType string, aggregateID string, payl
 	if !ok {
 		return DeclareTaskRequest{}, fmt.Errorf("task %s is not defined", taskType)
 	}
-	if err := validatePayloadAllowlist(payload, spec.PayloadAllowlist); err != nil {
+	if err := ValidatePayloadAllowlist(payload, spec.PayloadAllowlist); err != nil {
 		return DeclareTaskRequest{}, err
 	}
 	startAt := now.UTC().Add(spec.MergePolicy.DelayFromNow)

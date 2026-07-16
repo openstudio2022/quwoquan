@@ -4,10 +4,13 @@ import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_presenter.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
 import 'package:quwoquan_app/core/widgets/app_toast.dart';
+import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/share/forward_external_share_service.dart';
 import 'package:quwoquan_app/ui/share/forward_share_models.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_confirm_sheet.dart';
@@ -52,6 +55,12 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
     ).take(AppForwardLimits.recentRecipients).toList(growable: false);
   }
 
+  void _retryRecentRecipients() {
+    setState(() {
+      _recentFuture = _loadRecentRecipients();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
@@ -73,6 +82,7 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          _ForwardShareHeader(primary: primary),
           Text(
             UITextConstants.forwardMostContacted,
             style: TextStyle(
@@ -89,6 +99,25 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
                 return SizedBox(
                   height: AppSpacing.avatarUserXl + AppSpacing.containerLg,
                   child: const Center(child: CupertinoActivityIndicator()),
+                );
+              }
+              if (snapshot.hasError) {
+                return AppSectionErrorCard(
+                  margin: EdgeInsets.zero,
+                  semantic: runtimeErrorSemantic(
+                    context,
+                    error:
+                        snapshot.error ??
+                        StateError(UITextConstants.loadFailed),
+                    category: UiErrorCategory.sectionLoad,
+                    scope: UiErrorScope.section,
+                  ),
+                  onAction: (action) async {
+                    if (action.type == UiErrorActionType.retry ||
+                        action.type == UiErrorActionType.resubmit) {
+                      _retryRecentRecipients();
+                    }
+                  },
                 );
               }
               final recipients = snapshot.data ?? const <AppForwardRecipient>[];
@@ -139,10 +168,6 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
             ],
           ),
           SizedBox(height: AppSpacing.containerLg),
-          _ForwardSheetCancelButton(
-            isDark: isDark,
-            onPressed: () => Navigator.of(context).pop(),
-          ),
         ],
       ),
     );
@@ -173,17 +198,46 @@ class _ForwardShareSheetState extends ConsumerState<ForwardShareSheet> {
   }
 
   Future<void> _openExternalShare(ForwardExternalShareTarget target) async {
-    final result = await ref
-        .read(forwardExternalShareServiceProvider)
-        .share(payload: widget.payload, target: target);
+    late final ForwardExternalShareResult result;
+    try {
+      result = await ref
+          .read(forwardExternalShareServiceProvider)
+          .share(payload: widget.payload, target: target);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppActionErrorFeedback.show(
+        context,
+        semantic: runtimeErrorSemantic(
+          context,
+          error: error,
+          category: UiErrorCategory.submit,
+          scope: UiErrorScope.dialog,
+        ),
+        onAction: (action) async {
+          if (action.type == UiErrorActionType.retry ||
+              action.type == UiErrorActionType.resubmit) {
+            await _openExternalShare(target);
+          }
+        },
+      );
+      return;
+    }
     if (!mounted) {
       return;
     }
+    if (result.delivery == ForwardExternalShareDelivery.cancelled) {
+      return;
+    }
     final message = switch (result.delivery) {
-      ForwardExternalShareDelivery.targetedWechat =>
+      ForwardExternalShareDelivery.wechatAccepted =>
         UITextConstants.forwardOpeningWechat,
+      ForwardExternalShareDelivery.wechatCompleted =>
+        UITextConstants.shareCompleted,
       ForwardExternalShareDelivery.systemShareFallback =>
         UITextConstants.forwardShareSystemFallback,
+      ForwardExternalShareDelivery.cancelled => '',
       ForwardExternalShareDelivery.unavailable =>
         UITextConstants.forwardExternalShareUnavailable,
     };
@@ -272,39 +326,44 @@ class _ForwardTargetAction extends StatelessWidget {
   }
 }
 
-class _ForwardSheetCancelButton extends StatelessWidget {
-  const _ForwardSheetCancelButton({
-    required this.isDark,
-    required this.onPressed,
-  });
+class _ForwardShareHeader extends StatelessWidget {
+  const _ForwardShareHeader({required this.primary});
 
-  final bool isDark;
-  final VoidCallback onPressed;
+  final Color primary;
 
   @override
   Widget build(BuildContext context) {
-    final primary =
-        SettingsSemanticConstants.conversationSheetPrimaryLabelColor(isDark);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: SettingsSemanticConstants.blockBorderColor(isDark),
-            width: AppSpacing.hairline,
+    return SizedBox(
+      height: AppSpacing.modalHeaderHeight,
+      child: Stack(
+        alignment: Alignment.center,
+        children: <Widget>[
+          Text(
+            UITextConstants.shareTo,
+            style: TextStyle(
+              fontSize: AppTypography.iosTitle3,
+              fontWeight: AppTypography.semiBold,
+              color: primary,
+            ),
           ),
-        ),
-      ),
-      child: CupertinoButton(
-        padding: EdgeInsets.only(top: AppSpacing.containerMd),
-        onPressed: onPressed,
-        child: Text(
-          UITextConstants.cancel,
-          style: TextStyle(
-            fontSize: AppTypography.iosBody,
-            fontWeight: AppTypography.medium,
-            color: primary,
+          PositionedDirectional(
+            end: 0,
+            child: CupertinoButton(
+              key: const ValueKey<String>('forward-share-close-button'),
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(
+                AppSpacing.minInteractiveSize,
+                AppSpacing.minInteractiveSize,
+              ),
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: Icon(
+                CupertinoIcons.xmark,
+                size: AppSpacing.iconMedium,
+                color: primary,
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

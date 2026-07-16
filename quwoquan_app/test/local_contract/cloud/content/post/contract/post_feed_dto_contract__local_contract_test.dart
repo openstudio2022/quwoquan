@@ -224,7 +224,7 @@ void main() {
     });
 
     test('nextCursor from CursorPage is non-empty when more data exists', () {
-      // CursorPage.nextCursor is managed by ContentRepository, not FeedItemDto.
+      // CursorPage.nextCursor is managed by ContentReadRepository, not FeedItemDto.
       // This test validates that CursorPage correctly stores and returns the cursor.
       const cursorValue = 'post_d1';
       final page = CursorPage<FeedItemDto>(

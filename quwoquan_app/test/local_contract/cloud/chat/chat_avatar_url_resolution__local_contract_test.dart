@@ -53,10 +53,14 @@ void main() {
       final item = ChatMessageDto(
         id: 'msg_1',
         conversationId: 'conv_1',
+        seq: 1,
+        clientMsgId: 'client_msg_1',
         senderId: 'user_2',
         senderName: '契约联系人',
         senderAvatar: '/media/avatar/s/archived-avatar/user/user_2/v3/profile.png?v=3',
+        type: 'text',
         content: '你好',
+        status: 'sent',
       ).toDisplayItem(currentUserId: 'user_me');
 
       expect(
@@ -73,28 +77,35 @@ void main() {
       final item = ChatMessageDto(
         id: 'msg_img',
         conversationId: 'conv_1',
+        seq: 2,
+        clientMsgId: 'client_msg_img',
         senderId: 'user_2',
         type: 'image',
-        media: <String, dynamic>{
-          'url': 'https://cdn.example.com/photo.jpg',
-          'thumbnailUrl': 'https://cdn.example.com/thumb.jpg',
-        },
+        mediaAssetId: 'asset_img',
+        mediaDeliveryUrl: 'https://cdn.example.com/photo.jpg',
+        mediaType: 'image',
+        mediaContentType: 'image/jpeg',
+        status: 'sent',
       ).toDisplayItem(currentUserId: 'user_me');
 
       expect(item.type, 'image');
       expect(item.imageUrl, 'https://cdn.example.com/photo.jpg');
-      expect(item.thumbnailUrl, 'https://cdn.example.com/thumb.jpg');
+      expect(item.thumbnailUrl, 'https://cdn.example.com/photo.jpg');
     });
 
     test('image message display falls back to image url when thumbnail missing', () {
       final item = ChatMessageDto(
         id: 'msg_img_fallback',
         conversationId: 'conv_1',
+        seq: 3,
+        clientMsgId: 'client_msg_img_fallback',
         senderId: 'user_2',
         type: 'image',
-        media: <String, dynamic>{
-          'url': 'https://cdn.example.com/photo2.jpg',
-        },
+        mediaAssetId: 'asset_img_fallback',
+        mediaDeliveryUrl: 'https://cdn.example.com/photo2.jpg',
+        mediaType: 'image',
+        mediaContentType: 'image/jpeg',
+        status: 'sent',
       ).toDisplayItem(currentUserId: 'user_me');
 
       expect(item.imageUrl, 'https://cdn.example.com/photo2.jpg');

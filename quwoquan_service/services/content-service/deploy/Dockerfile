@@ -34,5 +34,9 @@ RUN if command -v apk >/dev/null 2>&1; then \
     fi
 COPY --from=builder /content-service /usr/local/bin/content-service
 COPY services/content-service/configs/ /etc/content-service/
+COPY contracts/metadata/recommendation/rec_model/segments.yaml /etc/quwoquan/metadata/recommendation/segments.yaml
+COPY contracts/metadata/recommendation/rec_model/policy.yaml /etc/quwoquan/metadata/recommendation/policy.yaml
+ENV QWQ_SEGMENTS_PATH=/etc/quwoquan/metadata/recommendation/segments.yaml
+ENV QWQ_REC_POLICY_PATH=/etc/quwoquan/metadata/recommendation/policy.yaml
 EXPOSE 18080
 CMD ["content-service"]

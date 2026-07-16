@@ -9,21 +9,24 @@ import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('关闭 unified create editor flag 后进入回退模式但不恢复旧 taxonomy', (tester) async {
+  testWidgets('关闭 unified create editor flag 后进入回退模式但不恢复旧 taxonomy', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+          ...mockContentFacetOverrides(MockContentRepository()),
           circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
-          contentFeatureFlagProvider('enable_unified_create_editor').overrideWith(
-            (ref) => false,
-          ),
+          contentFeatureFlagProvider(
+            'enable_unified_create_editor',
+          ).overrideWith((ref) => false),
         ],
         child: ScreenUtilInit(
           designSize: const Size(390, 844),

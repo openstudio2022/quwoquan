@@ -198,49 +198,6 @@ void syncProfileFollowIntent(
       .setFollowState(subAccountId, isFollowing);
 }
 
-Future<bool> syncPostShareIntent(
-  WidgetRef ref, {
-  required String postId,
-  required int baselineShareCount,
-}) async {
-  ref
-      .read(postInteractionStateProvider.notifier)
-      .stageOptimisticShare(postId, baseShareCount: baselineShareCount);
-  ref
-      .read(discoveryStateProvider.notifier)
-      .setShareCount(postId, baselineShareCount + 1);
-  try {
-    final changed = await ref
-        .read(contentRepositoryProvider)
-        .sharePost(postId: postId);
-    if (!changed) {
-      ref
-          .read(postInteractionStateProvider.notifier)
-          .rollbackOptimisticShare(
-            postId,
-            baseShareCount: baselineShareCount,
-            isShared: true,
-          );
-      ref
-          .read(discoveryStateProvider.notifier)
-          .setShareCount(postId, baselineShareCount);
-    }
-    return changed;
-  } catch (_) {
-    ref
-        .read(postInteractionStateProvider.notifier)
-        .rollbackOptimisticShare(
-          postId,
-          baseShareCount: baselineShareCount,
-          isShared: false,
-        );
-    ref
-        .read(discoveryStateProvider.notifier)
-        .setShareCount(postId, baselineShareCount);
-    rethrow;
-  }
-}
-
 void syncPostCommentCount(
   WidgetRef ref, {
   required String postId,

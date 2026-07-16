@@ -9,12 +9,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	usermodel "quwoquan_service/services/user-service/internal/domain/user/model"
-	greetingrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	greetingrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 type PgGreetingStore struct{ pgGreetingStoreBase }
 
-var _ greetingrepo.GreetingRepository = (*PgGreetingStore)(nil)
+var _ greetingrepo.GreetingRequestStore = (*PgGreetingStore)(nil)
 
 func NewPgGreetingStore(pool *pgxpool.Pool) *PgGreetingStore {
 	return &PgGreetingStore{pgGreetingStoreBase{pool: pool}}

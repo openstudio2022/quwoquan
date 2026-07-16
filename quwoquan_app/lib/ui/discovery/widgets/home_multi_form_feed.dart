@@ -37,11 +37,12 @@ import 'package:quwoquan_app/components/settings_conversation/more_actions_popup
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/components/post/post_preview_list_tile.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
-    show BehaviorAction, ReferralSource;
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+    show ReferralSource;
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/models/discovery_presentation_wire.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/core/media/media_aspect_ratio.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
@@ -135,7 +136,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
       contentFeatureFlagProvider('enable_article_distribution_profiles'),
     );
     final embeddedCatalog = ref
-        .watch(contentRepositoryProvider)
+        .watch(contentConfigRepositoryProvider)
         .usesEmbeddedContentCatalog;
     final shouldShowFollowingArticles =
         channelId == 'following' &&
@@ -158,7 +159,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
         .toList(growable: false);
     final articleFallback = shouldShowFollowingArticles
         ? ref
-              .read(contentRepositoryProvider)
+              .read(contentReadRepositoryProvider)
               .embeddedDiscoveryArticlePostsForFollowingMix()
         : const <PostBaseDto>[];
     final articlesById = <String, PostBaseDto>{
@@ -274,7 +275,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
             isDark: isDark,
             summaryLineLimit:
                 _followingArticleDistributionProfile.summaryLineLimit,
-            sourceCircleName: _resolveSourceCircleName(ref, dto.id),
             onTap: () {
               final feedSession = ref.read(feedSessionProvider.notifier);
               ref
@@ -329,7 +329,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
             dto.id,
             fallback: dto.commentCount,
           ),
-          sourceCircleName: _resolveSourceCircleName(ref, dto.id),
           inlineImageCarousel: effectiveInlineCarousel,
           videoScrollSignal: videoScrollSignal,
           isFocused: index == 0,
@@ -528,7 +527,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     PostBaseDto post, {
     required bool enableIdentityTemplate,
   }) {
-    runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
+    runWhenLoggedIn(ref, context, AuthGateReason.share, () {
       final template = buildDiscoveryShareTemplate(
         post: post,
         wire: _rawDiscoveryItem(ref, post.id),
@@ -537,6 +536,13 @@ class HomeMultiFormFeed extends ConsumerWidget {
       ContentShareSheet.show(
         context,
         template: template,
+        circlePostPlacementWriter: ref.read(
+          homeFeedCirclePostPlacementWriterProvider,
+        ),
+        circleMembershipQuery: ref.read(homeFeedCircleMembershipQueryProvider),
+        outboundShareWriter: ref.read(
+          homeFeedContentOutboundShareWriterProvider,
+        ),
         onActionCompleted: (result) async {
           await _recordShare(ref, post.id, result.actionId);
         },
@@ -653,39 +659,43 @@ class HomeMultiFormFeed extends ConsumerWidget {
           );
         },
         onReport: () {
-          runWhenLoggedIn(ref, context, AuthGateReason.report, () {
-            final feedSession = ref.read(feedSessionProvider.notifier);
-            ref
-                .read(behaviorRepositoryProvider)
-                .reportSingle(
-                  contentId: post.id,
-                  action: BehaviorAction.report,
-                  contentType: post.type,
-                  authorId: post.authorId,
-                  referralSource: ReferralSource.organicFeed,
-                  feedRequestId: feedSession.currentFeedRequestId,
-                  channelId: channelId,
-                  rankingVersion: feedSession.currentRankingVersion,
-                  reasonVersion: feedSession.currentReasonVersion,
-                  recallPath: post.recallPath,
-                  contentVertical: post.contentVertical,
-                  supplySource: post.supplySource,
+          runWhenLoggedIn(
+            ref,
+            context,
+            AuthGateReason.report,
+            () async {
+              try {
+                await ref
+                    .read(homeFeedContentReportCommandWriterProvider)
+                    .createReport(
+                      CreateContentReportCommand(
+                        targetId: post.id,
+                        targetType: ContentReportTargetType.post,
+                        reason: ContentReportReason.other,
+                      ),
+                    );
+                if (!context.mounted) return;
+                _dismissFeedPost(
+                  context,
+                  ref,
+                  post.id,
+                  toast: UITextConstants.commentReportSubmitted,
                 );
-            ref
-                .read(reportRepositoryProvider)
-                .createReport(
-                  targetId: post.id,
-                  targetType: 'post',
-                  reason: 'inappropriate',
+              } catch (error) {
+                if (!context.mounted) return;
+                await AppActionErrorFeedback.show(
+                  context,
+                  semantic: runtimeErrorSemantic(
+                    context,
+                    error: error,
+                    category: UiErrorCategory.submit,
+                    scope: UiErrorScope.global,
+                  ),
                 );
-            // 任务 A · 举报成功后立即移除卡片，避免重复举报与停留干扰。
-            _dismissFeedPost(
-              context,
-              ref,
-              post.id,
-              toast: UITextConstants.commentReportSubmitted,
-            );
-          });
+              }
+            },
+            dismissPolicy: LoginDismissPolicy.safeFallback,
+          );
         },
       ),
     );
@@ -716,18 +726,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
     String postId,
     String actionId,
   ) async {
-    final raw = _rawDiscoveryItem(ref, postId)?.toWireMap();
-    final rawShareCount = (raw?['shareCount'] as num?)?.toInt() ?? 0;
-    final baselineShareCount = effectivePostShareCount(
-      ref,
-      postId,
-      fallback: rawShareCount,
-    );
-    await syncPostShareIntent(
-      ref,
-      postId: postId,
-      baselineShareCount: baselineShareCount,
-    );
     ref
         .read(contentBehaviorTrackerProvider)
         .trackShare(postId, tags: <String>[actionId]);
@@ -749,13 +747,9 @@ class HomeMultiFormFeed extends ConsumerWidget {
     }
   }
 
-  String _resolveSourceCircleName(WidgetRef ref, String postId) {
-    return _rawDiscoveryItem(ref, postId)?.circleName ?? '';
-  }
-
   DiscoveryPresentationWire? _rawDiscoveryItem(WidgetRef ref, String postId) {
     return ref
-        .read(contentRepositoryProvider)
+        .read(contentReadRepositoryProvider)
         .discoveryPresentationWireForPost(postId);
   }
 

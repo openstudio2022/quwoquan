@@ -60,7 +60,7 @@ func (s *MongoIntersectionSource) FactReasons(ctx context.Context, userID, chann
 			now,
 			"relationship",
 			"friend_tags",
-			"followEdge",
+			"relationship",
 			"followeeDiscussedThis",
 			"view_object",
 			friendTags,
@@ -209,24 +209,25 @@ const (
 	maxIntersectionPoint = 3
 )
 
-// followeeSet 读取 follow_edges 中 userID 关注的人（上限 maxFolloweeScan）。
+// followeeSet reads the relationship projection for targets currently followed
+// by userID (bounded to protect page-fetch latency).
 func (s *MongoIntersectionSource) followeeSet(ctx context.Context, userID string) map[string]struct{} {
 	out := map[string]struct{}{}
 	if s.social == nil || s.social.db == nil || strings.TrimSpace(userID) == "" {
 		return out
 	}
-	cur, err := s.social.db.Collection("follow_edges").Find(ctx,
-		bson.M{"followerId": userID}, mongoFindLimit(maxFolloweeScan))
+	cur, err := s.social.db.Collection("persona_follow_projection").Find(ctx,
+		bson.M{"sourcePersonaId": userID, "following": true}, mongoFindLimit(maxFolloweeScan))
 	if err != nil {
 		return out
 	}
 	defer cur.Close(ctx)
 	for cur.Next(ctx) {
 		var doc struct {
-			FolloweeID string `bson:"followeeId"`
+			TargetPersonaID string `bson:"targetPersonaId"`
 		}
-		if err := cur.Decode(&doc); err == nil && strings.TrimSpace(doc.FolloweeID) != "" {
-			out[doc.FolloweeID] = struct{}{}
+		if err := cur.Decode(&doc); err == nil && strings.TrimSpace(doc.TargetPersonaID) != "" {
+			out[doc.TargetPersonaID] = struct{}{}
 		}
 	}
 	return out
@@ -360,13 +361,13 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 	if s.social == nil || s.social.db == nil {
 		return intersectionapp.IntersectionReasonView{}, false
 	}
-	followColl := s.social.db.Collection("follow_edges")
+	relationshipColl := s.social.db.Collection("persona_follow_projection")
 	var follow struct {
-		FollowerID string `bson:"followerId"`
-		FolloweeID string `bson:"followeeId"`
+		SourcePersonaID string `bson:"sourcePersonaId"`
+		TargetPersonaID string `bson:"targetPersonaId"`
 	}
-	viewerFollows := followColl.FindOne(ctx, bson.M{"followerId": viewerID, "followeeId": objectID}).Decode(&follow) == nil
-	objectFollows := followColl.FindOne(ctx, bson.M{"followerId": objectID, "followeeId": viewerID}).Decode(&follow) == nil
+	viewerFollows := relationshipColl.FindOne(ctx, bson.M{"sourcePersonaId": viewerID, "targetPersonaId": objectID, "following": true}).Decode(&follow) == nil
+	objectFollows := relationshipColl.FindOne(ctx, bson.M{"sourcePersonaId": objectID, "targetPersonaId": viewerID, "following": true}).Decode(&follow) == nil
 
 	points := make([]intersectionapp.IntersectionPointView, 0, 4)
 
@@ -456,6 +457,7 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 	return intersectionapp.IntersectionReasonView{
 		IntersectionID:     objectID + "_relationship",
 		IntersectionClass:  "fact",
+		Kind:               points[0].SourceRef,
 		Dimension:          "relationship",
 		DisplayName:        displayName,
 		AvatarURL:          avatarURL,
@@ -465,12 +467,13 @@ func (s *MongoIntersectionSource) viewerRelationReason(ctx context.Context, now 
 		RelationObjectID:   objectID,
 		ActionType:         relationActionType(objectType),
 		ActionTargetID:     objectID,
-		Source:             "followEdge",
+		Source:             "relationship",
 		FreshAt:            now.Format(time.RFC3339),
 		ExpiresAt:          now.Add(7 * 24 * time.Hour).Format(time.RFC3339),
 		IntersectionPoints: points,
 		FactPointCount:     len(points),
 		TotalPointCount:    len(points),
+		ObjectKind:         objectKindForObjectType(objectType),
 	}, true
 }
 
@@ -589,7 +592,37 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		visitorIDs = append(visitorIDs, id)
 	}
 	sort.Strings(visitorIDs)
-	n := len(visitorIDs)
+	actorEvidence := make([]intersectionapp.IntersectionActorEvidenceView, 0, len(visitorIDs))
+	sampleNames := make([]string, 0, maxIntersectionPoint)
+	for _, visitorID := range visitorIDs {
+		displayName, avatarURL := s.userDisplayProfile(ctx, visitorID)
+		if displayName == "" {
+			// 事实展示必须有可解释的真实用户资料；禁止用 userId 猜展示名。
+			continue
+		}
+		if len(sampleNames) < maxIntersectionPoint {
+			sampleNames = append(sampleNames, displayName)
+		}
+		actorEvidence = append(actorEvidence, intersectionapp.IntersectionActorEvidenceView{
+			ActorID:           visitorID,
+			DisplayName:       displayName,
+			AvatarURL:         avatarURL,
+			RelationLabel:     "你关注的人",
+			ActionSummaryText: "到访过",
+			SourceRef:         "followeeVisited",
+			PrivacyState:      "visible",
+			Target: &intersectionapp.IntersectionTargetView{
+				ObjectType: "user",
+				ObjectID:   visitorID,
+				ObjectKind: "person",
+				RouteID:    "userProfile",
+			},
+		})
+	}
+	if len(actorEvidence) == 0 {
+		return intersectionapp.IntersectionReasonView{}, false
+	}
+	n := len(actorEvidence)
 	// R-ID01：桥接型统一为单聚合点 Count=n（取代 reason 级 SharedCount），
 	// 端/Explain 经 anchor.Count 取数；样本走 SampleText（前 maxIntersectionPoint 个访客）。
 	points := []intersectionapp.IntersectionPointView{{
@@ -601,25 +634,30 @@ func (s *MongoIntersectionSource) followeeVisitedReason(ctx context.Context, now
 		SourceRef:   "followeeVisited",
 		Visibility:  "public",
 		Count:       n,
-		SampleText:  strings.Join(headKeys(visitorIDs, maxIntersectionPoint), "、"),
+		SampleText:  strings.Join(sampleNames, "、"),
 	}}
 	displayName := s.objectDisplayName(ctx, objectID, objectType)
 	return intersectionapp.IntersectionReasonView{
-		IntersectionID:     objectID + "_followee_visited",
-		IntersectionClass:  "fact",
-		Dimension:          "relationship",
-		DisplayName:        displayName,
-		Strength:           scoreFromCount(n, 4),
-		RelationKind:       "bridge",
-		RelationObjectID:   objectID,
-		ActionType:         relationActionType(objectType),
-		ActionTargetID:     objectID,
-		Source:             "followEdge",
-		FreshAt:            now.Format(time.RFC3339),
-		ExpiresAt:          now.Add(7 * 24 * time.Hour).Format(time.RFC3339),
-		IntersectionPoints: points,
-		FactPointCount:     1,
-		TotalPointCount:    1,
+		IntersectionID:            objectID + "_followee_visited",
+		IntersectionClass:         "fact",
+		Kind:                      "followeeVisited",
+		Dimension:                 "relationship",
+		DisplayName:               displayName,
+		Strength:                  scoreFromCount(n, 4),
+		RelationKind:              "bridge",
+		RelationObjectID:          objectID,
+		ActionType:                relationActionType(objectType),
+		ActionTargetID:            objectID,
+		Source:                    "relationship",
+		FreshAt:                   now.Format(time.RFC3339),
+		ExpiresAt:                 now.Add(7 * 24 * time.Hour).Format(time.RFC3339),
+		IntersectionPoints:        points,
+		FactPointCount:            1,
+		TotalPointCount:           1,
+		ActorEvidenceTotalCount:   len(actorEvidence),
+		ActorEvidenceCompleteness: "complete",
+		ActorEvidence:             actorEvidence,
+		ObjectKind:                objectKindForObjectType(objectType),
 	}, true
 }
 

@@ -1,0 +1,66 @@
+version: 1
+read_model: HomepageSource
+
+description: |
+  实体主页公开主底稿来源摘要。只允许 canonical HTTPS URL；sourceRefs/primaryEvidenceRef
+  属服务端与数据工程内部审计字段，不进入该 App 投影。
+
+source_entities:
+  - Homepage
+
+consumers:
+  - app
+
+client_projection:
+  dart_class: HomepageSource
+  base_class: ""
+  output_path: cloud/runtime/generated/entity/homepage_source.g.dart
+  fields:
+    - name: sourceKind
+      dart_type: String
+      nullable: false
+      source: sourceKind
+      aliases: [sourceKind]
+      default: "''"
+
+    - name: sourceUrl
+      dart_type: String
+      nullable: false
+      source: sourceUrl
+      aliases: [sourceUrl, url]
+      default: "''"
+
+    - name: title
+      dart_type: String
+      nullable: false
+      source: title
+      aliases: [title]
+      default: "''"
+
+    - name: fetchedAt
+      dart_type: String
+      nullable: false
+      source: fetchedAt
+      aliases: [fetchedAt]
+      default: "''"
+
+    - name: snapshotHash
+      dart_type: String
+      nullable: false
+      source: snapshotHash
+      aliases: [snapshotHash]
+      default: "''"
+
+    - name: policyRevision
+      dart_type: String
+      nullable: false
+      source: policyRevision
+      aliases: [policyRevision]
+      default: "''"
+
+    - name: sourceUseMode
+      dart_type: String
+      nullable: false
+      source: sourceUseMode
+      aliases: [sourceUseMode]
+      default: "''"

@@ -89,20 +89,13 @@ class AppLinkTemplates {
     });
   }
 
-  static String postAppDeepLink(String postId, {bool visibilityIsCircleVisible = false}) {
+  static String postAppDeepLink(String postId) {
     final postIdNorm = postId.trim();
     if (postIdNorm.isEmpty) return '';
     final path = _fillPathTemplate('post/{postId}', <String, String>{
       'postId': postIdNorm,
     });
-    final qp = <String, String>{};
-    if (visibilityIsCircleVisible) qp['scope'] = 'circle';
-    return Uri(
-      scheme: 'quwoquan',
-      host: 'content',
-      path: '/$path',
-      queryParameters: qp.isEmpty ? null : qp,
-    ).toString();
+    return Uri(scheme: 'quwoquan', host: 'content', path: '/$path').toString();
   }
 
 

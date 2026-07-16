@@ -18,7 +18,7 @@ domain_acceptance:
     tests:
       planned:
       - file: quwoquan_service/services/chat-service/tests/api_integration/assistant_mentioned_stream_contract__api_integration_test.go
-      - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/assistant_mentioned_chat_contract__local_contract_test.go
       - file: quwoquan_app/test/user_acceptance/journeys/chat/chat_assistant_journey__user_acceptance_test.dart
       recorded:
       - file: quwoquan_service/services/chat-service/tests/api_integration/event_publish_contract__api_integration_test.go

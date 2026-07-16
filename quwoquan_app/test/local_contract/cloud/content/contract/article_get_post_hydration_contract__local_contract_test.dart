@@ -3,12 +3,19 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/content_mock_data.dart';
 import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/services/post_view_projection.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 void main() {
   group('Article getPost hydration contract', () {
@@ -34,19 +41,32 @@ void main() {
       final mockRepo = MockContentRepository();
       final mockDetail = await mockRepo.getPost(postId: postId);
       final rawFixture = mockDetail.mergedArticleWireMap;
-      final remoteRepo = RemoteContentRepository(
-        httpClient: CloudHttpClient(
-          client: MockClient((request) async {
-            return http.Response(
-              jsonEncode(rawFixture),
-              200,
-              headers: const <String, String>{
-                'content-type': 'application/json',
-              },
-            );
-          }),
+      final remoteRepo = RemoteContentPostReaderAdapter(
+        client: buildGeneratedCloudOperationClient(
+          httpClient: CloudHttpClient(
+            client: MockClient((request) async {
+              return http.Response(
+                jsonEncode(rawFixture),
+                200,
+                headers: const <String, String>{
+                  'content-type': 'application/json',
+                },
+              );
+            }),
+          ),
+          clientContextProvider: const _ArticleTestClientContext(),
+          telemetrySink: const _NoopCloudOperationTelemetrySink(),
+          environment: CloudRuntimeEnvironment(
+            environment: CloudEnvironment.gamma,
+            gatewayBaseUri: Uri.parse('https://example.com'),
+          ),
         ),
-        baseUrl: 'https://example.com',
+        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          surfaceId: AppUiSurfaces.workBrowser.id,
+          routeId: AppUiSurfaces.workBrowser.routeId,
+          clientPageId: clientPageId,
+          actor: const CloudOperationActorContext(),
+        ),
       );
       final remoteDetail = await remoteRepo.getPost(postId: postId);
       final mockView = projectArticleDetailViewFromPayload(
@@ -143,4 +163,27 @@ void main() {
       expect(after.document.body, contains('水合后正文第一段'));
     });
   });
+}
+
+final class _ArticleTestClientContext implements CloudClientContextProvider {
+  const _ArticleTestClientContext();
+
+  @override
+  CloudClientContextSnapshot snapshot() {
+    return const CloudClientContextSnapshot(
+      sessionId: 'article-hydration-session',
+      deviceActorId: 'article-hydration-device',
+      platform: 'test',
+      appVersion: 'test',
+      locale: 'zh-CN',
+    );
+  }
+}
+
+final class _NoopCloudOperationTelemetrySink
+    implements CloudOperationTelemetrySink {
+  const _NoopCloudOperationTelemetrySink();
+
+  @override
+  void record(CloudOperationTelemetryEvent event) {}
 }

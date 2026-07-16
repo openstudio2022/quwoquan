@@ -30,9 +30,14 @@ service:
 #   CONTENT_REDIS_GENERAL_ADDRS    host1:port,...
 #   CONTENT_REDIS_GENERAL_PASSWORD 密码
 #   CONTENT_REDIS_GENERAL_TLS      true | false
-#
-# 既有环境变量 CONTENT_REDIS_ADDR / CONTENT_REDIS_PASSWORD 仍有效，
-# 会自动映射到 rec 场景的 standalone 配置。
+mongo:
+  uri: ""
+  database: "quwoquan_content"
+  collection: "posts"
+
+postgres:
+  report_dsn: ""
+
 redis:
   rec:
     mode: standalone            # standalone | cluster
@@ -59,6 +64,20 @@ redis:
       size: 0                   # 0 = 自动
       min_idle: 0
       read_timeout_ms: 200      # 通用缓存对延迟容忍度更高
+      write_timeout_ms: 200
+      dial_timeout_ms: 500
+
+  realtime:
+    mode: standalone
+    addr: ""
+    addrs: []
+    password: ""
+    db: 2
+    tls: false
+    pool:
+      size: 0
+      min_idle: 0
+      read_timeout_ms: 200
       write_timeout_ms: 200
       dial_timeout_ms: 500
 

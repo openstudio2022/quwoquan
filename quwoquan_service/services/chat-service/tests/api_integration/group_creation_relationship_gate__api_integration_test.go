@@ -2,36 +2,26 @@ package api_integration
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"sync"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
-	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	rterr "quwoquan_service/runtime/errors"
-	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/chat-service/internal/application"
 	chatcache "quwoquan_service/services/chat-service/internal/infrastructure/cache"
 	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
-var (
-	groupCreationMongoOnce      sync.Once
-	groupCreationMongoDB        *mongo.Database
-	groupCreationMongoClient    *mongo.Client
-	groupCreationMongoContainer *mongomod.MongoDBContainer
-	groupCreationMongoErr       error
-)
-
 var groupCreationCollections = []string{
 	"conversations",
 	"messages",
-	"conversation_members",
+	"messages_sequences",
+	"messages_command_receipts",
+	"messages_outbox",
+	"messages_outbox_sequences",
+	"messages_projection_checkpoints",
+	"conversation_memberships",
 	"conversation_user_states",
 	"message_receipts",
 	"reliable_task_outbox",
@@ -40,59 +30,9 @@ var groupCreationCollections = []string{
 	"notification_delivery_ledger",
 }
 
-func cleanupGroupCreationResources(ctx context.Context) {
-	if groupCreationMongoClient != nil {
-		_ = groupCreationMongoClient.Disconnect(ctx)
-	}
-	if groupCreationMongoContainer != nil {
-		_ = groupCreationMongoContainer.Terminate(ctx)
-	}
-}
-
 func requireGroupCreationMongoDB(tb testing.TB) *mongo.Database {
 	tb.Helper()
-	groupCreationMongoOnce.Do(func() {
-		ctx := context.Background()
-		mongoURI := os.Getenv("TEST_MONGO_URI")
-		if mongoURI == "" {
-			container, err := tryRunGroupCreationMongoContainer(ctx)
-			if err != nil {
-				groupCreationMongoErr = fmt.Errorf("start mongo testcontainer: %w", err)
-				return
-			}
-			groupCreationMongoContainer = container
-			uri, err := container.ConnectionString(ctx)
-			if err != nil {
-				groupCreationMongoErr = fmt.Errorf("get mongo connection string: %w", err)
-				return
-			}
-			mongoURI = uri
-		}
-		client, err := mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
-		if err != nil {
-			groupCreationMongoErr = fmt.Errorf("connect mongo: %w", err)
-			return
-		}
-		groupCreationMongoClient = client
-		groupCreationMongoDB = client.Database("chat_group_creation_test")
-	})
-	if groupCreationMongoErr != nil {
-		tb.Fatalf("group creation mongo unavailable: %v", groupCreationMongoErr)
-	}
-	if groupCreationMongoDB == nil {
-		tb.Fatal("group creation mongo database not initialized")
-	}
-	return groupCreationMongoDB
-}
-
-func tryRunGroupCreationMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("testcontainers panic (Docker unavailable?): %v", r)
-		}
-	}()
-	c, err = mongomod.Run(ctx, "mongo:7-jammy")
-	return
+	return requireMongoDB(tb)
 }
 
 func cleanGroupCreationCollections(t *testing.T) {
@@ -122,35 +62,6 @@ func (groupCreationProfileResolver) ResolveMany(
 	return out, nil
 }
 
-type groupCreationStubRelationshipGate struct {
-	cap application.RelationshipCapability
-	err error
-}
-
-func (g groupCreationStubRelationshipGate) GetCapability(
-	context.Context,
-	string,
-	string,
-) (application.RelationshipCapability, error) {
-	return g.cap, g.err
-}
-
-type keyedRelationshipGate struct {
-	caps    map[string]application.RelationshipCapability
-	missing application.RelationshipCapability
-}
-
-func (g keyedRelationshipGate) GetCapability(
-	_ context.Context,
-	_ string,
-	targetID string,
-) (application.RelationshipCapability, error) {
-	if cap, ok := g.caps[targetID]; ok {
-		return cap, nil
-	}
-	return g.missing, nil
-}
-
 func mutualCapability() application.RelationshipCapability {
 	return application.RelationshipCapability{
 		CanCreateDirectConversation: true,
@@ -165,37 +76,27 @@ func newGroupCreationConversationService(
 	gate application.RelationshipGate,
 ) *application.ConversationService {
 	t.Helper()
-	mr, err := miniredis.Run()
-	if err != nil {
-		t.Fatalf("miniredis: %v", err)
-	}
-	t.Cleanup(mr.Close)
-	router := rtredis.MustNewRouter(rtredis.RouterConfig{
-		Scenes: map[string]rtredis.SceneConfig{
-			"general": {Mode: "standalone", Addr: mr.Addr()},
-		},
-		DefaultScene: "general",
-	})
-	t.Cleanup(func() { _ = router.Close() })
 	store := persistence.NewMongoChatStore(requireGroupCreationMongoDB(t))
-	cache := chatcache.NewConversationCache(router.Scene("general"))
+	cache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 	return application.NewConversationService(
-		store,
+		chatStoragePorts(store),
 		cache,
-		nil,
+		eventPublisherForContractTest(),
 		groupCreationProfileResolver{},
 		gate,
 		nil,
 		nil,
-		nil,
+		groupAvatarSchedulerForContractTest(),
 	)
 }
 
 func TestCreateConversation_Group_RequiresMutualMembers(t *testing.T) {
 	t.Cleanup(func() { cleanGroupCreationCollections(t) })
-	svc := newGroupCreationConversationService(t, groupCreationStubRelationshipGate{
-		cap: application.RelationshipCapability{},
-	})
+	svc := newGroupCreationConversationService(t, relationshipGateForContractTest(
+		t,
+		application.RelationshipCapability{},
+		nil,
+	))
 
 	_, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
 		Type:             "group",
@@ -218,9 +119,11 @@ func TestCreateConversation_Group_RequiresMutualMembers(t *testing.T) {
 
 func TestCreateConversation_Group_BlockedMember(t *testing.T) {
 	t.Cleanup(func() { cleanGroupCreationCollections(t) })
-	svc := newGroupCreationConversationService(t, groupCreationStubRelationshipGate{
-		cap: application.RelationshipCapability{IsBlocked: true},
-	})
+	svc := newGroupCreationConversationService(t, relationshipGateForContractTest(
+		t,
+		application.RelationshipCapability{IsBlocked: true},
+		nil,
+	))
 
 	_, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
 		Type:             "group",
@@ -245,7 +148,7 @@ func TestCreateConversation_Group_AllowsMutualMembers(t *testing.T) {
 	t.Cleanup(func() { cleanGroupCreationCollections(t) })
 	svc := newGroupCreationConversationService(
 		t,
-		groupCreationStubRelationshipGate{cap: mutualCapability()},
+		relationshipGateForContractTest(t, mutualCapability(), nil),
 	)
 
 	conv, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
@@ -268,12 +171,14 @@ func TestCreateConversation_Group_AllowsMutualMembers(t *testing.T) {
 
 func TestCreateConversation_Group_MixedMembersRejectsNonMutual(t *testing.T) {
 	t.Cleanup(func() { cleanGroupCreationCollections(t) })
-	svc := newGroupCreationConversationService(t, keyedRelationshipGate{
-		caps: map[string]application.RelationshipCapability{
+	svc := newGroupCreationConversationService(t, relationshipGateForContractTest(
+		t,
+		application.RelationshipCapability{},
+		map[string]application.RelationshipCapability{
 			"user_b": mutualCapability(),
 			"user_c": {},
 		},
-	})
+	))
 
 	_, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
 		Type:             "group",
@@ -296,9 +201,11 @@ func TestCreateConversation_Group_MixedMembersRejectsNonMutual(t *testing.T) {
 
 func TestCreateConversation_Group_CircleBoundSkipsMutualGate(t *testing.T) {
 	t.Cleanup(func() { cleanGroupCreationCollections(t) })
-	svc := newGroupCreationConversationService(t, groupCreationStubRelationshipGate{
-		cap: application.RelationshipCapability{},
-	})
+	svc := newGroupCreationConversationService(t, relationshipGateForContractTest(
+		t,
+		application.RelationshipCapability{},
+		nil,
+	))
 
 	conv, err := svc.CreateConversation(context.Background(), application.CreateConversationRequest{
 		Type:             "group",

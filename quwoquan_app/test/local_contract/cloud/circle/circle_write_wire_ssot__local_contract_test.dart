@@ -8,10 +8,6 @@ void main() {
       CircleWriteWireWritableKeys.createCircleServiceFieldOrder.toSet(),
       CircleWriteWireWritableKeys.createCircle,
     );
-    expect(
-      CircleWriteWireWritableKeys.createCircleGroupServiceFieldOrder.toSet(),
-      CircleWriteWireWritableKeys.createCircleGroup,
-    );
   });
 
   test('CircleCreateWireDto.toRequestMap 覆盖 CreateCircle 全部可写字段', () {

@@ -102,7 +102,7 @@ func seedSelectableGroup(
 		Role:           "owner",
 		JoinedAt:       now,
 	}
-	if _, err := db.Collection("conversation_members").InsertOne(ctx, owner); err != nil {
+	if _, err := db.Collection("conversation_memberships").InsertOne(ctx, owner); err != nil {
 		t.Fatalf("seed owner member %s: %v", conversationID, err)
 	}
 	for i, id := range memberIDs {
@@ -117,7 +117,7 @@ func seedSelectableGroup(
 			InvitedBy:      viewer,
 			JoinedAt:       now.Add(time.Duration(i+1) * time.Second),
 		}
-		if _, err := db.Collection("conversation_members").InsertOne(ctx, member); err != nil {
+		if _, err := db.Collection("conversation_memberships").InsertOne(ctx, member); err != nil {
 			t.Fatalf("seed member %s in %s: %v", id, conversationID, err)
 		}
 	}
@@ -137,26 +137,27 @@ func newSelectableGroupHandler(t *testing.T, viewer string, mutual map[string]bo
 	t.Cleanup(socialServer.Close)
 
 	chatStore := persistence.NewMongoChatStore(mongoDB)
+	chatStorage := chatStoragePorts(chatStore)
 	convCache := cache.NewConversationCache(redisRouter.Scene("general"))
 	profiles := testProfileResolver{}
 	memberSvc := application.NewMemberService(
-		chatStore,
+		chatStorage,
 		convCache,
-		nil,
+		eventPublisherForContractTest(),
 		profiles,
 		nil,
 		nil,
-		nil,
+		groupAvatarSchedulerForContractTest(),
 		application.WithRelationshipGate(selectableMutualGate{mutual: mutual}),
 		application.WithSocialContactResolver(
 			chathttp.NewUserSocialContactResolver(socialServer.URL, socialServer.Client()),
 		),
 	)
 	return chathttp.NewChatHandler(
-		application.NewConversationService(chatStore, convCache, nil, profiles, application.DenyRelationshipGate(), nil, nil, nil),
-		application.NewMessageService(chatStore, convCache, nil, application.DenyRelationshipGate()),
+		application.NewConversationService(chatStorage, convCache, eventPublisherForContractTest(), profiles, application.DenyRelationshipGate(), nil, nil, groupAvatarSchedulerForContractTest()),
+		application.NewMessageService(chatStorage, convCache, eventPublisherForContractTest(), application.DenyRelationshipGate(), testMediaAssetDeliveryReader{}),
 		memberSvc,
-		application.NewInboxService(chatStore),
+		application.NewInboxService(chatStorage),
 		nil,
 	).Routes()
 }

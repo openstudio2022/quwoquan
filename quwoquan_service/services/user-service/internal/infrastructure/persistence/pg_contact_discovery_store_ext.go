@@ -9,13 +9,13 @@ import (
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	"quwoquan_service/services/user-service/internal/domain/user/phonematch"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 // PgContactDiscoveryStore extends pgContactDiscoveryStoreBase with domain-specific queries.
 type PgContactDiscoveryStore struct{ pgContactDiscoveryStoreBase }
 
-var _ repository.ContactDiscoveryRepository = (*PgContactDiscoveryStore)(nil)
+var _ repository.ContactDiscoveryStore = (*PgContactDiscoveryStore)(nil)
 
 func NewPgContactDiscoveryStore(pool *pgxpool.Pool) *PgContactDiscoveryStore {
 	return &PgContactDiscoveryStore{pgContactDiscoveryStoreBase{pool: pool}}

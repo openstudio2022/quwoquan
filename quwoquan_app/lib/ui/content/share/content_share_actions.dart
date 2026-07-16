@@ -19,6 +19,9 @@ class ContentShareActionResult {
     this.dismissed = false,
     this.message,
     this.savedPath,
+    this.destinationKind,
+    this.destination,
+    this.providerReceiptId,
   });
 
   final String actionId;
@@ -26,6 +29,14 @@ class ContentShareActionResult {
   final bool dismissed;
   final String? message;
   final String? savedPath;
+  final String? destinationKind;
+  final String? destination;
+  final String? providerReceiptId;
+
+  bool get isConfirmedOutboundDelivery =>
+      success &&
+      (destinationKind?.trim().isNotEmpty ?? false) &&
+      (providerReceiptId?.trim().isNotEmpty ?? false);
 }
 
 abstract class ContentShareActionHandler {
@@ -66,7 +77,17 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
             ),
           );
           if (result.status == ShareResultStatus.success) {
-            return ContentShareActionResult(actionId: action.id, success: true);
+            final receipt = result.raw.trim();
+            if (receipt.isEmpty) {
+              throw StateError('system_share_missing_provider_receipt');
+            }
+            return ContentShareActionResult(
+              actionId: action.id,
+              success: true,
+              destinationKind: 'external_app',
+              destination: receipt,
+              providerReceiptId: receipt,
+            );
           }
           if (context.mounted) {
             AppToast.show(context, UITextConstants.shareCancelled);

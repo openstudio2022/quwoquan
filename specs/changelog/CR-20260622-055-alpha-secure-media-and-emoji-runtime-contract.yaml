@@ -28,10 +28,10 @@ affected_nodes:
   - quwoquan_app/vendor/android_artifacts/android-144.7559.01.aar
   - quwoquan_app/vendor/android_artifacts/audioswitch-89582c47c9a04c62f90aa5e57251af4800a62c9a.aar
   - quwoquan_app/vendor/android_artifacts/noise-2.0.0.aar
-  - quwoquan_app/vendor/plugins/flutter_webrtc/android/build.gradle
+  - quwoquan_app/vendor/plugins/flutter_webrtc/android/content.homepage.gradle
   - quwoquan_app/vendor/plugins/flutter_webrtc/third_party/CMakeLists.txt
   - quwoquan_app/vendor/plugins/flutter_webrtc/third_party/downloads/README.md
-  - quwoquan_app/vendor/plugins/livekit_client/android/build.gradle
+  - quwoquan_app/vendor/plugins/livekit_client/android/content.homepage.gradle
   - quwoquan_app/vendor/plugins/livekit_client/linux/CMakeLists.txt
   - quwoquan_app/vendor/plugins/livekit_client/linux/test/third_party/README.md
 
@@ -42,7 +42,7 @@ entries:
 
       1. 四环境 public base 契约统一切换到 secure public plane。`alpha/beta/gamma`
          committed topology、App runtime config、Dart runtime defaults 改为
-         `https://*.quwoquan-env.test` / `wss://*.quwoquan-env.test`；`prod`
+         `https://*.quwoquan-content.execution.preflight.test` / `wss://*.quwoquan-content.execution.preflight.test`；`prod`
          保持 `118.31.239.122` 主机标识，但全部 public API / realtime / media /
          gray-strategy URL 统一为 HTTPS / WSS。
       2. 本地支持启动入口不再允许裸 `flutter run` 漏过 env-package。`quwoquan_app/run.sh`
@@ -52,7 +52,7 @@ entries:
          prod-sim / beta / gamma 本地入口同步收口到“内部 HTTP upstream + 外部 HTTPS
          public plane”模式。顺手修复了 macOS 系统 Bash 3.2 不支持 `mapfile` 导致
          `run.sh` 本身启动失败的问题。
-      3. 内容媒体与头像 URL 解析规则补齐 `*.quwoquan-env.test` 私有开发域识别，
+      3. 内容媒体与头像 URL 解析规则补齐 `*.quwoquan-content.execution.preflight.test` 私有开发域识别，
          让切到 TLS 域名后，本地图片、视频 poster、头像、主页封面仍能走正确的
          media/avatar candidate rewrite，而不是被当作陌生公网主机丢弃。
       4. Apple 主题字体契约不再依赖“emoji 为空再 fallback”的分支。主题主字体链
@@ -71,7 +71,7 @@ entries:
          缺资产时统一 fail-closed；新增 `verify_local_dependency_purity.py`
          对 iOS Pods、SwiftPM、Android AAR 与启动/gate 入口做回归阻断。
       7. `verify_runtime_host_literals.py` 与新的 secure env 契约对齐，显式允许
-         仓库受控的 `*.quwoquan-env.test` public plane，同时继续阻断 `lib/**`
+         仓库受控的 `*.quwoquan-content.execution.preflight.test` public plane，同时继续阻断 `lib/**`
          中任何未登记的第三方 host literal，避免门禁仍按旧的 loopback-only
          假设误报。
     reason: |
@@ -100,7 +100,7 @@ entries:
       - "flutter test --no-pub test/cloud/runtime/cloud_runtime_config_test.dart test/core/media/content_media_url_test.dart test/core/platform/app_font_families_test.dart test/core/widgets/app_cached_network_image_test.dart test/components/avatar/rounded_square_avatar_test.dart test/core/links/app_public_content_links_test.dart test/components/input/customizable_chat_input_bar_test.dart test/ui/chat/widgets/chat_message_bubble_widget_test.dart"
       - "flutter test --no-pub test/core/media/avatar_image_url_test.dart"
       - "python3 -m unittest quwoquan_ops.tests.test_dev_up quwoquan_ops.tests.test_stackctl_up_runtime"
-      - "`bash quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh up` 返回 `[alpha] mock public plane ready: https://alpha-api.quwoquan-env.test:17000, https://alpha-image.quwoquan-env.test:17100`"
+      - "`bash quwoquan_ops/cli/alpha/start_alpha_mock_stack.sh up` 返回 `[alpha] mock public plane ready: https://alpha-api.quwoquan-content.execution.preflight.test:17000, https://alpha-image.quwoquan-content.execution.preflight.test:17100`"
       - "cd quwoquan_app && flutter pub get --offline"
       - "flutter test --no-pub test/core/services/local_chat_search_store_test.dart test/core/services/local_chat_search_sync_service_test.dart test/core/services/local_circle_group_snapshot_store_test.dart test/core/services/conversation_avatar_sync_contract_test.dart test/ui/search/search_repository_test.dart test/core/media/content_media_url_test.dart"
       - "`bash quwoquan_app/run.sh -d AC42B9A5-AA79-4D4F-88A3-98AA37102CE7` 冷启动通过；输出 `A Dart VM Service on iPhone 15 is available at: http://127.0.0.1:8889/...`"

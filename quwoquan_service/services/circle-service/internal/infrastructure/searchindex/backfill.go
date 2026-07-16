@@ -5,19 +5,11 @@ import (
 
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/circle-service/internal/application"
-	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
-	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
 )
 
 // defaultBackfillBatchSize bounds how many circles are pulled (and pushed) per
 // page / _bulk round trip.
 const defaultBackfillBatchSize = 500
-
-// CircleLister enumerates circles for cold-start backfill via cursor pagination.
-// The circle store (persistence.CircleStore) satisfies it.
-type CircleLister interface {
-	List(ctx context.Context, opts persistence.ListCirclesOpts) ([]model.Circle, string)
-}
 
 // BulkIndexer is the subset of the ES client backfill needs: ensure the index
 // exists, then write batches of change events. *es.Client satisfies it.
@@ -39,7 +31,7 @@ type BackfillReport struct {
 // ones through the shared projection, and bulk-upserts them per page. It is the
 // cold-start / reconcile entry for the circle search index. batchSize <= 0 uses
 // the default.
-func Backfill(ctx context.Context, indexer BulkIndexer, lister CircleLister, batchSize int) (BackfillReport, error) {
+func Backfill(ctx context.Context, indexer BulkIndexer, lister application.CircleLister, batchSize int) (BackfillReport, error) {
 	var report BackfillReport
 	if indexer == nil || lister == nil {
 		return report, nil
@@ -53,7 +45,7 @@ func Backfill(ctx context.Context, indexer BulkIndexer, lister CircleLister, bat
 
 	cursor := ""
 	for {
-		page, next := lister.List(ctx, persistence.ListCirclesOpts{Cursor: cursor, Limit: batchSize})
+		page, next := lister.List(ctx, application.ListCirclesQuery{Cursor: cursor, Limit: batchSize})
 		report.TotalCircles += len(page)
 		batch := make([]es.ChangeEvent, 0, len(page))
 		for i := range page {

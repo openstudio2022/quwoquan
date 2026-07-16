@@ -7,6 +7,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
+
+	"quwoquan_service/services/circle-service/internal/application"
 )
 
 // MongoFeedStore implements FeedStore backed by MongoDB.
@@ -14,11 +16,13 @@ type MongoFeedStore struct {
 	coll *mongo.Collection
 }
 
+var _ application.CircleFeedStore = (*MongoFeedStore)(nil)
+
 func NewMongoFeedStore(coll *mongo.Collection) *MongoFeedStore {
 	return &MongoFeedStore{coll: coll}
 }
 
-func (s *MongoFeedStore) ListCirclePosts(ctx context.Context, circleID string, opts ListCirclePostsOpts) ([]map[string]any, string) {
+func (s *MongoFeedStore) ListCirclePosts(ctx context.Context, circleID string, opts application.ListCirclePostsQuery) ([]map[string]any, string) {
 	if opts.Limit <= 0 {
 		opts.Limit = 20
 	}

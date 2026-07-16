@@ -7,7 +7,8 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 **但 content-service 尚无法部署到灰度和生产**，原因如下：
 
 1. **存储层未启用**：`main.go` 默认使用内存 `PostStore`，MongoDB `MongoPostStore` 已实现但仅在契约测试中使用，服务重启即丢数据。
-2. **实体缓存未接入**：`storage.yaml` 定义了 5 个 Redis 缓存键，runtime `CacheableRepository` 装饰器已就绪，但 content-service 未通过 `EntityRegistry + Factory.WithCache` 构建 Repository。
+2. **实体缓存未接入**：`storage.yaml` 定义了 5 个 Redis 缓存键，但 content-service
+   尚未在 composition root 中把对象专属缓存 Reader 注入对应 query Facade。
 3. **事件总线为空壳**：`EventPublisher` 使用测试用 `EventSpy`，无生产级 Redis Pub/Sub 或 MQ，导致创作后无法实时推送到发现流投影。
 4. **6 个已声明 API 返回 `handleNotImplemented`**：ListComments、DeleteComment、GetCounters、ListUserPosts、GetHelperRead，加上 Report 系列。
 5. **端侧 14 个云侧已实现 API 未封装**：UpdatePost、DeletePost、PublishPost、媒体上传链路、推荐接口等均未在 `ContentRepository` 中封装。
@@ -26,8 +27,11 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 
 ### 云侧（content-service）
 
-1. **存储层启用**：`main.go` 切换默认存储为 `MongoPostStore`，通过 `EntityRegistry` 驱动 Repository 初始化，保留 InMemory 作为 `APP_ENV=alpha` 的 fallback。
-2. **实体缓存接入**：Post 读取走 `CacheableRepository` 装饰器（Redis `cache:post:{id}`，TTL 300s），写时失效（Update/Delete → InvalidateCache）。Reaction 缓存 `reaction:{uid}:{pid}` TTL 300s。
+1. **存储层启用**：`main.go` 显式装配 `MongoPostStore` 与对象 Reader，并注入
+   Post command/query Facade；测试替身只用于 local contract，生产缺真实依赖时 fail-fast。
+2. **实体缓存接入**：Post detail Reader 使用对象专属 Redis cache adapter
+   （`cache:post:{id}`，TTL 300s），Update/Delete 事件驱动失效。Reaction Reader
+   缓存 `reaction:{uid}:{pid}`，TTL 300s。
 3. **事件总线启用**：接入 Redis Pub/Sub 作为 `EventPublisher` 实现。发布 `PostCreated`、`PostUpdated`、`PostDeleted`、`CommentCreated`、`ReactionChanged` 事件。`DiscoveryFeedProjector` 消费事件维护 `rm_discovery_feed` 读模型。
 4. **缺失 API 实现**：
    - `ListComments`：游标分页，按 `createdAt` 排序
@@ -60,7 +64,7 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
    - 健康检查探针（liveness + readiness）
 10. **CI Pipeline 补充**：新增 `test-content-service` Job（含 MongoDB service container），Kustomize validate 覆盖所有 overlays。
 
-### 四层测试
+### 三层测试
 
 11. **local_contract 契约与静态层**：
     - 云侧：创作→投影一致性契约测试、评论 CRUD 契约测试、计数器一致性契约测试、缓存命中/失效契约测试
@@ -71,6 +75,17 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
     - content-service 端到端集成测试（HTTP → MongoDB → Redis → 事件 → 投影）
 14. **user_acceptance 端到端旅程层**：
     - Patrol E2E：创作微趣→发现流可见旅程、创作美图→发现流可见旅程、评论全旅程
+15. **数据供给商用候选边界**：
+    - homepage/article/image/video 共用 `1.download → 5.review` 五阶段与
+      `common contract → lane adapter → family recipe → resolved execution instance` 主线；
+    - canonical `publish/` 只保存自治 creators/entities/posts/tags 与唯一
+      `media/objects/sha256` CAS；对象证据、rights 与 refs 均 object-local/CAS 可解析；
+    - `QWQ_OUTPUT_ROOT/data/releases/{releaseId}` 是 create-once environment-neutral 静态 overlay，
+      只含 desired state/sample/media manifest/index/compact attestation；
+    - `.qwq_output/env/{env}/runs/data-release/{releaseId}/{runId}` 只保存 append-only
+      import/media-sync/reload/smoke/rollout/rollback/SLO 证据；
+    - 服务 importer 必须同时消费 canonical objects + immutable release desired state；
+      缺 release、retired sample/env contract、路径逃逸或悬挂引用均 fail-closed。
 
 ## 不做什么（Out of Scope）
 
@@ -86,11 +101,18 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 
 ### 技术约束
 
-- 云侧必须使用 `runtime/repository.Repository[T]` 接口 + `EntityRegistry` 驱动初始化，禁止绕过 Registry 直接操作 MongoDB。
-- 缓存装饰器必须使用 `runtime/repository/cached.go` 的 `CacheableRepository`，禁止自建缓存层。
-- 事件发布必须使用 `runtime/messaging.MessageEnvelope`，禁止自定义 MQ 序列化。
-- 端侧 Remote 实现必须使用 `CloudRuntimeConfig.gatewayBaseUrl` + `CloudRequestHeaders.forPage(pageId)`。
+- 云侧必须使用 Post/Report 等业务对象专属 `AggregateStore`、named Reader、
+  typed Slice 和 command/query Facade；禁止跨对象泛型 CRUD、运行时对象注册、
+  动态 Filter/Map 以及 domain/application 直接操作 MongoDB。
+- 缓存是对象 Reader adapter 的实现细节，key/TTL/失效事件来自 metadata；
+  禁止恢复通用缓存 Repository 装饰器。
+- 事件发布必须使用 metadata/codegen 生成的 typed event payload 与统一
+  messaging envelope，禁止动态 `map[string]any` 业务 payload。
+- 端侧 Remote 实现必须使用 `CloudRuntimeConfig.gatewayBaseUrl` +
+  generated operation/surface/route + `CloudRequestHeaders.forOperationContext`。
 - codegen 产物 `DO NOT EDIT` 标记文件禁止手改。
+- 数据供给阶段 JSON 必须绑定完整 immutable execution identity；只允许根
+  `executionId` 关联 execution manifest，不维护 task/batch/source 平行身份。
 
 ### 部署约束
 
@@ -100,7 +122,8 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 
 ### 业务约束
 
-- 存储切换必须向后兼容：已有的 Mock 数据不影响本地开发体验。
+- 错误接口和旧存储实现原子替换，不保留运行时兼容双轨；已有生产数据只允许
+  一次性离线迁移，alpha Mock 继续由 contract fixture 独立供给。
 - 端侧 Mock/Remote 切换仍通过 `appDataSourceModeProvider` 控制，UI 层无感知。
 
 ## 适用范围与约束
@@ -116,7 +139,9 @@ content-service 已完成契约基础层（`content-service-contract-foundation`
 
 技术参考：
 - **chat-service 部署配置**：作为同仓 Kustomize 配置的参照标准（HPA/PDB/探针/资源限制/overlays 结构）。
-- **runtime 已有能力**：Repository 工厂、CacheableRepository、Redis Router、governance、observability 均已在 chat-service 中验证，content-service 复用即可。
+- **runtime 与平台已有能力**：typed config、Redis client、governance、observability
+  可复用；Post/Report 的 Store、Reader 与缓存 adapter 必须留在 content-service
+  infrastructure，并由 composition root 显式装配。
 
 ## 验收重点
 

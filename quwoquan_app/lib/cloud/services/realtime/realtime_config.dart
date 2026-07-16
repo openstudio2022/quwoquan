@@ -7,6 +7,7 @@ class RealtimeConfig {
   final String wsUrl;
   final String gatewayBaseUrl;
   final int heartbeatIntervalSec;
+  final int authAckTimeoutSec;
   final int wsIdleTimeoutSec;
   final int longPollHoldSec;
   final int maxReconnectAttempts;
@@ -17,6 +18,7 @@ class RealtimeConfig {
     required this.wsUrl,
     this.gatewayBaseUrl = CloudRuntimeConfig.gatewayBaseUrl,
     this.heartbeatIntervalSec = 15,
+    this.authAckTimeoutSec = 5,
     this.wsIdleTimeoutSec = 120,
     this.longPollHoldSec = 60,
     this.maxReconnectAttempts = 10,
@@ -42,6 +44,7 @@ class RealtimeConfig {
           map['gatewayBaseUrl'] as String? ?? CloudRuntimeConfig.gatewayBaseUrl,
       heartbeatIntervalSec:
           (map['heartbeatIntervalSec'] as num?)?.toInt() ?? 15,
+      authAckTimeoutSec: (map['authAckTimeoutSec'] as num?)?.toInt() ?? 5,
       wsIdleTimeoutSec: (map['wsIdleTimeoutSec'] as num?)?.toInt() ?? 120,
       longPollHoldSec: (map['longPollHoldSec'] as num?)?.toInt() ?? 60,
       maxReconnectAttempts:

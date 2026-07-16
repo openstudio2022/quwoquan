@@ -9,7 +9,6 @@ import (
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/services/content-service/internal/application/searchprojection"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 type fakePublishedReader struct {
@@ -187,36 +186,5 @@ func TestNormalizeSearchMatchedFieldPreservesContractFieldNames(t *testing.T) {
 	}
 	if got := normalizeSearchMatchedField("summary", postWithSummary); got != "summary" {
 		t.Fatalf("expected explicit summary to stay summary, got %q", got)
-	}
-}
-
-func TestGetAppConfigUsesGenericCanaryMatrixPayload(t *testing.T) {
-	service := NewPostService(
-		persistence.NewPostStore(nil),
-		WithStoryRuntimeConfig(StoryRuntimeConfig{
-			ExperimentBucket: "rollout_20",
-			CurrentStage:     "20%",
-			CanaryMatrix: []StoryCanaryStage{
-				{Stage: "5%", RolloutPercent: 5},
-				{Stage: "20%", RolloutPercent: 20},
-			},
-		}),
-	)
-
-	resp := service.GetAppConfig()
-	content, _ := resp["content"].(map[string]any)
-	if content == nil {
-		t.Fatalf("missing content config: %+v", resp)
-	}
-	grayRelease, _ := content["gray_release"].(map[string]any)
-	if grayRelease == nil {
-		t.Fatalf("missing gray release config: %+v", content)
-	}
-	canaryMatrix, ok := grayRelease["canary_matrix"].([]any)
-	if !ok {
-		t.Fatalf("canary_matrix should be []any for generic payload, got %T", grayRelease["canary_matrix"])
-	}
-	if len(canaryMatrix) != 2 {
-		t.Fatalf("expected 2 canary stages, got %d", len(canaryMatrix))
 	}
 }

@@ -15,7 +15,6 @@ import 'package:quwoquan_app/core/utils/compact_count_formatter.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/configs/media_post_config.dart';
 import 'package:quwoquan_app/components/settings_conversation/more_actions_popup/more_action_popup.dart';
 import 'package:quwoquan_app/ui/content/comments/widgets/comment_viewer.dart';
-import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.dart';
 
 /// 媒体帖子卡片基类
 /// 按照Figma原型设计，包含完整的交互功能和评论显示
@@ -290,36 +289,8 @@ class _MediaPostCardState extends ConsumerState<MediaPostCard> {
     );
   }
 
-  /// 评论底栏「转发」：乐观写入分享态并落库（游客设备态可写）。
-  Future<void> _onShare() async {
-    final postId = widget.post.id;
-    if (postId.isEmpty) return;
-    final baseline = effectivePostShareCount(
-      ref,
-      postId,
-      fallback: widget.post.shareCount,
-    );
-    try {
-      await syncPostShareIntent(
-        ref,
-        postId: postId,
-        baselineShareCount: baseline,
-      );
-    } catch (error) {
-      if (mounted) {
-        await AppActionErrorFeedback.show(
-          context,
-          semantic: runtimeErrorSemantic(
-            context,
-            error: error,
-            category: UiErrorCategory.backgroundAction,
-            scope: UiErrorScope.global,
-            allowRetry: false,
-          ),
-        );
-      }
-    }
-  }
+  /// 评论底栏只打开宿主的真实分享流程；没有渠道成功回执时不得追加分享事实。
+  Future<void> _onShare() async => widget.onShare?.call(widget.post);
 
   /// 构建用户信息头部 - 基于原型代码增强，支持发布者类型和关注功能
   Widget _buildPostHeader(BuildContext context, bool isDark) {

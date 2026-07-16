@@ -59,7 +59,8 @@ APP_RUNTIME_ENV="$env_name" CDN_DOMAIN="$cdn_domain" bash quwoquan_ops/cli/share
 
 python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py >/dev/null
 
-out_dir=".qwq_output/env/${env_name}/release/app"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
+out_dir="${QWQ_OUTPUT_ROOT}/env/${env_name}/release/app"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 cp "quwoquan_app/configs/default/app_runtime.yaml" "$out_dir/default_app_runtime.yaml"
@@ -68,6 +69,8 @@ cp "$topology_manifest" "$out_dir/environment_topology_manifest.yaml"
 
 python3 - "$env_name" "$cfg" "$topology_manifest" "$out_dir/report.json" <<'PY'
 import json
+import hashlib
+import subprocess
 import re
 import sys
 from pathlib import Path
@@ -78,6 +81,18 @@ topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
 env_topology = ((topology.get("environments") or {}).get(env_name) or {})
 public_bases = env_topology.get("publicBases") or {}
 artifact_policy = ((env_topology.get("artifactPolicy") or {}).get("app") or {})
+
+def digest(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+revision = subprocess.run(
+    ["git", "rev-parse", "HEAD"],
+    text=True,
+    capture_output=True,
+    check=False,
+).stdout.strip()
+if not re.fullmatch(r"[0-9a-f]{40}", revision):
+    raise SystemExit("unable to resolve package git revision")
 
 def scalar(path):
     # Tiny YAML reader for the simple runtime config shape used here.
@@ -172,12 +187,20 @@ report = {
     "topologySchemaVersion": topology.get("schemaVersion"),
     "artifactPolicy": artifact_policy,
     "publicBases": expected_urls,
+    "provenance": {
+        "gitRevision": revision,
+        "files": {
+            "defaultAppRuntime": digest(Path(report_path).parent / "default_app_runtime.yaml"),
+            "appRuntime": digest(Path(report_path).parent / "app_runtime.yaml"),
+            "topologyManifest": digest(Path(topology_path)),
+        },
+    },
 }
 Path(report_path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY
 
 if [[ "$env_name" == "prod" ]]; then
-  python3 quwoquan_app/scripts/env/verify_prod_package_purity.py >/dev/null
+  python3 quwoquan_app/scripts/env/verify_prod_package_purity.py --scope app >/dev/null
 fi
 
 echo "app env package prepared: $out_dir"

@@ -82,4 +82,3 @@ List<Map<String, dynamic>> _parseMapList(Object? v) {
   }
   return out;
 }
-

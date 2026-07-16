@@ -3,11 +3,10 @@
   "type": "object",
   "properties": {
     "schemaVersion": { "type": "string", "minLength": 1 },
-    "taskId": { "type": "string", "minLength": 1 },
-    "batchId": { "type": "string", "minLength": 1 },
+    "executionId": { "type": "string", "minLength": 1 },
     "step": { "type": "string", "minLength": 1 },
     "ref": { "type": "string", "minLength": 1 },
     "payload": { "type": "object" }
   },
-  "required": ["schemaVersion", "taskId", "batchId", "step", "ref", "payload"]
+  "required": ["schemaVersion", "executionId", "step", "ref", "payload"]
 }

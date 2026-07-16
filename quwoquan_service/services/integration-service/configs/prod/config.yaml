@@ -15,6 +15,11 @@ integration:
     search_default_limit: 20
     default_latitude: 30.6586
     default_longitude: 104.0648
+  external_interaction:
+    sms:
+      enabled: true
+    push:
+      enabled: true
 
 redis:
   rec:

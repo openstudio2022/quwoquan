@@ -4,27 +4,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
-
-// Member list sort modes (align with contracts/metadata _shared/types.yaml MemberListSort).
-const (
-	SortMembersJoinedAsc      = "joined_asc"
-	SortMembersDisplayNameAsc = "display_name_asc"
-)
-
-// NormalizeMemberListSort returns a supported sort key; unknown values map to joined_asc.
-func NormalizeMemberListSort(s string) string {
-	switch strings.TrimSpace(s) {
-	case SortMembersDisplayNameAsc:
-		return SortMembersDisplayNameAsc
-	default:
-		return SortMembersJoinedAsc
-	}
-}
 
 type cursorJoinedAsc struct {
 	T int64  `json:"t"` // joinedAt UnixNano UTC

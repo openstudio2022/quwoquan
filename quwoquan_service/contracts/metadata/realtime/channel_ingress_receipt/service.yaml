@@ -1,0 +1,30 @@
+version: 1
+
+service:
+  name: realtime-gateway
+  domain: realtime
+  owner: infra-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: REALTIME_CHANNEL_INGRESS_RECEIPT_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
+  description: ChannelIngressReceipt 外部渠道入站事实操作包。
+
+api_routes:
+  - method: POST
+    path: /v1/channel/{channelType}/webhook
+    operation: ChannelWebhook
+    actor: none
+    application:
+      kind: command
+      facet: ChannelIngressReceiptCommandFacet
+      method: appendVerifiedReceipt
+      append_sink: ChannelIngressReceipt
+      mutation_target: ChannelIngressReceipt
+      invariant_target: ChannelIngressReceipt
+    description: 外部渠道 Webhook 入口；验签并幂等追加接收事实后再路由到实时 topic
+
+consumers:
+  - name: external-channels
+    capabilities: [channel_webhook]

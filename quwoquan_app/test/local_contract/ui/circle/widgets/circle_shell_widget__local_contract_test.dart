@@ -16,6 +16,7 @@ import 'package:quwoquan_app/cloud/runtime/models/circle_detail_payload.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
+import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
@@ -23,6 +24,7 @@ import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_action_bar.dart';
 import 'package:quwoquan_app/ui/circle/widgets/circle_shell.dart';
 import 'package:quwoquan_app/ui/circle/widgets/section_storage.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class _OpenStartupAuthGate extends StartupAuthRestoreGateNotifier {
   @override
@@ -63,6 +65,11 @@ class _AuthedSessionStore implements AuthSessionStore {
   }) async {}
 
   @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
+
+  @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}
 
   @override
@@ -78,6 +85,118 @@ class _AuthedSessionStore implements AuthSessionStore {
   Future<void> markForegroundAuthCheckNow() async {}
 }
 
+final class _FixtureCircleGroupQuery implements CircleGroupQueryReader {
+  const _FixtureCircleGroupQuery();
+
+  @override
+  Future<CircleGroupSlice> get(CircleGroupQuery query) async =>
+      CircleGroupSlice(
+        groupId: query.groupId,
+        version: 1,
+        circleId: query.circleId,
+        parentGroupId: null,
+        groupType: CircleGroupType.publicGroup,
+        nodeType: null,
+        name: '默认公共群',
+        description: '',
+        visibility: CircleGroupVisibility.public,
+        joinPolicy: CircleGroupJoinPolicy.applyOnly,
+        conversationId: 'fixture_conv_${query.circleId}',
+        storageEnabled: true,
+        noticeEnabled: true,
+        isDefaultPublicGroup: true,
+        status: CircleGroupStatus.active,
+        memberCount: 1,
+        createdAt: DateTime.utc(2026, 5, 6),
+        updatedAt: DateTime.utc(2026, 5, 6),
+      );
+
+  @override
+  Future<CircleGroupPageSlice> list(CircleGroupListQuery query) async =>
+      const CircleGroupPageSlice(items: <CircleGroupSlice>[]);
+
+  @override
+  Future<CircleGroupPageSlice> search(CircleGroupSearchQuery query) async =>
+      const CircleGroupPageSlice(items: <CircleGroupSlice>[]);
+}
+
+final class _FixtureCircleMembershipQuery implements CircleMembershipQuery {
+  const _FixtureCircleMembershipQuery();
+
+  CircleMembershipSlice _membership({
+    required String circleId,
+    String personaId = 'user_001',
+  }) => CircleMembershipSlice(
+    membershipId: '${circleId}_$personaId',
+    version: 1,
+    circleId: circleId,
+    personaId: personaId,
+    role: CircleMembershipRole.owner,
+    state: CircleMembershipState.active,
+    joinedAt: DateTime.utc(2026, 5, 6),
+    leftAt: null,
+    lastActiveAt: DateTime.utc(2026, 5, 6),
+    contribution: 0,
+    createdAt: DateTime.utc(2026, 5, 6),
+    updatedAt: DateTime.utc(2026, 5, 6),
+  );
+
+  @override
+  Future<CircleMembershipSlice> getMyMembership(
+    MyCircleMembershipQuery query,
+  ) async => _membership(circleId: query.circleId);
+
+  @override
+  Future<CircleMembershipPageSlice> listMemberships(
+    CircleMembershipListQuery query,
+  ) async => CircleMembershipPageSlice(
+    items: <CircleMembershipSlice>[_membership(circleId: query.circleId)],
+  );
+
+  @override
+  Future<PersonaCirclePageSlice> listPersonaCircles(
+    PersonaCircleListQuery query,
+  ) async => const PersonaCirclePageSlice(items: <PersonaCircleSummary>[]);
+}
+
+final class _FixtureCircleMembershipCommandWriter
+    implements CircleMembershipCommandWriter {
+  const _FixtureCircleMembershipCommandWriter();
+
+  @override
+  Future<CircleMembershipCommandResult> join(
+    JoinCircleMembershipCommand command,
+  ) async => const CircleMembershipCommandResult(
+    membershipId: 'fixture_membership',
+    version: 1,
+    state: CircleMembershipState.pending,
+    role: CircleMembershipRole.member,
+    idempotentReplay: false,
+  );
+
+  @override
+  Future<CircleMembershipCommandResult> leave(
+    LeaveCircleMembershipCommand command,
+  ) async => CircleMembershipCommandResult(
+    membershipId: 'fixture_membership',
+    version: command.expectedVersion + 1,
+    state: CircleMembershipState.left,
+    role: CircleMembershipRole.member,
+    idempotentReplay: false,
+  );
+
+  @override
+  Future<CircleMembershipCommandResult> updateRole(
+    UpdateCircleMembershipRoleCommand command,
+  ) async => CircleMembershipCommandResult(
+    membershipId: 'fixture_membership',
+    version: command.expectedVersion + 1,
+    state: CircleMembershipState.active,
+    role: command.role,
+    idempotentReplay: false,
+  );
+}
+
 Widget _scopedApp({
   CircleRepository? mock,
   VoidCallback? onBack,
@@ -90,6 +209,24 @@ Widget _scopedApp({
     overrides: [
       startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
       circleRepositoryProvider.overrideWithValue(repo),
+      circleDetailGroupQueryProvider.overrideWithValue(
+        const _FixtureCircleGroupQuery(),
+      ),
+      circleDetailMembershipQueryProvider.overrideWithValue(
+        const _FixtureCircleMembershipQuery(),
+      ),
+      circleDetailMembershipCommandWriterProvider.overrideWithValue(
+        const _FixtureCircleMembershipCommandWriter(),
+      ),
+      activePersonaContextProvider.overrideWith(
+        (_) async => ActivePersonaContextViewData.fallback(
+          subAccountId: 'user_001',
+          ownerUserId: 'user_001',
+          displayName: '圈子测试用户',
+          avatarUrl: '',
+          personaContextVersion: 'fixture-circle-shell',
+        ),
+      ),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
       ...overrides,
     ],
@@ -314,7 +451,13 @@ void main() {
     });
 
     testWidgets('私密圈子游客访问时显示内容门禁', (tester) async {
-      await _pumpShell(tester, mock: _PrivateVisitorCircleRepository());
+      await _pumpShell(
+        tester,
+        mock: _PrivateVisitorCircleRepository(),
+        overrides: <Override>[
+          resolvedOwnerUserIdProvider.overrideWithValue(''),
+        ],
+      );
 
       // 默认 Tab 为「内容」，私密圈子游客态展示内容门禁。
       expect(
@@ -382,7 +525,13 @@ void main() {
     });
 
     testWidgets('审批加入后切换为待审核状态', (tester) async {
-      await _pumpShell(tester, mock: _ApprovalVisitorCircleRepository());
+      await _pumpShell(
+        tester,
+        mock: _ApprovalVisitorCircleRepository(),
+        overrides: <Override>[
+          resolvedOwnerUserIdProvider.overrideWithValue(''),
+        ],
+      );
 
       final joinFinder = find.descendant(
         of: find.byType(CircleActionBar),
@@ -415,6 +564,32 @@ void main() {
 
       expect(find.byType(AppPageErrorState), findsOneWidget);
       expect(find.text(UITextConstants.tryAgain), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('circle-shell-error-back')),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Repository 异常时只由宿主顶栏提供返回', (tester) async {
+      var backCalled = false;
+      await _pumpShell(
+        tester,
+        mock: _ErrorCircleRepository(),
+        onBack: () => backCalled = true,
+      );
+
+      expect(
+        find.byKey(const ValueKey<String>('circle-shell-error-back')),
+        findsOneWidget,
+      );
+      expect(find.byIcon(CupertinoIcons.xmark), findsNothing);
+      expect(find.text(UITextConstants.back), findsNothing);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('circle-shell-error-back')),
+      );
+      await tester.pump();
+      expect(backCalled, isTrue);
     });
 
     testWidgets('Repository 异常错误态跟随来源页面 appearance', (tester) async {

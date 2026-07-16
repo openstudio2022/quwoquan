@@ -10,11 +10,78 @@ import (
 	"testing"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
+	rtoperation "quwoquan_service/runtime/operation"
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/assistant-service/internal/application"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
+	"quwoquan_service/services/assistant-service/internal/environmentseed"
 	"quwoquan_service/services/assistant-service/internal/infrastructure/persistence"
 )
+
+type httpNotificationCommandWriter struct{}
+
+func (httpNotificationCommandWriter) CreateAppMessage(
+	_ context.Context,
+	_ application.NotificationAppMessageCommand,
+) (application.NotificationAppMessageReceipt, error) {
+	return application.NotificationAppMessageReceipt{MessageID: "notification-http-test"}, nil
+}
+
+func TestConsentRoutesRequireVerifiedAccountAndIgnoreForgedHeader(t *testing.T) {
+	service := application.NewAssistantService(
+		persistence.NewMemoryEventStore(),
+		persistence.NewMemoryConsentStore(),
+		rtredis.NewMemoryClient(),
+	)
+	handler := NewHandler(service).Routes()
+
+	forged := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/assistant/skills/personal_content_access/consent",
+		strings.NewReader(`{"grantedScope":"read_own_content"}`),
+	)
+	forged.Header.Set("X-Client-User-Id", "forged-account")
+	forgedRec := httptest.NewRecorder()
+	handler.ServeHTTP(forgedRec, forged)
+	if forgedRec.Code != http.StatusUnauthorized {
+		t.Fatalf("forged status=%d body=%s", forgedRec.Code, forgedRec.Body.String())
+	}
+
+	verified := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/assistant/skills/personal_content_access/consent",
+		strings.NewReader(`{"grantedScope":"read_own_content"}`),
+	)
+	verified.Header.Set("X-Client-User-Id", "forged-account")
+	verified = verified.WithContext(rtauth.WithPrincipal(
+		verified.Context(),
+		rtauth.Principal{
+			Claims: rtauth.Claims{Subject: "account-1"},
+			Actor:  rtoperation.ActorContext{AccountID: "account-1"},
+		},
+	))
+	verifiedRec := httptest.NewRecorder()
+	handler.ServeHTTP(verifiedRec, verified)
+	if verifiedRec.Code != http.StatusOK {
+		t.Fatalf("verified status=%d body=%s", verifiedRec.Code, verifiedRec.Body.String())
+	}
+
+	items, err := service.ListConsents(context.Background(), "account-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].UserID != "account-1" {
+		t.Fatalf("trusted account consent=%+v", items)
+	}
+	forgedItems, err := service.ListConsents(context.Background(), "forged-account")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forgedItems) != 0 {
+		t.Fatalf("forged account received consent=%+v", forgedItems)
+	}
+}
 
 func TestHandleReportInteractionEvent_BatchWrapperAndHeaders(t *testing.T) {
 	service := application.NewAssistantService(
@@ -144,96 +211,28 @@ func TestHandleGetLearningOpsSummary(t *testing.T) {
 	}
 }
 
-func TestHandleAppMessageLifecycle(t *testing.T) {
+func TestAssistantDoesNotExposeNotificationRoutes(t *testing.T) {
 	service := application.NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
-		application.WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
 	)
 	handler := NewHandler(service).Routes()
-	payload, _ := json.Marshal(map[string]any{
-		"messageType": "assistant",
-		"source":      "assistant_turn",
-		"sourceId":    "atn_http_1",
-		"title":       "小趣提醒",
-		"summary":     "你关注的主题有新进展。",
-		"target": map[string]any{
-			"targetType": "assistant_turn",
-			"targetId":   "atn_http_1",
-			"routeId":    "myIntersections",
-			"routePath":  "/profile/intersections",
-			"query": map[string]string{
-				"dimension": "content",
-			},
-		},
-	})
-	createReq := httptest.NewRequest(http.MethodPost, "/v1/app-messages", bytes.NewReader(payload))
-	createReq.Header.Set("Content-Type", "application/json")
-	createReq.Header.Set("X-Client-User-Id", "user_msg_1")
-	createResp := httptest.NewRecorder()
-	handler.ServeHTTP(createResp, createReq)
-	if createResp.Code != http.StatusCreated {
-		t.Fatalf("create status=%d body=%s", createResp.Code, createResp.Body.String())
-	}
-	var created map[string]any
-	if err := json.Unmarshal(createResp.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
-	messageID, _ := created["messageId"].(string)
-	if messageID == "" {
-		t.Fatal("messageId should be returned")
-	}
-	target, _ := created["target"].(map[string]any)
-	query, _ := target["query"].(map[string]any)
-	if target["routeId"] != "myIntersections" || query["dimension"] != "content" {
-		t.Fatalf("structured target not preserved: %#v", target)
-	}
-
-	listReq := httptest.NewRequest(http.MethodGet, "/v1/app-messages", nil)
-	listReq.Header.Set("X-Client-User-Id", "user_msg_1")
-	listResp := httptest.NewRecorder()
-	handler.ServeHTTP(listResp, listReq)
-	if listResp.Code != http.StatusOK {
-		t.Fatalf("list status=%d body=%s", listResp.Code, listResp.Body.String())
-	}
-	var list map[string][]map[string]any
-	if err := json.Unmarshal(listResp.Body.Bytes(), &list); err != nil {
-		t.Fatalf("decode list response: %v", err)
-	}
-	if len(list["items"]) != 1 {
-		t.Fatalf("items=%d, want 1", len(list["items"]))
-	}
-
-	ackReq := httptest.NewRequest(http.MethodPost, "/v1/app-messages/"+messageID+"/ack", nil)
-	ackReq.Header.Set("X-Client-User-Id", "user_msg_1")
-	ackResp := httptest.NewRecorder()
-	handler.ServeHTTP(ackResp, ackReq)
-	if ackResp.Code != http.StatusOK {
-		t.Fatalf("ack status=%d body=%s", ackResp.Code, ackResp.Body.String())
-	}
-
-	readReq := httptest.NewRequest(http.MethodPost, "/v1/app-messages/"+messageID+"/read", nil)
-	readReq.Header.Set("X-Client-User-Id", "user_msg_1")
-	readResp := httptest.NewRecorder()
-	handler.ServeHTTP(readResp, readReq)
-	if readResp.Code != http.StatusOK {
-		t.Fatalf("read status=%d body=%s", readResp.Code, readResp.Body.String())
-	}
-
-	countReq := httptest.NewRequest(http.MethodGet, "/v1/app-messages/unread-count", nil)
-	countReq.Header.Set("X-Client-User-Id", "user_msg_1")
-	countResp := httptest.NewRecorder()
-	handler.ServeHTTP(countResp, countReq)
-	if countResp.Code != http.StatusOK {
-		t.Fatalf("count status=%d body=%s", countResp.Code, countResp.Body.String())
-	}
-	var count map[string]float64
-	if err := json.Unmarshal(countResp.Body.Bytes(), &count); err != nil {
-		t.Fatalf("decode count response: %v", err)
-	}
-	if count["unreadCount"] != 0 {
-		t.Fatalf("unreadCount=%v, want 0", count["unreadCount"])
+	for _, route := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/v1/app-messages"},
+		{http.MethodGet, "/v1/app-messages"},
+		{http.MethodGet, "/v1/app-messages/unread-count"},
+		{http.MethodGet, "/v1/app-messages/stream"},
+		{http.MethodPost, "/v1/app-messages/message-1/read"},
+	} {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(route.method, route.path, nil))
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("assistant route %s %s status=%d, want 404", route.method, route.path, response.Code)
+		}
 	}
 }
 
@@ -283,7 +282,7 @@ func TestHandleTickIntersectionReminders(t *testing.T) {
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
-		application.WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		application.WithNotificationAppMessageCommandWriter(httpNotificationCommandWriter{}),
 		application.WithIntersectionInboxReader(httpFakeIntersectionInboxReader{reasons: []application.IntersectionReminderReason{{
 			ReasonID:    "reason_http_1",
 			TargetID:    "user_2",
@@ -320,53 +319,13 @@ func (r httpFakeIntersectionInboxReader) ListNewIntersectionReasons(context.Cont
 	return r.reasons, nil
 }
 
-func TestHandleAppMessageStream(t *testing.T) {
-	service := application.NewAssistantService(
-		persistence.NewMemoryEventStore(),
-		persistence.NewMemoryConsentStore(),
-		rtredis.NewMemoryClient(),
-		application.WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
-	)
-	handler := NewHandler(service).Routes()
-	payload, _ := json.Marshal(map[string]any{
-		"messageType": "assistant",
-		"source":      "assistant_turn",
-		"sourceId":    "atn_stream_1",
-		"title":       "小趣提醒",
-		"summary":     "stream smoke",
-		"target": map[string]any{
-			"targetType": "assistant_turn",
-			"targetId":   "atn_stream_1",
-		},
-	})
-	createReq := httptest.NewRequest(http.MethodPost, "/v1/app-messages", bytes.NewReader(payload))
-	createReq.Header.Set("Content-Type", "application/json")
-	createReq.Header.Set("X-Client-User-Id", "user_stream_1")
-	handler.ServeHTTP(httptest.NewRecorder(), createReq)
-
-	streamReq := httptest.NewRequest(http.MethodGet, "/v1/app-messages/stream", nil)
-	streamReq.Header.Set("X-Client-User-Id", "user_stream_1")
-	streamResp := httptest.NewRecorder()
-	handler.ServeHTTP(streamResp, streamReq)
-	if streamResp.Code != http.StatusOK {
-		t.Fatalf("stream status=%d body=%s", streamResp.Code, streamResp.Body.String())
-	}
-	body := streamResp.Body.String()
-	if !bytes.Contains([]byte(body), []byte("event: app_message.stream.ready")) {
-		t.Fatalf("stream missing ready event: %s", body)
-	}
-	if !bytes.Contains([]byte(body), []byte(`"seq":1`)) || !bytes.Contains([]byte(body), []byte(`"seq":2`)) {
-		t.Fatalf("stream missing seq envelope: %s", body)
-	}
-}
-
 func TestHandleSkillSubscriptionLifecycleAndCronTick(t *testing.T) {
 	service := application.NewAssistantService(
 		persistence.NewMemoryEventStore(),
 		persistence.NewMemoryConsentStore(),
 		rtredis.NewMemoryClient(),
 		application.WithSkillSubscriptionStore(persistence.NewMemorySkillSubscriptionStore()),
-		application.WithAppMessageStore(persistence.NewMemoryAppMessageStore()),
+		application.WithNotificationAppMessageCommandWriter(httpNotificationCommandWriter{}),
 	)
 	handler := NewHandler(service).Routes()
 
@@ -462,7 +421,7 @@ func TestHandleConversationTurnStream(t *testing.T) {
 	turnPayload, _ := json.Marshal(map[string]any{
 		"input": map[string]any{"text": "今天帮我整理日程"},
 	})
-	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/turns", bytes.NewReader(turnPayload))
+	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
 	turnReq.Header.Set("Content-Type", "application/json")
 	turnReq.Header.Set("X-Client-User-Id", "user_m4_1")
 	turnResp := httptest.NewRecorder()
@@ -479,7 +438,7 @@ func TestHandleConversationTurnStream(t *testing.T) {
 		t.Fatalf("turnId=%q", turnID)
 	}
 
-	streamReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/turns/"+turnID+"/stream", nil)
+	streamReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID+"/events", nil)
 	streamReq.Header.Set("X-Client-User-Id", "user_m4_1")
 	streamResp := httptest.NewRecorder()
 	handler.ServeHTTP(streamResp, streamReq)
@@ -527,7 +486,7 @@ func TestHandleTurnStream_M5AgentLoopEndToEnd(t *testing.T) {
 	turnPayload, _ := json.Marshal(map[string]any{
 		"input": map[string]any{"text": "帮我总结今天的安排"},
 	})
-	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/turns", bytes.NewReader(turnPayload))
+	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
 	turnReq.Header.Set("Content-Type", "application/json")
 	turnReq.Header.Set("X-Client-User-Id", "user_m5_http")
 	turnResp := httptest.NewRecorder()
@@ -541,7 +500,7 @@ func TestHandleTurnStream_M5AgentLoopEndToEnd(t *testing.T) {
 	}
 	turnID, _ := turn["turnId"].(string)
 
-	streamReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/turns/"+turnID+"/stream", nil)
+	streamReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID+"/events", nil)
 	streamReq.Header.Set("X-Client-User-Id", "user_m5_http")
 	streamResp := httptest.NewRecorder()
 	handler.ServeHTTP(streamResp, streamReq)
@@ -580,7 +539,7 @@ func TestHandleTurnStream_M5AgentLoopEndToEnd(t *testing.T) {
 	if !bytes.Contains([]byte(body), []byte(`"text":"日程待办助手已生成会议与提醒方案`)) {
 		t.Fatalf("stream missing final text payload: %s", body)
 	}
-	getTurnReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/turns/"+turnID, nil)
+	getTurnReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID, nil)
 	getTurnReq.Header.Set("X-Client-User-Id", "user_m5_http")
 	getTurnResp := httptest.NewRecorder()
 	handler.ServeHTTP(getTurnResp, getTurnReq)
@@ -607,7 +566,7 @@ func TestHandleTurnStream_M11LocalScenarios(t *testing.T) {
 		rtredis.NewMemoryClient(),
 	)
 	handler := NewHandler(service).Routes()
-	pack, err := application.LoadAssistantScenarioPack()
+	pack, err := environmentseed.LoadAssistantScenarioPack()
 	if err != nil {
 		t.Fatalf("LoadAssistantScenarioPack() error = %v", err)
 	}
@@ -638,8 +597,8 @@ func TestHandleTurnStream_M11LocalScenarios(t *testing.T) {
 	}
 }
 
-func deterministicHanScenarios(cases []application.AssistantScenarioFixture) []application.AssistantScenarioFixture {
-	filtered := make([]application.AssistantScenarioFixture, 0, len(cases))
+func deterministicHanScenarios(cases []environmentseed.AssistantScenarioFixture) []environmentseed.AssistantScenarioFixture {
+	filtered := make([]environmentseed.AssistantScenarioFixture, 0, len(cases))
 	for _, tc := range cases {
 		if containsHan(tc.Question) {
 			filtered = append(filtered, tc)
@@ -685,7 +644,7 @@ func createM11TurnAndStream(t *testing.T, handler http.Handler, scenario, skillI
 		"input":    map[string]any{"text": text},
 		"trigger":  map[string]any{"type": "user_message"},
 	})
-	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/turns", bytes.NewReader(turnPayload))
+	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
 	turnReq.Header.Set("Content-Type", "application/json")
 	turnReq.Header.Set("X-Client-User-Id", userID)
 	turnResp := httptest.NewRecorder()
@@ -702,7 +661,7 @@ func createM11TurnAndStream(t *testing.T, handler http.Handler, scenario, skillI
 		t.Fatalf("turnId missing: %#v", turn)
 	}
 
-	streamReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/turns/"+turnID+"/stream", bytes.NewReader([]byte("{}")))
+	streamReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID+"/events", nil)
 	streamReq.Header.Set("Content-Type", "application/json")
 	streamReq.Header.Set("X-Client-User-Id", userID)
 	streamResp := httptest.NewRecorder()
@@ -744,7 +703,7 @@ func TestHandleTurnStream_M5ToolFailureReturnsRuntimeFailure(t *testing.T) {
 	}
 	conversationID, _ := conversation["conversationId"].(string)
 	turnPayload, _ := json.Marshal(map[string]any{"input": map[string]any{"text": "验证失败路径"}})
-	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/turns", bytes.NewReader(turnPayload))
+	turnReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/conversations/"+conversationID+"/runs", bytes.NewReader(turnPayload))
 	turnReq.Header.Set("Content-Type", "application/json")
 	turnReq.Header.Set("X-Client-User-Id", "user_m5_fail")
 	turnResp := httptest.NewRecorder()
@@ -755,7 +714,7 @@ func TestHandleTurnStream_M5ToolFailureReturnsRuntimeFailure(t *testing.T) {
 	}
 	turnID, _ := turn["turnId"].(string)
 
-	streamReq := httptest.NewRequest(http.MethodPost, "/v1/assistant/turns/"+turnID+"/stream", nil)
+	streamReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID+"/events", nil)
 	streamReq.Header.Set("X-Client-User-Id", "user_m5_fail")
 	streamResp := httptest.NewRecorder()
 	handler.ServeHTTP(streamResp, streamReq)
@@ -772,7 +731,7 @@ func TestHandleTurnStream_M5ToolFailureReturnsRuntimeFailure(t *testing.T) {
 	if !bytes.Contains([]byte(body), []byte(`"runtimeFailure"`)) {
 		t.Fatalf("stream missing runtimeFailure: %s", body)
 	}
-	getTurnReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/turns/"+turnID, nil)
+	getTurnReq := httptest.NewRequest(http.MethodGet, "/v1/assistant/runs/"+turnID, nil)
 	getTurnReq.Header.Set("X-Client-User-Id", "user_m5_fail")
 	getTurnResp := httptest.NewRecorder()
 	handler.ServeHTTP(getTurnResp, getTurnReq)

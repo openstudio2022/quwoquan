@@ -1,0 +1,37 @@
+version: 1
+entity: ContentReaction
+backend: mongodb
+
+collections:
+  content_reaction_aggregates:
+    entity: ContentReaction
+    description: targetKind + targetId + actorDimension + actorId 唯一的互动关系权威集合
+    indexes:
+      - { name: idx_content_reaction_unique_actor, keys: { targetKind: 1, targetId: 1, actorDimension: 1, actorId: 1 }, unique: true }
+      - { name: idx_content_reaction_target_value, keys: { targetKind: 1, targetId: 1, reaction: 1, updatedAt: -1 } }
+      - { name: idx_content_reaction_actor_history, keys: { actorDimension: 1, actorId: 1, updatedAt: -1 } }
+      - { name: idx_content_reaction_version, keys: { _id: 1, version: 1 }, unique: true }
+
+  content_reaction_command_receipts:
+    entity: ContentReaction
+    description: 点赞命令的幂等 receipt；与关系状态和 outbox 在同一 Mongo transaction 提交
+    indexes:
+      - { name: idx_content_reaction_receipt_key, keys: { _id: 1 }, unique: true }
+      - { name: idx_content_reaction_receipt_aggregate, keys: { aggregateId: 1, aggregateVersion: -1 } }
+      - { name: idx_content_reaction_receipt_expire, keys: { expiresAt: 1 }, expireAfterSeconds: 0 }
+
+  content_reaction_outbox:
+    entity: ContentReaction
+    description: ContentReaction 领域事实 outbox；只在聚合版本变化时追加
+    indexes:
+      - { name: idx_content_reaction_outbox_event, keys: { _id: 1 }, unique: true }
+      - { name: idx_content_reaction_outbox_aggregate_version, keys: { aggregateId: 1, aggregateVersion: 1 }, unique: true }
+      - { name: idx_content_reaction_outbox_sequence, keys: { outboxSequence: 1 }, unique: true }
+
+  content_reaction_outbox_sequences:
+    entity: ContentReaction
+    description: 为 reaction outbox transaction 分配全局单调 sequence
+
+  content_reaction_projection_checkpoints:
+    entity: ContentReaction
+    description: 每个外部投递或 projection consumer 的独立 durable checkpoint

@@ -1,21 +1,17 @@
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_group_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_member_roster_item_dto.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
-CircleStatsMemberRowViewData circleStatsMemberRowFromRosterItem(
-  CircleMemberRosterItemDto r,
-) {
-  final id = r.userId.isNotEmpty ? r.userId : r.membershipId;
-  return CircleStatsMemberRowViewData(
-    id: id.isNotEmpty ? id : 'unknown',
-    name: (r.displayName ?? id).toString(),
-    avatarUrl: (r.avatarUrl ?? '').toString(),
-    worksCountLabel: (r.worksCountLabel ?? '—').toString(),
-    fansCountLabel: (r.fansCountLabel ?? '—').toString(),
-    likesCountLabel: (r.likesCountLabel ?? '—').toString(),
-    isFollowed: r.isFollowed,
-  );
-}
+CircleStatsMemberRowViewData circleStatsMemberRowFromMembership(
+  CircleMembershipSlice membership,
+) => CircleStatsMemberRowViewData(
+  id: membership.personaId,
+  name: membership.personaId,
+  avatarUrl: '',
+  worksCountLabel: '—',
+  fansCountLabel: '—',
+  likesCountLabel: '—',
+  isFollowed: false,
+);
 
 CircleStatsMemberRowViewData circleStatsMemberRowFromWireMap(
   Map<String, Object?> m,
@@ -26,27 +22,19 @@ CircleStatsMemberRowViewData circleStatsMemberRowFromWireMap(
     id: id.isNotEmpty ? id : 'unknown',
     name: (dm['displayName'] ?? dm['name'] ?? id).toString(),
     avatarUrl: (dm['avatarUrl'] ?? dm['avatar'] ?? '').toString(),
-    worksCountLabel:
-        (dm['worksCountLabel'] ?? dm['worksCount'] ?? '—').toString(),
+    worksCountLabel: (dm['worksCountLabel'] ?? dm['worksCount'] ?? '—')
+        .toString(),
     fansCountLabel: (dm['fansCountLabel'] ?? dm['fansCount'] ?? '—').toString(),
-    likesCountLabel:
-        (dm['likesCountLabel'] ?? dm['likesCount'] ?? '—').toString(),
+    likesCountLabel: (dm['likesCountLabel'] ?? dm['likesCount'] ?? '—')
+        .toString(),
     isFollowed: dm['isFollowed'] as bool? ?? false,
   );
 }
 
-CircleStatsGroupRowViewData circleStatsGroupRowFromWireMap(
-  Map<String, Object?> m,
-) {
-  final dm = Map<String, dynamic>.from(m);
-  return circleStatsGroupRowFromGroupDto(CircleGroupDto.fromMap(dm));
-}
-
-CircleStatsGroupRowViewData circleStatsGroupRowFromGroupDto(CircleGroupDto g) {
-  final label = g.memberCount.toString();
-  return CircleStatsGroupRowViewData(
-    id: g.id.isNotEmpty ? g.id : 'g_unknown',
-    name: g.name,
-    memberCountLabel: label,
-  );
-}
+CircleStatsGroupRowViewData circleStatsGroupRowFromGroupSlice(
+  CircleGroupSlice group,
+) => CircleStatsGroupRowViewData(
+  id: group.groupId,
+  name: group.name,
+  memberCountLabel: group.memberCount.toString(),
+);

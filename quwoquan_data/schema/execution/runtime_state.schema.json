@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/runtime_state.schema.json",
+  "title": "Execution runtime state",
+  "description": "单一 execution 工作包的运行状态记录；由 execution manifest 绑定并禁止携带 secret。",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "executionId",
+    "targetSetSha256",
+    "commandChain",
+    "executionSequence",
+    "createdAt",
+    "updatedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.execution_runtime_state/2" },
+    "executionId": { "type": "string", "minLength": 1 },
+    "targetSetSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "commandChain": { "type": "array", "items": { "type": "string" } },
+    "executionSequence": { "type": "integer", "minimum": 1 },
+    "createdAt": { "type": "string" },
+    "updatedAt": { "type": "string" }
+  }
+}

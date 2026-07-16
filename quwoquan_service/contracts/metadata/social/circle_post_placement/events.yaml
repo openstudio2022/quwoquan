@@ -1,0 +1,21 @@
+version: 1
+aggregate: CirclePostPlacement
+events:
+  - name: CirclePostPlaced
+    producer: circle-service
+    consumers: [content-service, recommendation-engine, search-service, homepage-projector]
+    channel: transactional_outbox
+    payload_entity: CirclePostPlacement
+    payload_fields: [_id, version, postId, ownerPersonaId, circleId, groupId, state, createdAt]
+  - name: CirclePostPlacementRemoved
+    producer: circle-service
+    consumers: [content-service, recommendation-engine, search-service, homepage-projector]
+    channel: transactional_outbox
+    payload_entity: CirclePostPlacement
+    payload_fields: [_id, version, postId, circleId, groupId, state, updatedAt]
+  - name: CirclePostPlacementPresentationChanged
+    producer: circle-service
+    consumers: [recommendation-engine, circle-feed-projector]
+    channel: transactional_outbox
+    payload_entity: CirclePostPlacement
+    payload_fields: [_id, version, postId, circleId, pinned, pinnedAt, featured, featuredAt, updatedAt]

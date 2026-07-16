@@ -3,7 +3,6 @@
 // Regenerate: make codegen-app (from quwoquan_service)
 
 export 'post_base_dto.dart';
-export 'comment_dto.g.dart';
 export 'post_search_item_view_dto.g.dart';
 export 'report_create_request_wire.g.dart';
 export 'post_read_surface_id.g.dart';

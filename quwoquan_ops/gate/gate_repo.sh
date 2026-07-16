@@ -4,6 +4,7 @@ export PYTHONDONTWRITEBYTECODE=1
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
+export PYTEST_ADDOPTS="${PYTEST_ADDOPTS:-} -o cache_dir=$ROOT/.qwq_output/env/repo/local/tests/cache/pytest"
 
 if [ -x "/opt/homebrew/opt/ruby/bin/ruby" ]; then
   export PATH="/opt/homebrew/opt/ruby/bin:$PATH"
@@ -18,11 +19,11 @@ import yaml
 PY
   then
     export PATH="/opt/homebrew/bin:$PATH"
-  elif [ -x "$ROOT/quwoquan_data/.venv/bin/python3" ] && "$ROOT/quwoquan_data/.venv/bin/python3" - <<'PY' >/dev/null 2>&1
+  elif [ -x "$ROOT/.qwq_output/env/repo/local/python-envs/cache/quwoquan-data/bin/python3" ] && "$ROOT/.qwq_output/env/repo/local/python-envs/cache/quwoquan-data/bin/python3" - <<'PY' >/dev/null 2>&1
 import yaml
 PY
   then
-    export PATH="$ROOT/quwoquan_data/.venv/bin:$PATH"
+    export PATH="$ROOT/.qwq_output/env/repo/local/python-envs/cache/quwoquan-data/bin:$PATH"
   fi
 fi
 
@@ -39,6 +40,12 @@ fi
 bash quwoquan_ops/gate/scaffold/verify_global_increment_constraints.sh
 python3 quwoquan_ops/gate/verify_git_branch_policy.py
 python3 quwoquan_ops/gate/verify_agent_context_contract.py
+python3 quwoquan_ops/gate/verify_business_object_design_freeze.py
+python3 quwoquan_ops/gate/verify_retired_runtime_architecture.py
+python3 quwoquan_ops/gate/verify_cloud_commercial_directory_governance.py
+python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
+python3 quwoquan_app/scripts/runtime/verify_app_generated_manifest.py
+python3 quwoquan_app/scripts/runtime/verify_cloud_package_boundaries.py
 python3 quwoquan_ops/gate/scaffold/verify_test_specs.py
 python3 quwoquan_ops/gate/scaffold/verify_test_directory_inventory.py
 python3 quwoquan_ops/gate/scaffold/verify_test_no_fake.py
@@ -47,6 +54,7 @@ python3 quwoquan_ops/gate/verify_local_dependency_purity.py
 python3 quwoquan_ops/gate/verify_observability_layout.py
 python3 quwoquan_ops/gate/verify_observability_envelope.py
 python3 quwoquan_ops/gate/verify_output_layout.py
+python3 quwoquan_ops/gate/verify_output_path_source_contract.py
 python3 quwoquan_ops/gate/verify_root_layout.py
 python3 quwoquan_app/scripts/runtime/verify_app_layout.py
 python3 quwoquan_service/scripts/verify/verify_service_layout.py
@@ -90,7 +98,7 @@ run_service() {
   # Config release guardrails (skeleton; strict mode via QWQ_CONFIG_GATE_STRICT=1)
   bash quwoquan_service/scripts/runtime/verify_service_config_layout.sh
   bash quwoquan_service/scripts/runtime/verify_service_env_contract.sh
-  python3 quwoquan_service/scripts/verify/verify_sms_otp_pass_through_gate.py
+  python3 quwoquan_service/scripts/verify/verify_login_dependency_config.py
   python3 quwoquan_service/scripts/verify/verify_relationship_error_code_gate.py
   python3 quwoquan_service/scripts/verify/verify_error_recovery_alignment.py
   python3 quwoquan_app/scripts/env/verify_public_vs_upstream_url_contract.py
@@ -146,6 +154,7 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_native_edge_navigation.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_page_horizontal_quality_matrix.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_page_matrix_scan_complete.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_page_object_contract.py || exit 1
     # 页面 A/B/C：默认 --quiet 仅汇总、不阻断；GATE_PAGE_ABC_ENFORCE 见 specs/gates/page_abc_governance.md
     if [[ -n "${GATE_PAGE_ABC_ENFORCE:-}" ]]; then
       _abc_flags=""
@@ -187,6 +196,8 @@ run_app() {
     python3 quwoquan_app/scripts/runtime/verify_metadata_driven_ui_gate.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_routes_vs_codegen_app.py || exit 1
     python3 quwoquan_app/scripts/runtime/verify_metadata_response_body_vs_codegen_app.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_cloud_security_cutovers.py || exit 1
+    python3 quwoquan_app/scripts/runtime/verify_cloud_runtime_single_path.py || exit 1
     python3 quwoquan_app/scripts/auth/verify_auth_policy_contract.py || exit 1
     python3 quwoquan_app/scripts/auth/verify_login_entry_loop_contract.py || exit 1
     python3 quwoquan_app/scripts/device/verify_startup_ttid_baseline.py || exit 1
@@ -207,7 +218,6 @@ run_app() {
     python3 quwoquan_app/scripts/cli.py fonts verify || exit 1
     python3 quwoquan_app/scripts/cli.py web verify-offline || exit 1
     python3 quwoquan_app/scripts/env/verify_app_seed_manifests.py || exit 1
-    python3 quwoquan_data/scripts/verify/verify_prefab_user_provenance.py || exit 1
     python3 quwoquan_app/scripts/env/verify_business_env_data_inventory.py || exit 1
     python3 quwoquan_app/scripts/content/verify_markdown_article_no_article_document.py || exit 1
     python3 quwoquan_app/scripts/content/verify_article_contract_purity.py || exit 1
@@ -223,7 +233,7 @@ run_app() {
     # R02 Repository 接口方法数预算（ratchet；伞组合接口免登记）
     python3 quwoquan_app/scripts/runtime/verify_repository_interface_method_budget.py || exit 1
   else
-    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_assistant_context_contract, verify_assistant_security_contract, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_lib_dart_io_budget, verify_lib_platform_check_isolation, verify_app_seed_manifests, verify_business_env_data_inventory, verify_markdown_article_no_article_document, verify_article_contract_purity, verify_post_view_projection_wire_keys, verify_pageflip_backward_mainline, verify_content_ui_directory_boundaries"
+    echo "[gate] WARN: python3 not found — skipping verify_dart_semantic, verify_settings_canonical, verify_conversation_sheet_canonical, verify_error_code_semantic, verify_cloud_services_semantic, verify_route_and_context_semantic, verify_no_personal_assistant_imports, verify_degraded_response_contract, verify_ios_native_surface_gate, verify_native_edge_navigation, verify_page_horizontal_quality_matrix, verify_page_matrix_scan_complete, verify_page_object_contract, verify_page_abc_governance, verify_assistant_search_weak_typing_ratchet, verify_metadata_driven_ui_gate, verify_metadata_routes_vs_codegen_app, verify_metadata_service_entities_vs_fields, verify_assistant_context_contract, verify_assistant_security_contract, verify_ui_mock_isolation, verify_contract_mock_data_inventory, verify_app_no_integration_test_dir, verify_lib_no_import_test_tree, verify_ui_app_data_source_mode_ratchet, verify_lib_no_test_only_symbols, verify_lib_dart_io_budget, verify_lib_platform_check_isolation, verify_app_seed_manifests, verify_business_env_data_inventory, verify_markdown_article_no_article_document, verify_article_contract_purity, verify_post_view_projection_wire_keys, verify_pageflip_backward_mainline, verify_content_ui_directory_boundaries"
   fi
   # local_contract tests — fast, no external deps. Canonical App entry is test/local_contract/.
   # 使用 tee 边跑边输出：原先整段输出进变量，长时间无日志易被误判为「卡住」。
@@ -297,7 +307,7 @@ run_portal() {
 
 run_data() {
   echo "[gate] quwoquan_data"
-  bash quwoquan_data/scripts/verify/verify_quwoquan_data.sh
+  python3 quwoquan_data/scripts/cli.py verify all
 }
 
 echo "[gate] repo quality gate (scope=$scope)"

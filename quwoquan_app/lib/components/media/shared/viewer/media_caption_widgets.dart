@@ -46,6 +46,7 @@ class MediaCaptionBlock extends StatelessWidget {
     return ImmersiveViewerLayout.alignToRail(
       context: context,
       layoutSpec: layoutSpec,
+      includeBottomSafeSideInset: true,
       child: SizedBox(
         key: railKey,
         width: double.infinity,

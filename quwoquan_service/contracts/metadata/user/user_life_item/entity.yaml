@@ -1,7 +1,7 @@
 version: 1
 domain: user
-entity_name: UserLifeItem
-aggregate_root: false
+entity: UserLifeItem
+object_kind: projection
 
 description: |
   用户主页「生活」Tab 展示的生活记录项。

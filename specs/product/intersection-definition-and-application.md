@@ -1024,7 +1024,8 @@ flowchart LR
 - [ ] `_shared/request_context.yaml`：删 `FavoritePost/UnfavoritePost → page_id` 两条映射。
 - [ ] `content/post/fields.yaml`：删 `favoriteCount`（Post stats）、`favorited` / `favoritedAt`（ContentReaction）。
 - [ ] `content/post/behaviors.yaml`：删 `type: favorite` 行为定义与训练样本权重。
-- [ ] `content/post/events.yaml`：`ContentReacted` payload 去 `favorited`。
+- [x] `content/content_reaction/events.yaml`：独立 `ContentReactionActivated/Removed`
+  payload 仅携带 typed actor/state/version，不存在 `favorited` 兼容字段。
 - [ ] `content/post/storage.yaml`：删 `idx_reactions_user_favorited` 索引。
 - [ ] `content/post/aggregate.yaml`：删 `favorite` counter。
 - [ ] `_shared/types.yaml`：`BehaviorEventType` 删 `favorite`。
@@ -1032,7 +1033,7 @@ flowchart LR
 - [ ] 5 个投影 yaml（discovery_feed / photo / video / article / micro）：删 `favoriteCount` 字段及 `savesCount/bookmarks/favorite_count` aliases。
 - [ ] `content/post/projections/author_impact_item.yaml`：示例文案改连接型（无「N人收藏」）。
 - [ ] `content/post/ui_config.yaml`：action_bar_items 删 `favorite`；删 `interaction_config.favorite`、`show_favorite_count` 与悬空 `error_favorite_failed` 引用。
-- [ ] `recommendation/rec_model/projections/learning_events.yaml`：eventType 删 `favorite`。
+- [ ] `recommendation/model_release/projections/learning_events.yaml`：eventType 删 `favorite`。
 - [ ] `assistant/assistant_run/fields.yaml`：删 `favoritedAnswer`（收藏回答同退场，不做替代）。
 - [ ] `content/post/tests/contract.yaml`：删 favorite 契约测试登记。
 - [ ] fixtures：`content_scenarios.json`（72 处）+ `.lite` / `.gamma-curated` 变体删 `favoriteCount/favorited` 与「N人收藏」displayText。
@@ -1287,6 +1288,21 @@ affinity 必须分通道（intersectionClass=affinity + confidenceLabel），不
 无 primaryText → 不展示（不占位、不造假）。
 ```
 
+#### 18.1.1 上下文 SVO 与 self-target 红线（2026-07-15）
+
+用户可见交集句的宾语不再要求在所有 surface 都显式写进 `primaryText`：当交集宾语就是当前内容卡、视频书、内容详情或当前主页时，宾语由宿主 Query Slice 承载，句内禁止再次渲染可点击的当前对象链接。例如内容卡展示 `联系人林清越等3人赞过和评论过`，而不是 `联系人林清越等3人赞过和评论过《这条记录》`。
+
+`IntersectionReason.displayBinding` 是显示绑定合同：
+
+| binding | 使用场景 | 规则 |
+|---|---|---|
+| `explicit_link` | 我的交集 inbox、独立列表、跨对象证据 | `primarySpans` 必须有可点击 typed object |
+| `host_implicit` | 内容卡、视频书、内容详情、命中对象自身的搜索结果 | 不渲染当前宿主 object span；App 必须拿宿主 target 校验 |
+| `host_plain` | 用户/实体/圈子主页 | 可展示当前宿主名，但只能是 plain span，不可 self-link |
+| `hidden` | 证据或承接不足 | 云侧清空主句，App 不展示 |
+
+因此 G2 的不变量升级为：`join(primarySpans.text)==primaryText`；`explicit_link` 必须有 typed object span；host binding 必须由当前页面对象证明；任何 span target 为空时都不得回退到 `actionTargetId` 或整行自跳转。
+
 契约收口（零兼容，一次性迁移）：
 
 | 契约 | 保留 | 删除 |
@@ -1387,7 +1403,7 @@ affinity 必须分通道（intersectionClass=affinity + confidenceLabel），不
 
 | read_model | metadata 真相源 | 端 DTO（codegen） | 单通道约束 |
 |---|---|---|---|
-| `IntersectionReason` | `recommendation/rec_model/projections/intersection_reason.yaml` | `recommendation/intersection_reason.g.dart` | 结论句唯一来源 `primaryText`；快照/追踪 id 唯一字段 `pointSummarySnapshotId` |
+| `IntersectionReason` | `recommendation/model_release/projections/intersection_reason.yaml` | `recommendation/intersection_reason.g.dart` | 结论句唯一来源 `primaryText`；快照/追踪 id 唯一字段 `pointSummarySnapshotId` |
 | `IntersectionPoint` | `…/projections/intersection_point.yaml` | `recommendation/intersection_point.g.dart` | 证据组结构化字段（`count/sampleText/sampleAvatarUrls/label/displayText`）唯一来源 |
 | `IntersectionActorEvidence` | `…/projections/intersection_actor_evidence.yaml` | `recommendation/intersection_actor_evidence.g.dart` | 人数 N 下钻逐人来源 + 动作证据；端不得反解析 `primaryText` |
 | `IntersectionDimensionTally` | `…/projections/intersection_dimension_tally.yaml` | `recommendation/intersection_dimension_tally.g.dart` | `briefText` 动态简报 + `subtitleText` 证据摘要（端云已对齐） |
@@ -1513,7 +1529,7 @@ maxAffinityPerSurface=3 / cooldownDays=14 / freshnessTtlDaysByDimension`）；fe
 
 | 值对象 | metadata 真相源 | 端 DTO（codegen） | 字段 |
 |---|---|---|---|
-| `IntersectionTarget` | `recommendation/rec_model/projections/intersection_target.yaml` | `recommendation/intersection_target.g.dart` | `objectId` / `objectKind`(person/circle/school/place/enterprise/content/tag) / `routeId`(端路由逻辑名) |
+| `IntersectionTarget` | `recommendation/model_release/projections/intersection_target.yaml` | `recommendation/intersection_target.g.dart` | `objectId` / `objectKind`(person/circle/school/place/enterprise/content/tag) / `routeId`(端路由逻辑名) |
 | `IntersectionTextSpan` | `…/projections/intersection_text_span.yaml` | `recommendation/intersection_text_span.g.dart` | `text` / `role`(plain\|object\|count) / `target`(`IntersectionTarget?`) |
 | `IntersectionVisual` | `…/projections/intersection_visual.yaml` | `recommendation/intersection_visual.g.dart` | `assetKind`(avatar/circleAvatar/cover/emblem/logo/thumbnail/coverImage/icon) / `imageUrl` / `displayName` / `target`(`IntersectionTarget?`) |
 

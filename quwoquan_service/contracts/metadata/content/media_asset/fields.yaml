@@ -1,0 +1,153 @@
+version: 1
+entity: MediaAsset
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: version
+    type: int
+    constraints: [NOT_NULL, DEFAULT_1]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: ownerId
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    description: 素材所有者 Persona ID；所有 owner 侧读取和访问策略变更均以此字段做 BOLA 边界。
+
+  - name: sourceSessionId
+    type: string
+    constraints: [NOT_NULL, UNIQUE]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    description: 产生该资产的上传会话；同一会话最多物化一个资产。
+
+  - name: objectKey
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    description: 对象存储 canonical key。
+
+  - name: sha256
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+    description: 已验证的内容摘要；用于 CAS 定址和去重。
+
+  - name: mediaType
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: contentType
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: fileSize
+    type: int64
+    constraints: [NOT_NULL, POSITIVE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: accessPolicy
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    description: owner_only、referenced_post 或 public；策略不由 Post 内存状态派生。
+
+  - name: processingStatus
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+    description: processing、ready、rejected 或 deleted。
+
+  - name: processingFailureReason
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: coverStrategy
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+
+  - name: manualCoverAssetId
+    type: string
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read_write
+
+  - name: coverFrameTimeMs
+    type: int64
+    constraints: [NOT_NULL, NON_NEGATIVE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read_write
+
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: updatedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: processedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read

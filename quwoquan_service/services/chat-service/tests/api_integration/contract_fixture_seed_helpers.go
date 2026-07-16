@@ -8,8 +8,8 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 
 	"quwoquan_service/runtime/contractfixture"
-	runtimemedia "quwoquan_service/runtime/media"
 	"quwoquan_service/services/chat-service/internal/application"
+	messagemodel "quwoquan_service/services/chat-service/internal/domain/chat/message/model"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
@@ -56,15 +56,18 @@ type chatFixtureConversation struct {
 }
 
 type chatFixtureMessage struct {
-	ID             string `json:"_id"`
-	MessageID      string `json:"messageId"`
-	ConversationID string `json:"conversationId"`
-	SenderID       string `json:"senderId"`
-	Type           string `json:"type"`
-	MessageType    string `json:"messageType"`
-	Content        string `json:"content"`
-	Seq            int64  `json:"seq"`
-	CreatedAt      string `json:"createdAt"`
+	ID                        string `json:"id"`
+	ConversationID            string `json:"conversationId"`
+	ClientMessageID           string `json:"clientMsgId"`
+	SenderID                  string `json:"senderId"`
+	SenderDisplayNameSnapshot string `json:"senderDisplayNameSnapshot"`
+	SenderAvatarURLSnapshot   string `json:"senderAvatarUrlSnapshot"`
+	Type                      string `json:"type"`
+	Content                   string `json:"content"`
+	MediaAssetID              string `json:"mediaAssetId"`
+	Seq                       int64  `json:"seq"`
+	Status                    string `json:"status"`
+	Timestamp                 string `json:"timestamp"`
 }
 
 type chatFixtureMember struct {
@@ -117,7 +120,7 @@ func seedChatContractFixture(t *testing.T, seedRef string) contractSeedEvidence 
 			}
 			seenMembers[memberKey] = struct{}{}
 			member := chatMemberFromFixture(conversationID, idx, fm)
-			if _, err := mongoDB.Collection("conversation_members").InsertOne(ctx, member); err != nil {
+			if _, err := mongoDB.Collection("conversation_memberships").InsertOne(ctx, member); err != nil {
 				t.Fatalf("seed member %s/%s: %v", conversationID, fm.UserID, err)
 			}
 			inserted++
@@ -171,7 +174,9 @@ func resetChatFixtureNamespace(t *testing.T) {
 			t.Fatalf("reset chat fixture namespace %s: %v", name, err)
 		}
 	}
-	mr.FlushAll()
+	if err := integrationRedis.FlushDBs(ctx, 0, 1, 2, 3); err != nil {
+		t.Fatalf("flush chat fixture Redis: %v", err)
+	}
 }
 
 func chatConversationFromFixture(fc chatFixtureConversation) *model.Conversation {
@@ -198,25 +203,21 @@ func chatConversationFromFixture(fc chatFixtureConversation) *model.Conversation
 	}
 }
 
-func chatMessageFromFixture(conversationID string, fm chatFixtureMessage) *model.Message {
-	id := fm.ID
-	if id == "" {
-		id = fm.MessageID
-	}
-	msgType := fm.Type
-	if msgType == "" {
-		msgType = fm.MessageType
-	}
-	return &model.Message{
-		ID:             id,
-		ConversationId: conversationID,
-		Seq:            fm.Seq,
-		ClientMsgId:    id + "_client",
-		SenderId:       fm.SenderID,
-		Type:           msgType,
-		Content:        fm.Content,
-		Status:         "sent",
-		Timestamp:      parseFixtureTime(fm.CreatedAt),
+func chatMessageFromFixture(conversationID string, fm chatFixtureMessage) *messagemodel.Message {
+	return &messagemodel.Message{
+		ID:                        fm.ID,
+		ConversationID:            conversationID,
+		Seq:                       fm.Seq,
+		ClientMessageID:           fm.ClientMessageID,
+		SenderID:                  fm.SenderID,
+		SenderDisplayNameSnapshot: fm.SenderDisplayNameSnapshot,
+		SenderAvatarURLSnapshot:   fm.SenderAvatarURLSnapshot,
+		Type:                      fm.Type,
+		Content:                   fm.Content,
+		MediaAssetID:              fm.MediaAssetID,
+		Status:                    fm.Status,
+		Timestamp:                 parseFixtureTime(fm.Timestamp),
+		Version:                   1,
 	}
 }
 
@@ -240,18 +241,14 @@ func backfillSeededGroupAvatars(t *testing.T) {
 	t.Helper()
 	const testAvatarCDNBase = "http://127.0.0.1:18081"
 	repo := persistence.NewMongoChatStore(mongoDB)
-	media := runtimemedia.NewGroupAvatarService(
-		redisRouter.Scene("general"),
-		testAvatarCDNBase,
-		testChatMediaRoot,
-	)
+	media := newGroupAvatarMediaForContractTest()
 	if err := application.BackfillMissingGroupAvatars(
 		context.Background(),
-		repo,
-		nil,
+		chatStoragePorts(repo),
+		testEventPublisher,
 		media,
-		nil,
-		nil,
+		testUserSyncPublisher,
+		testGroupAvatarScheduler,
 		200,
 	); err != nil {
 		t.Fatalf("backfill seeded group avatars: %v", err)

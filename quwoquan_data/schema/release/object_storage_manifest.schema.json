@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/object_storage_manifest.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "backend",
+    "kind",
+    "logicalRef",
+    "objectKey",
+    "objectUri",
+    "sha256",
+    "bytes",
+    "storedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.object_storage_manifest/1" },
+    "backend": { "enum": ["filesystem", "s3"] },
+    "kind": { "enum": ["source_bundle", "media_cas", "entity_asset", "release"] },
+    "logicalRef": { "type": "string", "minLength": 1 },
+    "objectKey": { "type": "string", "minLength": 1 },
+    "objectUri": { "type": "string", "minLength": 1 },
+    "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "bytes": { "type": "integer", "minimum": 0 },
+    "storedAt": { "type": "string", "minLength": 1 }
+  }
+}

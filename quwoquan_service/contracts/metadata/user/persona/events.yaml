@@ -1,0 +1,21 @@
+version: 1
+aggregate: Persona
+events:
+  - name: PersonaCreated
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: Persona
+    payload_fields: [userId, subAccountId]
+  - name: PersonaUpdated
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: Persona
+    payload_fields: [userId, subAccountId]
+  - name: PersonaRetired
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: Persona
+    payload_fields: [userId, subAccountId]

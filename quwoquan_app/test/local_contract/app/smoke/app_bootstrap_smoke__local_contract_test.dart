@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 
 /// 与 `main_prod` 同构的数据源覆盖：ProviderScope + 恒 Remote Notifier。
 void main() {

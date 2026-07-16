@@ -14,6 +14,13 @@ ALL_SCOPE_PREFIXES = (
     ".github/workflows/",
     "quwoquan_ops/", "quwoquan_app/scripts/", "quwoquan_service/scripts/", "quwoquan_data/scripts/",
 )
+DATA_PREFIXES = (
+    "quwoquan_data/",
+    ".cursor/skills/quwoquan-data-content/",
+    ".cursor/commands/crawl",
+    ".cursor/commands/data-",
+)
+DATA_DOCUMENT_PREFIXES = ("specs/feature-tree/discovery-content/",)
 SERVICE_PREFIXES = (
     "quwoquan_service/",
 )
@@ -120,23 +127,29 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "app": False,
         "portal": False,
         "topology": False,
+        "data": False,
     }
     for raw_path in paths:
         path = raw_path.strip()
         if path.startswith("./"):
             path = path[2:]
         if not path or is_doc_only(path):
+            if path.startswith(DATA_DOCUMENT_PREFIXES):
+                impacted["data"] = True
             continue
         acceptance_scope = classify_acceptance_path(path)
         if acceptance_scope is not None:
             for key, value in acceptance_scope.items():
                 impacted[key] = impacted[key] or value
+            if path.startswith("specs/feature-tree/discovery-content/"):
+                impacted["data"] = True
             continue
         if path in ROOT_LEVEL_ALL_SCOPE_FILES:
             impacted["service"] = True
             impacted["app"] = True
             impacted["portal"] = True
             impacted["topology"] = True
+            impacted["data"] = True
             continue
         if path.startswith(ALL_SCOPE_PREFIXES):
             impacted["service"] = True
@@ -151,6 +164,8 @@ def classify(paths: list[str]) -> dict[str, bool]:
             continue
         if path.startswith(TOPOLOGY_PREFIXES):
             impacted["topology"] = True
+        if path.startswith(DATA_PREFIXES):
+            impacted["data"] = True
             continue
         if path.startswith(SERVICE_PREFIXES):
             impacted["service"] = True
@@ -178,6 +193,7 @@ def main() -> int:
                 "app": True,
                 "portal": True,
                 "topology": True,
+                "data": True,
             }
             print(
                 "No diff range available; defaulting all scopes to impacted for safety.",

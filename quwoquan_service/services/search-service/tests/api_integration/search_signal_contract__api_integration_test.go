@@ -20,7 +20,7 @@ type searchEventsMeta struct {
 }
 
 func TestSearchRecommendationSignalEventContract(t *testing.T) {
-	path := filepath.Join("..", "..", "..", "contracts", "metadata", "search", "query", "events.yaml")
+	path := filepath.Join("..", "..", "..", "..", "contracts", "metadata", "search", "query", "events.yaml")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read events.yaml: %v", err)

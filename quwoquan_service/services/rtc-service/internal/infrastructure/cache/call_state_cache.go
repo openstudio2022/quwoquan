@@ -8,8 +8,11 @@ import (
 	"time"
 
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/services/rtc-service/internal/application"
 	"quwoquan_service/services/rtc-service/internal/domain/call_session/model"
 )
+
+var _ application.CallStateCache = (*CallStateCache)(nil)
 
 type CallStateCache struct {
 	rdb rtredis.Client
@@ -20,9 +23,9 @@ func NewCallStateCache(rdb rtredis.Client) *CallStateCache {
 }
 
 const (
-	callStateTTL      = 3600 * time.Second
-	activeCallTTL     = 3600 * time.Second
-	callTimeoutTTL    = 120 * time.Second
+	callStateTTL   = 3600 * time.Second
+	activeCallTTL  = 3600 * time.Second
+	callTimeoutTTL = 120 * time.Second
 )
 
 func callCacheKey(callID string) string {

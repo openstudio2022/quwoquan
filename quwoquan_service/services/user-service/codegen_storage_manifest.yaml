@@ -11,7 +11,6 @@ sources:
       - user_auth
       - user_devices
       - user_settings
-      - profile_update_proposals
       - credential_bindings
       - anonymous_device_bindings
       - profile_qr_tokens
@@ -31,15 +30,22 @@ sources:
       "cache:user_setting:{userId}":
         name: Setting
 
-  - metadata: user/follow_edge
-    domain_pkg: follow
-    name_overrides:
-      FollowEdge: Follow
+  - metadata: user/persona_relationship
+    domain_pkg: persona_relationship
+    domain_path: relationship/persona_relationship
+    events_only: true
 
-  - metadata: user/block_edge
-    domain_pkg: block
-    name_overrides:
-      BlockEdge: Block
+  - metadata: user/profile_update_proposal
+    domain_pkg: profile_update_proposal
+    domain_path: persona/profile_update_proposal
+    tables:
+      - profile_update_proposals
+      - profile_update_proposals_command_receipts
+      - profile_update_proposals_outbox
+    migration_skip_tables:
+      - profile_update_proposals
+      - profile_update_proposals_command_receipts
+      - profile_update_proposals_outbox
 
   - metadata: user/contact_discovery
     domain_pkg: user

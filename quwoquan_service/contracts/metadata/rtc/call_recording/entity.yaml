@@ -1,0 +1,22 @@
+version: 1
+domain: rtc
+entity: CallRecording
+object_kind: aggregate_root
+description: 经全体参与者同意后启动的 Call 录制及 MediaAsset 产出生命周期聚合。
+storage_backend: mongodb
+capabilities: [commandable, queryable, idempotent_commands]
+business_rules:
+  - callId、requestedBy 与 consentSnapshot 创建后不可变
+  - start 前必须验证 CallSession active 且所有适用参与者同意
+  - 同一 CallSession 同时最多一个 recording
+  - stop 只能作用于 recording，完成后只保存 MediaAsset id
+  - failed 或 ready 为终态，重复 provider callback 按 callback id 去重
+lifecycle:
+  states: [requested, recording, processing, ready, failed, cancelled]
+  optimistic_concurrency: version
+  idempotency: command_receipt
+ddd_layer_mapping:
+  domain_model: internal/domain/rtc/call_recording/model
+  ports: internal/domain/rtc/call_recording/ports
+  application: internal/application/rtc/call_recording
+  persistence: internal/infrastructure/rtc/call_recording/persistence

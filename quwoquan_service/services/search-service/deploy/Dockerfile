@@ -1,8 +1,6 @@
 # Multi-stage build for search-service
 # Build context: quwoquan_service/
-# search-service 是独立 Go module（module quwoquan_service/services/search-service，
-# replace quwoquan_service => ../..），与其它 root-module 服务不同：必须 COPY 整个
-# quwoquan_service 源树，再从子模块目录构建，replace 的 ../.. 才能解析到父模块根。
+# 服务仍是独立部署二进制，但统一由根 quwoquan_service/go.mod 编译。
 
 ARG GO_BASE_IMAGE=golang:1.24-bookworm
 ARG ALPINE_BASE_IMAGE=alpine:3.19
@@ -15,11 +13,11 @@ ARG GOSUMDB=sum.golang.google.cn
 ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
 WORKDIR /build
-COPY . .
-WORKDIR /build/services/search-service
+COPY go.mod go.sum ./
 RUN go mod download
+COPY . .
 RUN CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-    go build ${GO_BUILD_FLAGS} -o /search-service ./cmd/api/
+    go build ${GO_BUILD_FLAGS} -o /search-service ./services/search-service/cmd/api/
 
 FROM ${ALPINE_BASE_IMAGE}
 RUN apk add --no-cache ca-certificates tzdata

@@ -30,6 +30,16 @@
 | 非 widget 上下文 | 全部迁移 | 双轨共存：`UITextConstants` 保留 | StateNotifier/catch 无 BuildContext，短期保留常量可降低迁移风险；长期通过 locale 感知异常层演进 |
 | 主题切换 | 硬编码分支 | Riverpod Provider 驱动 | 与 Repository mock/remote 切换模式对称 |
 
+## 结构化错误的呈现与导航所有权
+
+错误展示与页面导航是两个不同职责：
+
+- `UiErrorSemanticResolver` 负责把 `RuntimeFailure` / `CloudException` 解析为“发生了什么、可以如何恢复”，不决定页面如何退出。
+- 栈内页面的退出只由宿主导航栏的返回按钮负责；底部弹层、全屏模态和对话框的退出只由其模态容器的关闭按钮或 barrier 负责。
+- `AppPageErrorState` 不再注入 X 、“返回”或 Home fallback；它只展示错误说明与恢复动作。这避免宿主返回、错误 X、错误 CTA 三重退出并存。
+- 区块首屏完全失败使用无卡片外框的 `AppSectionErrorState`；局部数据失败且其它内容仍可用时才使用 `AppSectionErrorCard`；已有数据刷新失败使用 `AppTransientErrorNotice`；追加分页失败使用 `AppListAppendErrorFooter`。
+- 错误标题可按业务 surface 定制，原因和恢复动作仍必须来自结构化 semantic；禁止把 Remote 失败改写为空数据。
+
 ## 适用场景与约束
 
 - **适用**：Flutter App 在 `lib/ui/`、`lib/components/` 中需要展示用户可见文本的所有 widget 上下文（目录规范见 `specs/01_APP_DIRECTORY_STRUCTURE_BY_DOMAIN.md`）

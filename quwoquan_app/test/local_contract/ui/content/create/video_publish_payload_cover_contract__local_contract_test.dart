@@ -1,14 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
   group('video publish payload cover contract', () {
     test('视频发布上传视频与封面并只携带远端引用', () async {
-      final repository = _RecordingContentRepository();
+      final media = RecordingContentMediaFacet();
       final fileStorage = _MemoryFileStorageGateway(<String, List<int>>{
         '/tmp/clip.mp4': <int>[1, 2, 3, 4],
         '/tmp/cover.jpg': <int>[5, 6, 7],
@@ -31,22 +32,31 @@ void main() {
           );
 
       final prepared = await buildCreatePostPayloadWithRemoteImageMedia(
-        repository: repository,
+        media: media,
         fileStorageGateway: fileStorage,
         state: state,
-        uploadObject: (uri, bytes, {required contentType}) async {
-          uploads.add(_UploadCall(uri, bytes, contentType));
-        },
+        uploadObject:
+            (
+              uri,
+              bytes, {
+              required contentType,
+              required expectedSha256,
+            }) async {
+              uploads.add(_UploadCall(uri, bytes, contentType));
+            },
       );
 
-      expect(repository.initMediaTypes, <String>['video', 'image']);
+      expect(
+        media.initCommands.map((command) => command.mediaType),
+        <ContentMediaType>[ContentMediaType.video, ContentMediaType.image],
+      );
       expect(uploads.map((call) => call.contentType).toList(), <String>[
         'video/mp4',
         'image/jpeg',
       ]);
       expect(prepared.mediaAssetIds, <String>[
         'video_asset_1',
-        'cover_asset_1',
+        'image_asset_2',
       ]);
       expect(
         prepared.payload['videoUrl'],
@@ -54,11 +64,11 @@ void main() {
       );
       expect(
         prepared.payload['thumbnailUrl'],
-        'https://cdn.quwoquan.test/cover_asset_1.jpg',
+        'https://cdn.quwoquan.test/image_asset_2.jpg',
       );
       expect(
         prepared.payload['coverUrl'],
-        'https://cdn.quwoquan.test/cover_asset_1.jpg',
+        'https://cdn.quwoquan.test/image_asset_2.jpg',
       );
       expect(prepared.payload['coverStrategy'], 'manual');
       expect(prepared.payload['coverFrameTimeMs'], 3200);
@@ -74,11 +84,11 @@ void main() {
       );
       expect(mediaItems.single['coverUrl'], prepared.payload['coverUrl']);
       expect(mediaItems.single['mediaId'], 'video_asset_1');
-      expect(mediaItems.single['coverAssetId'], 'cover_asset_1');
+      expect(mediaItems.single['coverAssetId'], 'image_asset_2');
     });
 
     test('封面上传失败会 abort 封面 session 且不返回半成品 payload', () async {
-      final repository = _RecordingContentRepository();
+      final media = RecordingContentMediaFacet();
       final fileStorage = _MemoryFileStorageGateway(<String, List<int>>{
         '/tmp/clip.mp4': <int>[1, 2, 3, 4],
         '/tmp/cover.jpg': <int>[5, 6, 7],
@@ -95,20 +105,26 @@ void main() {
 
       await expectLater(
         buildCreatePostPayloadWithRemoteImageMedia(
-          repository: repository,
+          media: media,
           fileStorageGateway: fileStorage,
           state: state,
-          uploadObject: (uri, bytes, {required contentType}) async {
-            if (contentType == 'image/jpeg') {
-              throw StateError('cover upload failed');
-            }
-          },
+          uploadObject:
+              (
+                uri,
+                bytes, {
+                required contentType,
+                required expectedSha256,
+              }) async {
+                if (contentType == 'image/jpeg') {
+                  throw StateError('cover upload failed');
+                }
+              },
         ),
         throwsStateError,
       );
 
-      expect(repository.abortedSessions, <String>['image_session_1']);
-      expect(repository.selectedManualCovers, isEmpty);
+      expect(media.abortedSessions, <String>['session_2']);
+      expect(media.selectedManualCovers, isEmpty);
     });
   });
 }
@@ -119,71 +135,6 @@ class _UploadCall {
   final Uri uri;
   final List<int> bytes;
   final String contentType;
-}
-
-class _RecordingContentRepository extends MockContentRepository {
-  final List<String> initMediaTypes = <String>[];
-  final List<String> abortedSessions = <String>[];
-  final List<String> selectedManualCovers = <String>[];
-  final Map<String, String> _typeBySession = <String, String>{};
-  int _videoIndex = 0;
-  int _imageIndex = 0;
-
-  @override
-  Future<ContentMediaInitUploadResponseDto> initMediaUpload({
-    String mediaType = 'image',
-    String assetScope = 'draft',
-  }) async {
-    initMediaTypes.add(mediaType);
-    final isVideo = mediaType == 'video';
-    final index = isVideo ? ++_videoIndex : ++_imageIndex;
-    final sessionId = isVideo ? 'video_session_$index' : 'image_session_$index';
-    _typeBySession[sessionId] = mediaType;
-    return ContentMediaInitUploadResponseDto(
-      sessionId: sessionId,
-      mediaId: isVideo ? 'video_asset_$index' : 'cover_asset_$index',
-      uploadUrl: 'https://upload.quwoquan.test/$sessionId',
-      presignUrl: 'https://upload.quwoquan.test/$sessionId',
-    );
-  }
-
-  @override
-  Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
-    required String sessionId,
-  }) async {
-    final mediaType = _typeBySession[sessionId] ?? 'image';
-    final isVideo = mediaType == 'video';
-    final index = int.parse(sessionId.split('_').last);
-    final assetId = isVideo ? 'video_asset_$index' : 'cover_asset_$index';
-    return ContentMediaCompleteUploadResponseDto(
-      sessionId: sessionId,
-      status: 'ready',
-      cdnUrl: 'https://cdn.quwoquan.test/$assetId.${isVideo ? 'mp4' : 'jpg'}',
-      assetId: assetId,
-    );
-  }
-
-  @override
-  Future<void> abortMediaUpload({required String sessionId}) async {
-    abortedSessions.add(sessionId);
-  }
-
-  @override
-  Future<ContentVideoCoverSelectionWireDto> selectManualVideoCover({
-    required String mediaId,
-    required String coverAssetId,
-    int coverFrameTimeMs = 0,
-  }) async {
-    selectedManualCovers.add('$mediaId|$coverAssetId|$coverFrameTimeMs');
-    return ContentVideoCoverSelectionWireDto(
-      mediaId: mediaId,
-      coverStrategy: 'manual',
-      manualCoverAssetId: coverAssetId,
-      thumbnailUrl: 'https://cdn.quwoquan.test/$coverAssetId.jpg',
-      coverUrl: 'https://cdn.quwoquan.test/$coverAssetId.jpg',
-      coverFrameTimeMs: coverFrameTimeMs,
-    );
-  }
 }
 
 class _MemoryFileStorageGateway implements FileStorageGateway {

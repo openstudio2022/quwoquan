@@ -19,6 +19,7 @@ import 'package:quwoquan_app/core/constants/app_concept_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/assistant/providers/assistant_history_loader.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 enum PersonalAssistantTranscriptRole { user, assistant, system }
 
@@ -286,11 +287,9 @@ class PersonalAssistantStreamController
     }
     state = state.copyWith(managementSummaryLoading: true);
     try {
-      final unread = await ref
-          .read(appMessageRepositoryProvider)
-          .getUnreadCount();
+      final unread = await ref.read(appMessageQueryProvider).getUnreadCount(const GetAppMessageUnreadCountQuery());
       state = state.copyWith(
-        appMessageUnreadCount: unread,
+        appMessageUnreadCount: unread.unreadCount,
         managementSummaryLoading: false,
       );
     } catch (_) {
@@ -308,7 +307,7 @@ class PersonalAssistantStreamController
     try {
       final turn = await ref
           .read(assistantRepositoryProvider)
-          .getAssistantTurn(turnId: trimmed);
+          .getAssistantRun(runId: trimmed);
       state = state.copyWith(
         conversationId: turn.conversationId,
         turnId: turn.turnId,
@@ -365,7 +364,7 @@ class PersonalAssistantStreamController
         conversationId = conversation.conversationId;
         _debugPersonalAssistant('conversation created id=$conversationId');
       }
-      final turn = await repository.createAssistantTurn(
+      final turn = await repository.startAssistantRun(
         conversationId: conversationId,
         text: trimmed,
         domainId: 'assistant',
@@ -398,8 +397,8 @@ class PersonalAssistantStreamController
           transcript,
         ),
       );
-      await for (final event in repository.streamAssistantTurn(
-        turnId: turn.turnId,
+      await for (final event in repository.watchAssistantRunEvents(
+        runId: turn.turnId,
       )) {
         if (event.seq <= lastSeq) {
           continue;

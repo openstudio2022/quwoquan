@@ -22,16 +22,9 @@ redis:
 
 integration:
   external_interaction_base_url: "https://integration-service.local"
-  # beta：真实 user-service + mock integration/social provider；放通 + debugReveal 便于端云联调。
-  sms_otp:
-    pass_through_enabled: true
-    pass_through_debt_id: TECHDEBT-SMS-OTP-PASSTHROUGH-001
-    pass_through_owner: backend-team
-    pass_through_expires_at: "2026-08-31"
-    debug_reveal_enabled: true
+  otp:
+    mode: fixed_test
   social:
-    sandbox_allowlist:
-      enabled: false
     providers: {}
   one_tap:
-    resolver: dev
+    resolver: aliyun

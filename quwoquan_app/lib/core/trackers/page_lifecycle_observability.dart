@@ -187,20 +187,7 @@ class PageLifecycleObservability {
       return error.kind;
     }
     if (error is CloudException) {
-      final runtimeFailure = error.runtimeFailure;
-      if (runtimeFailure != null) {
-        return runtimeFailure.kind;
-      }
-      return switch (error.type) {
-        CloudErrorType.timeout => RuntimeFailureKind.timeout,
-        CloudErrorType.network => RuntimeFailureKind.network,
-        CloudErrorType.unauthorized => RuntimeFailureKind.auth,
-        CloudErrorType.forbidden => RuntimeFailureKind.permission,
-        CloudErrorType.notFound => RuntimeFailureKind.notFound,
-        CloudErrorType.invalidResponse => RuntimeFailureKind.contract,
-        CloudErrorType.server => RuntimeFailureKind.unavailable,
-        CloudErrorType.unknown => RuntimeFailureKind.internal,
-      };
+      return error.runtimeFailure.kind;
     }
     return null;
   }

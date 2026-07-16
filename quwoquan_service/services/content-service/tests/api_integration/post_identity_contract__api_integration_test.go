@@ -10,6 +10,11 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
+
+	postapp "quwoquan_service/services/content-service/internal/application/post"
+	contentmessaging "quwoquan_service/services/content-service/internal/infrastructure/messaging"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
+	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
 
 func TestCreatePostPersistsIdentityAndAssistantUsePolicy(t *testing.T) {
@@ -52,6 +57,60 @@ func TestUpdatePostSettingsContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := createPostWithAuthor(t, "settings_author", `{
+		"contentType":"article",
+		"contentIdentity":"work",
+		"title":"可调整设置的作品",
+		"body":"发布内容保持不可变"
+	}`)
+	postID, _ := created["_id"].(string)
+	if postID == "" {
+		t.Fatal("created post must have an id")
+	}
+
+	request := httptest.NewRequest(
+		http.MethodPatch,
+		"/v1/content/posts/"+postID+"/settings",
+		strings.NewReader(`{
+			"visibility":"private",
+			"assistantUsePolicy":"exclude"
+		}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Client-User-Id", "settings_author")
+	recorder := httptest.NewRecorder()
+	testHandler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("update settings status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+
+	var updated map[string]any
+	if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decode settings response: %v", err)
+	}
+	if updated["visibility"] != "private" || updated["assistantUsePolicy"] != "exclude" {
+		t.Fatalf("updated settings drifted: %+v", updated)
+	}
+
+	ownerRequest := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
+	ownerRequest.Header.Set("X-Client-User-Id", "settings_author")
+	ownerRecorder := httptest.NewRecorder()
+	testHandler.ServeHTTP(ownerRecorder, ownerRequest)
+	if ownerRecorder.Code != http.StatusOK {
+		t.Fatalf("owner read after settings update status=%d body=%s", ownerRecorder.Code, ownerRecorder.Body.String())
+	}
+	var persisted map[string]any
+	if err := json.Unmarshal(ownerRecorder.Body.Bytes(), &persisted); err != nil {
+		t.Fatalf("decode persisted post: %v", err)
+	}
+	if persisted["visibility"] != "private" || persisted["assistantUsePolicy"] != "exclude" {
+		t.Fatalf("persisted settings drifted: %+v", persisted)
+	}
+}
+
+func TestUpdatePostSettingsRejectsRetiredCirclePlacementFields(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+
+	created := createPostWithAuthor(t, "settings_author", `{
 		"contentType":"image",
 		"contentIdentity":"work",
 		"title":"初始作品",
@@ -73,19 +132,8 @@ func TestUpdatePostSettingsContract(t *testing.T) {
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var resp map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp["assistantUsePolicy"] != "exclude" {
-		t.Fatalf("expected assistantUsePolicy=exclude, got %v", resp["assistantUsePolicy"])
-	}
-	circleIDs, _ := resp["circleIds"].([]any)
-	if len(circleIDs) != 2 {
-		t.Fatalf("expected 2 circleIds, got %d", len(circleIDs))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("Post must reject CirclePostPlacement fields, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -170,6 +218,10 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 	if likeRec.Code != http.StatusOK {
 		t.Fatalf("expected 200 like response, got %d: %s", likeRec.Code, likeRec.Body.String())
 	}
+	// ContentReaction owns the authoritative relation and updates Post/feed
+	// counters through its durable outbox. Wait for that production convergence
+	// boundary before proving PromotePost preserves the projected counter.
+	drainReactionOutbox(t)
 
 	promoteReq := httptest.NewRequest(
 		http.MethodPost,
@@ -288,9 +340,10 @@ func TestAssistantAccessRevokedAfterSettingsChange(t *testing.T) {
 	viewerReq.Header.Set("X-Client-User-Id", "assistant_viewer")
 	viewerRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(viewerRec, viewerReq)
-	if viewerRec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for revoked viewer access, got %d: %s", viewerRec.Code, viewerRec.Body.String())
+	if viewerRec.Code != http.StatusNotFound {
+		t.Fatalf("expected non-disclosing 404 for revoked viewer access, got %d: %s", viewerRec.Code, viewerRec.Body.String())
 	}
+	assertStablePostNotFound(t, viewerRec.Body.Bytes())
 
 	var projected bson.M
 	err := mongoDB.Collection("rm_discovery_feed").
@@ -320,78 +373,51 @@ func TestPrivatePostBlocksNonAuthorViewer(t *testing.T) {
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected non-disclosing 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+	assertStablePostNotFound(t, rec.Body.Bytes())
+}
+
+func assertStablePostNotFound(t *testing.T, raw []byte) {
+	t.Helper()
+	var failure struct {
+		Code   string `json:"code"`
+		Reason string `json:"reason"`
+	}
+	if err := json.Unmarshal(raw, &failure); err != nil {
+		t.Fatalf("decode post visibility failure: %v", err)
+	}
+	if failure.Code != "CONTENT.USER.post_not_found" || failure.Reason != "not_found" {
+		t.Fatalf("unexpected post visibility failure: %+v", failure)
 	}
 }
 
-func TestCircleVisiblePostAllowsCircleMemberViewer(t *testing.T) {
+func TestPostCreateRejectsDirectCirclePlacement(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-
-	created := createPostWithAuthor(t, "circle_author", `{
+	request := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(`{
 		"contentType":"article",
 		"contentIdentity":"work",
 		"title":"圈内作品",
 		"body":"仅圈成员可见",
+		"articleMarkdown":"# 圈内作品\n\n仅圈成员可见",
+		"articleMarkdownVersion":"qwq-rich-md/1",
+		"articleAssetManifest":{"assets":[]},
 		"visibility":"circle_visible",
 		"circleIds":["circle_alpha"]
-	}`)
-	postID, _ := created["_id"].(string)
-
-	memberReq := httptest.NewRequest(http.MethodGet, "/v1/content/posts/"+postID, nil)
-	memberReq.Header.Set("X-Client-User-Id", "circle_member")
-	memberReq.Header.Set("X-Client-Circle-Ids", "circle_alpha,circle_beta")
-	memberRec := httptest.NewRecorder()
-	testHandler.ServeHTTP(memberRec, memberReq)
-	if memberRec.Code != http.StatusOK {
-		t.Fatalf("expected 200 for circle member, got %d: %s", memberRec.Code, memberRec.Body.String())
-	}
-
-	outsiderReq := httptest.NewRequest(
-		http.MethodGet,
-		"/v1/content/sub-accounts/circle_author/posts?identity=work&type=article",
-		nil,
-	)
-	outsiderReq.Header.Set("X-Client-User-Id", "outsider")
-	outsiderRec := httptest.NewRecorder()
-	testHandler.ServeHTTP(outsiderRec, outsiderReq)
-	if outsiderRec.Code != http.StatusOK {
-		t.Fatalf("expected 200 list response for outsider, got %d: %s", outsiderRec.Code, outsiderRec.Body.String())
-	}
-	var outsiderResp struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := json.Unmarshal(outsiderRec.Body.Bytes(), &outsiderResp); err != nil {
-		t.Fatalf("decode outsider response: %v", err)
-	}
-	if len(outsiderResp.Items) != 0 {
-		t.Fatalf("expected outsider list hide circle-visible post, got %d items", len(outsiderResp.Items))
-	}
-
-	memberListReq := httptest.NewRequest(
-		http.MethodGet,
-		"/v1/content/sub-accounts/circle_author/posts?identity=work&type=article",
-		nil,
-	)
-	memberListReq.Header.Set("X-Client-User-Id", "circle_member")
-	memberListReq.Header.Set("X-Client-Circle-Ids", "circle_alpha")
-	memberListRec := httptest.NewRecorder()
-	testHandler.ServeHTTP(memberListRec, memberListReq)
-	if memberListRec.Code != http.StatusOK {
-		t.Fatalf("expected 200 list response for member, got %d: %s", memberListRec.Code, memberListRec.Body.String())
-	}
-	var memberListResp struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := json.Unmarshal(memberListRec.Body.Bytes(), &memberListResp); err != nil {
-		t.Fatalf("decode member response: %v", err)
-	}
-	if len(memberListResp.Items) != 1 {
-		t.Fatalf("expected circle member see 1 post, got %d", len(memberListResp.Items))
+	}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-Client-User-Id", "circle_author")
+	request.Header.Set("X-Client-Sub-Account-Id", "circle_author")
+	request.Header.Set("Idempotency-Key", "retired-circle-placement")
+	recorder := httptest.NewRecorder()
+	testHandler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("Post cannot mutate CirclePostPlacement, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
 
-func TestProjectionRebuildDryRunBackfillsCurrentFields(t *testing.T) {
+func TestPostProjectionRebuildReplaysDurableOutbox(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := createPostWithAuthor(t, "rebuild_author", `{
@@ -404,18 +430,6 @@ func TestProjectionRebuildDryRunBackfillsCurrentFields(t *testing.T) {
 		t.Fatal("expected post id")
 	}
 
-	if _, err := mongoDB.Collection("posts").UpdateOne(
-		context.Background(),
-		bson.M{"_id": postID},
-		bson.M{
-			"$unset": bson.M{
-				"contentIdentity":    "",
-				"assistantUsePolicy": "",
-			},
-		},
-	); err != nil {
-		t.Fatalf("unset current fields: %v", err)
-	}
 	if _, err := mongoDB.Collection("rm_discovery_feed").DeleteMany(
 		context.Background(),
 		bson.M{"postId": postID},
@@ -423,34 +437,23 @@ func TestProjectionRebuildDryRunBackfillsCurrentFields(t *testing.T) {
 		t.Fatalf("delete projected doc: %v", err)
 	}
 
-	report, err := testPostService.RebuildProjectionDryRun(context.Background(), false)
+	store := persistence.NewMongoPostStore(mongoDB.Collection("posts"))
+	rebuildRelay := postapp.NewOutboxRelay(
+		store,
+		store,
+		contentmessaging.NewPostOutboxPublisher(
+			contentmessaging.NewInProcessProjectorPublisher(&discoveryProjectorAdapter{
+				projector: recinfra.NewDiscoveryFeedProjector(mongoDB),
+			}),
+		),
+		"api-integration-discovery-rebuild-"+postID,
+	)
+	count, err := rebuildRelay.Drain(context.Background(), 100)
 	if err != nil {
-		t.Fatalf("dry-run rebuild: %v", err)
+		t.Fatalf("replay durable Post outbox: %v", err)
 	}
-	if !report.DryRun {
-		t.Fatalf("expected dry-run report, got %+v", report)
-	}
-	if report.BackfilledContentIdentity == 0 || report.BackfilledAssistantUsePolicy == 0 {
-		t.Fatalf("expected backfill counts > 0, got %+v", report)
-	}
-	if report.DiscoveryEligiblePosts == 0 {
-		t.Fatalf("expected discovery eligible posts > 0, got %+v", report)
-	}
-
-	var dryRunProjected bson.M
-	err = mongoDB.Collection("rm_discovery_feed").
-		FindOne(context.Background(), bson.M{"postId": postID}).
-		Decode(&dryRunProjected)
-	if err != mongo.ErrNoDocuments {
-		t.Fatalf("expected dry-run not to rebuild projection, got err=%v doc=%+v", err, dryRunProjected)
-	}
-
-	applied, err := testPostService.RebuildProjectionDryRun(context.Background(), true)
-	if err != nil {
-		t.Fatalf("apply rebuild: %v", err)
-	}
-	if applied.DryRun {
-		t.Fatalf("expected apply rebuild report, got %+v", applied)
+	if count < 2 {
+		t.Fatalf("expected CreatePost and PublishPost facts to replay, got %d", count)
 	}
 
 	var projected bson.M
@@ -467,6 +470,9 @@ func TestProjectionRebuildDryRunBackfillsCurrentFields(t *testing.T) {
 	}
 	if projected["status"] != "published" {
 		t.Fatalf("expected rebuilt status=published, got %v", projected["status"])
+	}
+	if count, err := rebuildRelay.Drain(context.Background(), 100); err != nil || count != 0 {
+		t.Fatalf("rebuild checkpoint replay count=%d err=%v", count, err)
 	}
 }
 

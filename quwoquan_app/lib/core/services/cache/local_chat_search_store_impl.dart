@@ -278,7 +278,7 @@ class LocalChatSearchStore {
         'senderDisplayName': _string(row['sender_display_name']),
         'conversationTitle': _string(row['conversation_title']),
       });
-      final item = LocalChatSearchMessageRecord.fromWireMap(payload)
+      final item = LocalChatSearchMessageRecord.fromProjectionMap(payload)
           .copyWith(
             matchedField: matchedField,
             highlightText: _highlightText(payload, matchedField),
@@ -701,7 +701,7 @@ class LocalChatSearchStore {
       return factory.openDatabase(
         path,
         options: OpenDatabaseOptions(
-          version: 2,
+          version: 3,
           onCreate: _onCreate,
           onUpgrade: _onUpgrade,
         ),
@@ -709,7 +709,7 @@ class LocalChatSearchStore {
     }
     return openDatabase(
       path,
-      version: 2,
+      version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -720,7 +720,7 @@ class LocalChatSearchStore {
     int oldVersion,
     int newVersion,
   ) async {
-    if (oldVersion >= 2) {
+    if (oldVersion >= 3) {
       return;
     }
     await _dropAllTables(database);

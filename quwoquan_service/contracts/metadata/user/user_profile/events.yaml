@@ -1,132 +1,36 @@
 version: 1
-aggregate: UserProfile
+aggregate: UserAccount
 
 events:
+  - name: UserProfileUpdated
+    description: 用户资料已更新
+    producer: user-service
+    consumers: [recommendation-engine, notification-service, search-service]
+    channel: event_store
+    payload_entity: UserAccount
+    payload_fields: [userId, nickname, profileVersion, updatedAt]
+
+  - name: UserAvatarUpdated
+    description: 用户头像已更新
+    producer: user-service
+    consumers: [content-service, search-service]
+    channel: event_store
+    payload_entity: UserAccount
+    payload_fields: [userId, avatarUrl, avatarVersion, profileVersion, updatedAt]
+
   - name: UserRegistered
     description: 用户注册完成
     producer: user-service
     consumers: [recommendation-engine, notification-service, assistant-service]
     channel: event_store
-    payload_entity: UserProfile
+    payload_entity: UserAccount
     payload_fields: [userId, nickname, gender, region, createdAt]
     recommend_impact: cold_start_profile
-
-  - name: UserProfileUpdated
-    description: 用户资料更新
-    producer: user-service
-    consumers: [recommendation-engine, assistant-service]
-    channel: event_store
-    payload_entity: UserProfile
-    payload_fields: [userId, nickname, bio, avatarUrl, gender, region, profileVersion]
-    recommend_impact: profile_feature_refresh
-
-  - name: UserAvatarUpdated
-    description: 用户头像更新；供聊天 runtime/avatar patch 统一消费
-    producer: user-service
-    consumers: [chat-service, notification-service]
-    channel: event_store
-    payload_entity: UserProfile
-    payload_fields: [userId, avatarAssetId, avatarVersion, avatarUrl, profileVersion, updatedAt]
-
-  - name: PersonaActivated
-    description: 子账号切换（激活）
-    producer: user-service
-    consumers: [chat-service, content-service, circle-service, recommendation-engine]
-    channel: event_store
-    payload_entity: Persona
-    payload_fields: [userId, id, subAccountId, displayName, isPrivate, isolationLevel]
-
-  - name: PersonaCreated
-    description: 新子账号创建
-    producer: user-service
-    consumers: []
-    channel: event_store
-    payload_entity: Persona
-    payload_fields: [userId, id, subAccountId, displayName, isPrimary, isPrivate, isolationLevel]
-
-  - name: SubAccountIsolationUpdated
-    description: 子账号隔离等级变更
-    producer: user-service
-    consumers: [recommendation-engine]
-    channel: event_store
-    payload_entity: Persona
-    payload_fields: [userId, subAccountId, isolationLevel]
-
-  - name: ProfileProposalCreated
-    description: 资料修改提案创建
-    producer: user-service
-    consumers: [notification-service]
-    channel: event_store
-    payload_entity: ProfileUpdateProposal
-    payload_fields: [id, userId, source, status]
-
-  - name: ProfileProposalResolved
-    description: 资料修改提案处理完成
-    producer: user-service
-    consumers: [notification-service]
-    channel: event_store
-    payload_entity: ProfileUpdateProposal
-    payload_fields: [id, userId, status, resolvedAt]
 
   - name: UserSuspended
     description: 用户账户停用
     producer: user-service
     consumers: [content-service, chat-service, circle-service, notification-service]
     channel: event_store
-    payload_entity: UserProfile
+    payload_entity: UserAccount
     payload_fields: [userId, status]
-
-  - name: UserDeviceRegistered
-    description: 设备注册
-    producer: user-service
-    consumers: [notification-service]
-    channel: event_store
-    payload_entity: UserDevice
-    payload_fields: [userId, deviceId, platform, pushToken]
-
-  - name: UserSettingUpdated
-    description: 用户设置更新
-    producer: user-service
-    consumers: [notification-service, recommendation-engine]
-    channel: event_store
-    payload_entity: UserSetting
-    payload_fields: [userId, enablePush, profileVisibility, assistantEnabled, feedPreference, defaultIncomingCallRingtoneId, allowCallerRingtoneOverride, enableCallVibration, enableGroupCallRing, defaultThemeMode, defaultFontSizePreset, appearanceVersion]
-
-  - name: UserAppearanceSettingsChanged
-    description: owner 默认值或子账号 override 发生变化，客户端据此失效并重新拉取最新快照
-    producer: user-service
-    consumers: [notification-service]
-    channel: event_store
-    payload_fields: [userId, version, source]
-
-  - name: CredentialBound
-    description: 用户绑定新凭证（手机/微信/Apple）
-    producer: user-service
-    consumers: [notification-service]
-    channel: event_store
-    payload_entity: CredentialBinding
-    payload_fields: [userId, credentialType, boundAt]
-
-  - name: CredentialUnbound
-    description: 用户解绑凭证
-    producer: user-service
-    consumers: [notification-service]
-    channel: event_store
-    payload_entity: CredentialBinding
-    payload_fields: [userId, credentialType]
-
-  - name: LoginSucceeded
-    description: 登录成功
-    producer: user-service
-    consumers: [recommendation-engine, notification-service]
-    channel: event_store
-    payload_fields: [ownerId, credentialType, loginAt, deviceId, platform]
-    security_note: 不含 credentialKey，不含 IP（单独脱敏存储）
-
-  - name: LoginFailed
-    description: 登录失败
-    producer: user-service
-    consumers: []
-    channel: event_store
-    payload_fields: [credentialType, failReason, attemptAt]
-    security_note: 不含 credentialKey，不含 ownerId（登录失败时身份未确认）

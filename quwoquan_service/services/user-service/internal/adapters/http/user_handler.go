@@ -2,16 +2,17 @@ package http
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	runtimegovernance "quwoquan_service/runtime/governance"
 	"quwoquan_service/services/user-service/internal/application"
-	followmodel "quwoquan_service/services/user-service/internal/domain/follow/model"
-	followrepo "quwoquan_service/services/user-service/internal/domain/follow/repository"
-	followtelemetry "quwoquan_service/services/user-service/internal/domain/follow/telemetry"
+	proposalapp "quwoquan_service/services/user-service/internal/application/persona/profile_update_proposal"
+	relationshipapp "quwoquan_service/services/user-service/internal/application/relationship/persona_relationship"
+	relmodel "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/model"
+	reltelemetry "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/telemetry"
 	usermodel "quwoquan_service/services/user-service/internal/domain/user/model"
 	usertelemetry "quwoquan_service/services/user-service/internal/domain/user/telemetry"
 	"quwoquan_service/services/user-service/internal/generated"
@@ -20,8 +21,7 @@ import (
 type UserHandler struct {
 	profile          *application.ProfileService
 	search           *application.SearchService
-	follow           *application.FollowService
-	block            *application.BlockService
+	relationship     *relationshipapp.PersonaRelationshipService
 	greeting         *application.GreetingService
 	persona          *application.PersonaService
 	work             *application.WorkService
@@ -32,13 +32,18 @@ type UserHandler struct {
 	contactDiscovery *application.ContactDiscoveryService
 	invite           *application.InviteService
 	interestProfile  *application.InterestProfileService
+	profileProposal  *proposalapp.Facade
 }
+
+const (
+	PullUserSyncPath   = "/v1/user/sync"
+	LoginAnonymousPath = "/v1/auth/login/anonymous"
+)
 
 func NewUserHandler(
 	profile *application.ProfileService,
 	search *application.SearchService,
-	follow *application.FollowService,
-	block *application.BlockService,
+	relationship *relationshipapp.PersonaRelationshipService,
 	greeting *application.GreetingService,
 	persona *application.PersonaService,
 	work *application.WorkService,
@@ -49,12 +54,15 @@ func NewUserHandler(
 	contactDiscovery *application.ContactDiscoveryService,
 	invite *application.InviteService,
 	interestProfile *application.InterestProfileService,
-) *UserHandler {
+	profileProposal *proposalapp.Facade,
+) (*UserHandler, error) {
+	if profileProposal == nil {
+		return nil, errors.New("ProfileUpdateProposal Facade is required")
+	}
 	return &UserHandler{
 		profile:          profile,
 		search:           search,
-		follow:           follow,
-		block:            block,
+		relationship:     relationship,
 		greeting:         greeting,
 		persona:          persona,
 		work:             work,
@@ -65,7 +73,8 @@ func NewUserHandler(
 		contactDiscovery: contactDiscovery,
 		invite:           invite,
 		interestProfile:  interestProfile,
-	}
+		profileProposal:  profileProposal,
+	}, nil
 }
 
 func (h *UserHandler) Routes() http.Handler {
@@ -80,7 +89,7 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/user/profile/qr-card", h.handleGetProfileQRCard)
 	mux.HandleFunc("GET /v1/public/profile/qr/resolve", h.handleResolveProfileQRToken)
 	mux.HandleFunc("PATCH /v1/user/profile", h.handleUpdateProfile)
-	mux.HandleFunc("POST /v1/user/sync", h.handlePullUserSync)
+	mux.HandleFunc("POST "+PullUserSyncPath, h.handlePullUserSync)
 	mux.HandleFunc("GET /v1/me", h.handleGetMeProfile)
 	mux.HandleFunc("GET /v1/user/{subAccountId}", h.handleGetSubAccountProfile)
 	mux.HandleFunc("GET /v1/user/sub-accounts/{subAccountId}/homepage-bundle", h.handleGetUserHomepageBundle)
@@ -103,6 +112,7 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /v1/user/sub-accounts/{targetSubAccountId}/block/check", h.handleCheckBlocked)
 
 	h.registerGreetingRoutes(mux)
+	h.registerProfileProposalRoutes(mux)
 
 	mux.HandleFunc("GET /v1/user/personas", h.handleListPersonas)
 	mux.HandleFunc("GET /v1/user/personas/summary", h.handleGetPersonaManagementSummary)
@@ -129,13 +139,13 @@ func (h *UserHandler) Routes() http.Handler {
 	mux.HandleFunc("POST /v1/auth/otp/send", h.handleSendOtp)
 	mux.HandleFunc("POST /internal/auth/otp-deliveries:callback", h.handleOtpDeliveryCallback)
 	mux.HandleFunc("POST /v1/auth/login/phone", h.handleLoginWithPhone)
+	mux.HandleFunc("POST /v1/auth/authorization/alipay", h.handleCreateAlipayAuthorizationRequest)
 	mux.HandleFunc("POST /v1/auth/login/wechat", h.handleLoginWithWechat)
 	mux.HandleFunc("POST /v1/auth/login/alipay", h.handleLoginWithAlipay)
 	mux.HandleFunc("POST /v1/auth/login/qq", h.handleLoginWithQq)
-	mux.HandleFunc("POST /v1/auth/login/apple", h.handleLoginWithApple)
 	mux.HandleFunc("POST /v1/auth/login/one-tap", h.handleOneTapLogin)
 	mux.HandleFunc("POST /v1/auth/login/one-tap/hint", h.handleOneTapLoginHint)
-	mux.HandleFunc("POST /v1/auth/login/anonymous", h.handleAnonymousLogin)
+	mux.HandleFunc("POST "+LoginAnonymousPath, h.handleAnonymousLogin)
 	mux.HandleFunc("POST /v1/auth/token/refresh", h.handleRefreshToken)
 	mux.HandleFunc("POST /v1/auth/logout", h.handleLogout)
 	mux.HandleFunc("GET /v1/owner/credentials", h.handleListCredentials)
@@ -361,9 +371,9 @@ func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http
 		targetSubAccountID := strings.TrimSpace(anyString(item["subAccountId"]))
 		relationTargetID := targetSubAccountID
 
-		rel, _ := h.follow.GetRelationship(r.Context(), viewerID, relationTargetID)
-		isBlocked, _ := h.block.CheckBlocked(r.Context(), viewerID, relationTargetID)
-		isBlockedBy, _ := h.block.CheckBlocked(r.Context(), relationTargetID, viewerID)
+		rel, _ := h.relationship.GetRelationship(r.Context(), viewerID, relationTargetID)
+		isBlocked, _ := h.relationship.CheckBlocked(r.Context(), viewerID, relationTargetID)
+		isBlockedBy, _ := h.relationship.CheckBlocked(r.Context(), relationTargetID, viewerID)
 		capability := h.buildRelationshipCapabilityView(
 			r.Context(),
 			viewerID,
@@ -376,7 +386,7 @@ func (h *UserHandler) handleSearchSocialRelations(w http.ResponseWriter, r *http
 			capability["targetSubAccountId"] = targetSubAccountID
 		}
 		if item["chatAvailable"] != nil && item["chatAvailable"] != capability["canOpenConversation"] {
-			followtelemetry.Collector().RecordRelationshipCapabilityMismatch()
+			reltelemetry.Collector().RecordCapabilityMismatch()
 			usertelemetry.RolloutCollector().RecordAttributionMismatch()
 		}
 		item["relationshipCapability"] = capability
@@ -498,12 +508,18 @@ func (h *UserHandler) handleFollow(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, err)
 		return
 	}
-	created, err := h.follow.Follow(r.Context(), followerID, followeeID, anyString(body["source"]))
+	result, err := h.relationship.Follow(
+		r.Context(),
+		followerID,
+		followeeID,
+		anyString(body["source"]),
+		anyString(body["clientRequestId"]),
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	rel, err := h.follow.GetRelationship(r.Context(), followerID, followeeID)
+	rel, err := h.relationship.GetRelationship(r.Context(), followerID, followeeID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -512,8 +528,8 @@ func (h *UserHandler) handleFollow(w http.ResponseWriter, r *http.Request) {
 		"actorSubAccountId":  followerID,
 		"targetSubAccountId": followeeID,
 		"relationState":      relationshipState(rel, followerID, followeeID),
-		"idempotentReplay":   !created,
-		"updatedAt":          currentTimestampRFC3339(),
+		"idempotentReplay":   result.IdempotentReplay || !result.Changed,
+		"updatedAt":          relationshipUpdatedAt(result),
 	})
 }
 
@@ -529,12 +545,17 @@ func (h *UserHandler) handleUnfollow(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, err)
 		return
 	}
-	deleted, err := h.follow.Unfollow(r.Context(), followerID, followeeID)
+	result, err := h.relationship.Unfollow(
+		r.Context(),
+		followerID,
+		followeeID,
+		anyString(body["clientRequestId"]),
+	)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	rel, err := h.follow.GetRelationship(r.Context(), followerID, followeeID)
+	rel, err := h.relationship.GetRelationship(r.Context(), followerID, followeeID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -543,15 +564,15 @@ func (h *UserHandler) handleUnfollow(w http.ResponseWriter, r *http.Request) {
 		"actorSubAccountId":  followerID,
 		"targetSubAccountId": followeeID,
 		"relationState":      relationshipState(rel, followerID, followeeID),
-		"idempotentReplay":   !deleted,
-		"updatedAt":          currentTimestampRFC3339(),
+		"idempotentReplay":   result.IdempotentReplay || !result.Changed,
+		"updatedAt":          relationshipUpdatedAt(result),
 	})
 }
 
 func (h *UserHandler) handleListFollowing(w http.ResponseWriter, r *http.Request) {
 	startedAt := time.Now()
 	defer func() {
-		followtelemetry.Collector().RecordGraphListLatency(time.Since(startedAt))
+		reltelemetry.Collector().RecordListLatency(time.Since(startedAt))
 	}()
 	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
 	viewerID, _ := h.resolveActorSubAccountID(r.Context(), r, "")
@@ -573,7 +594,7 @@ func (h *UserHandler) handleListFollowing(w http.ResponseWriter, r *http.Request
 func (h *UserHandler) handleListFollowers(w http.ResponseWriter, r *http.Request) {
 	startedAt := time.Now()
 	defer func() {
-		followtelemetry.Collector().RecordGraphListLatency(time.Since(startedAt))
+		reltelemetry.Collector().RecordListLatency(time.Since(startedAt))
 	}()
 	subAccountID := strings.TrimSpace(r.PathValue("subAccountId"))
 	viewerID, _ := h.resolveActorSubAccountID(r.Context(), r, "")
@@ -603,12 +624,12 @@ func (h *UserHandler) handleGetRelationship(w http.ResponseWriter, r *http.Reque
 		writeHTTPError(w, r, err)
 		return
 	}
-	rel, err := h.follow.GetRelationship(r.Context(), userID, targetID)
+	rel, err := h.relationship.GetRelationship(r.Context(), userID, targetID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, rel)
+	writeJSON(w, http.StatusOK, newRelationshipViewResponse(userID, targetID, rel))
 }
 
 func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *http.Request) {
@@ -625,17 +646,17 @@ func (h *UserHandler) handleGetRelationshipCapability(w http.ResponseWriter, r *
 	if targetID == "me" {
 		targetID = viewerID
 	}
-	rel, err := h.follow.GetRelationship(r.Context(), viewerID, targetID)
+	rel, err := h.relationship.GetRelationship(r.Context(), viewerID, targetID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	isBlocked, err := h.block.CheckBlocked(r.Context(), viewerID, targetID)
+	isBlocked, err := h.relationship.CheckBlocked(r.Context(), viewerID, targetID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	isBlockedBy, err := h.block.CheckBlocked(r.Context(), targetID, viewerID)
+	isBlockedBy, err := h.relationship.CheckBlocked(r.Context(), targetID, viewerID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -654,7 +675,7 @@ func (h *UserHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, err)
 		return
 	}
-	if err := h.block.Block(r.Context(), blockerID, blockedID); err != nil {
+	if _, err := h.relationship.Block(r.Context(), blockerID, blockedID, ""); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
@@ -672,7 +693,7 @@ func (h *UserHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, err)
 		return
 	}
-	if err := h.block.Unblock(r.Context(), blockerID, blockedID); err != nil {
+	if _, err := h.relationship.Unblock(r.Context(), blockerID, blockedID, ""); err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
@@ -685,12 +706,16 @@ func (h *UserHandler) handleListBlocked(w http.ResponseWriter, r *http.Request) 
 		writeHTTPError(w, r, err)
 		return
 	}
-	edges, next, err := h.block.ListBlocked(r.Context(), blockerID, parseCursor(r), parseLimit(r, 20))
+	edges, next, err := h.relationship.ListBlocked(r.Context(), blockerID, parseCursor(r), parseLimit(r, 20))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": edges, "nextCursor": next})
+	items := make([]blockedListItemResponse, 0, len(edges))
+	for _, edge := range edges {
+		items = append(items, newBlockedListItemResponse(edge))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "nextCursor": next})
 }
 
 func (h *UserHandler) handleCheckBlocked(w http.ResponseWriter, r *http.Request) {
@@ -704,7 +729,7 @@ func (h *UserHandler) handleCheckBlocked(w http.ResponseWriter, r *http.Request)
 		writeHTTPError(w, r, err)
 		return
 	}
-	blocked, err := h.block.CheckBlocked(r.Context(), blockerID, blockedID)
+	blocked, err := h.relationship.CheckBlocked(r.Context(), blockerID, blockedID)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -722,32 +747,19 @@ func (h *UserHandler) resolveActorSubAccountID(
 		return "", generated.AppErrorFromInvalidArgument("X-Client-User-Id header required")
 	}
 	actorID := strings.TrimSpace(explicitActorID)
-	currentFallback := !runtimegovernance.PersonaContextEnabled() || !runtimegovernance.PersonaGraphEnabled()
 	if actorID == "" {
 		actorID = subAccountIDFromHeader(r)
 	}
 	if actorID != "" {
-		if currentFallback {
-			followtelemetry.Collector().RecordCurrentGraphRead()
-		}
 		return actorID, nil
 	}
 	activeContext, err := h.subAccount.GetActivePersonaContextView(ctx, userID)
 	if err != nil {
-		if currentFallback {
-			followtelemetry.Collector().RecordCurrentGraphRead()
-			return userID, nil
-		}
 		return "", err
 	}
 	actorID = strings.TrimSpace(anyString(activeContext["subAccountId"]))
 	if actorID == "" {
-		actorID = userID
-		followtelemetry.Collector().RecordCurrentFollowRead()
-		return actorID, nil
-	}
-	if currentFallback {
-		followtelemetry.Collector().RecordCurrentGraphRead()
+		return "", generated.AppErrorFromInvalidArgument("active persona context is required")
 	}
 	return actorID, nil
 }
@@ -763,27 +775,19 @@ func readOptionalBody(r *http.Request) map[string]any {
 	return body
 }
 
-func currentTimestampRFC3339() string {
-	return time.Now().UTC().Format(time.RFC3339)
+func relationshipUpdatedAt(result relmodel.MutationResult) string {
+	updatedAt := result.State.UpdatedAt
+	if updatedAt.IsZero() {
+		updatedAt = result.OccurredAt
+	}
+	if updatedAt.IsZero() {
+		updatedAt = time.Now().UTC()
+	}
+	return updatedAt.UTC().Format(time.RFC3339)
 }
 
-func relationshipState(rel *followrepo.Relationship, viewerID, targetID string) string {
-	if viewerID == targetID {
-		return "self"
-	}
-	if rel == nil {
-		return "not_following"
-	}
-	switch {
-	case rel.IsMutual:
-		return "mutual"
-	case rel.IsFollowing:
-		return "following"
-	case rel.IsFollowedBy:
-		return "followed_by"
-	default:
-		return "not_following"
-	}
+func relationshipState(rel relmodel.RelationshipState, viewerID, targetID string) string {
+	return rel.RelationState(viewerID, targetID)
 }
 
 func (h *UserHandler) collectFollowListItems(
@@ -800,13 +804,13 @@ func (h *UserHandler) collectFollowListItems(
 	nextCursor := cursor
 	for len(items) < limit {
 		var (
-			edges []followmodel.FollowEdge
+			edges []relmodel.Direction
 			err   error
 		)
 		if listFollowing {
-			edges, nextCursor, err = h.follow.ListFollowing(ctx, subAccountID, nextCursor, limit)
+			edges, nextCursor, err = h.relationship.ListFollowing(ctx, subAccountID, nextCursor, limit)
 		} else {
-			edges, nextCursor, err = h.follow.ListFollowers(ctx, subAccountID, nextCursor, limit)
+			edges, nextCursor, err = h.relationship.ListFollowers(ctx, subAccountID, nextCursor, limit)
 		}
 		if err != nil {
 			return nil, "", err
@@ -816,7 +820,7 @@ func (h *UserHandler) collectFollowListItems(
 		}
 		batch := h.buildFollowListItems(ctx, viewerID, edges, listFollowing)
 		if len(batch) < len(edges) {
-			followtelemetry.Collector().RecordGraphFilterMismatch()
+			reltelemetry.Collector().RecordFilterMismatch()
 			usertelemetry.RolloutCollector().RecordAttributionMismatch()
 		}
 		for i := range batch {
@@ -842,28 +846,28 @@ func (h *UserHandler) collectFollowListItems(
 func (h *UserHandler) buildFollowListItems(
 	ctx context.Context,
 	viewerID string,
-	edges []followmodel.FollowEdge,
+	edges []relmodel.Direction,
 	listFollowing bool,
 ) []map[string]any {
 	items := make([]map[string]any, 0, len(edges))
 	for i := range edges {
-		targetID := edges[i].FollowerID
+		targetID := edges[i].SourcePersonaID
 		if listFollowing {
-			targetID = edges[i].FolloweeID
+			targetID = edges[i].TargetPersonaID
 		}
 		if targetID == "" {
 			continue
 		}
 		if viewerID != "" {
-			blocked, _ := h.block.CheckBlocked(ctx, viewerID, targetID)
-			blockedBy, _ := h.block.CheckBlocked(ctx, targetID, viewerID)
+			blocked, _ := h.relationship.CheckBlocked(ctx, viewerID, targetID)
+			blockedBy, _ := h.relationship.CheckBlocked(ctx, targetID, viewerID)
 			if blocked || blockedBy {
 				continue
 			}
 		}
 		view, err := h.subAccount.GetSubAccountProfileView(ctx, targetID)
 		if err != nil || view == nil {
-			followtelemetry.Collector().RecordGraphPageDrift()
+			reltelemetry.Collector().RecordPageDrift()
 			usertelemetry.RolloutCollector().RecordAttributionMismatch()
 			continue
 		}
@@ -874,10 +878,10 @@ func (h *UserHandler) buildFollowListItems(
 			"avatarUrl":         view["avatarUrl"],
 			"avatarVersion":     view["avatarVersion"],
 			"profileVisibility": view["profileVisibility"],
-			"followedAt":        edges[i].CreatedAt.Format(time.RFC3339),
+			"followedAt":        optionalTimestampRFC3339(edges[i].FollowedAt),
 		}
 		if viewerID != "" {
-			rel, _ := h.follow.GetRelationship(ctx, viewerID, targetID)
+			rel, _ := h.relationship.GetRelationship(ctx, viewerID, targetID)
 			item["relationState"] = relationshipState(rel, viewerID, targetID)
 		} else {
 			item["relationState"] = "not_following"
@@ -885,6 +889,13 @@ func (h *UserHandler) buildFollowListItems(
 		items = append(items, item)
 	}
 	return items
+}
+
+func optionalTimestampRFC3339(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339)
 }
 
 func (h *UserHandler) handleListPersonas(w http.ResponseWriter, r *http.Request) {
@@ -1351,10 +1362,6 @@ func (h *UserHandler) handleLoginWithQq(w http.ResponseWriter, r *http.Request) 
 	h.handleSocialProviderLogin(w, r, "qq", "qqAuthCode")
 }
 
-func (h *UserHandler) handleLoginWithApple(w http.ResponseWriter, r *http.Request) {
-	h.handleTypedCredentialLogin(w, r, "apple", "appleIdToken")
-}
-
 // handleSocialProviderLogin 处理微信/支付宝/QQ：App 只上传短期授权码，服务端置换稳定身份并首次同步资料。
 func (h *UserHandler) handleSocialProviderLogin(w http.ResponseWriter, r *http.Request, provider, primaryField string) {
 	body, err := readBody(r)
@@ -1371,26 +1378,6 @@ func (h *UserHandler) handleSocialProviderLogin(w http.ResponseWriter, r *http.R
 		return
 	}
 	result, err := h.auth.LoginWithSocialProvider(r.Context(), provider, authCode, deviceID, platform, appVersion)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
-func (h *UserHandler) handleTypedCredentialLogin(w http.ResponseWriter, r *http.Request, credType, primaryField string) {
-	body, err := readBody(r)
-	if err != nil {
-		writeInvalidArg(w, r, "invalid body")
-		return
-	}
-	credKey := strings.TrimSpace(anyString(body[primaryField]))
-	label := strings.TrimSpace(anyString(body["displayLabel"]))
-	if credKey == "" {
-		writeInvalidArg(w, r, primaryField+" required")
-		return
-	}
-	result, err := h.auth.LoginWithCredential(r.Context(), credType, credKey, label)
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return

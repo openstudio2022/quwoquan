@@ -1,7 +1,7 @@
 /// user_acceptance Patrol: 系统通知点击打开聊天详情
 ///
 /// 守护：flutter_test 无法覆盖的系统推送通知交互场景。
-/// 验证收到聊天通知 → 点击通知 → 正确打开 ChatDetailPage 的完整链路。
+/// 验证收到聊天通知 → 点击通知 → 正确打开 ChatConversationPage 的完整链路。
 ///
 /// 注：每个用例自启动真实 App（launchPatrolAppOnce），对齐已绿的
 ///     home_recommendation_journey_test，不依赖 patrol_test_main 预启动。

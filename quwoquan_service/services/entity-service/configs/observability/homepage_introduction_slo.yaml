@@ -3,7 +3,7 @@ version: 1
 #   1) HTTP 边界（延迟/错误/可用性）：runtime/observability http_server_* 中间件按
 #      route 自动产出，无需服务自埋；分位数取自 histogram（禁止算术平均代替分位数）。
 #   2) 数据通路（导入新鲜度/完整性）：qwq-data ship → entity-service homepage-import
-#      的导入报告（publish/env_releases/<releaseId>/import-homepage-<env>.json），
+#      的导入报告（.qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/import-homepage.json），
 #      CLI 导入为离线批任务，不产 Prometheus 长驻指标，观测经告警组的日志/报告断言承接。
 # 告警规则落在单一源 quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml 的
 # quwoquan_entity_homepage 组，expr 直接消费下列指标，阈值与本文件 objective 对齐。
@@ -46,7 +46,7 @@ slis:
   - id: introduction_import_integrity
     description: homepage-import 导入报告中 imported == expected 且 issues 为空；
       由 ship 一致性预检 + 导入报告断言承接（离线批任务，不产长驻指标）
-    evidence: publish/env_releases/<releaseId>/import-homepage-<env>.json
+    evidence: .qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/import-homepage.json
     objective: imported_ratio == 1.0 且 issues == []
   - id: introduction_media_url_validity
     description: introductionAssets URL 必须来自 topology manifest 解析的环境

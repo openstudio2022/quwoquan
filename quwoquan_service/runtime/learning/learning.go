@@ -39,7 +39,7 @@ type Recorder interface {
 // NoopRecorder allows services to integrate runtime-learning before backend readiness.
 type NoopRecorder struct{}
 
-func (NoopRecorder) RecordEvent(_ context.Context, _ Event) error       { return nil }
+func (NoopRecorder) RecordEvent(_ context.Context, _ Event) error         { return nil }
 func (NoopRecorder) RecordScorecard(_ context.Context, _ Scorecard) error { return nil }
 
 // BufferedRecorder buffers events and scorecards, flushing to a sink periodically.

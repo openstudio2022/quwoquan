@@ -14,6 +14,7 @@
           "id": "fixture_circle_tech",
           "name": "契约科技前沿",
           "ownerId": "fixture_user_article",
+          "ownerDisplayNameSnapshot": "契约撰稿人",
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
@@ -42,7 +43,6 @@
           "defaultPublicGroupId": "fixture_group_tech_public",
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-05-06T00:00:00Z",
-          "ownerDisplayNameSnapshot": "契约撰稿人",
           "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_tech/v1/avatar.png",
           "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_tech/v1/cover.png"
         },
@@ -50,6 +50,7 @@
           "id": "fixture_circle_life",
           "name": "契约生活方式",
           "ownerId": "fixture_user_weekend_1",
+          "ownerDisplayNameSnapshot": "契约同伴一",
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
@@ -78,7 +79,6 @@
           "defaultPublicGroupId": "fixture_group_life_public",
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-05-06T00:00:00Z",
-          "ownerDisplayNameSnapshot": "契约同伴一",
           "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_life/v1/avatar.png",
           "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png"
         },
@@ -86,6 +86,7 @@
           "id": "fixture_circle_travel",
           "name": "契约旅行手账",
           "ownerId": "fixture_user_travel_owner",
+          "ownerDisplayNameSnapshot": "契约旅行圈主",
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
@@ -114,7 +115,6 @@
           "defaultPublicGroupId": "fixture_group_travel_public",
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-05-06T00:00:00Z",
-          "ownerDisplayNameSnapshot": "契约旅行圈主",
           "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_travel/v1/avatar.png",
           "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_travel/v1/cover.png"
         },
@@ -122,6 +122,7 @@
           "id": "fixture_circle_photo",
           "name": "契约摄影社",
           "ownerId": "fixture_user_owner",
+          "ownerDisplayNameSnapshot": "契约摄影社主理人",
           "role": "member",
           "joinStatus": "joined",
           "isFollowed": true,
@@ -150,7 +151,6 @@
           "defaultPublicGroupId": "fixture_group_photo_public",
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-05-06T00:00:00Z",
-          "ownerDisplayNameSnapshot": "契约摄影社主理人",
           "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_photo/v1/avatar.png",
           "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_photo/v1/cover.png"
         },
@@ -158,6 +158,7 @@
           "id": "fixture_circle_gold_invest",
           "name": "黄金投资圈",
           "ownerId": "fixture_user_tech_01",
+          "ownerDisplayNameSnapshot": "黄金投资圈主",
           "role": "member",
           "joinStatus": "not_joined",
           "isFollowed": false,
@@ -188,7 +189,6 @@
           "defaultPublicGroupId": "fixture_group_gold_invest_public",
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-06-30T00:00:00Z",
-          "ownerDisplayNameSnapshot": "黄金投资圈主",
           "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_tech/v1/avatar.png",
           "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_tech/v1/cover.png",
           "tags": [
@@ -202,6 +202,7 @@
           "id": "fixture_circle_neworiental_alumni",
           "name": "新东方校友圈",
           "ownerId": "fixture_user_article",
+          "ownerDisplayNameSnapshot": "新东方校友圈主",
           "role": "member",
           "joinStatus": "not_joined",
           "isFollowed": false,
@@ -232,7 +233,6 @@
           "defaultPublicGroupId": "fixture_group_neworiental_alumni_public",
           "createdAt": "2026-05-06T00:00:00Z",
           "updatedAt": "2026-06-30T00:00:00Z",
-          "ownerDisplayNameSnapshot": "新东方校友圈主",
           "avatarObjectKey": "media/avatar/s/archived-avatar/circle/fixture_circle_life/v1/avatar.png",
           "coverObjectKey": "media/image/s/archived-image/circle/fixture_circle_life/v1/cover.png",
           "tags": [
@@ -247,127 +247,121 @@
         "fixture_circle_tech": [
           {
             "_id": "fixture_group_tech_public",
+            "version": 1,
             "circleId": "fixture_circle_tech",
             "groupType": "public_group",
             "name": "契约科技前沿公开群",
             "description": "契约科技前沿 默认公开群。",
             "visibility": "public",
             "joinPolicy": "apply_only",
-            "ownerUserId": "fixture_user_article",
-            "memberCount": 6,
+            "createdByPersonaId": "fixture_user_article",
             "conversationId": "fixture_conv_circle_tech",
             "storageEnabled": true,
             "noticeEnabled": true,
             "isDefaultPublicGroup": true,
             "status": "active",
             "createdAt": "2026-05-06T00:00:00Z",
-            "updatedAt": "2026-05-06T00:00:00Z",
-            "ownerDisplayNameSnapshot": "契约撰稿人"
+            "updatedAt": "2026-05-06T00:00:00Z"
           }
         ],
         "fixture_circle_life": [
           {
             "_id": "fixture_group_life_public",
+            "version": 1,
             "circleId": "fixture_circle_life",
             "groupType": "public_group",
             "name": "契约生活方式公开群",
             "description": "契约生活方式 默认公开群。",
             "visibility": "public",
             "joinPolicy": "apply_only",
-            "ownerUserId": "fixture_user_weekend_1",
-            "memberCount": 6,
+            "createdByPersonaId": "fixture_user_weekend_1",
             "conversationId": "fixture_conv_circle_life",
             "storageEnabled": true,
             "noticeEnabled": true,
             "isDefaultPublicGroup": true,
             "status": "active",
             "createdAt": "2026-05-06T00:00:00Z",
-            "updatedAt": "2026-05-06T00:00:00Z",
-            "ownerDisplayNameSnapshot": "契约同伴一"
+            "updatedAt": "2026-05-06T00:00:00Z"
           }
         ],
         "fixture_circle_travel": [
           {
             "_id": "fixture_group_travel_public",
+            "version": 1,
             "circleId": "fixture_circle_travel",
             "groupType": "public_group",
             "name": "契约旅行手账公开群",
             "description": "契约旅行手账 默认公开群。",
             "visibility": "public",
             "joinPolicy": "apply_only",
-            "ownerUserId": "fixture_user_travel_owner",
-            "memberCount": 6,
+            "createdByPersonaId": "fixture_user_travel_owner",
             "conversationId": "fixture_conv_circle_travel",
             "storageEnabled": true,
             "noticeEnabled": true,
             "isDefaultPublicGroup": true,
             "status": "active",
             "createdAt": "2026-05-06T00:00:00Z",
-            "updatedAt": "2026-05-06T00:00:00Z",
-            "ownerDisplayNameSnapshot": "契约旅行圈主"
+            "updatedAt": "2026-05-06T00:00:00Z"
           }
         ],
         "fixture_circle_photo": [
           {
             "_id": "fixture_group_photo_public",
+            "version": 1,
             "circleId": "fixture_circle_photo",
             "groupType": "public_group",
             "name": "契约摄影社公开群",
             "description": "契约摄影社 默认公开群。",
             "visibility": "public",
             "joinPolicy": "apply_only",
-            "ownerUserId": "fixture_user_owner",
-            "memberCount": 6,
+            "createdByPersonaId": "fixture_user_owner",
             "conversationId": "fixture_conv_circle_photo",
             "storageEnabled": true,
             "noticeEnabled": true,
             "isDefaultPublicGroup": true,
             "status": "active",
             "createdAt": "2026-05-06T00:00:00Z",
-            "updatedAt": "2026-05-06T00:00:00Z",
-            "ownerDisplayNameSnapshot": "契约摄影社主理人"
+            "updatedAt": "2026-05-06T00:00:00Z"
           }
         ],
         "fixture_circle_gold_invest": [
           {
             "_id": "fixture_group_gold_invest_public",
+            "version": 1,
             "circleId": "fixture_circle_gold_invest",
             "groupType": "public_group",
             "name": "黄金投资圈公开群",
             "description": "黄金投资圈默认公开群。",
             "visibility": "public",
             "joinPolicy": "apply_only",
-            "ownerUserId": "fixture_user_tech_01",
-            "memberCount": 8426,
+            "createdByPersonaId": "fixture_user_tech_01",
             "conversationId": "fixture_conv_fixture_circle_gold_invest",
             "storageEnabled": true,
             "noticeEnabled": true,
             "isDefaultPublicGroup": true,
             "status": "active",
             "createdAt": "2026-05-06T00:00:00Z",
-            "updatedAt": "2026-06-30T00:00:00Z",
-            "ownerDisplayNameSnapshot": "黄金投资圈圈主"
+            "updatedAt": "2026-06-30T00:00:00Z"
           }
         ],
         "fixture_circle_neworiental_alumni": [
           {
             "_id": "fixture_group_neworiental_alumni_public",
+            "version": 1,
             "circleId": "fixture_circle_neworiental_alumni",
             "groupType": "public_group",
             "name": "新东方校友圈公开群",
             "description": "新东方校友圈默认公开群。",
             "visibility": "public",
             "joinPolicy": "apply_only",
-            "ownerUserId": "fixture_user_article",
-            "memberCount": 3120,
+            "createdByPersonaId": "fixture_user_article",
             "conversationId": "fixture_conv_fixture_circle_neworiental_alumni",
             "storageEnabled": true,
             "noticeEnabled": true,
             "isDefaultPublicGroup": true,
             "status": "active",
             "createdAt": "2026-05-06T00:00:00Z",
-            "updatedAt": "2026-06-30T00:00:00Z",
-            "ownerDisplayNameSnapshot": "新东方校友圈圈主"
+            "updatedAt": "2026-06-30T00:00:00Z"
           }
         ]
       },
@@ -376,7 +370,7 @@
           {
             "_id": "fixture_member_tech_fixture_user_tech_01",
             "circleId": "fixture_circle_tech",
-            "userId": "fixture_user_tech_01",
+            "personaId": "fixture_user_tech_01",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -388,7 +382,7 @@
           {
             "_id": "fixture_member_tech_fixture_user_tech_02",
             "circleId": "fixture_circle_tech",
-            "userId": "fixture_user_tech_02",
+            "personaId": "fixture_user_tech_02",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -400,7 +394,7 @@
           {
             "_id": "fixture_member_tech_fixture_user_tech_03",
             "circleId": "fixture_circle_tech",
-            "userId": "fixture_user_tech_03",
+            "personaId": "fixture_user_tech_03",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -412,7 +406,7 @@
           {
             "_id": "fixture_member_tech_fixture_user_tech_04",
             "circleId": "fixture_circle_tech",
-            "userId": "fixture_user_tech_04",
+            "personaId": "fixture_user_tech_04",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -424,7 +418,7 @@
           {
             "_id": "fixture_member_tech_fixture_user_tech_05",
             "circleId": "fixture_circle_tech",
-            "userId": "fixture_user_tech_05",
+            "personaId": "fixture_user_tech_05",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -436,7 +430,7 @@
           {
             "_id": "fixture_member_tech_fixture_user_tech_06",
             "circleId": "fixture_circle_tech",
-            "userId": "fixture_user_tech_06",
+            "personaId": "fixture_user_tech_06",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -450,7 +444,7 @@
           {
             "_id": "fixture_member_life_fixture_user_current",
             "circleId": "fixture_circle_life",
-            "userId": "fixture_user_current",
+            "personaId": "fixture_user_current",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -462,7 +456,7 @@
           {
             "_id": "fixture_member_life_fixture_user_weekend_1",
             "circleId": "fixture_circle_life",
-            "userId": "fixture_user_weekend_1",
+            "personaId": "fixture_user_weekend_1",
             "role": "owner",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -474,7 +468,7 @@
           {
             "_id": "fixture_member_life_fixture_user_lifestyle_01",
             "circleId": "fixture_circle_life",
-            "userId": "fixture_user_lifestyle_01",
+            "personaId": "fixture_user_lifestyle_01",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -486,7 +480,7 @@
           {
             "_id": "fixture_member_life_fixture_user_lifestyle_02",
             "circleId": "fixture_circle_life",
-            "userId": "fixture_user_lifestyle_02",
+            "personaId": "fixture_user_lifestyle_02",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -498,7 +492,7 @@
           {
             "_id": "fixture_member_life_fixture_user_lifestyle_03",
             "circleId": "fixture_circle_life",
-            "userId": "fixture_user_lifestyle_03",
+            "personaId": "fixture_user_lifestyle_03",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -510,7 +504,7 @@
           {
             "_id": "fixture_member_life_fixture_user_lifestyle_04",
             "circleId": "fixture_circle_life",
-            "userId": "fixture_user_lifestyle_04",
+            "personaId": "fixture_user_lifestyle_04",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -524,7 +518,7 @@
           {
             "_id": "fixture_member_travel_fixture_user_travel",
             "circleId": "fixture_circle_travel",
-            "userId": "fixture_user_travel",
+            "personaId": "fixture_user_travel",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -536,7 +530,7 @@
           {
             "_id": "fixture_member_travel_fixture_user_travel_owner",
             "circleId": "fixture_circle_travel",
-            "userId": "fixture_user_travel_owner",
+            "personaId": "fixture_user_travel_owner",
             "role": "owner",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -548,7 +542,7 @@
           {
             "_id": "fixture_member_travel_fixture_user_travel_01",
             "circleId": "fixture_circle_travel",
-            "userId": "fixture_user_travel_01",
+            "personaId": "fixture_user_travel_01",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -560,7 +554,7 @@
           {
             "_id": "fixture_member_travel_fixture_user_travel_02",
             "circleId": "fixture_circle_travel",
-            "userId": "fixture_user_travel_02",
+            "personaId": "fixture_user_travel_02",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -572,7 +566,7 @@
           {
             "_id": "fixture_member_travel_fixture_user_travel_03",
             "circleId": "fixture_circle_travel",
-            "userId": "fixture_user_travel_03",
+            "personaId": "fixture_user_travel_03",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -584,7 +578,7 @@
           {
             "_id": "fixture_member_travel_fixture_user_travel_04",
             "circleId": "fixture_circle_travel",
-            "userId": "fixture_user_travel_04",
+            "personaId": "fixture_user_travel_04",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -598,7 +592,7 @@
           {
             "_id": "fixture_member_photo_fixture_user_photo",
             "circleId": "fixture_circle_photo",
-            "userId": "fixture_user_photo",
+            "personaId": "fixture_user_photo",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -610,7 +604,7 @@
           {
             "_id": "fixture_member_photo_fixture_user_owner",
             "circleId": "fixture_circle_photo",
-            "userId": "fixture_user_owner",
+            "personaId": "fixture_user_owner",
             "role": "owner",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -622,7 +616,7 @@
           {
             "_id": "fixture_member_photo_fixture_user_photography_01",
             "circleId": "fixture_circle_photo",
-            "userId": "fixture_user_photography_01",
+            "personaId": "fixture_user_photography_01",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -634,7 +628,7 @@
           {
             "_id": "fixture_member_photo_fixture_user_photography_02",
             "circleId": "fixture_circle_photo",
-            "userId": "fixture_user_photography_02",
+            "personaId": "fixture_user_photography_02",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -646,7 +640,7 @@
           {
             "_id": "fixture_member_photo_fixture_user_photography_03",
             "circleId": "fixture_circle_photo",
-            "userId": "fixture_user_photography_03",
+            "personaId": "fixture_user_photography_03",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -658,7 +652,7 @@
           {
             "_id": "fixture_member_photo_fixture_user_photography_04",
             "circleId": "fixture_circle_photo",
-            "userId": "fixture_user_photography_04",
+            "personaId": "fixture_user_photography_04",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-05-06T00:00:00Z",
@@ -672,7 +666,7 @@
           {
             "_id": "fixture_member_fixture_circle_gold_invest_owner",
             "circleId": "fixture_circle_gold_invest",
-            "userId": "fixture_user_tech_01",
+            "personaId": "fixture_user_tech_01",
             "role": "owner",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-06-30T00:00:00Z",
@@ -684,7 +678,7 @@
           {
             "_id": "fixture_member_fixture_circle_gold_invest_member_01",
             "circleId": "fixture_circle_gold_invest",
-            "userId": "fixture_user_friend",
+            "personaId": "fixture_user_friend",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-06-29T12:00:00Z",
@@ -698,7 +692,7 @@
           {
             "_id": "fixture_member_fixture_circle_neworiental_alumni_owner",
             "circleId": "fixture_circle_neworiental_alumni",
-            "userId": "fixture_user_article",
+            "personaId": "fixture_user_article",
             "role": "owner",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-06-30T00:00:00Z",
@@ -710,7 +704,7 @@
           {
             "_id": "fixture_member_fixture_circle_neworiental_alumni_member_01",
             "circleId": "fixture_circle_neworiental_alumni",
-            "userId": "fixture_user_weekend_1",
+            "personaId": "fixture_user_weekend_1",
             "role": "member",
             "joinedAt": "2026-05-06T00:00:00Z",
             "lastActiveAt": "2026-06-29T12:00:00Z",
@@ -725,14 +719,16 @@
         "fixture_circle_photo": [
           {
             "_id": "fixture_file_photo_guide",
+            "version": 1,
             "circleId": "fixture_circle_photo",
             "groupId": "fixture_group_photo_public",
+            "parentFolderId": "",
             "name": "摄影路线指南.png",
-            "fileType": "image",
+            "fileType": "file",
+            "assetId": "fixture_media_asset_photo_guide",
             "mimeType": "image/png",
             "sizeBytes": 4096,
-            "objectKey": "media/image/s/archived-image/circle/fixture_circle_photo/v1/cover.png",
-            "uploaderId": "fixture_user_owner",
+            "uploaderPersonaId": "fixture_user_owner",
             "status": "active",
             "createdAt": "2026-05-11T20:00:00Z",
             "updatedAt": "2026-05-11T20:00:00Z"
@@ -769,11 +765,37 @@
           "weeklyActiveCount": 88
         }
       ],
-      "postIds": [
-        "fixture_photo_001",
-        "fixture_photo_002",
-        "fixture_post_photography_001"
-      ]
+      "placements": [
+        {
+          "placementId": "fixture_placement_photo_001",
+          "circleId": "fixture_circle_photo",
+          "postId": "fixture_photo_001",
+          "status": "active",
+          "placedAt": "2026-06-01T08:00:00Z"
+        },
+        {
+          "placementId": "fixture_placement_photo_002",
+          "circleId": "fixture_circle_photo",
+          "postId": "fixture_photo_002",
+          "status": "active",
+          "placedAt": "2026-06-02T08:00:00Z"
+        },
+        {
+          "placementId": "fixture_placement_photography_001",
+          "circleId": "fixture_circle_photo",
+          "postId": "fixture_post_photography_001",
+          "status": "active",
+          "placedAt": "2026-06-03T08:00:00Z"
+        },
+        {
+          "placementId": "fixture_placement_photography_008",
+          "circleId": "fixture_circle_photo",
+          "postId": "fixture_post_photography_008",
+          "status": "active",
+          "placedAt": "2026-06-04T08:00:00Z"
+        }
+      ],
+      "postIds": []
     }
   },
   "scenarios": [

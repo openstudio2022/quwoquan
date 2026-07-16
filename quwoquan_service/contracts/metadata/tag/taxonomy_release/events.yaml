@@ -1,0 +1,16 @@
+version: 1
+aggregate: TagTaxonomyRelease
+
+events:
+  - name: TagTaxonomyReleaseImported
+    producer: tag-service
+    consumers: [platform-ops]
+    channel: event_store
+    payload_entity: TagTaxonomyRelease
+    payload_fields: [releaseId, canonicalDigest, nodeCount, status, importedAt]
+  - name: TagTaxonomyReleaseActivated
+    producer: tag-service
+    consumers: [tag-cache, recommendation-engine, platform-ops]
+    channel: event_store
+    payload_entity: TagTaxonomyRelease
+    payload_fields: [releaseId, canonicalDigest, nodeCount, status, activatedAt]

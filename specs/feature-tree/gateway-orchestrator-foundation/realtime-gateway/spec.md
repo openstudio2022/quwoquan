@@ -22,7 +22,7 @@ realtime-gateway 是**平台级基础设施服务**，不属于任何业务域�
 |---|---|---|
 | chat-service | 消息持久化、seq 分配、域事件发布 | realtime-gateway 的上游事件源 |
 | runtime/streaming (SSE) | Assistant 流式输出 | 保留，SSE 仅用于 AI 流式场景 |
-| runtime/eventstore | 域事件持久化 | 事件最终一致性保障 |
+| 各聚合 Store + transactional outbox | 聚合变更与 typed event 同事务持久化 | 事件最终一致性保障 |
 | notification-service | 离线推送（APNs/FCM） | realtime-gateway 判定用户离线后通知 notification |
 
 ## 3. 功能范围
@@ -112,8 +112,8 @@ WebSocket 仅在用户活跃聊天时建立，空闲时自动回落到 long-poll
 
 | 转换 | 触发条件 | 端侧行为 |
 |---|---|---|
-| 空闲 → 活跃 | 进入 ChatDetailPage / 发送消息 / 10s 内收到 3+ 条消息 | 建立 WebSocket，停止 long-polling |
-| 活跃 → 空闲 | 离开 ChatDetailPage / **`ws_idle_timeout_sec`** 无消息收发（默认 120s） | 关闭 WebSocket，启动 long-polling |
+| 空闲 → 活跃 | 进入 ChatConversationPage / 发送消息 / 10s 内收到 3+ 条消息 | 建立 WebSocket，停止 long-polling |
+| 活跃 → 空闲 | 离开 ChatConversationPage / **`ws_idle_timeout_sec`** 无消息收发（默认 120s） | 关闭 WebSocket，启动 long-polling |
 | 任意 → 后台 | App 进入后台（iOS ~3s / Android ~30s） | 关闭所有连接 |
 | 后台 → 空闲 | App 回到前台 / 点击 push 通知 | 启动 long-polling + seq gap fill |
 | 后台 → 活跃 | 点击消息 push → 直接打开聊天页 | 直接建立 WebSocket + seq gap fill |
@@ -310,19 +310,25 @@ lib/cloud/services/realtime/
 ### 8.2 Provider 集成
 
 ```dart
-final realtimeManagerProvider = Provider<RealtimeConnectionManager>((ref) {
-  final mode = ref.watch(appDataSourceModeProvider);
-  return mode == AppDataSourceMode.remote
-      ? RemoteRealtimeConnectionManager(...)
-      : MockRealtimeConnectionManager();
-});
+final realtimeConnectionManagerProvider =
+    NotifierProvider<RealtimeConnectionNotifier, TransportState>(
+  () => RealtimeConnectionNotifier(), // production Remote-only
+);
+
+// Only runners/alpha may replace the whole notifier at composition root.
+realtimeConnectionManagerProvider.overrideWith(
+  () => RealtimeConnectionNotifier(delegateFactory: alphaDelegateFactory),
+);
 ```
+
+Production 不读取 `appDataSourceModeProvider`，不包含 fixture delegate/catalog，
+也不提供运行时热切换或失败回退。alpha fixture 只消费构建期生成的 immutable bundle。
 
 ## 9. 跨特性依赖
 
 | 依赖 | 方向 | 说明 |
 |---|---|---|
-| chat-service | ← | 消费 MessageSent/MemberJoined 等事件 |
+| chat-service | ← | 消费 MessageSent/ConversationMemberAdded 等事件 |
 | notification-service | → | 离线用户触发 APNs/FCM |
 | runtime/config | ← | 读取网关配置 |
 | runtime/observability | ← | 指标 + 日志 + tracing |

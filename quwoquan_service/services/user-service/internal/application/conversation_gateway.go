@@ -8,14 +8,9 @@ type ConversationGateway interface {
 	HasDirectBetween(ctx context.Context, subAccountA, subAccountB string) (bool, error)
 }
 
-type noopConversationGateway struct{}
-
-func (noopConversationGateway) CreateOrReuseDirect(context.Context, string, string) (string, error) {
-	return "", nil
+func requireConversationGateway(gateway ConversationGateway) ConversationGateway {
+	if gateway == nil {
+		panic("user application requires ConversationGateway")
+	}
+	return gateway
 }
-
-func (noopConversationGateway) HasDirectBetween(context.Context, string, string) (bool, error) {
-	return false, nil
-}
-
-func NoopConversationGateway() ConversationGateway { return noopConversationGateway{} }

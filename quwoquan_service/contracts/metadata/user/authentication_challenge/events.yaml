@@ -1,0 +1,21 @@
+version: 1
+aggregate: AuthenticationChallenge
+events:
+  - name: AuthenticationChallengeIssued
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: AuthenticationChallenge
+    payload_fields: [id]
+  - name: AuthenticationChallengeCompleted
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: AuthenticationChallenge
+    payload_fields: [id]
+  - name: AuthenticationChallengeLocked
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: AuthenticationChallenge
+    payload_fields: [id]

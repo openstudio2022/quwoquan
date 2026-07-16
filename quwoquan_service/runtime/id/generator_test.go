@@ -15,6 +15,7 @@ func TestGenerateAndValidateDefaultPrefixes(t *testing.T) {
 		PrefixDeviceContext,
 		PrefixToolUse,
 		PrefixAppMessage,
+		PrefixNotificationDeliveryJob,
 	}
 	for _, prefix := range prefixes {
 		t.Run(string(prefix), func(t *testing.T) {

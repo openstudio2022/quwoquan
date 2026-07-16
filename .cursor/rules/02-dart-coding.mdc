@@ -163,11 +163,18 @@ AppException (abstract)
 
 ---
 
-## 4. cloud/ 层约束
+## 4. App Cloud 分层约束
 
-- `lib/cloud/models/` DTO 必须从 metadata `fields.yaml` codegen 生成（`DO NOT EDIT`）
-- `lib/cloud/services/` Repository 接口必须与 `service.yaml` API 定义一致
-- `lib/cloud/runtime/` 字段策略必须从 metadata 生成
+- pure Dart request/result/Slice/error/descriptor 只由 ContractGraph 生成到
+  `packages/quwoquan_cloud_contracts`，禁止在 `lib/cloud/runtime/generated` 维护业务副本。
+- `lib/application/{context}/{object}` 只声明对象级 `*CommandWriter/*Query` port 与少量
+  coordinator；禁止聚合 Repository 和动态 wire。
+- `lib/cloud/remote/{context}/{object}` 只做 generated client 到 application port 的薄映射；
+  URL、operationId、auth、decoder、retry、deadline 和 error policy 不得由调用方传入。
+- `lib/cloud/runtime` 只保留 executor/context/transport/error/config/observability，禁止依赖
+  UI、Router、Provider、fixture、local store 或平台插件。
+- production composition 位于 `lib/core/di` 且只装配 Remote；Mock 只能由独立 alpha/test
+  package 注入。
 
 ---
 

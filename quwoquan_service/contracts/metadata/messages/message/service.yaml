@@ -1,0 +1,150 @@
+version: 1
+service:
+  name: chat-service
+  domain: chat
+  owner: backend-team
+  description: Message 对象专属 command packet。
+  commercial_defaults:
+    status: blocked
+    block_reason: 对象专属 Store/outbox、transport 与 generated client 尚未完成生产装配
+    gap_id: CHAT_OBJECT_PACKET_WIRING
+    target_story: app-cloud-business-object-commercial-closure
+api_routes:
+  - method: POST
+    path: /v1/chat/conversations/{conversationId}/messages
+    operation: SendMessage
+    actor: persona
+    application:
+      kind: command
+      facet: MessageCommandFacet
+      method: sendMessage
+      aggregate_owner: Message
+      mutation_target: Message
+      invariant_target: Message
+    commercial:
+      status: blocked
+      block_reason: generated Remote 真实 Gateway api_integration 与 Gamma UAT 尚未闭环
+      gap_id: CHAT_MESSAGE_MEDIA_GAMMA_CLOSURE
+      target_story: app-cloud-business-object-commercial-closure
+    reliability:
+      timeout_ms: 3000
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: required
+    privacy:
+      request_classification: SENSITIVE
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_message_send
+      trace: true
+      attributes: [outcome, message_type]
+    slo:
+      latency_p95_ms: 800
+      availability_percent: 99.9
+    client_contract:
+      dart_import: ../chat/message_contracts.dart
+      request_type: ChatSendMessageCommand
+      response_type: ChatSendMessageResult
+      request_encoder: encodeChatSendMessageCommand
+      response_decoder: decodeChatSendMessageResult
+    description: 发送消息（clientMsgId 幂等 + seq 分配，返回 messageId + seq + timestamp）
+    request_entity: Message
+    writable_fields: [type, content, mediaAssetId, card, replyToMessageId, mentions, clientMsgId, senderDisplayNameSnapshot, senderAvatarUrlSnapshot, personaContextVersion]
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.message_invalid, CHAT.USER.message_too_long, CHAT.USER.message_media_invalid, CHAT.USER.message_idempotency_conflict, CHAT.USER.not_mutual, CHAT.USER.blocked, CHAT.SYSTEM.message_media_unavailable, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: POST
+    path: /v1/chat/conversations/{conversationId}/messages/{messageId}/recall
+    operation: RecallMessage
+    actor: persona
+    application:
+      kind: command
+      facet: MessageCommandFacet
+      method: recallMessage
+      aggregate_owner: Message
+      mutation_target: Message
+      invariant_target: Message
+    description: 撤回消息（2 分钟内有效）
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.blocked, CHAT.USER.message_not_found, CHAT.USER.message_recall_forbidden, CHAT.USER.message_recall_expired, CHAT.SYSTEM.internal_error]
+    security:
+      auth_mode: required
+      principal: owner
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: GET
+    path: /v1/chat/conversations/{conversationId}/messages
+    operation: ListMessages
+    actor: persona
+    authorization:
+      principal: persona
+      ownership_policy: conversation_member
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [CHAT.USER.unauthorized, CHAT.USER.conversation_not_found, CHAT.SYSTEM.internal_error]
+    privacy:
+      request_classification: INTERNAL
+      response_classification: SENSITIVE
+      log_policy: metadata_only
+    telemetry:
+      metric: chat_message_list
+      trace: true
+      attributes: [conversation_id, outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    application:
+      kind: query
+      facet: MessageQueryFacet
+      method: listMessages
+      reader: MessageHistoryReader
+      slice: MessagePageSlice
+    description: 消息列表（支持 afterSeq/beforeSeq 分页，默认按 seq DESC）
+    query_params: [afterSeq, beforeSeq, cursor, limit]
+    response_entity: Message
+    security:
+      auth_mode: required
+      principal: persona
+      token_transport: bearer
+      anonymous_policy: deny
+      visibility: private
+
+  - method: POST
+    path: /v1/chat/conversations/{conversationId}/sync
+    operation: SyncMessages
+    actor: persona
+    application:
+      kind: query
+      facet: MessageSyncQueryFacet
+      method: syncMessages
+      reader: MessageSyncReader
+      slice: MessageSyncSlice
+    description: 离线同步（上报 lastSeq，返回 gap 消息列表 + hasMore，单次最多 500 条）
+    auth: required
+
+  - method: GET
+    path: /v1/chat/messages/search
+    operation: SearchMessages
+    actor: persona
+    application:
+      kind: query
+      facet: MessageSearchQueryFacet
+      method: searchMessages
+      reader: MessageSearchReader
+      slice: MessageSearchResultSlice
+    description: 全局搜索消息投影；不加载 Conversation 聚合。
+    query_params: [query, cursor, limit]
+    response_entity: MessageSearchItemView
+    auth: required

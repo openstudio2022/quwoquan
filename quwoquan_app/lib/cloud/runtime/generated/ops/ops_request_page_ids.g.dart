@@ -5,22 +5,34 @@ class OpsRequestPageIds {
   const OpsRequestPageIds._();
 
   static const Map<String, String> operationToPageId = <String, String>{
-    'AssignBucket': 'ops.assign.bucket',
-    'GetBucket': 'ops.get.bucket',
+    'AssignExperimentVariant': 'ops.assign.experiment.variant',
     'GetEventDrilldown': 'ops.get.event.drilldown',
     'GetEventSummary': 'ops.get.event.summary',
+    'GetExperimentAssignment': 'ops.get.experiment.assignment',
     'GetExperimentStats': 'ops.get.experiment.stats',
     'GetVisitStats': 'ops.get.visit.stats',
+    'ListConfigLayers': 'ops.list.config.layers',
+    'ListExperiments': 'ops.list.experiments',
+    'ListServiceConfigs': 'ops.list.service.configs',
     'RecordVisit': 'ops.record.visit',
     'ReportEventBatch': 'ops.report.event.batch',
+    'ResolveEffectiveConfig': 'ops.resolve.effective.config',
+    'UpdateExperimentRollout': 'ops.update.experiment.rollout',
+    'UpdateServiceConfig': 'ops.update.service.config',
   };
 
-  static const String assignBucket = 'ops.assign.bucket';
-  static const String getBucket = 'ops.get.bucket';
+  static const String assignExperimentVariant = 'ops.assign.experiment.variant';
   static const String getEventDrilldown = 'ops.get.event.drilldown';
   static const String getEventSummary = 'ops.get.event.summary';
+  static const String getExperimentAssignment = 'ops.get.experiment.assignment';
   static const String getExperimentStats = 'ops.get.experiment.stats';
   static const String getVisitStats = 'ops.get.visit.stats';
+  static const String listConfigLayers = 'ops.list.config.layers';
+  static const String listExperiments = 'ops.list.experiments';
+  static const String listServiceConfigs = 'ops.list.service.configs';
   static const String recordVisit = 'ops.record.visit';
   static const String reportEventBatch = 'ops.report.event.batch';
+  static const String resolveEffectiveConfig = 'ops.resolve.effective.config';
+  static const String updateExperimentRollout = 'ops.update.experiment.rollout';
+  static const String updateServiceConfig = 'ops.update.service.config';
 }

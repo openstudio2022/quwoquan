@@ -1,0 +1,270 @@
+version: 1
+entity: CreatorRuntimeProfile
+
+fields:
+  - name: creatorId
+    type: string
+    constraints: [PK, NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: subAccountId
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: handle
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: displayName
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: headline
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: bio
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: slogan
+    type: string
+    constraints: [NULLABLE]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: avatarUrl
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: avatarObjectKey
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: none
+    ops_exposure: read
+  - name: avatarSha256
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+  - name: coverUrl
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: coverObjectKey
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: none
+    ops_exposure: read
+  - name: coverSha256
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+  - name: tagRefs
+    type: "[]tag_ref"
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: publicProfileTagRefs
+    type: "[]tag_ref"
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: roles
+    type: "[]string"
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: verticals
+    type: "[]string"
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: segment
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: preferredContentTypes
+    type: "[]string"
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: creatorArchetype
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: carrierAffinity
+    type: object
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: none
+    ops_exposure: read
+  - name: preferredBlueprintIds
+    type: "[]string"
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: none
+    ops_exposure: read
+  - name: coverageScope
+    type: object
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: none
+    ops_exposure: read
+  - name: claimPolicy
+    type: object
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: none
+    ops_exposure: read
+  - name: expertiseClaims
+    type: "[]string"
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: mustNotClaim
+    type: "[]string"
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: none
+    ops_exposure: read
+  - name: disclosure
+    type: object
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: entityRefs
+    type: "[]string"
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: circleRefs
+    type: "[]string"
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: sourceStatus
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: works
+    type: "[]object"
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: redact
+    api_exposure: none
+    ops_exposure: read
+  - name: packageDigest
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: none
+    ops_exposure: read
+  - name: releaseId
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: status
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: managedBy
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: importedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read
+  - name: updatedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+  - name: tombstonedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: none
+    ops_exposure: read

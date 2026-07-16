@@ -8,7 +8,9 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// --- create_circle_with_owner (contract.yaml scenario) ---
+// Circle creation writes only the Circle aggregate. The owner
+// CircleMembership is a separate aggregate and must never be inserted by the
+// Circle store as a hidden cross-aggregate write.
 
 func TestCreateCircleWithOwner(t *testing.T) {
 	defer cleanCollections(t)
@@ -37,23 +39,12 @@ func TestCreateCircleWithOwner(t *testing.T) {
 		t.Errorf("expected name=摄影圈, got %v", doc["name"])
 	}
 
-	// Verify owner member record
-	var memberDoc bson.M
-	err = mongoDB.Collection("circle_members").FindOne(context.Background(), bson.M{
-		"circleId": circleID, "userId": "test_user_001",
-	}).Decode(&memberDoc)
-	if err != nil {
-		t.Fatalf("owner member not found: %v", err)
+	memberCount, err := mongoDB.Collection("circle_memberships").CountDocuments(context.Background(), bson.M{"circleId": circleID})
+	if err != nil || memberCount != 0 {
+		t.Fatalf("Circle store performed a hidden membership write: count=%d err=%v", memberCount, err)
 	}
-	if memberDoc["role"] != "owner" {
-		t.Errorf("expected role=owner, got %v", memberDoc["role"])
-	}
-
-	// Verify memberCount = 1
-	if mc, ok := doc["memberCount"].(int64); !ok || mc != 1 {
-		if mc32, ok := doc["memberCount"].(int32); !ok || mc32 != 1 {
-			t.Errorf("expected memberCount=1, got %v", doc["memberCount"])
-		}
+	if toInt64(doc["memberCount"]) != 0 {
+		t.Errorf("memberCount must be projection-owned, got %v", doc["memberCount"])
 	}
 
 	// Verify CircleCreated event

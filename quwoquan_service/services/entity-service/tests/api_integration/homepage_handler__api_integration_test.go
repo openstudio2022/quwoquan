@@ -232,15 +232,28 @@ func TestHomepageImpactReturnsStructuredSummary(t *testing.T) {
 	}
 	spans := sliceField(t, first, "primarySpans")
 	joined := ""
+	hasCircleObjectSpan := false
 	for _, raw := range spans {
 		span, ok := raw.(map[string]any)
 		if !ok {
 			t.Fatalf("expected primary span map, got %T", raw)
 		}
 		joined += stringField(t, span, "text")
+		if stringField(t, span, "role") == "object" {
+			target, _ := span["target"].(map[string]any)
+			hasCircleObjectSpan = target != nil && stringField(t, target, "objectType") == "circle" && stringField(t, target, "objectId") == "fixture_circle_photo"
+		}
 	}
-	if joined != primaryText {
-		t.Fatalf("expected joined primarySpans %q = primaryText %q", joined, primaryText)
+	if joined != primaryText || !hasCircleObjectSpan {
+		t.Fatalf("invalid primarySpans: joined=%q primary=%q spans=%+v", joined, primaryText, spans)
+	}
+	representative, ok := first["representativeActor"].(map[string]any)
+	if !ok || stringField(t, representative, "displayName") != "契约摄影社主理人" || stringField(t, representative, "relationLabel") != "圈子主理人" {
+		t.Fatalf("expected relationship-qualified representative actor, got %+v", first["representativeActor"])
+	}
+	actorTarget, _ := representative["target"].(map[string]any)
+	if actorTarget == nil || stringField(t, actorTarget, "objectType") != "user" || stringField(t, actorTarget, "objectId") != "fixture_user_owner" {
+		t.Fatalf("expected routable user actor target, got %+v", representative["target"])
 	}
 	actionHints := sliceField(t, first, "actionHints")
 	if len(actionHints) == 0 {
@@ -254,8 +267,8 @@ func TestHomepageImpactReturnsStructuredSummary(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected action hint target map, got %T", actionHint["target"])
 	}
-	if got := stringField(t, target, "objectId"); got != "homepage_sight_west_lake" {
-		t.Fatalf("expected action target homepage_sight_west_lake, got %q", got)
+	if got := stringField(t, target, "objectId"); got != "fixture_circle_photo" {
+		t.Fatalf("expected action target fixture_circle_photo, got %q", got)
 	}
 }
 
@@ -270,16 +283,51 @@ func TestHomepageObjectPageBundleRequestsCanonicalEntityScopedIntersections(t *t
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"items": []map[string]any{
 				{
-					"intersectionId": "remote_homepage_reason",
-					"primaryText":    "1位你关注的人来过「西湖景区」",
+					"intersectionId":            "remote_homepage_reason",
+					"actionTargetId":            "homepage_sight_west_lake",
+					"primaryText":               "顾南等2位你关注的人来过西湖景区",
+					"sourceRefs":                []string{"internal/source"},
+					"primaryEvidenceRef":        "internal/evidence",
+					"actorEvidenceTotalCount":   2,
+					"actorEvidenceCompleteness": "complete",
+					"representativeActor": map[string]any{
+						"actorId":       "user_gu_nan",
+						"displayName":   "顾南",
+						"relationLabel": "你关注的人",
+						"target": map[string]any{
+							"objectType": "user",
+							"objectId":   "user_gu_nan",
+							"objectKind": "person",
+							"routeId":    "userProfile",
+						},
+					},
 					"primarySpans": []map[string]any{
-						{"text": "1位你关注的人来过「西湖景区」", "role": "plain"},
+						{
+							"text": "顾南", "role": "object",
+							"target": map[string]any{
+								"objectType": "user",
+								"objectId":   "user_gu_nan",
+								"objectKind": "person",
+								"routeId":    "userProfile",
+							},
+						},
+						{"text": "等2位你关注的人来过", "role": "plain"},
+						{
+							"text": "西湖景区", "role": "object",
+							"target": map[string]any{
+								"objectType": "homepage",
+								"objectId":   "homepage_sight_west_lake",
+								"objectKind": "place",
+								"routeId":    "homepageDetail",
+							},
+						},
 					},
 					"actionHints": []map[string]any{
 						{
 							"actionKey": "view_object",
 							"label":     "查看对象",
 							"target": map[string]any{
+								"objectType": "homepage",
 								"objectId":   "homepage_sight_west_lake",
 								"objectKind": "place",
 								"routeId":    "homepageDetail",
@@ -339,6 +387,80 @@ func TestHomepageObjectPageBundleRequestsCanonicalEntityScopedIntersections(t *t
 	if got := stringField(t, first, "intersectionId"); got != "remote_homepage_reason" {
 		t.Fatalf("expected remote reason passthrough, got %q", got)
 	}
+	for _, forbidden := range []string{"sourceRefs", "primaryEvidenceRef"} {
+		if _, leaked := first[forbidden]; leaked {
+			t.Fatalf("remote reason leaked %s", forbidden)
+		}
+	}
+}
+
+func TestHomepageObjectPageBundleFallbackSatisfiesStrictPrimaryContract(t *testing.T) {
+	t.Setenv("CONTENT_SERVICE_BASE_URL", "")
+	server := httptest.NewServer(
+		httpadapter.NewHandler(application.NewHomepageService()).Routes(),
+	)
+	defer server.Close()
+
+	bundle := requestJSON(
+		t,
+		server.Client(),
+		http.MethodGet,
+		server.URL+"/v1/homepages/homepage_sight_west_lake/object-page-bundle",
+		nil,
+		http.StatusOK,
+	)
+	reasons := sliceField(t, bundle, "intersectionReasons")
+	if len(reasons) == 0 {
+		t.Fatal("fallback intersection reasons must be non-empty")
+	}
+	for index, raw := range reasons {
+		reason, ok := raw.(map[string]any)
+		if !ok {
+			t.Fatalf("reason[%d] type=%T", index, raw)
+		}
+		primaryText := stringField(t, reason, "primaryText")
+		if primaryText == "" {
+			t.Fatalf("reason[%d].primaryText empty", index)
+		}
+		actionTargetID := stringField(t, reason, "actionTargetId")
+		spans := sliceField(t, reason, "primarySpans")
+		if len(spans) == 0 {
+			t.Fatalf("reason[%d].primarySpans empty", index)
+		}
+		joined := ""
+		hasBoundObject := false
+		for spanIndex, rawSpan := range spans {
+			span, ok := rawSpan.(map[string]any)
+			if !ok {
+				t.Fatalf("reason[%d].primarySpans[%d] type=%T", index, spanIndex, rawSpan)
+			}
+			joined += stringField(t, span, "text")
+			if stringField(t, span, "role") != "object" {
+				continue
+			}
+			target, ok := span["target"].(map[string]any)
+			if !ok {
+				t.Fatalf("reason[%d].primarySpans[%d].target missing", index, spanIndex)
+			}
+			if stringField(t, target, "objectType") == "" {
+				t.Fatalf("reason[%d].primarySpans[%d].target.objectType empty", index, spanIndex)
+			}
+			if stringField(t, target, "objectId") == actionTargetID {
+				hasBoundObject = true
+			}
+		}
+		if joined != primaryText {
+			t.Fatalf("reason[%d] spans=%q primaryText=%q", index, joined, primaryText)
+		}
+		if !hasBoundObject {
+			t.Fatalf("reason[%d] missing object span bound to actionTargetId", index)
+		}
+		for _, forbidden := range []string{"sourceRefs", "primaryEvidenceRef"} {
+			if _, leaked := reason[forbidden]; leaked {
+				t.Fatalf("reason[%d] leaked %s", index, forbidden)
+			}
+		}
+	}
 }
 
 func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
@@ -364,8 +486,8 @@ func TestHomepageIntroductionReturnsStructuredLongFormContent(t *testing.T) {
 	if got := stringField(t, introduction, "summary"); got == "" {
 		t.Fatalf("expected introduction summary")
 	}
-	if refs := sliceField(t, introduction, "sourceRefs"); len(refs) == 0 {
-		t.Fatalf("expected sourceRefs")
+	if _, ok := introduction["sourceRefs"]; ok {
+		t.Fatalf("internal sourceRefs must not be exposed by introduction API")
 	}
 	sections := sliceField(t, introduction, "sections")
 	if len(sections) < 4 {
@@ -599,22 +721,16 @@ func TestHomepageGovernanceLifecycle(t *testing.T) {
 		t.Fatalf("expected confirmed_offline review, got %q", got)
 	}
 
-	detail := requestJSON(
+	offlineDetail := requestJSON(
 		t,
 		server.Client(),
 		http.MethodGet,
 		server.URL+"/v1/homepages/"+homepageID,
 		nil,
-		http.StatusOK,
+		http.StatusGone,
 	)
-	if got := stringField(t, detail, "claimStatus"); got != "claimed" {
-		t.Fatalf("expected claimed homepage, got %q", got)
-	}
-	if got := stringField(t, detail, "status"); got != "offline" {
-		t.Fatalf("expected offline homepage, got %q", got)
-	}
-	if _, ok := detail["offlineAt"].(string); !ok {
-		t.Fatalf("expected offlineAt timestamp in detail response")
+	if got := stringField(t, offlineDetail, "code"); got != "ENTITY.USER.homepage_offline" {
+		t.Fatalf("expected offline runtime error, got %q", got)
 	}
 }
 

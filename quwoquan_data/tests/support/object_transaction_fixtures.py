@@ -1,0 +1,258 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+
+from content.release.canonical import object_transaction as transaction
+
+
+TRANSACTION_ID = "object-one"
+RELEASE_ID = "release-one"
+SOURCE_POLICY = "encyclopedia-primary-v2"
+CREATOR_ID = "creator_a"
+TAG_REF = "Topic/旅行"
+OBJECT_REF = "地点/景区/真实地点"
+
+
+def write_json(path: Path, payload: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True),
+        encoding="utf-8",
+    )
+
+
+def build_canonical(root: Path) -> Path:
+    canonical = root / "publish"
+    for name in ("creators", "entities", "posts", "media/objects"):
+        (canonical / name).mkdir(parents=True, exist_ok=True)
+    creator = canonical / "creators" / CREATOR_ID
+    write_json(
+        creator / "_creator.json",
+        {
+            "schemaVersion": "quwoquan_data.creator_object/1",
+            "creatorId": CREATOR_ID,
+            "profileRef": "profile.json",
+            "assetsRef": "assets.refs.json",
+            "worksRefsRef": "works.refs.ndjson",
+            "tagRefs": [TAG_REF],
+            "entityRefs": [],
+        },
+    )
+    write_json(creator / "profile.json", {"creatorId": CREATOR_ID})
+    write_json(creator / "assets.refs.json", {"assets": []})
+    (creator / "works.refs.ndjson").write_text("", encoding="utf-8")
+    return canonical
+
+
+def _review_attestation() -> dict:
+    return {
+        "schemaVersion": "quwoquan_data.review_attestation/1",
+        "decision": "approved",
+        "deterministicGate": {"status": "passed", "issues": []},
+        "independentReviewer": {
+            "status": "passed",
+            "provider": "cursor_sdk",
+            "model": "composer-2.5",
+            "modelFamily": "composer",
+            "runId": "review-run",
+        },
+        "mediaRefReview": {"status": "passed", "issues": []},
+    }
+
+
+def build_package(root: Path, canonical: Path) -> Path:
+    package_root = root / "package"
+    object_root = package_root / "object"
+    image = package_root / "cas/image.jpg"
+    image.parent.mkdir(parents=True, exist_ok=True)
+    image.write_bytes(b"licensed-real-image")
+    digest_hex = hashlib.sha256(image.read_bytes()).hexdigest()
+    digest = f"sha256:{digest_hex}"
+    object_key = (
+        f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/"
+        f"{digest_hex}.jpg"
+    )
+    write_json(
+        object_root / "_entity.json",
+        {
+            "label": "真实地点",
+            "domain": "地点",
+            "type": "景区",
+            "originTaskId": "旅行/地域/测试",
+            "entityRef": "/entity/地点/景区/真实地点",
+            "tagRefs": [TAG_REF],
+            "geoTagRef": TAG_REF,
+            "sourceUrls": ["https://zh.wikipedia.org/wiki/真实地点"],
+            "primarySource": {
+                "sourceKind": "wikipedia",
+                "entityName": "真实地点",
+                "extractor": "wikipedia_api",
+                "canonicalUrl": "https://zh.wikipedia.org/wiki/真实地点",
+                "sourceUrl": "https://zh.wikipedia.org/wiki/真实地点",
+                "title": "真实地点",
+                "fetchedAt": "2026-07-11T00:00:00Z",
+                "snapshotHash": "sha256:" + "1" * 64,
+                "policyRevision": SOURCE_POLICY,
+                "sourceUseMode": "licensed_adaptation",
+            },
+        },
+    )
+    write_json(
+        object_root / "manifest.json",
+        {
+            "schemaVersion": "quwoquan_data.entity_object/1",
+            "finalContentRef": "page.md",
+            "sourceCatalogRef": "evidence/source_catalog.json",
+            "rightsRef": "evidence/rights.json",
+            "creatorRefsRef": "creator.refs.json",
+            "tagRefsRef": "tag.refs.json",
+            "assetRefsRef": "asset.refs.json",
+        },
+    )
+    (object_root / "page.md").write_text(
+        "# 真实地点\n\n真实正文。\n",
+        encoding="utf-8",
+    )
+    write_json(
+        object_root / "evidence/source_catalog.json",
+        {
+            "sources": [
+                {
+                    "sourceKind": "wikipedia",
+                    "sourceUrl": "https://zh.wikipedia.org/wiki/真实地点",
+                }
+            ]
+        },
+    )
+    snapshot = object_root / "evidence/rights/commons_file_page.html"
+    snapshot.parent.mkdir(parents=True, exist_ok=True)
+    snapshot.write_bytes(b"canonical commons author and license snapshot")
+    snapshot_digest = "sha256:" + hashlib.sha256(snapshot.read_bytes()).hexdigest()
+    write_json(
+        object_root / "evidence/rights.json",
+        {
+            "schemaVersion": "quwoquan_data.asset_rights_closure/1",
+            "assets": [
+                {
+                    "assetId": "cover",
+                    "sourceKind": "wikipedia",
+                    "sourceUseMode": "licensed_adaptation",
+                    "canonicalFilePage": (
+                        "https://commons.wikimedia.org/wiki/File:Example.jpg"
+                    ),
+                    "snapshotUrl": (
+                        "https://commons.wikimedia.org/w/index.php?"
+                        "title=File:Example.jpg&oldid=1"
+                    ),
+                    "pageRevision": "1",
+                    "originalAssetUrl": (
+                        "https://upload.wikimedia.org/example.jpg"
+                    ),
+                    "author": "真实作者",
+                    "source": "Own work",
+                    "licenseName": (
+                        "Creative Commons Attribution-ShareAlike 4.0 International"
+                    ),
+                    "licenseShortName": "CC BY-SA 4.0",
+                    "licenseUrl": (
+                        "https://creativecommons.org/licenses/by-sa/4.0/"
+                    ),
+                    "usageScope": "app_publish",
+                    "attribution": "真实地点，摄影：真实作者，CC BY-SA 4.0",
+                    "caption": "真实地点",
+                    "captionSource": "Commons file page Chinese description",
+                    "modifications": "none",
+                    "fetchedAt": "2026-07-11T00:00:00Z",
+                    "snapshot": {
+                        "ref": "object/evidence/rights/commons_file_page.html",
+                        "sha256": snapshot_digest,
+                        "bytes": snapshot.stat().st_size,
+                    },
+                    "asset": {
+                        "ref": "cas/image.jpg",
+                        "sha256": digest,
+                        "bytes": image.stat().st_size,
+                        "mimeType": "image/jpeg",
+                        "width": 1280,
+                        "height": 720,
+                    },
+                    "authorizationProof": (
+                        "https://commons.wikimedia.org/w/index.php?"
+                        "title=File:Example.jpg&oldid=1"
+                    ),
+                    "modelReleaseStatus": "not_required",
+                }
+            ],
+        },
+    )
+    write_json(object_root / "creator.refs.json", {"creatorRefs": [CREATOR_ID]})
+    write_json(object_root / "tag.refs.json", {"tagRefs": [TAG_REF]})
+    write_json(
+        object_root / "asset.refs.json",
+        {
+            "assets": [
+                {
+                    "assetId": "cover",
+                    "objectKey": object_key,
+                    "sha256": digest,
+                    "bytes": image.stat().st_size,
+                }
+            ]
+        },
+    )
+    write_json(object_root / "attestation.json", _review_attestation())
+    write_json(
+        object_root / "evidence_index.json",
+        {"schemaVersion": "quwoquan_data.release_evidence_index/1", "refs": []},
+    )
+    closure = {
+        "creatorRefs": [CREATOR_ID],
+        "tagRefs": [TAG_REF],
+        "sourceCatalogRef": "evidence/source_catalog.json",
+        "rightsRef": "evidence/rights.json",
+        "casRefs": [
+            {
+                "sourceRef": "cas/image.jpg",
+                "objectKey": object_key,
+                "sha256": digest,
+                "bytes": image.stat().st_size,
+            }
+        ],
+    }
+    review = {
+        "attestationRef": "attestation.json",
+        "evidenceIndexRef": "evidence_index.json",
+    }
+    review_binding = transaction._review_binding(object_root, {"review": review})
+    closure_digest = transaction._closure_digest(
+        object_root=object_root,
+        object_kind="entities",
+        object_ref=OBJECT_REF,
+        target_schema="quwoquan_data.entity_object/1",
+        source_policy_revision=SOURCE_POLICY,
+        closure=closure,
+        cas_rows=[dict(closure["casRefs"][0])],
+        review=review_binding,
+    )
+    write_json(
+        package_root / "object_transaction_package.json",
+        {
+            "schemaVersion": transaction.PACKAGE_SCHEMA,
+            "transactionId": TRANSACTION_ID,
+            "executionId": "20260711--travel-homepage-coverage--cn-test--canary-001",
+            "sourcePolicyRevision": SOURCE_POLICY,
+            "target": {
+                "layoutSchema": transaction.LAYOUT_SCHEMA,
+                "objectKind": "entities",
+                "objectRef": OBJECT_REF,
+                "objectSchema": "quwoquan_data.entity_object/1",
+                "packageObjectRef": "object",
+            },
+            "closure": closure,
+            "review": review,
+            "objectClosureDigest": closure_digest,
+        },
+    )
+    return package_root

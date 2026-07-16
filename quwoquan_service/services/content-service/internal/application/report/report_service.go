@@ -2,209 +2,410 @@ package report
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/runtime/repository"
-	"quwoquan_service/services/content-service/internal/application/ports"
+	"quwoquan_service/services/content-service/internal/application/commandmeta"
 	reportmodel "quwoquan_service/services/content-service/internal/domain/report/model"
+	reportports "quwoquan_service/services/content-service/internal/domain/report/ports"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
+)
+
+const (
+	reportReceiptTTL  = 24 * time.Hour
+	maxReportListSize = 100
 )
 
 type ReportService struct {
-	store     ports.ReportRepository
-	publisher repository.EventPublisher
+	data DataPorts
+	now  func() time.Time
 }
 
-func NewReportService(store ports.ReportRepository, publisher repository.EventPublisher) *ReportService {
+func NewReportService(data DataPorts) *ReportService {
+	if data.Aggregate == nil || data.Detail == nil || data.Queue == nil {
+		panic("ReportService requires aggregate, detail and queue data ports")
+	}
 	return &ReportService{
-		store:     store,
-		publisher: publisher,
+		data: data,
+		now:  time.Now,
 	}
 }
 
-func asString(v any) string {
-	if s, ok := v.(string); ok {
-		return s
+func (s *ReportService) CreateReport(
+	ctx context.Context,
+	command CreateReportCommand,
+) (ReportCommandResult, error) {
+	commandDigest := reportCommandDigest("CreateReport", command)
+	if replayed, found, err := s.replay(ctx, "CreateReport", commandDigest); err != nil || found {
+		return replayed, err
 	}
-	return ""
-}
-
-func (s *ReportService) CreateReport(ctx context.Context, reporterID string, payload map[string]any) (*reportmodel.Report, error) {
-	targetType := strings.TrimSpace(asString(payload["targetType"]))
-	targetID := strings.TrimSpace(asString(payload["targetId"]))
-	reason := strings.TrimSpace(asString(payload["reason"]))
-	description := strings.TrimSpace(asString(payload["description"]))
-	if description == "" {
-		description = strings.TrimSpace(asString(payload["note"]))
-	}
-	reporterID = strings.TrimSpace(reporterID)
-	if reporterID == "" {
-		reporterID = strings.TrimSpace(asString(payload["reporterId"]))
-	}
-
-	if reporterID == "" || targetType == "" || targetID == "" || reason == "" {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "举报字段不完整", "reporterId/targetType/targetId/reason are required")
-	}
-
-	now := time.Now().UTC()
-	report := &reportmodel.Report{
-		ID:          fmt.Sprintf("report_%d", now.UnixNano()),
-		ReporterID:  reporterID,
-		TargetType:  targetType,
-		TargetID:    targetID,
-		Reason:      reason,
-		Description: description,
-		Status:      "pending",
-		CreatedAt:   now,
-	}
-	if err := s.store.Create(ctx, report); err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "create_report_failed"),
-			"提交举报失败",
-			err.Error(),
-		)
-	}
-
-	if s.publisher != nil {
-		_ = s.publisher.Publish(ctx, repository.DomainEvent{
-			Type:          "ReportCreated",
-			AggregateType: "Report",
-			AggregateID:   report.ID,
-			Payload: map[string]any{
-				"id":         report.ID,
-				"reporterId": report.ReporterID,
-				"targetType": report.TargetType,
-				"targetId":   report.TargetID,
-				"reason":     report.Reason,
-			},
-			OccurredAt: now.Format(time.RFC3339),
-		})
-	}
-	return report, nil
-}
-
-func (s *ReportService) GetReport(ctx context.Context, id string) (*reportmodel.Report, error) {
-	report, ok, err := s.store.FindByID(ctx, strings.TrimSpace(id))
+	now := s.now().UTC()
+	reportID, err := newReportIdentifier("rpt")
 	if err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "query_report_failed"),
-			"查询举报失败",
-			err.Error(),
-		)
+		return ReportCommandResult{}, unavailable(err)
 	}
-	if !ok {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "report_not_found"),
-			"举报不存在",
-			"report not found",
-		)
+	aggregate, err := reportmodel.Create(reportmodel.CreateParams{
+		ID:          reportID,
+		ReporterID:  command.ReporterID,
+		TargetType:  command.TargetType,
+		TargetID:    command.TargetID,
+		Reason:      command.Reason,
+		Description: command.Description,
+		Now:         now,
+	})
+	if err != nil {
+		return ReportCommandResult{}, mapDomainError(err)
 	}
-	return report, nil
+	return s.commit(
+		ctx,
+		aggregate,
+		0,
+		"CreateReport",
+		commandDigest,
+		"content.report.created",
+		struct {
+			ReportID   string                 `json:"reportId"`
+			ReporterID string                 `json:"reporterId"`
+			TargetType reportmodel.TargetType `json:"targetType"`
+			TargetID   string                 `json:"targetId"`
+			Reason     reportmodel.Reason     `json:"reason"`
+		}{
+			ReportID:   reportID,
+			ReporterID: strings.TrimSpace(command.ReporterID),
+			TargetType: command.TargetType,
+			TargetID:   strings.TrimSpace(command.TargetID),
+			Reason:     command.Reason,
+		},
+		now,
+	)
 }
 
-func (s *ReportService) ListReports(ctx context.Context, limit int) ([]*reportmodel.Report, error) {
-	items, err := s.store.List(ctx, limit)
-	if err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "list_reports_failed"),
-			"查询举报列表失败",
-			err.Error(),
-		)
+func (s *ReportService) BeginReview(
+	ctx context.Context,
+	command BeginReviewReportCommand,
+) (ReportCommandResult, error) {
+	commandDigest := reportCommandDigest("BeginReviewReport", command)
+	if replayed, found, err := s.replay(
+		ctx,
+		"BeginReviewReport",
+		commandDigest,
+	); err != nil || found {
+		return replayed, err
 	}
-	return items, nil
+	aggregate, found, err := s.load(ctx, command.ReportID)
+	if err != nil {
+		return ReportCommandResult{}, err
+	}
+	if !found {
+		return ReportCommandResult{}, reportNotFound(command.ReportID)
+	}
+	expectedVersion := aggregate.Version()
+	now := s.now().UTC()
+	if err := aggregate.BeginReview(command.ReviewerID, now); err != nil {
+		return ReportCommandResult{}, mapDomainError(err)
+	}
+	return s.commit(
+		ctx,
+		aggregate,
+		expectedVersion,
+		"BeginReviewReport",
+		commandDigest,
+		"content.report.review_started",
+		struct {
+			ReportID   string `json:"reportId"`
+			ReviewerID string `json:"reviewerId"`
+		}{
+			ReportID:   aggregate.ID(),
+			ReviewerID: strings.TrimSpace(command.ReviewerID),
+		},
+		now,
+	)
 }
 
-func (s *ReportService) ResolveReport(ctx context.Context, reportID, reviewerID string, payload map[string]any) (*reportmodel.Report, error) {
-	report, ok, err := s.store.FindByID(ctx, strings.TrimSpace(reportID))
+func (s *ReportService) Resolve(
+	ctx context.Context,
+	command ResolveReportCommand,
+) (ReportCommandResult, error) {
+	commandDigest := reportCommandDigest("ResolveReport", command)
+	if replayed, found, err := s.replay(
+		ctx,
+		"ResolveReport",
+		commandDigest,
+	); err != nil || found {
+		return replayed, err
+	}
+	aggregate, found, err := s.load(ctx, command.ReportID)
 	if err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "query_report_failed"),
-			"查询举报失败",
+		return ReportCommandResult{}, err
+	}
+	if !found {
+		return ReportCommandResult{}, reportNotFound(command.ReportID)
+	}
+	expectedVersion := aggregate.Version()
+	now := s.now().UTC()
+	if err := aggregate.Resolve(
+		command.ReviewerID,
+		command.Resolution,
+		now,
+	); err != nil {
+		return ReportCommandResult{}, mapDomainError(err)
+	}
+	return s.commit(
+		ctx,
+		aggregate,
+		expectedVersion,
+		"ResolveReport",
+		commandDigest,
+		"content.report.resolved",
+		struct {
+			ReportID   string                 `json:"reportId"`
+			ReviewerID string                 `json:"reviewerId"`
+			Resolution reportmodel.Resolution `json:"resolution"`
+		}{
+			ReportID:   aggregate.ID(),
+			ReviewerID: strings.TrimSpace(command.ReviewerID),
+			Resolution: command.Resolution,
+		},
+		now,
+	)
+}
+
+func (s *ReportService) Dismiss(
+	ctx context.Context,
+	command DismissReportCommand,
+) (ReportCommandResult, error) {
+	commandDigest := reportCommandDigest("DismissReport", command)
+	if replayed, found, err := s.replay(
+		ctx,
+		"DismissReport",
+		commandDigest,
+	); err != nil || found {
+		return replayed, err
+	}
+	aggregate, found, err := s.load(ctx, command.ReportID)
+	if err != nil {
+		return ReportCommandResult{}, err
+	}
+	if !found {
+		return ReportCommandResult{}, reportNotFound(command.ReportID)
+	}
+	expectedVersion := aggregate.Version()
+	now := s.now().UTC()
+	if err := aggregate.Dismiss(command.ReviewerID, now); err != nil {
+		return ReportCommandResult{}, mapDomainError(err)
+	}
+	return s.commit(
+		ctx,
+		aggregate,
+		expectedVersion,
+		"DismissReport",
+		commandDigest,
+		"content.report.dismissed",
+		struct {
+			ReportID   string `json:"reportId"`
+			ReviewerID string `json:"reviewerId"`
+		}{
+			ReportID:   aggregate.ID(),
+			ReviewerID: strings.TrimSpace(command.ReviewerID),
+		},
+		now,
+	)
+}
+
+func (s *ReportService) GetReport(
+	ctx context.Context,
+	query GetReportQuery,
+) (ReportDetailSlice, error) {
+	slice, found, err := s.data.Detail.FindByID(
+		ctx,
+		strings.TrimSpace(query.ReportID),
+	)
+	if err != nil {
+		return ReportDetailSlice{}, unavailable(err)
+	}
+	if !found {
+		return ReportDetailSlice{}, reportNotFound(query.ReportID)
+	}
+	return slice, nil
+}
+
+func (s *ReportService) ListReports(
+	ctx context.Context,
+	query ListReportsQuery,
+) (ReportQueueSlice, error) {
+	limit := query.Limit
+	if limit <= 0 || limit > maxReportListSize {
+		limit = 20
+	}
+	slice, err := s.data.Queue.List(ctx, limit)
+	if err != nil {
+		return ReportQueueSlice{}, unavailable(err)
+	}
+	return slice, nil
+}
+
+func (s *ReportService) load(
+	ctx context.Context,
+	reportID string,
+) (*reportmodel.Report, bool, error) {
+	aggregate, found, err := s.data.Aggregate.Load(
+		ctx,
+		strings.TrimSpace(reportID),
+	)
+	if err != nil {
+		return nil, false, unavailable(err)
+	}
+	return aggregate, found, nil
+}
+
+func (s *ReportService) replay(
+	ctx context.Context,
+	commandName string,
+	commandDigest string,
+) (ReportCommandResult, bool, error) {
+	idempotencyKey := strings.TrimSpace(commandmeta.IdempotencyKey(ctx))
+	if idempotencyKey == "" {
+		return ReportCommandResult{},
+			false,
+			rterr.NewInvalidArgument(
+				rterr.ModuleContent,
+				"idempotencyKey 必填",
+				"report command requires idempotencyKey",
+			)
+	}
+	result, found, err := s.data.Aggregate.FindReceipt(
+		ctx,
+		idempotencyKey,
+		commandName,
+		commandDigest,
+	)
+	if err != nil {
+		return ReportCommandResult{}, false, unavailable(err)
+	}
+	if !found {
+		return ReportCommandResult{}, false, nil
+	}
+	if result.Aggregate == nil {
+		return ReportCommandResult{},
+			false,
+			unavailable(errors.New("report receipt has no aggregate"))
+	}
+	return ReportCommandResult{
+		ID:       result.Aggregate.ID(),
+		Version:  result.Aggregate.Version(),
+		Status:   result.Aggregate.Status(),
+		Replayed: true,
+	}, true, nil
+}
+
+func (s *ReportService) commit(
+	ctx context.Context,
+	aggregate *reportmodel.Report,
+	expectedVersion int64,
+	commandName string,
+	commandDigest string,
+	eventType string,
+	eventPayload any,
+	now time.Time,
+) (ReportCommandResult, error) {
+	idempotencyKey := strings.TrimSpace(commandmeta.IdempotencyKey(ctx))
+	if idempotencyKey == "" {
+		return ReportCommandResult{}, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"idempotencyKey 必填",
+			"report command requires idempotencyKey",
+		)
+	}
+	payload, err := json.Marshal(eventPayload)
+	if err != nil {
+		return ReportCommandResult{}, unavailable(err)
+	}
+	eventID, err := newReportIdentifier("evt")
+	if err != nil {
+		return ReportCommandResult{}, unavailable(err)
+	}
+	result, err := s.data.Aggregate.Commit(ctx, reportports.Commit{
+		Aggregate:        aggregate,
+		ExpectedVersion:  expectedVersion,
+		IdempotencyKey:   idempotencyKey,
+		CommandName:      commandName,
+		CommandDigest:    commandDigest,
+		ReceiptExpiresAt: now.Add(reportReceiptTTL),
+		Events: []reportports.OutboxEvent{{
+			EventID:          eventID,
+			EventType:        eventType,
+			AggregateID:      aggregate.ID(),
+			AggregateVersion: aggregate.Version(),
+			Payload:          payload,
+			OccurredAt:       now,
+		}},
+	})
+	if err != nil {
+		return ReportCommandResult{}, unavailable(err)
+	}
+	return ReportCommandResult{
+		ID:       result.Aggregate.ID(),
+		Version:  result.Aggregate.Version(),
+		Status:   result.Aggregate.Status(),
+		Replayed: result.Replayed,
+	}, nil
+}
+
+func reportCommandDigest(commandName string, payload any) string {
+	raw, _ := json.Marshal(struct {
+		Command string `json:"command"`
+		Payload any    `json:"payload"`
+	}{
+		Command: commandName,
+		Payload: payload,
+	})
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+func mapDomainError(err error) error {
+	switch {
+	case errors.Is(err, reportmodel.ErrInvalidReport),
+		errors.Is(err, reportmodel.ErrInvalidTransition):
+		return rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"举报状态或参数不合法",
 			err.Error(),
 		)
-	}
-	if !ok {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "report_not_found"),
-			"举报不存在",
-			"report not found",
-		)
-	}
-
-	nextStatus := strings.TrimSpace(asString(payload["status"]))
-	resolution := strings.TrimSpace(asString(payload["resolution"]))
-	if nextStatus == "" && resolution == "" {
-		return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "缺少处理动作", "status or resolution is required")
-	}
-
-	switch report.Status {
-	case "pending":
-		if nextStatus == "reviewing" && resolution == "" {
-			report.Status = "reviewing"
-		} else if resolution != "" {
-			report.Status = resolutionToStatus(resolution)
-			report.Resolution = resolution
-		} else {
-			return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "非法状态流转", "pending can only move to reviewing or resolved/dismissed")
-		}
-	case "reviewing":
-		if resolution == "" {
-			return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "reviewing 需要 resolution", "resolution is required when report is reviewing")
-		}
-		report.Status = resolutionToStatus(resolution)
-		report.Resolution = resolution
 	default:
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_report_state"),
-			"举报状态不可再处理",
-			"report already closed",
-		)
+		return err
 	}
-
-	reviewerID = strings.TrimSpace(reviewerID)
-	if reviewerID == "" {
-		reviewerID = strings.TrimSpace(asString(payload["reviewerId"]))
-	}
-	if reviewerID != "" {
-		report.ReviewerID = reviewerID
-	}
-	if report.Status == "resolved" || report.Status == "dismissed" {
-		now := time.Now().UTC()
-		report.ResolvedAt = &now
-	}
-	if err := s.store.Update(ctx, report); err != nil {
-		return nil, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "update_report_failed"),
-			"处理举报失败",
-			err.Error(),
-		)
-	}
-
-	if report.Resolution != "" && s.publisher != nil {
-		_ = s.publisher.Publish(ctx, repository.DomainEvent{
-			Type:          "ReportResolved",
-			AggregateType: "Report",
-			AggregateID:   report.ID,
-			Payload: map[string]any{
-				"id":         report.ID,
-				"targetType": report.TargetType,
-				"targetId":   report.TargetID,
-				"resolution": report.Resolution,
-				"reviewerId": report.ReviewerID,
-			},
-			OccurredAt: time.Now().UTC().Format(time.RFC3339),
-		})
-	}
-	return report, nil
 }
 
-func resolutionToStatus(resolution string) string {
-	switch resolution {
-	case "dismissed":
-		return "dismissed"
-	default:
-		return "resolved"
+func reportNotFound(reportID string) error {
+	return contentgenerated.AppErrorFromReportNotFound(
+		fmt.Sprintf("report %s not found", strings.TrimSpace(reportID)),
+	)
+}
+
+func unavailable(err error) error {
+	var appError *rterr.AppError
+	if errors.As(err, &appError) {
+		return appError
 	}
+	return rterr.NewUnavailable(
+		rterr.ModuleContent,
+		"举报服务暂时不可用",
+		err.Error(),
+	)
+}
+
+func newReportIdentifier(prefix string) (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return prefix + "_" + hex.EncodeToString(raw[:]), nil
 }

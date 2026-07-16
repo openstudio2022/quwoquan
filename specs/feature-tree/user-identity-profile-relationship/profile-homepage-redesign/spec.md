@@ -86,9 +86,12 @@
 
 ### F5: 互动 Tab
 
-- 子维度：`[赞 | 评论]`
-- 方向切换：`[收到 | 发出]`（我的主页）/ 仅 `[Ta收到]` 公开部分（他人主页）
-- 互动列表：头像 + 用户名 + 互动内容摘要 + 时间
+- 子维度固定为：`[点赞 | 评论 | 转发 | 浏览]`，不提供“全部”。
+- 方向切换固定放在互动二级控制行右侧：`[收到的 | 我发起的]`；不得叠放在一级 `记录 / 互动 / 足迹` Tab 行。
+- 点赞、评论、浏览继续消费既有通用互动列表；本增量仅为 `type=share` 提供独立双向状态和专属行。
+- 转发互动仅本人可见：他人主页不展示转发筛选，不请求转发互动接口。
+- 转发收到方向显示未读、服务端真实归因结果；我发起方向不显示未读或传播影响。
+- 每次转发独立成行，保留附言、目标预览、稳定 interactionId、发生时间和内容失效语义，不做多人聚合。
 
 ### F6: 足迹 Tab（浏览历史，仅本人可见）
 
@@ -154,7 +157,7 @@
 ### F14: 职业与兴趣资料页（career-interest-profile-editor）
 
 - 在“编辑资料”中新增独立 `职业与兴趣` 页面，路径 `/profile/career-interests`，页面结构固定为 `职业身份 / 我的标签 / 全部兴趣`，不再展示推荐标签。
-- 职业与兴趣标签均以 `quwoquan_data/publish/tags` 为唯一真相源：职业使用 `Audience/用户/职业`，兴趣使用 `Audience/用户/兴趣偏好`；端侧通过 tag-service `ListTagChildren / ResolveTag / ValidateTagRefs` 查询与校验，不维护第二套枚举。
+- 职业与兴趣标签均以 `quwoquan_data/control_plane/governance/taxonomy` 为唯一真相源：职业使用 `Audience/用户/职业`，兴趣使用 `Audience/用户/兴趣偏好`；端侧通过 tag-service `ListTagChildren / ResolveTag / ValidateTagRefs` 查询 serving projection，不维护第二套枚举。
 - 保存接口复用 `GET /v1/user/profile/edit-snapshot` 与 `PATCH /v1/user/profile`，字段为单选 `occupationTagRef` 与有序 `interestTagRefs`；兴趣最多 30 个、允许 0 个，重复输入去重保序。
 - UX 对齐个人资料页 iOS 列表风格：顶部 `< 职业与兴趣 保存`，职业单行入口；职业选择采用“大类列表 -> 二级职业列表”的两级导航；我的标签默认可编辑但不展示操作说明文案，支持右上角 `×` 删除、长按拖拽排序与轻微摇曳；全部兴趣为轻量分类胶囊 Tab + 4 列文字标签网格，添加符号与文字必须有独立避让空间，添加后从全部兴趣隐藏。
 - 保存成功后 user-service 将职业与兴趣 tagRefs 投影到 tag-service 约定的 `object_tag_index` `user` 对象索引，供 `shared-tags`、推荐解释与小趣助手偏好理解使用。

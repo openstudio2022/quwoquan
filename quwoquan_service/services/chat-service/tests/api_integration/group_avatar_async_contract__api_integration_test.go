@@ -14,6 +14,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/v2/bson"
 
+	"quwoquan_service/internal/platform/reliabletaskmongo"
 	runtimemedia "quwoquan_service/runtime/media"
 	"quwoquan_service/runtime/reliabletask"
 	runtimesync "quwoquan_service/runtime/sync"
@@ -97,13 +98,13 @@ func (failingGroupAvatarScheduler) EnqueueConversationAvatarPatch(context.Contex
 }
 
 type completeTaskFailOnceStore struct {
-	*reliabletask.MongoStore
+	*reliabletaskmongo.Store
 	mu       sync.Mutex
 	failures int
 }
 
 type completeNotificationFailOnceStore struct {
-	*reliabletask.MongoStore
+	*reliabletaskmongo.Store
 	mu       sync.Mutex
 	failures int
 }
@@ -116,7 +117,7 @@ func (s *completeTaskFailOnceStore) CompleteTask(ctx context.Context, taskID str
 		return errors.New("injected task ack failure")
 	}
 	s.mu.Unlock()
-	return s.MongoStore.CompleteTask(ctx, taskID, leaseToken)
+	return s.Store.CompleteTask(ctx, taskID, leaseToken)
 }
 
 func (s *completeNotificationFailOnceStore) CompleteNotification(ctx context.Context, notificationID string, leaseToken string) error {
@@ -127,7 +128,7 @@ func (s *completeNotificationFailOnceStore) CompleteNotification(ctx context.Con
 		return errors.New("injected notification ack failure")
 	}
 	s.mu.Unlock()
-	return s.MongoStore.CompleteNotification(ctx, notificationID, leaseToken)
+	return s.Store.CompleteNotification(ctx, notificationID, leaseToken)
 }
 
 func (f *flakyUserSyncPublisher) AppendPatch(
@@ -178,7 +179,7 @@ func newGroupAvatarTestHandler(
 	media application.GroupAvatarAssetizer,
 	syncPublisher application.UserSyncPublisher,
 ) (http.Handler, *runtimesync.Service) {
-	return newGroupAvatarTestHandlerWithStore(t, media, syncPublisher, reliabletask.NewMongoStore(mongoDB))
+	return newGroupAvatarTestHandlerWithStore(t, media, syncPublisher, reliabletaskmongo.New(mongoDB))
 }
 
 func newGroupAvatarTestHandlerWithStore(
@@ -201,13 +202,14 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 ) (http.Handler, *runtimesync.Service, *application.ReliableGroupAvatarTaskScheduler) {
 	t.Helper()
 	chatStore := persistence.NewMongoChatStore(mongoDB)
+	chatStorage := chatStoragePorts(chatStore)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
 	if syncPublisher == nil {
 		syncPublisher = userSyncService
 	}
 	eventPublisher := mq.NewEventPublisher(redisRouter.Scene("realtime"))
-	catalog, err := reliabletask.LoadCatalog("../../../../quwoquan_ops/environments/reliable_task_module_catalog.yaml")
+	catalog, err := reliabletask.LoadCatalog(testReliableTaskCatalogPath())
 	if err != nil {
 		t.Fatalf("load reliable task catalog: %v", err)
 	}
@@ -235,7 +237,7 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 	scheduler := application.NewReliableGroupAvatarTaskScheduler(
 		reliableTaskStore,
 		catalog,
-		chatStore,
+		chatStorage,
 		eventPublisher,
 		media,
 		syncPublisher,
@@ -243,11 +245,21 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 		schedulerOpts...,
 	)
 	schedulerCtx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	_ = scheduler.Start(schedulerCtx)
+	if err := scheduler.Start(schedulerCtx); err != nil {
+		cancel()
+		t.Fatalf("start reliable group avatar scheduler: %v", err)
+	}
+	t.Cleanup(func() {
+		cancel()
+		waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer waitCancel()
+		if err := scheduler.WaitForStop(waitCtx); err != nil {
+			t.Errorf("wait reliable group avatar scheduler stop: %v", err)
+		}
+	})
 	profiles := testProfileResolver{}
 	conversationSvc := application.NewConversationService(
-		chatStore,
+		chatStorage,
 		convCache,
 		eventPublisher,
 		profiles,
@@ -257,7 +269,7 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 		scheduler,
 	)
 	memberSvc := application.NewMemberService(
-		chatStore,
+		chatStorage,
 		convCache,
 		eventPublisher,
 		profiles,
@@ -266,13 +278,20 @@ func newGroupAvatarTestHandlerWithStoreAndScheduler(
 		scheduler,
 	)
 	messageSvc := application.NewMessageService(
-		chatStore,
+		chatStorage,
 		convCache,
 		eventPublisher,
 		application.AllowRelationshipGateForTest(),
+		testMediaAssetDeliveryReader{},
 	)
-	inboxSvc := application.NewInboxService(chatStore)
-	return chathttp.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc, userSyncService).Routes(), userSyncService, scheduler
+	inboxSvc := application.NewInboxService(chatStorage)
+	return chathttp.NewChatHandler(
+		conversationSvc,
+		messageSvc,
+		memberSvc,
+		inboxSvc,
+		userSyncService,
+	).Routes(), userSyncService, scheduler
 }
 
 func doHandlerJSON(
@@ -391,11 +410,7 @@ func TestGroupAvatar_RecomputeCoalescesEarlyMemberAdds(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
 	assetizer := &countingGroupAvatarAssetizer{
-		delegate: runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		delegate: newGroupAvatarMediaForContractTest(),
 	}
 	handler, _ := newGroupAvatarTestHandler(t, assetizer, nil)
 	created := doHandlerJSON(
@@ -427,7 +442,7 @@ func TestGroupAvatar_RecomputeCoalescesEarlyMemberAdds(t *testing.T) {
 		http.StatusOK,
 	)
 
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	time.Sleep(700 * time.Millisecond)
 	if got := assetizer.Calls(); got != 1 {
 		t.Fatalf("expected early create/add recomputes to coalesce into one render, got %d", got)
@@ -531,11 +546,7 @@ func TestGroupAvatar_RecomputeWorkerRetriesUntilSuccess(t *testing.T) {
 
 	assetizer := &flakyGroupAvatarAssetizer{
 		failures: 2,
-		delegate: runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		delegate: newGroupAvatarMediaForContractTest(),
 	}
 	handler, _ := newGroupAvatarTestHandler(t, assetizer, nil)
 	created := doHandlerJSON(
@@ -548,7 +559,7 @@ func TestGroupAvatar_RecomputeWorkerRetriesUntilSuccess(t *testing.T) {
 		http.StatusCreated,
 	)
 	convID := created["_id"].(string)
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 }
 
 func TestGroupAvatar_PatchFanoutRetriesAfterTransientFailure(t *testing.T) {
@@ -563,11 +574,7 @@ func TestGroupAvatar_PatchFanoutRetriesAfterTransientFailure(t *testing.T) {
 	}
 	handler, syncService := newGroupAvatarTestHandler(
 		t,
-		runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		newGroupAvatarMediaForContractTest(),
 		flakyPublisher,
 	)
 
@@ -581,7 +588,7 @@ func TestGroupAvatar_PatchFanoutRetriesAfterTransientFailure(t *testing.T) {
 		http.StatusCreated,
 	)
 	convID := created["_id"].(string)
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 
 	deliveredAfterRetry := false
 	for i := 0; i < 40; i++ {
@@ -621,11 +628,7 @@ func TestGroupAvatar_ReliableTaskOutboxToMemberSyncEndToEnd(t *testing.T) {
 
 	handler, syncService := newGroupAvatarTestHandler(
 		t,
-		runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		newGroupAvatarMediaForContractTest(),
 		nil,
 	)
 	created := doHandlerJSON(
@@ -643,7 +646,7 @@ func TestGroupAvatar_ReliableTaskOutboxToMemberSyncEndToEnd(t *testing.T) {
 		"taskType":    "chat.group_avatar.recompute",
 		"aggregateId": convID,
 	}, 1)
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	waitForCollectionCount(t, "notification_outbox", bson.M{
 		"eventType":   "conversation.avatar.updated",
 		"aggregateId": convID,
@@ -662,16 +665,12 @@ func TestGroupAvatar_TaskAckFailureReplaysAndCompletesIdempotently(t *testing.T)
 	t.Cleanup(func() { cleanAll(t) })
 
 	store := &completeTaskFailOnceStore{
-		MongoStore: reliabletask.NewMongoStore(mongoDB),
-		failures:   1,
+		Store:    reliabletaskmongo.New(mongoDB),
+		failures: 1,
 	}
 	handler, syncService := newGroupAvatarTestHandlerWithStore(
 		t,
-		runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		newGroupAvatarMediaForContractTest(),
 		nil,
 		store,
 		application.WithReliableGroupAvatarLeaseTTL(80*time.Millisecond),
@@ -686,7 +685,7 @@ func TestGroupAvatar_TaskAckFailureReplaysAndCompletesIdempotently(t *testing.T)
 		http.StatusCreated,
 	)
 	convID := created["_id"].(string)
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	waitForCollectionCount(t, "reliable_async_task", bson.M{
 		"taskType":    "chat.group_avatar.recompute",
 		"aggregateId": convID,
@@ -705,16 +704,12 @@ func TestGroupAvatar_NotificationAckFailureReplaysLedgerWithoutDuplicatePatch(t 
 	t.Cleanup(func() { cleanAll(t) })
 
 	store := &completeNotificationFailOnceStore{
-		MongoStore: reliabletask.NewMongoStore(mongoDB),
-		failures:   1,
+		Store:    reliabletaskmongo.New(mongoDB),
+		failures: 1,
 	}
 	handler, syncService := newGroupAvatarTestHandlerWithStore(
 		t,
-		runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		newGroupAvatarMediaForContractTest(),
 		nil,
 		store,
 		application.WithReliableGroupAvatarLeaseTTL(80*time.Millisecond),
@@ -729,7 +724,7 @@ func TestGroupAvatar_NotificationAckFailureReplaysLedgerWithoutDuplicatePatch(t 
 		http.StatusCreated,
 	)
 	convID := created["_id"].(string)
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	waitForCollectionCount(t, "notification_outbox", bson.M{
 		"eventType":   "conversation.avatar.updated",
 		"aggregateId": convID,
@@ -765,13 +760,9 @@ func TestGroupAvatar_DissolveConversationStopsPendingAvatarNotificationFanout(t 
 	}
 	handler, _, _ := newGroupAvatarTestHandlerWithStoreAndScheduler(
 		t,
-		runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		newGroupAvatarMediaForContractTest(),
 		flakySync,
-		reliabletask.NewMongoStore(mongoDB),
+		reliabletaskmongo.New(mongoDB),
 		application.WithReliableGroupAvatarLeaseTTL(80*time.Millisecond),
 	)
 	created := doHandlerJSON(
@@ -784,7 +775,7 @@ func TestGroupAvatar_DissolveConversationStopsPendingAvatarNotificationFanout(t 
 		http.StatusCreated,
 	)
 	convID := created["_id"].(string)
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	doHandlerJSON(
 		t,
 		handler,
@@ -824,13 +815,9 @@ func TestGroupAvatar_SourceHashReplayRecreatesMissingNotification(t *testing.T) 
 
 	handler, syncService, scheduler := newGroupAvatarTestHandlerWithStoreAndScheduler(
 		t,
-		runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		newGroupAvatarMediaForContractTest(),
 		nil,
-		reliabletask.NewMongoStore(mongoDB),
+		reliabletaskmongo.New(mongoDB),
 	)
 	created := doHandlerJSON(
 		t,
@@ -842,7 +829,7 @@ func TestGroupAvatar_SourceHashReplayRecreatesMissingNotification(t *testing.T) 
 		http.StatusCreated,
 	)
 	convID := created["_id"].(string)
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	waitForAvatarPatch(t, syncService, "user_test_001", convID)
 
 	if _, err := mongoDB.Collection("notification_delivery_ledger").DeleteMany(context.Background(), bson.M{}); err != nil {
@@ -875,9 +862,9 @@ func TestGroupAvatar_CreateConversationRollsBackWhenOutboxFails(t *testing.T) {
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 	conversationSvc := application.NewConversationService(
-		chatStore,
+		chatStoragePorts(chatStore),
 		convCache,
-		nil,
+		eventPublisherForContractTest(),
 		testProfileResolver{},
 		application.AllowRelationshipGateForTest(),
 		nil,
@@ -893,7 +880,7 @@ func TestGroupAvatar_CreateConversationRollsBackWhenOutboxFails(t *testing.T) {
 		t.Fatal("expected create conversation to fail when outbox write fails")
 	}
 	waitForExactCollectionCount(t, "conversations", bson.M{"title": "rollback create"}, 0)
-	waitForExactCollectionCount(t, "conversation_members", bson.M{"userId": "user_test_001"}, 0)
+	waitForExactCollectionCount(t, "conversation_memberships", bson.M{"userId": "user_test_001"}, 0)
 	waitForExactCollectionCount(t, "reliable_task_outbox", bson.M{"taskType": "chat.group_avatar.recompute"}, 0)
 }
 
@@ -905,9 +892,9 @@ func TestGroupAvatar_AddMembersRollsBackWhenOutboxFails(t *testing.T) {
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 	memberSvc := application.NewMemberService(
-		chatStore,
+		chatStoragePorts(chatStore),
 		convCache,
-		nil,
+		eventPublisherForContractTest(),
 		testProfileResolver{},
 		nil,
 		nil,
@@ -921,7 +908,7 @@ func TestGroupAvatar_AddMembersRollsBackWhenOutboxFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected add members to fail when outbox write fails")
 	}
-	waitForExactCollectionCount(t, "conversation_members", bson.M{
+	waitForExactCollectionCount(t, "conversation_memberships", bson.M{
 		"conversationId": convID,
 		"userId":         "user_test_009",
 	}, 0)
@@ -936,9 +923,9 @@ func TestGroupAvatar_RemoveMemberRollsBackWhenOutboxFails(t *testing.T) {
 	chatStore := persistence.NewMongoChatStore(mongoDB)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
 	memberSvc := application.NewMemberService(
-		chatStore,
+		chatStoragePorts(chatStore),
 		convCache,
-		nil,
+		eventPublisherForContractTest(),
 		testProfileResolver{},
 		nil,
 		nil,
@@ -948,7 +935,7 @@ func TestGroupAvatar_RemoveMemberRollsBackWhenOutboxFails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected remove member to fail when outbox write fails")
 	}
-	waitForExactCollectionCount(t, "conversation_members", bson.M{
+	waitForExactCollectionCount(t, "conversation_memberships", bson.M{
 		"conversationId": convID,
 		"userId":         "user_test_002",
 	}, 1)
@@ -959,11 +946,7 @@ func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
 
 	handler, _ := newGroupAvatarTestHandler(
 		t,
-		runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		newGroupAvatarMediaForContractTest(),
 		nil,
 	)
 	created := doHandlerJSON(
@@ -976,7 +959,7 @@ func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
 		http.StatusCreated,
 	)
 	convID := created["_id"].(string)
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
 	doHandlerJSON(
 		t,
 		handler,
@@ -1020,7 +1003,10 @@ func TestGroupAvatar_AddRemoveStormUsesLatestTopNineSourceHash(t *testing.T) {
 		if err != nil {
 			t.Fatalf("find conversation: %v", err)
 		}
-		members, err := chatStore.ListMembers(context.Background(), convID, 200, "", "", persistence.SortMembersJoinedAsc)
+		members, err := chatStore.ListMembers(context.Background(), convID, application.ListMembersQuery{
+			Limit: 200,
+			Sort:  application.MemberListSortJoinedAsc,
+		})
 		if err != nil {
 			t.Fatalf("list members: %v", err)
 		}
@@ -1048,11 +1034,7 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 
 	handler, syncService := newGroupAvatarTestHandler(
 		t,
-		runtimemedia.NewGroupAvatarService(
-			redisRouter.Scene("general"),
-			"http://127.0.0.1:18081",
-			testChatMediaRoot,
-		),
+		newGroupAvatarMediaForContractTest(),
 		nil,
 	)
 	created := doHandlerJSON(
@@ -1065,7 +1047,10 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		http.StatusCreated,
 	)
 	convID := created["_id"].(string)
-	waitForConversationAvatarVersion(t, convID, 1)
+	waitForConversationAvatarVersionFromBackground(t, convID, 1)
+	for _, userID := range []string{"user_test_001", "user_test_002", "user_test_003"} {
+		waitForAvatarPatch(t, syncService, userID, convID)
+	}
 
 	beforeAddSeq := map[string]int64{}
 	for _, userID := range []string{"user_test_001", "user_test_002", "user_test_003", "user_test_004"} {
@@ -1080,7 +1065,7 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		"user_test_001",
 		http.StatusOK,
 	)
-	waitForConversationAvatarVersion(t, convID, 2)
+	waitForConversationAvatarVersionFromBackground(t, convID, 2)
 	addDetail := doHandlerJSON(
 		t,
 		handler,
@@ -1123,7 +1108,7 @@ func TestGroupAvatar_MemberChangesFanoutSameAvatarToCurrentMembers(t *testing.T)
 		"user_test_001",
 		http.StatusOK,
 	)
-	waitForConversationAvatarVersion(t, convID, addVersion+1)
+	waitForConversationAvatarVersionFromBackground(t, convID, addVersion+1)
 	removeDetail := doHandlerJSON(
 		t,
 		handler,
@@ -1167,13 +1152,9 @@ func TestGroupAvatar_RedisReadyIndexAlphaBetaLocalLoop(t *testing.T) {
 			}
 			handler, syncService, _ := newGroupAvatarTestHandlerWithStoreAndScheduler(
 				t,
-				runtimemedia.NewGroupAvatarService(
-					redisRouter.Scene("general"),
-					"http://127.0.0.1:18081",
-					testChatMediaRoot,
-				),
+				newGroupAvatarMediaForContractTest(),
 				nil,
-				reliabletask.NewMongoStore(mongoDB),
+				reliabletaskmongo.New(mongoDB),
 				application.WithReliableGroupAvatarRuntimeIdentity(env, "chat-service-"+env),
 				application.WithReliableGroupAvatarReadyIndex(readyIndex),
 			)
@@ -1187,7 +1168,7 @@ func TestGroupAvatar_RedisReadyIndexAlphaBetaLocalLoop(t *testing.T) {
 				http.StatusCreated,
 			)
 			convID := created["_id"].(string)
-			waitForConversationAvatarVersion(t, convID, 1)
+			waitForConversationAvatarVersionFromBackground(t, convID, 1)
 			for _, userID := range []string{"user_test_001", "user_test_002", "user_test_003"} {
 				waitForAvatarPatch(t, syncService, userID, convID)
 			}

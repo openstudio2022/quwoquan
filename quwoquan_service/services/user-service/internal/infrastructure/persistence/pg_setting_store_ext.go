@@ -9,13 +9,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 // PgSettingStore extends pgSettingStoreBase with domain-specific methods.
 type PgSettingStore struct{ pgSettingStoreBase }
 
-var _ repository.SettingRepository = (*PgSettingStore)(nil)
+var _ repository.UserSettingsStore = (*PgSettingStore)(nil)
 
 func NewPgSettingStore(pool *pgxpool.Pool) *PgSettingStore {
 	return &PgSettingStore{pgSettingStoreBase{pool: pool}}

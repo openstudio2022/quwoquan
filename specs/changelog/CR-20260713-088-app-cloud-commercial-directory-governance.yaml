@@ -1,0 +1,1262 @@
+id: CR-20260713-088-app-cloud-commercial-directory-governance
+title: App Cloud 商用接入与服务目录类型化治理
+slug: app-cloud-commercial-directory-governance
+revision: 24
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide
+story_refs:
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+
+entries:
+  - timestamp: "2026-07-13T01:19:00+08:00"
+    summary: |
+      冻结 App Cloud 只消费 ContractGraph 的单写边界、pure Dart contracts、
+      独立 Mock/alpha runner、production Remote composition、Cloud Runtime 分层、
+      App-only generated manifest 与服务目录 asset profile。同步废止“暂缓物理
+      Mock 分离”的旧政策，并把十项安全、生成链、测试与服务目录风险登记到唯一 backlog。
+    reason: |
+      当前 lib/cloud 的 generated、Runtime、Remote/Mock、平台/本地存储和 UI 依赖
+      混合，合同包反向依赖 App；服务目录又混放源码服务、部署包、外部 workload、
+      静态发布物与本机构建二进制。继续扩展会制造第二业务真相源、生产 Mock 可达、
+      不可信实时鉴权和不可复现发布工件。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+      - security
+      - operations
+    changed_documents:
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/spec.md
+        sections:
+          - App Cloud 与服务目录治理范围
+          - 服务资产类型
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md
+        sections:
+          - App Cloud 合同交接与单写权
+          - App Cloud 目标分层
+          - 服务目录 asset profile
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml
+        sections:
+          - SIT7
+      - path: specs/03_TESTING_STRATEGY.md
+        sections:
+          - App Cloud package/adapter 三层测试
+      - path: specs/gates/mock_production_separation_backlog.md
+        sections:
+          - R2 商用物理隔离已触发
+      - path: specs/gates/mock_migration_checklist.md
+        sections:
+          - 32 个 Mock 顶层类动态对齐
+      - path: specs/gates/mock_data_cloud_integration_policy.md
+        sections:
+          - production/alpha 物理装配
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-CLOUD01 至 R-CLOUD10
+    impact:
+      replan_required: true
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 业务对象会话唯一负责 aggregate/Facade/Reader/Slice/metadata/Graph 语义；
+        本变更只消费不可变 bundle，不从旧 Repository 推断业务边界。
+      - 同一对象迁移时旧 Repository/DTO/decoder/alias/Mock/fallback 与新路径同批替换，
+        不保留兼容、dual-read 或 dual-write。
+      - commercial 总门未全绿前，状态保持 in_progress，禁止宣称 App Cloud 可商用。
+  - timestamp: "2026-07-13T10:12:00+08:00"
+    summary: |
+      新增可独立关闭的 App Cloud 业务对象商用闭环 L3 Story，并与 AppRoot 商用
+      UAT 的十条 Scenario、L2 SIT7 和本 CR 建立双向追踪。Story 冻结业务对象
+      typed contract、服务端可信身份、Runtime 唯一执行链、production/alpha
+      物理隔离及真实 Remote Journey 的阶段性准出条件。
+    reason: |
+      仅用 L2 SIT7 表达横切重构无法形成可关闭交付单元，也无法证明十条 AppRoot
+      Scenario 的 operation/store/event/security/test 追踪闭环。新增 L3 后仍保持
+      in_progress，只有三层证据、SLO、灰度与回滚全部完成才允许关闭。
+    change_type:
+      - architecture
+      - contract
+      - testing
+      - security
+      - operations
+    changed_documents:
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/spec.md
+        sections:
+          - 全文
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/acceptance.yaml
+        sections:
+          - GWT1-GWT5
+          - CONTRACT1
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml
+        sections:
+          - SIT7 story_refs
+      - path: specs/feature-tree/journey_scenario_registry.yaml
+        sections:
+          - UAT_BUSINESS_OBJECT_COMMERCIALIZATION 十条 Scenario stories
+      - path: specs/feature-tree/tree_index.yaml
+        sections:
+          - runtime/system-architecture-and-engineering-guide children
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: false
+    notes:
+      - 本 Story 只拥有 App Cloud 横切合同与准出，不替各业务域裁决 aggregate 或状态机。
+      - 当前仍为 GATE_BLOCK；新增追踪关系不等于实现或商用完成。
+  - timestamp: "2026-07-13T10:30:00+08:00"
+    summary: |
+      完成首个真相源与 P0 containment 工作包：Report 零兼容迁入 pure contracts，
+      quwoquan_cloud_mock 去除 App/Flutter/Riverpod 反向依赖，alpha composition
+      归 runner；服务端认证中间件先清除客户端身份头，Content/Chat Media、
+      Behavior 与 Assistant consent 增加 verified principal/owner 负例。无可信
+      guard 的 Realtime、RTC 和 Product Ops 暂不接入 prod root。
+    reason: |
+      在 commercial ContractGraph 与统一 operation guard 完成前，继续让客户端
+      身份头、跨 owner 媒体会话或未鉴权 edge/ops workload 进入生产会造成 P0
+      越权风险；因此先用可删除的 fail-closed containment 封闭入口，并保持 CR
+      为 in_progress，后续由生成式安全根替换服务局部 guard。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - testing
+      - security
+      - operations
+    changed_documents:
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/acceptance.yaml
+        sections:
+          - GWT2
+          - GWT3
+          - CONTRACT1
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-CLOUD01
+          - R-CLOUD02
+          - R-CLOUD03
+          - R-CLOUD05
+      - path: quwoquan_ops/environments/workload_topology_inventory.yaml
+        sections:
+          - product-ops-service
+          - realtime-gateway
+          - rtc-service
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - P0 containment 不等于 server-security-root 完成；issuer/audience/scope/token-version、
+        device ticket 与 generated route authorization 仍是后续硬门。
+      - Product Ops、RTC、Realtime 只有在可信 principal 与对象级负测完成后才可重新接入 prod root。
+  - timestamp: "2026-07-13T13:04:00+08:00"
+    summary: |
+      复核并诚实纠偏首个 containment 里程碑：GWT0/GWT1 从 implemented 回退为
+      partial；解除 App Runtime 正式 gate 的广域忽略，使 Story acceptance、Graph
+      lock/manifest、service asset profile、CR 与验证脚本均可被 Git 跟踪。四个
+      核心服务统一改用 issuer/audience/token-version 完整校验的 access-token
+      配置，seed-box 将四项认证配置设为必填；Report 零兼容与 P0 fail-closed
+      门禁重新验证通过。
+    reason: |
+      前序状态把局部生成与 containment 误记为 DDD/ContractGraph 完成，并且
+      `.gitignore` 隐藏了 clean-checkout 必需脚本；旧 secret-only verifier 又与
+      新统一认证 Runtime 不兼容。继续后续迁移会造成假绿、clean checkout 漂移和
+      服务无法编译，因此必须先回退正式状态并消除双轨认证装配。
+    change_type:
+      - contract
+      - security
+      - testing
+      - operations
+    changed_documents:
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/acceptance.yaml
+        sections:
+          - GWT0
+          - GWT1
+      - path: .gitignore
+        sections:
+          - App runtime verification scripts
+      - path: quwoquan_service/services/seed-box/deploy/kustomize/base/deployment.yaml
+        sections:
+          - AUTH_JWT required configuration
+      - path: quwoquan_ops/gate/verify_cloud_commercial_directory_governance.py
+        sections:
+          - P0 fail-closed validation
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 本轮只关闭 truth-containment；GWT0/GWT1、server-security-root、真实 Remote
+        api_integration 与 user_acceptance 仍按后续任务继续，CR 保持 in_progress。
+      - 已通过 Story/acceptance、Report/package、P0 Go security、workload topology、
+        ContractGraph handoff 与 generated clean-rebuild 本地门禁。
+  - timestamp: "2026-07-13T13:45:00+08:00"
+    summary: |
+      关闭 GWT0 DDD/CQRS 批量迁移前硬门：business_object_map 成为 typed
+      ContractGraph 节点，separate_aggregate 仅停留在 loader 输入边界；blocked
+      operation 不再绕过 command owner、projection/fact 和 typed query 校验。
+      补齐 MediaUploadSession、PostModerationCase 字段包，统一 Tombstone fact
+      分类，并建立按 issue code、subject 与 source 精确识别的 commercial failure
+      set 单调收缩门。Report 同步落地私有行为聚合、对象专属 Store、typed
+      command/result 与 Reader/Slice。
+    reason: |
+      原 commercial validator 会把缺失绑定自动标为 blocked 后直接返回，导致
+      29 个跨对象 command、2 个 runtime-session command 与 1 个 projection
+      command 假绿；原 Graph 还把输入别名与 object map 原始文档暴露给 generator。
+      在此状态继续批量迁移无法证明问题只减不增，因此先修 compiler/validator
+      和可审计 ratchet，再进入对象 Facet 原子迁移。
+    change_type:
+      - architecture
+      - contract
+      - codegen
+      - testing
+    changed_documents:
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/acceptance.yaml
+        sections:
+          - GWT0
+      - path: quwoquan_service/contracts/metadata/content/business_object_map.yaml
+        sections:
+          - MediaUploadSession
+          - PostModerationCase
+          - DeletedPostTombstone
+      - path: specs/gates/contract_graph_commercial_failure_baseline.json
+        sections:
+          - commercial failure identities
+      - path: quwoquan_service/internal/metadata
+        sections:
+          - typed business object map
+          - canonical alias normalization
+          - DDD commercial validator
+      - path: quwoquan_service/services/content-service/internal/domain/report
+        sections:
+          - behavior aggregate
+          - aggregate store port
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - GWT0 已实现不代表 commercial Graph 已全绿；32 个已冻结失败身份仍必须在
+        content-post-report 与 domain-object-waves 中逐项删除，禁止新增或替换。
+      - GWT1、SIT6、server-security-root、真实 Remote user_acceptance 继续保持
+        partial/pending，CR 仍为 in_progress。
+  - timestamp: "2026-07-13T15:10:00+08:00"
+    summary: |
+      完成 commercial ContractGraph 生成底座：29 个跨对象 command 原子归入
+      canonical object packet，FollowingSubject projection 写入拆为独立访问水位聚合，
+      Realtime WebSocket 使用 runtime session operation，外部 Channel Webhook 改写为
+      append-only ingress receipt。commercial failure baseline 收敛为零，Graph/OpenAPI/
+      Go descriptor/App handoff/typed-ready client 均从同一 hash clean rebuild。
+    reason: |
+      blocked 状态不能掩盖 DDD 结构错误；旧 Graph 虽能生成，却把 32 个 owner/kind
+      违规带入后续波次并让 96 个 App exposure 保留隐式 blocked snapshot。通过 packet
+      归位和明确 runtime session 语义，严格 commercial profile 现可零失败生成，
+      不再需要兼容别名或失败 allowlist。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata
+        sections:
+          - canonical operation packets
+          - runtime session operation
+          - channel ingress receipt
+      - path: quwoquan_service/contracts/metadata/_schemas/v1
+        sections:
+          - service operation schema
+          - ContractGraph operation schema
+      - path: quwoquan_service/generated/contract_graph.json
+        sections:
+          - commercial bundle ac95c24c87da742ae8d6a40ddc7291e634c7cf82018b851f1552d53582df9fd5
+      - path: quwoquan_app/tool/cloud_codegen/contract_graph.lock.json
+        sections:
+          - 96 App-exposed operation snapshots
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-CLOUD04
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 96 个预发布 operation snapshot 的 breaking report 已按零兼容政策显式批准；
+        无已发布客户端兼容承诺，也未保留旧 canonical ID alias。
+      - Go 生成覆盖 316 operations，OpenAPI 覆盖 313 versioned transports，App handoff
+        覆盖 96 exposures；当前 3 个 ready operations 已生成 typed client，其余
+        blocked operations 随对象迁移波次补 client contract。
+      - GWT1 继续保持 partial，因为旧 Repository/动态消费者尚未清零；该缺口属于
+        content/domain waves 与 appcontent retirement，不能用生成底座完成状态掩盖。
+  - timestamp: "2026-07-13T22:00:00+08:00"
+    summary: |
+      从异常中止的 Cursor 会话恢复 P0 检查点并纠偏正式证据：acceptance 仅记录
+      canonical test 文件，Location 与 Mongo importer 证据归入三层测试真相源，
+      metadata surface inventory 补齐且存在性 wrapper 不再充当 UAT。重新生成
+      OpenAPI、ContractGraph、App handoff 与 manifest；删除 Chat/User 14 处生产
+      Noop 装配，并把缺少事件发布器、可靠调度器或 Chat gateway 改为启动失败。
+    reason: |
+      原会话因 API usage limit 中止，部分 completed 标记与实时仓库不一致：测试
+      coverage/acceptance、OpenAPI/Graph hash 和 production wiring 均存在红门。若不先
+      恢复可重生真相源和 fail-fast 装配，后续 Content packet 会建立在假绿基线上。
+    change_type:
+      - contract
+      - codegen
+      - testing
+      - security
+      - operations
+    changed_documents:
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/acceptance.yaml
+        sections:
+          - GWT0-GWT5
+          - CONTRACT1
+      - path: specs/gates/user_acceptance_page_inventory.yaml
+        sections:
+          - metadata surface inventory
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-CLOUD01-R-CLOUD06
+          - R-CLOUD09
+      - path: quwoquan_service/services/chat-service/internal/application
+        sections:
+          - required production ports
+      - path: quwoquan_service/services/user-service/internal/application
+        sections:
+          - required production ports
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 当前 Graph hash 为 `1549f48eef4990b3b4422048d994efc44533c484cbf0dd40a91b5c5278745e11`，
+        覆盖 325 个 operation、322 个 OpenAPI transport、98 个 App exposure；仅 7 个
+        exposure typed-ready，因此 GWT1 继续保持 partial。
+      - P0 本地 acceptance/coverage/DDD/ContractGraph/production wiring 已全绿；
+        Gamma、AOT/SBOM、真实 Remote API integration 和十 Journey 均未执行，整体
+        仍为 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-13T22:52:00+08:00"
+    summary: |
+      推进 Content Post+Report 首个纵向 packet：Post Mongo outbox 以事务内单调
+      sequence 提供稳定重放顺序和独立 consumer checkpoint，Report PostgreSQL outbox
+      接入同一 runtime event bus；CreatePost/PublishPost 生成 operation-specific pure
+      Dart command/result/client，并由 production Content write composition 通过 typed
+      adapter 执行。补回 Comment/Media 仍在使用但曾被旧生成物掩盖的 canonical route。
+    reason: |
+      共享 fan-out checkpoint 会在任一消费者失败后丢失其重放位置，timestamp 排序也
+      不能提供稳定游标；App 聚合 Remote 继续手写 path/Map 则无法证明端侧业务对象
+      contract。生成后暴露的 ReactToComment 与视频封面常量缺失进一步证明 live route
+      必须先归回 metadata，而不能手改 generated 文件或保留陈旧产物。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+      - operations
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/content
+        sections:
+          - Post Create/Publish typed client contract
+          - Comment/Media live operation ownership
+      - path: quwoquan_service/services/content-service
+        sections:
+          - Post/Report outbox relay and projection checkpoints
+          - production dependency preflight
+      - path: quwoquan_app/packages/quwoquan_cloud_contracts
+        sections:
+          - typed Post lifecycle commands and result
+      - path: quwoquan_app/lib/cloud/remote/content/post/post_lifecycle_remote.dart
+        sections:
+          - CreatePost/PublishPost generated client adapter
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml
+        sections:
+          - SIT6 recorded evidence
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 当前 Graph hash 为 `0f517e60385315810dde1988255994bbcc64796690ac5ce3ed657123fc4d5c53`，
+        覆盖 329 个 canonical operation、326 个 OpenAPI transport、100 个 App exposure；
+        其中 9 个 exposure typed-ready，GWT1 仍为 partial。
+      - 真实 Mongo replica-set Post 链和 embedded PostgreSQL Report outbox 定向
+        api_integration 已通过；Content 全包 api_integration 仍有既存 HTTP/行为契约
+        漂移，Gamma 与设备 UAT 未执行，因此 SIT6 保持 pending、整体保持 NO-GO。
+  - timestamp: "2026-07-13T23:14:00+08:00"
+    summary: |
+      收口 Post+Report 样板暴露的公共失败语义与真实重放边界：Runtime AppError
+      同时保留 metadata stable code、semantic reason 与 HTTP status，content Go
+      generator 统一生成该绑定；私密或撤权 Post 使用非泄露 404。删除 Post 读时
+      contentIdentity/assistantUsePolicy 兼容补值和扫描式 backfill，改由独立 consumer
+      checkpoint 从 durable outbox 重放 PostCreated/PostPublished 重建 discovery projection。
+      API integration harness 仅在缺少 verified principal 时注入测试主体，并以可信主体
+      覆盖 Behavior payload actor。
+    reason: |
+      旧 AppError 把 stable reason 与传输 reason 混为一个字段，导致保留稳定错误码时
+      HTTP 退化为 500；旧 projection rebuild 又通过业务聚合扫描和默认值补齐掩盖旧
+      存储形状，违反零兼容与 outbox replay 契约。安全装配后继续信任测试 payload/header
+      也会让集成证据与生产 principal 语义分叉，因此必须在公共缝隙一次性纠正。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+      - security
+    changed_documents:
+      - path: quwoquan_service/runtime/errors
+        sections:
+          - stable failure identity and transport semantics
+      - path: quwoquan_service/tools/codegen_content_service
+        sections:
+          - metadata error constructor generation
+      - path: quwoquan_service/services/content-service
+        sections:
+          - verified principal integration harness
+          - durable Post projection replay
+          - Post visibility non-disclosure
+      - path: quwoquan_service/contracts/metadata/content/post/tests/contract.yaml
+        sections:
+          - private visibility and projection replay contracts
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml
+        sections:
+          - SIT6 canonical test evidence
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 当前 Graph hash 为 `442144f5a9bae0364e906ed5478de3a060dde10caae0b1b6bdffa44983cf76e0`，
+        覆盖 329 个 canonical operation、326 个 OpenAPI transport、100 个 App exposure，
+        其中 9 个 exposure typed-ready；因新增 Post 隐私/重放 canonical contract，旧 Graph
+        被门禁判 stale 后已按 generate -> accept handoff -> codegen 顺序重生。
+      - Content API integration 全包由修复前 14 类失败收敛为 5 项：4 项
+        Creator/Intersection projection 语义和 1 项 Circle membership 服务端授权依赖；
+        这些属于后续跨对象 packet，不以客户端 circle header 或测试放宽伪造通过。
+      - Post/Report 当前定向真实存储、事务 outbox、独立 checkpoint、replay/rebuild、
+        stable error 与 verified actor 证据已通过；Gamma、真实 Dart Remote、设备 UAT、
+        全量 Content 对象迁移和旧主线删除仍未完成，因此 SIT6 保持 pending、CR 保持
+        in_progress、整体保持 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-14T03:17:45+08:00"
+    summary: |
+      继续收口恢复后的 P0/P1 红门：修复 Runtime 成功请求与 401 refresh 路径未释放
+      deadline timer 的资源泄漏，AuthGate 改为只消费 ContractGraph canonical operation
+      ID；User 全量真实 API integration 已通过，ContentReaction 完成 aggregate、Mongo
+      事务 outbox、投影与删除级联 packet。修复 D0 verifier 对 canonical aggregate_root
+      的陈旧判断，并以同一 metadata 连续两次重生 ContractGraph 验证确定性。
+    reason: |
+      门禁恢复后暴露出端侧 deadline timer 泄漏、短 operation ID 第二真相源、生成 DTO
+      测试漂移以及 D0 gate 仍识别 retired separate_aggregate 的问题。若保留这些兼容或
+      假失败，Runtime 唯一执行链和对象 packet 证据都不可复现，因此必须在继续对象波次
+      前先按 canonical contract 零兼容纠正。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+      - security
+    changed_documents:
+      - path: quwoquan_app/lib/cloud/runtime/executor/generated_cloud_operation_executor.dart
+        sections:
+          - cancellable deadline trigger
+      - path: quwoquan_app/lib/core/auth/auth_gate.dart
+        sections:
+          - canonical generated operation identifiers
+      - path: quwoquan_service/services/content-service/internal/application/reaction
+        sections:
+          - aggregate facade outbox projections deletion consumer
+      - path: quwoquan_service/services/chat-service/internal/application/reliable_group_avatar_scheduler.go
+        sections:
+          - source-bound idempotency
+          - deterministic worker lifecycle
+      - path: quwoquan_service/services/tag-service/tests/api_integration/testmain__api_integration_test.go
+        sections:
+          - unified real Mongo testinfra
+      - path: quwoquan_ops/gate/verify_business_object_design_freeze.py
+        sections:
+          - canonical aggregate_root freeze assertion
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/acceptance.yaml
+        sections:
+          - GWT2
+          - GWT4
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-CLOUD01
+          - R-CLOUD02
+          - R-CLOUD03
+          - R-CLOUD05
+          - R-CLOUD06
+          - R-CLOUD09
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 当前 Graph hash 为 `0f01fae9fc6ca2f80d3d3691963487a43f046db9f609d805859afe368fb4bc31`，
+        覆盖 327 个 canonical operation、312 个 versioned transport、100 个 App exposure，
+        其中 9 个 exposure typed-ready；连续两次临时重生与仓内 bundle byte-for-byte 一致。
+      - 根 `make gate` 的 Flutter canonical local contract 3062 项和 Service Go 全量测试已通过；
+        Python 精确重跑为 1123 passed、5 failed，失败全部位于本任务明确隔离的并行 Data
+        工作树（dedup ledger、Qunar research、tag publish fixture），因此根门仍如实为红。
+      - Chat 全量 API integration 已修复退休 circle type 静默改写、超限原子性、跨 client
+        transaction/outbox、头像 source-bound idempotency、typed fanout payload 与 worker
+        生命周期后通过；Tag 统一接入 real Mongo testinfra 后全量 API integration 通过。
+      - Gamma/设备 UAT、AOT/SBOM、十 Journey 和剩余 91 个 typed client 仍未闭合；
+        GWT2/GWT4 仅保持 partial，整体继续 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-14T16:10:00+08:00"
+    summary: |
+      完成恢复后的 P0 红门复核并推进第二对象 Notification 反证：App scope 通过
+      3023 条 canonical local contract、PA Core A/B/C 与 12/12 metadata dart_func；
+      Comment 补齐配置化回复预览、赞踩三态和图片/视频/翻页文章评论分屏 Journey。
+      Notification 删除两个 metadata 外手写路由与 Map body，新增 operator-only
+      delivery metrics、dead-letter list/recovery operation、具名 Facade/Slice、稳定错误码
+      和真实 Mongo 收敛证据；Graph、OpenAPI、Go descriptor、App lock/manifest 与
+      control-plane/Portal 生成物已按同一 hash 重生。
+    reason: |
+      前序 App gate 的最后一项实际缺少三个已登记 Dart 测试，不能因长日志截断误报为绿；
+      Notification 虽有 5/5 App typed client，但 delivery metrics 与 DLQ 恢复仍绕过
+      metadata，使用公开手写 path 和弱类型 body，并会被 generated authorization
+      default-deny。该状态既不是第二对象反证，也无法由 platform-ops 安全执行恢复，
+      因此必须零兼容删除旧路由并归回 canonical operation contract。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+      - security
+      - operations
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/notification
+        sections:
+          - operator delivery operations
+          - dead-letter and metrics projections
+          - stable delivery failure identity
+      - path: quwoquan_service/services/notification-service
+        sections:
+          - Notification delivery Facades
+          - typed HTTP adapter
+          - real Mongo dead-letter recovery evidence
+      - path: quwoquan_service/contracts/metadata/_control_plane/domains/notification.yaml
+        sections:
+          - dedicated service and second-object evidence
+      - path: quwoquan_app/test/local_contract/ui/components/comment_system/comment_facet_widget__local_contract_test.dart
+        sections:
+          - reply preview config and reaction three-state contracts
+      - path: quwoquan_app/test/user_acceptance/journeys/discovery/post/discovery_post_interaction_journey__user_acceptance_test.dart
+        sections:
+          - immersive comment split journey
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/acceptance.yaml
+        sections:
+          - GWT1 and GWT5 recorded evidence
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 当前 Graph hash 为 `1d2ab294cb944940e7a7aff9f825e07c2821e3286d1dad052bca90381fff3731`，
+        覆盖 323 个 canonical operation、320 个 OpenAPI transport、116 个 App exposure；
+        typed-ready 为 27，其中 Content 20、Notification 5、Location 2。
+      - P0 acceptance/coverage/DDD/ContractGraph/production wiring、App scope、Service scope、
+        Data 全门与 Notification 真实 Mongo api_integration 已通过；handoff 首次因错误 owner
+        被策略拒绝，改用强制 owner `app-cloud-governance` 后重跑通过。
+      - 仍有 89 个 App exposure 未 typed-ready、31 个 Mock 顶层类、38 个超大文件 allowlist，
+        十 Journey 与四环境/AOT/SBOM 未闭合；GWT1-GWT5 状态不提升，整体继续
+        GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-14T19:20:00+08:00"
+    summary: |
+      将 business_object_map 升级为 v2 全域对象登记：统一登记 bounded context、
+      aggregate root、owned child、fact/projection/session/external reference、访问策略、
+      typed relationship 与字段角色；commercial validator 新增未登记 domain/object、
+      聚合根嵌套、跨上下文直达子对象和非法 access policy 硬失败。首次覆盖 14 个 domain、
+      91 个 canonical object，并清除 PushDelivery/SmsOtp 伪业务对象、补齐 Experiment、
+      Recommendation、Notification delivery、Chat/Circle/Assistant 子域模型。
+    reason: |
+      旧 Content-only 字段表无法表达限界上下文和跨对象访问，且 schema 允许 aggregate
+      root 嵌套为 member，导致文档宣称独立生命周期但机器合同允许直达子对象。v2 registry
+      将“写经目标 Facade、读经 Reader/Slice、child 经 aggregate root”变为可执行门禁，
+      不再依靠命名约定或代码评审猜测边界。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata
+        sections:
+          - v2 business object registries
+          - bounded context and relationship access policy
+      - path: quwoquan_service/internal/metadata
+        sections:
+          - object registry AST loader graph validator
+      - path: specs/feature-tree/design.md
+        sections:
+          - D0 业务对象架构冻结
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md
+        sections:
+          - OBJECT-REGISTRY-011
+          - CHILD-ACCESS-012
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure/acceptance.yaml
+        sections:
+          - GWT0
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - >-
+        `qwq-contract validate --profile commercial` 当前为 668 sources、589 documents、
+        91 objects、323 operations、155 projections、0 issues；14 个 OpenAPI snapshot
+        覆盖 320 operations。
+      - 此结果只证明登记和结构门，不证明所有旧对象已完成语义迁移；FollowEdge/BlockEdge、
+        HomepageFollow、PostDistribution/ShareRecord 仍须按新裁决删除，因此 GWT0 回写为
+        partial，整体继续 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-14T21:10:00+08:00"
+    summary: |
+      补齐对象登记到 operation binding 的缺口：command 目标改为互斥的
+      aggregate_owner 或 append_sink，validator 分别强制 aggregate_root 与
+      append_only_fact；query/session 同时禁止夹带写目标。零兼容删除
+      ExperimentBucket packet 和旧 AssignBucket/GetBucket operation，迁移为
+      Experiment 聚合与不可变 ExperimentAssignmentFact，并补齐此前只有对象声明、
+      没有完整物理 packet 的 ModelRelease、IntersectionVisitState、RecentSearchState。
+    reason: |
+      v2 registry 虽能登记事实访问策略，但旧 service schema 仍强制所有 command
+      使用 aggregate_owner，导致 append-only fact 在 operation 层伪装为聚合根；同时
+      metadata 基础校验发现 40 项空壳 packet 与旧目录引用。若不修复，跨上下文访问
+      治理只能停留在对象表，无法约束实际 Facade/Reader/Sink。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+    changed_documents:
+      - path: quwoquan_service/internal/metadata
+        sections:
+          - typed append sink AST loader validator OpenAPI
+      - path: quwoquan_service/contracts/metadata/ops
+        sections:
+          - Experiment aggregate packet
+          - ExperimentAssignmentFact append-only packet
+      - path: quwoquan_service/contracts/metadata/recommendation
+        sections:
+          - ModelRelease packet
+          - IntersectionVisitState packet
+      - path: quwoquan_service/contracts/metadata/search/recent_search_state
+        sections:
+          - complete object packet
+      - path: quwoquan_service/services/product-ops-service
+        sections:
+          - immutable assignment facts
+          - versioned experiment rollout
+      - path: quwoquan_service/tools/verify_metadata
+        sections:
+          - flat root plus nested entity validation
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - >-
+        `make verify-metadata` 已从 40 errors 修复并重跑为 84 packets / 112 enums 通过。
+      - ContractGraph 当前为 684 sources、605 documents、91 objects、325 operations、
+        155 projections、0 issues；14 个 OpenAPI snapshot 覆盖 322 operations、0 orphan。
+      - App handoff 以 breaking approval 接受 hash
+        `af8da230dbc70843a0ce1629af324aefe0d7c31d65312afb9bd8817267143485`；
+        不生成旧 operation alias。
+      - Product Ops 现有生产 Experiment 权威存储仍是 FileStore 而不是 metadata 冻结的
+        PostgreSQL，且未具备 aggregate+outbox 事务；因此该实现只关闭模型/绑定债务，
+        不能作为 gamma/prod 商用证据，整体保持 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-15T21:50:00+08:00"
+    summary: |
+      完成 Chat Message 对象事件/类型/BOLA 收口与端侧页面兼容清零，并将 Realtime
+      production composition 从运行时 Mock/Remote 切换破坏性改为 Remote-only。
+      Alpha realtime delegate 归独立 runner，只消费生成的 immutable fixture bundle；
+      local contract fixture 归 test/support。删除两个 production Mock 类、旧 mode-switch
+      GWT 和 ChatDetailPage 别名，Mock 单调预算从 31 收紧到 25。
+    reason: |
+      原 RealtimeConnectionNotifier 观察 appDataSourceMode 并在 production package 内
+      构造 Mock delegate，既违反物理包隔离，也允许已激活连接被无关 mode 状态替换；
+      Chat Message 同时存在跨会话 ID 引用与动态 card Map，页面证据还把 fixture 测试
+      误登记为 UAT。若保留这些路径，局部门禁通过仍不能证明对象边界、BOLA 和真实
+      Remote 商用链路。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+      - security
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/messages/chat
+        sections:
+          - Message typed card and object-owned events
+          - chat_realtime_fixture_core
+      - path: quwoquan_service/services/chat-service
+        sections:
+          - Message BOLA and generated operation authorization
+      - path: quwoquan_app/lib/cloud/services/realtime
+        sections:
+          - production Remote-only notifier
+          - deleted production Mock delegate and catalog
+      - path: quwoquan_app/runners/alpha
+        sections:
+          - alpha fixture composition
+      - path: specs/feature-tree/chat-conversation/list-detail-message-delivery/realtime-push-and-offline-sync
+        sections:
+          - physical composition isolation GWT
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-CLOUD01
+          - R-CLOUD02
+          - R-CLOUD05
+          - R-CLOUD06
+          - R-CLOUD09
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+      breaking_rationale: |
+        不保留 ChatDetailPage、realtime Mock/Remote mode switch、旧 fixture key、动态
+        card payload 或旧事件 owner alias；所有调用方必须使用 canonical Message 与
+        composition-root 注入。
+    verification:
+      completed:
+        - Chat 5 项真实 Mongo/Redis api_integration 通过
+        - App Chat 47 项定向测试与 Realtime 8 项 local contract 通过
+        - App 全量 local_contract 通过
+        - Service 非 api_integration 全量 Go tests 通过
+        - acceptance、coverage、metadata、DDD、ContractGraph、production wiring 门通过
+        - handoff、App manifest、runtime/security/package boundary 门通过
+        - alpha/root Dart analyze 与 Cloud governance 6 项 local contract 通过
+      failed_then_fixed:
+        - fixture metadata 变更使 App handoff lock 失配；接受 breaking hash、重生 App 与 alpha bundle 后复验通过
+      blocked:
+        - 根 gate 仍被并行 Data 非 canonical test 目录阻断，本任务未越界修改
+        - Gamma Remote 环境缺 base URL、Product Ops URL 与 auth token，无法生成真实 Remote/UAT 证据
+    notes:
+      - 当前 Graph hash 为 `019f433d91f892b6109c40ed0eac65c63c5081daf53e152effc5b6f4ca89714c`，
+        覆盖 91 objects、20 bounded contexts、340 operations、338 OpenAPI transports、
+        150 App exposure；仅 27 typed-ready，55 commercial-ready，285 blocked。
+      - App production 仍有 25 个 `Mock*`、41 个 Repository 声明与 94 个
+        `lib/cloud/services/**` Dart 文件；R-CLOUD05/R-CLOUD06 不能关闭。
+      - 十 Journey、Gamma Remote、设备、AOT/SBOM 与剩余对象波次未闭合；
+        GWT/SIT 状态不提升，整体继续 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-16T07:37:13+08:00"
+    summary: |
+      收口 P0 当前红门：将 Chat 本地搜索切为独立版本化 typed projection，修正
+      Intersection plain-text/span 导航语义，删除 ObjectIntersectionPreviewCard 兼容壳，
+      清理 retired term；同时修复 Chat reliable-task dispatcher 对 64 个空 shard 的
+      无条件 lease 竞争，并为 GroupAvatar Runtime Media 注入受控 HTTP client seam。
+      metadata 重新生成 OpenAPI、ContractGraph、Go descriptor、Dart contracts 与 handoff。
+    reason: |
+      旧 Chat cache 复用 wire DTO decoder，schema 漂移会使本地搜索失效；Intersection
+      缺 spans 时错误隐藏云侧 primaryText，且外层 button/span 容易重复归因导航。
+      Chat API integration 还暴露 group-avatar worker 每 tick 扫描全部 shard、测试头像源
+      串行等待外网的问题。上述缺陷会把真实失败误报为空态、超时或测试随机失败。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+      - reliability
+    changed_documents:
+      - path: quwoquan_app/lib/core/services/cache
+        sections:
+          - typed local chat search projection schema v1
+      - path: quwoquan_app/lib/components/object_page
+        sections:
+          - ObjectIntersectionSection direct consumption
+          - single attribution and navigation
+      - path: quwoquan_service/internal/platform/reliabletaskmongo
+        sections:
+          - due task shard discovery
+      - path: quwoquan_service/runtime/media
+        sections:
+          - GroupAvatar HTTP client injection
+      - path: quwoquan_service/generated/contract_graph.json
+        sections:
+          - commercial ContractGraph bundle
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-CLOUD04
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+      breaking_rationale: |
+        不恢复本地 cache 旧 schema、Message `_id`、mediaUrl、SubAccount sender key 或
+        ObjectIntersectionPreviewCard；所有消费者直接切到 canonical schema/component。
+    verification:
+      completed:
+        - App 全量 local_contract 3040 passed / 0 failed
+        - Chat 全量 api_integration 通过
+        - retired-term gate 与改动 Dart analyze 通过
+        - acceptance、coverage、feature-tree、metadata、DDD/CQRS、ContractGraph、Service production wiring 通过
+        - commercial generation、handoff、manifest clean rebuild、runtime/security/package boundary 通过
+        - codegen 后 generated client/runtime/error 50 项 local contract 通过
+      failed_then_fixed:
+        - App local_contract 初始 10 项失败；修复 Chat typed projection 与 Intersection 展示/导航后全量复验通过
+        - Chat api_integration 初始出现响应别名、错误媒体 fixture、BOLA 与 group-avatar timeout；逐项修复后全量复验通过
+        - metadata 首次复验报告 generated ContractGraph stale；正式重生并 accept handoff 后复验通过
+      blocked:
+        - 关键规格、registry、Graph/descriptor 与 handoff 资产未被 Git 跟踪，无法证明 clean checkout
+        - 仅 27/150 App exposure typed-ready，剩余对象 packet、Gamma Remote、十 Journey 与四环境工件未闭合
+    notes:
+      - 当前 Graph hash 为 `6cb74384ea565c1b7023757962449dc00f7eb94147322b8e60767abbea5b7050`，
+        覆盖 91 objects、20 bounded contexts、340 operations、338 OpenAPI transports、
+        150 App exposure；仅 27 typed-ready，commercial-ready 尚未全量。
+      - App production 仍有 25 个 `Mock*`、41 个 Repository 声明与 94 个
+        `lib/cloud/services/**` Dart 文件；R-CLOUD05/R-CLOUD06 不能关闭。
+      - P0 技术红门已关闭不等于商业准出；R-CLOUD04 因 clean-checkout 资产未跟踪回正为
+        进行中，GWT/SIT 状态保持 partial/pending，整体继续 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-16T12:10:00+08:00"
+    summary: |
+      在现有 Registry v3 上完成 v3.1 增量编译：所有 identity-like 字段必须归类为
+      identity、typed/external reference、transport-only 或给出逐字段 local identity
+      原因；relationship 与字段绑定扩展为 175 条。179 个 command 全部显式声明
+      mutation/invariant target，Go generated guard 在 composition 时拒绝缺失或错配。
+      App handoff 同步纳入 Facet、Facade method、aggregate owner 与语义 target，并删除
+      executor 公共入口的 raw path/query/body 参数，只接受 operation-specific encoder。
+    reason: |
+      v3 虽能生成完整 operation set，但 ID 字段仍可能绕过 relationship，command owner
+      也可能只凭名称看似对齐；App executor 还能被业务调用方传入原始 URL 参数和动态
+      body。若不在编译期切断这些旁路，后续对象 packet 会继续制造跨上下文直连和第二
+      transport 主线。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+      - security
+    changed_documents:
+      - path: quwoquan_service/internal/metadata
+        sections:
+          - Registry v3.1 identity/reference validation
+          - command semantic targets
+      - path: quwoquan_service/contracts/metadata
+        sections:
+          - typed relationships and local identity reasons
+          - object-packet-specific commercial gap identities
+      - path: quwoquan_service/runtime/auth
+        sections:
+          - generated descriptor semantic target fail-closed validation
+      - path: quwoquan_ops/cli/cloud_contract_handoff.py
+        sections:
+          - v3.1 fixed handoff snapshot
+      - path: quwoquan_app/packages/quwoquan_cloud_contracts
+        sections:
+          - typed-only executor ABI
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-CLOUD04
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: high
+      breaking_contract: true
+      breaking_rationale: |
+        不提供缺失 operation kind/semantic target 的运行时默认值，不保留 generic
+        APP_CLOUD_OBJECT_MIGRATION gap，也不恢复 executor raw request 参数。
+    verification:
+      completed:
+        - metadata commercial validation 通过，覆盖 91 objects、175 relationships、340 operations
+        - Go metadata/compiler/auth local contract 与 Circle integration package 编译通过
+        - App Runtime/typed client 49 项 local contract 与定向 analyze 通过
+        - handoff、manifest clean rebuild、runtime/security/package boundary 门通过
+      failed_then_fixed:
+        - ID 分类规则首次暴露 136 个未分类字段；逐对象补 relationship/local identity reason 后复验通过
+        - App handoff 先后阻断 62 与 900 项 breaking snapshot；审计为 packet gap 与 v3.1 semantic 字段后显式接受
+        - 手工格式化 generated Dart 触发 manifest 漂移；重新运行 emitter 后 clean rebuild 通过
+      blocked:
+        - clean checkout 仍等待用户另行授权 exact-path checkpoint
+        - 派生 commercial readiness、剩余对象 packet、Gamma、十 Journey 与四环境工件尚未闭合
+    notes:
+      - 当前 Graph hash 为 `cf502c8f3cf9ed563a5a9102871035414aedaa750bbd976eb6ea7c48ed50c9ee`。
+      - 本条不提升 GWT/SIT 状态；整体继续 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-16T12:40:00+08:00"
+    summary: |
+      完成 ProfileUpdateProposal 首个 Persona 上下文真实对象 packet：提案聚合拥有
+      pending/confirmed/applied/rejected 状态机、对象专属 Store/Reader、幂等 receipt
+      与 outbox；Apply 不直接访问 Persona 数据，而是调用 Persona aggregate 的 typed
+      Command Facade，由 Persona Store 在同一 PostgreSQL 事务提交版本、回执和 outbox。
+      同步补齐六个可信 operation-context HTTP 入口、owner 隐藏策略与强类型 cursor。
+      在现有 Registry v3.1 上增加 typed readiness evidence：compiler 对 exact-path
+      实现/测试/环境文件派生 SHA256，并按合同单调派生对象阶段，禁止 metadata 手写
+      implemented/commercial-ready。
+    reason: |
+      旧 metadata 把资料提案当成 UserAccount 附属场景，既无真实 aggregate 行为，也无
+      target aggregate 写入边界。直接写 Persona 表会绕过目标聚合不变量；继续返回动态
+      proposal map 又无法证明端云合同和错误语义。因此本次以破坏性切换建立独立提案聚合，
+      并通过 Persona Command Facade 保持跨聚合写入边界。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - codegen
+      - testing
+      - security
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/user/profile_update_proposal
+        sections:
+          - aggregate/events/fields/storage/errors/service/projections/readiness
+      - path: quwoquan_service/internal/metadata
+        sections:
+          - typed readiness evidence AST/loader/schema/derived ObjectReadiness
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md
+        sections:
+          - READINESS-013
+      - path: quwoquan_service/contracts/metadata/user/persona
+        sections:
+          - MediaAsset references and versioned authoritative storage
+      - path: quwoquan_service/services/user-service/internal/domain/persona
+        sections:
+          - ProfileUpdateProposal aggregate and Persona target command ports
+      - path: quwoquan_service/services/user-service/internal/application/persona
+        sections:
+          - proposal Facade and Persona command Facade
+      - path: quwoquan_service/services/user-service/internal/infrastructure/persona
+        sections:
+          - PostgreSQL aggregate/receipt/outbox stores
+      - path: quwoquan_service/services/user-service/internal/adapters/http
+        sections:
+          - strict trusted-operation handlers
+      - path: docs/outstanding_risks_backlog.md
+        sections:
+          - R-CLOUD04
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+      rollout_impact: high
+      breaking_contract: true
+      breaking_rationale: |
+        不恢复 UserAccount proposal 场景、动态 proposal payload、直接 Persona 表写入或
+        owner alias；ProfileUpdateProposal 与 Persona 各自只经对象专属 Facade/Store。
+    verification:
+      completed:
+        - ProfileUpdateProposal domain/application/HTTP local contract 通过
+        - 真实 PostgreSQL proposal-to-Persona apply、receipt/outbox 与 replay API integration 通过
+        - App pure Dart typed contract、thin Remote、profileEdit 审核交互与 6 项 local contract 通过
+        - App 全量 local_contract 最终 3046 passed / 0 failed；页面横向质量门 79 pages、64 routes、69 surfaces、70 objects 全绿
+        - metadata、DDD/CQRS、ContractGraph 与 Service production wiring 门通过
+        - handoff、manifest、runtime single-path、security 与 package boundary 门通过
+        - Graph 覆盖 91 objects、177 relationships、343 operations、163 projections、341 OpenAPI transports
+        - 派生对象阶段为 54 modeled、36 contract-ready、1 implemented、0 commercial-ready；ProfileUpdateProposal 缺项精确为 UAT 与四环境
+      failed_then_fixed:
+        - 首次 Graph 重生暴露 6 项 Persona MediaAsset reference/storage role 错配；归回 Persona authoritative storage 后复验通过
+        - 新 Graph 使 App handoff lock 正常阻断；正式 accept/codegen 后 228 输出 clean rebuild 通过
+        - 修正六个 operation 的过时 block reason 后 handoff 再次阻断 6 项 breaking snapshot；按零兼容政策显式批准并重生 228 输出
+        - readiness 首测暴露临时 schema fixture 未复制新 schema、空 environments 被序列化为 null；补齐 versioned fixture 并稳定为空数组后复验通过
+        - PostgreSQL E2E 首跑因测试 createdAt 晚于运行时 now 被状态机拒绝；改用真实相对时间后复验通过
+        - App 全量 local_contract 首跑为 3045 passed / 1 failed，暴露 user.edit_profile 使用 proposal Query Slice 却遗漏对象登记；补入 user.profile_update_proposal、重生 Graph/handoff 后复验为 3046 / 0
+        - repo 总门首次暴露 Profile service 与 Search registry 的 YAML anchor/alias；未放宽门禁，改为完整显式字段并重生 OpenAPI、Graph、guard、handoff 与 228 个 App 输出
+      blocked:
+        - ProfileUpdateProposal Gamma 与 user_acceptance 尚未闭合，commercial 状态保持 blocked
+        - compiler-derived 对象 readiness 仍为 0/91 commercial-ready；旧手写 operation assertion 为 55/343 ready，App exposure 为 27/156 typed-ready
+        - 55 个手写 operation ready assertion 尚未迁为派生 commercial readiness，运行时切换仍需后续 packet 逐项消除
+        - clean checkout 仍等待用户另行授权 exact-path checkpoint
+    notes:
+      - 当前 Graph hash 为 `6e59767c340b3297804cf6a6a5ae9020f1531531bd7a12f030e5a86f0fe04dc3`；`user.edit_profile.object_ids` 已纳入 `user.profile_update_proposal`，与页面 Query Slice 双向一致。
+      - 本条不提升 GWT/SIT 状态；整体继续 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-16T15:10:00+08:00"
+    summary: |
+      原子删除没有任何业务消费者的 Invite 旧端侧第二主线：
+      `InviteRepository`、`RemoteInviteRepository`、`MockInviteRepository`、
+      `inviteRepositoryProvider` 及测试 re-export 同批移除，不保留 owner、DTO、
+      decoder 或 provider alias；Mock 单调门从 25 收紧到 24。
+    reason: |
+      该路径仅被 production provider 声明和测试聚合导出引用，没有页面、Provider
+      consumer 或 Journey；其 Remote 仍手写 path/body、Mock 仍制造成功响应且字段使用
+      SubAccount 旧语义。保留它会把未实现的 InviteRecord typed packet伪装为可用能力。
+    change_type:
+      - architecture
+      - breaking
+      - cleanup
+      - testing
+    changed_documents:
+      - path: quwoquan_app/lib/cloud/services/user/invite_repository.dart
+        sections: [deleted]
+      - path: quwoquan_app/lib/core/providers
+        sections: [inviteRepositoryProvider removed]
+      - path: specs/gates/mock_migration_checklist.md
+        sections: [Invite completed]
+      - path: quwoquan_ops/gate/verify_cloud_commercial_directory_governance.py
+        sections: [Mock ratchet 24]
+      - path: docs/outstanding_risks_backlog.md
+        sections: [R-CLOUD05]
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: [local_contract]
+      rollout_impact: low
+      breaking_contract: true
+      breaking_rationale: |
+        删除无消费者、非 generated、非对象中心的手写 Repository API；不提供兼容层。
+    verification:
+      completed:
+        - 全仓 Dart source 对 InviteRepository/Mock/Remote/provider/path 的引用扫描为零
+        - 定向 flutter analyze 通过
+        - cloud commercial directory governance 通过，Mock inventory=24
+        - App 全量 local_contract 3046 passed / 0 failed
+      blocked:
+        - InviteRecord 的 generated typed client、真实 Remote、页面、三层测试和环境证据尚未实施
+        - 本清理不改变 0/91 compiler-derived commercial-ready，也不提升 GWT/SIT
+    notes:
+      - App production 当前仍有 24 个 Mock、48 个 abstract Repository、56 个 repository 命名文件与 93 个 cloud/services Dart 文件。
+      - 整体继续 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-16T16:00:00+08:00"
+    summary: |
+      完成 P0 全量门禁复验与 Gamma 商用实测。App local-contract 最终保持
+      3046/3046；输出运行时从违反 local-state 布局的
+      `local/python-envs/quwoquan-data` 破坏性迁入
+      `local/python-envs/cache/quwoquan-data`，Makefile、repo gate 与 Data preflight
+      统一消费新地址。Gamma package、拓扑、T2 与 T4 通过，但 T3 仍失败；同时
+      清除源码树陈旧 bytecode 后暴露 74 个并行 Data local-contract 未建立正式
+      execution manifest，故 repo 总门继续失败。
+    reason: |
+      旧 Python 运行时地址与 `verify_output_layout` 自相矛盾，且源码树
+      `__pycache__` 曾让 pytest 运行陈旧字节码，掩盖当前 execution identity 合同与
+      测试夹具的漂移。恢复旧 cache、允许缺 manifest 或放宽布局门都会制造兼容旁路；
+      因此迁移 canonical runtime、删除生成缓存并如实保留 Data 与 Gamma 阻断。
+    change_type:
+      - architecture
+      - breaking
+      - cleanup
+      - testing
+      - operations
+    changed_documents:
+      - path: Makefile
+        sections: [canonical Data Python runtime]
+      - path: quwoquan_ops/gate/gate_repo.sh
+        sections: [canonical Data Python fallback]
+      - path: quwoquan_data/scripts/core/python_environment.py
+        sections: [cached local runtime path]
+      - path: quwoquan_data/scripts/content/execution/preflight/handler.py
+        sections: [preflight help contract]
+      - path: quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml
+        sections: [user-service external identity fail-closed configuration]
+      - path: docs/outstanding_risks_backlog.md
+        sections: [R-CLOUD06]
+    impact:
+      replan_required: true
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+      breaking_rationale: |
+        不恢复非法 Python runtime 地址、源码 bytecode、缺 execution manifest 的测试
+        旁路或 Gamma blocked operation 的服务端放行；所有失败按正式合同修正。
+    verification:
+      completed:
+        - App 全量 local_contract 3046 passed / 0 failed
+        - Go Service 全仓测试通过
+        - Python/Ops 非 Data 门 1178 passed
+        - output layout、output path source、root/App/Service/Data 静态 layout 门通过
+        - Gamma package、topology/config/packaging、T2 media、T4 page smoke/media surface 通过
+        - Gamma Comment 探针幂等键改为同一 run 稳定、跨 run 隔离；后续 T3 runtime setup 的 parent/reply/reaction/media bind 全部通过
+        - Entity composition root 接入 generated default-deny；三条 blocked operation 本地返回 403，未知 route 返回结构化 404，业务 handler 零触达
+      failed_then_fixed:
+        - repo 总门首次阻断 Profile/Search YAML anchor；完整展开 metadata 并重生 Graph/handoff 后复验通过
+        - repo 总门随后阻断 gamma user-service 外部身份配置与 Service `__pycache__`；补 fail-closed 配置并精确删除缓存后对应测试通过
+        - repo 总门再次阻断非法 `local/python-envs/quwoquan-data`；迁入唯一允许的 `cache/quwoquan-data` 后 output layout 与 14 项环境合同通过
+        - Data layout 阻断 34 个源码树 `__pycache__`；精确删除后静态 layout 通过，随即暴露真实 Data 测试合同漂移而保持失败
+        - Gamma 首次 T3 的固定 Idempotency-Key 跨 run 复用导致 Comment 409；改为 run-root 哈希键后 standalone 与完整 stackctl T3 runtime setup 均通过
+        - 定向复验末段发现根级 `.pytest_cache`；精确删除生成缓存后 root 与 Data layout 门复验通过
+      blocked:
+        - "`make gate` 当前为 74 failed / 1104 passed：并行 Data 测试未调用既有 `seed_execution_manifest`，部分旧测试还在同一 article execution 注册 image 对象"
+        - Gamma T3 endpoint 为 7 passed、4 contract_blocked、5 unexpected accepted、7 not_ready；Comment runtime setup 已不再阻断
+        - 当前 User/Entity 安全源码无法装入 Gamma：`stackctl up --target gamma-local --skip-app` 因缺真实 `WECHAT_OAUTH_APP_ID` fail-closed，禁止用占位凭据绕过
+        - "`make gate-full` 未执行，因为其前置 repo gate 与 Gamma 均未通过"
+        - clean checkout 仍等待用户另行授权 exact-path checkpoint
+    notes:
+      - 最新 Gamma 主报告：`.qwq_output/env/gamma/runs/20260716T030836Z-verify-gamma-local/report.json`；T3：`.qwq_output/env/gamma/runs/20260716T030856Z-local-gamma-t3-gamma-local/t3_report.json`；fail-closed 启动报告：`.qwq_output/env/gamma/runs/20260716T031439Z-up-gamma-local/report.json`。
+      - 当前 Graph hash 仍为 `6e59767c340b3297804cf6a6a5ae9020f1531531bd7a12f030e5a86f0fe04dc3`；本条不提升任何 GWT/SIT 状态，整体继续 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-16T18:10:00+08:00"
+    summary: |
+      完成 Registry/ContractGraph 单轨破坏性切换：删除 Registry、readiness、Graph、
+      App lock、breaking report 与 generated manifest 的版本信封，将全部 schema 收敛到
+      唯一 `_schemas/`，删除版本目录、版本常量、旧字段解析和 handoff 旧 baseline 兼容。
+      Graph、Go guard、OpenAPI、Dart emitter、handoff 与 manifest 继续绑定同一 Graph hash。
+    reason: |
+      并行的 v2/v3/v3.1 与 schema v1/v2 标签让当前合同被误当作可并存版本，并诱发
+      compatibility loader、旧 lock 基线与生成分支。当前尚未上线，应一次切换到唯一
+      当前模型；聚合 expectedVersion、事件顺序和正式 `/v1` path 保留为业务/API 语义。
+    change_type: [architecture, contract, breaking, codegen, cleanup, testing]
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/_schemas
+        sections: [single current schema set]
+      - path: quwoquan_service/internal/metadata
+        sections: [versionless Registry and ContractGraph]
+      - path: quwoquan_ops/cli/cloud_contract_handoff.py
+        sections: [versionless content-addressed handoff]
+      - path: quwoquan_service/tools/codegen_app_metadata
+        sections: [single emitter manifest]
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide
+        sections: [single-track governance]
+      - path: docs/outstanding_risks_backlog.md
+        sections: [R-CLOUD04]
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: [local_contract]
+      rollout_impact: high
+      breaking_contract: true
+      breaking_rationale: |
+        旧 Registry/Graph 字段、版本目录、lock 与 generated manifest 直接拒绝；不提供
+        parser、migration adapter、alias、fallback 或双生成器。
+    verification:
+      completed:
+        - Registry/ContractGraph single-track 反向门通过，14 Registry 无退休字段且无版本目录
+        - metadata load/graph/validate 与 App emitter Go 测试通过
+        - commercial Graph validate/check/coverage 通过，91 objects、343 operations、341 OpenAPI transports
+        - App handoff verify 与 228 outputs clean rebuild 通过
+      failed_then_fixed:
+        - 首次 Go 复验暴露 ContractGraph schema 内嵌 businessObjectMaps 仍要求 version，删除后同一测试集通过
+        - 首次 App emitter 复验暴露旧 Graph/lock fixture，删除旧 baseline 并从唯一 Graph 重生后通过
+      blocked:
+        - compiler-derived commercial-ready 仍为 0/91，其余对象 packet、Data、Gamma 与十 Journey 尚未闭合
+        - clean checkout 仍等待用户另行授权 exact-path checkpoint
+    notes:
+      - 当前唯一 Graph hash 为 `7ad204ed91de2149c8293efd809055c5aee3e5eb3af96cfccd54a9af52c5c358`。
+      - 340→343 的净增来自冻结对象 ProfileUpdateProposal 的真实 packet，保留 343 作为当前 Graph 派生值，不建立版本分支。
+      - 本条不提升 GWT/SIT 状态；整体继续 GATE_BLOCK / NO-GO。
+  - timestamp: "2026-07-16T18:40:00+08:00"
+    summary: |
+      关闭 Data/Ops local-contract 中由 execution manifest 与单 content type
+      合同漂移引起的 74 项失败；不恢复缺 manifest fallback，不保留
+      article/image 混合 execution。同时收紧 OTP seal 的 canonical RawURL 校验，
+      并以独占 Flutter 运行复验 App 全量 local-contract。
+    reason: |
+      旧测试未建立强制 execution identity，且在单 execution 内同时注册
+      article 与 image content object，违反生产入口的 immutable target set
+      和单 content type 不变量。放宽生产校验会重新引入双轨，因此只修正
+      canonical helper、用例装配与共享配额政策。
+    change_type: [contract, breaking, cleanup, testing, security]
+    changed_documents:
+      - path: quwoquan_data/schema/execution/workflow_state.schema.json
+        sections: [active workflow state fields]
+      - path: quwoquan_data/scripts/content/post/content_plan_state.py
+        sections: [single content quota shortfall policy]
+      - path: quwoquan_data/scripts/content/source/gate.py
+        sections: [partial-content rights-preserving gate]
+      - path: quwoquan_data/scripts/core/publish_materialization.py
+        sections: [execution-scoped abandonment]
+      - path: quwoquan_service/runtime/otpseal/otp_code_sealer.go
+        sections: [canonical RawURL decode]
+      - path: quwoquan_app/test/local_contract
+        sections: [exclusive full rerun]
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: [local_contract]
+      rollout_impact: medium
+      breaking_contract: true
+      breaking_rationale: |
+        旧的缺 manifest、混合 content type 和非 canonical RawURL 输入直接拒绝，
+        不提供 alias、fallback 或兼容 loader。
+    verification:
+      completed:
+        - Data/Ops 全量 local-contract 1185 passed / 0 failed
+        - App 定向 ImageBookCanvas 9 passed / 0 failed
+        - App 定向登录页 58 passed / 0 failed
+        - App 独占全量 local-contract 3053 passed / 0 failed
+        - OTP seal 定向与 Service 全量 Go 测试通过
+      failed_then_fixed:
+        - Data/Ops 首轮 74 failed / 1104 passed；修正 manifest 装配、单 content type 和发布物化后全量复验为 1185 / 0
+        - App 总门一度报告 ImageBookCanvas 和登录页 2 项失败；两项定向与同一工作树独占全量均通过，未改弱断言
+      blocked:
+        - Gamma-local 缺少真实外部身份与 provider 凭据，stackctl up 在 WECHAT_OAUTH_APP_ID 前 fail-closed
+        - Gamma T3 的 unexpected accepted、contract_blocked 与 not_ready 尚未清零
+        - compiler-derived commercial readiness、十条 Journey、四环境工件与 clean checkout 尚未闭合
+    notes:
+      - 当前唯一 Graph hash 为 `c44b4e94abd5840f86ab7e803c852cab4d6e8fec5d89980808d6122a31b36c19`；343 operations、156 App exposures、27 typed-ready。
+      - 代码测试门恢复不等于商用准出；本条不提升 GWT/SIT，整体继续 GATE_BLOCK / NO-GO。

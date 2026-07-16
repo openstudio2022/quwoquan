@@ -257,6 +257,9 @@ def _assistant_env(env: dict[str, str]) -> dict[str, str]:
         "SERVICE_NAME": "assistant-service",
         "ASSISTANT_SERVICE_ADDR": ":18087",
         "ASSISTANT_CHAT_BASE_URL": env.get("ASSISTANT_CHAT_BASE_URL", "http://127.0.0.1:18081"),
+        "ASSISTANT_NOTIFICATION_BASE_URL": env.get(
+            "ASSISTANT_NOTIFICATION_BASE_URL", "http://127.0.0.1:18089"
+        ),
     }
     if not env.get("REDIS_GENERAL_ADDR") and env.get("REDIS_ADDR"):
         child["REDIS_GENERAL_ADDR"] = env["REDIS_ADDR"]
@@ -266,10 +269,22 @@ def _assistant_env(env: dict[str, str]) -> dict[str, str]:
 
 
 def _notification_env(env: dict[str, str]) -> dict[str, str]:
-    return {
+    child = {
         "SERVICE_NAME": "notification-service",
         "NOTIFICATION_SERVICE_ADDR": ":18089",
+        "NOTIFICATION_MONGO_DATABASE": env.get(
+            "NOTIFICATION_MONGO_DATABASE", "quwoquan_notification"
+        ),
+        "NOTIFICATION_INTEGRATION_BASE_URL": env.get(
+            "NOTIFICATION_INTEGRATION_BASE_URL", "http://127.0.0.1:18086"
+        ),
+        "NOTIFICATION_INTEGRATION_TIMEOUT_MS": env.get(
+            "NOTIFICATION_INTEGRATION_TIMEOUT_MS", "1500"
+        ),
     }
+    if not env.get("NOTIFICATION_MONGO_URI") and env.get("MONGO_URI"):
+        child["NOTIFICATION_MONGO_URI"] = env["MONGO_URI"]
+    return child
 
 
 @dataclass(frozen=True)
@@ -444,7 +459,7 @@ SERVICE_SPECS = [
         name="notification-service",
         binary_name="notification-service",
         port=18089,
-        required=False,
+        required=True,
         enable_fn=_notification_enabled,
         env_fn=_notification_env,
     ),

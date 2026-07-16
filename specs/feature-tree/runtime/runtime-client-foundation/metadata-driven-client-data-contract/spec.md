@@ -32,7 +32,8 @@
 ## Out of Scope
 
 - 不在此一次性替换所有记录 `Map` UI（由缺口清单 + 分域切片消化）。  
-- 不重新定义 Go 侧 EntityRegistry/拦截链（沿用现有 `quwoquan_service` 规则）。  
+- 不重新定义 Go 侧 ContractGraph compiler、Object Facade/Data Ports 或字段策略
+  （沿用 D0/F1 权威设计与 `quwoquan_service` 规则）。
 - **纯本地、无云契约** 的 UI 状态（如展开/折叠 flag）不要求 metadata。  
 - **个人助理引擎** 内部 LLM 契约以 `lib/personal_assistant/contracts/` 为准，与本 L3「云 metadata」正交；若助理 **调用云 API**，仍须走 codegen Repository。
 

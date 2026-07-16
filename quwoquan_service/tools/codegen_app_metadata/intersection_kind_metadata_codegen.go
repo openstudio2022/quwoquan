@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -29,10 +28,11 @@ func dartStringListLiteral(values []string) string {
 // table + UnifiedObjectKind enum + closed-set constants (§23 Solution A/B/C).
 func writeIntersectionKindMetadata(appDir, metadataDir string) error {
 	contractPath := filepath.Join(metadataDir, "recommendation", "rec_model", "intersection_kind_registry.yaml")
-	if _, err := os.Stat(contractPath); err != nil {
+	raw, err := readMetadataDocument(contractPath)
+	if err != nil {
 		return fmt.Errorf("intersection kind registry: %w", err)
 	}
-	registry, err := recintersectionmeta.Read(contractPath)
+	registry, err := recintersectionmeta.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("read intersection kind registry: %w", err)
 	}

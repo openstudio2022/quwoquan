@@ -6,12 +6,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 type PgProfileQrTokenStore struct{ pgProfileQrTokenStoreBase }
 
-var _ repository.ProfileQrTokenRepository = (*PgProfileQrTokenStore)(nil)
+var _ repository.ProfileQrTokenStore = (*PgProfileQrTokenStore)(nil)
 
 func NewPgProfileQrTokenStore(pool *pgxpool.Pool) *PgProfileQrTokenStore {
 	return &PgProfileQrTokenStore{pgProfileQrTokenStoreBase{pool: pool}}

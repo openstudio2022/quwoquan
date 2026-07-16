@@ -1,8 +1,13 @@
+import 'dart:async';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_file_dto.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// 圈子存储空间板块：容量条 + 文件列表 + 上传按钮（含独立 loading/error 状态）
 class SectionStorage extends ConsumerStatefulWidget {
@@ -25,8 +30,12 @@ class SectionStorage extends ConsumerStatefulWidget {
 
 class _SectionStorageState extends ConsumerState<SectionStorage> {
   bool _isLoading = true;
+  bool _isMutating = false;
   UiErrorSemantic? _errorSemantic;
-  List<CircleFileDto> _files = const [];
+  List<CircleFileSlice> _files = const [];
+  final List<String?> _folderPath = <String?>[null];
+
+  String? get _parentFolderId => _folderPath.last;
 
   @override
   void initState() {
@@ -40,11 +49,18 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
       _errorSemantic = null;
     });
     try {
-      final repo = ref.read(circleRepositoryProvider);
-      final files = await repo.listFiles(widget.circleId);
+      final files = await ref
+          .read(circleDetailFileQueryProvider)
+          .list(
+            CircleFileListQuery(
+              circleId: widget.circleId,
+              parentFolderId: _parentFolderId,
+              limit: 100,
+            ),
+          );
       if (mounted) {
         setState(() {
-          _files = files;
+          _files = files.items;
           _isLoading = false;
         });
       }
@@ -63,6 +79,99 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     }
   }
 
+  Future<void> _openEntry(CircleFileSlice file) async {
+    if (file.fileType == CircleFileType.folder) {
+      setState(() => _folderPath.add(file.fileId));
+      await _loadFiles();
+      return;
+    }
+    final assetId = file.assetId;
+    if (assetId == null) {
+      _setActionFailure(StateError('CircleFile asset reference is missing'));
+      return;
+    }
+    setState(() => _isMutating = true);
+    try {
+      final grant = await ref
+          .read(circleDetailContentMediaFacetProvider)
+          .requestOriginalAccess(
+            RequestContentMediaOriginalAccessCommand(mediaId: assetId),
+          );
+      final launched = await launchUrl(
+        grant.originalUrl,
+        mode: ref.read(platformCapabilitiesProvider).hasLocalFileSystem
+            ? LaunchMode.externalApplication
+            : LaunchMode.platformDefault,
+      );
+      if (!launched) throw StateError('platform rejected the media access URL');
+    } catch (error) {
+      _setActionFailure(error);
+    } finally {
+      if (mounted) setState(() => _isMutating = false);
+    }
+  }
+
+  Future<void> _backToParent() async {
+    if (_folderPath.length <= 1) return;
+    setState(() => _folderPath.removeLast());
+    await _loadFiles();
+  }
+
+  Future<void> _pickAndUpload() async {
+    final file = await FilePicker.pickFile();
+    if (file == null) return;
+    setState(() {
+      _isMutating = true;
+      _errorSemantic = null;
+    });
+    try {
+      final coordinator = ContentMediaUploadCoordinator(
+        media: ref.read(circleDetailContentMediaFacetProvider),
+        fileStorage: ref.read(fileStorageGatewayProvider),
+        uploadObject: ref.read(contentMediaObjectUploadProvider),
+      );
+      final path = file.path?.trim() ?? '';
+      final uploaded = path.isNotEmpty
+          ? await coordinator.uploadLocalPath(
+              localPath: path,
+              mediaType: ContentMediaType.file,
+            )
+          : await coordinator.uploadBytes(
+              bytes: await file.readAsBytes(),
+              mediaType: ContentMediaType.file,
+              contentType: 'application/octet-stream',
+            );
+      await ref
+          .read(circleDetailFileCommandWriterProvider)
+          .create(
+            CreateCircleFileCommand(
+              circleId: widget.circleId,
+              parentFolderId: _parentFolderId,
+              name: file.name,
+              fileType: CircleFileType.file,
+              assetId: uploaded.assetId,
+            ),
+          );
+      await _loadFiles();
+    } catch (error) {
+      _setActionFailure(error);
+    } finally {
+      if (mounted) setState(() => _isMutating = false);
+    }
+  }
+
+  void _setActionFailure(Object error) {
+    if (!mounted) return;
+    setState(() {
+      _errorSemantic = runtimeErrorSemantic(
+        context,
+        error: error,
+        category: UiErrorCategory.submit,
+        scope: UiErrorScope.section,
+      );
+    });
+  }
+
   String _formatBytes(int bytes) {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1048576) return '${(bytes / 1024).toStringAsFixed(1)} KB';
@@ -70,8 +179,8 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     return '${(bytes / 1073741824).toStringAsFixed(1)} GB';
   }
 
-  IconData _fileIcon(String? mimeType, String fileType) {
-    if (fileType == 'folder') return CupertinoIcons.folder_fill;
+  IconData _fileIcon(String? mimeType, CircleFileType fileType) {
+    if (fileType == CircleFileType.folder) return CupertinoIcons.folder_fill;
     if (mimeType == null) return CupertinoIcons.doc;
     if (mimeType.startsWith('image/')) return CupertinoIcons.photo;
     if (mimeType.startsWith('video/')) return CupertinoIcons.videocam;
@@ -82,8 +191,8 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     return CupertinoIcons.doc;
   }
 
-  Color _fileIconColor(String? mimeType, String fileType) {
-    if (fileType == 'folder') return AppColors.warning;
+  Color _fileIconColor(String? mimeType, CircleFileType fileType) {
+    if (fileType == CircleFileType.folder) return AppColors.warning;
     if (mimeType == null) return AppColors.primaryColor;
     if (mimeType.startsWith('image/')) return AppColors.primaryColor;
     if (mimeType.startsWith('video/')) return AppColors.secondaryColor;
@@ -129,6 +238,25 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
             backgroundColor: bgSecondary,
           ),
           SizedBox(height: AppSpacing.md),
+          if (_folderPath.length > 1) ...[
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: _isMutating ? null : () => unawaited(_backToParent()),
+              child: Text(UITextConstants.circleStorageBackToParent),
+            ),
+            SizedBox(height: AppSpacing.sm),
+          ],
+          if (_files.isEmpty)
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Text(
+                UITextConstants.noData,
+                style: TextStyle(
+                  fontSize: AppTypography.sm,
+                  color: fgSecondary,
+                ),
+              ),
+            ),
           ..._files.map(
             (file) => _buildFileItem(
               file,
@@ -152,7 +280,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
     required Color backgroundColor,
   }) {
     final usedRatio = widget.storageQuotaBytes > 0
-        ? widget.storageUsedBytes / widget.storageQuotaBytes
+        ? (widget.storageUsedBytes / widget.storageQuotaBytes).clamp(0.0, 1.0)
         : 0.0;
     final remainingBytes = (widget.storageQuotaBytes - widget.storageUsedBytes)
         .clamp(0, widget.storageQuotaBytes);
@@ -232,7 +360,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
             children: [
               Expanded(
                 child: _StorageStatChip(
-                  label: '已用',
+                  label: UITextConstants.circleStorageUsed,
                   value: _formatBytes(widget.storageUsedBytes),
                   fgPrimary: fgPrimary,
                   fgSecondary: fgSecondary,
@@ -241,7 +369,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
               SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: _StorageStatChip(
-                  label: '剩余',
+                  label: UITextConstants.circleStorageRemaining,
                   value: _formatBytes(remainingBytes),
                   fgPrimary: fgPrimary,
                   fgSecondary: fgSecondary,
@@ -255,7 +383,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
   }
 
   Widget _buildFileItem(
-    CircleFileDto file,
+    CircleFileSlice file,
     Color fgPrimary,
     Color fgSecondary,
     Color borderColor,
@@ -272,7 +400,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
       child: CupertinoButton(
         padding: EdgeInsets.all(AppSpacing.containerSm),
         minimumSize: Size.zero,
-        onPressed: () {},
+        onPressed: _isMutating ? null : () => unawaited(_openEntry(file)),
         child: Container(
           decoration: BoxDecoration(
             color: backgroundColor,
@@ -314,7 +442,7 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
                     ),
                     SizedBox(height: AppSpacing.xs),
                     Text(
-                      fileType == 'folder'
+                      fileType == CircleFileType.folder
                           ? date
                           : '${_formatBytes(sizeBytes)} · $date',
                       style: TextStyle(
@@ -343,15 +471,18 @@ class _SectionStorageState extends ConsumerState<SectionStorage> {
       child: CupertinoButton(
         color: AppColors.primaryColor,
         borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-        onPressed: () {},
+        onPressed: _isMutating ? null : () => unawaited(_pickAndUpload()),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              CupertinoIcons.cloud_upload,
-              color: AppColors.white,
-              size: AppSpacing.iconMedium,
-            ),
+            if (_isMutating)
+              const CupertinoActivityIndicator(color: AppColors.white)
+            else
+              Icon(
+                CupertinoIcons.cloud_upload,
+                color: AppColors.white,
+                size: AppSpacing.iconMedium,
+              ),
             SizedBox(width: AppSpacing.sm),
             Text(
               UITextConstants.circleUploadFile,

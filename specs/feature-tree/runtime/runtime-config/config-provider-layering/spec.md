@@ -98,7 +98,7 @@
 - `repair`
 - `deploy`
 
-所有命令必须输出稳定的 JSON 报告，并将 Markdown 摘要归档到 `.qwq_output/runs/<env>/<run-id>/`。
+所有命令必须输出稳定的 JSON 报告，并将 Markdown 摘要归档到 `.qwq_output/env/<env>/runs/<run-id>/`。
 
 ## 子节点
 

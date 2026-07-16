@@ -7,14 +7,12 @@ import "context"
 // this interface via its PublishDomainEvent method.
 type EventPublisher interface {
 	PublishDomainEvent(ctx context.Context, eventType, conversationId, actorId string, payload map[string]any) error
+	PublishRecordedDomainEvent(ctx context.Context, eventID, eventType, conversationID, actorID string, payload map[string]any) error
 }
 
-// noopPublisher is used when no publisher is configured (e.g. graceful degradation).
-type noopPublisher struct{}
-
-func (noopPublisher) PublishDomainEvent(context.Context, string, string, string, map[string]any) error {
-	return nil
+func requireEventPublisher(publisher EventPublisher) EventPublisher {
+	if publisher == nil {
+		panic("chat application requires EventPublisher")
+	}
+	return publisher
 }
-
-// NoopEventPublisher returns a publisher that silently discards all events.
-func NoopEventPublisher() EventPublisher { return noopPublisher{} }

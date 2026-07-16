@@ -1,7 +1,7 @@
 # 正式入口（main_prod）与 Repository / Mock 依赖清单（P4a）
 
 > **目的**：为「物理剥离 Mock 编译单元」排期；与 [`mock_data_cloud_integration_policy.md`](./mock_data_cloud_integration_policy.md) §5、§9 一致。  
-> **现状（2026-03-30）**：`main_prod` **不**再 import `lib/main.dart`，经 [`app_bootstrap.dart`](../../quwoquan_app/lib/app_bootstrap.dart) 启动，并对 [`appDataSourceModeProvider`](../../quwoquan_app/lib/core/services/app_content_repository.dart) 做 **恒 Remote + setMode 忽略非 remote** 覆盖；**仍**通过 `quwoquan_app_shell` → `quwoquan_core` → [`app_providers.dart`](../../quwoquan_app/lib/core/providers/app_providers.dart) 链接到各 `Mock*Repository` 类型（AOT 体积目标见策略 §5.1 说明）。
+> **现状（2026-07-15）**：`main_prod` **不** import `lib/main.dart`，经 [`app_bootstrap.dart`](../../quwoquan_app/lib/app_bootstrap.dart) 启动；[`appDataSourceModeProvider`](../../quwoquan_app/lib/core/di/app_data_source_mode.dart) 对 `beta/gamma/prod` 固定 Remote、对未知环境启动失败。`AppContentRepository` 聚合入口已删除；其余旧 Provider 仍通过 [`app_providers.dart`](../../quwoquan_app/lib/core/providers/app_providers.dart) 链接到 `Mock*Repository`，必须继续物理剥离。
 
 ## 1. `app_providers.dart` 中按数据源分支的 Repository Provider（需 prod 专用图时逐条拆）
 
@@ -13,12 +13,10 @@
 | `integrationRepositoryProvider` | `RemoteIntegrationRepository` | `MockIntegrationRepository` |
 | `chatRepositoryProvider` | `RemoteChatRepository`（[`remote/chat_repository_remote.dart`](../../quwoquan_app/lib/cloud/services/chat/remote/chat_repository_remote.dart)） | `MockChatRepository` |
 | `userRepositoryProvider` | `RemoteUserRepository` | `MockUserRepository` |
-| `authRepositoryProvider` | `RemoteAuthRepository` | `MockAuthRepository` |
-| `inviteRepositoryProvider` | `RemoteInviteRepository` | `MockInviteRepository` |
 | `behaviorRepositoryProvider` | `RemoteBehaviorRepository` | `MockBehaviorRepository` |
 | `userProfileRepositoryProvider` | `RemoteUserProfileRepository` | `MockUserProfileRepository` |
 | `blockRepositoryProvider` | `RemoteBlockRepository` | `MockBlockRepository` |
-| `reportRepositoryProvider` | `RemoteReportRepository` | `MockReportRepository` |
+| `homeFeedContentReportCommandWriterProvider` / `workBrowserContentReportCommandWriterProvider` / `userProfileContentReportCommandWriterProvider` | `RemoteContentReportAdapter`（context 由各 surface Provider 固定） | `AlphaContentReportAdapter`（仅 `quwoquan_cloud_mock`，override 位于 alpha runner） |
 | `keywordBlockRepositoryProvider` | `RemoteKeywordBlockRepository` | `MockKeywordBlockRepository` |
 | `circleRepositoryProvider` | `RemoteCircleRepository` | `MockCircleRepository` |
 | `searchRepositoryProvider` | `RemoteSearchRepository` | `MockSearchRepository` |
@@ -26,7 +24,11 @@
 | `callSettingsRepositoryProvider` | `RemoteCallSettingsRepository` | `MockCallSettingsRepository` |
 | `greetingRepositoryProvider` | `RemoteGreetingRepository` | `MockGreetingRepository` |
 
-另：`dataServiceProvider`、`appContentRepositoryProvider`（见 [`app_content_repository_provider.dart`](../../quwoquan_app/lib/cloud/services/app_content/app_content_repository_provider.dart)）等组合门面，同理依赖 `AppDataSourceMode`。
+`appContentRepositoryProvider` 已删除；不得新增同类跨对象组合门面。
+
+`authRepositoryProvider` 与 `socialAuthorizationRepositoryProvider` 已于 2026-07-15
+收敛为 production Remote-only；Auth/SocialAuthorization fixture 仅由
+`runners/alpha/` 显式 override，不再经 `AppDataSourceMode` 分支。
 
 ## 2. 推荐后续切片（P4b+）
 

@@ -175,8 +175,8 @@ LiveKit 是 Apache 2.0 开源的 Go 语言 SFU 引擎（基于 Pion WebRTC），
 | 入口 | 位置 | 行为 | Phase |
 |------|------|------|-------|
 | ① 用户主页（互相关注且未拉黑） | 用户资料页操作栏 | `消息 / 视频 / 语音` 三按钮等宽展示 | P2 |
-| ② 1v1 会话输入区 `+` | ChatDetailPage 输入区更多功能 | 仅 `mutual + !blocked` 会话显示 `语音通话 / 视频通话` | P2 |
-| ③ 群聊会话输入区 `+` | ChatDetailPage(group) 输入区更多功能 | 发起语音/视频通话并进入成员选择页，默认从当前会话成员起选，可切换互相关注用户/其他群 | P2 |
+| ② 1v1 会话输入区 `+` | ChatConversationPage 输入区更多功能 | 仅 `mutual + !blocked` 会话显示 `语音通话 / 视频通话` | P2 |
+| ③ 群聊会话输入区 `+` | ChatConversationPage(group) 输入区更多功能 | 发起语音/视频通话并进入成员选择页，默认从当前会话成员起选，可切换互相关注用户/其他群 | P2 |
 | ④ 通话中邀请 | Voice/VideoCallPage 顶部或控制栏固定入口 | 主动邀请当前会话成员、互相关注用户或其他群成员加入当前通话 | P2 |
 | ⑤ 通话中分享链接 | Voice/VideoCallPage 邀请二级面板 | 复制/分享呼叫链接，对方点击入会 | P2 |
 | ⑥ 圈子详情 | CircleDetailPage 操作栏 | 发起圈子通话，选择成员 | P2 |

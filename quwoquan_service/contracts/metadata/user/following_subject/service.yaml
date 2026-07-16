@@ -1,14 +1,26 @@
 version: 1
-entity: FollowingSubject
 
 service:
   name: user-service
   domain: user
+  owner: app-foundation
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: USER_FOLLOWING_SUBJECT_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
 
 api_routes:
   - method: GET
     path: /v1/user/following-subjects
     operation: ListFollowingSubjects
+    actor: persona
+    application:
+      kind: query
+      facet: FollowingSubjectQueryFacade
+      method: listFollowingSubjects
+      reader: ListFollowingSubjectsReader
+      slice: ListFollowingSubjectsSlice
     description: 首页关注频道顶部关注对象列表（用户 / 圈子 / 地点和事物主页）
     query_params: [cursor, limit, subjectType]
     response_entity: FollowingSubjectItemView
@@ -20,25 +32,9 @@ api_routes:
       anonymous_policy: deny
       visibility: private
 
-  - method: POST
-    path: /v1/user/following-subjects/{subjectType}/{subjectId}:mark-visited
-    operation: MarkFollowingSubjectVisited
-    description: 标记关注对象已访问，清除“上次访问后变化”提示
-    path_params: [subjectType, subjectId]
-    request_entity: MarkFollowingSubjectVisitedRequest
-    request_fields: [subjectId, subjectType, visitedAt, clientRequestId]
-    response_entity: FollowingSubjectVisitResult
-    response_fields: [subjectId, subjectType, lastVisitedAt, hasUnreadChanges]
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
 consumers:
   - name: app
-    capabilities: [list_following_subjects, mark_following_subject_visited]
+    capabilities: [list_following_subjects]
   - name: recommendation-engine
     capabilities: [read_following_subjects]
 
@@ -51,6 +47,3 @@ contract_test:
         - name: list_three_subject_types
           route: GET /v1/user/following-subjects
           assertions: [contains_user_circle_homepage, unread_flags_present]
-        - name: mark_visited_clears_unread
-          route: POST /v1/user/following-subjects/{subjectType}/{subjectId}:mark-visited
-          assertions: [hasUnreadChanges_false, lastVisitedAt_updated]

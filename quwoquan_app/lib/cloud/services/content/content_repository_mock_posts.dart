@@ -443,29 +443,4 @@ extension _MockContentPosts on MockContentRepository {
     }
     return true;
   }
-
-  String _mockCategoryForCircleIds(Iterable<String> circleIds) {
-    for (final circleId in circleIds) {
-      switch (circleId) {
-        case 'fixture_circle_photo':
-        case 'circle_photo_01':
-        case 'c1':
-        case 'c-human-1':
-        case 'c-photo-owner':
-        case 'c-meet-2':
-          return 'photography';
-        case 'c2':
-        case 'c3':
-          return 'travel';
-        case 'c-tech-admin':
-          return 'tech';
-        case 'c-meet-1':
-          return 'campus';
-        case 'c-car-1':
-        case 'c-car-2':
-          return 'car';
-      }
-    }
-    return '';
-  }
 }

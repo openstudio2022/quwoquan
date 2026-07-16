@@ -3,6 +3,10 @@ service:
   http:
     addr: ":18080"
 
+mongodb:
+  uri: ""
+  database: "quwoquan_integration"
+
 integration:
   location:
     provider: "baidu"
@@ -19,6 +23,20 @@ integration:
     # placeholder keys, injected by secret/config center in real env
     baidu_ak: ""
     amap_key: ""
+  external_interaction:
+    callback_secret: ""
+    sms:
+      enabled: false
+      provider: "aliyun_sms"
+      endpoint: ""
+      token: ""
+      timeout_ms: 2000
+    push:
+      enabled: false
+      provider: "vendor_push"
+      endpoint: ""
+      token: ""
+      timeout_ms: 2000
 
 config:
   # Config release contract

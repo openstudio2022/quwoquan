@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -30,7 +31,7 @@ func fixturePublish(t *testing.T) string {
 	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/_entity.json"),
 		`{"label":"甲居藏寨","domain":"地点","type":"景区","tagRefs":["Entity/地点/景区"],"conditionProfile":{"regions":["高原","山地"],"seasons":["夏","秋"],"altitudeMeters":3500},"sourceTaskId":"旅行/环线/川西环线/川西大环线自驾"}`)
 	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/page.md"), "# 甲居藏寨\n")
-	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/manifest.json"),
+	writeFile(t, filepath.Join(root, "entities/地点/景区/甲居藏寨/asset.refs.json"),
 		`{"assets":[{"assetId":"甲居藏寨_homepage_detail","objectKey":"media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png","cdnUrl":"https://img.example.com/media/objects/sha256/bb/bb/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.png","sha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}`)
 	writeFile(t, filepath.Join(root, "entities/地点/景区/色达/_entity.json"),
 		`{"label":"色达","domain":"地点","type":"景区","tagRefs":[]}`)
@@ -183,22 +184,56 @@ func TestEmptySampleBundleFiltersToZeroObjects(t *testing.T) {
 	}
 }
 
-func TestLoadSampleBundle(t *testing.T) {
+func TestDesiredStateLoadRejectsMissingCanonicalObjects(t *testing.T) {
+	root := fixturePublish(t)
+
+	_, err := LoadPosts(root, toSet([]string{
+		"posts/article/攻略/色达攻略/1",
+		"posts/article/攻略/已隔离文章/1",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "posts/article/攻略/已隔离文章/1") {
+		t.Fatalf("missing desired post must fail closed, got %v", err)
+	}
+
+	_, err = LoadEntities(root, toSet([]string{
+		"地点/景区/色达",
+		"地点/景区/已隔离实体",
+	}))
+	if err == nil || !strings.Contains(err.Error(), "地点/景区/已隔离实体") {
+		t.Fatalf("missing desired entity must fail closed, got %v", err)
+	}
+}
+
+func TestLoadReleaseDesiredState(t *testing.T) {
 	root := t.TempDir()
-	path := filepath.Join(root, "alpha.json")
-	writeFile(t, path, `{"environment":"alpha","posts":["posts/article/攻略/色达攻略/1"],"entities":["地点/景区/色达"]}`)
-	b, err := loadSampleBundle(path)
+	writeFile(t, filepath.Join(root, "payload", "desired_state.json"),
+		`{"schemaVersion":"quwoquan_data.release_desired_state/1","releaseId":"release-a","desiredRefs":{"posts":["posts/article/攻略/色达攻略/1"],"entities":["地点/景区/色达"]}}`)
+	b, err := LoadReleaseDesiredState(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b.Environment != "alpha" || len(b.Posts) != 1 || len(b.Entities) != 1 {
-		t.Fatalf("bundle parse wrong: %+v", b)
+	if b.ReleaseID != "release-a" || len(b.DesiredRefs.Posts) != 1 || len(b.DesiredRefs.Entities) != 1 {
+		t.Fatalf("desired state parse wrong: %+v", b)
 	}
-	if !toSet(b.Posts)["posts/article/攻略/色达攻略/1"] {
-		t.Fatalf("toSet from bundle posts failed: %+v", b.Posts)
+	if !toSet(b.DesiredRefs.Posts)["posts/article/攻略/色达攻略/1"] {
+		t.Fatalf("toSet from desired posts failed: %+v", b.DesiredRefs.Posts)
 	}
-	if _, err := loadSampleBundle(filepath.Join(root, "missing.json")); err == nil {
+	if _, err := LoadReleaseDesiredState(filepath.Join(root, "missing")); err == nil {
 		t.Fatalf("expected error for missing bundle")
+	}
+}
+
+func TestLoadReleaseDesiredStateRejectsRetiredSchemaAndPathEscape(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "payload", "desired_state.json"),
+		`{"schemaVersion":"quwoquan.content_sample_bundle","releaseId":"release-a","desiredRefs":{"posts":[],"entities":[]}}`)
+	if _, err := LoadReleaseDesiredState(root); err == nil {
+		t.Fatal("retired sample schema must be rejected")
+	}
+	writeFile(t, filepath.Join(root, "payload", "desired_state.json"),
+		`{"schemaVersion":"quwoquan_data.release_desired_state/1","releaseId":"release-a","desiredRefs":{"posts":["../escape"],"entities":[]}}`)
+	if _, err := LoadReleaseDesiredState(root); err == nil {
+		t.Fatal("path escape must be rejected")
 	}
 }
 

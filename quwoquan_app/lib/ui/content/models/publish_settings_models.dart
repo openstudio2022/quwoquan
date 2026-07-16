@@ -1,5 +1,5 @@
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
 
 /// 通用发布设置状态模型（design B1），承载位置/公开/圈子选择，供创作、编辑等多页面复用。
@@ -99,11 +99,13 @@ class PublishSettings {
     'assistantUsePolicy': assistantUsePolicy,
   };
 
-  /// 生成发布 payload 字段
+  /// 生成 Post 聚合的发布字段。
+  ///
+  /// [circleIds] 是跨上下文协调输入，只能在 Post 发布成功后交给
+  /// CirclePostPlacement Command Facade，禁止写入 Post payload。
   Map<String, dynamic> toPayloadFields() {
     final payload = <String, dynamic>{
       'visibility': isPublic ? 'public' : 'private',
-      'circleIds': circleIds,
     };
     if (locationName.isNotEmpty) payload['locationName'] = locationName;
     if (locationPoi != null) {
@@ -170,7 +172,7 @@ class CreateLocationOption {
     this.distanceMeters,
   });
 
-  /// 从 LocationPoiDto 构造，供 CreateLocationService 解析云响应时使用。
+  /// 从 Integration Location typed projection 构造页面选项。
   factory CreateLocationOption.from(LocationPoiDto dto) => CreateLocationOption(
     id: dto.id,
     name: dto.name,

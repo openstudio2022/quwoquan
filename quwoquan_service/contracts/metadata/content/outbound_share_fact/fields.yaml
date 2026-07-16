@@ -1,0 +1,14 @@
+version: 1
+entity: OutboundShareFact
+
+fields:
+  - { name: eventId, type: string, constraints: [PK], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }
+  - { name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+  - { name: actorDimension, type: enum, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+  - { name: actorId, type: string, constraints: [NOT_NULL], classification: PII, log_policy: hash, api_exposure: drop, ops_exposure: read }
+  - { name: channel, type: enum, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+  - { name: destinationKind, type: enum, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+  - { name: destinationDigest, type: string, constraints: [NULLABLE], classification: SENSITIVE, log_policy: hash, api_exposure: drop, ops_exposure: read }
+  - { name: referralId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read }
+  - { name: idempotencyKey, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: drop, ops_exposure: read }
+  - { name: occurredAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read }

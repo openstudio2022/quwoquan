@@ -7,8 +7,8 @@ import (
 	"log/slog"
 	"time"
 
+	runtimemessaging "quwoquan_service/runtime/messaging"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/runtime/repository"
 )
 
 type RedisEventPublisher struct {
@@ -24,7 +24,7 @@ func NewRedisEventPublisher(redis rtredis.Client, serviceName string, logger *sl
 	return &RedisEventPublisher{redis: redis, service: serviceName, logger: logger}
 }
 
-func (p *RedisEventPublisher) Publish(ctx context.Context, event repository.DomainEvent) error {
+func (p *RedisEventPublisher) Publish(ctx context.Context, event runtimemessaging.DomainEvent) error {
 	channel := fmt.Sprintf("events.ops.%s", event.Type)
 	envelope := map[string]any{
 		"meta": map[string]any{

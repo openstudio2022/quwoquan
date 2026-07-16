@@ -72,18 +72,6 @@ circle_adjacent:
     category: migrate_partial
     notes: _entry* + tryReadPresentation 为主；_item* 保留 raw 回退。
 
-app_content_repository:
-  - path: quwoquan_app/lib/core/services/app_content_repository.dart
-    category: migrate_done_partially
-    notes: |
-      discovery*Data 为 List<FeedItemDto>；lookupDiscoveryFeedWireRow 经 aggregateDiscoveryWireSlices 产出 wire Map。
-      discoveryPostsAsDtos 使用 toDiscoveryWireMap + postBaseDtoFromMap。
-
-out_of_scope_non_post_mainline:
-  - path: quwoquan_app/lib/core/services/app_content_repository.dart
-    category: out_of_scope
-    notes: chatMock* / assistant* / circlesMock* / helperReadSummary 等 — 非内容域双写核心。
-
 codegen_generated:
   - path: quwoquan_app/lib/cloud/runtime/generated/content/
     category: ssot

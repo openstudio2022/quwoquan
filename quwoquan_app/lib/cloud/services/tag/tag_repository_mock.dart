@@ -121,11 +121,6 @@ class MockTagRepository implements TagRepository {
   }
 
   @override
-  Future<bool> feedback(String tagRef, String action, {String? context}) async {
-    return true;
-  }
-
-  @override
   Future<List<TagCooccurrence>> cooccurrence({
     String? tagRef,
     int minCount = TagApiDefaults.minCooccurCount,

@@ -2,6 +2,18 @@ version: 1
 aggregate: SearchQuery
 
 entities:
+  SearchIndexView:
+    description: 跨对象搜索索引统一投影
+    fields:
+      - { name: objectType, type: string, constraints: [NOT_NULL] }
+      - { name: objectId, type: string, constraints: [NOT_NULL] }
+      - { name: title, type: string, constraints: [NOT_NULL] }
+      - { name: summary, type: string, constraints: [NULLABLE] }
+      - { name: tagRefs, type: array, constraints: [NULLABLE] }
+      - { name: visibility, type: string, constraints: [NOT_NULL] }
+      - { name: sourceVersion, type: int, constraints: [NOT_NULL] }
+      - { name: indexedAt, type: timestamp, constraints: [NOT_NULL] }
+
   SearchQuery:
     description: 一次搜索请求的查询日志，用于搜索词热力与 relevance 评测
     fields:

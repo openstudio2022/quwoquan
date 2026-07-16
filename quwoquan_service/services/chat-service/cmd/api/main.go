@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,8 +15,13 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"quwoquan_service/generated/operationsecurity"
+	rtmongo "quwoquan_service/internal/platform/mongodb"
+	platformredis "quwoquan_service/internal/platform/redis"
+	"quwoquan_service/internal/platform/reliabletaskmongo"
+	rtauth "quwoquan_service/runtime/auth"
+	runtimeconfig "quwoquan_service/runtime/config"
 	rthealth "quwoquan_service/runtime/health"
-	rtmongo "quwoquan_service/runtime/mongodb"
 	rtotel "quwoquan_service/runtime/otel"
 
 	rterr "quwoquan_service/runtime/errors"
@@ -31,6 +37,7 @@ import (
 	"quwoquan_service/services/chat-service/internal/adapters/mq"
 	"quwoquan_service/services/chat-service/internal/application"
 	chatcache "quwoquan_service/services/chat-service/internal/infrastructure/cache"
+	messageexternal "quwoquan_service/services/chat-service/internal/infrastructure/chat/message/external"
 	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
@@ -112,7 +119,16 @@ func main() {
 	if err := validateRuntimeCompatibility(cfg, configVersion, imageVersion); err != nil {
 		log.Fatalf("chat-service config compatibility failed: %v", err)
 	}
-
+	accessTokenConfig, err := rtauth.LoadAccessTokenConfig(
+		runtimeconfig.EnvRuntimeConfigProvider{},
+	)
+	if err != nil {
+		log.Fatalf("chat-service access token config invalid: %v", err)
+	}
+	accessVerifier, err := rtauth.NewHS256Verifier(accessTokenConfig)
+	if err != nil {
+		log.Fatalf("chat-service access token verifier invalid: %v", err)
+	}
 	addr := getenvOrDefault("CHAT_SERVICE_ADDR", cfg.Service.HTTP.Addr)
 	if addr == "" {
 		addr = ":18081"
@@ -120,10 +136,30 @@ func main() {
 
 	logger := slog.Default()
 	instanceID := getenvOrDefault("SERVICE_INSTANCE_ID", hostname())
-	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
+	userServiceBaseURL, err := requireInternalServiceBaseURL(
+		"USER_SERVICE_BASE_URL",
+		os.Getenv("USER_SERVICE_BASE_URL"),
+	)
+	if err != nil {
+		log.Fatalf("chat-service user dependency invalid: %v", err)
+	}
 	circleServiceBaseURL := strings.TrimSpace(os.Getenv("CIRCLE_SERVICE_BASE_URL"))
 	if circleServiceBaseURL == "" {
 		circleServiceBaseURL = strings.TrimSpace(os.Getenv("GATEWAY_BASE_URL"))
+	}
+	circleServiceBaseURL, err = requireInternalServiceBaseURL(
+		"CIRCLE_SERVICE_BASE_URL or GATEWAY_BASE_URL",
+		circleServiceBaseURL,
+	)
+	if err != nil {
+		log.Fatalf("chat-service circle dependency invalid: %v", err)
+	}
+	contentServiceBaseURL, err := requireInternalServiceBaseURL(
+		"CONTENT_SERVICE_BASE_URL",
+		os.Getenv("CONTENT_SERVICE_BASE_URL"),
+	)
+	if err != nil {
+		log.Fatalf("chat-service content dependency invalid: %v", err)
 	}
 
 	ioLogger := robs.NewIOAccessLogger(os.Stdout)
@@ -145,15 +181,39 @@ func main() {
 	defer otelShutdown()
 
 	if err := router.PingAll(ctx); err != nil {
-		log.Printf("WARN: chat-service redis ping: %v", err)
+		log.Fatalf("chat-service redis dependency unavailable: %v", err)
 	}
 	mongoClient := rtmongo.MustConnect(ctx, rtmongo.ConnectConfig{URI: cfg.MongoDB.URI}, "chat-service")
 	defer func() { _ = mongoClient.Disconnect(ctx) }()
 
 	mongoDB := mongoClient.Database(cfg.MongoDB.Database)
 	chatStore := persistence.NewMongoChatStore(mongoDB)
+	if err := chatStore.EnsureIndexes(ctx); err != nil {
+		log.Fatalf("chat-service aggregate indexes unavailable: %v", err)
+	}
+	chatStorage := application.ChatStoragePorts{
+		Transactions:      chatStore,
+		Conversations:     chatStore,
+		Messages:          chatStore,
+		MessageProjection: chatStore,
+		Members:           chatStore,
+		UserStates:        chatStore,
+		Receipts:          chatStore,
+	}
 	convCache := chatcache.NewConversationCache(router.Scene("general"))
 	eventPublisher := mq.NewEventPublisher(router.Scene("realtime"))
+	messageOutboxRelay := application.NewMessageOutboxRelay(
+		chatStore,
+		chatStore,
+		chatStore,
+		eventPublisher,
+		"chat-runtime-fanout",
+	)
+	go func() {
+		if err := messageOutboxRelay.Run(ctx, 100*time.Millisecond); err != nil {
+			logger.Error("chat message outbox relay stopped", "err", err)
+		}
+	}()
 	localMediaRoot := strings.TrimSpace(cfg.Runtime.Media.GroupAvatarLocalMediaRoot)
 	if localMediaRoot == "" {
 		localMediaRoot = "./var/chat-media"
@@ -183,7 +243,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("chat-service reliable task catalog load failed: %v", err)
 	}
-	reliableTaskStore := reliabletask.NewMongoStore(mongoDB)
+	reliableTaskStore := reliabletaskmongo.New(mongoDB)
 	if err := reliableTaskStore.EnsureIndexes(ctx); err != nil {
 		log.Fatalf("chat-service reliable task index init failed: %v", err)
 	}
@@ -206,7 +266,7 @@ func main() {
 	groupAvatarScheduler := application.NewReliableGroupAvatarTaskScheduler(
 		reliableTaskStore,
 		reliableTaskCatalog,
-		chatStore,
+		chatStorage,
 		eventPublisher,
 		groupAvatarMedia,
 		userSyncService,
@@ -221,7 +281,7 @@ func main() {
 	go func() {
 		if err := application.BackfillMissingGroupAvatars(
 			context.Background(),
-			chatStore,
+			chatStorage,
 			eventPublisher,
 			groupAvatarMedia,
 			userSyncService,
@@ -237,9 +297,25 @@ func main() {
 	relationshipGate := httpadapter.NewUserRelationshipGate(userServiceBaseURL, profileClient)
 	socialContactResolver := httpadapter.NewUserSocialContactResolver(userServiceBaseURL, profileClient)
 	circleListResolver := httpadapter.NewCircleListResolverClient(circleServiceBaseURL, profileClient)
+	contentCredentials, err := rtauth.NewHS256ServiceAuthorizationProvider(
+		accessTokenConfig,
+		"chat-service",
+		[]string{"content.media.delivery.read"},
+	)
+	if err != nil {
+		log.Fatalf("content-service delivery credential init failed: %v", err)
+	}
+	mediaAssetReader, err := messageexternal.NewMediaAssetDeliveryReader(
+		contentServiceBaseURL,
+		contentCredentials,
+		nil,
+	)
+	if err != nil {
+		log.Fatalf("content-service MediaAsset delivery reader invalid: %v", err)
+	}
 
 	conversationSvc := application.NewConversationService(
-		chatStore,
+		chatStorage,
 		convCache,
 		eventPublisher,
 		profileResolver,
@@ -248,9 +324,15 @@ func main() {
 		userSyncService,
 		groupAvatarScheduler,
 	)
-	messageSvc := application.NewMessageService(chatStore, convCache, eventPublisher, relationshipGate)
+	messageSvc := application.NewMessageService(
+		chatStorage,
+		convCache,
+		eventPublisher,
+		relationshipGate,
+		mediaAssetReader,
+	)
 	memberSvc := application.NewMemberService(
-		chatStore,
+		chatStorage,
 		convCache,
 		eventPublisher,
 		profileResolver,
@@ -261,10 +343,10 @@ func main() {
 		application.WithSocialContactResolver(socialContactResolver),
 		application.WithCircleListResolver(circleListResolver),
 	)
-	inboxSvc := application.NewInboxService(chatStore)
+	inboxSvc := application.NewInboxService(chatStorage)
 	userAvatarConsumer := mq.NewUserAvatarUpdateConsumer(
 		router.Scene("general"),
-		chatStore,
+		chatStorage,
 		eventPublisher,
 		groupAvatarMedia,
 		userSyncService,
@@ -274,10 +356,6 @@ func main() {
 	if err := userAvatarConsumer.Start(ctx); err != nil {
 		log.Fatalf("chat-service user avatar consumer start failed: %v", err)
 	}
-	if userServiceBaseURL == "" {
-		logger.Warn("chat-service user profile resolver base URL is empty; create/add member snapshot hydration will be skipped")
-	}
-
 	healthChecker := rthealth.NewChecker()
 	healthChecker.Register("redis", func(hctx context.Context) error {
 		return router.PingAll(hctx)
@@ -285,8 +363,20 @@ func main() {
 	healthChecker.Register("mongodb", func(hctx context.Context) error {
 		return mongoClient.Ping(hctx, nil)
 	})
+	healthChecker.Register("message_outbox_relay", func(context.Context) error {
+		return messageOutboxRelay.Healthy(5 * time.Second)
+	})
 
-	baseHandler := httpadapter.NewChatHandler(conversationSvc, messageSvc, memberSvc, inboxSvc, userSyncService).Routes()
+	chatRoutes := httpadapter.NewChatHandler(
+		conversationSvc,
+		messageSvc,
+		memberSvc,
+		inboxSvc,
+		userSyncService,
+	).Routes()
+	baseHandler := rtauth.RequireGeneratedOperationAuthorization(
+		operationsecurity.ForDomain("chat"),
+	)(chatRoutes)
 	rootMux := http.NewServeMux()
 	rootMux.HandleFunc("/healthz", healthChecker.Handler())
 	rootMux.Handle("/metrics", rtmetrics.Handler())
@@ -317,8 +407,10 @@ func main() {
 	rateLimited := rtgov.RateLimitMiddleware(rateLimiter)(corsHandler)
 
 	server := &http.Server{
-		Addr:              addr,
-		Handler:           rateLimited,
+		Addr: addr,
+		Handler: rtauth.Middleware(rtauth.MiddlewareConfig{
+			AccessTokenVerifier: accessVerifier,
+		})(rateLimited),
 		ReadHeaderTimeout: 5 * time.Second,
 		WriteTimeout:      30 * time.Second,
 		IdleTimeout:       60 * time.Second,
@@ -369,6 +461,23 @@ func getenvOrDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func requireInternalServiceBaseURL(name, raw string) (string, error) {
+	value := strings.TrimRight(strings.TrimSpace(raw), "/")
+	if value == "" {
+		return "", fmt.Errorf("%s is required", name)
+	}
+	parsed, err := url.Parse(value)
+	if err != nil ||
+		(parsed.Scheme != "http" && parsed.Scheme != "https") ||
+		parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("%s must be an absolute http(s) origin without credentials, query, or fragment", name)
+	}
+	if parsed.Path != "" {
+		return "", fmt.Errorf("%s must not contain a path", name)
+	}
+	return value, nil
 }
 
 func hostname() string {
@@ -683,7 +792,7 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 		PrefixRoutes: rtredis.DefaultRouterConfig().PrefixRoutes,
 		DefaultScene: "general",
 	}
-	return rtredis.MustNewRouter(routerCfg)
+	return platformredis.MustNewRouter(routerCfg)
 }
 
 func resolveReliableTaskRedisScene(cfg config) redisSceneCfg {

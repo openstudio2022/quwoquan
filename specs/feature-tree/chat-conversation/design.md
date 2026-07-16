@@ -148,9 +148,9 @@ Redis SET NX dedup:{conversationId}:{clientMsgId} → 1, TTL 300s
 ```yaml
 source_events:
   - MessageSent           # 更新 lastMessage* + unreadCount
-  - MemberJoined          # 创建 inbox 条目
-  - MemberLeft            # 删除 inbox 条目
-  - ConversationSettingsUpdated  # 更新 muted/pinned
+  - ConversationMemberAdded          # 创建 inbox 条目
+  - ConversationMemberRemoved        # 删除 inbox 条目
+  - ConversationUserSettingsChanged  # 更新 muted/pinned
 ```
 
 新增字段：`lastSeq`（会话最新 seq，端侧 gap 检测用）
@@ -247,12 +247,12 @@ abstract class ChatRepository {
 ```
 1. 用户在聊天中点击"邀请小趣" → POST /conversations/{id}/assistant { skillId? }
 2. 创建 ConversationMember { memberType: assistant, role: member, userId: "assistant:{skillId}" }
-3. 发布 AssistantInvited 事件 → realtime-gateway 通知会话成员
+3. 发布 ConversationMemberAdded（memberType=assistant）→ realtime-gateway 通知会话成员
 4. 用户在消息中 @小趣 → chat-service 检测 mentions 含 assistant memberId
    → 发布 AssistantMentioned 事件 → assistant-service 消费
 5. assistant-service 处理后通过 SendMessage API 回复（senderId=assistant:{skillId}, type=assistant_reply）
 6. 移除助手 → DELETE /conversations/{id}/assistant → 删除 assistant member
-   → 发布 AssistantRemoved 事件 → realtime-gateway/端上成员态同步
+   → 发布 ConversationMemberRemoved（memberType=assistant）→ realtime-gateway/端上成员态同步
 ```
 
 **约束**：
@@ -270,9 +270,9 @@ func main() {
     cfg := config.MustLoad("configs/config.yaml")
     shutdown := observability.MustInit(cfg)
     defer shutdown()
-    reg := registry.MustLoad(cfg.MetadataDir)
-    repos := repository.MustInitFromRegistry(reg, cfg)
-    handler := http.NewServer(cfg, reg, repos)
+    stores := infrastructure.MustInitChatAdapters(cfg)
+    facades := application.NewConversationFacades(stores)
+    handler := http.NewServer(cfg, generated.Operations(), facades)
     http.ListenAndServe(handler, cfg)
 }
 ```
@@ -283,7 +283,7 @@ func main() {
 | 配置读取 | `os.Getenv` + 自定义 `loadConfig` | `runtime/config.RuntimeConfigProvider` |
 | 可观测 | 无 | `runtime/observability`（日志/指标/追踪） |
 | 消息发布 | 无 | `runtime/messaging.MessageEnvelope` |
-| 实体注册 | 无 | `runtime/registry.EntityRegistry` |
+| 契约注册 | 运行时手写 | 构建期 `ContractGraph` generated operation descriptor |
 
 ### KD-12：部署架构
 

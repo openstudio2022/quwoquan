@@ -19,12 +19,12 @@ sit_acceptance:
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_service/services/platform-ops-service/cmd/api/main__local_contract_test.go
+      - file: quwoquan_service/services/platform-ops-service/tests/local_contract/config_layer_http_boundary__local_contract_test.go
       - file: quwoquan_ops/portal/src/shared/api/controlPlane.test.mjs
       recorded:
-      - file: quwoquan_service/services/platform-ops-service/cmd/api/main__local_contract_test.go
-      - file: quwoquan_service/services/platform-ops-service/tests/api_integration/config_and_reliability_governance__api_integration_test.go
-    status: implemented
+      - file: quwoquan_service/services/platform-ops-service/tests/local_contract/config_layer_http_boundary__local_contract_test.go
+      - file: quwoquan_service/services/platform-ops-service/tests/api_integration/config_layer_http_boundary__api_integration_test.go
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -48,6 +48,7 @@ sit_acceptance:
         envs: *id001
     notes:
     - '[migrated_from_recorded_reference] quwoquan_ops/portal/src/shared/api/controlPlane.test.mjs'
+    - ConfigLayer 已具备真实 PostgreSQL、generated guard、幂等回执和 transactional outbox 证据；其余 PlatformOps 对象仍未完成 Graph/Facade/Store 迁移，因此不得标记 implemented。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

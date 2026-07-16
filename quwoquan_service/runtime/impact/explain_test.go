@@ -2,32 +2,70 @@ package impact
 
 import "testing"
 
-func TestPrimaryTextCircleActions(t *testing.T) {
-	tests := []struct {
-		name     string
-		helpType string
-		action   string
-		count    int64
-		want     string
-	}{
-		{name: "members", helpType: HelpRelationship, action: "establish_connection", count: 12, want: "一位用户等12人在这里建立了新连接"},
-		{name: "posts", helpType: HelpCommunity, action: "start_discussion", count: 5, want: "一位用户等5人带起了新的讨论"},
-		{name: "weekly active", helpType: HelpSpread, action: "active_participation", count: 3, want: "一位用户等3人最近参与了这里"},
+func TestBuildStatementRequiresNamedActorAndRoutableObject(t *testing.T) {
+	userTarget := &Target{ObjectType: "user", ObjectID: "user_1", ObjectKind: "person", RouteID: "profile"}
+	statement, ok := BuildStatement(StatementEvidence{
+		HelpType:              HelpCommunity,
+		Action:                "join_circle",
+		IntersectionDimension: "relationship",
+		Source:                "circle_members",
+		Count:                 12,
+		ImpactID:              "impact_1",
+		EvidenceSnapshotID:    "snapshot_1",
+		RepresentativeActor: RepresentativeActor{
+			ActorID:       "user_1",
+			DisplayName:   "契约摄影社主理人",
+			RelationLabel: "圈子主理人",
+			Target:        userTarget,
+		},
+		ObjectName:   "契约摄影社",
+		ObjectTarget: Target{ObjectType: "circle", ObjectID: "circle_1", ObjectKind: "circle", RouteID: "circleDetail"},
+	})
+	if !ok {
+		t.Fatal("expected complete evidence to build statement")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := PrimaryText(tt.helpType, tt.action, tt.count, ActorTA); got != tt.want {
-				t.Fatalf("PrimaryText() = %q, want %q", got, tt.want)
-			}
-		})
+	if statement.PrimaryText != "契约摄影社主理人等12人加入了契约摄影社" {
+		t.Fatalf("primaryText = %q", statement.PrimaryText)
+	}
+	joined := ""
+	hasObject := false
+	for _, span := range statement.PrimarySpans {
+		joined += span.Text
+		if span.Role == "object" && span.Target != nil && span.Target.ObjectType == "circle" {
+			hasObject = true
+		}
+	}
+	if joined != statement.PrimaryText || !hasObject {
+		t.Fatalf("invalid spans: %+v", statement.PrimarySpans)
+	}
+	if statement.RepresentativeActor == nil || statement.RepresentativeActor.Target == nil || statement.RepresentativeActor.Target.ObjectType != "user" {
+		t.Fatalf("invalid representative actor: %+v", statement.RepresentativeActor)
 	}
 }
 
-func TestPrimaryTextAuthorPerspective(t *testing.T) {
-	if got := PrimaryText(HelpDecision, "", 7, ActorTA); got != "一位用户等7人通过TA的记录关注了相关对象" {
-		t.Fatalf("TA perspective = %q", got)
+func TestBuildStatementFailsClosedForSyntheticOrIncompleteEvidence(t *testing.T) {
+	base := StatementEvidence{
+		HelpType:           HelpCommunity,
+		Action:             "join_circle",
+		Source:             "circle_members",
+		Count:              12,
+		ImpactID:           "impact_1",
+		EvidenceSnapshotID: "snapshot_1",
+		RepresentativeActor: RepresentativeActor{
+			ActorID:       "user_1",
+			DisplayName:   "一位用户",
+			RelationLabel: "圈子主理人",
+			Target:        &Target{ObjectType: "user", ObjectID: "user_1", RouteID: "profile"},
+		},
+		ObjectName:   "契约摄影社",
+		ObjectTarget: Target{ObjectType: "circle", ObjectID: "circle_1", RouteID: "circleDetail"},
 	}
-	if got := PrimaryText(HelpDecision, "", 7, ActorSelf); got != "一位用户等7人通过你的记录关注了相关对象" {
-		t.Fatalf("self perspective = %q", got)
+	if _, ok := BuildStatement(base); ok {
+		t.Fatal("synthetic actor must fail closed")
+	}
+	base.RepresentativeActor.DisplayName = "契约摄影社主理人"
+	base.EvidenceSnapshotID = ""
+	if _, ok := BuildStatement(base); ok {
+		t.Fatal("missing evidence snapshot must fail closed")
 	}
 }

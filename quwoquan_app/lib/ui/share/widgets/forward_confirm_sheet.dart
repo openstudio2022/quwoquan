@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository_api.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -15,6 +15,7 @@ import 'package:quwoquan_app/core/widgets/app_toast.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
 import 'package:quwoquan_app/ui/share/forward_share_models.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_recipient_widgets.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 class ForwardConfirmSheet extends ConsumerStatefulWidget {
   const ForwardConfirmSheet({
@@ -74,6 +75,8 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
   final FocusNode _focusNode = FocusNode();
   bool _busy = false;
   bool _inputFocused = false;
+  final String _clientMsgId =
+      'forward_${DateTime.now().microsecondsSinceEpoch}';
 
   @override
   void initState() {
@@ -238,22 +241,24 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
       final repo = ref.read(chatRepositoryProvider);
       final conversationId = await _resolveConversationId(repo);
       final activeContext = await ref.read(activePersonaContextProvider.future);
-      final senderSubAccountId = activeContext.subAccountId.trim().isNotEmpty
-          ? activeContext.subAccountId.trim()
-          : activeContext.ownerUserId.trim();
       final note = _messageController.text.trim();
       final content = note.isNotEmpty ? note : widget.payload.messagePreview;
-      await repo.sendMessage(
-        conversationId: conversationId,
-        type: 'card',
-        content: content,
-        cardPayload: widget.payload.toCardPayload(message: note),
-        senderSubAccountId: senderSubAccountId,
-        personaContextVersion: activeContext.contextVersion,
-        senderDisplayNameSnapshot: activeContext.displayName,
-        senderAvatarUrlSnapshot: activeContext.avatarUrl,
-        clientMsgId: 'forward_${DateTime.now().microsecondsSinceEpoch}',
-      );
+      await ref
+          .read(chatMessageCommandWriterProvider)
+          .sendMessage(
+            ChatSendMessageCommand(
+              conversationId: conversationId,
+              type: 'card',
+              content: content,
+              card: widget.payload.toMessageCardCommand(message: note),
+              senderDisplayNameSnapshot: activeContext.displayName,
+              senderAvatarUrlSnapshot: activeContext.avatarUrl,
+              personaContextVersion: _positiveVersion(
+                activeContext.contextVersion,
+              ),
+              clientMsgId: _clientMsgId,
+            ),
+          );
       if (!mounted) {
         return;
       }
@@ -280,6 +285,11 @@ class _ForwardConfirmSheetState extends ConsumerState<ForwardConfirmSheet> {
         },
       );
     }
+  }
+
+  int? _positiveVersion(String raw) {
+    final parsed = int.tryParse(raw.trim());
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   Future<String> _resolveConversationId(ChatRepository repo) async {

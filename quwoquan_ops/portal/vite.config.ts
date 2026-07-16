@@ -8,7 +8,7 @@ export default defineConfig({
     port: 4173,
   },
   build: {
-    outDir: '../../.qwq_output/env/repo/local/ops-portal/dist',
+    outDir: '../../.qwq_output/env/repo/local/ops-portal/process/dist',
     emptyOutDir: true,
     rollupOptions: {
       output: {

@@ -4,6 +4,49 @@
 # 或结构化 OpsEvent 做 log-based alerting，或将聚合写入 Prometheus recording rule 后再挂 Alertmanager。
 
 groups:
+  - name: quwoquan_l2_auth_login
+    rules:
+      - alert: AuthProviderErrorRateHigh
+        expr: |
+          sum(rate(http_server_requests_total{service="user-service", route=~"/v1/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))", status!~"2.."}[5m])) by (route)
+          / (sum(rate(http_server_requests_total{service="user-service", route=~"/v1/auth/(authorization/alipay|login/(wechat|alipay|qq|one-tap.*))"}[5m])) by (route) + 0.001) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "登录 Provider {{ $labels.route }} 错误率连续两个窗口 > 2%"
+          description: "当前非 2xx 比率 {{ $value | humanizePercentage }}。立即验证该 provider 降级、短信验证码恢复入口与配置回滚。"
+
+      - alert: AuthChallengeLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="user-service", route=~"/v1/auth/(otp/send|authorization/alipay|login/one-tap/hint)"}[5m])) by (le, route)
+          ) > 1.2
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "登录挑战路由 {{ $labels.route }} P95 连续两个窗口 > 1.2s"
+          description: "当前 P95 = {{ $value | humanizeDuration }}，超出 SendOtp/提示契约 SLO。"
+
+      - alert: AuthLoginLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_duration_seconds_bucket{service="user-service", route=~"/v1/auth/login/(phone|wechat|alipay|qq|one-tap)"}[5m])) by (le, route)
+          ) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          layer: l2
+          domain: user-auth
+        annotations:
+          summary: "登录路由 {{ $labels.route }} P95 连续两个窗口 > 1.5s"
+          description: "当前 P95 = {{ $value | humanizeDuration }}，超出登录契约 SLO；优先验证 provider 降级和短信恢复路径。"
+
   - name: quwoquan_l2_mq
     rules:
       - alert: MQConsumeLagHigh
@@ -27,6 +70,80 @@ groups:
         annotations:
           summary: "OpsEvent upload rate dropped to near-zero"
           description: "Client app_log uploads have stopped, indicating AppLogUploader or OpsEvent pipeline failure"
+
+  - name: quwoquan_l1_startup_welcome
+    # startup_welcome_sequence 由 App Analytics/AppLog 上传并投影为 OpsEvent labels/metrics。
+    rules:
+      - alert: StartupWelcomeReplay1RateHigh
+        expr: |
+          sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished",replay_count=~"1|2"}[10m]))
+          / (sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished"}[10m])) + 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          layer: l1
+          domain: startup
+        annotations:
+          summary: "启动欢迎 replay 1 比例 > 5%"
+
+      - alert: StartupWelcomeReplay2RateHigh
+        expr: |
+          sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished",replay_count="2"}[10m]))
+          / (sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished"}[10m])) + 0.001) > 0.005
+        for: 10m
+        labels:
+          severity: warning
+          layer: l1
+          domain: startup
+        annotations:
+          summary: "启动欢迎 replay 2 比例 > 0.5%"
+
+      - alert: StartupWelcomeDegradedRateHigh
+        expr: |
+          sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished",exit_reason=~"degraded|deadline"}[10m]))
+          / (sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished"}[10m])) + 0.001) > 0.001
+        for: 5m
+        labels:
+          severity: critical
+          layer: l1
+          domain: startup
+        annotations:
+          summary: "启动降级或 deadline 比例 > 0.1%"
+
+      - alert: StartupWelcomeExitOverDeadline
+        expr: |
+          sum(rate(ops_event_metrics_count{event_name="startup_welcome_sequence",metric="welcomeExitMs"}[5m]))
+          - sum(rate(ops_event_metrics_bucket{event_name="startup_welcome_sequence",metric="welcomeExitMs",le="6000"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          layer: l1
+          domain: startup
+        annotations:
+          summary: "发现 welcomeExitMs > 6000 的启动"
+
+      - alert: StartupWelcomeOverlayRemovalOverDeadline
+        expr: |
+          sum(rate(ops_event_metrics_count{event_name="startup_welcome_sequence",metric="overlayRemovedMs"}[5m]))
+          - sum(rate(ops_event_metrics_bucket{event_name="startup_welcome_sequence",metric="overlayRemovedMs",le="6000"}[5m])) > 0
+        for: 1m
+        labels:
+          severity: critical
+          layer: l1
+          domain: startup
+        annotations:
+          summary: "发现 overlayRemovedMs > 6000 的启动"
+
+      - alert: StartupWelcomeConsecutiveSlowFrames
+        expr: |
+          sum(rate(ops_events_total{event_name="startup_welcome_sequence",phase="finished",slow_frame_streak_detected="true"}[5m])) > 0
+        for: 2m
+        labels:
+          severity: warning
+          layer: l1
+          domain: startup
+        annotations:
+          summary: "欢迎动效连续两帧超过 32ms"
 
   - name: quwoquan_l3_mongo
     rules:
@@ -659,7 +776,7 @@ groups:
           layer: l1
         annotations:
           summary: "homepage-import 最近一次导入存在 issues（env={{ $labels.env }}）"
-          description: "qwq-data ship → entity-service homepage-import 报告 issues={{ $value }}，introduction 投影可能缺三件套或 CAS 对象未物化；核对 publish/env_releases/<releaseId>/import-homepage-{{ $labels.env }}.json。"
+          description: "qwq-data ship → entity-service homepage-import 报告 issues={{ $value }}，introduction 投影可能缺对象闭包或 CAS；核对 .qwq_output/env/{{ $labels.env }}/data-release/<releaseId>/runs/<runId>/import-homepage.json。"
 
       - alert: HomepageImportStale
         expr: |

@@ -5,7 +5,7 @@ env-seed-first：唯一真相源是
 quwoquan_service/contracts/metadata/_shared/test_fixtures/content_recommendation_social_graph.gamma_seed.json，
 本脚本只读消费该 fixture，向 quwoquan_content 库幂等 upsert：
 
-  - follow_edges          : { followerId, followeeId }          —— viewer 关注边
+  - persona_follow_projection: { sourcePersonaId, targetPersonaId, following } —— viewer 关注投影
   - rm_recommend_feature  : userFeatures.tagInteraction.<tag>    —— 关注对象兴趣特征（按 tag dotted-path 合并，不清空既有）
   - rm_entity_tags        : { entityId, tags }                  —— canonical homepage/circle 对象标签
   - rm_behavior_events    : { userId, action, entityRefs }      —— 关注对象到访 canonical object 的事实事件
@@ -14,8 +14,9 @@ quwoquan_service/contracts/metadata/_shared/test_fixtures/content_recommendation
 并失效 viewer 的 rm_viewer_object_intersection 预物化快照（删除该 _id 文档），
 使下一次 feed/summary 读穿透回算交集（ReadModelIntersectionSource.FactReasons 缺快照即重算）。
 
-这些 follow_edges / rm_recommend_feature 在真实部署由 user-service 关注事件投影产出；
-gamma-local 未接线该跨服务投影，故此 fixture 充当其最小正规替身（可重跑、可审计、不硬编码业务列表到 UI/服务）。
+这些 persona_follow_projection / rm_recommend_feature 在真实部署由 user-service
+PersonaRelationship Stream 投影产出；本 fixture 仅用于受控 gamma 验证预置读模型
+事实，不替代跨服务事件链或生产数据。
 
 用法（gamma-local）：
   python3 quwoquan_service/services/seed-box/scripts/apply_content_social_graph_seed.py \
@@ -42,31 +43,38 @@ DEFAULT_FIXTURE = (
 )
 
 
-def build_mongo_script(fixture: dict) -> str:
+def build_mongo_script(fixture: dict, viewer_id_override: str = "") -> str:
     """把 fixture 编译成幂等 mongosh JS（值经 json.dumps 安全转义）。"""
     lines: list[str] = [
-        "var applied={followEdges:0,featureTags:0,entityTags:0,objectVisits:0,circleMembers:0,invalidated:0};"
+        "var applied={relationshipProjection:0,featureTags:0,entityTags:0,objectVisits:0,circleMembers:0,invalidated:0};"
     ]
     invalidate = bool(fixture.get("invalidateViewerIntersectionCache", False))
+    canonical_viewer_ids = {
+        str(viewer.get("viewerId") or "").strip()
+        for viewer in fixture.get("viewers", [])
+        if str(viewer.get("viewerId") or "").strip()
+    }
     for viewer in fixture.get("viewers", []):
-        viewer_id = viewer["viewerId"]
+        viewer_id = viewer_id_override.strip() or viewer["viewerId"]
         vid = json.dumps(viewer_id, ensure_ascii=False)
-        for follow in viewer.get("follows", []):
-            followee = follow["followeeId"]
-            fid = json.dumps(followee, ensure_ascii=False)
+        for relationship in viewer.get("relationships", []):
+            target_persona_id = relationship["targetPersonaId"]
+            tid = json.dumps(target_persona_id, ensure_ascii=False)
+            following = bool(relationship.get("following", False))
+            following_literal = "true" if following else "false"
             lines.append(
-                "applied.followEdges += db.follow_edges.updateOne("
-                f"{{followerId:{vid}, followeeId:{fid}}}, "
-                f"{{$set:{{followerId:{vid}, followeeId:{fid}, source:\"gamma_social_graph_seed\", updatedAt:new Date()}}}}, "
+                "applied.relationshipProjection += db.persona_follow_projection.updateOne("
+                f"{{sourcePersonaId:{vid}, targetPersonaId:{tid}}}, "
+                f"{{$set:{{sourcePersonaId:{vid}, targetPersonaId:{tid}, following:{following_literal}, source:\"gamma_social_graph_seed\", updatedAt:new Date()}}}}, "
                 "{upsert:true}).upsertedCount;"
             )
-            for tag, weight in (follow.get("interestTags") or {}).items():
+            for tag, weight in (relationship.get("interestTags") or {}).items():
                 field = json.dumps("userFeatures.tagInteraction." + tag, ensure_ascii=False)
                 wlit = int(weight)
                 lines.append(
                     "db.rm_recommend_feature.updateOne("
-                    f"{{userId:{fid}}}, "
-                    f"{{$set:{{userId:{fid}, {field}:{wlit}}}}}, "
+                    f"{{userId:{tid}}}, "
+                    f"{{$set:{{userId:{tid}, {field}:{wlit}}}}}, "
                     "{upsert:true});"
                 )
                 lines.append("applied.featureTags += 1;")
@@ -100,7 +108,10 @@ def build_mongo_script(fixture: dict) -> str:
         lines.append("applied.objectVisits += 1;")
     for membership in fixture.get("circleMemberships", []):
         circle_id = json.dumps(membership["circleId"], ensure_ascii=False)
-        user_id = json.dumps(membership["userId"], ensure_ascii=False)
+        membership_user_id = str(membership["userId"])
+        if viewer_id_override.strip() and membership_user_id in canonical_viewer_ids:
+            membership_user_id = viewer_id_override.strip()
+        user_id = json.dumps(membership_user_id, ensure_ascii=False)
         lines.append(
             "db.circle_members.updateOne("
             f"{{circleId:{circle_id}, userId:{user_id}}}, "
@@ -134,10 +145,15 @@ def main() -> int:
     parser.add_argument("--container", default="quwoquan_service-mongodb-1", help="mongo container name")
     parser.add_argument("--db", default="quwoquan_content", help="content-service mongo database")
     parser.add_argument("--report", default="", help="optional machine-readable report path")
+    parser.add_argument(
+        "--viewer-id",
+        default="",
+        help="bind the canonical fixture viewer to the authenticated runtime persona",
+    )
     args = parser.parse_args()
 
     fixture = json.loads(Path(args.fixture).read_text(encoding="utf-8"))
-    script = build_mongo_script(fixture)
+    script = build_mongo_script(fixture, args.viewer_id)
     out = run_mongosh(args.container, args.db, script)
     print(f"[seed] applied content social-graph seed -> {out}")
 
@@ -149,6 +165,7 @@ def main() -> int:
                 {
                     "fixture": args.fixture,
                     "targetStore": fixture.get("targetStore", ""),
+                    "activeViewerId": args.viewer_id,
                     "applied": json.loads(out) if out.startswith("{") else out,
                 },
                 ensure_ascii=False,

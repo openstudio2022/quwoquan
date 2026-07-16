@@ -29,7 +29,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
     PostBaseDto post, {
     required bool enableIdentityTemplate,
   }) {
-    runWhenLoggedIn(ref, context, AuthGateReason.shareRecord, () {
+    runWhenLoggedIn(ref, context, AuthGateReason.share, () {
       final template = _buildShareTemplate(
         post: post,
         enableIdentityTemplate: enableIdentityTemplate,
@@ -37,6 +37,15 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       ContentShareSheet.show(
         ctx,
         template: template,
+        circlePostPlacementWriter: ref.read(
+          workBrowserCirclePostPlacementWriterProvider,
+        ),
+        circleMembershipQuery: ref.read(
+          workBrowserCircleMembershipQueryProvider,
+        ),
+        outboundShareWriter: ref.read(
+          workBrowserContentOutboundShareWriterProvider,
+        ),
         onActionCompleted: (result) async {
           await _recordShare(post.id, result.actionId);
         },
@@ -74,27 +83,10 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       surfaceView: surfaceView,
       enableIdentityTemplate: enableIdentityTemplate,
       visibility: visibility,
-      circleNames: _circlesForPost(
-        post,
-      ).map((circle) => circle.name).toList(growable: false),
     );
   }
 
   Future<void> _recordShare(String postId, String actionId) async {
-    final rawShareCount =
-        (_rawPostById(postId)?[ContentPostImmersiveWireKeys.shareCount] as num?)
-            ?.toInt() ??
-        0;
-    final baselineShareCount = effectivePostShareCount(
-      ref,
-      postId,
-      fallback: rawShareCount,
-    );
-    await syncPostShareIntent(
-      ref,
-      postId: postId,
-      baselineShareCount: baselineShareCount,
-    );
     ref
         .read(contentBehaviorTrackerProvider)
         .trackShare(postId, tags: <String>[actionId]);

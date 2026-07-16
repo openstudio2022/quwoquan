@@ -19,42 +19,9 @@ redis:
 
 integration:
   external_interaction_base_url: "https://integration-service.local"
-  # gamma 对接真实上游，但通过"沙箱号段/测试账号 allowlist + 受控放通"保留可测性：
-  # 命中白名单的测试号/测试授权码回填验证码/接受沙箱身份并打审计；非白名单真实用户严格校验。
-  sms_otp:
-    pass_through_enabled: false
-    pass_through_debt_id: ""
-    pass_through_owner: ""
-    pass_through_expires_at: ""
-    debug_reveal_enabled: false
-    sandbox_allowlist:
-      enabled: true
-      phones:
-        - "+8617000000000"
-        - "+8617000000001"
-      debt_id: TECHDEBT-LOGIN-SANDBOX-ALLOWLIST-GAMMA-001
-      owner: backend-team
-      expires_at: "2026-08-31"
+  otp:
+    mode: fixed_test
   social:
-    sandbox_allowlist:
-      enabled: true
-      tokens:
-        - "sandbox-wechat-"
-        - "sandbox-alipay-"
-        - "sandbox-qq-"
-      debt_id: TECHDEBT-LOGIN-SANDBOX-ALLOWLIST-GAMMA-001
-      owner: backend-team
-      expires_at: "2026-08-31"
     providers: {}
   one_tap:
-    resolver: sandbox
-    sandbox_phones:
-      "sandbox-onetap-token-0": "+8617000000000"
-      "sandbox-onetap-token-1": "+8617000000001"
-    sandbox_allowlist:
-      enabled: true
-      tokens:
-        - "sandbox-onetap-token-"
-      debt_id: TECHDEBT-LOGIN-SANDBOX-ALLOWLIST-GAMMA-001
-      owner: backend-team
-      expires_at: "2026-08-31"
+    resolver: aliyun

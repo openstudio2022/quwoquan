@@ -34,7 +34,8 @@
         "intersection_core",
         "footprint_core",
         "home_showcase_core",
-        "creator_authored_core"
+        "creator_authored_core",
+        "profile_share_interaction_core"
       ],
       "resetScope": "fixture_content_*",
       "targetStore": "alpha-local-mock+content-service:test_store",
@@ -44,7 +45,9 @@
         "/v1/content/posts/fixture_photo_001/comments?sort=recommended",
         "/v1/content/posts/fixture_photo_001/comments/fixture_comment_parent_001/replies",
         "/v1/content/comments/fixture_comment_parent_001/reaction",
-        "/v1/content/comments/fixture_comment_parent_001/media:bind"
+        "/v1/content/comments/fixture_comment_parent_001/media:bind",
+        "/v1/content/sub-accounts/fixture_user_current/interactions/received?type=share",
+        "/v1/content/sub-accounts/fixture_user_current/interactions/sent?type=share"
       ],
       "deliveryChannels": [
         "app-fixture-json",
@@ -78,7 +81,7 @@
         "chat_settings_core",
         "chat_contacts_core",
         "chat_group_flow_core",
-        "chat_realtime_mock_core"
+        "chat_realtime_fixture_core"
       ],
       "resetScope": "fixture_chat_*",
       "targetStore": "alpha-local-mock+chat-service:test_store",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare content wire DTO Dart fromMap keys with metadata fields.yaml / report fields.
+"""Compare typed content decoders with metadata fields.yaml / report fields.
 
 Run from repo root: python3 scripts/verify_content_wire_dto_fields.py
 
@@ -34,15 +34,34 @@ FIELDS_REPORT = (
     / "report"
     / "fields.yaml"
 )
+FIELDS_COMMENT = (
+    ROOT
+    / "quwoquan_service"
+    / "contracts"
+    / "metadata"
+    / "content"
+    / "comment"
+    / "fields.yaml"
+)
+COMMENT_PAGE_PROJECTION = (
+    ROOT
+    / "quwoquan_service"
+    / "contracts"
+    / "metadata"
+    / "content"
+    / "comment"
+    / "projections"
+    / "comment_page_slice.yaml"
+)
 COMMENT_DART = (
     ROOT
     / "quwoquan_app"
+    / "packages"
+    / "quwoquan_cloud_contracts"
     / "lib"
-    / "cloud"
-    / "runtime"
-    / "generated"
+    / "src"
     / "content"
-    / "comment_dto.g.dart"
+    / "comment_contracts.dart"
 )
 SEARCH_DART = (
     ROOT
@@ -97,9 +116,34 @@ def _extract_factory_block(dart: str, factory_name: str) -> str:
     raise SystemExit(f"unclosed factory {factory_name}")
 
 
+def _extract_function_block(dart: str, function_name: str) -> str:
+    idx = dart.find(function_name)
+    if idx < 0:
+        raise SystemExit(f"function {function_name} not found")
+    brace = dart.find("{", idx)
+    depth = 0
+    for i in range(brace, len(dart)):
+        if dart[i] == "{":
+            depth += 1
+        elif dart[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return dart[brace : i + 1]
+    raise SystemExit(f"unclosed function {function_name}")
+
+
 def _map_keys_in_block(block: str) -> set[str]:
     keys: set[str] = set()
     for m in re.finditer(r"(?:m|map)\[['\"]([^'\"]+)['\"]\]", block):
+        keys.add(m.group(1))
+    # Pure contracts use typed accessors instead of direct dynamic-map reads.
+    # Keep the gate coupled to the decoder's declared wire keys without
+    # requiring the implementation to regress to `map['field']` access.
+    for m in re.finditer(
+        r"_(?:string|optionalString|integer|optionalInteger|boolean|optionalBoolean|timestamp|optionalTimestamp|stringList|objectList|status|reactionValue)"
+        r"\(\s*map\s*,\s*['\"]([^'\"]+)['\"]",
+        block,
+    ):
         keys.add(m.group(1))
     return keys
 
@@ -112,26 +156,32 @@ def _report_create_body_keys(report_yaml: dict) -> set[str]:
 
 def main() -> int:
     post = yaml.safe_load(FIELDS_POST.read_text(encoding="utf-8"))
-    comment_fields = set(_entity_field_names(post, "Comment"))
+    comment = yaml.safe_load(FIELDS_COMMENT.read_text(encoding="utf-8"))
+    comment_projection = yaml.safe_load(
+        COMMENT_PAGE_PROJECTION.read_text(encoding="utf-8")
+    )
+    comment_fields = {
+        str(field["name"])
+        for field in (comment.get("fields") or [])
+        if isinstance(field, dict) and field.get("name")
+    }
+    comment_fields.update(
+        str(field)
+        for field in (comment_projection.get("fields") or [])
+        if str(field).strip()
+    )
     search_fields = set(_entity_field_names(post, "PostSearchItemView"))
 
-    comment_block = _extract_factory_block(COMMENT_DART.read_text(encoding="utf-8"), "CommentDto.fromMap")
+    comment_block = _extract_function_block(
+        COMMENT_DART.read_text(encoding="utf-8"),
+        "_decodeCommentListItem(",
+    )
     comment_keys = _map_keys_in_block(comment_block)
 
-    # Wire-only aliases consumed by CommentDto but not Post entity field names.
-    extra_comment_ok = {
-        "id",
-        "subAccountId",
-        "authorId",
-        "displayName",
-        "avatarUrl",
-        "isAuthor",
-        "replyToDisplayName",
-    }
-    unknown = comment_keys - comment_fields - extra_comment_ok
+    unknown = comment_keys - comment_fields
     if unknown:
         print(
-            "verify_content_wire_dto_fields: CommentDto.fromMap uses unknown keys:\n  "
+            "verify_content_wire_dto_fields: ContentCommentListItem decoder uses unknown keys:\n  "
             + "\n  ".join(sorted(unknown)),
             file=sys.stderr,
         )
@@ -139,13 +189,11 @@ def main() -> int:
 
     missing = []
     for name in sorted(comment_fields):
-        if name not in comment_keys and name != "_id":
+        if name not in comment_keys:
             missing.append(name)
-        if name == "_id" and "_id" not in comment_keys and "id" not in comment_keys:
-            missing.append("_id")
     if missing:
         print(
-            "verify_content_wire_dto_fields: Comment entity fields missing from fromMap keys:\n  "
+            "verify_content_wire_dto_fields: Comment fields missing from strict decoder:\n  "
             + "\n  ".join(missing),
             file=sys.stderr,
         )

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "releaseId",
+    "releaseKind",
+    "executionIds",
+    "rolloutMilestone",
+    "entityCount",
+    "tagCount",
+    "canonicalMerkle",
+    "payloadSha256",
+    "recordedAt"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.aggregate_release_attestation/2" },
+    "releaseId": { "type": "string", "minLength": 1 },
+    "releaseKind": { "enum": ["content", "empty_baseline"] },
+    "executionIds": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "rolloutMilestone": {
+      "enum": ["baseline", "canary", "m1", "m2", "m3"]
+    },
+    "entityCount": { "type": "integer", "minimum": 0 },
+    "tagCount": { "type": "integer", "minimum": 0 },
+    "canonicalMerkle": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "payloadSha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "recordedAt": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "releaseKind": { "const": "content" } } },
+      "then": {
+        "properties": {
+          "executionIds": { "minItems": 1 },
+          "rolloutMilestone": { "enum": ["canary", "m1", "m2", "m3"] },
+          "entityCount": { "minimum": 1 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "releaseKind": { "const": "empty_baseline" } } },
+      "then": {
+        "properties": {
+          "executionIds": { "maxItems": 0 },
+          "rolloutMilestone": { "const": "baseline" },
+          "entityCount": { "const": 0 },
+          "tagCount": { "const": 0 }
+        }
+      }
+    }
+  ]
+}

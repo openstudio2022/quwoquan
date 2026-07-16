@@ -1,13 +1,13 @@
-// Command import 把 publish 主线的 posts/entities 灌入运行库（mongo）。
+// Command import 按 immutable release desired state 把 canonical objects 灌入运行库。
 //
-// 唯一内容真相源是 quwoquan_data/publish；本工具只读消费其目录树，按可选 sample bundle
-// 过滤某环境子集，幂等 upsert 到 content/entity 两个库，可重跑。
+// canonical 只提供对象事实，release overlay 是唯一选择集；禁止 sample bundle fallback
+// 与不带 release 的全树导入。
 //
 // 用法:
 //
 //	go run ./services/content-service/cmd/import \
 //	  --publish-root ../quwoquan_data/publish \
-//	  --sample-bundle ../quwoquan_data/publish/sample_bundles/gamma.json \
+//	  --release-root ../.qwq_output/data/release/<releaseId> \
 //	  --mongo-uri mongodb://localhost:27017 --env gamma
 package main
 
@@ -32,28 +32,27 @@ import (
 
 func main() {
 	publishRoot := flag.String("publish-root", "../quwoquan_data/publish", "path to publish mainline")
-	sampleBundle := flag.String("sample-bundle", "", "optional sample bundle json (env subset); empty = full")
+	releaseRoot := flag.String("release-root", "", "immutable release root containing payload/desired_state.json (required)")
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "mongo connection uri")
 	postsDB := flag.String("posts-db", "quwoquan_content", "target db for posts")
 	entitiesDB := flag.String("entities-db", "quwoquan_entity", "target db for entities")
 	env := flag.String("env", "", "environment label (for logging)")
 	dryRun := flag.Bool("dry-run", false, "load + report only, do not write mongo")
-	releaseID := flag.String("release-id", "", "data release id")
 	mode := flag.String("mode", "upsert", "apply mode: upsert|sync|reset-source")
 	deletePolicy := flag.String("delete-policy", "none", "missing object policy: none|tombstone|hard-delete")
 	sourceOwner := flag.String("source-owner", "qwq_data", "source owner for imported documents")
 	reportPath := flag.String("report", "", "optional machine-readable import report path")
 	flag.Parse()
 
-	var postFilter, entityFilter map[string]bool
-	if *sampleBundle != "" {
-		bundle, err := loadSampleBundle(*sampleBundle)
-		if err != nil {
-			log.Fatalf("load sample bundle: %v", err)
-		}
-		postFilter = toSet(bundle.Posts)
-		entityFilter = toSet(bundle.Entities)
+	if strings.TrimSpace(*releaseRoot) == "" {
+		log.Fatalf("--release-root is required; full-tree import and sample bundle fallback are forbidden")
 	}
+	desired, err := LoadReleaseDesiredState(*releaseRoot)
+	if err != nil {
+		log.Fatalf("load release desired state: %v", err)
+	}
+	postFilter := toSet(desired.DesiredRefs.Posts)
+	entityFilter := toSet(desired.DesiredRefs.Entities)
 
 	posts, err := LoadPosts(*publishRoot, postFilter)
 	if err != nil {
@@ -71,7 +70,7 @@ func main() {
 			"schemaVersion": "quwoquan.content_import_report.v1",
 			"status":        "dry-run",
 			"environment":   *env,
-			"releaseId":     NormalizeImportOptions(ImportOptions{ReleaseID: *releaseID}).ReleaseID,
+			"releaseId":     desired.ReleaseID,
 			"counts":        bson.M{"postsLoaded": len(posts), "entitiesLoaded": len(entities)},
 			"auditEvents":   []string{"DataReleasePrepared"},
 		})
@@ -92,7 +91,7 @@ func main() {
 
 	now := time.Now().UTC()
 	opts := NormalizeImportOptions(ImportOptions{
-		ReleaseID:    *releaseID,
+		ReleaseID:    desired.ReleaseID,
 		Mode:         *mode,
 		DeletePolicy: *deletePolicy,
 		SourceOwner:  *sourceOwner,
@@ -282,7 +281,7 @@ func UpsertPostsWithOptions(ctx context.Context, coll *mongo.Collection, posts [
 		doc := bson.M{
 			"postRef": p.PostRef, "postId": postID, "contentType": p.ContentType, "title": p.Title,
 			"angle": p.Angle, "seq": p.Seq, "entityRefs": runtimeEntityRefs, "tagRefs": p.TagRefs,
-			"intersectionHints":      p.IntersectionHints,
+			"intersectionHints":     p.IntersectionHints,
 			"semanticMentions":      p.SemanticMentions,
 			"authorId":              p.AuthorID,
 			"creatorProfileId":      p.CreatorProfileID,
@@ -413,7 +412,14 @@ func ApplyMissingPostPolicy(ctx context.Context, coll *mongo.Collection, posts [
 	if !missingPolicyEnabled(opts) || opts.DeletePolicy == "none" {
 		return 0, nil
 	}
-	filter := bson.M{"sourceOwner": opts.SourceOwner, "postRef": bson.M{"$nin": desiredPostRefs(posts)}}
+	filter := bson.M{
+		"sourceOwner": opts.SourceOwner,
+		"postRef":     bson.M{"$nin": desiredPostRefs(posts)},
+		"$or": bson.A{
+			bson.M{"lifecycleStatus": bson.M{"$ne": "tombstone"}},
+			bson.M{"deletedByReleaseId": bson.M{"$ne": opts.ReleaseID}},
+		},
+	}
 	if opts.DeletePolicy == "hard-delete" {
 		res, err := coll.DeleteMany(ctx, filter)
 		if err != nil {
@@ -436,7 +442,14 @@ func ApplyMissingEntityPolicy(ctx context.Context, coll *mongo.Collection, entit
 	if !missingPolicyEnabled(opts) || opts.DeletePolicy == "none" {
 		return 0, nil
 	}
-	filter := bson.M{"sourceOwner": opts.SourceOwner, "entityRef": bson.M{"$nin": desiredEntityRefs(entities)}}
+	filter := bson.M{
+		"sourceOwner": opts.SourceOwner,
+		"entityRef":   bson.M{"$nin": desiredEntityRefs(entities)},
+		"$or": bson.A{
+			bson.M{"lifecycleStatus": bson.M{"$ne": "tombstone"}},
+			bson.M{"deletedByReleaseId": bson.M{"$ne": opts.ReleaseID}},
+		},
+	}
 	if opts.DeletePolicy == "hard-delete" {
 		res, err := coll.DeleteMany(ctx, filter)
 		if err != nil {
@@ -604,7 +617,11 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 		if len(runtimeEntityRefs) == 0 {
 			runtimeEntityRefs = p.EntityRefs
 		}
-		for _, er := range runtimeEntityRefs {
+		joinEntityRefs := p.EntityRefs
+		if len(joinEntityRefs) == 0 {
+			joinEntityRefs = runtimeEntityRefs
+		}
+		for _, er := range joinEntityRefs {
 			if c, ok := condByEntity[er]; ok {
 				cond = c
 				break
@@ -626,7 +643,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"authorQualitySignals":  p.AuthorQualitySignals,
 			"tagRefs":               p.TagRefs,
 			"entityRefs":            runtimeEntityRefs,
-			"intersectionHints":      p.IntersectionHints,
+			"intersectionHints":     p.IntersectionHints,
 			"semanticMentions":      p.SemanticMentions,
 			"sourceCollectionId":    p.SourceCollectionID,
 			"sourcePlatform":        p.SourcePlatform,
@@ -694,7 +711,14 @@ func ApplyMissingFeedPolicy(ctx context.Context, coll *mongo.Collection, posts [
 	if !missingPolicyEnabled(opts) || opts.DeletePolicy == "none" {
 		return 0, nil
 	}
-	filter := bson.M{"sourceOwner": opts.SourceOwner, "postId": bson.M{"$nin": desiredRuntimePostIDs(posts)}}
+	filter := bson.M{
+		"sourceOwner": opts.SourceOwner,
+		"postId":      bson.M{"$nin": desiredRuntimePostIDs(posts)},
+		"$or": bson.A{
+			bson.M{"lifecycleStatus": bson.M{"$ne": "tombstone"}},
+			bson.M{"deletedByReleaseId": bson.M{"$ne": opts.ReleaseID}},
+		},
+	}
 	if opts.DeletePolicy == "hard-delete" {
 		res, err := coll.DeleteMany(ctx, filter)
 		if err != nil {

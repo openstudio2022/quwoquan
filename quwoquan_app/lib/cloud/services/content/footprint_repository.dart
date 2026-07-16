@@ -1,12 +1,6 @@
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_response_decoder.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
-import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
 
 /// 我的足迹条目（云侧只读契约 GET /v1/content/footprint 的端侧映射）。
@@ -118,47 +112,5 @@ class MockFootprintRepository implements FootprintRepository {
         .toUtc()
         .subtract(Duration(hours: hours))
         .toIso8601String();
-  }
-}
-
-/// Remote 实现：metadata codegen 的 path/operation/page id 单一真相源。
-class RemoteFootprintRepository implements FootprintRepository {
-  RemoteFootprintRepository({CloudHttpClient? httpClient, String? baseUrl})
-    : _httpClient = httpClient ?? CloudHttpClient(),
-      _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim();
-
-  final CloudHttpClient _httpClient;
-  final String _baseUrl;
-
-  @override
-  Future<CursorPage<FootprintEntry>> getMyFootprint({
-    String? type,
-    String? cursor,
-    int limit = GeneratedPostRuntimeMetadata.feedDefaultLimit,
-  }) async {
-    final query = <String, String>{'limit': '$limit'};
-    if (type?.trim().isNotEmpty == true) {
-      query['type'] = type!.trim();
-    }
-    if (cursor?.isNotEmpty == true) {
-      query['cursor'] = cursor!;
-    }
-    final uri = Uri.parse(
-      '$_baseUrl${ContentApiMetadata.getMyFootprintPath}',
-    ).replace(queryParameters: query);
-    final decoded = await _httpClient.getJson(
-      uri,
-      headers: CloudRequestHeaders.forPage(
-        ContentRequestPageIds.getMyFootprint,
-      ),
-    );
-    final rawPage = CloudResponseDecoder.asCursorPage(
-      decoded,
-      context: ContentRequestPageIds.getMyFootprint,
-    );
-    return CursorPage<FootprintEntry>(
-      items: rawPage.items.map(FootprintEntry.fromMap).toList(growable: false),
-      nextCursor: rawPage.nextCursor,
-    );
   }
 }

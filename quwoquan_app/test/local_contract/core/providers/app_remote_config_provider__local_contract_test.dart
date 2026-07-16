@@ -3,7 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
+import '../../../support/cloud_services/content_facet_overrides.dart';
 
 class _ConfigRepo extends MockContentRepository {
   _ConfigRepo(this.config);
@@ -30,7 +31,7 @@ void main() {
   test('normal remote config is stored as pending next session', () async {
     final container = ProviderContainer(
       overrides: [
-        contentRepositoryProvider.overrideWithValue(
+        ...mockContentFacetOverrides(
           _ConfigRepo({
             'schemaVersion': 'app_remote_config.v1',
             'packageVersion': 'cfg_test_1',
@@ -69,7 +70,7 @@ void main() {
     () async {
       final container = ProviderContainer(
         overrides: [
-          contentRepositoryProvider.overrideWithValue(
+          ...mockContentFacetOverrides(
             _ConfigRepo({
               'schemaVersion': 'app_remote_config.v1',
               'packageVersion': 'cfg_kill_switch',

@@ -2,6 +2,7 @@ package placeindex
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 
@@ -13,11 +14,10 @@ import (
 )
 
 // PostReader reads posts back so a lifecycle event (carrying only an aggregate
-// id) can be reconciled against the full post. persistence.PostRepository
-// satisfies it.
+// id) can be reconciled against the full post.
 type PostReader interface {
 	FindByID(ctx context.Context, id string) (*postmodel.Post, bool)
-	ListAll(ctx context.Context) []postmodel.Post
+	ListAll(ctx context.Context) ([]postmodel.Post, error)
 }
 
 // PlaceProjector keeps the first-party place snapshot store and the unified ES
@@ -26,8 +26,8 @@ type PostReader interface {
 // search-index projector.
 //
 // Like the post search-index projector, indexing/store failures are recorded
-// structurally but never propagate: the place index is a derived read store, so
-// a transient outage must not block the primary post write path.
+// and returned to this projector's dedicated outbox relay. The Post write has
+// already committed; the error keeps only the place checkpoint replayable.
 type PlaceProjector struct {
 	indexer *es.Indexer
 	reader  PostReader
@@ -58,8 +58,8 @@ func NewProjector(indexer *es.Indexer, reader PostReader, store PlaceStore, opts
 }
 
 // Project reconciles a post lifecycle event into the place snapshot store + ES
-// index. It always returns nil so a failing index write cannot break the
-// projector fan-out or the primary write path.
+// index. Failures must reach the dedicated relay so its checkpoint does not
+// acknowledge a partial projection.
 func (p *PlaceProjector) Project(ctx context.Context, event ports.ProjectorEvent) error {
 	if p == nil || p.indexer == nil || p.store == nil || p.reader == nil {
 		return nil
@@ -70,9 +70,9 @@ func (p *PlaceProjector) Project(ctx context.Context, event ports.ProjectorEvent
 	}
 	switch event.Type {
 	case "PostDeleted":
-		p.retractAll(ctx, postID, event.Type)
+		return p.retractAll(ctx, postID, event.Type)
 	case "PostCreated", "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork":
-		p.reconcile(ctx, postID, event.Type)
+		return p.reconcile(ctx, postID, event.Type)
 	default:
 		// Counter-only / unrelated events: nothing place-related changed.
 	}
@@ -85,68 +85,80 @@ func (p *PlaceProjector) Project(ctx context.Context, event ports.ProjectorEvent
 // single-source rule lives in searchprojection.DerivePlaceRef: a post bound to a
 // canonical entity yields no ref, so its old place loses this reference (and is
 // deleted once its last free-text reference is gone — carried by entity.homepage).
-func (p *PlaceProjector) reconcile(ctx context.Context, postID, eventType string) {
+func (p *PlaceProjector) reconcile(ctx context.Context, postID, eventType string) error {
 	currentID := ""
 	if post, ok := p.reader.FindByID(ctx, postID); ok && post != nil {
 		if ref, eligible := searchprojection.DerivePlaceRef(*post); eligible {
 			currentID = ref.PlaceID
 			if snap, err := p.store.AddReference(ctx, ref, postID); err != nil {
 				p.logger.Warn("place store add reference failed", "event", eventType, "postId", postID, "err", err)
+				return fmt.Errorf("place store add reference for %s: %w", postID, err)
 			} else {
-				p.indexUpsert(ctx, snap, eventType)
+				if err := p.indexUpsert(ctx, snap, eventType); err != nil {
+					return err
+				}
 			}
 		}
 	}
 	prev, err := p.store.PlacesReferencing(ctx, postID)
 	if err != nil {
 		p.logger.Warn("place store reverse lookup failed", "event", eventType, "postId", postID, "err", err)
-		return
+		return fmt.Errorf("place store reverse lookup for %s: %w", postID, err)
 	}
 	for _, place := range prev {
 		if place.PlaceID == currentID {
 			continue
 		}
-		p.retract(ctx, place.PlaceID, postID, eventType)
+		if err := p.retract(ctx, place.PlaceID, postID, eventType); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // retractAll removes a deleted post from every place it referenced.
-func (p *PlaceProjector) retractAll(ctx context.Context, postID, eventType string) {
+func (p *PlaceProjector) retractAll(ctx context.Context, postID, eventType string) error {
 	prev, err := p.store.PlacesReferencing(ctx, postID)
 	if err != nil {
 		p.logger.Warn("place store reverse lookup failed", "event", eventType, "postId", postID, "err", err)
-		return
+		return fmt.Errorf("place store reverse lookup for %s: %w", postID, err)
 	}
 	for _, place := range prev {
-		p.retract(ctx, place.PlaceID, postID, eventType)
+		if err := p.retract(ctx, place.PlaceID, postID, eventType); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // retract drops one post's reference from a place, re-indexing the survivor or
 // deleting the place doc when no references remain.
-func (p *PlaceProjector) retract(ctx context.Context, placeID, postID, eventType string) {
+func (p *PlaceProjector) retract(ctx context.Context, placeID, postID, eventType string) error {
 	snap, remaining, err := p.store.RemoveReference(ctx, placeID, postID)
 	if err != nil {
 		p.logger.Warn("place store remove reference failed", "event", eventType, "postId", postID, "placeId", placeID, "err", err)
-		return
+		return fmt.Errorf("place store remove reference %s from %s: %w", postID, placeID, err)
 	}
 	if remaining <= 0 {
-		p.indexDelete(ctx, placeID, eventType)
-		return
+		return p.indexDelete(ctx, placeID, eventType)
 	}
-	p.indexUpsert(ctx, snap, eventType)
+	return p.indexUpsert(ctx, snap, eventType)
 }
 
-func (p *PlaceProjector) indexUpsert(ctx context.Context, snap searchprojection.PlaceSnapshot, eventType string) {
+func (p *PlaceProjector) indexUpsert(ctx context.Context, snap searchprojection.PlaceSnapshot, eventType string) error {
 	doc := searchprojection.ProjectPlaceToSearchDocument(snap)
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpUpsert, Doc: doc}); err != nil {
 		p.logger.Warn("place index upsert failed", "event", eventType, "placeId", snap.PlaceID, "err", err)
+		return fmt.Errorf("place index upsert %s: %w", snap.PlaceID, err)
 	}
+	return nil
 }
 
-func (p *PlaceProjector) indexDelete(ctx context.Context, placeID, eventType string) {
+func (p *PlaceProjector) indexDelete(ctx context.Context, placeID, eventType string) error {
 	doc := rtsearch.Document{ObjectType: rtsearch.ObjectTypeLocation, ObjectID: placeID}
 	if err := p.indexer.Apply(ctx, es.ChangeEvent{Op: es.OpDelete, Doc: doc}); err != nil {
 		p.logger.Warn("place index delete failed", "event", eventType, "placeId", placeID, "err", err)
+		return fmt.Errorf("place index delete %s: %w", placeID, err)
 	}
+	return nil
 }

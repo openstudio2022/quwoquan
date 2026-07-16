@@ -5,6 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.da
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/cloud/services/user/auth_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/social_authorization_repository.dart';
 
 const String _defaultNicknameSample = '新同学_260622_6698692';
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
@@ -30,6 +31,7 @@ class _StubCloudHttpClient extends CloudHttpClient {
     Uri uri, {
     required Map<String, String> headers,
     required CloudJsonMap body,
+    bool requireAuth = false,
   }) async {
     final handler = onPostJson;
     if (handler == null) {
@@ -42,6 +44,8 @@ class _StubCloudHttpClient extends CloudHttpClient {
   Future<CloudHttpDecodedJson> deleteJson(
     Uri uri, {
     required Map<String, String> headers,
+    CloudJsonMap? body,
+    bool requireAuth = false,
   }) async {
     final handler = onDeleteJson;
     if (handler == null) {
@@ -52,6 +56,44 @@ class _StubCloudHttpClient extends CloudHttpClient {
 }
 
 void main() {
+  group('RemoteSocialAuthorizationRepository 契约', () {
+    test('支付宝授权串只从 metadata 路由获取且必须未过期', () async {
+      final client = _StubCloudHttpClient(
+        onPostJson: (uri, headers, body) async {
+          expect(
+            uri.path,
+            UserApiMetadata.createAlipayAuthorizationRequestPath,
+          );
+          expect(
+            headers['X-Client-Page-Id'],
+            UserRequestPageIds.createAlipayAuthorizationRequest,
+          );
+          expect(
+            headers['X-Client-Operation-Id'],
+            UserApiMetadata.createAlipayAuthorizationRequestOperation,
+          );
+          expect(body['platform'], isNotEmpty);
+          return <String, dynamic>{
+            'authorizationPayload': 'signed-alipay-auth-info',
+            'expiresAt': DateTime.now()
+                .toUtc()
+                .add(const Duration(minutes: 5))
+                .toIso8601String(),
+          };
+        },
+      );
+      final repository = RemoteSocialAuthorizationRepository(
+        httpClient: client,
+        baseUrl: 'https://gateway.example.com',
+      );
+
+      final request = await repository.createAlipayAuthorizationRequest();
+
+      expect(request.payload, 'signed-alipay-auth-info');
+      expect(request.isUsable, isTrue);
+    });
+  });
+
   group('RemoteAuthRepository 契约', () {
     test('手机号登录透传 deviceId/platform 并命中 metadata path', () async {
       final client = _StubCloudHttpClient(
@@ -119,7 +161,6 @@ void main() {
             'requestId': 'otp-request-1',
             'challengeId': 'otp-challenge-1',
             'retryAfterSeconds': 60,
-            'debugCode': '123456',
           };
         },
       );
@@ -361,82 +402,6 @@ void main() {
 
       expect(result.ownerId, 'owner-qq');
       expect(result.identityOrigin, 'qq');
-    });
-
-    test('Apple 登录命中 metadata path 并透传 id token', () async {
-      final client = _StubCloudHttpClient(
-        onPostJson: (uri, headers, body) async {
-          expect(uri.path, UserApiMetadata.loginWithApplePath);
-          expect(
-            headers['X-Client-Page-Id'],
-            UserRequestPageIds.loginWithApple,
-          );
-          expect(body['appleIdToken'], 'apple-id-token');
-          expect(body['deviceId'], 'install-id-4');
-          expect(body['platform'], 'ios');
-          return <String, dynamic>{
-            'accessToken': 'token-apple',
-            'refreshToken': 'refresh-apple',
-            'ownerId': 'owner-apple',
-            'activeSub': <String, dynamic>{'subAccountId': 'sub-apple'},
-            'subAccountCount': 1,
-            'accountState': 'active',
-            'identityOrigin': 'apple',
-          };
-        },
-      );
-      final repo = RemoteAuthRepository(
-        httpClient: client,
-        baseUrl: 'https://gateway.example.com',
-      );
-
-      final result = await repo.loginApple(
-        appleIdToken: 'apple-id-token',
-        deviceId: 'install-id-4',
-        platform: 'ios',
-      );
-
-      expect(result.ownerId, 'owner-apple');
-      expect(result.identityOrigin, 'apple');
-    });
-
-    test('passkey 登录命中 metadata path 并透传 assertion', () async {
-      final client = _StubCloudHttpClient(
-        onPostJson: (uri, headers, body) async {
-          expect(uri.path, UserApiMetadata.loginWithPasskeyPath);
-          expect(
-            headers['X-Client-Page-Id'],
-            UserRequestPageIds.loginWithPasskey,
-          );
-          expect(body['passkeyAssertion'], 'passkey-assertion');
-          expect(body['deviceId'], 'install-id-5');
-          expect(body['platform'], 'android');
-          expect(body['displayLabel'], 'zhaoyx@example.com');
-          return <String, dynamic>{
-            'accessToken': 'token-passkey',
-            'refreshToken': 'refresh-passkey',
-            'ownerId': 'owner-passkey',
-            'activeSub': <String, dynamic>{'subAccountId': 'sub-passkey'},
-            'subAccountCount': 1,
-            'accountState': 'active',
-            'identityOrigin': 'passkey',
-          };
-        },
-      );
-      final repo = RemoteAuthRepository(
-        httpClient: client,
-        baseUrl: 'https://gateway.example.com',
-      );
-
-      final result = await repo.loginPasskey(
-        passkeyAssertion: 'passkey-assertion',
-        deviceId: 'install-id-5',
-        platform: 'android',
-        displayLabel: 'zhaoyx@example.com',
-      );
-
-      expect(result.ownerId, 'owner-passkey');
-      expect(result.identityOrigin, 'passkey');
     });
   });
 }

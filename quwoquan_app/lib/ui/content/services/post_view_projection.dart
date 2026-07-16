@@ -1,12 +1,13 @@
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/models/content_post_detail_payload.dart';
+import 'package:quwoquan_app/core/media/content_media_url.dart';
 import 'package:quwoquan_app/ui/content/models/article_detail_view.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
 import 'package:quwoquan_app/ui/content/models/article_presentation_models.dart';
 import 'package:quwoquan_app/ui/content/article_render/markdown/article_markdown_codec.dart';
 import 'package:quwoquan_app/ui/content/models/content_surface_view.dart';
 
-/// 自 [ContentRepository.getPost] 返回的 [ContentPostDetailPayload] 投射出文章富渲染载荷。
+/// 自 [ContentReadRepository.getPost] 返回的 [ContentPostDetailPayload] 投射出文章富渲染载荷。
 ContentArticleRender projectArticleDetailViewFromPayload(
   ContentPostDetailPayload payload, {
   required String fallbackArticleId,
@@ -33,18 +34,25 @@ ContentArticleRender projectArticleDetailView(
   final read = PostReadPresentation.fromPostBase(dto, wire: raw);
   final postTitle = read.title;
   final body = read.body;
+  final mediaCoverUrl = resolveContentMediaUrl(dto.mediaCoverUrl);
+  final mediaThumbnailUrl = resolveContentMediaUrl(dto.mediaThumbnailUrl);
+  final primaryImageUrl = resolveContentMediaUrl(dto.primaryImageUrl);
+  final primaryVisualUrl = resolveContentMediaUrl(dto.primaryVisualUrl);
   var images = dto.hasImages
-      ? dto.mediaImageUrls.where((e) => e.isNotEmpty).toList(growable: false)
+      ? dto.mediaImageUrls
+            .map(resolveContentMediaUrl)
+            .where((url) => url.isNotEmpty)
+            .toList(growable: false)
       : const <String>[];
-  if (dto.isArticleLike && dto.mediaCoverUrl.isNotEmpty && images.isEmpty) {
-    images = <String>[dto.mediaCoverUrl];
+  if (dto.isArticleLike && mediaCoverUrl.isNotEmpty && images.isEmpty) {
+    images = <String>[mediaCoverUrl];
   }
-  final coverFromDto = dto.mediaCoverUrl.isNotEmpty
-      ? dto.mediaCoverUrl
-      : (dto.primaryImageUrl.isNotEmpty ? dto.primaryImageUrl : '');
-  final thumbnailFromDto = dto.mediaThumbnailUrl.isNotEmpty
-      ? dto.mediaThumbnailUrl
-      : dto.primaryVisualUrl;
+  final coverFromDto = mediaCoverUrl.isNotEmpty
+      ? mediaCoverUrl
+      : primaryImageUrl;
+  final thumbnailFromDto = mediaThumbnailUrl.isNotEmpty
+      ? mediaThumbnailUrl
+      : primaryVisualUrl;
   final coverImage = coverFromDto.isNotEmpty
       ? coverFromDto
       : (images.isNotEmpty

@@ -48,18 +48,11 @@ type ConversationAvatarPatchTask struct {
 	RecipientUserIDs []string
 }
 
-type noopGroupAvatarTaskScheduler struct{}
-
-func (noopGroupAvatarTaskScheduler) EnqueueRecompute(context.Context, GroupAvatarRecomputeTask) error {
-	return nil
-}
-
-func (noopGroupAvatarTaskScheduler) EnqueueConversationAvatarPatch(context.Context, ConversationAvatarPatchTask) error {
-	return nil
-}
-
-func NoopGroupAvatarTaskScheduler() GroupAvatarTaskScheduler {
-	return noopGroupAvatarTaskScheduler{}
+func requireGroupAvatarTaskScheduler(scheduler GroupAvatarTaskScheduler) GroupAvatarTaskScheduler {
+	if scheduler == nil {
+		panic("chat application requires GroupAvatarTaskScheduler")
+	}
+	return scheduler
 }
 
 type denyRelationshipGate struct{}

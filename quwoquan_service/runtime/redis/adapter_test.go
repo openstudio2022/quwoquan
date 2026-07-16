@@ -9,35 +9,6 @@ import (
 	"quwoquan_service/runtime/recommendation"
 )
 
-func TestCacheAdapter_GetSetDel(t *testing.T) {
-	client := NewMemoryClient()
-	adapter := NewCacheAdapter(client)
-	ctx := context.Background()
-
-	got, err := adapter.Get(ctx, "missing")
-	if err != nil {
-		t.Fatalf("Get missing: err=%v", err)
-	}
-	if got != nil {
-		t.Errorf("Get missing: expected nil, got %v", got)
-	}
-
-	_ = adapter.Set(ctx, "k1", []byte("data"), 60)
-	got, err = adapter.Get(ctx, "k1")
-	if err != nil {
-		t.Fatalf("Get after Set: err=%v", err)
-	}
-	if string(got) != "data" {
-		t.Errorf("Get after Set: got %q, want %q", string(got), "data")
-	}
-
-	_ = adapter.Del(ctx, "k1")
-	got, _ = adapter.Get(ctx, "k1")
-	if got != nil {
-		t.Errorf("Get after Del: expected nil, got %v", got)
-	}
-}
-
 func TestRecAdapter_BasicOps(t *testing.T) {
 	client := NewMemoryClient()
 	rec := NewRecAdapter(client)

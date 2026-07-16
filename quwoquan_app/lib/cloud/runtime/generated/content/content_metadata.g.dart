@@ -8,18 +8,19 @@ class GeneratedPostRuntimeMetadata {
   // Field defaults derived from post/fields.yaml constraints.
   static const Map<String, dynamic> postFieldDefaults = <String, dynamic>{
     'assistantUsePolicy': 'inherit',
-    'circleIds': <String>[],
     'commentCount': 0,
     'embedding': <double>[],
     'entityMentions': <Map<String, dynamic>>[],
     'entityRefs': <String>[],
     'likeCount': 0,
+    'mediaAssetIds': <String>[],
     'mediaItems': <Map<String, dynamic>>[],
     'mediaUrls': <String>[],
     'moderationStatus': 'pending',
     'semanticMentions': <Map<String, dynamic>>[],
     'shareCount': 0,
     'tagRefs': <String>[],
+    'version': 1,
     'viewCount': 0,
     'visibility': 'public',
   };
@@ -97,9 +98,6 @@ class GeneratedPostRuntimeMetadata {
     'primaryHomepageType',
     'primaryHomepageSnapshot',
     'visibility',
-    'circleIds',
-    'groupId',
-    'nodeId',
     'assistantUsePolicy',
     'sourcePostId',
     'sourceType',
@@ -110,9 +108,4 @@ class GeneratedPostRuntimeMetadata {
     'personaContextVersion',
   ];
 
-  // Reaction mutation route paths (from post/service.yaml).
-  static const Map<String, String> reactionRoutePaths = <String, String>{
-    'LikePost': '/v1/content/posts/{postId}/like',
-    'UnlikePost': '/v1/content/posts/{postId}/like',
-  };
 }

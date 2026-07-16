@@ -54,17 +54,17 @@ RUN set -e; \
     fi
 
 COPY quwoquan_service/services/rec-model-service/generated/ ./generated/
-COPY quwoquan_service/services/rec-model-service/app/ ./app/
 COPY quwoquan_service/services/rec-model-service/api/ ./api/
 COPY quwoquan_service/services/rec-model-service/features/ ./features/
 COPY quwoquan_service/services/rec-model-service/models/ ./models/
+COPY quwoquan_service/services/rec-model-service/security/ ./security/
 COPY quwoquan_service/services/rec-model-service/configs/ ./configs/
 COPY quwoquan_service/services/recommendation-service/ ./quwoquan_service/services/recommendation-service/
 COPY quwoquan_service/services/rec-model-service/runtime_contract.py ./
 COPY quwoquan_service/services/rec-model-service/main.py ./
 
-COPY quwoquan_service/services/rec-model-service/scripts/artifact_store.py ./ml/artifact_store.py
-COPY quwoquan_service/services/rec-model-service/scripts/model_registry.py ./ml/model_registry.py
+COPY quwoquan_service/services/rec-model-service/scripts/artifact_store.py ./scripts/artifact_store.py
+COPY quwoquan_service/services/rec-model-service/scripts/model_registry.py ./scripts/model_registry.py
 
 ENV PYTHONPATH=.
 ENV PYTHONUNBUFFERED=1

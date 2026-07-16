@@ -29,10 +29,3 @@ events:
     consumers: [user-service, platform-ops]
     channel: callback_or_event
     payload_fields: [requestId, challengeId, normalizedError, recoveryAction, timestamp]
-
-  - name: SmsOtpPassThroughDebtUsed
-    description: 非生产环境验证码正确性校验跳过已被使用，必须关联债务。
-    producer: user-service
-    consumers: [platform-ops]
-    channel: event_store
-    payload_fields: [requestId, challengeId, passThroughMode, debtId, owner, expiresAt]

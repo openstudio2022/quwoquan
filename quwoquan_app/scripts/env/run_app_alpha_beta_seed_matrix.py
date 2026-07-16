@@ -14,12 +14,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-# 统一输出根：app seed-matrix 辅助报告属于 repo 本地工具状态；正式 stackctl 证据写入 .qwq_output/env/<env>/runs/<runId>。
+# 统一输出根：app seed-matrix 报告属于 alpha 环境运行证据；正式 stackctl 证据写入 .qwq_output/env/<env>/runs/<runId>。
 OUTPUT_ROOT = Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
 APP_ARTIFACTS_ROOT = Path(
     os.environ.get(
         "QWQ_APP_ARTIFACTS_ROOT",
-        OUTPUT_ROOT / "env" / "repo" / "local" / "app-seed-matrix",
+        OUTPUT_ROOT / "env" / "alpha" / "runs" / "app-seed-matrix",
     )
 )
 APP = ROOT / "quwoquan_app"

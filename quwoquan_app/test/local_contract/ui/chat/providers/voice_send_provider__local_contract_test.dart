@@ -3,28 +3,33 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
+import 'package:quwoquan_app/cloud/remote/content/media/local_media_upload_source.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
+import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
   group('VoiceSendNotifier', () {
-    test('上传完成后发送 audio 消息并压缩 waveform', () async {
+    test('上传完成后只用 MediaAsset identity 发送 audio 消息', () async {
       final uploadManager = _ImmediateUploadManager(
         cdnUrl: 'https://cdn.example.com/voice.m4a',
         assetId: 'media_001',
       );
       final analytics = _FakeAnalyticsService();
-      final chatRepo = _TrackingChatRepository();
+      final writer = _TrackingMessageWriter();
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryProvider.overrideWithValue(chatRepo),
+          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatMessageCommandWriterProvider.overrideWithValue(writer),
           currentUserIdProvider.overrideWithValue('user_001'),
           analyticsProvider.overrideWithValue(analytics),
         ],
@@ -44,11 +49,16 @@ void main() {
 
       final state = container.read(voiceSendProvider('conv_001'));
       expect(state.status, VoiceSendStatus.completed);
-      expect(chatRepo.lastType, 'audio');
-      expect(chatRepo.lastMediaUrl, 'https://cdn.example.com/voice.m4a');
-      expect(chatRepo.lastMedia?['durationMs'], 3200);
-      expect(chatRepo.lastMedia?['codec'], 'aac');
-      expect((chatRepo.lastMedia?['waveform'] as List), hasLength(80));
+      expect(writer.lastCommand?.type, 'audio');
+      expect(writer.lastCommand?.mediaAssetId, 'media_001');
+      final wire =
+          encodeChatSendMessageCommand(writer.lastCommand!).body
+              as Map<String, Object?>;
+      expect(wire['mediaAssetId'], 'media_001');
+      expect(wire, isNot(contains('media')));
+      expect(wire, isNot(contains('url')));
+      expect(wire, isNot(contains('durationMs')));
+      expect(wire, isNot(contains('waveform')));
       expect(
         analytics.events.map((event) => event.eventName),
         containsAll(<String>[
@@ -66,11 +76,12 @@ void main() {
         assetId: 'media_001',
       );
       final analytics = _FakeAnalyticsService();
-      final chatRepo = _TrackingChatRepository();
+      final writer = _TrackingMessageWriter();
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryProvider.overrideWithValue(chatRepo),
+          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatMessageCommandWriterProvider.overrideWithValue(writer),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -92,7 +103,7 @@ void main() {
       expect(state.status, VoiceSendStatus.failed);
       expect(state.error, UITextConstants.chatVoiceRecordUnavailable);
       expect(uploadManager.enqueueCount, 0);
-      expect(chatRepo.sendCount, 0);
+      expect(writer.sendCount, 0);
       expect(
         analytics.events.map((event) => event.eventName),
         contains('voice_record_invalid'),
@@ -105,11 +116,12 @@ void main() {
         error: 'socket closed',
       );
       final analytics = _FakeAnalyticsService();
-      final chatRepo = _TrackingChatRepository();
+      final writer = _TrackingMessageWriter();
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryProvider.overrideWithValue(chatRepo),
+          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatMessageCommandWriterProvider.overrideWithValue(writer),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -130,7 +142,7 @@ void main() {
       final state = container.read(voiceSendProvider('conv_001'));
       expect(state.status, VoiceSendStatus.failed);
       expect(state.error, UITextConstants.chatVoicePendingRetry);
-      expect(chatRepo.sendCount, 0);
+      expect(writer.sendCount, 0);
       expect(
         analytics.events.map((event) => event.eventName),
         contains('voice_upload_failed'),
@@ -143,11 +155,12 @@ void main() {
         assetId: 'media_001',
       );
       final analytics = _FakeAnalyticsService();
-      final chatRepo = _TrackingChatRepository(shouldFail: true);
+      final writer = _TrackingMessageWriter(shouldFail: true);
       final container = ProviderContainer(
         overrides: [
           mediaUploadManagerProvider.overrideWithValue(uploadManager),
-          chatRepositoryProvider.overrideWithValue(chatRepo),
+          chatRepositoryProvider.overrideWithValue(MockChatRepository()),
+          chatMessageCommandWriterProvider.overrideWithValue(writer),
           analyticsProvider.overrideWithValue(analytics),
         ],
       );
@@ -193,7 +206,23 @@ class _ImmediateUploadManager extends MediaUploadManager {
     this.cdnUrl,
     this.assetId,
     this.error,
-  }) : super();
+  }) : super(
+         coordinator: ContentMediaUploadCoordinator(
+           media: RecordingContentMediaFacet(),
+           fileStorage: createFileStorageGateway(),
+           uploadObject:
+               (_, _, {required contentType, required expectedSha256}) async {},
+         ),
+         sourceReader: const LocalContentMediaSourceReader(),
+         uploadStream:
+             (
+               _,
+               _, {
+               required contentLength,
+               required contentType,
+               required expectedSha256,
+             }) async {},
+       );
 
   final UploadStatus status;
   final String? cdnUrl;
@@ -219,40 +248,24 @@ class _ImmediateUploadManager extends MediaUploadManager {
   void startOfflineMonitor() {}
 }
 
-class _TrackingChatRepository extends MockChatRepository {
-  _TrackingChatRepository({this.shouldFail = false});
+class _TrackingMessageWriter implements ChatMessageCommandWriter {
+  _TrackingMessageWriter({this.shouldFail = false});
 
   final bool shouldFail;
   int sendCount = 0;
-  String? lastType;
-  String? lastMediaUrl;
-  CloudJsonMap? lastMedia;
+  ChatSendMessageCommand? lastCommand;
 
   @override
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    CloudJsonMap? media,
-    CloudJsonMap? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? personaContextVersion,
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    required String clientMsgId,
-  }) async {
+  Future<ChatSendMessageResult> sendMessage(
+    ChatSendMessageCommand command,
+  ) async {
     sendCount++;
     if (shouldFail) {
       throw StateError('send failed');
     }
-    lastType = type;
-    lastMediaUrl = mediaUrl;
-    lastMedia = media;
-    return SendMessageResponse(
-      id: 'msg_voice_$sendCount',
+    lastCommand = command;
+    return ChatSendMessageResult(
+      messageId: 'msg_voice_$sendCount',
       seq: sendCount,
       timestamp: DateTime.utc(2026, 6, 6),
     );

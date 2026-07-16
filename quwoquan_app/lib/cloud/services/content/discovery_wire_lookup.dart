@@ -38,7 +38,7 @@ Map<String, dynamic>? findDiscoveryWireRowByPostId(
   return null;
 }
 
-/// Canonical mock 发现区：与 [MockContentRepository] / [MockAppContentRepository] 同源。
+/// Canonical alpha mock 发现区：仅由 [MockContentRepository] 持有。
 Map<String, dynamic>? lookupCanonicalDiscoveryWireRowByPostId(String postId) {
   final row = findDiscoveryWireRowByPostId(
     postId,
@@ -69,7 +69,7 @@ List<Map<String, dynamic>> mockDiscoveryWireFallback(
       .toList(growable: false);
 }
 
-/// 分享/沉浸器等需要的 wire 扩展字段（如 circleName、tags）：仅 Mock 有线表。
+/// 分享/沉浸器等需要的 Post wire 扩展字段：仅 alpha Mock 有线表。
 Map<String, dynamic>? prototypeDiscoveryWireRowForMock(
   bool isMockDataSource,
   String postId,

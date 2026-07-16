@@ -10,7 +10,10 @@ echo "[verify] config pr policy"
 # - If service config files changed, at least one release version snapshot must change.
 # - If high-risk keys changed in service configs, risky-config docs must be updated too.
 
-changed="$(git diff --no-renames --name-only HEAD)"
+changed="$({
+  git diff --no-renames --name-only HEAD
+  git ls-files --others --exclude-standard
+} | awk 'NF && !seen[$0]++')"
 if [[ -z "$changed" ]]; then
   echo "[verify] OK: no changes against HEAD (policy skipped)"
   exit 0

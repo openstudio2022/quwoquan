@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "leaseRoot": ".qwq_output/env/repo/local/control-plane/process/app-cloud-handoff/leases",
+  "resources": [
+    {
+      "id": "contract-graph-source",
+      "owner": "business-object-analysis",
+      "writePaths": [
+        "quwoquan_service/contracts/metadata/**",
+        "quwoquan_service/internal/metadata/ast/**",
+        "quwoquan_service/internal/metadata/graph/**",
+        "quwoquan_service/internal/metadata/validate/**"
+      ],
+      "consumers": [
+        "contract-graph-compiler"
+      ]
+    },
+    {
+      "id": "contract-graph-bundle",
+      "owner": "business-object-analysis",
+      "writePaths": [
+        "quwoquan_service/generated/contract_graph.json"
+      ],
+      "consumers": [
+        "app-cloud-handoff"
+      ]
+    },
+    {
+      "id": "app-cloud-handoff",
+      "owner": "app-cloud-governance",
+      "writePaths": [
+        "quwoquan_app/tool/cloud_codegen/contract_graph.lock.json",
+        "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json"
+      ],
+      "consumers": [
+        "app-only-emitter"
+      ]
+    },
+    {
+      "id": "app-generated-output",
+      "owner": "app-only-emitter",
+      "writePaths": [
+        "quwoquan_app/lib/cloud/runtime/generated/**",
+        "quwoquan_app/lib/cloud/**/generated/**",
+        "quwoquan_app/lib/app/navigation/generated/**",
+            "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/generated/**",
+            "quwoquan_app/tool/cloud_codegen/generated_manifest.json"
+      ],
+      "consumers": [
+        "app-production-composition",
+        "app-alpha-composition"
+      ]
+    },
+    {
+      "id": "shared-topology",
+      "owner": "environment-ops",
+      "writePaths": [
+        "quwoquan_ops/environments/*.yaml"
+      ],
+      "consumers": [
+        "stackctl",
+        "service-layout-governance"
+      ]
+    },
+    {
+      "id": "app-alpha-composition",
+      "owner": "app-cloud-governance",
+      "writePaths": [
+        "quwoquan_app/packages/quwoquan_cloud_mock/**",
+        "quwoquan_app/runners/alpha/**"
+      ],
+      "consumers": [
+        "app-alpha-runner",
+        "local-contract"
+      ]
+    }
+  ],
+  "consumerImportDag": [
+    [
+      "contract-graph-source",
+      "contract-graph-bundle"
+    ],
+    [
+      "contract-graph-bundle",
+      "app-cloud-handoff"
+    ],
+    [
+      "app-cloud-handoff",
+      "app-generated-output"
+    ],
+    [
+      "app-generated-output",
+      "app-production-composition"
+    ],
+    [
+      "app-generated-output",
+      "app-alpha-composition"
+    ]
+  ],
+  "forbiddenEdges": [
+    [
+      "app-cloud-governance",
+      "contract-graph-source"
+    ],
+    [
+      "app-only-emitter",
+      "contract-graph-source"
+    ],
+    [
+      "app-production-composition",
+      "app-alpha-composition"
+    ]
+  ]
+}

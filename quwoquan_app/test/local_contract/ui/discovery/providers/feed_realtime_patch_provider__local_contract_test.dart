@@ -5,7 +5,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/feed_realtime_patch.g.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/core/auth/auth_session.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
 import 'package:quwoquan_app/ui/discovery/providers/feed_realtime_patch_provider.dart';
 

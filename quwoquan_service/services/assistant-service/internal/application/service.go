@@ -15,9 +15,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	rterr "quwoquan_service/runtime/errors"
+	messaging "quwoquan_service/runtime/messaging"
 	rtobs "quwoquan_service/runtime/observability"
 	rtredis "quwoquan_service/runtime/redis"
-	"quwoquan_service/runtime/repository"
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/services/assistant-service/internal/domain/assistant"
 )
@@ -62,9 +62,9 @@ type AssistantService struct {
 	profiles                   LearningProfileStore
 	consents                   ConsentStore
 	cache                      rtredis.Client
-	publisher                  repository.EventPublisher
+	publisher                  messaging.EventPublisher
 	projector                  Projector
-	appMessages                AppMessageStore
+	notificationMessages       NotificationAppMessageCommandWriter
 	subscriptions              SkillSubscriptionStore
 	proactiveInterest          ProactiveInterestReader
 	creationGrounding          CreationSuggestGrounding
@@ -82,7 +82,7 @@ type AssistantService struct {
 
 type AssistantServiceOption func(*AssistantService)
 
-func WithEventPublisher(pub repository.EventPublisher) AssistantServiceOption {
+func WithEventPublisher(pub messaging.EventPublisher) AssistantServiceOption {
 	return func(s *AssistantService) { s.publisher = pub }
 }
 
@@ -403,7 +403,7 @@ func (s *AssistantService) publishInteractionEvent(ctx context.Context, event as
 	if s.publisher == nil {
 		return
 	}
-	_ = s.publisher.Publish(ctx, repository.DomainEvent{
+	_ = s.publisher.Publish(ctx, messaging.DomainEvent{
 		Type:          interactionEventTypeForPublish(event),
 		AggregateType: "AssistantRun",
 		AggregateID:   event.RunID,
@@ -416,7 +416,7 @@ func (s *AssistantService) publishScorecardEvent(ctx context.Context, score assi
 	if s.publisher == nil {
 		return
 	}
-	_ = s.publisher.Publish(ctx, repository.DomainEvent{
+	_ = s.publisher.Publish(ctx, messaging.DomainEvent{
 		Type:          "AssistantScorecardReported",
 		AggregateType: "AssistantRun",
 		AggregateID:   firstNonEmpty(score.RunID, score.EventID, score.ScoreID),
@@ -1017,61 +1017,6 @@ func (s *AssistantService) ListSkills(ctx context.Context, userID string, limit 
 		limit = len(items)
 	}
 	return assistant.AssistantSkillCatalogListView{Items: items[:limit]}, nil
-}
-
-func (s *AssistantService) ListConsents(ctx context.Context, userID string) (_ []assistant.SkillConsent, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.ListConsents",
-		attribute.String("user.id", userID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if strings.TrimSpace(userID) == "" {
-		return []assistant.SkillConsent{}, nil
-	}
-	if s.consents == nil {
-		return []assistant.SkillConsent{}, nil
-	}
-	return s.consents.ListActiveConsents(ctx, userID)
-}
-
-func (s *AssistantService) GrantSkillConsent(ctx context.Context, userID string, skillID string, grantedScope string) (_ assistant.SkillConsent, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.GrantSkillConsent",
-		attribute.String("user.id", userID),
-		attribute.String("skill.id", skillID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if strings.TrimSpace(userID) == "" {
-		return assistant.SkillConsent{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
-	}
-	if strings.TrimSpace(skillID) == "" {
-		return assistant.SkillConsent{}, rterr.NewInvalidArgument(rterr.ModuleAssistant, "skillId 不能为空", "missing skillId")
-	}
-	if strings.TrimSpace(grantedScope) == "" {
-		grantedScope = skillID
-	}
-	if s.consents == nil {
-		now := s.now()
-		return assistant.SkillConsent{ID: consentID(userID, skillID), UserID: userID, SkillID: skillID, GrantedScope: grantedScope, GrantedAt: now}, nil
-	}
-	consent := assistant.SkillConsent{ID: consentID(userID, skillID), UserID: userID, SkillID: skillID, GrantedScope: grantedScope, GrantedAt: s.now()}
-	return s.consents.UpsertConsent(ctx, consent)
-}
-
-func (s *AssistantService) RevokeSkillConsent(ctx context.Context, userID string, skillID string) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "assistant.RevokeSkillConsent",
-		attribute.String("user.id", userID),
-		attribute.String("skill.id", skillID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if strings.TrimSpace(userID) == "" {
-		return rterr.NewInvalidArgument(rterr.ModuleAssistant, "userId 不能为空", "missing userId")
-	}
-	if strings.TrimSpace(skillID) == "" {
-		return rterr.NewInvalidArgument(rterr.ModuleAssistant, "skillId 不能为空", "missing skillId")
-	}
-	if s.consents == nil {
-		return nil
-	}
-	return s.consents.RevokeConsent(ctx, userID, skillID, s.now())
 }
 
 func buildSuggestedActions(pageType string, objectID string) []assistant.SuggestedAction {

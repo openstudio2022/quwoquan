@@ -69,7 +69,7 @@ func TestPostSearchBlocksSensitiveQuery(t *testing.T) {
 
 func TestPendingSemanticMentionRemainsFullTextOnly(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := createPostWithAuthor(t, "semantic_search_author", `{
+	created := createDraftPostWithAuthor(t, "semantic_search_author", `{
 		"contentType":"article",
 		"title":"高原旅行笔记",
 		"body":"神秘雪谷仍在候选治理中，但这段普通正文应当可以搜索。",

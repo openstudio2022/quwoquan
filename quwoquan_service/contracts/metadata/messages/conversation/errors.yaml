@@ -30,6 +30,50 @@ errors:
       zh: "请先登录"
       en: "Please sign in"
 
+  - code: CHAT.USER.message_not_found
+    kind: USER
+    reason: not_found
+    http_status: 404
+    recovery_action: surface
+    dart_const: messageNotFound
+    go_const: ErrMessageNotFound
+    user_message:
+      zh: "消息不存在"
+      en: "Message not found"
+
+  - code: CHAT.USER.message_recall_forbidden
+    kind: USER
+    reason: forbidden
+    http_status: 403
+    recovery_action: surface
+    dart_const: messageRecallForbidden
+    go_const: ErrMessageRecallForbidden
+    user_message:
+      zh: "只能撤回自己发送的消息"
+      en: "Only the sender can recall a message"
+
+  - code: CHAT.USER.message_recall_expired
+    kind: USER
+    reason: conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: messageRecallExpired
+    go_const: ErrMessageRecallExpired
+    user_message:
+      zh: "消息已超过可撤回时间"
+      en: "Message recall window has expired"
+
+  - code: CHAT.USER.message_idempotency_conflict
+    kind: USER
+    reason: conflict
+    http_status: 409
+    recovery_action: surface
+    dart_const: messageIdempotencyConflict
+    go_const: ErrMessageIdempotencyConflict
+    user_message:
+      zh: "该消息请求标识已用于不同内容，请重新发送"
+      en: "This message request identifier was already used for different content"
+
   - code: CHAT.USER.message_too_long
     kind: USER
     reason: invalid_argument
@@ -40,6 +84,40 @@ errors:
     user_message:
       zh: "消息内容超出长度限制"
       en: "Message exceeds length limit"
+
+  - code: CHAT.USER.message_invalid
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: messageInvalid
+    go_const: ErrMessageInvalid
+    user_message:
+      zh: "消息内容不符合发送要求，请检查后重试"
+      en: "Message content is invalid; review it and try again"
+
+  - code: CHAT.USER.message_media_invalid
+    kind: USER
+    reason: invalid_argument
+    http_status: 400
+    recovery_action: surface
+    dart_const: messageMediaInvalid
+    go_const: ErrMessageMediaInvalid
+    user_message:
+      zh: "消息媒体不可用，请重新上传后再发送"
+      en: "Message media is invalid; upload it again before sending"
+
+  - code: CHAT.SYSTEM.message_media_unavailable
+    kind: SYSTEM
+    reason: dependency_unavailable
+    http_status: 503
+    recovery_action: retry
+    recovery_after_seconds: 3
+    dart_const: messageMediaUnavailable
+    go_const: ErrMessageMediaUnavailable
+    user_message:
+      zh: "媒体服务暂时不可用，请稍后重试"
+      en: "Media service is temporarily unavailable; try again later"
 
   - code: CHAT.USER.rate_limited
     kind: USER

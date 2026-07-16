@@ -26,6 +26,8 @@ class PlatformCapabilities {
     required this.promotesAppInstall,
     required this.oneTapLogin,
     required this.wechatNativeLogin,
+    required this.alipayNativeLogin,
+    required this.qqNativeLogin,
     required this.wechatTargetedShare,
     required this.systemShareSheet,
     required this.appleNativeLogin,
@@ -90,6 +92,12 @@ class PlatformCapabilities {
   /// WeChat native OpenSDK login.
   final bool wechatNativeLogin;
 
+  /// Alipay native authorization login.
+  final bool alipayNativeLogin;
+
+  /// QQ native OpenSDK login.
+  final bool qqNativeLogin;
+
   /// WeChat native OpenSDK targeted share.
   ///
   /// This is intentionally separate from [wechatNativeLogin]: login can be
@@ -132,6 +140,8 @@ class PlatformCapabilities {
     bool? promotesAppInstall,
     bool? oneTapLogin,
     bool? wechatNativeLogin,
+    bool? alipayNativeLogin,
+    bool? qqNativeLogin,
     bool? wechatTargetedShare,
     bool? systemShareSheet,
     bool? appleNativeLogin,
@@ -155,6 +165,8 @@ class PlatformCapabilities {
       promotesAppInstall: promotesAppInstall ?? this.promotesAppInstall,
       oneTapLogin: oneTapLogin ?? this.oneTapLogin,
       wechatNativeLogin: wechatNativeLogin ?? this.wechatNativeLogin,
+      alipayNativeLogin: alipayNativeLogin ?? this.alipayNativeLogin,
+      qqNativeLogin: qqNativeLogin ?? this.qqNativeLogin,
       wechatTargetedShare: wechatTargetedShare ?? this.wechatTargetedShare,
       systemShareSheet: systemShareSheet ?? this.systemShareSheet,
       appleNativeLogin: appleNativeLogin ?? this.appleNativeLogin,
@@ -192,6 +204,8 @@ class CapabilityProfile {
     promotesAppInstall: false,
     oneTapLogin: true,
     wechatNativeLogin: true,
+    alipayNativeLogin: true,
+    qqNativeLogin: true,
     wechatTargetedShare: false,
     systemShareSheet: true,
     appleNativeLogin: true,
@@ -215,6 +229,8 @@ class CapabilityProfile {
     promotesAppInstall: true,
     oneTapLogin: false,
     wechatNativeLogin: false,
+    alipayNativeLogin: false,
+    qqNativeLogin: false,
     wechatTargetedShare: false,
     systemShareSheet: true,
     appleNativeLogin: false,
@@ -240,6 +256,8 @@ class CapabilityProfile {
     promotesAppInstall: false,
     oneTapLogin: false,
     wechatNativeLogin: false,
+    alipayNativeLogin: false,
+    qqNativeLogin: false,
     wechatTargetedShare: false,
     systemShareSheet: false,
     appleNativeLogin: false,
@@ -263,6 +281,8 @@ class CapabilityProfile {
     promotesAppInstall: false,
     oneTapLogin: false,
     wechatNativeLogin: false,
+    alipayNativeLogin: false,
+    qqNativeLogin: false,
     wechatTargetedShare: false,
     systemShareSheet: true,
     appleNativeLogin: false,
@@ -281,8 +301,7 @@ PlatformCapabilities platformCapabilitiesFor(AppPlatform platform) {
         wechatTargetedShare: true,
       );
     case AppPlatform.ios:
-      // 微信原生登录仅 Android 开启；iOS 走 Apple 登录（与来电能力位基线测试契约一致）。
-      return CapabilityProfile.mobile.copyWith(wechatNativeLogin: false);
+      return CapabilityProfile.mobile;
     case AppPlatform.web:
       return CapabilityProfile.web;
     case AppPlatform.ohos:

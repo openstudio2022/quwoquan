@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"text/template"
 
-	"gopkg.in/yaml.v3"
+	"quwoquan_service/internal/metadata/graph"
 )
 
 type eventsYAML struct {
@@ -22,26 +22,29 @@ type eventDef struct {
 // generateMergedEventConstants merges events.yaml from all sources sharing the same
 // domain_pkg and writes a single events.g.go per package. This prevents overwriting
 // when multiple metadata sources map to the same Go package.
-func generateMergedEventConstants(manifest *Manifest, metadataDir string) error {
+func generateMergedEventConstants(
+	manifest *Manifest,
+	contractGraph *graph.ContractGraph,
+) error {
 	// Group events by domain_pkg
 	pkgEvents := make(map[string][]eventDef)
 	pkgOutputDir := make(map[string]string)
+	pkgNames := make(map[string]string)
 
 	for _, src := range manifest.Sources {
-		eventsPath := filepath.Join(metadataDir, src.Metadata, "events.yaml")
-		data, err := os.ReadFile(eventsPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return fmt.Errorf("read %s: %w", eventsPath, err)
+		eventsPath := filepath.ToSlash(filepath.Join(src.Metadata, "events.yaml"))
+		if !contractGraph.HasDocument(eventsPath) {
+			continue
 		}
 		var ev eventsYAML
-		if err := yaml.Unmarshal(data, &ev); err != nil {
+		if err := contractGraph.DecodeDocumentYAML(eventsPath, &ev); err != nil {
 			return fmt.Errorf("parse %s: %w", eventsPath, err)
 		}
-		pkg := src.DomainPkg
+		pkg := src.domainPath()
 		pkgEvents[pkg] = appendUniqueEvents(pkgEvents[pkg], ev.Events)
+		if _, exists := pkgNames[pkg]; !exists {
+			pkgNames[pkg] = src.DomainPkg
+		}
 		// Record output dir (same for all sources with same domain_pkg + manifest)
 		if _, exists := pkgOutputDir[pkg]; !exists {
 			pkgOutputDir[pkg] = filepath.Join(manifest.OutputDir, "domain", pkg, "event")
@@ -66,7 +69,7 @@ func generateMergedEventConstants(manifest *Manifest, metadataDir string) error 
 		if err := tmpl.Execute(&buf, struct {
 			Package string
 			Events  []eventDef
-		}{Package: pkg, Events: events}); err != nil {
+		}{Package: pkgNames[pkg], Events: events}); err != nil {
 			return fmt.Errorf("execute events template for %s: %w", pkg, err)
 		}
 

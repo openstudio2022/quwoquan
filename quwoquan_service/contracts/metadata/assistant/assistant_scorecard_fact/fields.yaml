@@ -1,0 +1,70 @@
+version: 1
+aggregate: AssistantScorecardFact
+
+entities:
+  Scorecard:
+    description: 助手交互指标评分卡
+    fields:
+      - name: scoreId
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: eventId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: runId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: userId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: domainId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: metricId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: scoreValue
+        type: float
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: scoreSource
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read

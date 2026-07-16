@@ -286,7 +286,7 @@ behavior_events:
     notes: |
       交集转化归因（S6）：intersectionDimension（identity/location/content/interest/relationship
       五维之一）+ intersectionSourceRef（§5.4 标准 kind，与曝光/点击/展开同名）+ intersectionTagRefs
-      （路径制 tagRef，唯一真相源 publish/tags）随关注上报，使「交集曝光 → 点击 → 转化」整条漏斗
+      （路径制 tagRef，唯一真相源 control_plane/governance/taxonomy）随关注上报，使「交集曝光 → 点击 → 转化」整条漏斗
       可按同一 sourceRef 下钻，供推荐回流与「交集转化率」北极星指标按维度/kind/tagRef 切分。
 
   - type: join_circle

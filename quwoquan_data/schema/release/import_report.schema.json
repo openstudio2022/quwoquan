@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/import_report.schema.json",
+  "title": "Environment import report (content importer 回执)",
+  "description": "content-service cmd/import 产出的 import-<env>.json 契约（Go 侧写、数据侧消费）。ship 转写批次证据前必须通过本 Schema，防止导入证据链断裂。",
+  "type": "object",
+  "required": ["schemaVersion", "status", "environment", "releaseId", "counts", "auditEvents"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "quwoquan.content_import_report.v1" },
+    "status": { "type": "string", "enum": ["dry-run", "active"] },
+    "environment": { "type": "string", "minLength": 1 },
+    "releaseId": { "type": "string", "minLength": 1 },
+    "sourceOwner": { "type": "string" },
+    "mode": { "type": "string" },
+    "deletePolicy": { "type": "string" },
+    "counts": {
+      "type": "object",
+      "required": ["postsLoaded", "entitiesLoaded"],
+      "additionalProperties": false,
+      "properties": {
+        "postsLoaded": { "type": "integer", "minimum": 0 },
+        "entitiesLoaded": { "type": "integer", "minimum": 0 },
+        "postsUpserted": { "type": "integer", "minimum": 0 },
+        "entitiesUpserted": { "type": "integer", "minimum": 0 },
+        "feedUpserted": { "type": "integer", "minimum": 0 },
+        "postsRemoved": { "type": "integer", "minimum": 0 },
+        "entitiesRemoved": { "type": "integer", "minimum": 0 },
+        "feedRemoved": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "auditEvents": { "type": "array", "items": { "type": "string" } },
+    "generatedAt": { "type": "string" },
+    "sourceReportPath": { "type": "string" }
+  }
+}

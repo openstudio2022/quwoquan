@@ -9,6 +9,7 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
+import '../../../support/cloud_services/content_facet_overrides.dart';
 
 class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   @override
@@ -26,7 +27,7 @@ Widget _buildApp() {
       userProfileRepositoryProvider.overrideWithValue(
         const MockUserProfileRepository(),
       ),
-      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      ...mockContentFacetOverrides(MockContentRepository()),
       relationshipCapabilityRepositoryProvider.overrideWithValue(
         _ThrowingCapabilityRepository(),
       ),

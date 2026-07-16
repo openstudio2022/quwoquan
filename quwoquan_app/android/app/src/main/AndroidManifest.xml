@@ -30,12 +30,20 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity
+            android:name=".wxapi.WXEntryActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.quwoquan.quwoquan_app"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
     <queries>
         <package android:name="com.tencent.mm" />
+        <package android:name="com.tencent.mobileqq" />
+        <package android:name="com.eg.android.AlipayGphone" />
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

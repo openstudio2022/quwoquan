@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 聊天助手旅程：邀请助手 → @小趣 → 收到回复
 ///
-/// ChatDetailPage 中助手交互依赖 AssistantEngine 等重型运行时，旅程测试通过
+/// PersonalAssistantConversationPage 中助手交互依赖 AssistantEngine 等重型运行时，旅程测试通过
 /// 轻量测试 Widget 验证 ChatRepository.inviteAssistant / removeAssistant 的
 /// 核心交互链路与 UI 状态反馈。
 void main() {
@@ -17,7 +17,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [chatRepositoryProvider.overrideWithValue(mock)],
-          child: MaterialApp(home: _AssistantTestPage(repo: mock)),
+          child: MaterialApp(
+            home: _AssistantTestPage(repo: mock, writer: mock.writer),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -35,7 +37,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [chatRepositoryProvider.overrideWithValue(mock)],
-          child: MaterialApp(home: _AssistantTestPage(repo: mock)),
+          child: MaterialApp(
+            home: _AssistantTestPage(repo: mock, writer: mock.writer),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -160,9 +164,13 @@ void main() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _AssistantTestPage extends StatefulWidget {
-  const _AssistantTestPage({required this.repo});
+  const _AssistantTestPage({
+    required this.repo,
+    this.writer = const _NoopWriter(),
+  });
 
   final ChatRepository repo;
+  final ChatMessageCommandWriter writer;
 
   @override
   State<_AssistantTestPage> createState() => _AssistantTestPageState();
@@ -225,11 +233,13 @@ class _AssistantTestPageState extends State<_AssistantTestPage> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     try {
-      await widget.repo.sendMessage(
-        conversationId: 'conv_test',
-        type: 'text',
-        content: text,
-        clientMsgId: 'test-${DateTime.now().millisecondsSinceEpoch}',
+      await widget.writer.sendMessage(
+        ChatSendMessageCommand(
+          conversationId: 'conv_test',
+          type: 'text',
+          content: text,
+          clientMsgId: 'test-${DateTime.now().millisecondsSinceEpoch}',
+        ),
       );
       setState(() {
         _messages.add(text);
@@ -295,9 +305,11 @@ class _AssistantTestPageState extends State<_AssistantTestPage> {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _TrackingAssistantRepo extends MockChatRepository {
+  final _TrackingAssistantMessageWriter writer =
+      _TrackingAssistantMessageWriter();
   int inviteCallCount = 0;
   int removeCallCount = 0;
-  int sendCallCount = 0;
+  int get sendCallCount => writer.sendCallCount;
 
   @override
   Future<void> inviteAssistant({
@@ -311,38 +323,30 @@ class _TrackingAssistantRepo extends MockChatRepository {
   Future<void> removeAssistant({required String conversationId}) async {
     removeCallCount++;
   }
+}
+
+class _TrackingAssistantMessageWriter implements ChatMessageCommandWriter {
+  int sendCallCount = 0;
 
   @override
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    Map<String, dynamic>? media,
-    Map<String, dynamic>? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? senderAvatarUrlSnapshot,
-    String? senderDisplayNameSnapshot,
-    String? personaContextVersion,
-    required String clientMsgId,
-  }) async {
+  Future<ChatSendMessageResult> sendMessage(
+    ChatSendMessageCommand command,
+  ) async {
     sendCallCount++;
-    return super.sendMessage(
-      conversationId: conversationId,
-      type: type,
-      content: content,
-      mediaUrl: mediaUrl,
-      media: media,
-      replyToMessageId: replyToMessageId,
-      mentions: mentions,
-      senderSubAccountId: senderSubAccountId,
-      senderAvatarUrlSnapshot: senderAvatarUrlSnapshot,
-      senderDisplayNameSnapshot: senderDisplayNameSnapshot,
-      personaContextVersion: personaContextVersion,
-      clientMsgId: clientMsgId,
+    return ChatSendMessageResult(
+      messageId: 'message-${command.clientMsgId}',
+      seq: sendCallCount,
+      timestamp: DateTime.utc(2026, 7, 15),
     );
+  }
+}
+
+class _NoopWriter implements ChatMessageCommandWriter {
+  const _NoopWriter();
+
+  @override
+  Future<ChatSendMessageResult> sendMessage(ChatSendMessageCommand command) {
+    throw StateError('message writer was not configured for this scenario');
   }
 }
 

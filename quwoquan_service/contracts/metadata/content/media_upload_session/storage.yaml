@@ -1,0 +1,29 @@
+version: 1
+entity: MediaUploadSession
+backend: mongodb
+
+collections:
+  media_upload_sessions:
+    entity: MediaUploadSession
+    description: MediaUploadSession 权威聚合；会话过期后由 Mongo TTL 自动删除，Complete 必须在过期前完成。
+    indexes:
+      - { name: idx_media_upload_sessions_owner_status, keys: { ownerId: 1, status: 1, createdAt: -1 } }
+      - { name: idx_media_upload_sessions_object_key, keys: { objectKey: 1 }, unique: true }
+      - { name: idx_media_upload_sessions_expire, keys: { expiresAt: 1 }, expireAfterSeconds: 0 }
+      - { name: idx_media_upload_sessions_version, keys: { _id: 1, version: 1 }, unique: true }
+
+  media_upload_session_command_receipts:
+    entity: MediaUploadSession
+    description: Init/Complete/Abort 的幂等结果；和会话版本及 outbox 在同一 Mongo transaction 提交。
+    indexes:
+      - { name: idx_media_upload_session_receipts_key, keys: { _id: 1 }, unique: true }
+      - { name: idx_media_upload_session_receipts_aggregate, keys: { aggregateId: 1, aggregateVersion: -1 } }
+      - { name: idx_media_upload_session_receipts_expire, keys: { expiresAt: 1 }, expireAfterSeconds: 0 }
+
+  media_upload_session_outbox:
+    entity: MediaUploadSession
+    description: 上传会话领域事实；与会话状态变更同一 Mongo transaction 落盘。
+    indexes:
+      - { name: idx_media_upload_session_outbox_event, keys: { _id: 1 }, unique: true }
+      - { name: idx_media_upload_session_outbox_replay, keys: { occurredAt: 1, _id: 1 } }
+      - { name: idx_media_upload_session_outbox_aggregate_version, keys: { aggregateId: 1, aggregateVersion: 1 }, unique: true }

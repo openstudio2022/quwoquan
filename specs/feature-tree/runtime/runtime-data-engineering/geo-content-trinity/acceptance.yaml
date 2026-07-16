@@ -7,155 +7,94 @@ node:
   parent_domain_service: runtime
   parent_business_capability: runtime-data-engineering
 scope:
-  summary: geo content trinity 验收范围。
-  in_scope: []
-  out_of_scope: []
+  summary: 主页、文章、图片和视频复用同一 execution、来源权利与发布闭包。
+  in_scope:
+  - 四类内容的单 execution 五阶段结构。
+  - source unit、图片权利、creator/tag/entity 引用与 review 闭包。
+  - 失败对象隔离和成功对象独立发布。
+  out_of_scope:
+  - 按站点建立第二套 runner 或发布目录。
 gwt_acceptance:
   GWT1:
-    title: Pinterest image-only commercial lane stays scoped and auditable
+    title: 多内容类型复用同一来源与权利合同
     given:
-    - 商业验证任务显式声明只做 Pinterest `image` lane，且 workflowPolicy 绑定唯一执行分支。
-    - Pinterest 来源 registry、content_source_registry 与 vertical license policy 同时声明 `attribution_no_watermark`。
-    - local runtime 以任务级 `QWQ_DATA_ROOT/QWQ_RUNTIME_ROOT/QWQ_PUBLISH_ROOT` 运行，shell supervisor 不再用全局 `pkill` 或日志猜完成。
+    - recipe 明确 contentType，来源与权利规则来自静态 registry。
     when:
-    - 运营通过 `site-supply ingest-attributed-assets` 或等价正式入口导入 Pinterest 公开图归因清单，并推进到 image work content_plan 与 managed author/review。
+    - execution 执行 download、quality、compose、draft、review。
     then:
-    - 只有具备 `pinUrl/discoveryUrl/originalAssetUrl/sourceAuthor/repostAttribution/watermarkScan/ocrScan/modelReleaseStatus/collectedAt` 的图片才可进入发布候选。
-    - content_plan / base draft / release integrity 保持单一 `sourceCollectionId`，禁止多来源拼接和大改重写。
-    - workflow 完成判定来自 task workflow state / audit / downstream evidence，而不是 `WORKFLOW COMPLETE` 文本 grep。
+    - 四类内容均使用相同 source unit、Agent 审计与逐图权利闭包。
+    - 中间文件只进入 execution，approved 对象才进入 publish/release。
     done_when:
-    - H100/H1000 前置代码路径都已被 local_contract 锁住，且商业评估只依赖真实下载、真实 author、真实 release、真实 TokenLedger/firstPassRate/throughput 证据。
+    - 图片来源、下载字节、授权与发布引用均可回放。
     edge_cases:
-    - Pinterest 受控试跑 `controlled_trial` 仍不能冒充真实发布，必须走 `attribution_publish_ingest`。
-    - 原图或 pin 缺作者、转载出处、无水印/OCR 扫描时必须阻断。
-    - local runtime 存在其他批次运行时，只允许观察，不得跨任务误清理。
+    - 缺作者、原始来源、授权或无水印/OCR 结论时阻断该对象。
     contract_refs:
     - quwoquan_data/verticals/travel/sources/source_registry.yaml
-    - quwoquan_data/verticals/photography/sources/source_registry.yaml
     - quwoquan_data/verticals/travel/rights/license_policy.yaml
-    - quwoquan_data/verticals/photography/rights/license_policy.yaml
-    - quwoquan_data/scripts/site_supply/authorized_assets.py
-    - quwoquan_data/scripts/task/run.py
-    - quwoquan_data/scripts/task/fanout_runner.py
-    performance_points:
-    - H100 至少产出真实 TokenLedger / firstPassRate / objectsPerHour / release-import-search-reco 证据。
-    - H1000 只在 H100 全绿后推进，并以 reliabletask + local runtime isolation 作为并发基线。
+    performance_points: []
     tests:
       planned:
-      - file: quwoquan_data/tests/local_contract/site_supply/test_tuchong_authorized_assets__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/site_supply/test_pinterest_public_pin__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/common/test_image_provider_compliance__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/vertical/test_image_rights_asset_level__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_managed_preflight_workspace__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/verify/test_site_scale_readiness__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/core/test_image_provider_compliance__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/governance/test_image_rights_asset_level__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/governance/test_travel_source_registry__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/source/test_auto_research_image_lane__behavior__functional__local_contract_test.py
       recorded:
-      - file: quwoquan_data/tests/local_contract/site_supply/test_tuchong_authorized_assets__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/site_supply/test_pinterest_public_pin__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/common/test_image_provider_compliance__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/vertical/test_image_rights_asset_level__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/vertical/test_travel_source_registry__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/core/test_image_provider_compliance__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/governance/test_image_rights_asset_level__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/governance/test_travel_source_registry__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/source/test_auto_research_image_lane__behavior__functional__local_contract_test.py
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
-        suite: contract
+        suite: geo_content_rights
         cases:
-        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.contract
-        envs: &id001
-        - local
-      - layer: local_contract
-        suite: gwt1_pinterest_image_only_local_contract
-        cases:
-        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt1_pinterest_image_only_local_contract
-        envs: *id001
-      supporting:
-      - layer: api_integration
-        suite: image_release_visibility
-        cases:
-        - api_integration.runtime.runtime_data_engineering.geo_content_trinity.image_release_visibility
-        envs:
-        - gamma
-    notes:
-    - Pinterest image-only 商业验证仅接受单源图片作品与真实下载证据，不接受 homepage/article 泛改造冒充完成。
+        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt1.rights
+        envs: [local]
+      supporting: []
+    notes: []
   GWT2:
-    title: partial delivery and failed entity reference isolation
+    title: 失败对象隔离与成功对象独立发布
     given:
-    - 内容生产任务配置了实体主页、文章、图片或视频目标额度。
-    - 部分对象或实体主页在来源、质量、权利或审核门中失败。
+    - 同一 execution 中部分对象在来源、质量、权利或 review 门失败。
     when:
-    - 数据工程执行 publish、release integrity、scale readiness 与 trial review。
+    - 生成 canonical publish 与 immutable release。
     then:
-    - release 只包含已通过质量与权利门的成功文章、图片、视频和主页对象。
-    - 未达额度只写入 partialDelivery 履约率、warning 与审计证据，不阻断成功对象发布。
-    - 未发布实体主页对应的 entityRefs、normalizedEntityRefs 与正文 /entity 链接被剔除或降级，保留 pendingEntityMentions
-      供后续补实体审核。
+    - release 只包含 approved 对象，失败对象保留在 execution evidence。
+    - 下游不得看到悬挂 entity、creator、tag 或 media 引用。
     done_when:
-    - 成功对象可独立发布，失败对象不污染下游 release/import。
+    - release-first ship 与 operator journey 契约通过。
     edge_cases:
-    - 实体主页 0 个但 postCount > 0 时，publish 可继续且实体引用为空。
-    - image/video 不满目标时只影响对应 lane fulfillment，不影响文章发布。
-    - allowPartialContent=false 的任务仍按全量契约硬阻断。
+    - 某一内容类型为零不污染其他已批准内容类型。
     contract_refs:
-    - quwoquan_data/scripts/publish/gate.py
-    - quwoquan_data/scripts/_common/publish_filter.py
-    - quwoquan_data/scripts/verify/scale_readiness.py
-    - quwoquan_data/scripts/task/trial_review.py
-    performance_points:
-    - partialDelivery.fulfillment 可用于百级、千级、万级扩容时估算真实产能。
+    - quwoquan_data/scripts/content/release/canonical/gate.py
+    - quwoquan_data/scripts/core/publish_filter.py
+    performance_points: []
     tests:
       planned:
-      - file: quwoquan_data/tests/local_contract/annotate/test_annotate_publish_filter__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_workflow_state_machine__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_download_checkpoint_repair__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_download_auto_research__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_replacement_screening__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/produce/test_task_author_review__local_contract_test.py
-      - file: quwoquan_data/tests/api_integration/ship/test_task_publish_release__api_integration_test.py
-      - file: quwoquan_data/tests/user_acceptance/workflow/test_task_run_operator_journey__user_acceptance_test.py
-      - file: quwoquan_data/tests/local_contract/verify/test_scale_readiness__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/homepage/test_annotate_publish_filter__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/source/test_auto_research_article_homepage__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/api_integration/release/test_release_first_ship__behavior__functional__api_integration_test.py
+      - file: quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
       recorded:
-      - file: quwoquan_data/tests/local_contract/annotate/test_annotate_publish_filter__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/build/test_homepage_prepare__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/common/test_auto_content_plan__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/common/test_content_plan_source_contract__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/produce/test_task_author_review__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_download_auto_research__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_download_checkpoint_repair__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_download_fast_fail_policy__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_download_repair_prompt__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_managed_local_runtime__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_managed_preflight_workspace__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_replacement_screening__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_workflow_state_machine__local_contract_test.py
-      - file: quwoquan_data/tests/api_integration/ship/test_task_publish_release__api_integration_test.py
-      - file: quwoquan_data/tests/user_acceptance/workflow/test_task_run_operator_journey__user_acceptance_test.py
-      - file: quwoquan_data/tests/local_contract/verify/test_scale_readiness__local_contract_test.py
-      - file: quwoquan_data/tests/local_contract/task/test_trial_review__local_contract_test.py
-      - file: quwoquan_data/tests/api_integration/ship/test_data_release_consistency__api_integration_test.py
-    status: completed
+      - file: quwoquan_data/tests/local_contract/homepage/test_annotate_publish_filter__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/source/test_auto_research_article_homepage__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/api_integration/release/test_release_first_ship__behavior__functional__api_integration_test.py
+      - file: quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
+    status: pending
     test_evidence:
       primary:
       - layer: local_contract
-        suite: contract
+        suite: geo_content_partial_delivery
         cases:
-        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.contract
-        envs: *id001
-      - layer: local_contract
-        suite: gwt2_local_contract
-        cases:
-        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt2_local_contract
-        envs: *id001
-      supporting:
+        - local_contract.runtime.runtime_data_engineering.geo_content_trinity.gwt2.partial_delivery
+        envs: [local]
       - layer: api_integration
-        suite: data_e2e
+        suite: geo_content_release
         cases:
-        - api_integration.runtime.runtime_data_engineering.geo_content_trinity.data_e2e
-        envs:
-        - beta
-        - gamma
+        - api_integration.runtime.runtime_data_engineering.geo_content_trinity.gwt2.release
+        envs: [beta, gamma]
+      supporting: []
     notes: []
 execution:
   local_gate:

@@ -87,7 +87,41 @@ spec:
                 secretKeyRef:
                   name: seed-box-secrets
                   key: AUTH_JWT_SECRET
-                  optional: true
+            - name: AUTH_JWT_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: AUTH_JWT_ISSUER
+            - name: AUTH_JWT_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: AUTH_JWT_AUDIENCE
+            - name: AUTH_JWT_TOKEN_VERSION
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: AUTH_JWT_TOKEN_VERSION
+            - name: AUTH_DEVICE_TICKET_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: AUTH_DEVICE_TICKET_SECRET
+            - name: AUTH_DEVICE_TICKET_ISSUER
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: AUTH_DEVICE_TICKET_ISSUER
+            - name: AUTH_DEVICE_TICKET_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: AUTH_DEVICE_TICKET_AUDIENCE
+            - name: AUTH_DEVICE_TICKET_TOKEN_VERSION
+              valueFrom:
+                secretKeyRef:
+                  name: seed-box-secrets
+                  key: AUTH_DEVICE_TICKET_TOKEN_VERSION
             - name: CHAT_GROUP_AVATAR_CDN_BASE_URL
               valueFrom:
                 secretKeyRef:

@@ -6,50 +6,92 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	rtrec "quwoquan_service/runtime/recommendation"
 	behaviorapp "quwoquan_service/services/content-service/internal/application/behavior"
 	feedapp "quwoquan_service/services/content-service/internal/application/feed"
 	postapp "quwoquan_service/services/content-service/internal/application/post"
 	reportapp "quwoquan_service/services/content-service/internal/application/report"
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
+	"quwoquan_service/services/content-service/internal/testsupport"
 )
 
+type localPostDetailReader struct {
+	store *testsupport.PostStore
+}
+
+func (r localPostDetailReader) FindPostDetail(
+	ctx context.Context,
+	postID postports.PostID,
+) (postports.PostDetailSlice, bool, error) {
+	post, found := r.store.FindByID(ctx, string(postID))
+	if !found {
+		return postports.PostDetailSlice{}, false, nil
+	}
+	raw, err := json.Marshal(post)
+	if err != nil {
+		return postports.PostDetailSlice{}, false, err
+	}
+	var detail postports.PostDetailSlice
+	if err := json.Unmarshal(raw, &detail); err != nil {
+		return postports.PostDetailSlice{}, false, err
+	}
+	return detail, true, nil
+}
+
 func newTestHandler() http.Handler {
-	redis := recinfra.NewMemoryRedis()
+	redis := testsupport.NewFakeRedis()
 	hotPath := rtrec.NewHotPath(redis)
-	store := persistence.NewPostStore(recinfra.DefaultSeedPosts())
-	source := recinfra.NewPostRepositorySource(store)
+	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
+	source := recinfra.NewPostProjectionSource(store, store)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source})
-	feedService := feedapp.NewFeedService(engine, source)
-	postService := postapp.NewPostService(
-		store,
-		postapp.WithCommentStore(persistence.NewMemoryCommentStore()),
-		postapp.WithCommentReactionStore(persistence.NewMemoryCommentReactionStore()),
-	)
-	reportService := reportapp.NewReportService(persistence.NewInMemoryReportStore(), nil)
+	feedService := feedapp.NewFeedService(engine, testsupport.NewPostFeedReader(store))
+	postService := postapp.NewPostService(postapp.BindDataPorts(store))
+	reportStore := testsupport.NewReportStore()
+	reportService := reportapp.NewReportService(reportapp.BindDataPorts(reportStore))
 	behaviorService := behaviorapp.NewBehaviorService(hotPath, store)
-	return NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
+	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail: localPostDetailReader{store: store},
+	})
+	return NewContentHandler(
+		feedService,
+		postapp.BindFacades(postService),
+		postQueryService,
+		nil,
+		nil,
+		reportapp.BindFacades(reportService),
+		behaviorService,
+	).Routes()
 }
 
 func newFeedHandlerWithFeatures(features rtrec.FeatureProvider) http.Handler {
-	redis := recinfra.NewMemoryRedis()
+	redis := testsupport.NewFakeRedis()
 	hotPath := rtrec.NewHotPath(redis)
-	store := persistence.NewPostStore(recinfra.DefaultSeedPosts())
-	source := recinfra.NewPostRepositorySource(store)
+	store := testsupport.NewPostStore(recinfra.DefaultSeedPosts())
+	source := recinfra.NewPostProjectionSource(store, store)
 	engine := rtrec.NewEngine(hotPath, []rtrec.CandidateSource{source}, rtrec.WithFeatureProvider(features))
-	feedService := feedapp.NewFeedService(engine, source)
-	postService := postapp.NewPostService(
-		store,
-		postapp.WithCommentStore(persistence.NewMemoryCommentStore()),
-		postapp.WithCommentReactionStore(persistence.NewMemoryCommentReactionStore()),
-	)
-	reportService := reportapp.NewReportService(persistence.NewInMemoryReportStore(), nil)
+	feedService := feedapp.NewFeedService(engine, testsupport.NewPostFeedReader(store))
+	postService := postapp.NewPostService(postapp.BindDataPorts(store))
+	reportStore := testsupport.NewReportStore()
+	reportService := reportapp.NewReportService(reportapp.BindDataPorts(reportStore))
 	behaviorService := behaviorapp.NewBehaviorService(hotPath, store)
-	return NewContentHandler(feedService, postService, reportService, behaviorService).Routes()
+	postQueryService := postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+		Detail: localPostDetailReader{store: store},
+	})
+	return NewContentHandler(
+		feedService,
+		postapp.BindFacades(postService),
+		postQueryService,
+		nil,
+		nil,
+		reportapp.BindFacades(reportService),
+		behaviorService,
+	).Routes()
 }
 
 type stubFeatureProvider struct {
@@ -66,6 +108,9 @@ func setActorHeaders(req *http.Request, ownerID, subAccountID string) {
 	}
 	if subAccountID != "" {
 		req.Header.Set("X-Client-Sub-Account-Id", subAccountID)
+	}
+	if req.Header.Get("Idempotency-Key") == "" && req.Header.Get("X-Request-Id") == "" {
+		req.Header.Set("X-Request-Id", "contract-test-"+subAccountID+"-"+strconv.FormatInt(time.Now().UnixNano(), 10))
 	}
 }
 
@@ -147,6 +192,28 @@ func TestCreatePostBodyBindingRejectsUnknownField(t *testing.T) {
 	newTestHandler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("unexpected create status for invalid field: %d", rec.Code)
+	}
+}
+
+func TestCreatePostRequiresTransportIdempotencyHeader(t *testing.T) {
+	handler := newTestHandler()
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/content/posts",
+		bytes.NewBufferString(`{"contentType":"micro","body":"缺少幂等键"}`),
+	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Client-Sub-Account-Id", "persona-idempotency")
+
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"expected 400 without Idempotency-Key/X-Request-Id, got %d: %s",
+			rec.Code,
+			rec.Body.String(),
+		)
 	}
 }
 
@@ -356,10 +423,52 @@ func TestPostImmutableAfterPublish(t *testing.T) {
 		"/v1/content/posts/"+postID,
 		bytes.NewBufferString(`{"title":"new title"}`),
 	)
+	setActorHeaders(updateReq, "u1", "u1")
 	updateRec := httptest.NewRecorder()
 	handler.ServeHTTP(updateRec, updateReq)
 	if updateRec.Code != http.StatusConflict {
 		t.Fatalf("expected 409 for immutable post, got %d", updateRec.Code)
+	}
+}
+
+func TestUpdatePostRejectsDifferentPersonaOwner(t *testing.T) {
+	handler := newTestHandler()
+	createReq := httptest.NewRequest(
+		http.MethodPost,
+		"/v1/content/posts",
+		bytes.NewBufferString(`{"contentType":"micro","body":"private draft"}`),
+	)
+	setActorHeaders(createReq, "account-owner", "persona-owner")
+	createRec := httptest.NewRecorder()
+	handler.ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d: %s", createRec.Code, createRec.Body.String())
+	}
+
+	var created struct {
+		ID string `json:"_id"`
+	}
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created post: %v", err)
+	}
+	if created.ID == "" {
+		t.Fatal("created post id is empty")
+	}
+
+	updateReq := httptest.NewRequest(
+		http.MethodPatch,
+		"/v1/content/posts/"+created.ID,
+		bytes.NewBufferString(`{"body":"forged update"}`),
+	)
+	setActorHeaders(updateReq, "account-outsider", "persona-outsider")
+	updateRec := httptest.NewRecorder()
+	handler.ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusForbidden {
+		t.Fatalf(
+			"expected 403 for a different persona, got %d: %s",
+			updateRec.Code,
+			updateRec.Body.String(),
+		)
 	}
 }
 
@@ -391,37 +500,22 @@ func TestDeletePostAndTombstoneLookup(t *testing.T) {
 	getReq := httptest.NewRequest("GET", "/v1/content/posts/"+postID, nil)
 	getRec := httptest.NewRecorder()
 	handler.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusConflict {
-		t.Fatalf("expected 409 for deleted tombstone, got %d", getRec.Code)
+	if getRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for deleted tombstone, got %d", getRec.Code)
 	}
 }
 
-func TestUpdatePostCirclesRequiresPublic(t *testing.T) {
+func TestRetiredPostCircleMutationRouteIsAbsent(t *testing.T) {
 	handler := newTestHandler()
-	createReq := httptest.NewRequest(
-		"POST",
-		"/v1/content/posts",
-		bytes.NewBufferString(`{"contentType":"article","visibility":"private","articleMarkdown":"# private\n\n仅圈子分发测试","articleMarkdownVersion":"qwq-rich-md/1","articleAssetManifest":{"assets":[]}}`),
-	)
-	setActorHeaders(createReq, "author1", "author1")
-	createRec := httptest.NewRecorder()
-	handler.ServeHTTP(createRec, createReq)
-	if createRec.Code != http.StatusCreated {
-		t.Fatalf("create failed: %d", createRec.Code)
-	}
-	var created map[string]any
-	_ = json.Unmarshal(createRec.Body.Bytes(), &created)
-	postID, _ := created["_id"].(string)
-
 	circleReq := httptest.NewRequest(
 		"PATCH",
-		"/v1/content/posts/"+postID+"/circles",
+		"/v1/content/posts/post-retired-route/circles",
 		bytes.NewBufferString(`{"add":["circle_a"]}`),
 	)
 	setActorHeaders(circleReq, "author1", "author1")
 	circleRec := httptest.NewRecorder()
 	handler.ServeHTTP(circleRec, circleReq)
-	if circleRec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 when private post distributed to circles, got %d", circleRec.Code)
+	if circleRec.Code != http.StatusNotFound {
+		t.Fatalf("retired Post circle mutation route must be absent, got %d", circleRec.Code)
 	}
 }

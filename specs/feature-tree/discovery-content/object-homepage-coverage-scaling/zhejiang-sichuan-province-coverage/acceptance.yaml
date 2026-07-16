@@ -1,4 +1,4 @@
-version: 2
+version: 3
 node:
   id: zhejiang-sichuan-province-coverage
   level: L3_story
@@ -7,177 +7,239 @@ node:
   parent_domain_service: discovery-content
   parent_business_capability: object-homepage-coverage-scaling
 scope:
-  summary: 浙江/四川旅行地点省级覆盖放量：主清单扩容、前置核验、M1/M2/M3 批次执行、App 消费 UAT。
+  summary: 浙江、四川实体主页从覆盖清单到 Gamma App 消费的单任务端到端准出。
   in_scope:
-  - 两省主清单扩容至来源发现饱和（目标合计 3000+ 候选，证据约束）。
-  - 两省 ready 存量前置 sourceScreen 全量核验与折扣率报告。
-  - WP5 尾部 3 分区补跑收口（沙湾区/市中区/岱山县）。
-  - M1/M2/M3 三档批次执行、gamma 导入、coverage 账本回写。
-  - App 标签页/搜索到实体主页消费路径 UAT。
+  - 两省覆盖清单与 encyclopedia-primary-v2 来源核验。
+  - 浙江、四川各一条金丝雀 execution，随后 M1、M2、M3。
+  - 逐图权利、Agent 正文、独立 review、canonical publish 与 immutable release。
+  - Gamma 幂等导入、API 核验、动态 App UAT、观测与回滚重放。
   out_of_scope:
-  - 两省以外省份实跑。
-  - pending 存量逐项扩源执行。
+  - 两省以外实体实跑。
+rollout_contract:
+  selection_policy: frozen
+  release_mode: full-sync
+  milestones:
+    canary:
+      batch: {浙江省: 2, 四川省: 1}
+      cumulative: {浙江省: 2, 四川省: 1, total: 3}
+      rollback_to: empty
+    m1:
+      batch: {浙江省: 100, 四川省: 100}
+      cumulative: {浙江省: 102, 四川省: 101, total: 203}
+      rollback_to: canary
+    m2:
+      batch: {浙江省: 500, 四川省: 500}
+      cumulative: {浙江省: 602, 四川省: 601, total: 1203}
+      rollback_to: m1
+    m3:
+      batch: {浙江省: 320, 四川省: 1376}
+      cumulative: {浙江省: 922, 四川省: 1977, total: 2899}
+      rollback_to: m2
+  capacity:
+    soak_jobs: 30
+    minimum_safe_concurrency: 3
+    maximum_unrecovered_bridge_failures: 0
+    minimum_approved_homepages_per_hour: 18
+    maximum_object_p95_seconds: 720
 gwt_acceptance:
   GWT1:
-    title: 省级全覆盖口径达成（主清单扩容 + 来源饱和）
+    title: 目录、输入与凭证准入
     given:
-    - 两省主清单基线 1093 项（浙江 415 / 四川 678），schema discovery_seed/2。
-    - 五路来源（百科/官方文旅/政府名录/OTA 公共索引/地图 POI 线索）发现管线可用。
+    - 静态 recipe、prompt、template、schema 与覆盖清单位于代码仓。
     when:
-    - 执行 coverage 扩容批（发现 → 去重 → 类型/地理打标 → 写回市州 YAML）。
+    - 执行目录、输入归属、publish 纯度与凭证门禁。
     then:
-    - 每批写回后 verify coverage-master-list 门禁绿，master-list-stats 出数。
-    - 市州文件齐全（浙 11 / 川 21）、区县分组无缺口、10 类 entityType 省级维度全覆盖。
-    - 跨省地点单主 geoTagRef + geoTagRefs 数组表达。
+    - 运行实例只写 data/tasks，发布包只写 data/releases，环境证据只写 env run。
+    - 只接受仓外 0600 的 QWQ_CURSOR_API_KEY_FILE。
+    - recipe 显式声明 author/reviewer model 与 modelFamily，且执行前两种模型均完成真实 Cursor SDK 启动探针；同族或不可启动直接 GATE_BLOCK。
+    - execution manifest 冻结 target set ref/digest；runtime state 不重复身份字段或部署环境。
+    - 初始化即为每个目标创建五阶段目录，reserve、replacement 与 abandonment 均为硬失败。
     done_when:
-    - 两省合计候选 3000+，或五路来源饱和（新一轮发现增量 <5%）并产出来源饱和报告与缺口清单。
+    - Data gate 与目录门禁全绿。
     edge_cases:
-    - 同名地点跨区县去重以 canonicalName 全局唯一裁决。
-    - 个别区县确无某类 entityType 属诚实事实，不凑数。
+    - 缺凭证、权限错误或输出路径漂移必须 GATE_BLOCK。
     contract_refs:
-    - quwoquan_data/schema/coverage/master_list.schema.json
+    - quwoquan_data/schema/execution/content_execution_manifest.schema.json
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_data/tests/local_contract/vertical/test_coverage_expand__local_contract_test.py
-      recorded: []
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_input_ownership__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_model_contract__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
+      recorded:
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_input_ownership__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_model_contract__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/user_acceptance/journeys/content_execution/test_execution_work_package_operator_journey__behavior__functional__user_acceptance_test.py
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
-        suite: gwt1_local_contract
+        suite: execution_contract
         cases:
-        - local_contract.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt1_local_contract
-        envs: &id001
-        - local
+        - local_contract.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt1.execution
+        envs: [local]
       supporting: []
     notes: []
   GWT2:
-    title: 前置 sourceScreen 核验与 ready 折扣率出数
+    title: 覆盖与来源权利准入
     given:
-    - 两省 ready 存量 492（WP5 口径含 20-30% 虚高）。
+    - 浙江、四川覆盖主清单通过 schema 与语义门。
     when:
-    - 执行 qwq-data vertical source-screen 批量深核验（排产前置）。
+    - 选择实体并构建 source unit、对象本地 source catalog 与图片候选。
     then:
-    - 逐叶子回写 sourceReadiness 三态（ready/pending/no_primary_source）与核验时间戳。
-    - 产出 ready 折扣率与扩源缺口报告。
+    - 主来源绑定 encyclopedia-primary-v2，图片逐项具有来源与权利结论。
+    - 普陀山 17 个页面图位与东钱湖 5 个页面图位均无数量截断；尺寸参数不进入图注。
+    - cover、inline、related 三类处置互斥，groupMember 只进入相关图片。
     done_when:
-    - 两省 ready 存量完成首轮核验，折扣率实测出数，排产只消费核验后 ready。
+    - 金丝雀实体 source、rights 与 selection 证据完整。
     edge_cases:
-    - 网络断路/反爬拦截不结论（保持 pending，不误降级）。
-    contract_refs: []
+    - 网络、来源或权利不确定时对象保持 blocked，不伪造 URL。
+    contract_refs:
+    - quwoquan_data/schema/governance/master_list.schema.json
+    - quwoquan_data/verticals/travel/rights/license_policy.yaml
     performance_points: []
     tests:
       planned:
-      - file: quwoquan_data/tests/local_contract/vertical/test_source_screen__local_contract_test.py
-      recorded: []
+      - file: quwoquan_data/tests/local_contract/governance/test_coverage_matrix__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_source_qualification__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/governance/test_image_rights_asset_level__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/core/test_object_stages_and_wikitext__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/source/test_source_layout_ir__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/source/test_source_unit_image_byte_budget__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/post/test_homepage_media_placement__behavior__contract__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_homepage_media_completeness__behavior__contract__local_contract_test.py
+      recorded:
+      - file: quwoquan_data/tests/local_contract/governance/test_coverage_matrix__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/execution/test_execution_source_qualification__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/governance/test_image_rights_asset_level__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/core/test_object_stages_and_wikitext__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/source/test_source_layout_ir__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/source/test_source_unit_image_byte_budget__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/post/test_homepage_media_placement__behavior__contract__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_homepage_media_completeness__behavior__contract__local_contract_test.py
     status: pending
     test_evidence:
       primary:
       - layer: local_contract
-        suite: gwt2_local_contract
+        suite: coverage_source_rights
         cases:
-        - local_contract.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt2_local_contract
-        envs: *id001
+        - local_contract.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt2.source_rights
+        envs: [local]
       supporting: []
     notes: []
   GWT3:
-    title: M1 校准批准入门（尾部补跑 + 两省各 100 + 并发改造生效）
+    title: 浙江与四川双金丝雀 release 准出
     given:
-    - WP5 尾部 3 分区（沙湾区/市中区/岱山县）产线修复已落码待实跑。
-    - download/author 两段流水线与 bridge 池化改造完成并带合同测试。
+    - GWT1、GWT2 全绿且浙江选出普陀山、东钱湖，四川选出海螺沟。
     when:
-    - 补跑尾部 3 分区收口；随后两省各启动 100 地点校准批（双 worktree 并行拓扑）。
+    - 两条 execution 顺序执行五阶段并发布 aggregate canary release。
     then:
-    - 尾部 3 分区收口（成稿晋升或 reasoned 放弃归因落账）。
-    - 校准批全链走通（env ready → run-recipe → verify → ship → coverage 回写）。
-    - 分段吞吐出数（sourceScreen/download/author/review/ship）。
+    - 正文由 Cursor SDK 生成，独立 review approved，canonical/release 引用闭包。
+    - reviewer response 与绑定 provider/model/modelFamily/runId 的 canonical reviewer result 使用不同 schema；同源 run、同模型族或无 findings 不得 approved。
+    - object transaction audit、apply、rollback 与 replay 可复验。
+    - Gamma 导入、API 核验、动态 App UAT、回滚与重放必须写入 immutable rollout_milestone_closure；下一档只复验该 release 闭包。
     done_when:
-    - 改造后单机吞吐基线 ≥4-6 主页/h；author 并发实测安全上限写入 runtime profile。
-    - no-progress watchdog 与断点续跑在批内至少各验证一次（或证明无触发场景）。
+    - 三个实体均出现在同一 canary release，homepage media completeness 与 release gate 全绿。
     edge_cases:
-    - promote 质量门 SKIP 属正常裁决不计失败。
-    contract_refs: []
-    performance_points:
-    - 单机吞吐 ≥4-6 主页/h（M1 出数）。
-    tests:
-      planned:
-      - file: quwoquan_data/tests/local_contract/task/test_pipeline_stage_split__local_contract_test.py
-      recorded: []
-    status: pending
-    test_evidence:
-      primary:
-      - layer: local_contract
-        suite: gwt3_local_contract
-        cases:
-        - local_contract.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt3_local_contract
-        envs: *id001
-      - layer: api_integration
-        suite: gwt3_api_integration
-        cases:
-        - api_integration.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt3_api_integration
-        envs:
-        - gamma
-      supporting: []
-    notes:
-    - M1 未达标不得进 M2；并发改造未完成不得启动省级大批。
-  GWT4:
-    title: M2/M3 扩量与全量批（首过率门 + 环境导入）
-    given:
-    - M1 准入门达标。
-    when:
-    - 两省各 500 地点批（M2）；达标后全部真 ready 批（M3）。
-    then:
-    - 每批附 env ready、run-recipe、scale-readiness --daily-target 100000、
-      verify_quwoquan_data.sh、ship/import 报告、coverage 账本回写。
-    done_when:
-    - M2 首过率（非放弃口径）≥85%；M3 全部真 ready 成稿或诚实放弃归因。
-    - 放量硬前置未完成前省级大批只导 gamma，prod 只做受控小批窗口。
-    edge_cases:
-    - key 403/limit 自动暂停、恢复自动续跑（CLI 内置 key 生命周期能力）。
-    contract_refs: []
+    - 任一省失败时不得形成双省成功 release。
+    contract_refs:
+    - quwoquan_data/schema/release/release_manifest.schema.json
+    - quwoquan_data/schema/release/object_transaction_package.schema.json
+    - quwoquan_data/schema/release/rollout_milestone_closure.schema.json
+    - quwoquan_data/scripts/verify/verify_homepage_media_completeness.py
     performance_points: []
     tests:
-      planned: []
-      recorded: []
+      planned:
+      - file: quwoquan_data/tests/local_contract/release/test_stage_artifact_contract__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_object_transaction__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/post/test_homepage_independent_review_evidence__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_execution_readiness__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_rollout_milestone__behavior__functional__local_contract_test.py
+      - file: quwoquan_service/services/content-service/cmd/import/mongo_import__api_integration_test.go
+      recorded:
+      - file: quwoquan_data/tests/local_contract/release/test_stage_artifact_contract__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_object_transaction__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/post/test_homepage_independent_review_evidence__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_execution_readiness__behavior__functional__local_contract_test.py
+      - file: quwoquan_data/tests/local_contract/release/test_rollout_milestone__behavior__functional__local_contract_test.py
+      - file: quwoquan_service/services/content-service/cmd/import/mongo_import__api_integration_test.go
     status: pending
     test_evidence:
       primary:
       - layer: api_integration
-        suite: gwt4_api_integration
+        suite: two_province_canary_release
         cases:
-        - api_integration.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt4_api_integration
-        envs:
-        - gamma
+        - api_integration.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt3.release
+        envs: [gamma]
+      supporting: []
+    notes: []
+  GWT4:
+    title: M1、M2、M3 两省扩量与全覆盖
+    given:
+    - 双省金丝雀 release 的 immutable Gamma closure 已通过复验。
+    when:
+    - 使用同一 recipe 与 CLI 依次执行 M1、M2、M3。
+    then:
+    - M1/M2 的每个选中 coverage cell 必须对应 approved execution；任一 blocked 对象必须先修复来源、权利或流程问题，不能被替换后计入该档成功。
+    - M3 的每个浙江/四川 coverage cell 必须对应 approved execution；任一 blocked、abandoned 或未归因对象都阻断最终 release。
+    - aggregate release 聚合 approved execution manifest，不建立 campaign 运行根。
+    - M1、M2、M3 创建前必须复验前一档 rollout_milestone_closure，且浙江/四川分别达到契约数量；M3 与覆盖主清单等量。
+    - 四档增量目标两两不交叠，累计数量依次为 3、203、1203、2899，最终集合与 master digest 精确相等。
+    - 每档使用累计 full-sync release，按 empty、canary、M1、M2 顺序回滚并 replay 当前 release。
+    done_when:
+    - 两省覆盖 release 通过 verify two-province-coverage-release。
+    edge_cases:
+    - 外部限流或来源失败只阻断对应 execution，不计为覆盖成功。
+    contract_refs:
+    - quwoquan_data/scripts/verify/verify_two_province_coverage_release.py
+    performance_points:
+    - 放量前 30-job soak 的安全并发至少 3，未恢复 bridge 基础设施失败为 0。
+    - M1 approved homepages/hour 不低于 18，P95 单对象耗时不超过 720 秒。
+    tests:
+      planned:
+      - file: quwoquan_data/tests/api_integration/release/test_release_first_ship__behavior__functional__api_integration_test.py
+      recorded:
+      - file: quwoquan_data/tests/api_integration/release/test_release_first_ship__behavior__functional__api_integration_test.py
+    status: pending
+    test_evidence:
+      primary:
+      - layer: api_integration
+        suite: two_province_full_release
+        cases:
+        - api_integration.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt4.full_release
+        envs: [gamma]
       supporting: []
     notes: []
   GWT5:
-    title: App 消费路径 user_acceptance（标签/搜索 → 实体主页）
+    title: Gamma 动态 App 用户旅程 UAT
     given:
-    - 两省批次成稿已导入 gamma，introduction API 抽查 200。
+    - 双省 release 已幂等导入 Gamma，实体主页 API 返回 200。
     when:
-    - 用户从标签页/搜索入口进入实体主页。
+    - 用户从标签页和搜索进入浙江、四川实体主页。
     then:
-    - 正文、封面、categoryTags 正确渲染；错误/空态有兜底；曝光/停留埋点上报。
+    - 正文、封面、标签与来源信息正确渲染，错误态可恢复，关键行为有 trace。
+    - M1、M2、M3 分别按最多 100 实体一片顺序执行 3、13、29 个 UAT 分片，每档 App 只构建一次。
     done_when:
-    - widget 或真机 UAT 通过；路由与 surface 来自 metadata（禁止 UI mock）。
+    - gamma-local 真设备或模拟器动态 UAT 与观测证据通过。
     edge_cases:
-    - 未导入实体的 404 语义与空态兜底。
-    contract_refs: []
-    performance_points: []
+    - 未导入实体返回统一 404 语义与空态。
+    contract_refs:
+    - quwoquan_service/contracts/metadata/entity/homepage/service.yaml
+    performance_points:
+    - 2899 实体 homepage API P95 不超过 300ms，可用性不低于 99.5%。
     tests:
       planned:
       - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_detail/homepage_detail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/entity/homepage_introduction/homepage_introduction_page__user_acceptance_test.dart
       recorded: []
     status: pending
     test_evidence:
       primary:
       - layer: user_acceptance
-        suite: gwt5_user_acceptance
+        suite: two_province_gamma_local
         cases:
-        - user_acceptance.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt5_user_acceptance
-        envs:
-        - gamma_local
+        - user_acceptance.discovery_content.object_homepage_coverage_scaling.zhejiang_sichuan_province_coverage.gwt5.gamma_local
+        envs: [gamma_local]
       supporting: []
     notes: []
 execution:

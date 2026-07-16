@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
+import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/appearance_settings_provider.dart';
 import 'package:quwoquan_app/cloud/services/user/appearance_settings_repository.dart';
@@ -256,6 +257,11 @@ class SettingsPage extends ConsumerWidget {
     required bool navigateToLogin,
   }) async {
     final controller = ref.read(authSessionControllerProvider.notifier);
+    await Future.wait<void>(<Future<void>>[
+      ref.read(behaviorRepositoryProvider).clearPendingForLogout(),
+      ref.read(opsEventRepositoryProvider).clearPendingForLogout(),
+      AppExceptionTelemetryService.instance.clearPendingForLogout(),
+    ]);
     if (clearLocalCredential) {
       final session = ref.read(authSessionControllerProvider);
       try {
@@ -292,7 +298,7 @@ class SettingsPage extends ConsumerWidget {
       context,
       reasonName: AuthPromptReason.manualLoggedOut.name,
       replace: true,
-      allowGuestDismissPop: false,
+      dismissPolicy: LoginDismissPolicy.safeFallback,
     );
   }
 }

@@ -3,11 +3,16 @@
 
 enum ContentErrorCode {
   postNotFound,
+  reportNotFound,
   commentNotFound,
   forbiddenEdit,
   forbiddenDelete,
   unauthorized,
   invalidArgument,
+  interactionTypeInvalid,
+  interactionCursorInvalid,
+  interactionOwnerForbidden,
+  interactionReadModelUnavailable,
   assistantMentionContextMissing,
   invalidContentType,
   rateLimited,
@@ -29,8 +34,14 @@ enum ContentErrorCode {
   publicRequiredForCircleDistribution,
   invalidMomentPayload,
   contentDeleted,
+  versionConflict,
+  idempotencyConflict,
+  moderationApprovalRequired,
+  moderationDecisionStale,
   circleDistributionForbidden,
   storageWriteFailed,
+  storageReadFailed,
+  requiredDependencyUnavailable,
   internalError,
   upstreamTimeout,
   unknown;
@@ -39,6 +50,8 @@ enum ContentErrorCode {
     switch (code) {
       case 'CONTENT.USER.post_not_found':
         return ContentErrorCode.postNotFound;
+      case 'CONTENT.USER.report_not_found':
+        return ContentErrorCode.reportNotFound;
       case 'CONTENT.USER.comment_not_found':
         return ContentErrorCode.commentNotFound;
       case 'CONTENT.USER.forbidden_edit':
@@ -49,6 +62,14 @@ enum ContentErrorCode {
         return ContentErrorCode.unauthorized;
       case 'CONTENT.USER.invalid_argument':
         return ContentErrorCode.invalidArgument;
+      case 'CONTENT.USER.interaction_type_invalid':
+        return ContentErrorCode.interactionTypeInvalid;
+      case 'CONTENT.USER.interaction_cursor_invalid':
+        return ContentErrorCode.interactionCursorInvalid;
+      case 'CONTENT.USER.interaction_owner_forbidden':
+        return ContentErrorCode.interactionOwnerForbidden;
+      case 'CONTENT.SYSTEM.interaction_read_model_unavailable':
+        return ContentErrorCode.interactionReadModelUnavailable;
       case 'CONTENT.USER.assistant_mention_context_missing':
         return ContentErrorCode.assistantMentionContextMissing;
       case 'CONTENT.USER.invalid_content_type':
@@ -91,10 +112,22 @@ enum ContentErrorCode {
         return ContentErrorCode.invalidMomentPayload;
       case 'CONTENT.USER.content_deleted':
         return ContentErrorCode.contentDeleted;
+      case 'CONTENT.USER.version_conflict':
+        return ContentErrorCode.versionConflict;
+      case 'CONTENT.USER.idempotency_conflict':
+        return ContentErrorCode.idempotencyConflict;
+      case 'CONTENT.USER.moderation_approval_required':
+        return ContentErrorCode.moderationApprovalRequired;
+      case 'CONTENT.USER.moderation_decision_stale':
+        return ContentErrorCode.moderationDecisionStale;
       case 'CONTENT.USER.circle_distribution_forbidden':
         return ContentErrorCode.circleDistributionForbidden;
       case 'CONTENT.SYSTEM.storage_write_failed':
         return ContentErrorCode.storageWriteFailed;
+      case 'CONTENT.SYSTEM.storage_read_failed':
+        return ContentErrorCode.storageReadFailed;
+      case 'CONTENT.SYSTEM.required_dependency_unavailable':
+        return ContentErrorCode.requiredDependencyUnavailable;
       case 'CONTENT.SYSTEM.internal_error':
         return ContentErrorCode.internalError;
       case 'CONTENT.MIDDLEWARE.upstream_timeout':
@@ -111,11 +144,16 @@ class ContentErrorMessages {
 
   static const Map<ContentErrorCode, String> zh = <ContentErrorCode, String>{
     ContentErrorCode.postNotFound: '内容不存在或已删除',
+    ContentErrorCode.reportNotFound: '举报不存在',
     ContentErrorCode.commentNotFound: '评论不存在或已删除',
     ContentErrorCode.forbiddenEdit: '无权编辑此内容',
     ContentErrorCode.forbiddenDelete: '无权删除此内容',
     ContentErrorCode.unauthorized: '请先登录',
     ContentErrorCode.invalidArgument: '请求参数有误，请检查后重试',
+    ContentErrorCode.interactionTypeInvalid: '不支持的互动类型',
+    ContentErrorCode.interactionCursorInvalid: '列表状态已更新，请刷新后重试',
+    ContentErrorCode.interactionOwnerForbidden: '无权查看该互动记录',
+    ContentErrorCode.interactionReadModelUnavailable: '互动记录暂时不可用，请稍后重试',
     ContentErrorCode.assistantMentionContextMissing: '小趣暂时无法识别这条评论的上下文',
     ContentErrorCode.invalidContentType: '不支持的内容类型',
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
@@ -137,19 +175,30 @@ class ContentErrorMessages {
     ContentErrorCode.publicRequiredForCircleDistribution: '发布到圈子前需设置为公开',
     ContentErrorCode.invalidMomentPayload: '微趣内容为空，正文/图片/视频至少填写一项',
     ContentErrorCode.contentDeleted: '内容已删除',
+    ContentErrorCode.versionConflict: '内容已更新，请刷新后重试',
+    ContentErrorCode.idempotencyConflict: '重复请求与原操作不一致，请刷新后重试',
+    ContentErrorCode.moderationApprovalRequired: '内容尚未通过当前版本审核',
+    ContentErrorCode.moderationDecisionStale: '内容已编辑，请基于最新版本重新审核',
     ContentErrorCode.circleDistributionForbidden: '无权修改圈子分发关系',
     ContentErrorCode.storageWriteFailed: '操作失败，请稍后重试',
+    ContentErrorCode.storageReadFailed: '读取内容失败，请稍后重试',
+    ContentErrorCode.requiredDependencyUnavailable: '内容服务依赖暂时不可用，请稍后重试',
     ContentErrorCode.internalError: '服务异常，请稍后重试',
     ContentErrorCode.upstreamTimeout: '请求超时，请检查网络后重试',
   };
 
   static const Map<ContentErrorCode, String> en = <ContentErrorCode, String>{
     ContentErrorCode.postNotFound: 'Post not found or deleted',
+    ContentErrorCode.reportNotFound: 'Report not found',
     ContentErrorCode.commentNotFound: 'Comment not found or deleted',
     ContentErrorCode.forbiddenEdit: 'Not allowed to edit this post',
     ContentErrorCode.forbiddenDelete: 'Not allowed to delete this post',
     ContentErrorCode.unauthorized: 'Please sign in to continue',
     ContentErrorCode.invalidArgument: 'Invalid request, please check and retry',
+    ContentErrorCode.interactionTypeInvalid: 'Unsupported interaction type',
+    ContentErrorCode.interactionCursorInvalid: 'The list changed, refresh and retry',
+    ContentErrorCode.interactionOwnerForbidden: 'You cannot view this interaction history',
+    ContentErrorCode.interactionReadModelUnavailable: 'Interaction history is temporarily unavailable',
     ContentErrorCode.assistantMentionContextMissing: 'Xiaoqu cannot resolve this comment context yet',
     ContentErrorCode.invalidContentType: 'Unsupported content type',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',
@@ -171,8 +220,14 @@ class ContentErrorMessages {
     ContentErrorCode.publicRequiredForCircleDistribution: 'Post must be public before distributing to circles',
     ContentErrorCode.invalidMomentPayload: 'Moment payload is empty; at least body/image/video is required',
     ContentErrorCode.contentDeleted: 'Content has been deleted',
+    ContentErrorCode.versionConflict: 'Content changed, refresh and retry',
+    ContentErrorCode.idempotencyConflict: 'The repeated request differs from the original operation',
+    ContentErrorCode.moderationApprovalRequired: 'The current content version is not approved',
+    ContentErrorCode.moderationDecisionStale: 'Content changed; review the latest version',
     ContentErrorCode.circleDistributionForbidden: 'Not allowed to modify circle distribution',
     ContentErrorCode.storageWriteFailed: 'Operation failed, please retry',
+    ContentErrorCode.storageReadFailed: 'Unable to read content, please retry',
+    ContentErrorCode.requiredDependencyUnavailable: 'A required content dependency is unavailable',
     ContentErrorCode.internalError: 'Service error, please try again later',
     ContentErrorCode.upstreamTimeout: 'Request timed out, please check your connection',
   };

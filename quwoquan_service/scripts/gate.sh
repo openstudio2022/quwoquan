@@ -21,6 +21,11 @@ require_cmd dart
 SERVICE_GO_TEST_TIMEOUT="${SERVICE_GO_TEST_TIMEOUT:-240s}"
 export PYTHONDONTWRITEBYTECODE="${PYTHONDONTWRITEBYTECODE:-1}"
 
+python3 scripts/verify/verify_go_single_module.py \
+  || fail "nested Go module detected"
+python3 scripts/verify/verify_codegen_contract_graph_source.py \
+  || fail "codegen bypasses ContractGraph Source"
+
 has_rg() {
   command -v rg >/dev/null 2>&1
 }
@@ -37,69 +42,16 @@ search() {
   fi
 }
 
-# 1) YAML syntax check (OpenAPI)
-# Domain-centric OpenAPI fragments live under contracts/metadata/.
+# 1) OpenAPI 必须是 ContractGraph 的精确生成快照；先于 commercial validation。
+echo "[gate] checking generated OpenAPI snapshots"
+go run ./tools/qwq_contract check-openapi --metadata-dir contracts/metadata \
+  || fail "generated OpenAPI snapshots are stale"
+
+# 1.1) YAML syntax check (OpenAPI)
 echo "[gate] validating OpenAPI yaml syntax"
 ruby -ryaml -e 'ARGV.each { |f| YAML.load_file(f) }' \
   contracts/metadata/_shared/openapi_common.yaml \
   contracts/metadata/*/openapi.yaml
-
-# 1.1) OpenAPI <-> endpoint catalog consistency (subset)
-echo "[gate] checking OpenAPI <-> endpoint catalog consistency"
-ruby -ryaml -e '
-  def fail(msg)
-    STDERR.puts("[gate] FAIL: #{msg}")
-    exit 1
-  end
-
-  # endpoint_catalog.md is superseded by per-domain service.yaml in the new design.
-  # Skip this check when the current catalog file does not exist.
-  unless File.exist?("contracts/endpoint_catalog.md")
-    puts "[gate] endpoint_catalog.md not present (replaced by service.yaml) — skipping current catalog check"
-    exit 0
-  end
-
-  openapi_files = Dir["contracts/metadata/*/openapi.yaml"]
-  paths = {}
-  openapi_files.each do |f|
-    doc = YAML.load_file(f) || {}
-    (doc["paths"] || {}).each do |path, ops|
-      next unless ops.is_a?(Hash)
-      ops.each do |method, _|
-        m = method.to_s.upcase
-        next unless %w[GET POST PATCH PUT DELETE].include?(m)
-        paths["#{m} #{path}"] = true
-      end
-    end
-  end
-
-  catalog = File.read("contracts/endpoint_catalog.md")
-  catalog_entries = {}
-  catalog.each_line do |line|
-    # | `xxx` | GET | `/v1/...` | ...
-    if line =~ /\|\s*`[^`]+`\s*\|\s*(GET|POST|PATCH|PUT|DELETE)\s*\|\s*`([^`]+)`\s*\|/
-      catalog_entries["#{$1} #{$2}"] = true
-    end
-  end
-
-  prefixes = %w[/v1/content /v1/user /v1/chat /v1/orch]
-
-  missing_in_catalog = paths.keys.select do |k|
-    method, path = k.split(" ", 2)
-    prefixes.any? { |p| path.start_with?(p) } && !catalog_entries[k]
-  end
-  unless missing_in_catalog.empty?
-    fail("endpoint_catalog missing entries for OpenAPI paths:\\n" + missing_in_catalog.sort.join("\\n"))
-  end
-
-  missing_in_openapi = catalog_entries.keys.select do |k|
-    method, path = k.split(" ", 2)
-    prefixes.any? { |p| path.start_with?(p) } && !paths[k]
-  end
-  unless missing_in_openapi.empty?
-    fail("endpoint_catalog has entries not present in OpenAPI (for core prefixes):\\n" + missing_in_openapi.sort.join("\\n"))
-  end
-' 
 
 # 1.2) contracts/README.md must list all contracts/*.md
 echo "[gate] checking contracts/README.md coverage"
@@ -713,13 +665,54 @@ if [ -f "$CONTENT_POST_DIR/tests/contract.yaml" ]; then
 fi
 
 # ── Tooling / control-plane codegen tests ────────────────────────────────────
+echo "[gate] checking DDD/CQRS baseline and commercial failure ratchet"
+go test ./internal/metadata/load ./internal/metadata/graph ./internal/metadata/validate \
+  || fail "DDD/CQRS baseline verification failed"
+
+echo "[gate] compiling canonical ContractGraph"
+go run ./tools/qwq_contract validate --metadata-dir contracts/metadata --profile commercial \
+  || fail "ContractGraph validation failed"
+go run ./tools/qwq_contract check --metadata-dir contracts/metadata --profile commercial --input generated/contract_graph.json \
+  || fail "generated ContractGraph is stale"
+go run ./tools/qwq_contract coverage --metadata-dir contracts/metadata \
+  || fail "ContractGraph coverage failed"
+
+echo "[gate] checking DDD service layering"
+python3 scripts/verify/verify_service_layering.py \
+  || fail "service layering verification failed"
+
+echo "[gate] checking production service wiring purity"
+python3 scripts/verify/verify_production_wiring_purity.py \
+  || fail "production wiring purity verification failed"
+
 echo "[gate] verify contracts/metadata (verify_metadata)"
 go run ./tools/verify_metadata contracts/metadata \
   || fail "metadata verification failed"
 
 echo "[gate] running metadata and control-plane tooling tests"
-go test ./tools/verify_metadata ./tools/codegen_ops_portal_metadata ./tools/codegen_control_plane_runtime ./runtime/codegen ./tools/codegen_circle_domain -count=1 \
+go test ./internal/metadata/... ./runtime/operation/... ./tools/qwq_contract ./tools/verify_metadata ./tools/codegen_ops_portal_metadata ./tools/codegen_control_plane_runtime ./tools/codegen_circle_domain -count=1 \
   || fail "control-plane tooling tests failed"
+
+echo "[gate] compiling every Go package and test in the root module"
+# `go test -run '^$'` still invokes TestMain. That is wrong for this compile-only
+# stage because API integration TestMain intentionally requires a real MongoDB.
+# Build each test binary without executing it; real integration suites below keep
+# their runtime prerequisites and fail closed when their environment is absent.
+compile_dir="$(mktemp -d "${TMPDIR:-/tmp}/quwoquan-go-test-compile.XXXXXX")"
+package_list="$compile_dir/packages.txt"
+if ! go list ./... >"$package_list"; then
+  rm -rf "$compile_dir"
+  fail "could not enumerate root-module packages for compilation"
+fi
+compile_index=0
+while IFS= read -r package_name; do
+  compile_index=$((compile_index + 1))
+  if ! go test -c -o "$compile_dir/$compile_index.test" "$package_name"; then
+    rm -rf "$compile_dir"
+    fail "root-module package/test compilation failed: $package_name"
+  fi
+done <"$package_list"
+rm -rf "$compile_dir"
 
 bash scripts/verify_domain_onboarding.sh \
   || fail "domain onboarding aggregation failed"
@@ -759,8 +752,7 @@ echo "[gate] running product-ops-service contract tests"
 ) || fail "product-ops-service go tests failed"
 
 # ── L2: tag-service contract tests ───────────────────────────────────────────
-# testcontainers(mongo) 在无 Docker 的本地会优雅 skip（TestMain os.Exit(0)），
-# CI(CI=true / GITHUB_ACTIONS=true) 下强制起容器，缺 Docker 即 panic 暴露。
+# 缺真实 MongoDB 时必须失败，禁止把未执行的集成测试记为成功。
 echo "[gate] running tag-service contract tests"
 go test ./services/tag-service/... -count=1 -timeout="$SERVICE_GO_TEST_TIMEOUT" \
   || fail "tag-service go tests failed"
@@ -812,7 +804,8 @@ echo "[gate] running recommendation-service python tests"
 PYTHON_TEST_RUNNER="${ML_PYTHON:-}"
 if [ -z "$PYTHON_TEST_RUNNER" ]; then
   REPO_ROOT="$(cd "$ROOT/.." && pwd)"
-  REC_MODEL_VENV="$REPO_ROOT/.qwq_output/env/repo/local/python-envs/rec-model"
+  QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$REPO_ROOT/.qwq_output}"
+  REC_MODEL_VENV="$QWQ_OUTPUT_ROOT/env/repo/local/python-envs/cache/rec-model"
   if [ ! -x "$REC_MODEL_VENV/bin/python" ]; then
     echo "[gate] bootstrapping rec-model python env at $REC_MODEL_VENV"
     python3 -m venv "$REC_MODEL_VENV" \

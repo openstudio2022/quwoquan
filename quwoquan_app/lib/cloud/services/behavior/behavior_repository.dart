@@ -11,12 +11,13 @@ import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_s
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
+import 'package:quwoquan_app/cloud/runtime/context/actor_queue_partition.dart';
+import 'package:quwoquan_app/infrastructure/local/actor_queue/actor_queue_storage.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
-import 'package:quwoquan_app/core/services/hive_runtime.dart';
 
 /// Behavior action types aligned with behaviors.yaml.
 ///
@@ -353,6 +354,8 @@ class BehaviorEvent {
 abstract class BehaviorRepository {
   Future<void> reportEvents({required List<BehaviorEvent> events});
 
+  Future<void> clearPendingForLogout();
+
   Future<void> reportSingle({
     required String contentId,
     required BehaviorAction action,
@@ -402,6 +405,11 @@ class MockBehaviorRepository extends BehaviorRepository {
   Future<void> reportEvents({required List<BehaviorEvent> events}) async {
     recorded.addAll(events);
   }
+
+  @override
+  Future<void> clearPendingForLogout() async {
+    recorded.clear();
+  }
 }
 
 /// Remote 实现：对接云侧 POST /v1/content/behaviors。
@@ -415,13 +423,15 @@ class RemoteBehaviorRepository extends BehaviorRepository
     this._eventRepository,
     String currentUserId = '',
     String experimentBucket = '',
-    CloudHttpClient? httpClient,
+    required this._httpClient,
     String? baseUrl,
     this._feedSessionIdProvider,
-  }) : _httpClient = httpClient ?? CloudHttpClient(),
-       _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
+    required this._queuePartition,
+    ActorQueueStorage? queueStorage,
+  }) : _baseUrl = (baseUrl ?? CloudRuntimeConfig.gatewayBaseUrl).trim(),
        _currentUserId = currentUserId.trim(),
-       _experimentBucket = experimentBucket.trim() {
+       _experimentBucket = experimentBucket.trim(),
+       _queueStorage = queueStorage ?? ActorQueueStorage() {
     _bindLifecycle();
   }
 
@@ -431,6 +441,10 @@ class RemoteBehaviorRepository extends BehaviorRepository
   final String _currentUserId;
   final String _experimentBucket;
   final String Function()? _feedSessionIdProvider;
+  final ActorQueuePartition _queuePartition;
+  final ActorQueueStorage _queueStorage;
+  final Map<Timer, Completer<void>> _retryWaits = <Timer, Completer<void>>{};
+  bool _disposed = false;
 
   // ── 双 sessionId 语义（军规 R23 收敛说明）──────────────────────────────
   // 端侧存在两个不同语义、不可混用的会话标识，上报 body 同时携带：
@@ -458,6 +472,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_disposed) return;
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
       unawaited(_flushPending());
@@ -465,6 +480,15 @@ class RemoteBehaviorRepository extends BehaviorRepository
   }
 
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    for (final entry in _retryWaits.entries.toList(growable: false)) {
+      entry.key.cancel();
+      if (!entry.value.isCompleted) {
+        entry.value.complete();
+      }
+    }
+    _retryWaits.clear();
     try {
       WidgetsBinding.instance.removeObserver(this);
     } catch (_) {
@@ -475,12 +499,16 @@ class RemoteBehaviorRepository extends BehaviorRepository
   Uri _uri(String path) => Uri.parse('$_baseUrl$path');
 
   Future<Box<String>?> _ensureQueueBox() async {
-    return HiveRuntime.openStringBoxOrNull(kBehaviorPendingQueueBoxName);
+    return _queueStorage.open(_queuePartition, kBehaviorPendingQueueBoxName);
   }
 
   @override
+  Future<void> clearPendingForLogout() =>
+      _queueStorage.purge(_queuePartition, kBehaviorPendingQueueBoxName);
+
+  @override
   Future<void> reportEvents({required List<BehaviorEvent> events}) async {
-    if (events.isEmpty) return;
+    if (_disposed || events.isEmpty) return;
 
     final uri = _uri(ContentApiMetadata.reportBehaviorsPath);
     final feedSid = _resolvedFeedSessionId;
@@ -497,9 +525,9 @@ class RemoteBehaviorRepository extends BehaviorRepository
       if (_shouldEnqueueBehaviorFailure(e)) {
         await _enqueue(events);
       }
-    } catch (e) {
+    } catch (_) {
       developer.log(
-        'behavior reportEvents failed, enqueuing: $e',
+        'behavior reportEvents failed; enqueuing actor-scoped batch',
         name: 'BehaviorRepository',
       );
       await _enqueue(events);
@@ -559,14 +587,16 @@ class RemoteBehaviorRepository extends BehaviorRepository
   }
 
   Future<void> _flushPending() async {
+    if (_disposed) return;
     final box = await _ensureQueueBox();
-    if (box == null) {
+    if (_disposed || box == null) {
       return;
     }
     final keys = box.keys.map((key) => key.toString()).toList(growable: false)
       ..sort();
     var consecutiveFailures = 0;
     for (final key in keys) {
+      if (_disposed) return;
       final raw = box.get(key);
       if (raw == null || raw.isEmpty) {
         await box.delete(key);
@@ -574,17 +604,20 @@ class RemoteBehaviorRepository extends BehaviorRepository
       }
       try {
         final envelope = jsonDecode(raw);
-        List<dynamic> eventsList;
-        String sessionId;
-        String feedSessionId = '';
-        if (envelope is Map && envelope.containsKey('sessionId')) {
-          sessionId = (envelope['sessionId'] ?? '').toString();
-          feedSessionId = (envelope['feedSessionId'] ?? '').toString();
-          eventsList = (envelope['events'] as List?) ?? <dynamic>[];
-        } else {
-          sessionId = _resolvedSessionId;
-          eventsList = envelope as List;
+        if (envelope is! Map ||
+            !_queuePartition.acceptsEnvelope(envelope['actorPartitionKey'])) {
+          await _queueStorage.moveToDlq(
+            partition: _queuePartition,
+            queueName: kBehaviorPendingQueueBoxName,
+            sourceKey: key,
+            rawEnvelope: raw,
+            reason: 'actor_partition_mismatch',
+          );
+          continue;
         }
+        final sessionId = (envelope['sessionId'] ?? '').toString();
+        final feedSessionId = (envelope['feedSessionId'] ?? '').toString();
+        final eventsList = (envelope['events'] as List?) ?? <dynamic>[];
         final events = eventsList
             .whereType<Map>()
             .map((item) => _behaviorEventFromJson(item.cast<String, dynamic>()))
@@ -602,14 +635,29 @@ class RemoteBehaviorRepository extends BehaviorRepository
         consecutiveFailures = 0;
       } on CloudException catch (e) {
         if (!_shouldEnqueueBehaviorFailure(e)) {
-          await box.delete(key);
+          await _queueStorage.moveToDlq(
+            partition: _queuePartition,
+            queueName: kBehaviorPendingQueueBoxName,
+            sourceKey: key,
+            rawEnvelope: raw,
+            reason: 'non_retryable_${e.statusCode ?? 0}',
+          );
           continue;
         }
         consecutiveFailures++;
         if (consecutiveFailures >= 3) break;
-      } catch (e) {
+      } on FormatException catch (error) {
+        await _queueStorage.moveToDlq(
+          partition: _queuePartition,
+          queueName: kBehaviorPendingQueueBoxName,
+          sourceKey: key,
+          rawEnvelope: raw,
+          reason: 'poison_${error.message}',
+        );
+      } catch (_) {
         developer.log(
-          'behavior flushPending failed (consecutive=$consecutiveFailures): $e',
+          'behavior actor-scoped flush failed '
+          '(consecutive=$consecutiveFailures)',
           name: 'BehaviorRepository',
         );
         consecutiveFailures++;
@@ -626,6 +674,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
     final key = DateTime.now().microsecondsSinceEpoch.toString();
     final feedSid = _resolvedFeedSessionId;
     final envelope = <String, dynamic>{
+      'actorPartitionKey': _queuePartition.key,
       'sessionId': _resolvedSessionId,
       if (feedSid.isNotEmpty) 'feedSessionId': feedSid,
       'events': events.map((event) => event.toJson()).toList(growable: false),
@@ -638,12 +687,26 @@ class RemoteBehaviorRepository extends BehaviorRepository
             ..sort();
       final overflow = box.length - maxBacklog;
       for (var i = 0; i < overflow; i++) {
-        await box.delete(keys[i]);
+        final overflowKey = keys[i];
+        final raw = box.get(overflowKey);
+        if (raw == null) {
+          await box.delete(overflowKey);
+          continue;
+        }
+        await _queueStorage.moveToDlq(
+          partition: _queuePartition,
+          queueName: kBehaviorPendingQueueBoxName,
+          sourceKey: overflowKey,
+          rawEnvelope: raw,
+          reason: 'queue_capacity_exceeded',
+          kind: ActorQueueSignalKind.overflowMoved,
+        );
       }
     }
   }
 
   Future<void> _postBehaviorBatch(Uri uri, Map<String, dynamic> body) async {
+    if (_disposed) return;
     final jsonStr = jsonEncode(body);
     final headers = Map<String, String>.from(
       CloudRequestHeaders.forPage(ContentRequestPageIds.reportBehaviors),
@@ -661,6 +724,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
     }
 
     for (var attempt = 0; attempt <= _maxRetries; attempt++) {
+      if (_disposed) return;
       try {
         final response = await _httpClient.postBytes(
           uri,
@@ -680,6 +744,7 @@ class RemoteBehaviorRepository extends BehaviorRepository
           requestPath: uri.path,
         );
       } catch (e) {
+        if (_disposed) return;
         final cloudError = e is CloudException
             ? e
             : CloudErrorMapper.fromException(e, requestPath: uri.path);
@@ -689,8 +754,22 @@ class RemoteBehaviorRepository extends BehaviorRepository
         }
       }
       final delayMs = math.min(1000 * math.pow(2, attempt).toInt(), 8000);
-      await Future<void>.delayed(Duration(milliseconds: delayMs));
+      await _waitBeforeRetry(Duration(milliseconds: delayMs));
     }
+  }
+
+  Future<void> _waitBeforeRetry(Duration duration) {
+    if (_disposed) return Future<void>.value();
+    final completer = Completer<void>();
+    late final Timer timer;
+    timer = Timer(duration, () {
+      _retryWaits.remove(timer);
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+    _retryWaits[timer] = completer;
+    return completer.future;
   }
 
   bool _shouldRetryBehaviorFailure(CloudException error) {
@@ -703,11 +782,15 @@ class RemoteBehaviorRepository extends BehaviorRepository
   }
 
   BehaviorEvent _behaviorEventFromJson(Map<String, dynamic> json) {
-    final action =
-        BehaviorAction.fromWireValue((json['action'] ?? '').toString()) ??
-        BehaviorAction.impression;
+    final contentId = (json['contentId'] ?? '').toString().trim();
+    final action = BehaviorAction.fromWireValue(
+      (json['action'] ?? '').toString(),
+    );
+    if (contentId.isEmpty || action == null) {
+      throw const FormatException('invalid behavior queue event');
+    }
     return BehaviorEvent(
-      contentId: (json['contentId'] ?? '').toString(),
+      contentId: contentId,
       action: action,
       clientEventId: json['clientEventId'] as String?,
       state: json['state'] as String?,

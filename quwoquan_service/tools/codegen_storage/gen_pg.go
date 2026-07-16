@@ -9,26 +9,26 @@ import (
 	"strings"
 	"text/template"
 
-	"quwoquan_service/runtime/codegen"
+	"quwoquan_service/internal/metadata/codegen"
 )
 
 type pgStoreData struct {
-	TableName   string
-	EntityName  string
-	ShortName   string
-	BaseName    string
-	DomainPkg   string
-	ModelImport string
-	Columns     []pgColData
-	PKColumn    string
-	PKGoName    string
-	FKColumn    string
-	FKGoName    string
-	HasFK       bool
+	TableName    string
+	EntityName   string
+	ShortName    string
+	BaseName     string
+	DomainPkg    string
+	ModelImport  string
+	Columns      []pgColData
+	PKColumn     string
+	PKGoName     string
+	FKColumn     string
+	FKGoName     string
+	HasFK        bool
 	HasCreatedAt bool
 	HasUpdatedAt bool
-	NonPKCols   []pgColData
-	NeedsTime   bool
+	NonPKCols    []pgColData
+	NeedsTime    bool
 }
 
 type pgColData struct {
@@ -38,7 +38,7 @@ type pgColData struct {
 }
 
 func generatePGStore(ctx *genContext, tableName string, table TableDef) error {
-	dir := filepath.Join(ctx.outputDir(), "infrastructure", "persistence")
+	dir := filepath.Join(ctx.outputDir(), ctx.source.infrastructurePath("persistence"))
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -53,7 +53,7 @@ func generatePGStore(ctx *genContext, tableName string, table TableDef) error {
 		ShortName:   shortName,
 		BaseName:    "pg" + shortName + "StoreBase",
 		DomainPkg:   ctx.domainPkg(),
-		ModelImport: ctx.modulePath() + "/domain/" + ctx.domainPkg() + "/model",
+		ModelImport: ctx.source.modelImport(ctx.modulePath()),
 	}
 
 	for _, col := range table.Columns {

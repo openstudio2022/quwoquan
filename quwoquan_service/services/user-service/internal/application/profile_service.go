@@ -18,23 +18,21 @@ import (
 	runtimesync "quwoquan_service/runtime/sync"
 	event "quwoquan_service/services/user-service/internal/domain/user/event"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 	"quwoquan_service/services/user-service/internal/generated"
-	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 )
 
 type ProfileService struct {
-	profiles userrepo.ProfileRepository
-	personas userrepo.PersonaRepository
-	settings userrepo.SettingRepository
-	pcache   *cache.ProfileCache
-	scache   *cache.SettingCache
+	profiles userrepo.UserProfileStore
+	personas PersonaStore
+	settings userrepo.UserSettingsStore
+	pcache   ProfileSnapshotCache
 	events   UserEventPublisher
 	sync     UserSyncStream
 
 	regionTags           RegionTagResolver
 	profileTags          ProfileTagValidator
-	qrTokens             userrepo.ProfileQrTokenRepository
+	qrTokens             userrepo.ProfileQrTokenStore
 	publicProfileBaseURL string
 	qrTokenSecret        []byte
 	qrTokenTTL           time.Duration
@@ -42,7 +40,7 @@ type ProfileService struct {
 
 type ProfileServiceOption func(*ProfileService)
 
-func WithProfileQrTokenRepository(qrTokens userrepo.ProfileQrTokenRepository) ProfileServiceOption {
+func WithProfileQrTokenStore(qrTokens userrepo.ProfileQrTokenStore) ProfileServiceOption {
 	return func(s *ProfileService) {
 		s.qrTokens = qrTokens
 	}
@@ -73,24 +71,20 @@ func WithProfileTagValidator(validator ProfileTagValidator) ProfileServiceOption
 }
 
 func NewProfileService(
-	profiles userrepo.ProfileRepository,
-	personas userrepo.PersonaRepository,
-	settings userrepo.SettingRepository,
-	pcache *cache.ProfileCache,
-	scache *cache.SettingCache,
+	profiles userrepo.UserProfileStore,
+	personas PersonaStore,
+	settings userrepo.UserSettingsStore,
+	pcache ProfileSnapshotCache,
 	events UserEventPublisher,
 	sync UserSyncStream,
 	options ...ProfileServiceOption,
 ) *ProfileService {
-	if events == nil {
-		events = NoopUserEventPublisher()
-	}
+	events = requireUserEventPublisher(events)
 	service := &ProfileService{
 		profiles:             profiles,
 		personas:             personas,
 		settings:             settings,
 		pcache:               pcache,
-		scache:               scache,
 		events:               events,
 		sync:                 sync,
 		regionTags:           PathRegionTagResolver{},

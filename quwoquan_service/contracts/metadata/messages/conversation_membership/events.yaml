@@ -1,0 +1,18 @@
+version: 1
+aggregate: ConversationMembership
+events:
+  - name: ConversationMemberAdded
+    producer: chat-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_fields: [conversationId, memberId, userId, displayName, memberType, role, assistantSkillId, invitedBy, memberCount, joinedAt]
+  - name: ConversationMemberRemoved
+    producer: chat-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_fields: [conversationId, memberId, userId, memberType, assistantSkillId, removedBy, memberCount]
+  - name: ConversationMemberRoleChanged
+    producer: chat-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_fields: [conversationId, memberId, userId, role, changedBy]

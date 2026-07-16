@@ -28,19 +28,22 @@ for base in (
 
 required = {
     ROOT / "quwoquan_data" / "scripts" / "ship" / "handler.py": [
-        "materialize_release_media",
-        "media_manifest=media_manifest",
+        "_load_release",
+        "_release_media_object_keys",
+        "object_keys=_release_media_object_keys(release)",
+        '"media-sync.json"',
+        '"data-release"',
     ],
     ROOT / "quwoquan_data" / "scripts" / "ship" / "consistency.py": [
-        "_media_manifest_issues",
-        "media_asset_missing_object_key",
-        "media_asset_invalid_cdn_url",
-        "media_asset_invalid_sha256",
+        "_cas_issues",
+        "asset_ref_path_escape",
+        "non_cas_asset_ref",
+        "dangling_asset_ref",
     ],
-    ROOT / "quwoquan_data" / "scripts" / "_common" / "media_asset_url.py": [
-        "COLLISION_LEDGER_SCHEMA_VERSION",
-        "build_object_key",
+    ROOT / "quwoquan_data" / "scripts" / "core" / "media_asset_url.py": [
+        "is_cas_media_object_key",
         "materialize_release_media",
+        "quwoquan_data.release_media_manifest/1",
     ],
     ROOT / "quwoquan_service" / "services" / "content-service" / "cmd" / "import" / "loader.go": [
         "ArticleAssetManifest",
@@ -57,6 +60,16 @@ for path, needles in required.items():
     for needle in needles:
         if needle not in text:
             violations.append(f"{path.relative_to(ROOT)}: missing required media contract marker {needle!r}")
+
+for path in (
+    ROOT / "quwoquan_data" / "scripts" / "ship" / "handler.py",
+    ROOT / "quwoquan_data" / "scripts" / "ship" / "consistency.py",
+    ROOT / "quwoquan_data" / "scripts" / "core" / "media_asset_url.py",
+):
+    text = read(path)
+    for legacy in ("env_releases", "sample_bundles", "media/library", "libraryPath", "cdnUrl"):
+        if legacy in text:
+            violations.append(f"{path.relative_to(ROOT)}: legacy media path/field {legacy!r} is forbidden")
 
 https_only_files = [
     ROOT / "quwoquan_app" / "lib" / "cloud" / "runtime" / "cloud_runtime_config.dart",

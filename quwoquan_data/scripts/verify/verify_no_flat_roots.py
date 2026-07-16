@@ -4,7 +4,7 @@
 - quwoquan_data 根层 tracked 条目必须在目录规范 allowlist 内
   （docs/pipeline_directory_layout_spec.md 仓内层规范），禁止新开根层目录/平铺文件；
 - 禁止 quwoquan_data/scripts/ 与 quwoquan_data/tests/ 根层级再次出现业务平铺文件。
-  允许 scripts/ 根仅保留 cli.py + cli_first_allowlist.txt；tests/ 根仅保留 conftest.py。
+  允许 scripts/ 根仅保留 cli.py；tests/ 根仅保留 conftest.py。
 """
 from __future__ import annotations
 
@@ -19,9 +19,9 @@ for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from _common.paths import DATA_ROOT as _DATA_ROOT  # noqa: E402
+from core.paths import DATA_ROOT as _DATA_ROOT  # noqa: E402
 
-ALLOWED_SCRIPT_ROOT_FILES = {"cli.py", "cli_first_allowlist.txt"}
+ALLOWED_SCRIPT_ROOT_FILES = {"cli.py"}
 ALLOWED_TEST_ROOT_FILES = {"conftest.py"}
 
 # quwoquan_data 根层 tracked 目录规范（与 docs/pipeline_directory_layout_spec.md 同源）。

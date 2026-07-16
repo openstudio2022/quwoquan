@@ -8,8 +8,5 @@
     <application
         android:networkSecurityConfig="@xml/beta_debug_network_security_config"
         android:usesCleartextTraffic="false">
-        <meta-data
-            android:name="io.flutter.embedding.android.EnableImpeller"
-            android:value="false" />
     </application>
 </manifest>

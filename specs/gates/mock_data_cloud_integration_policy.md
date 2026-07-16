@@ -1,8 +1,8 @@
 # Mock 数据 · 端云一体化 · 正式发布隔离 — 总策略
 
 > **目标**  
-> 1. **一键切换**：开发/内测通过 **单一配置**（如 `AppDataSourceMode` + dart-define / flavor）在 **端侧 Mock** 与 **云侧 Remote** 间切换。  
-> 2. **完全隔离**：**域名 Mock 数据与假用户路径** 只存在于 **`Mock*Repository` / `cloud/services/*/mock/` / `test/`**，**不得**出现在 `lib/ui`、`lib/app`、`lib/core` 的业务链路中。  
+> 1. **物理分离**：`alpha` runner 依赖 `quwoquan_cloud_mock`；`beta/gamma/prod` 只依赖 production Remote composition，不存在运行时 Mock/Remote 切换。  
+> 2. **完全隔离**：**域名 Mock 数据与假用户路径** 只存在于 **`packages/quwoquan_cloud_mock` / `test/`**，不得出现在 production `lib/**`。  
 > 3. **正式发行**：**Release/商店包** 不携带 **可切换 Mock 的配置入口**、**测试专用 dart-define 默认值**、以及 **未剥离的 Mock 实现**（见下文「发行形态」）。  
 > 4. **编译单元隔离**：**禁止**在 `lib/**` 与业务代码 **同一源文件** 内定义「仅测试/夹具用」类型、配置或导出（见 **§4.1**）。运行时 `kDebugMode` 分支仍会把两侧代码编进同一产物；**真正零耦合**依赖 **文件级/包级边界**，而非仅靠访问控制。
 
@@ -12,9 +12,9 @@
 
 | 层级 | 合规形态 | 典型缺口 |
 |------|-----------|----------|
-| **Provider** | 仅 `ref.watch(xxxRepositoryProvider)` | `appDataSourceModeProvider` 已存在，但部分 UI 仍绕过 |
-| **Mock*Repository** | 仅在此读 `*MockData` | `cloud/services/*/*_repository.dart` 内混用可接受；**UI 直接 import `.../mock/`** 不可接受 |
-| **Remote*Repository** | HTTP + codegen DTO | `RemoteAppContentRepository` 全量委托 Mock 等 **伪 Remote** |
+| **Provider** | 仅暴露对象专属 `*CommandWriter/*Query` Facet | 旧 `*RepositoryProvider` 仍待对象 packet 删除 |
+| **Alpha adapter** | 仅在 `quwoquan_cloud_mock` 读 generated fixture | production `lib/**` 仍存在 `Mock*` 与 `prototype_mock_data` |
+| **Remote adapter** | generated client + typed Facet | `AppContentRepository`、空 Remote 与运行时 provider 已删除；其余旧 Repository 仍待对象 packet 迁移 |
 | **UI 模型** | 无 `prototype*` 域名实体 | `ChatContactsRow.prototype*` 等 **const 假数据** |
 | **单文件边界** | 业务 `.dart` 仅含发布所需 API | 与业务类 **同文件** 的 fake、`@visibleForTesting` 扩权 API、仅测用 `typedef`/常量 — **仍进入 Release 编译单元** |
 
@@ -25,24 +25,22 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  UI / AppShell / Core widgets                                │
-│  只依赖：Repository 抽象接口 + Riverpod Provider               │
+│  只依赖：对象专属 typed Facet + Riverpod Provider               │
 └───────────────────────────┬─────────────────────────────────┘
                             │
             ┌───────────────▼───────────────┐
-            │  appDataSourceModeProvider     │
-            │  + dart-define / flavor (prod) │
+            │  production DI / alpha runner  │
+            │  （编译期包依赖物理分离）        │
             └───────────────┬───────────────┘
                             │
          ┌──────────────────┴──────────────────┐
          ▼                                      ▼
-  MockChatRepository                    RemoteChatRepository
-  （仅引用 chat/mock/*）                 （仅 HTTP + DTO）
+  AlphaChatFacet                        RemoteChatFacet
+  （quwoquan_cloud_mock）                （generated client + decoder）
 ```
 
-- **「测试数据」** 在工程上等同于 **MockRepository 的内存数据源**，与 **`test/` fakes** 同源策略；**禁止**在 UI 再复制一份。  
-- **切换配置**：  
-  - **运行时**：开发者设置写 `AppDataSourceMode`（仅 **非正式包** 展示入口，见 §5）。  
-  - **编译期**：`--dart-define=APP_DATA_SOURCE=remote|mock`（或 flavor）决定 **默认模式** 与 **是否链接 Mock 实现**。
+- **「测试数据」** 只来自 generated fixture，经 `quwoquan_cloud_mock` 的 typed adapter 暴露；禁止在 UI、Remote 或 production DI 复制。  
+- **环境绑定**：`alpha` 固定 Mock，`beta/gamma/prod` 固定 Remote；未知 `APP_RUNTIME_ENV` 启动失败。`APP_DATA_SOURCE` 不能改变环境绑定，也不能把 Mock 链接进 production 包。
 
 ---
 
@@ -53,11 +51,14 @@
 | **P0 看护** | `verify_ui_mock_isolation.py` + allowlist **只缩不扩** | 新增/改动 `lib/ui|app|core` **不得**新增 mock import / 内嵌 prototype 行 |
 | **P0b 同文件测试剥离** | 审计 `lib/**`：测试夹具/fake/仅测 API 迁出至 `test/**`（或 dev 专用包）；见 **§4.1** | `lib` 内 **无**「仅 test 引用」的顶层声明与业务混文件；可选门禁 `verify_lib_no_test_only_symbols.py`（后续） |
 | **P1 去 UI 直连** | 圈子/联系人/收件箱等改走 `*Repository` | allowlist 中 `import_cloud_mock` 类条目清零 |
-| **P2 伪 Remote** | `RemoteAppContentRepository` 等改为真 Remote 或空态 | 无「Remote 委托 Mock」用于生产路径 |
+| **P2 伪 Remote** | 删除 `RemoteAppContentRepository` 等空/伪 Remote | `AppContent` 已完成；其余对象按 packet 清零 |
 | **P3 身份与全局** | `currentUserIdProvider` 等与 Auth 对齐 | 不依赖 `ChatMockData.currentUserProfileId` |
 | **P4 发行剥离** | prod flavor / 条件编译 | Release 包体与入口满足 §5 |
 
-**Mock/远端与生产包完全分离（契约包、Mock→`test/`、双 pubspec 等）**：**暂缓**，触发条件与清单见 **[`mock_production_separation_backlog.md`](mock_production_separation_backlog.md)**（与 P4 互补；非当前必做项）。
+**Mock/远端与生产包完全分离已于 2026-07-13 触发**：目标固定为 pure Dart
+contracts + 独立 `quwoquan_cloud_mock` + alpha/test runner + production Remote
+composition，执行清单见
+[`mock_production_separation_backlog.md`](mock_production_separation_backlog.md)。
 
 ---
 
@@ -65,8 +66,8 @@
 
 | 允许 | 禁止（正式代码路径） |
 |------|----------------------|
-| `lib/cloud/services/{domain}/mock/*.dart` | `lib/ui/**` import `.../mock/` |
-| `Mock*Repository` 内使用 `*MockData` | `lib/core/**`（除 allowlist 过渡期）import `.../mock/` |
+| `packages/quwoquan_cloud_mock/{context}/{object}/` | production `lib/**` import `.../mock/` |
+| `runners/alpha/` 显式 override typed Facet | `lib/**` 声明 `Mock*`、fixture loader 或运行时 Mock 分支 |
 | `test/**` 使用 fakes | `lib/ui/**/models/**` 内 **域名** `static const` 列表（头像 URL、业务 id） |
 | `core/mock/prototype_mock_data.dart` **仅**被 Mock 层与过渡期 allowlist 引用 | 正式发布 **依赖** `prototype_mock_data` 的 Remote 路径 |
 
@@ -105,7 +106,9 @@
 | **R5** | **正式构建显式 remote**：CI 上生成上架/交付用二进制时 **必须** 传入 `--dart-define=APP_DATA_SOURCE=remote`（或与策略等价的 flavor/入口约定）。 | CI 配置审阅 |
 | **R6** | **伪 Remote 不得充当线上路径**：`Remote*Repository` 不得将生产路径 **整表委托** Mock 内存数据（P2 退出标准）。 | 代码审阅 + 契约测试 |
 
-**说明（二进制与 Mock 类）**：在 **未做 P4 条件编译/拆入口** 前，Dart AOT **仍可能**链接与 `Remote` 同库的 `Mock*Repository` 实现；**R1～R6 保证的是运行时与工程边界**，**不**自动保证「可执行文件内零 Mock 字节」。「物理零 Mock」为 **P4 增强目标**，见 §5 上文与 P4。
+**说明（二进制与 Mock 类）**：Dart AOT tree-shaking 不能作为隔离证据。P4
+商用准出必须通过 package/runner 的物理依赖边界以及 dependency graph、
+kernel/AOT reachability、SBOM 共同证明零 Mock/fixture/Noop。
 
 #### B. 开发 / 内测态（Debug、Profile、或显式 mock 定义）
 
@@ -173,11 +176,11 @@ flutter build ipa --dart-define=APP_DATA_SOURCE=remote
 
 ---
 
-## 9. 目标目录结构（Mock 接口 · 配置 · 测试隔离）
+## 9. 迁移前目录与商用目标目录
 
 > **目的**：把「接口 / 配置」与「假数据实现 / 测试夹具」在 **路径上** 分开，便于从 `lib/ui`、`lib/core` **迁入迁出** 时有一致落点；**测试** 仍按与发布代码相同的 **域（cloud / ui / core / assistant）** 分层，但 **共享夹具** 必须落在 **单独根目录**，避免与用例文件混放、避免误 import 进 `lib`。
 
-### 9.1 `lib/`（发布代码）— 按域并列 Mock / Remote，配置无假表
+### 9.1 迁移输入：`lib/` 按域并列 Mock / Remote
 
 以 `chat` 域为例（其它域 **同形**）：
 
@@ -195,12 +198,22 @@ quwoquan_app/lib/cloud/services/chat/
 - **配置**（数据源模式、dart-define、是否允许 Mock）：集中在独立目录，**不**与某一域 `mock_data` 同文件：
 
 ```text
-quwoquan_app/lib/core/data_source/   # 建议新建；从 app_providers 渐进抽出
-  app_data_source_mode.dart          # AppDataSourceMode、SharedPreferences key、notifier
-  data_source_policy.dart            # 可选：kDebugMode / flavor 下是否展示开发者切换
+quwoquan_app/lib/core/di/
+  app_data_source_mode.dart          # alpha 固定 Mock；beta/gamma/prod 固定 Remote
 ```
 
-- **God 对象迁移方向**：[`lib/core/mock/prototype_mock_data.dart`](../../quwoquan_app/lib/core/mock/prototype_mock_data.dart) 按域 **下沉** 到各 `mock/{domain}_mock_data.dart`；[`app_content_repository.dart`](../../quwoquan_app/lib/core/services/app_content_repository.dart) 按能力 **拆回** 各域 Repository 或 **薄门面**（仅组合接口、不持有假表）。
+- **God 对象迁移方向**：`AppContentRepository` 已删除且不保留薄门面；[`lib/core/mock/prototype_mock_data.dart`](../../quwoquan_app/lib/core/mock/prototype_mock_data.dart) 的剩余对象必须按 packet 迁入 `quwoquan_cloud_mock` 后从 production tree 删除。
+
+以上结构只描述存量迁移输入，禁止继续扩展。商用目标为：
+
+```text
+packages/quwoquan_cloud_contracts/  # pure Dart contract
+packages/quwoquan_cloud_mock/       # alpha/test adapter + generated fixture
+runners/alpha/                      # 唯一依赖 mock package 的设备 runner
+lib/cloud/runtime/                  # 公共执行机制
+lib/cloud/remote/{domain}/          # generated client + thin adapter
+lib/core/di/production/             # Remote-only composition
+```
 
 ### 9.2 `test/` — 与 `lib` 域划分一致 + **`support/` 单独隔离根**
 
@@ -256,3 +269,4 @@ quwoquan_app/test/support/
 | 2026-03-30 | **§5.1 功能规格**：冻结「发布态 R1–R6 / 开发测试态 D1–D4 / 测试代码用语边界」验收表；明确 R1–R6 为运行时与工程边界、物理零 Mock 属 P4 |
 | 2026-04-12 | §6 增补：`verify_ui_app_data_source_mode_ratchet`、`verify_lib_no_test_only_symbols`、Makefile 目标与正式构建 define；索引表增加棘轮脚本 |
 | 2026-04-12 | **P1 进展**：`mockDataSourceActiveProvider` / `remoteDataSourceActiveProvider` 收敛于 [`app_content_repository.dart`](../../quwoquan_app/lib/core/services/app_content_repository.dart)；`lib/ui/**` 对 `AppDataSourceMode.mock` / `appDataSourceModeProvider` 的散落引用棘轮基线已 **清零**（见 [`ui_app_data_source_mode_baseline.json`](./ui_app_data_source_mode_baseline.json)）；[`app_content_repository_provider`](../../quwoquan_app/lib/cloud/services/app_content/app_content_repository_provider.dart) 改为依 `remoteDataSourceActiveProvider` 选型 |
+| 2026-07-15 | `AppContentRepository`、空 Remote、Mock、provider 与兼容 barrel 同批删除；`AppDataSourceMode` 归位 `core/di`，`prod-sim` Mock 特例删除。上行 2026-04-12 记录仅为历史状态，不再是当前规则。 |

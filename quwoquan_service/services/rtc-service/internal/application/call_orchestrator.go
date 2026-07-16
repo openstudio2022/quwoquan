@@ -6,53 +6,46 @@ import (
 	"time"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/rtc-service/internal/adapters/mq"
-	wsadapter "quwoquan_service/services/rtc-service/internal/adapters/ws"
 	callsession "quwoquan_service/services/rtc-service/internal/domain/call_session"
-	"quwoquan_service/services/rtc-service/internal/generated"
 	"quwoquan_service/services/rtc-service/internal/domain/call_session/event"
 	"quwoquan_service/services/rtc-service/internal/domain/call_session/model"
-	"quwoquan_service/services/rtc-service/internal/infrastructure/cache"
-	"quwoquan_service/services/rtc-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/rtc-service/internal/generated"
 )
 
 type CallOrchestrator struct {
-	repo           persistence.CallRepository
-	cache          *cache.CallStateCache
+	repo           CallStore
+	cache          CallStateCache
 	domainService  *callsession.CallSessionService
 	roomService    *RoomService
-	tokenService   *TokenService
-	eventPublisher *mq.EventPublisher
-	signalHandler  *wsadapter.SignalHandler
+	tokenIssuer    CallTokenIssuer
+	eventPublisher CallEventPublisher
+	signaler       CallSignaler
 	relationships  RelationshipGate
 }
 
 func NewCallOrchestrator(
-	repo persistence.CallRepository,
-	cache *cache.CallStateCache,
+	repo CallStore,
+	cache CallStateCache,
 	domainSvc *callsession.CallSessionService,
 	roomSvc *RoomService,
-	tokenSvc *TokenService,
-	eventPub *mq.EventPublisher,
+	tokenIssuer CallTokenIssuer,
+	eventPub CallEventPublisher,
 	relationships RelationshipGate,
-	sigHandler ...*wsadapter.SignalHandler,
+	signaler CallSignaler,
 ) *CallOrchestrator {
 	if relationships == nil {
 		relationships = DenyRelationshipGate()
 	}
-	o := &CallOrchestrator{
+	return &CallOrchestrator{
 		repo:           repo,
 		cache:          cache,
 		domainService:  domainSvc,
 		roomService:    roomSvc,
-		tokenService:   tokenSvc,
+		tokenIssuer:    tokenIssuer,
 		eventPublisher: eventPub,
+		signaler:       signaler,
 		relationships:  relationships,
 	}
-	if len(sigHandler) > 0 {
-		o.signalHandler = sigHandler[0]
-	}
-	return o
 }
 
 type InitiateCallRequest struct {
@@ -101,12 +94,12 @@ func (o *CallOrchestrator) InitiateCall(ctx context.Context, req InitiateCallReq
 	_ = o.repo.UpdateCall(ctx, session)
 	_ = o.cache.SetCallState(ctx, session)
 
-	o.publishEvent(ctx, event.CallInitiated, session, req.InitiatorID, nil)
-	o.publishEvent(ctx, event.CallRinging, session, req.InitiatorID, nil)
+	o.publishEvent(ctx, event.CallInitiated, session, req.InitiatorID, CallEventPayload{})
+	o.publishEvent(ctx, event.CallRinging, session, req.InitiatorID, CallEventPayload{})
 
 	token := ""
-	if o.tokenService != nil {
-		token, _ = o.tokenService.GenerateParticipantToken(session.RoomID, req.InitiatorID)
+	if o.tokenIssuer != nil {
+		token, _ = o.tokenIssuer.GenerateParticipantToken(session.RoomID, req.InitiatorID)
 	}
 
 	return &InitiateCallResponse{Session: session, Token: token}, nil
@@ -134,11 +127,11 @@ func (o *CallOrchestrator) AnswerCall(ctx context.Context, callID, userID string
 	_ = o.cache.DeleteCallTimeout(ctx, callID)
 
 	token := ""
-	if o.tokenService != nil {
-		token, _ = o.tokenService.GenerateParticipantToken(session.RoomID, userID)
+	if o.tokenIssuer != nil {
+		token, _ = o.tokenIssuer.GenerateParticipantToken(session.RoomID, userID)
 	}
 
-	o.publishEvent(ctx, event.CallAnswered, session, userID, nil)
+	o.publishEvent(ctx, event.CallAnswered, session, userID, CallEventPayload{})
 	return &AnswerCallResponse{Session: session, Token: token, RoomID: session.RoomID}, nil
 }
 
@@ -155,7 +148,7 @@ func (o *CallOrchestrator) RejectCall(ctx context.Context, callID, userID string
 	}
 	_ = o.cache.SetCallState(ctx, session)
 	o.cleanupIfEnded(ctx, session)
-	o.publishEvent(ctx, event.CallEnded, session, userID, map[string]any{"reason": session.EndReason})
+	o.publishEvent(ctx, event.CallEnded, session, userID, CallEventPayload{Reason: session.EndReason})
 	return session, nil
 }
 
@@ -172,7 +165,7 @@ func (o *CallOrchestrator) CancelCall(ctx context.Context, callID, userID string
 	}
 	_ = o.cache.SetCallState(ctx, session)
 	o.cleanupIfEnded(ctx, session)
-	o.publishEvent(ctx, event.CallEnded, session, userID, map[string]any{"reason": session.EndReason})
+	o.publishEvent(ctx, event.CallEnded, session, userID, CallEventPayload{Reason: session.EndReason})
 	return session, nil
 }
 
@@ -192,9 +185,9 @@ func (o *CallOrchestrator) HangupCall(ctx context.Context, callID, userID string
 	o.cleanupIfEnded(ctx, session)
 
 	if session.Status == model.StatusEnded {
-		o.publishEvent(ctx, event.CallEnded, session, userID, map[string]any{"reason": session.EndReason})
+		o.publishEvent(ctx, event.CallEnded, session, userID, CallEventPayload{Reason: session.EndReason})
 	} else {
-		o.publishEvent(ctx, event.ParticipantLeft, session, userID, nil)
+		o.publishEvent(ctx, event.ParticipantLeft, session, userID, CallEventPayload{})
 	}
 	return session, nil
 }
@@ -214,11 +207,11 @@ func (o *CallOrchestrator) JoinCall(ctx context.Context, callID, userID string) 
 	_ = o.cache.SetActiveCallForUser(ctx, userID, callID)
 
 	token := ""
-	if o.tokenService != nil {
-		token, _ = o.tokenService.GenerateParticipantToken(session.RoomID, userID)
+	if o.tokenIssuer != nil {
+		token, _ = o.tokenIssuer.GenerateParticipantToken(session.RoomID, userID)
 	}
 
-	o.publishEvent(ctx, event.ParticipantJoined, session, userID, nil)
+	o.publishEvent(ctx, event.ParticipantJoined, session, userID, CallEventPayload{})
 	return session, token, nil
 }
 
@@ -241,7 +234,7 @@ func (o *CallOrchestrator) LeaveCall(ctx context.Context, callID, userID string)
 	}
 
 	o.cleanupIfEnded(ctx, session)
-	o.publishEvent(ctx, event.ParticipantLeft, session, userID, nil)
+	o.publishEvent(ctx, event.ParticipantLeft, session, userID, CallEventPayload{})
 	return session, nil
 }
 
@@ -262,7 +255,7 @@ func (o *CallOrchestrator) InviteToCall(ctx context.Context, callID, userID stri
 	}
 	_ = o.cache.SetCallState(ctx, session)
 
-	o.publishEvent(ctx, event.CallRinging, session, userID, map[string]any{"inviteeIds": inviteeIDs})
+	o.publishEvent(ctx, event.CallRinging, session, userID, CallEventPayload{InviteeIDs: inviteeIDs})
 	return session, nil
 }
 
@@ -349,7 +342,7 @@ func (o *CallOrchestrator) StartRecording(ctx context.Context, callID, userID st
 		return nil, wrapSystemError(err)
 	}
 	_ = o.cache.SetCallState(ctx, session)
-	o.publishEvent(ctx, event.CallRecordingStarted, session, userID, nil)
+	o.publishEvent(ctx, event.CallRecordingStarted, session, userID, CallEventPayload{})
 	return session, nil
 }
 
@@ -365,7 +358,7 @@ func (o *CallOrchestrator) StopRecording(ctx context.Context, callID, userID str
 		return nil, wrapSystemError(err)
 	}
 	_ = o.cache.SetCallState(ctx, session)
-	o.publishEvent(ctx, event.CallRecordingStopped, session, userID, nil)
+	o.publishEvent(ctx, event.CallRecordingStopped, session, userID, CallEventPayload{})
 	return session, nil
 }
 
@@ -381,7 +374,7 @@ func (o *CallOrchestrator) StartScreenShare(ctx context.Context, callID, userID 
 		return nil, wrapSystemError(err)
 	}
 	_ = o.cache.SetCallState(ctx, session)
-	o.publishEvent(ctx, event.ScreenShareStarted, session, userID, nil)
+	o.publishEvent(ctx, event.ScreenShareStarted, session, userID, CallEventPayload{})
 	return session, nil
 }
 
@@ -397,7 +390,7 @@ func (o *CallOrchestrator) StopScreenShare(ctx context.Context, callID, userID s
 		return nil, wrapSystemError(err)
 	}
 	_ = o.cache.SetCallState(ctx, session)
-	o.publishEvent(ctx, event.ScreenShareStopped, session, userID, nil)
+	o.publishEvent(ctx, event.ScreenShareStopped, session, userID, CallEventPayload{})
 	return session, nil
 }
 
@@ -448,15 +441,12 @@ func (o *CallOrchestrator) cleanupIfEnded(ctx context.Context, session *model.Ca
 	}
 }
 
-func (o *CallOrchestrator) publishEvent(ctx context.Context, eventType string, session *model.CallSession, actorID string, payload map[string]any) {
-	if payload == nil {
-		payload = map[string]any{}
-	}
-	payload["status"] = session.Status
-	payload["participantCount"] = session.ParticipantCount
+func (o *CallOrchestrator) publishEvent(ctx context.Context, eventType string, session *model.CallSession, actorID string, payload CallEventPayload) {
+	payload.Status = session.Status
+	payload.ParticipantCount = session.ParticipantCount
 
 	if o.eventPublisher != nil {
-		_ = o.eventPublisher.Publish(ctx, mq.DomainEvent{
+		_ = o.eventPublisher.Publish(ctx, CallEvent{
 			Type:      eventType,
 			CallID:    session.ID,
 			ActorID:   actorID,
@@ -465,17 +455,17 @@ func (o *CallOrchestrator) publishEvent(ctx context.Context, eventType string, s
 		})
 	}
 
-	if o.signalHandler != nil {
-		wsEvent := map[string]any{
-			"type":    signalWireType(eventType),
-			"callId":  session.ID,
-			"actorId": actorID,
-			"payload": payload,
+	if o.signaler != nil {
+		signal := CallSignal{
+			Type:    signalWireType(eventType),
+			CallID:  session.ID,
+			ActorID: actorID,
+			Payload: payload,
 		}
 		if eventType == event.CallRinging || eventType == event.CallInitiated {
 			for _, p := range session.Participants {
 				if p.UserID != actorID {
-					o.signalHandler.PushToUser(ctx, p.UserID, wsEvent)
+					o.signaler.PushToUser(ctx, p.UserID, signal)
 				}
 			}
 		} else {
@@ -483,7 +473,7 @@ func (o *CallOrchestrator) publishEvent(ctx context.Context, eventType string, s
 			for _, p := range session.Participants {
 				userIDs = append(userIDs, p.UserID)
 			}
-			o.signalHandler.PushToUsers(ctx, userIDs, wsEvent)
+			o.signaler.PushToUsers(ctx, userIDs, signal)
 		}
 	}
 }

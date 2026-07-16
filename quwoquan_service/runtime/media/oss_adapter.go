@@ -53,7 +53,6 @@ type OSSMediaStore struct {
 }
 
 // NewOSSMediaStore creates a production-ready MediaStore.
-// If presigner is nil, falls back to StubPresignClient (dev-only).
 func NewOSSMediaStore(
 	config OSSConfig,
 	sessions SessionStore,
@@ -61,8 +60,8 @@ func NewOSSMediaStore(
 	logger *runtimeobservability.IOAccessLogger,
 	presigner PresignClient,
 ) *OSSMediaStore {
-	if presigner == nil {
-		presigner = StubPresignClient{}
+	if sessions == nil || assets == nil || presigner == nil {
+		panic("OSSMediaStore requires session store, asset store and presign client")
 	}
 	return &OSSMediaStore{
 		config:       config,
@@ -109,6 +108,10 @@ func (s *OSSMediaStore) InitUpload(ctx context.Context, opts InitUploadOpts) (*U
 
 	s.logAccess("media.upload.init", "success", opts.OwnerID, 0, "")
 	return session, nil
+}
+
+func (s *OSSMediaStore) GetUploadSession(ctx context.Context, sessionID string) (*UploadSession, error) {
+	return s.sessions.FindByID(ctx, strings.TrimSpace(sessionID))
 }
 
 func (s *OSSMediaStore) CompleteUpload(ctx context.Context, sessionID string, opts CompleteUploadOpts) (*MediaAsset, error) {
@@ -236,7 +239,7 @@ func (s *OSSMediaStore) generatePresignURL(ctx context.Context, ossKey, contentT
 		return "", rterr.NewUnavailable(rterr.ModuleContent, "OSS 服务暂时不可用", "circuit breaker open for OSS")
 	}
 
-	url, err := s.presigner.PresignPutObject(ctx, s.config.Bucket, ossKey, contentType, s.config.PresignTTL)
+	url, err := s.presigner.PresignPutObject(ctx, s.config.Bucket, ossKey, PutObjectConstraints{ContentType: contentType}, s.config.PresignTTL)
 	if err != nil {
 		s.circuitBreak.RecordFailure()
 		return "", rterr.NewUnavailable(rterr.ModuleContent, "生成上传链接失败", fmt.Sprintf("presign failed: %v", err))
@@ -293,7 +296,14 @@ func maxInt64(a, b int64) int64 {
 
 // SignCDNURL generates a signed CDN URL with HMAC-SHA256.
 func SignCDNURL(cdnDomain, ossKey, signKey string, ttl time.Duration) string {
-	expires := time.Now().Add(ttl).Unix()
+	return SignCDNURLUntil(cdnDomain, ossKey, signKey, time.Now().Add(ttl))
+}
+
+// SignCDNURLUntil generates a deterministic signed CDN URL for an absolute
+// expiration. Idempotent access grants must keep the original expiry instead
+// of silently extending their lifetime when a command is replayed.
+func SignCDNURLUntil(cdnDomain, ossKey, signKey string, expiresAt time.Time) string {
+	expires := expiresAt.UTC().Unix()
 	path := fmt.Sprintf("/%s", ossKey)
 	signStr := fmt.Sprintf("%s-%d", path, expires)
 

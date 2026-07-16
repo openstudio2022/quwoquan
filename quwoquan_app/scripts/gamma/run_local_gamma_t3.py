@@ -3,6 +3,7 @@
 
 import argparse
 import contextlib
+import hashlib
 import json
 import os
 import re
@@ -19,25 +20,27 @@ from urllib.parse import urlsplit, urlunsplit
 
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.local_gamma_auth import (  # noqa: E402
+    LocalGammaAcceptanceSession,
+    open_local_gamma_acceptance_session,
+)
+from quwoquan_ops.cli.lib.output_paths import env_run_dir  # noqa: E402
+
 MANIFEST = ROOT / "quwoquan_service/contracts/metadata/_shared/test_fixtures/app_gamma_seed_manifest.json"
 METADATA_ROOT = ROOT / "quwoquan_service/contracts/metadata"
-# 统一输出根：local-gamma 辅助报告属于本地环境状态，正式运行证据由 stackctl 写入 .qwq_output/env/<env>/runs/<runId>。
-LOCAL_GAMMA_ARTIFACT_ROOT = Path(
-    os.environ.get(
-        "LOCAL_GAMMA_ARTIFACT_ROOT",
-        Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
-        / "env"
-        / "gamma"
-        / "local"
-        / "gamma-local"
-        / "app-artifacts",
-    )
+# stackctl injects QWQ_RUN_ROOT. A standalone probe creates the same kind of
+# timestamped run evidence instead of leaking reports into local process state.
+GAMMA_RUN_ROOT = Path(
+    os.environ.get("QWQ_RUN_ROOT")
+    or env_run_dir("gamma", "local-gamma-t3", target="gamma-local")
 )
 COMPOSE_FILE = ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
 COMPOSE_PROJECT = os.environ.get("LOCAL_GAMMA_COMPOSE_PROJECT") or os.environ.get(
     "COMPOSE_PROJECT_NAME", "quwoquan_service"
 )
-CONTENT_SERVICE_YAML = METADATA_ROOT / "content/post/service.yaml"
+CONTRACT_GRAPH = ROOT / "quwoquan_service/generated/contract_graph.json"
 RAW_INTERACTION_STATS_RE = re.compile(r"[0-9０-９]+\s*(赞|评|转|转发)")
 COUNT_SUBJECT_RE = re.compile(r"[0-9０-９]+\s*(人|位)")
 DISPLAY_STATEMENT_BANNED_FRAGMENTS = (
@@ -57,6 +60,16 @@ DISPLAY_STATEMENT_BANNED_FRAGMENTS = (
     "最近在看这些",
 )
 DISPLAY_OBJECT_TARGET_TYPES = {"user", "circle", "homepage", "post", "task"}
+_ACTIVE_SESSION: Optional[LocalGammaAcceptanceSession] = None
+
+
+def gamma_probe_idempotency_key(purpose: str) -> str:
+    """Return a retry-stable key scoped to one immutable Gamma verification run."""
+    normalized = re.sub(r"[^a-z0-9-]+", "-", purpose.strip().lower()).strip("-")
+    if not normalized:
+        raise ValueError("Gamma probe idempotency purpose must not be empty")
+    run_digest = hashlib.sha256(str(GAMMA_RUN_ROOT.resolve()).encode("utf-8")).hexdigest()[:16]
+    return f"gamma-t3-{normalized}-v1-{run_digest}"
 
 
 def load_manifest() -> Dict[str, Any]:
@@ -91,33 +104,20 @@ def flutter_contract_base_url(url: str) -> str:
     return url
 
 
-def default_test_auth_token() -> str:
-    return (
-        os.environ.get("LOCAL_GAMMA_TEST_AUTH_TOKEN")
-        or os.environ.get("GAMMA_TEST_AUTH_TOKEN")
-        or os.environ.get("TEST_AUTH_TOKEN")
-        or "local-gamma-token"
-    )
-
-
-def default_request_headers(viewer_user_id: Optional[str] = "fixture_user_current") -> Dict[str, str]:
-    headers = {"X-Test-Local-Gamma": "true"}
-    if viewer_user_id is not None and viewer_user_id.strip():
-        headers["X-Client-User-Id"] = viewer_user_id.strip()
-    return headers
+def default_request_headers() -> Dict[str, str]:
+    if _ACTIVE_SESSION is None:
+        return {}
+    return {"Authorization": _ACTIVE_SESSION.authorization_header()}
 
 
 def http_get(
     url: str,
     timeout: int = 5,
     *,
-    viewer_user_id: Optional[str] = "fixture_user_current",
     headers: Optional[Dict[str, str]] = None,
 ) -> Tuple[int, bytes]:
     ctx = ssl._create_unverified_context()
-    # Carry the fixture viewer id so header-scoped reads (e.g. GET /v1/me,
-    # 我的主页) resolve the current user. Public reads simply ignore it.
-    request_headers = default_request_headers(viewer_user_id)
+    request_headers = default_request_headers()
     if headers:
         request_headers.update(headers)
     req = urllib.request.Request(
@@ -135,11 +135,10 @@ def http_request(
     method: str = "GET",
     body: Optional[Dict[str, Any]] = None,
     timeout: int = 5,
-    viewer_user_id: Optional[str] = "fixture_user_current",
     headers: Optional[Dict[str, str]] = None,
 ) -> Tuple[int, bytes]:
     ctx = ssl._create_unverified_context()
-    request_headers = default_request_headers(viewer_user_id)
+    request_headers = default_request_headers()
     if headers:
         request_headers.update(headers)
     data = None
@@ -466,7 +465,7 @@ def seed_content() -> Dict[str, Any]:
             doc = fixture_post_to_doc(post)
             docs_by_id[str(doc["_id"])] = doc
     docs = list(docs_by_id.values())
-    js_path = ROOT / ".qwq_output/env/gamma/local/gamma-local/seed-content.js"
+    js_path = GAMMA_RUN_ROOT / "seed-content.js"
     js_path.parent.mkdir(parents=True, exist_ok=True)
     js_path.write_text(
         """
@@ -478,16 +477,30 @@ for (const doc of docs) {
   }
 }
 const dbh = db.getSiblingDB("quwoquan_content");
-dbh.posts.deleteMany({
-  $or: [
-    {_id: /^fixture_/},
-    {postId: /^fixture_/},
-    {postRef: /^fixture_/},
-    {body: "automated test fixture - safe to delete"},
-  ],
-});
-if (docs.length > 0) dbh.posts.insertMany(docs);
-printjson({insertedCount: docs.length});
+const ids = docs.map((doc) => doc._id);
+try {
+  // The Gamma fixture set includes stable non-fixture IDs. Remove precisely
+  // this execution's IDs before insertion so a rerun is idempotent and every
+  // Mongo write failure terminates mongosh with a non-zero status.
+  const deleted = ids.length > 0
+    ? dbh.posts.deleteMany({_id: {$in: ids}})
+    : {deletedCount: 0};
+  if (docs.length > 0) dbh.posts.insertMany(docs, {ordered: true});
+  const storedCount = ids.length > 0
+    ? dbh.posts.countDocuments({_id: {$in: ids}})
+    : 0;
+  if (storedCount !== docs.length) {
+    throw new Error(`seed verification failed: stored ${storedCount}/${docs.length}`);
+  }
+  printjson({
+    insertedCount: docs.length,
+    deletedCount: deleted.deletedCount || 0,
+    storedCount,
+  });
+} catch (error) {
+  print(error && error.stack ? error.stack : String(error));
+  quit(1);
+}
 """
         % json.dumps(docs, ensure_ascii=False),
         encoding="utf-8",
@@ -515,8 +528,11 @@ printjson({insertedCount: docs.length});
     }
 
 
-def seed_content_social_graph() -> Dict[str, Any]:
-    report_path = LOCAL_GAMMA_ARTIFACT_ROOT / "content_social_graph_seed_report.json"
+def seed_content_social_graph(viewer_id: str) -> Dict[str, Any]:
+    viewer_id = viewer_id.strip()
+    if not viewer_id:
+        return {"status": "failed", "error": "authenticated persona id is required"}
+    report_path = GAMMA_RUN_ROOT / "content_social_graph_seed_report.json"
     cmd = [
         "python3",
         "quwoquan_service/services/seed-box/scripts/apply_content_social_graph_seed.py",
@@ -526,6 +542,8 @@ def seed_content_social_graph() -> Dict[str, Any]:
         "quwoquan_content",
         "--report",
         str(report_path),
+        "--viewer-id",
+        viewer_id,
     ]
     result = subprocess.run(
         cmd,
@@ -560,12 +578,12 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
             base_url.rstrip() + "/v1/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "主评论示例"},
-            headers={"X-Client-User-Id": "fixture_user_current"},
             timeout=8,
+            headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-parent")},
         )
         parent_resp = json.loads(body.decode("utf-8"))
-        parent = parent_resp.get("comment") or {}
-        parent_id = str(parent.get("_id") or parent.get("commentId") or "").strip()
+        parent_id = str(parent_resp.get("id") or "").strip()
+        parent_version = int(parent_resp.get("version") or 0)
         if not parent_id:
             return {
                 "status": "failed",
@@ -576,32 +594,67 @@ def setup_comment_thread(base_url: str) -> Dict[str, Any]:
             base_url.rstrip() + "/v1/content/posts/fixture_photo_001/comments",
             method="POST",
             body={"content": "回复示例", "replyToCommentId": parent_id},
-            headers={"X-Client-User-Id": "fixture_user_commenter"},
             timeout=8,
+            headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-reply")},
         )
         reply_resp = json.loads(reply_body.decode("utf-8"))
-        reply = reply_resp.get("comment") or {}
-        reply_id = str(reply.get("_id") or reply.get("commentId") or "").strip()
+        reply_id = str(reply_resp.get("id") or "").strip()
         if not reply_id:
             return {
                 "status": "failed",
                 "httpStatus": reply_status,
                 "error": "CreateComment did not return reply comment id",
             }
+        reaction_status, _ = http_request(
+            base_url.rstrip() + f"/v1/content/comments/{parent_id}/reaction",
+            method="POST",
+            body={"reaction": "like"},
+            timeout=8,
+            headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-reaction")},
+        )
+        bind_status, bind_body = http_request(
+            base_url.rstrip() + f"/v1/content/comments/{parent_id}/media:bind",
+            method="POST",
+            body={
+                "version": parent_version,
+                "attachmentMediaIds": [],
+            },
+            timeout=8,
+            headers={"Idempotency-Key": gamma_probe_idempotency_key("comment-media-bind")},
+        )
+        bind_resp = json.loads(bind_body.decode("utf-8"))
         return {
             "status": "passed",
             "parentCommentId": parent_id,
             "replyCommentId": reply_id,
+            "reaction": {"status": "passed", "httpStatus": reaction_status},
+            "mediaBind": {
+                "status": "passed",
+                "httpStatus": bind_status,
+                "version": int(bind_resp.get("version") or 0),
+            },
         }
     except urllib.error.HTTPError as exc:
-        return {"status": "failed", "httpStatus": exc.code, "error": str(exc)}
+        error_body = exc.read()
+        error_code = ""
+        try:
+            payload = json.loads(error_body.decode("utf-8"))
+            error_code = str(payload.get("code") or "").strip()
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            pass
+        return {
+            "status": "failed",
+            "httpStatus": exc.code,
+            "error": str(exc),
+            "errorCode": error_code,
+        }
     except Exception as exc:  # noqa: BLE001
         return {"status": "failed", "error": str(exc)}
 
 
-def setup_runtime_fixtures(base_url: str) -> Dict[str, Any]:
+def setup_runtime_fixtures(base_url: str, viewer_id: str) -> Dict[str, Any]:
     comment = setup_comment_thread(base_url)
-    social_graph = seed_content_social_graph()
+    social_graph = seed_content_social_graph(viewer_id)
     status = "passed"
     if comment.get("status") == "failed" or social_graph.get("status") == "failed":
         status = "failed"
@@ -616,19 +669,60 @@ def setup_runtime_fixtures(base_url: str) -> Dict[str, Any]:
 
 def content_route_methods() -> Dict[str, List[str]]:
     methods: Dict[str, List[str]] = {}
-    current_method = ""
-    for raw_line in CONTENT_SERVICE_YAML.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if line.startswith("- method:"):
-            current_method = line.split(":", 1)[1].strip().upper()
+    graph = json.loads(CONTRACT_GRAPH.read_text(encoding="utf-8"))
+    for operation in graph.get("operations", []):
+        if operation.get("domain") != "content":
             continue
-        if current_method and line.startswith("path:"):
-            path = line.split(":", 1)[1].strip()
-            methods.setdefault(path, [])
-            if current_method not in methods[path]:
-                methods[path].append(current_method)
-            current_method = ""
+        path = str(operation.get("pathTemplate") or "").strip()
+        method = str(operation.get("method") or "").strip().upper()
+        if not path or not method:
+            continue
+        methods.setdefault(path, [])
+        if method not in methods[path]:
+            methods[path].append(method)
     return methods
+
+
+def operation_contract_for_path(
+    domain: str,
+    path: str,
+    method: str,
+) -> Optional[Dict[str, Any]]:
+    graph = json.loads(CONTRACT_GRAPH.read_text(encoding="utf-8"))
+    probe_path = path.split("?", 1)[0]
+    for operation in graph.get("operations", []):
+        if str(operation.get("domain") or "").strip() != domain:
+            continue
+        if str(operation.get("method") or "").strip().upper() != method.upper():
+            continue
+        template = str(operation.get("pathTemplate") or "").strip()
+        if not template:
+            continue
+        template_parts = template.strip("/").split("/")
+        probe_parts = probe_path.strip("/").split("/")
+        if len(template_parts) != len(probe_parts):
+            continue
+        if all(
+            (left.startswith("{") and left.endswith("}")) or left == right
+            for left, right in zip(template_parts, probe_parts)
+        ):
+            return operation
+    return None
+
+
+def endpoint_contract_summary(domain: str, path: str, method: str) -> Dict[str, str]:
+    operation = operation_contract_for_path(domain, path, method)
+    if operation is None:
+        return {}
+    commercial = operation.get("commercial")
+    if not isinstance(commercial, dict):
+        commercial = {}
+    return {
+        "operationId": str(operation.get("id") or "").strip(),
+        "method": str(operation.get("method") or "GET").strip().upper(),
+        "authMode": str(operation.get("authMode") or "").strip(),
+        "commercialStatus": str(commercial.get("status") or "").strip(),
+    }
 
 
 def route_method_for_path(path: str, route_methods: Dict[str, List[str]]) -> str:
@@ -718,10 +812,6 @@ def resolve_probe_path(path: str, runtime_refs: Dict[str, str]) -> str:
 
 
 def probe_body_for_path(path: str) -> Dict[str, Any]:
-    if path.endswith("/reaction"):
-        return {"reaction": "like"}
-    if path.endswith("/media:bind"):
-        return {}
     return {}
 
 
@@ -1066,6 +1156,9 @@ def endpoint_checks(
             # via runtime_refs; circle/chat paths have no refs and pass through.
             resolved_path = resolve_probe_path(path, resolved_refs)
             method = route_method_for_path(resolved_path, route_methods) if domain == "content" else "GET"
+            contract = endpoint_contract_summary(domain, resolved_path, method)
+            check.update({key: value for key, value in contract.items() if value})
+            method = contract.get("method") or method
             check["method"] = method
             if resolved_path != path:
                 check["resolvedPath"] = resolved_path
@@ -1081,11 +1174,19 @@ def endpoint_checks(
                     )
                 check["httpStatus"] = status
                 check["bytes"] = len(body)
-                check["status"] = "passed" if 200 <= status < 300 else "failed"
+                if contract.get("commercialStatus") == "blocked":
+                    check["status"] = "failed"
+                    check["error"] = "blocked operation unexpectedly accepted the request"
+                else:
+                    check["status"] = "passed" if 200 <= status < 300 else "failed"
             except urllib.error.HTTPError as exc:
                 check["httpStatus"] = exc.code
-                check["status"] = "failed"
-                check["error"] = str(exc)
+                if contract.get("commercialStatus") == "blocked" and exc.code == 403:
+                    check["status"] = "contract_blocked"
+                    check["expectedHttpStatus"] = 403
+                else:
+                    check["status"] = "failed"
+                    check["error"] = str(exc)
             except Exception as exc:  # noqa: BLE001
                 check["status"] = "failed"
                 check["error"] = str(exc)
@@ -1125,6 +1226,9 @@ def strict_endpoint_checks(
         elif assertion_name == "object_intersections_circle":
             spec = {**spec, "expectedObjectType": "circle"}
         method = str(spec.get("method") or "GET").upper()
+        contract = endpoint_contract_summary(check["domain"], resolved_path, method)
+        check.update({key: value for key, value in contract.items() if value})
+        method = contract.get("method") or method
         try:
             if method == "GET":
                 status, body = http_get(base_url.rstrip("/") + resolved_path, timeout=8)
@@ -1147,8 +1251,12 @@ def strict_endpoint_checks(
             check["status"] = "passed"
         except urllib.error.HTTPError as exc:
             check["httpStatus"] = exc.code
-            check["status"] = "failed"
-            check["error"] = str(exc)
+            if contract.get("commercialStatus") == "blocked" and exc.code == 403:
+                check["status"] = "contract_blocked"
+                check["expectedHttpStatus"] = 403
+            else:
+                check["status"] = "failed"
+                check["error"] = str(exc)
         except AssertionError as exc:
             check["status"] = "failed"
             check["error"] = str(exc)
@@ -1159,7 +1267,7 @@ def strict_endpoint_checks(
     return checks
 
 
-def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) -> List[Dict[str, Any]]:
+def run_flutter_contracts(base_url: str, product_ops_base_url: str) -> List[Dict[str, Any]]:
     checks = []  # type: List[Dict[str, Any]]
     flutter_base_url = flutter_contract_base_url(base_url)
     flutter_product_ops_base_url = flutter_contract_base_url(product_ops_base_url)
@@ -1172,7 +1280,6 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
                 f"--dart-define=API_CONTRACT_BASE_URL={flutter_base_url}",
                 "--dart-define=LOCAL_GAMMA_T3_SCOPE=content",
                 "--dart-define=API_CONTRACT_ALLOW_BAD_CERT=true",
-                f"--dart-define=TEST_AUTH_TOKEN={token}",
             ],
         },
         {
@@ -1182,7 +1289,6 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
                 "--dart-define=API_CONTRACT_ENV=gamma",
                 f"--dart-define=API_CONTRACT_BASE_URL={flutter_base_url}",
                 "--dart-define=API_CONTRACT_ALLOW_BAD_CERT=true",
-                f"--dart-define=TEST_AUTH_TOKEN={token}",
             ],
         },
         {
@@ -1191,11 +1297,25 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
             "defines": [
                 "--dart-define=API_CONTRACT_ENV=gamma",
                 f"--dart-define=API_CONTRACT_PRODUCT_OPS_BASE_URL={flutter_product_ops_base_url}",
+                f"--dart-define=API_CONTRACT_AUTH_BASE_URL={flutter_base_url}",
                 "--dart-define=API_CONTRACT_ALLOW_BAD_CERT=true",
             ],
         },
     ]
     for case in cases:
+        if case["name"] == "chat_api_contract":
+            chat_inbox = endpoint_contract_summary("chat", "/v1/chat/inbox", "GET")
+            if chat_inbox.get("commercialStatus") == "blocked":
+                checks.append(
+                    {
+                        "name": case["name"],
+                        "status": "contract_blocked",
+                        "operationId": chat_inbox.get("operationId", ""),
+                        "commercialStatus": "blocked",
+                        "evidence": "endpoint_checks requires metadata-enforced HTTP 403",
+                    }
+                )
+                continue
         cmd = ["flutter", "test", case["path"], *case["defines"]]
         result = subprocess.run(
             cmd,
@@ -1217,6 +1337,7 @@ def run_flutter_contracts(base_url: str, product_ops_base_url: str, token: str) 
 
 
 def main() -> int:
+    global _ACTIVE_SESSION
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--base-url",
@@ -1232,7 +1353,7 @@ def main() -> int:
             "https://gamma-product-ops.quwoquan-env.test:19010",
         ),
     )
-    parser.add_argument("--report", default=str(LOCAL_GAMMA_ARTIFACT_ROOT / "t3_report.json"))
+    parser.add_argument("--report", default=str(GAMMA_RUN_ROOT / "t3_report.json"))
     parser.add_argument(
         "--enabled-domain",
         action="append",
@@ -1245,7 +1366,6 @@ def main() -> int:
         help="Only run Mongo content seed (no health wait or flutter contracts).",
     )
     parser.add_argument("--skip-flutter-contracts", action="store_true")
-    parser.add_argument("--test-auth-token", default=default_test_auth_token())
     parser.add_argument("--strict-all", action="store_true")
     parser.add_argument(
         "--verification-scope",
@@ -1267,6 +1387,7 @@ def main() -> int:
         "verificationScope": scope_name,
         "health": {},
         "productOpsHealth": {},
+        "auth": {},
         "seed": {},
         "domainSeeds": {},
         "runtimeSetup": {},
@@ -1303,16 +1424,29 @@ def main() -> int:
         if report["health"].get("status") != "passed" or report["productOpsHealth"].get("status") != "passed":
             report["status"] = "gate_block"
         else:
+            try:
+                _ACTIVE_SESSION = open_local_gamma_acceptance_session(args.base_url)
+            except Exception as exc:  # noqa: BLE001
+                report["auth"] = {"status": "failed", "error": type(exc).__name__}
+                report["status"] = "gate_block"
+                report_path = ROOT / args.report
+                report_path.parent.mkdir(parents=True, exist_ok=True)
+                report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                print(f"[local-gamma:t3] report: {report_path}")
+                print(f"[local-gamma:t3] status: {report['status']}")
+                return 2
+            report["auth"] = {"status": "passed", "principal": "seeded_persona"}
             report["seed"] = {"status": "skipped"} if args.skip_seed else seed_content()
             if report["seed"].get("status") == "failed":
                 report["runtimeSetup"] = {"status": "skipped"}
                 report["endpoints"] = []
             else:
-                setup = setup_runtime_fixtures(args.base_url)
+                setup = setup_runtime_fixtures(args.base_url, _ACTIVE_SESSION.persona_id)
                 report["runtimeSetup"] = setup
                 runtime_refs = {
                     "fixture_comment_parent_001": str(setup.get("parentCommentId") or ""),
                     "fixture_comment_reply_001": str(setup.get("replyCommentId") or ""),
+                    "{activePersonaId}": _ACTIVE_SESSION.persona_id,
                 }
                 if not args.skip_seed and "circle" in enabled_domains:
                     circle_seed = seed_circle()
@@ -1352,7 +1486,6 @@ def main() -> int:
                 else run_flutter_contracts(
                     args.base_url,
                     args.product_ops_base_url,
-                    args.test_auth_token,
                 )
             )
             failed = any(item.get("status") == "failed" for item in report["endpoints"])

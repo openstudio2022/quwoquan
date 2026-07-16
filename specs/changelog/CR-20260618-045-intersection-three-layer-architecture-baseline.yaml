@@ -8,17 +8,17 @@ affected_nodes:
   - specs/product/intersection-definition-and-application.md
   - specs/product/intersection-unification-dispatch-index.md
   - specs/product/intersection-contract-freeze-checklist.md
-  - docs/intersection-unification-plan.md
+  - docs/intersection-unification-content.execution.planning.md
   - specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md
   - specs/feature-tree/object-homepage-network/intersection-unified-experience/design.md
   - quwoquan_service/contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml
   - quwoquan_service/contracts/metadata/recommendation/rec_model/policy.yaml
-  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
-  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_text_span.yaml
-  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_visual.yaml
-  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_propagation_path.yaml
-  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_dimension_tally.yaml
-  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_inbox_summary.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_reason.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_text_span.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_visual.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_propagation_path.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_dimension_tally.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_inbox_summary.yaml
   - quwoquan_service/contracts/metadata/content/post/projections/author_impact_item.yaml
   - quwoquan_service/contracts/metadata/social/circle/projections/circle_impact_item.yaml
 
@@ -73,26 +73,26 @@ entries:
         sections:
           - 8 v2 三层架构草案字段（未冻结）
           - 8.1 端侧四槽视觉模型组件
-      - path: docs/intersection-unification-plan.md
+      - path: docs/intersection-unification-content.execution.planning.md
         sections:
           - v2 三层架构新基线（本轮完成 + 验证证据 + 明确后置）
       - path: quwoquan_service/contracts/metadata/recommendation/rec_model/intersection_kind_registry.yaml
         sections:
           - 每 kind Graph 元数据 + iconKey + lifecycleApplicable + propagationRole
           - coLiked 恢复（status=active，从 migrations 移除）
-      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_reason.yaml
         sections:
           - lifecycleState / previousStrength / strengthDelta / edgeWeight / iconKey / objectVisual（只附加）
-      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_text_span.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_text_span.yaml
         sections:
           - visual（句内 inline 头像，只附加）
-      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_propagation_path.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_propagation_path.yaml
         sections:
           - 新增传播链值对象（pathKind/hopCount/secondarySpreadCount/summaryText/summaryTarget/nodes）
-      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_dimension_tally.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_dimension_tally.yaml
         sections:
           - strengthenedCount / reactivatedCount / iconKey（只附加）
-      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_inbox_summary.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_inbox_summary.yaml
         sections:
           - totalStrengthenedCount / totalReactivatedCount（只附加）
       - path: quwoquan_service/contracts/metadata/content/post/projections/author_impact_item.yaml

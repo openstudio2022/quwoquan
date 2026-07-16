@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	runtimemedia "quwoquan_service/runtime/media"
+	"quwoquan_service/internal/platform/reliabletaskmongo"
 	"quwoquan_service/runtime/reliabletask"
 	runtimesync "quwoquan_service/runtime/sync"
 	"quwoquan_service/services/chat-service/internal/application"
@@ -15,7 +15,7 @@ import (
 )
 
 // newInboxTestEnv creates a fresh InboxService + supporting services
-// wired to the shared test MongoDB and miniredis.
+// wired to the shared real MongoDB and Redis dependencies.
 func newInboxTestEnv(t *testing.T) (
 	*application.InboxService,
 	*application.ConversationService,
@@ -24,18 +24,15 @@ func newInboxTestEnv(t *testing.T) (
 ) {
 	t.Helper()
 	chatStore := persistence.NewMongoChatStore(mongoDB)
+	chatStorage := chatStoragePorts(chatStore)
 	convCache := chatcache.NewConversationCache(redisRouter.Scene("general"))
-	groupAvatarMedia := runtimemedia.NewGroupAvatarService(
-		redisRouter.Scene("general"),
-		"http://127.0.0.1:18081",
-		testChatMediaRoot,
-	)
+	groupAvatarMedia := newGroupAvatarMediaForContractTest()
 	userSyncService := runtimesync.NewService(redisRouter.Scene("general"), redisRouter.Scene("realtime"))
-	catalog, err := reliabletask.LoadCatalog("../../../../quwoquan_ops/environments/reliable_task_module_catalog.yaml")
+	catalog, err := reliabletask.LoadCatalog(testReliableTaskCatalogPath())
 	if err != nil {
 		t.Fatalf("load reliable task catalog: %v", err)
 	}
-	reliableTaskStore := reliabletask.NewMongoStore(mongoDB)
+	reliableTaskStore := reliabletaskmongo.New(mongoDB)
 	if err := reliableTaskStore.EnsureIndexes(context.Background()); err != nil {
 		t.Fatalf("ensure reliable task indexes: %v", err)
 	}
@@ -54,8 +51,8 @@ func newInboxTestEnv(t *testing.T) (
 	groupAvatarScheduler := application.NewReliableGroupAvatarTaskScheduler(
 		reliableTaskStore,
 		catalog,
-		chatStore,
-		nil,
+		chatStorage,
+		eventPublisherForContractTest(),
 		groupAvatarMedia,
 		userSyncService,
 		nil,
@@ -63,13 +60,25 @@ func newInboxTestEnv(t *testing.T) (
 		application.WithReliableGroupAvatarTick(40*time.Millisecond),
 		application.WithReliableGroupAvatarReadyIndex(readyIndex),
 	)
-	_ = groupAvatarScheduler.Start(context.Background())
+	schedulerCtx, cancelScheduler := context.WithCancel(context.Background())
+	if err := groupAvatarScheduler.Start(schedulerCtx); err != nil {
+		cancelScheduler()
+		t.Fatalf("start reliable group avatar scheduler: %v", err)
+	}
+	t.Cleanup(func() {
+		cancelScheduler()
+		waitCtx, waitCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer waitCancel()
+		if err := groupAvatarScheduler.WaitForStop(waitCtx); err != nil {
+			t.Errorf("wait reliable group avatar scheduler stop: %v", err)
+		}
+	})
 
-	inboxSvc := application.NewInboxService(chatStore)
+	inboxSvc := application.NewInboxService(chatStorage)
 	convSvc := application.NewConversationService(
-		chatStore,
+		chatStorage,
 		convCache,
-		nil,
+		eventPublisherForContractTest(),
 		nil,
 		application.AllowRelationshipGateForTest(),
 		groupAvatarMedia,
@@ -77,12 +86,13 @@ func newInboxTestEnv(t *testing.T) (
 		groupAvatarScheduler,
 	)
 	msgSvc := application.NewMessageService(
-		chatStore,
+		chatStorage,
 		convCache,
-		nil,
+		eventPublisherForContractTest(),
 		application.AllowRelationshipGateForTest(),
+		testMediaAssetDeliveryReader{},
 	)
-	memberSvc := application.NewMemberService(chatStore, convCache, nil, nil, groupAvatarMedia, userSyncService, groupAvatarScheduler)
+	memberSvc := application.NewMemberService(chatStorage, convCache, eventPublisherForContractTest(), nil, groupAvatarMedia, userSyncService, groupAvatarScheduler)
 
 	return inboxSvc, convSvc, msgSvc, memberSvc
 }
@@ -207,7 +217,7 @@ func TestInbox_MarkAsReadOnlyAdvancesSeq(t *testing.T) {
 	inboxSvc, _, _, _ := newInboxTestEnv(t)
 	ctx := context.Background()
 
-	conv := createConversation(t, `{"type":"direct","title":"inbox seq advance"}`)
+	conv := createConversation(t, `{"type":"direct","title":"inbox seq advance","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 	userId := "user_inbox_seqadv_001"
 
@@ -245,10 +255,10 @@ func TestInbox_ListInboxSortedByTime(t *testing.T) {
 
 	userId := "user_inbox_sort_001"
 
-	conv1 := createConversationAs(t, userId, `{"type":"direct","title":"older conv"}`)
+	conv1 := createConversationAs(t, userId, `{"type":"direct","title":"older conv","initialMemberIds":["user_test_002"]}`)
 	conv1Id := conv1["_id"].(string)
 
-	conv2 := createConversationAs(t, userId, `{"type":"direct","title":"newer conv"}`)
+	conv2 := createConversationAs(t, userId, `{"type":"direct","title":"newer conv","initialMemberIds":["user_test_003"]}`)
 	conv2Id := conv2["_id"].(string)
 
 	// Increment unread on conv1 first, then conv2 (conv2 should be more recent)
@@ -286,7 +296,7 @@ func TestInbox_ListInboxDefaultLimit(t *testing.T) {
 	userId := "user_inbox_limit_001"
 
 	for i := 0; i < 3; i++ {
-		conv := createConversationAs(t, userId, fmt.Sprintf(`{"type":"direct","title":"limit conv %d"}`, i))
+		conv := createConversationAs(t, userId, fmt.Sprintf(`{"type":"direct","title":"limit conv %d","initialMemberIds":["peer_limit_%d"]}`, i, i))
 		if err := inboxSvc.IncrementUnread(ctx, userId, conv["_id"].(string)); err != nil {
 			t.Fatalf("IncrementUnread[%d]: %v", i, err)
 		}

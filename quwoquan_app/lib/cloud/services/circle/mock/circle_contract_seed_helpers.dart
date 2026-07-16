@@ -61,15 +61,6 @@ class CircleContractSeedHelpers {
     return null;
   }
 
-  static List<Map<String, dynamic>> groupsForCircle(String circleId) {
-    final seed = ContractFixtureRuntimeLoader.circleSeedSet();
-    final groups = seed?['groups'];
-    if (groups is! Map) {
-      return const <Map<String, dynamic>>[];
-    }
-    return mapRows(groups[circleId]);
-  }
-
   static List<Map<String, dynamic>> membersForCircle(String circleId) {
     final seed = ContractFixtureRuntimeLoader.circleSeedSet();
     final members = seed?['members'];
@@ -77,15 +68,6 @@ class CircleContractSeedHelpers {
       return const <Map<String, dynamic>>[];
     }
     return mapRows(members[circleId]);
-  }
-
-  static List<Map<String, dynamic>> filesForCircle(String circleId) {
-    final seed = ContractFixtureRuntimeLoader.circleSeedSet();
-    final files = seed?['files'];
-    if (files is! Map) {
-      return const <Map<String, dynamic>>[];
-    }
-    return mapRows(files[circleId]);
   }
 
   static Map<String, dynamic>? statsForCircle(String circleId) {
@@ -130,17 +112,15 @@ class CircleContractSeedHelpers {
     final profileSeed = ContractFixtureRuntimeLoader.circleSeedSet(
       'circle_profile_core',
     );
-    final profileCircleIds = stringList(profileSeed?['circleIds']);
-    if (profileCircleIds.contains(circleId)) {
-      final rows = contentPostRowsByIds(stringList(profileSeed?['postIds']));
-      if (rows.isNotEmpty) {
-        return rows;
-      }
-    }
-    return contentPostRows()
-        .where((row) => _postBelongsToCircle(row, circleId))
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList(growable: false);
+    final placements = mapRows(profileSeed?['placements']);
+    final postIds = placements
+        .where(
+          (placement) =>
+              (placement['circleId'] ?? '').toString().trim() == circleId &&
+              (placement['status'] ?? 'active').toString().trim() == 'active',
+        )
+        .map((placement) => (placement['postId'] ?? '').toString().trim());
+    return contentPostRowsByIds(postIds);
   }
 
   static List<Map<String, dynamic>> homeFeedRows() {
@@ -227,48 +207,4 @@ class CircleContractSeedHelpers {
     };
   }
 
-  static Map<String, dynamic> normalizedCircleGroup(
-    Map<String, dynamic> data, {
-    required String circleId,
-    required String groupId,
-    String? fallbackUpdatedAt,
-  }) {
-    final now = fallbackUpdatedAt ?? DateTime.now().toIso8601String();
-    return <String, dynamic>{
-      ...data,
-      '_id': groupId,
-      'id': groupId,
-      'circleId': circleId,
-      if (data['parentGroupId'] != null)
-        'parentGroupId': data['parentGroupId'].toString(),
-      'groupType': (data['groupType'] ?? 'public_group').toString(),
-      if (data['nodeType'] != null) 'nodeType': data['nodeType'].toString(),
-      'name': (data['name'] ?? '未命名讨论').toString(),
-      'description': (data['description'] ?? '').toString(),
-      'visibility': (data['visibility'] ?? 'public').toString(),
-      'joinPolicy': (data['joinPolicy'] ?? 'apply_only').toString(),
-      'ownerUserId': (data['ownerUserId'] ?? 'owner_user').toString(),
-      'managerIds': ((data['managerIds'] as List?) ?? const <Object?>[])
-          .map((Object? item) => item.toString())
-          .toList(growable: false),
-      'memberCount': (data['memberCount'] as num?)?.toInt() ?? 0,
-      if (data['conversationId'] != null)
-        'conversationId': data['conversationId'].toString(),
-      'storageEnabled': data['storageEnabled'] as bool? ?? true,
-      'noticeEnabled': data['noticeEnabled'] as bool? ?? true,
-      'isDefaultPublicGroup': data['isDefaultPublicGroup'] as bool? ?? false,
-      'lastActiveAt': data['lastActiveAt'] ?? now,
-      'status': (data['status'] ?? 'active').toString(),
-      'createdAt': data['createdAt'] ?? now,
-      'updatedAt': data['updatedAt'] ?? now,
-    };
-  }
-
-  static bool _postBelongsToCircle(Map<String, dynamic> row, String circleId) {
-    final primaryId = (row['circleId'] ?? '').toString().trim();
-    if (primaryId == circleId) {
-      return true;
-    }
-    return stringList(row['circleIds']).contains(circleId);
-  }
 }

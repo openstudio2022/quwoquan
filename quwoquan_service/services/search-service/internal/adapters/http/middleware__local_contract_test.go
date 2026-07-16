@@ -8,10 +8,24 @@ import (
 	rtgov "quwoquan_service/runtime/governance"
 )
 
+type recordingLoadObserver struct {
+	shedReasons []string
+	inflight    []int
+}
+
+func (o *recordingLoadObserver) ObserveLoadShed(reason string) {
+	o.shedReasons = append(o.shedReasons, reason)
+}
+
+func (o *recordingLoadObserver) SetInflight(inflight int) {
+	o.inflight = append(o.inflight, inflight)
+}
+
 // When the in-flight limiter is full, the boundary sheds with a typed 503 and a
 // Retry-After hint instead of invoking the downstream handler.
 func TestMaxInflightMiddlewareShedsWhenFull(t *testing.T) {
 	limiter := rtgov.NewInflightLimiter(1)
+	observer := &recordingLoadObserver{}
 	if !limiter.Acquire() { // saturate so the middleware sees a full limiter
 		t.Fatalf("setup: expected to acquire the only slot")
 	}
@@ -22,7 +36,7 @@ func TestMaxInflightMiddlewareShedsWhenFull(t *testing.T) {
 		downstreamCalled = true
 		w.WriteHeader(http.StatusOK)
 	})
-	h := MaxInflightMiddleware(limiter)(next)
+	h := MaxInflightMiddleware(limiter, observer)(next)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/search", nil))
@@ -36,18 +50,22 @@ func TestMaxInflightMiddlewareShedsWhenFull(t *testing.T) {
 	if rec.Header().Get("Retry-After") == "" {
 		t.Fatalf("expected Retry-After hint on shed response")
 	}
+	if len(observer.shedReasons) != 1 || observer.shedReasons[0] != "inflight_full" {
+		t.Fatalf("unexpected shed observations: %#v", observer.shedReasons)
+	}
 }
 
 // Under capacity the request passes through and the slot is released afterward.
 func TestMaxInflightMiddlewarePassesThroughAndReleases(t *testing.T) {
 	limiter := rtgov.NewInflightLimiter(1)
+	observer := &recordingLoadObserver{}
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if limiter.Inflight() != 1 {
 			t.Errorf("inflight=%d during handler, want 1", limiter.Inflight())
 		}
 		w.WriteHeader(http.StatusOK)
 	})
-	h := MaxInflightMiddleware(limiter)(next)
+	h := MaxInflightMiddleware(limiter, observer)(next)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/v1/search", nil))
@@ -57,5 +75,8 @@ func TestMaxInflightMiddlewarePassesThroughAndReleases(t *testing.T) {
 	}
 	if limiter.Inflight() != 0 {
 		t.Fatalf("inflight=%d after request, want 0 (slot released)", limiter.Inflight())
+	}
+	if len(observer.inflight) != 2 || observer.inflight[0] != 1 || observer.inflight[1] != 0 {
+		t.Fatalf("unexpected inflight observations: %#v", observer.inflight)
 	}
 }

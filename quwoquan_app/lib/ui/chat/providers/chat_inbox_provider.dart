@@ -8,7 +8,7 @@ import 'package:quwoquan_app/core/services/cache/conversation_cache_record.dart'
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 
 class ChatInboxListState {
   const ChatInboxListState({

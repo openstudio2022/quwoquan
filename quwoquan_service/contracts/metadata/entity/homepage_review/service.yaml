@@ -1,0 +1,53 @@
+version: 1
+service:
+  name: entity-service
+  domain: entity
+  owner: entity-platform
+  description: HomepageReview 对象专属 command/query packet。
+  commercial_defaults:
+    status: blocked
+    block_reason: Mongo Store/outbox、generated transport 与真实页面闭环尚未完成
+    gap_id: HOMEPAGE_REVIEW_WIRING
+    target_story: app-cloud-business-object-commercial-closure
+api_routes:
+  - method: POST
+    path: /v1/homepages/{homepageId}/reviews
+    operation: CreateHomepageReview
+    actor: persona
+    application:
+      kind: command
+      facet: HomepageReviewCommandFacade
+      method: create
+      aggregate_owner: HomepageReview
+      mutation_target: HomepageReview
+      invariant_target: HomepageReview
+    request_fields: [rating, body, tagRefs, idempotencyKey]
+    response_entity: HomepageReview
+    auth: required
+  - method: PATCH
+    path: /v1/homepage-reviews/{reviewId}
+    operation: UpdateHomepageReview
+    actor: persona
+    application:
+      kind: command
+      facet: HomepageReviewCommandFacade
+      method: update
+      aggregate_owner: HomepageReview
+      mutation_target: HomepageReview
+      invariant_target: HomepageReview
+    request_fields: [rating, body, tagRefs, expectedVersion, idempotencyKey]
+    response_entity: HomepageReview
+    auth: required
+  - method: DELETE
+    path: /v1/homepage-reviews/{reviewId}
+    operation: DeleteHomepageReview
+    actor: persona
+    application:
+      kind: command
+      facet: HomepageReviewCommandFacade
+      method: delete
+      aggregate_owner: HomepageReview
+      mutation_target: HomepageReview
+      invariant_target: HomepageReview
+    request_fields: [expectedVersion, idempotencyKey]
+    auth: required

@@ -17,14 +17,14 @@ entries:
       - split
       - migrate
     changed_documents:
-      - path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/content.execution.planning.yaml
         sections:
           - P1
           - P2
           - P3
           - P4
           - P5
-      - path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/profile-homepage-redesign/owner-subaccount-homepage-unification/content.execution.planning.yaml
         sections:
           - P1
           - P2

@@ -174,7 +174,7 @@ menus:
     icon: shield-alert
     order: 32
     permission_scope: ops.case.read
-    object_types: [moderation_case, appeal_case, recovery_case]
+    object_types: [moderation_case, report_queue, appeal_case, recovery_case]
 
   - menu_id: recommendation
     parent_menu_id: product-ops
@@ -265,16 +265,6 @@ menus:
     order: 37
     permission_scope: ops.product.xiaoqu.read
     object_types: [assistant_comment, correction_case]
-
-  - menu_id: campus-bootstrap
-    parent_menu_id: product-ops
-    label: 校园冷启动
-    domain: product-ops
-    route_path: /product/campus-bootstrap
-    icon: school
-    order: 38
-    permission_scope: ops.product.bootstrap.read
-    object_types: [campus_homepage, bootstrap_seed]
 
   - menu_id: experiments
     parent_menu_id: product-ops

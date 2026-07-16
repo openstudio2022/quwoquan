@@ -3,10 +3,10 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /build
 
 COPY go.mod go.sum ./
-COPY runtime/ runtime/
-COPY services/circle-service/ services/circle-service/
+RUN go mod download
+COPY . .
 
-RUN cd services/circle-service && go build -o /circle-service ./cmd/api
+RUN go build -o /circle-service ./services/circle-service/cmd/api
 
 FROM alpine:3.21
 

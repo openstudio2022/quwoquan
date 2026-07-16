@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Attestation bound to one immutable Zhejiang/Sichuan coverage release payload.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "kind", "releaseId", "payloadSha256", "passed", "recordedAt"],
+  "properties": {
+    "schemaVersion": {"const": "quwoquan_data.two_province_release_attestation/1"},
+    "kind": {"enum": ["coverage", "source_rights", "execution", "importer_api", "gamma_app_uat", "rollback_replay"]},
+    "releaseId": {"type": "string", "minLength": 1},
+    "payloadSha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "passed": {"const": true},
+    "recordedAt": {"type": "string", "minLength": 1},
+    "provinces": {"type": "object"},
+    "approvedEntityRefs": {"type": "array", "items": {"type": "string"}},
+    "executionIds": {"type": "array", "items": {"type": "string"}},
+    "environment": {"type": "string"},
+    "evidenceRefs": {"type": "array", "items": {"type": "string"}},
+    "apiEvidenceRefs": {"type": "array", "items": {"type": "string"}},
+    "appEvidenceRefs": {"type": "array", "items": {"type": "string"}},
+    "rollbackEvidenceRefs": {"type": "array", "items": {"type": "string"}},
+    "rollbackTargetReleaseId": {"type": "string", "minLength": 1},
+    "qualifiedEntityRefs": {"type": "array", "items": {"type": "string"}},
+    "rightsEntityRefs": {"type": "array", "items": {"type": "string"}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "coverage"}}},
+      "then": {"required": ["provinces", "approvedEntityRefs"]}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "source_rights"}}},
+      "then": {"required": ["executionIds", "qualifiedEntityRefs", "rightsEntityRefs"]}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "execution"}}},
+      "then": {"required": ["executionIds", "approvedEntityRefs"]}
+    },
+    {
+      "if": {"properties": {"kind": {"enum": ["importer_api", "gamma_app_uat", "rollback_replay"]}}},
+      "then": {"required": ["environment", "evidenceRefs"]}
+    }
+  ]
+}

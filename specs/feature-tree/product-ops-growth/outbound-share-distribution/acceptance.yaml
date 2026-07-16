@@ -34,7 +34,7 @@ sit_acceptance:
     - conflict: 微信能力位缺失（Web/鸿蒙/未集成 SDK）
       resolution: 自动降级海报 + 系统分享，面板不展示死按钮。
     - conflict: private 对象触发对外分享
-      resolution: 渠道置灰提示不可分享；circle_visible 仅生成受控预览。
+      resolution: 渠道置灰提示不可分享；未知或已退役 visibility 直接拒绝。
     - conflict: 游客触发需登录的分享动作
       resolution: 走 AuthGateReason.shareRecord 登录门，关闭回安全态不死循环（rule15）。
     done_when:

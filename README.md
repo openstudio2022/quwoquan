@@ -1,18 +1,18 @@
 # 趣我圈工程目录说明
 
-本仓库按领域自治和 Ops 横切面治理组织。顶层只保留长期工程域；运行产物、日志、报告和本地状态统一进入 `.qwq_output/`，可整体删除重跑。
+本仓库按领域自治和 Ops 横切面治理组织。顶层只保留长期工程域；`.qwq_output/` 只保存可删除重跑的运行证据、发布包、进程记录和缓存，绝不保存配置、部署拓扑、证书规则或密钥。
 
 ## 顶层目录
 
 ```text
 quwoquan_app/       Flutter App 工程，拥有 App 配置、发布规则、App 自用包和端侧观测片段。
 quwoquan_service/   服务端工程，拥有服务契约、服务配置、服务部署模板和服务观测片段。
-quwoquan_data/      数据工程，拥有数据任务、模板、发布真相源和数据发布规则。
+quwoquan_data/      数据工程，拥有可复用的内容家族、模板、提示词、发布真相源和数据发布规则。
 quwoquan_ops/       Ops 横切控制面，拥有 stackctl、gate、CI、环境拓扑、策略、全局可观测和 Ops Portal。
 specs/              当前产品、架构、特性树、验收与 changelog 的唯一规格体系。
 docs/               长期工程说明、Codex 工作流、外部依赖登记和正式风险 backlog；不承载功能规格真相源。
 .github/            CI 工作流入口。
-.qwq_output/        gitignored，本地运行输出、release package、验证证据、日志、指标和临时状态。
+.qwq_output/        gitignored；唯一运行输出根，不是配置或状态真相源。
 ```
 
 ## 本地忽略目录
@@ -37,10 +37,10 @@ changes, openspec, app_log, runtime, build, tmp, tools, githooks, social_content
 
 ## 目录边界
 
-- 领域私有资产归领域：服务 Dockerfile、k8s、compose、release config 位于 `quwoquan_service/services/<service>/`；App 发布资产位于 `quwoquan_app/deploy/`；数据发布资产位于 `quwoquan_data/deploy/`。
+- 领域私有资产归领域：服务 Dockerfile、部署规则和 release config 位于 `quwoquan_service/services/<service>/`；App 配置与发布规则位于 `quwoquan_app/configs/`、`quwoquan_app/deploy/`；数据发布规则位于 `quwoquan_data/` 的 control plane 与 publish 边界。
 - Ops 只放横切能力：统一调度、环境拓扑、跨域策略、gate、CI/CD、全局可观测、runbook 和 Portal。
 - 根目录不承载工具 workspace：Ops Portal 的 `package.json`、`package-lock.json` 和 `node_modules` 归 `quwoquan_ops/portal/`，根目录不保留 Node workspace。
-- 生成物只进 `.qwq_output/`：环境相关输出按 `.qwq_output/env/<env>/{runs,observability,release,local}` 归位，repo 工具状态按 `.qwq_output/env/repo/local` 归位，数据工程输出按 `.qwq_output/data/{runs,observability,release,local}` 归位。
+- 运行输出按唯一 taxonomy 归位：环境输出为 `.qwq_output/env/<env>/{runs,observability,release,local/<target>/{process,cache}}/`，repo 级输出位于 `.qwq_output/env/repo/`，数据工程输出为 `.qwq_output/data/{tasks,releases,local}/`。部署渲染临时文件与设备信任证书在系统临时目录，容器证书和卷状态由容器运行时命名卷管理；其生成规则和网络配置只在领域 `deploy/configs` 与 `quwoquan_ops/environments/` 中定义。
 
 ## 常用入口
 

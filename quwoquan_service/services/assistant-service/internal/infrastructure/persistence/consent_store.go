@@ -17,12 +17,45 @@ type PgConsentStore struct {
 	pool *pgxpool.Pool
 }
 
+const (
+	assistantConsentSchemaVersion = 1
+	assistantConsentMigrationLock = int64(0x617373697374)
+)
+
 func NewPgConsentStore(pool *pgxpool.Pool) *PgConsentStore {
 	return &PgConsentStore{pool: pool}
 }
 
 func (s *PgConsentStore) EnsureSchema(ctx context.Context) error {
-	query := `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin assistant consent migration: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, assistantConsentMigrationLock); err != nil {
+		return fmt.Errorf("lock assistant consent migration: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+CREATE TABLE IF NOT EXISTS assistant_schema_migrations (
+  version INTEGER PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`); err != nil {
+		return fmt.Errorf("create assistant migration ledger: %w", err)
+	}
+
+	var applied bool
+	if err := tx.QueryRow(
+		ctx,
+		`SELECT EXISTS (SELECT 1 FROM assistant_schema_migrations WHERE version = $1)`,
+		assistantConsentSchemaVersion,
+	).Scan(&applied); err != nil {
+		return fmt.Errorf("read assistant consent migration version: %w", err)
+	}
+	if !applied {
+		query := `
 CREATE TABLE IF NOT EXISTS skill_consents (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -34,11 +67,27 @@ CREATE TABLE IF NOT EXISTS skill_consents (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_skill_consents_user_skill_active
   ON skill_consents(user_id, skill_id)
   WHERE revoked_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_skill_consents_user_active
-  ON skill_consents(user_id, granted_at DESC);
+DROP INDEX IF EXISTS idx_skill_consents_user_active;
+CREATE INDEX idx_skill_consents_user_active
+  ON skill_consents(user_id, granted_at DESC)
+  WHERE revoked_at IS NULL;
 `
-	_, err := s.pool.Exec(ctx, query)
-	return err
+		if _, err := tx.Exec(ctx, query); err != nil {
+			return fmt.Errorf("apply assistant consent schema v%d: %w", assistantConsentSchemaVersion, err)
+		}
+		if _, err := tx.Exec(
+			ctx,
+			`INSERT INTO assistant_schema_migrations(version) VALUES ($1)`,
+			assistantConsentSchemaVersion,
+		); err != nil {
+			return fmt.Errorf("record assistant consent schema v%d: %w", assistantConsentSchemaVersion, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit assistant consent migration: %w", err)
+	}
+	return nil
 }
 
 func (s *PgConsentStore) ListActiveConsents(ctx context.Context, userID string) ([]assistant.SkillConsent, error) {
@@ -133,5 +182,3 @@ func (s *MemoryConsentStore) EnsureSchema(_ context.Context) error { return nil 
 func IsNoRows(err error) bool {
 	return errors.Is(err, sql.ErrNoRows)
 }
-
-var _ = fmt.Sprintf

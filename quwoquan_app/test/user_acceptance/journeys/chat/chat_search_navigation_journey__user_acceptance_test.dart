@@ -13,11 +13,12 @@ import 'package:quwoquan_app/cloud/services/chat/mock/chat_repository_mock.dart'
 import 'package:quwoquan_app/cloud/services/realtime/realtime_connection_delegate.dart';
 import 'package:quwoquan_app/cloud/services/user/greeting_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/relationship_capability_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
-import 'package:quwoquan_app/ui/chat/pages/chat_detail_page.dart';
+import 'package:quwoquan_app/ui/chat/pages/chat_conversation_page.dart';
 import 'package:quwoquan_app/ui/chat/pages/chat_page.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_offline_queue.dart';
 import 'package:quwoquan_app/ui/chat/providers/voice_send_provider.dart';
@@ -74,7 +75,7 @@ Widget _buildApp() {
             ),
             builder: (context, state) {
               final id = state.pathParameters['id'] ?? '';
-              return ChatDetailPage(
+              return ChatConversationPage(
                 conversationId: id,
                 onBack: () {
                   if (context.canPop()) {
@@ -173,14 +174,16 @@ void main() {
           TransportState.active,
     );
 
-    expect(find.byType(ChatDetailPage), findsOneWidget);
+    expect(find.byType(ChatConversationPage), findsOneWidget);
     expect(
-      tester.widget<ChatDetailPage>(find.byType(ChatDetailPage)).conversationId,
+      tester
+          .widget<ChatConversationPage>(find.byType(ChatConversationPage))
+          .conversationId,
       'conv_002',
     );
     expect(tester.takeException(), isNull);
 
-    final detailContext = tester.element(find.byType(ChatDetailPage));
+    final detailContext = tester.element(find.byType(ChatConversationPage));
     Navigator.of(detailContext).pop();
     await tester.pumpAndSettle();
     await _pumpUntil(
@@ -219,14 +222,18 @@ void main() {
           TransportState.active,
     );
 
-    expect(find.byType(ChatDetailPage), findsOneWidget);
+    expect(find.byType(ChatConversationPage), findsOneWidget);
     expect(
-      tester.widget<ChatDetailPage>(find.byType(ChatDetailPage)).conversationId,
+      tester
+          .widget<ChatConversationPage>(find.byType(ChatConversationPage))
+          .conversationId,
       'conv_001',
     );
     expect(tester.takeException(), isNull);
 
-    final secondDetailContext = tester.element(find.byType(ChatDetailPage));
+    final secondDetailContext = tester.element(
+      find.byType(ChatConversationPage),
+    );
     Navigator.of(secondDetailContext).pop();
     await tester.pumpAndSettle();
     await _pumpUntil(

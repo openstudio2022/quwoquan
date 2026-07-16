@@ -1,12 +1,16 @@
 package api_integration
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"quwoquan_service/services/content-service/internal/application/identity"
 	"strings"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
+
+	"quwoquan_service/services/content-service/internal/application/identity"
 )
 
 func TestCreateMarkdownArticleContract(t *testing.T) {
@@ -102,10 +106,11 @@ func TestBindMediaAssetsToPostContract(t *testing.T) {
 	initReq := httptest.NewRequest(
 		http.MethodPost,
 		"/v1/content/media/uploads:init",
-		strings.NewReader(`{"mediaType":"image","assetScope":"draft","sourceKind":"user_upload"}`),
+		strings.NewReader(`{"mediaType":"image","contentType":"image/jpeg","fileSize":128,"expectedSha256":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`),
 	)
 	initReq.Header.Set("Content-Type", "application/json")
 	initReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	initReq.Header.Set("Idempotency-Key", "media-bind-init")
 	initRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(initRec, initReq)
 	if initRec.Code != http.StatusOK {
@@ -116,14 +121,20 @@ func TestBindMediaAssetsToPostContract(t *testing.T) {
 		t.Fatalf("decode init response: %v", err)
 	}
 	sessionID := asTestString(initResp["sessionId"])
-	mediaID := asTestString(initResp["mediaId"])
 
-	completeReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete", nil)
+	completeReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete", strings.NewReader(`{"accessPolicy":"owner_only"}`))
+	completeReq.Header.Set("Content-Type", "application/json")
+	completeReq.Header.Set("Idempotency-Key", "media-bind-complete")
 	completeRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(completeRec, completeReq)
 	if completeRec.Code != http.StatusOK {
 		t.Fatalf("complete upload failed: %d %s", completeRec.Code, completeRec.Body.String())
 	}
+	var completeResp map[string]any
+	if err := json.Unmarshal(completeRec.Body.Bytes(), &completeResp); err != nil {
+		t.Fatalf("decode complete response: %v", err)
+	}
+	mediaID := asTestString(completeResp["assetId"])
 
 	post := createDraftPost(t, `{"contentType":"micro","body":"绑定素材测试","visibility":"public"}`)
 	postID := asTestString(post["_id"])
@@ -133,6 +144,7 @@ func TestBindMediaAssetsToPostContract(t *testing.T) {
 		strings.NewReader(`{"assetIds":["`+mediaID+`"]}`),
 	)
 	bindReq.Header.Set("Content-Type", "application/json")
+	bindReq.Header.Set("Idempotency-Key", "media-bind-post")
 	bindRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(bindRec, bindReq)
 	if bindRec.Code != http.StatusOK {
@@ -154,10 +166,11 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 	initReq := httptest.NewRequest(
 		http.MethodPost,
 		"/v1/content/media/uploads:init",
-		strings.NewReader(`{"mediaType":"image","assetScope":"draft","sourceKind":"user_upload"}`),
+		strings.NewReader(`{"mediaType":"image","contentType":"image/jpeg","fileSize":256,"expectedSha256":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`),
 	)
 	initReq.Header.Set("Content-Type", "application/json")
 	initReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	initReq.Header.Set("Idempotency-Key", "media-original-init")
 	initRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(initRec, initReq)
 	if initRec.Code != http.StatusOK {
@@ -168,21 +181,31 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 		t.Fatalf("decode init response: %v", err)
 	}
 	sessionID := asTestString(initResp["sessionId"])
-	mediaID := asTestString(initResp["mediaId"])
-	if sessionID == "" || mediaID == "" {
-		t.Fatalf("missing media session or id: %#v", initResp)
+	if sessionID == "" {
+		t.Fatalf("missing media session: %#v", initResp)
 	}
 
-	completeReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete", nil)
+	completeReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/uploads/"+sessionID+":complete", strings.NewReader(`{"accessPolicy":"owner_only"}`))
+	completeReq.Header.Set("Content-Type", "application/json")
+	completeReq.Header.Set("Idempotency-Key", "media-original-complete")
 	completeRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(completeRec, completeReq)
 	if completeRec.Code != http.StatusOK {
 		t.Fatalf("complete upload failed: %d %s", completeRec.Code, completeRec.Body.String())
 	}
+	var completeResp map[string]any
+	if err := json.Unmarshal(completeRec.Body.Bytes(), &completeResp); err != nil {
+		t.Fatalf("decode complete response: %v", err)
+	}
+	mediaID := asTestString(completeResp["assetId"])
+	if mediaID == "" {
+		t.Fatalf("missing completed media asset: %#v", completeResp)
+	}
 
 	accessReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view","sessionId":"sess_original_001"}`))
 	accessReq.Header.Set("Content-Type", "application/json")
 	accessReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	accessReq.Header.Set("Idempotency-Key", "media-original-access")
 	accessRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(accessRec, accessReq)
 	if accessRec.Code != http.StatusOK {
@@ -195,10 +218,37 @@ func TestRequestOriginalImageAccessContract(t *testing.T) {
 	if accessResp["mediaId"] != mediaID || accessResp["status"] != "granted" {
 		t.Fatalf("unexpected access response: %#v", accessResp)
 	}
-	if !strings.Contains(asTestString(accessResp["originalUrl"]), "x-original="+mediaID) {
-		t.Fatalf("originalUrl must be signed for media id %q: %#v", mediaID, accessResp)
+	if !strings.HasPrefix(asTestString(accessResp["originalUrl"]), "https://cdn.test/") {
+		t.Fatalf("originalUrl must be issued by Media object gateway: %#v", accessResp)
 	}
-	if len(eventSpy.EventsOfType("MediaOriginalAccessGranted")) != 1 {
-		t.Fatalf("expected MediaOriginalAccessGranted audit event, got %#v", eventSpy.Events())
+	if asTestString(accessResp["auditId"]) == "" {
+		t.Fatalf("original access must return an audit correlation id: %#v", accessResp)
+	}
+	replayReq := httptest.NewRequest(http.MethodPost, "/v1/content/media/"+mediaID+"/original:access", strings.NewReader(`{"purpose":"view"}`))
+	replayReq.Header.Set("Content-Type", "application/json")
+	replayReq.Header.Set("X-Client-User-Id", identity.AnonymousFallbackSubAccountID)
+	replayReq.Header.Set("Idempotency-Key", "media-original-access")
+	replayRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(replayRec, replayReq)
+	if replayRec.Code != http.StatusOK {
+		t.Fatalf("replay original access failed: %d %s", replayRec.Code, replayRec.Body.String())
+	}
+	var replayResp map[string]any
+	if err := json.Unmarshal(replayRec.Body.Bytes(), &replayResp); err != nil {
+		t.Fatalf("decode replay response: %v", err)
+	}
+	if replayResp["auditId"] != accessResp["auditId"] || replayResp["originalUrl"] != accessResp["originalUrl"] || replayResp["expiresAt"] != accessResp["expiresAt"] {
+		t.Fatalf("replay must return the same access grant: first=%#v replay=%#v", accessResp, replayResp)
+	}
+	count, err := mongoDB.Collection("media_original_access_facts").CountDocuments(context.Background(), bson.M{"_id": accessResp["auditId"]})
+	if err != nil {
+		t.Fatalf("count original access facts: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected one persisted original access fact, got %d", count)
+	}
+	outboxCount, err := mongoDB.Collection("media_original_access_outbox").CountDocuments(context.Background(), bson.M{"_id": accessResp["auditId"]})
+	if err != nil || outboxCount != 1 {
+		t.Fatalf("expected one persisted original access outbox event, count=%d err=%v", outboxCount, err)
 	}
 }

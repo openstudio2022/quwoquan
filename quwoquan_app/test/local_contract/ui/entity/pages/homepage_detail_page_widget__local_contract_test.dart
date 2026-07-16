@@ -14,6 +14,8 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_context.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_rollout_context.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_text_span.g.dart';
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/intersection_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
@@ -65,6 +67,7 @@ void main() {
       find.text(UITextConstants.objectMyIntersectionsTitle),
       findsOneWidget,
     );
+    expect(find.text('推荐你了解西湖摄影'), findsOneWidget);
     expect(find.text(UITextConstants.objectImpactTitleEntity), findsOneWidget);
     expect(find.text('认领主页'), findsNothing);
     expect(find.text(UITextConstants.follow), findsWidgets);
@@ -321,9 +324,15 @@ void main() {
     expect(find.byType(AppPageErrorState), findsOneWidget);
     expect(find.text(UITextConstants.homepageLoadFailedTitle), findsOneWidget);
     expect(find.text('主页不存在或已下线'), findsOneWidget);
-    expect(find.text(UITextConstants.back), findsOneWidget);
+    expect(find.text(UITextConstants.back), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('homepage-detail-error-back')),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text(UITextConstants.back));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('homepage-detail-error-back')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('HOME'), findsOneWidget);
@@ -535,9 +544,14 @@ class _HomepageIntersectionRepository extends MockIntersectionRepository {
       IntersectionReason(
         kind: 'shared_interest',
         dimension: 'interest',
-        objectKind: objectType,
+        objectKind: 'place',
         relationObjectId: objectId,
-        primaryText: '你和这里都与西湖摄影有关',
+        primaryText: '推荐你了解西湖摄影',
+        displayBinding: 'host_plain',
+        primarySpans: <IntersectionTextSpan>[
+          IntersectionTextSpan(text: '推荐你了解', role: 'plain'),
+          IntersectionTextSpan(text: '西湖摄影', role: 'plain'),
+        ],
         source: 'test',
         intersectionId: 'ix_homepage_west_lake',
         actionType: 'open',
@@ -709,7 +723,6 @@ class _RecordingHomepageIntroductionRepository
           bodyMarkdown: '真实 introduction summary',
         ),
       ],
-      sourceRefs: const <String>['fixture:introduction'],
       updatedAt: '2026-06-12T00:00:00Z',
     );
   }

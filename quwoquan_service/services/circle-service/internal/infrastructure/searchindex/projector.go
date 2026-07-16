@@ -9,7 +9,7 @@
 // owned by runtime/search/es. This package only decides which lifecycle events
 // upsert vs delete, reads back the full circle, and forwards to the indexer.
 //
-// The projector implements runtime/repository.EventPublisher so it slots into the
+// The projector implements runtime/messaging.EventPublisher so it slots into the
 // circle service's existing domain-event publish path; non-circle / counter-only
 // events are ignored.
 package searchindex
@@ -19,22 +19,14 @@ import (
 	"log/slog"
 	"strings"
 
-	"quwoquan_service/runtime/repository"
+	messaging "quwoquan_service/runtime/messaging"
 	rtsearch "quwoquan_service/runtime/search"
 	"quwoquan_service/runtime/search/es"
 	"quwoquan_service/services/circle-service/internal/application"
-	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
 )
 
-// CircleReader reads a circle back so a lifecycle event (which carries only an
-// aggregate id + a thin payload) can be reconciled against the full circle. The
-// circle store (persistence.CircleStore) satisfies it.
-type CircleReader interface {
-	FindByID(ctx context.Context, id string) (*model.Circle, bool)
-}
-
 // Projector applies circle lifecycle events to the unified ES index. It
-// implements repository.EventPublisher so it can be wired as the circle service's
+// implements messaging.EventPublisher so it can be wired as the circle service's
 // event publisher (or composed onto an existing one).
 //
 // Indexing failures are recorded structurally (logged with event/circle context)
@@ -42,11 +34,11 @@ type CircleReader interface {
 // ES outage must not block or fail the primary circle write path.
 type Projector struct {
 	indexer *es.Indexer
-	reader  CircleReader
+	reader  application.CircleReader
 	logger  *slog.Logger
 }
 
-var _ repository.EventPublisher = (*Projector)(nil)
+var _ messaging.EventPublisher = (*Projector)(nil)
 
 // Option configures a Projector.
 type Option func(*Projector)
@@ -61,7 +53,7 @@ func WithLogger(logger *slog.Logger) Option {
 }
 
 // NewProjector builds a write-time search-index projector.
-func NewProjector(indexer *es.Indexer, reader CircleReader, opts ...Option) *Projector {
+func NewProjector(indexer *es.Indexer, reader application.CircleReader, opts ...Option) *Projector {
 	p := &Projector{
 		indexer: indexer,
 		reader:  reader,
@@ -79,7 +71,7 @@ func NewProjector(indexer *es.Indexer, reader CircleReader, opts ...Option) *Pro
 // / counter-only events do not change the searchable surface and are ignored. It
 // always returns nil so a failing index write cannot break the publish path or
 // the primary circle write path.
-func (p *Projector) Publish(ctx context.Context, event repository.DomainEvent) error {
+func (p *Projector) Publish(ctx context.Context, event messaging.DomainEvent) error {
 	if p == nil || p.indexer == nil {
 		return nil
 	}

@@ -23,7 +23,9 @@ class IntersectionDisplayConfig {
 
   /// 从 `/v1/config/app` 响应根（wireRoot）解析 `intersection` 子节点；
   /// 兼容 snake_case / camelCase；缺失字段回落默认值。
-  factory IntersectionDisplayConfig.fromAppConfigRoot(Map<String, Object?> root) {
+  factory IntersectionDisplayConfig.fromAppConfigRoot(
+    Map<String, Object?> root,
+  ) {
     final content = (root['content'] as Map?)?.cast<String, Object?>();
     final raw =
         (content?['intersection'] as Map?)?.cast<String, Object?>() ??

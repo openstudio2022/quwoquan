@@ -3,34 +3,35 @@ package reliabletask
 import (
 	"context"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
 type MemoryStore struct {
-	mu             sync.Mutex
-	outboxes       map[string]TaskOutboxRecord
-	outboxByDedupe map[string]string
-	tasks          map[string]ReliableAsyncTask
-	taskByDedupe   map[string]string
-	notifications  map[string]NotificationOutboxRecord
-	ledgers        map[string]NotificationDeliveryLedgerRecord
-	attempts       map[string]ProviderAttemptRecord
-	leases         map[string]TaskLease
+	mu                  sync.Mutex
+	outboxes            map[string]TaskOutboxRecord
+	outboxByDedupe      map[string]string
+	outboxByIdempotency map[string]string
+	tasks               map[string]ReliableAsyncTask
+	taskByDedupe        map[string]string
+	notifications       map[string]NotificationOutboxRecord
+	ledgers             map[string]NotificationDeliveryLedgerRecord
+	attempts            map[string]ProviderAttemptRecord
+	leases              map[string]TaskLease
 }
 
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		outboxes:       map[string]TaskOutboxRecord{},
-		outboxByDedupe: map[string]string{},
-		tasks:          map[string]ReliableAsyncTask{},
-		taskByDedupe:   map[string]string{},
-		notifications:  map[string]NotificationOutboxRecord{},
-		ledgers:        map[string]NotificationDeliveryLedgerRecord{},
-		attempts:       map[string]ProviderAttemptRecord{},
-		leases:         map[string]TaskLease{},
+		outboxes:            map[string]TaskOutboxRecord{},
+		outboxByDedupe:      map[string]string{},
+		outboxByIdempotency: map[string]string{},
+		tasks:               map[string]ReliableAsyncTask{},
+		taskByDedupe:        map[string]string{},
+		notifications:       map[string]NotificationOutboxRecord{},
+		ledgers:             map[string]NotificationDeliveryLedgerRecord{},
+		attempts:            map[string]ProviderAttemptRecord{},
+		leases:              map[string]TaskLease{},
 	}
 }
 
@@ -45,14 +46,20 @@ func (s *MemoryStore) EnsureIndexes(ctx context.Context) error {
 
 func (s *MemoryStore) DeclareTask(ctx context.Context, req DeclareTaskRequest) (TaskOutboxRecord, error) {
 	_ = ctx
-	if err := validatePayloadAllowlist(req.Payload, req.PayloadAllow); err != nil {
+	if err := ValidatePayloadAllowlist(req.Payload, req.PayloadAllow); err != nil {
 		return TaskOutboxRecord{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	now := time.Now().UTC()
-	startAt, maxDelayUntil := normalizeStartAt(req, now)
+	startAt, maxDelayUntil := ResolveTaskSchedule(req, now)
+	idempotencyKey := strings.TrimSpace(req.IdempotencyKey)
+	if idempotencyKey != "" {
+		if existingID := s.outboxByIdempotency[idempotencyKey]; existingID != "" {
+			return s.outboxes[existingID], nil
+		}
+	}
 	dedupeKey := strings.TrimSpace(req.DedupeKey)
 	if dedupeKey == "" {
 		dedupeKey = strings.TrimSpace(req.TaskType) + ":" + strings.TrimSpace(req.AggregateID)
@@ -60,9 +67,9 @@ func (s *MemoryStore) DeclareTask(ctx context.Context, req DeclareTaskRequest) (
 	if existingID := s.outboxByDedupe[dedupeKey]; existingID != "" {
 		existing := s.outboxes[existingID]
 		if existing.Status == TaskOutboxStatusPending {
-			existing.Payload = mergePayload(existing.Payload, req.Payload)
-			existing.Trigger = mergeCSV(existing.Trigger, req.Trigger)
-			existing.StartAt = extendStartAt(existing, req, now)
+			existing.Payload = MergeTaskPayload(existing.Payload, req.Payload)
+			existing.Trigger = MergeCSVValues(existing.Trigger, req.Trigger)
+			existing.StartAt = ExtendTaskStartAt(existing, req, now)
 			if existing.MaxDelayUntil.IsZero() && !maxDelayUntil.IsZero() {
 				existing.MaxDelayUntil = maxDelayUntil
 			}
@@ -73,7 +80,7 @@ func (s *MemoryStore) DeclareTask(ctx context.Context, req DeclareTaskRequest) (
 	}
 
 	record := TaskOutboxRecord{
-		OutboxID:        newID("outbox"),
+		OutboxID:        NewRecordID("outbox"),
 		TaskType:        strings.TrimSpace(req.TaskType),
 		OwnerDomain:     strings.TrimSpace(req.OwnerDomain),
 		AggregateType:   strings.TrimSpace(req.AggregateType),
@@ -81,8 +88,8 @@ func (s *MemoryStore) DeclareTask(ctx context.Context, req DeclareTaskRequest) (
 		DedupeKey:       dedupeKey,
 		IdempotencyKey:  strings.TrimSpace(req.IdempotencyKey),
 		PartitionKey:    strings.TrimSpace(req.PartitionKey),
-		ShardID:         shardIDForRequest(req),
-		Payload:         clonePayload(req.Payload),
+		ShardID:         ResolveTaskShardID(req),
+		Payload:         CloneStringMap(req.Payload),
 		Trigger:         strings.TrimSpace(req.Trigger),
 		Status:          TaskOutboxStatusPending,
 		StartAt:         startAt,
@@ -93,6 +100,9 @@ func (s *MemoryStore) DeclareTask(ctx context.Context, req DeclareTaskRequest) (
 	}
 	s.outboxes[record.OutboxID] = record
 	s.outboxByDedupe[record.DedupeKey] = record.OutboxID
+	if record.IdempotencyKey != "" {
+		s.outboxByIdempotency[record.IdempotencyKey] = record.OutboxID
+	}
 	return record, nil
 }
 
@@ -134,7 +144,7 @@ func (s *MemoryStore) DispatchDueTasksForShard(ctx context.Context, now time.Tim
 		}
 		if taskID == "" {
 			task = ReliableAsyncTask{
-				TaskID:         newID("task"),
+				TaskID:         NewRecordID("task"),
 				OutboxID:       outbox.OutboxID,
 				TaskType:       outbox.TaskType,
 				OwnerDomain:    outbox.OwnerDomain,
@@ -144,7 +154,7 @@ func (s *MemoryStore) DispatchDueTasksForShard(ctx context.Context, now time.Tim
 				IdempotencyKey: outbox.IdempotencyKey,
 				PartitionKey:   outbox.PartitionKey,
 				ShardID:        outbox.ShardID,
-				Payload:        clonePayload(outbox.Payload),
+				Payload:        CloneStringMap(outbox.Payload),
 				Status:         TaskStatusReady,
 				NextAttemptAt:  now.UTC(),
 				CreatedAt:      now.UTC(),
@@ -152,7 +162,7 @@ func (s *MemoryStore) DispatchDueTasksForShard(ctx context.Context, now time.Tim
 			}
 			s.taskByDedupe[task.DedupeKey] = task.TaskID
 		} else {
-			task.Payload = mergePayload(task.Payload, outbox.Payload)
+			task.Payload = MergeTaskPayload(task.Payload, outbox.Payload)
 			if task.Status == TaskStatusRetryWait && !task.NextAttemptAt.After(now) {
 				task.Status = TaskStatusReady
 			}
@@ -186,7 +196,7 @@ func (s *MemoryStore) ClaimReadyTask(ctx context.Context, taskTypes []string, wo
 		if (task.Status == TaskStatusReady || task.Status == TaskStatusRetryWait || (task.Status == TaskStatusProcessing && leaseExpired)) && !task.NextAttemptAt.After(now) {
 			task.Status = TaskStatusProcessing
 			task.LeaseOwner = strings.TrimSpace(workerID)
-			task.LeaseToken = newID("lease")
+			task.LeaseToken = NewRecordID("lease")
 			task.LeaseUntil = now.Add(leaseTTL).UTC()
 			task.UpdatedAt = now.UTC()
 			s.tasks[id] = task
@@ -210,7 +220,7 @@ func (s *MemoryStore) ClaimReadyTaskByID(ctx context.Context, taskID string, wor
 	}
 	task.Status = TaskStatusProcessing
 	task.LeaseOwner = strings.TrimSpace(workerID)
-	task.LeaseToken = newID("lease")
+	task.LeaseToken = NewRecordID("lease")
 	task.LeaseUntil = now.Add(leaseTTL).UTC()
 	task.UpdatedAt = now.UTC()
 	s.tasks[task.TaskID] = task
@@ -268,7 +278,7 @@ func (s *MemoryStore) CreateNotification(ctx context.Context, record Notificatio
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
 	if record.NotificationID == "" {
-		record.NotificationID = newID("notification")
+		record.NotificationID = NewRecordID("notification")
 	}
 	if record.Status == "" {
 		record.Status = NotificationStatusPending
@@ -277,7 +287,7 @@ func (s *MemoryStore) CreateNotification(ctx context.Context, record Notificatio
 		record.CreatedAt = now
 	}
 	record.UpdatedAt = now
-	record.Payload = clonePayload(record.Payload)
+	record.Payload = CloneStringMap(record.Payload)
 	s.notifications[record.NotificationID] = record
 	return record, nil
 }
@@ -300,7 +310,7 @@ func (s *MemoryStore) ClaimNotification(ctx context.Context, eventTypes []string
 		if (n.Status == NotificationStatusPending || n.Status == NotificationStatusRetryWait || (n.Status == NotificationStatusProcessing && leaseExpired)) && !n.NextAttemptAt.After(now) {
 			n.Status = NotificationStatusProcessing
 			n.LeaseOwner = workerID
-			n.LeaseToken = newID("notification-lease")
+			n.LeaseToken = NewRecordID("notification-lease")
 			n.LeaseUntil = now.Add(leaseTTL).UTC()
 			n.UpdatedAt = now.UTC()
 			s.notifications[id] = n
@@ -315,8 +325,8 @@ func (s *MemoryStore) EnsureRecipientLedgers(ctx context.Context, notificationID
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
-	for _, recipientID := range dedupeStrings(recipientIDs) {
-		id := ledgerID(notificationID, recipientID)
+	for _, recipientID := range DedupeStrings(recipientIDs) {
+		id := DeliveryLedgerID(notificationID, recipientID)
 		if _, ok := s.ledgers[id]; ok {
 			continue
 		}
@@ -352,7 +362,7 @@ func (s *MemoryStore) MarkRecipientDelivered(ctx context.Context, notificationID
 	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id := ledgerID(notificationID, recipientID)
+	id := DeliveryLedgerID(notificationID, recipientID)
 	record := s.ledgers[id]
 	record.LedgerID = id
 	record.NotificationID = notificationID
@@ -369,7 +379,7 @@ func (s *MemoryStore) MarkRecipientFailed(ctx context.Context, notificationID st
 	_ = ctx
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	id := ledgerID(notificationID, recipientID)
+	id := DeliveryLedgerID(notificationID, recipientID)
 	record := s.ledgers[id]
 	record.LedgerID = id
 	record.NotificationID = notificationID
@@ -387,12 +397,12 @@ func (s *MemoryStore) RecordProviderAttempt(ctx context.Context, record Provider
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if strings.TrimSpace(record.AttemptID) == "" {
-		record.AttemptID = newID("attempt")
+		record.AttemptID = NewRecordID("attempt")
 	}
 	if record.CreatedAt.IsZero() {
 		record.CreatedAt = time.Now().UTC()
 	}
-	record.Attributes = clonePayload(record.Attributes)
+	record.Attributes = CloneStringMap(record.Attributes)
 	s.attempts[record.AttemptID] = record
 	return record, nil
 }
@@ -470,7 +480,7 @@ func (s *MemoryStore) ClaimShardLease(ctx context.Context, req ClaimShardLeaseRe
 	if ttl <= 0 {
 		ttl = 30 * time.Second
 	}
-	id := shardLeaseID(req.Env, req.Domain, req.Module, req.ShardID)
+	id := ShardLeaseID(req.Env, req.Domain, req.Module, req.ShardID)
 	current := s.leases[id]
 	if current.Token != "" && current.Owner != req.Owner && current.LeaseUntil.After(now) {
 		return nil, nil
@@ -480,7 +490,7 @@ func (s *MemoryStore) ClaimShardLease(ctx context.Context, req ClaimShardLeaseRe
 		Domain:     strings.TrimSpace(req.Domain),
 		Module:     strings.TrimSpace(req.Module),
 		Owner:      strings.TrimSpace(req.Owner),
-		Token:      newID("shard-lease"),
+		Token:      NewRecordID("shard-lease"),
 		ShardID:    req.ShardID,
 		LeaseUntil: now.Add(ttl).UTC(),
 		UpdatedAt:  now,
@@ -504,7 +514,7 @@ func (s *MemoryStore) ListDeadTasks(ctx context.Context, taskTypes []string, lim
 			AggregateID: task.AggregateID,
 			Attempts:    task.Attempts,
 			LastFailure: task.LastFailure,
-			Payload:     clonePayload(task.Payload),
+			Payload:     CloneStringMap(task.Payload),
 			UpdatedAt:   task.UpdatedAt,
 		})
 		if limit > 0 && len(out) >= limit {
@@ -647,30 +657,4 @@ func (s *MemoryStore) ReliableTaskMetrics(ctx context.Context) (MetricsSnapshot,
 		snapshot.ProviderAttempts[key]++
 	}
 	return snapshot, nil
-}
-
-func dedupeStrings(values []string) []string {
-	seen := map[string]struct{}{}
-	out := make([]string, 0, len(values))
-	for _, raw := range values {
-		value := strings.TrimSpace(raw)
-		if value == "" {
-			continue
-		}
-		if _, ok := seen[value]; ok {
-			continue
-		}
-		seen[value] = struct{}{}
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func ledgerID(notificationID string, recipientID string) string {
-	return strings.TrimSpace(notificationID) + ":" + strings.TrimSpace(recipientID)
-}
-
-func shardLeaseID(env string, domain string, module string, shardID int) string {
-	return strings.TrimSpace(env) + ":" + strings.TrimSpace(domain) + ":" + strings.TrimSpace(module) + ":" + strconv.Itoa(shardID)
 }

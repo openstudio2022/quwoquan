@@ -25,7 +25,7 @@ void main() {
         return http.Response('{}', 404);
       }),
       authTokenProvider: _MemoryTokenProvider(() => currentAccessToken),
-      onUnauthorizedRefresh: () async {
+      onUnauthorizedRefresh: (_) async {
         refreshCount++;
         currentAccessToken = 'fresh-token';
         return true;
@@ -51,7 +51,7 @@ void main() {
         return http.Response('{"code":"USER.AUTH.token_expired"}', 401);
       }),
       authTokenProvider: const _StaticTokenProvider('expired-token'),
-      onUnauthorizedRefresh: () async {
+      onUnauthorizedRefresh: (_) async {
         refreshCount++;
         return false;
       },

@@ -186,16 +186,6 @@ void main() {
       }
     });
 
-    test('listUserCircles 返回圈子列表', () async {
-      final circles = await repo.listUserCircles(_fixtureProfileUserId);
-      expect(circles, isNotEmpty);
-      for (final c in circles) {
-        expect(c.id, isNotEmpty);
-        expect(c.name, isNotEmpty);
-        expect(c.coverUrl ?? '', isNotEmpty);
-      }
-    });
-
     test('getUserStats 返回统计数据', () async {
       final stats = await repo.getUserStats(_fixtureProfileUserId);
       expect(stats.followingCount, greaterThan(0));
@@ -258,18 +248,18 @@ void main() {
       final personas = await repo.listPersonas();
       expect(personas, isNotEmpty);
       for (final p in personas) {
-        expect(p.id, isNotEmpty);
+        expect(p.subAccountId, isNotEmpty);
         expect(p.displayName, isNotEmpty);
       }
     });
 
-    test('createPersona 返回含 id 的分身', () async {
+    test('createPersona 返回含 subAccountId 的分身', () async {
       final persona = await repo.createPersona(
         PersonaCreateRequestDto(displayName: '新分身', isolationLevel: 'strict'),
       );
-      expect(persona.id, isNotEmpty);
+      expect(persona.subAccountId, isNotEmpty);
       expect(persona.displayName, '新分身');
-      expect(persona.isPrivate, isTrue);
+      expect(persona.isolationLevel, 'strict');
     });
 
     test('updatePersona 不崩溃', () async {
@@ -341,7 +331,7 @@ void main() {
       expect(merged.postCount, bundle.stats.postCount);
     });
 
-    test('接口包含全部 19 个 service.yaml API 方法', () {
+    test('接口只包含 User/Profile 对象归属的方法', () {
       final methods = <String>[
         'getUserProfile',
         'getUserHomepageBundle',
@@ -349,7 +339,6 @@ void main() {
         'listUserPosts',
         'listUserWorks',
         'listUserLifeItems',
-        'listUserCircles',
         'getUserStats',
         'followUser',
         'unfollowUser',
@@ -363,7 +352,7 @@ void main() {
         'deletePersona',
         'activatePersona',
       ];
-      expect(methods.length, 19);
+      expect(methods.length, 18);
       expect(
         repo.runtimeType.toString(),
         contains('MockUserProfileRepository'),
@@ -371,9 +360,9 @@ void main() {
     });
   });
 
-  // ── 兼容性契约 ────────────────────────────────────────────────────────────
+  // ── 参数边界契约 ──────────────────────────────────────────────────────────
 
-  group('UserProfileRepository — 兼容性契约', () {
+  group('UserProfileRepository — 参数边界契约', () {
     late UserProfileRepository repo;
 
     setUp(() {
@@ -383,14 +372,6 @@ void main() {
     test('listUserPosts limit 参数限制条数', () async {
       final posts = await repo.listUserPosts(_fixtureProfileUserId, limit: 2);
       expect(posts.length, lessThanOrEqualTo(2));
-    });
-
-    test('listUserCircles limit 参数限制条数', () async {
-      final circles = await repo.listUserCircles(
-        _fixtureProfileUserId,
-        limit: 1,
-      );
-      expect(circles.length, lessThanOrEqualTo(1));
     });
 
     test('listFollowing limit 参数限制条数', () async {
@@ -503,7 +484,7 @@ void main() {
       final result = await repo.createPersona(
         PersonaCreateRequestDto(displayName: ''),
       );
-      expect(result.id, isNotEmpty);
+      expect(result.subAccountId, isNotEmpty);
     });
 
     test('listFollowing cursor 参数不崩溃', () async {

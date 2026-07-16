@@ -48,7 +48,7 @@ entries:
         `ui_surfaces` / `app_routes` 为唯一页面清单；`page-horizontal-quality` acceptance 建立
         `user_acceptance.page.*` 页面矩阵，不再为 0。
       - 证据与 acceptance：新增 `normalize_acceptance_recorded_paths.py`，回写 66 份 acceptance，
-        `tests.recorded` 只允许 canonical 三层路径或真实 `.qwq_output/env/repo/runs/tests/**/report.json`。
+        `tests.recorded` 只允许 canonical 三层路径或真实 `QWQ_OUTPUT_ROOT/env/repo/runs/tests/**/report.json`。
       - 门禁：`verify-test-no-fake` 与 `verify-test-coverage-map` 从别名升级为独立脚本，并串入
         `Makefile` 与 `quwoquan_ops/gate/gate_repo.sh`；`make gate` / `make gate-full` 收敛到新口径。
       - 二轮收口：新增 `specs/gates/test_legacy_source_allowlist.yaml` 作为存量 legacy 源 ratchet，
@@ -194,7 +194,7 @@ entries:
       - "cd quwoquan_service/services/search-service && go test ./tests/api_integration -count=1"
     notes:
       - 本 CR 收口的是迁移与门禁，不把 `quwoquan_data` 既有业务红测或 `user-service` 长跑 api_integration 误记为绿色。
-      - 生产灰度语义统一为 `prod_gray_initial` rollout stage，不新增 `prod-gray` 第二环境。
+      - 生产灰度语义统一为 `env: prod` + `rollout_stage: gray_initial`，不新增 `prod-gray` 第二环境。
   - timestamp: "2026-06-22T22:30:00+08:00"
     summary: |
       继续按 `/continue-dev` 对 `R-TST06` 做 feature-tree 级 burn-down，本轮不新增测试实现，只回填已有

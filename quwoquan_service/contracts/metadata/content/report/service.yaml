@@ -1,67 +1,330 @@
-version: 1
-entity: Report
-
-service:
-  name: content-service
-  domain: content
-
 api_routes:
-  - method: POST
-    path: /v1/content/reports
-    operation: CreateReport
-    description: 提交举报
-    security:
-      auth_mode: required
-      principal: owner
-      token_transport: bearer
-      anonymous_policy: deny
-      visibility: private
-
-  - method: GET
-    path: /v1/content/reports/{reportId}
-    operation: GetReport
-    description: 举报详情（运营）
-
-  - method: PATCH
-    path: /v1/content/reports/{reportId}
-    operation: ResolveReport
-    description: 处理举报（运营）
-
+- actor: persona
+  application:
+    aggregate_owner: Report
+    mutation_target: Report
+    invariant_target: Report
+    facet: ReportCommandFacet
+    kind: command
+    method: createReport
+  authorization:
+    ownership_policy: reporter
+    principal: persona
+  client_contract:
+    dart_import: ../content/report_commands.dart
+    request_encoder: encodeCreateContentReportCommand
+    request_type: CreateContentReportCommand
+    response_decoder: decodeEmptyCloudResponse
+    response_type: void
+  commercial:
+    status: ready
+  description: 提交举报
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.idempotency_conflict
+  - CONTENT.SYSTEM.storage_write_failed
+  method: POST
+  operation: CreateReport
+  path: /v1/content/reports
+  privacy:
+    log_policy: metadata_only
+    request_classification: SENSITIVE
+    response_classification: INTERNAL
+  reliability:
+    cancellation: supported
+    idempotency: required
+    max_attempts: 2
+    retry_mode: idempotent
+    timeout_ms: 5000
+  security:
+    auth_mode: required
+    token_transport: bearer
+    visibility: private
+  slo:
+    availability_percent: 99.9
+    latency_p95_ms: 800
+  telemetry:
+    attributes:
+    - target_type
+    - outcome
+    metric: content_report_create
+    trace: true
+- actor: account
+  application:
+    facet: ReportQueryFacet
+    kind: query
+    method: listReports
+    reader: ReportQueueReader
+    slice: ReportQueueSlice
+  authorization:
+    ownership_policy: operator_queue
+    permissions:
+    - content.report.read
+    principal: operator
+    scopes:
+    - ops.case.read
+  commercial:
+    status: ready
+  description: 举报运营队列（仅运营人员）
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.SYSTEM.storage_read_failed
+  method: GET
+  operation: ListReports
+  path: /v1/content/reports
+  privacy:
+    log_policy: redacted
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+  query_params:
+  - limit
+  reliability:
+    cancellation: supported
+    idempotency: none
+    max_attempts: 2
+    retry_mode: idempotent
+    timeout_ms: 1500
+  response_body: ReportQueueItemSlice
+  response_body_kind: page
+  response_entity: ReportQueueItemSlice
+  security:
+    auth_mode: required
+    token_transport: bearer
+    visibility: internal
+  slo:
+    availability_percent: 99.9
+    latency_p95_ms: 400
+  telemetry:
+    attributes:
+    - outcome
+    metric: content_report_queue_list
+    trace: true
+- actor: account
+  application:
+    facet: ReportQueryFacet
+    kind: query
+    method: getReport
+    reader: ReportDetailReader
+    slice: ReportDetailSlice
+  authorization:
+    ownership_policy: operator_queue
+    permissions:
+    - content.report.read
+    principal: operator
+    scopes:
+    - ops.case.read
+  commercial:
+    status: ready
+  description: 举报详情（运营）
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.report_not_found
+  - CONTENT.SYSTEM.storage_read_failed
+  method: GET
+  operation: GetReport
+  path: /v1/content/reports/{reportId}
+  privacy:
+    log_policy: redacted
+    request_classification: INTERNAL
+    response_classification: SENSITIVE
+  reliability:
+    cancellation: supported
+    idempotency: none
+    max_attempts: 2
+    retry_mode: idempotent
+    timeout_ms: 1500
+  response_body: ReportDetailSlice
+  response_body_kind: object
+  response_entity: ReportDetailSlice
+  security:
+    auth_mode: required
+    token_transport: bearer
+    visibility: internal
+  slo:
+    availability_percent: 99.9
+    latency_p95_ms: 400
+  telemetry:
+    attributes:
+    - outcome
+    metric: content_report_get
+    trace: true
+- actor: account
+  application:
+    aggregate_owner: Report
+    mutation_target: Report
+    invariant_target: Report
+    facet: ReportCommandFacet
+    kind: command
+    method: beginReview
+  authorization:
+    ownership_policy: operator_review
+    permissions:
+    - content.report.review
+    principal: operator
+    scopes:
+    - ops.case.write
+  commercial:
+    status: ready
+  description: 领取待处理举报并开始审核（仅运营人员）
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.idempotency_conflict
+  - CONTENT.USER.report_not_found
+  - CONTENT.USER.version_conflict
+  - CONTENT.SYSTEM.storage_write_failed
+  method: POST
+  operation: BeginReportReview
+  path: /v1/content/reports/{reportId}/review
+  privacy:
+    log_policy: redacted
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+  reliability:
+    cancellation: supported
+    idempotency: required
+    max_attempts: 2
+    retry_mode: idempotent
+    timeout_ms: 5000
+  request_entity: BeginReportReviewRequest
+  response_body: ReportCommandResult
+  response_body_kind: object
+  response_entity: ReportCommandResult
+  security:
+    auth_mode: required
+    token_transport: bearer
+    visibility: internal
+  slo:
+    availability_percent: 99.9
+    latency_p95_ms: 800
+  telemetry:
+    attributes:
+    - outcome
+    metric: content_report_review_begin
+    trace: true
+- actor: account
+  application:
+    aggregate_owner: Report
+    mutation_target: Report
+    invariant_target: Report
+    facet: ReportCommandFacet
+    kind: command
+    method: resolveReport
+  authorization:
+    ownership_policy: operator_review
+    permissions:
+    - content.report.resolve
+    principal: operator
+    scopes:
+    - ops.case.write
+  commercial:
+    status: ready
+  description: 处理审核中的举报（仅运营人员）
+  error_codes:
+  - CONTENT.USER.unauthorized
+  - CONTENT.USER.invalid_argument
+  - CONTENT.USER.idempotency_conflict
+  - CONTENT.USER.report_not_found
+  - CONTENT.USER.version_conflict
+  - CONTENT.SYSTEM.storage_write_failed
+  method: PATCH
+  operation: ResolveReport
+  path: /v1/content/reports/{reportId}
+  privacy:
+    log_policy: redacted
+    request_classification: INTERNAL
+    response_classification: INTERNAL
+  reliability:
+    cancellation: supported
+    idempotency: required
+    max_attempts: 2
+    retry_mode: idempotent
+    timeout_ms: 5000
+  request_entity: ResolveReportRequest
+  response_body: ReportCommandResult
+  response_body_kind: object
+  response_entity: ReportCommandResult
+  security:
+    auth_mode: required
+    token_transport: bearer
+    visibility: internal
+  slo:
+    availability_percent: 99.9
+    latency_p95_ms: 800
+  telemetry:
+    attributes:
+    - resolution
+    - outcome
+    metric: content_report_resolve
+    trace: true
+  writable_fields:
+  - resolution
 consumers:
-  - name: app
-    capabilities: [create_report]
-  - name: platform-ops
-    capabilities: [read_report, resolve_report]
-
+- capabilities:
+  - create_report
+  name: app
+- capabilities:
+  - list_reports
+  - read_report
+  - begin_review
+  - resolve_report
+  name: platform-ops
 contract_test:
+  coverage_requirements:
+  - all target types covered
+  - state machine transitions tested
   mock_strategy:
     app_side:
       mock_target: content-service API (report)
       scenarios:
-        - name: submit_report
-          route: POST /v1/content/reports
-          variants: [post, comment, user, circle, message]
-          assertions: [status_201, report_id_returned]
-
+      - assertions:
+        - status_204
+        - empty_response_body
+        name: submit_report
+        route: POST /v1/content/reports
+        variants:
+        - post
+        - comment
+        - user
+        - circle
+        - message
     service_side:
+      data_management:
+        cleanup: TRUNCATE reports CASCADE
+        seed: fixture 工厂预制到真实 PG
       description: 使用真实测试数据库，不 mock 存储层
       real_engines:
         postgres: embedded-postgres
-      spy_targets: [event_publisher]
-      data_management:
-        seed: fixture 工厂预制到真实 PG
-        cleanup: "TRUNCATE reports CASCADE"
       scenarios:
-        - name: report_lifecycle
-          command: CreateReport → ResolveReport
-          seed: []
-          assertions:
-            - "SELECT * FROM reports WHERE id=? → status='pending'"
-            - "SELECT status FROM reports → 'reviewing' after review start"
-            - "SELECT status, resolution FROM reports → 'resolved' + resolution set"
-            - "eventSpy.AssertPublished('ReportCreated')"
-            - "eventSpy.AssertPublished('ReportResolved', {resolution})"
-
-  coverage_requirements:
-    - all target types covered
-    - state machine transitions tested
+      - assertions:
+        - SELECT * FROM reports WHERE id=? → status='pending'
+        - SELECT status FROM reports → 'reviewing' after review start
+        - SELECT status, resolution FROM reports → 'resolved' + resolution set
+        - SELECT * FROM report_outbox WHERE event_type='content.report.created'
+        - SELECT * FROM report_outbox WHERE event_type='content.report.resolved'
+        command: CreateReport → BeginReportReview → ResolveReport
+        name: report_lifecycle
+        seed: []
+      - assertions:
+        - anonymous and forged headers are rejected before persistence
+        - regular account without operator role is forbidden
+        - operator role requires declared scope and permission
+        commands:
+        - ListReports
+        - GetReport
+        - BeginReportReview
+        - ResolveReport
+        name: operator_report_queue_authorization
+      spy_targets:
+      - report_outbox
+service:
+  commercial_defaults:
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: CONTENT_REPORT_COMMERCIAL_EVIDENCE
+    status: blocked
+    target_story: app-cloud-business-object-commercial-closure
+  domain: content
+  name: content-service
+  owner: backend-team
+version: 1

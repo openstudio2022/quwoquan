@@ -30,17 +30,38 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--state-root",
-        default=str(ROOT / ".qwq_output/local/app-instances"),
+        default=str(
+            Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
+            / "env"
+            / "repo"
+            / "local"
+            / "app-instances"
+            / "process"
+        ),
         help="App instance state root.",
     )
     parser.add_argument(
         "--beta-report",
-        default=str(ROOT / ".qwq_output/local/app_beta_manual/app-beta-manual-report.json"),
+        default=str(
+            Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
+            / "env"
+            / "beta"
+            / "runs"
+            / "beta-local"
+            / "app-beta-manual-report.json"
+        ),
         help="Beta manual report path.",
     )
     parser.add_argument(
         "--gamma-stack-report",
-        default=str(ROOT / ".qwq_output/local/gamma/stack_state.json"),
+        default=str(
+            Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
+            / "env"
+            / "gamma"
+            / "runtime"
+            / "gamma-local"
+            / "stack_state.json"
+        ),
         help="local-gamma stack report path.",
     )
     parser.add_argument(

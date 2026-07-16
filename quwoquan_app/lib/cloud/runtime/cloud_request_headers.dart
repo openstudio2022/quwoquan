@@ -1,8 +1,6 @@
 import 'dart:math';
 
-import 'package:flutter/foundation.dart';
-import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
-import 'package:quwoquan_app/core/platform/platform_target.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
 
 /// 端侧请求上下文 header 注入（用于网关访问日志/异常日志/过程日志关联）。
 ///
@@ -16,43 +14,20 @@ import 'package:quwoquan_app/core/platform/platform_target.dart';
 class CloudRequestHeaders {
   CloudRequestHeaders._();
 
-  /// Canonical session ID shared across HTTP headers, OpsEvent, BehaviorEvent,
-  /// and AppLog. Delegates to AppTraceContextStore to guarantee a single ID
-  /// per app lifecycle.
-  static String get sessionId => AppTraceContextStore.instance.sessionId;
+  static CloudClientContextSnapshot get _clientContext =>
+      CloudClientContextRegistry.provider.snapshot();
+
+  /// Canonical session ID is injected by the application composition root.
+  static String get sessionId => _clientContext.sessionId;
 
   /// 隐私安全的派生设备标识（installId hash 派生）。游客设备态点赞/分享以此作为
   /// 设备维度计数键；登录用户也携带（用于同设备识别），但云侧账号维度优先、不并账。
-  static String? get deviceActorId => AppTraceContextStore.instance.deviceActorId;
+  static String? get deviceActorId => _clientContext.deviceActorId;
   static final Random _rng = Random();
 
-  static const String appVersion = String.fromEnvironment(
-    'APP_VERSION',
-    defaultValue: 'dev',
-  );
+  static String get appVersion => _clientContext.appVersion;
 
-  static String platform() {
-    if (kIsWeb) return 'web';
-    // HarmonyOS / OpenHarmony reports as `ohos` via dart:io operatingSystem,
-    // which `defaultTargetPlatform` does not distinguish. Detect it first.
-    // NOTE: the cloud-side `X-Client-Device-Platform` enum must register
-    // `ohos` (and `web`) metadata-first before relying on it server-side.
-    if (currentAppPlatform == AppPlatform.ohos) return 'ohos';
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.android:
-        return 'android';
-      case TargetPlatform.iOS:
-        return 'ios';
-      case TargetPlatform.macOS:
-        return 'macos';
-      case TargetPlatform.windows:
-        return 'windows';
-      case TargetPlatform.linux:
-        return 'linux';
-      case TargetPlatform.fuchsia:
-        return 'fuchsia';
-    }
-  }
+  static String platform() => _clientContext.platform;
 
   static Map<String, String> forPage(String pageId) {
     final ts = _toBase36(DateTime.now().microsecondsSinceEpoch);
@@ -68,6 +43,7 @@ class CloudRequestHeaders {
       'X-Client-Sent-At': nowIso,
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,
+      'X-Client-Locale': _clientContext.locale,
       // 追踪：分段可读，可从 ID 直接看出源头/页面/会话/时间
       'X-Trace-Id': traceId,
       'X-Request-Id': requestId,
@@ -101,23 +77,41 @@ class CloudRequestHeaders {
     required String operationId,
     required String clientPageId,
     String? routeId,
+    String? referralSource,
+    String? feedRequestId,
   }) {
+    if (surfaceId.trim().isEmpty ||
+        operationId.trim().isEmpty ||
+        clientPageId.trim().isEmpty) {
+      throw ArgumentError.value(
+        operationId,
+        'operationId',
+        'surface operation context is incomplete',
+      );
+    }
     final ts = _toBase36(DateTime.now().microsecondsSinceEpoch);
     final rand = _toBase36(_rng.nextInt(36 * 36 * 36 * 36));
     final nowIso = DateTime.now().toIso8601String();
     final traceId = 'APP.$sessionId.$surfaceId.$operationId.$ts.$rand';
     final requestId = 'APP.$surfaceId.$operationId.$ts.$rand';
+    final resolvedDeviceActorId = deviceActorId?.trim() ?? '';
     return <String, String>{
       'X-Client-Page-Id': clientPageId,
       'X-Client-Surface-Id': surfaceId,
       'X-Client-Operation-Id': operationId,
-      if (routeId != null && routeId.isNotEmpty) 'X-Client-Route-Id': routeId,
+      if ((routeId ?? '').trim().isNotEmpty)
+        'X-Client-Route-Id': routeId!.trim(),
       'X-Client-Session-Id': sessionId,
-      if (deviceActorId != null && deviceActorId!.isNotEmpty)
-        'X-Client-Device-Actor-Id': deviceActorId!,
+      if (resolvedDeviceActorId.isNotEmpty)
+        'X-Client-Device-Actor-Id': resolvedDeviceActorId,
+      if ((referralSource ?? '').trim().isNotEmpty)
+        'X-Referral-Source': referralSource!.trim(),
+      if ((feedRequestId ?? '').trim().isNotEmpty)
+        'X-Feed-Request-Id': feedRequestId!.trim(),
       'X-Client-Sent-At': nowIso,
       'X-Client-Device-Platform': platform(),
       'X-Client-App-Version': appVersion,
+      'X-Client-Locale': _clientContext.locale,
       'X-Trace-Id': traceId,
       'X-Request-Id': requestId,
     };

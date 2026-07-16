@@ -10,6 +10,7 @@ import 'package:quwoquan_app/cloud/runtime/generated/entity/object_page_bundle.g
 import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/ui/entity/widgets/homepage_detail_shell.dart';
 
 class HomepageDetailPage extends ConsumerStatefulWidget {
@@ -59,14 +60,25 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
   @override
   Widget build(BuildContext context) {
     if (_errorSemantic != null && !_isLoading) {
-      return AppPageErrorState(
-        semantic: _errorSemantic!,
-        onAction: (action) async {
-          if (action.type == UiErrorActionType.retry ||
-              action.type == UiErrorActionType.resubmit) {
-            await _load();
-          }
-        },
+      return AppScaffold(
+        backgroundColor: AppColors.iosPageBackground(context),
+        navigationBar: AppNavigationBar(
+          leading: AppNavigationBarIconButton(
+            key: const ValueKey<String>('homepage-detail-error-back'),
+            icon: CupertinoIcons.back,
+            onPressed: _back,
+          ),
+          middle: const Text(UITextConstants.objectHomepageDefaultTitle),
+        ),
+        body: AppPageErrorState(
+          semantic: _errorSemantic!,
+          onAction: (action) async {
+            if (action.type == UiErrorActionType.retry ||
+                action.type == UiErrorActionType.resubmit) {
+              await _load();
+            }
+          },
+        ),
       );
     }
     return HomepageDetailShell(
@@ -89,6 +101,14 @@ class _HomepageDetailPageState extends ConsumerState<HomepageDetailPage> {
       onOpenIntroduction: _openIntroduction,
       onAttach: (reference) => context.pop(reference),
     );
+  }
+
+  void _back() {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go(AppRoutePaths.home);
   }
 
   Future<void> _load() async {

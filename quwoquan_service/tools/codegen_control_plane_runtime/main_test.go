@@ -5,9 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/graph"
+	"quwoquan_service/internal/metadata/load"
+	"quwoquan_service/internal/metadata/validate"
 )
 
 func TestCodegenControlPlaneRuntimeGeneratesGoAndPythonArtifacts(t *testing.T) {
+	useFixtureContractSource(t)
 	metadataDir := t.TempDir()
 	goOutDir := t.TempDir()
 	pythonOutDir := t.TempDir()
@@ -243,6 +249,27 @@ configs:
 	if !strings.Contains(string(onboardingText), "MustLoadDomainOnboardingDomains") || !strings.Contains(string(onboardingText), `\"domain\": \"content\"`) {
 		t.Fatalf("generated onboarding go file missing expected content: %s", string(onboardingText))
 	}
+}
+
+func useFixtureContractSource(t *testing.T) {
+	t.Helper()
+	previous := compileContractSource
+	compileContractSource = func(
+		metadataDir string,
+		_ validate.Profile,
+	) (*contractcodegen.Source, error) {
+		catalog, err := load.Load(metadataDir)
+		if err != nil {
+			return nil, err
+		}
+		return contractcodegen.NewSourceFromGraph(
+			metadataDir,
+			graph.Build(catalog),
+		), nil
+	}
+	t.Cleanup(func() {
+		compileContractSource = previous
+	})
 }
 
 func writeFixture(t *testing.T, path, content string) {

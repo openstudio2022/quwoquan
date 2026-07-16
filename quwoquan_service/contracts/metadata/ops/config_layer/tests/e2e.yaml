@@ -1,0 +1,14 @@
+version: 1
+entity: ConfigLayer
+layer: user_acceptance
+scenarios:
+  - name: operator_updates_and_resolves_service_config
+    steps:
+      - operator selects a metadata-registered config key and target layer
+      - operator submits a typed value with expectedVersion and idempotency key
+      - portal resolves effective config for the target service
+    assertions:
+      - layer_version_incremented_once
+      - effective_value_and_source_layer_visible
+      - duplicate_submit_has_one_side_effect
+      - unauthorized_operator_denied

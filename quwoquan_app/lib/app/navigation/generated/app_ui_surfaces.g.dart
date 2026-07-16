@@ -48,7 +48,7 @@ class AppUiSurfaces {
       'CreateConversation',
       'ListConversations',
       'SearchSocialRelations',
-      'ListUserCircles',
+      'ListPersonaCircles',
     ],
   );
 
@@ -60,6 +60,9 @@ class AppUiSurfaces {
     description: 'IM 会话详情',
     operationIds: <String>[
       'GetConversation',
+      'InitMediaUpload',
+      'CompleteMediaUpload',
+      'AbortMediaUpload',
       'ListMessages',
       'SendMessage',
       'RecallMessage',
@@ -170,10 +173,14 @@ class AppUiSurfaces {
     operationIds: <String>[
       'CreateAssistantConversation',
       'GetAssistantConversation',
-      'CreateAssistantTurn',
-      'GetAssistantTurn',
-      'StreamAssistantTurn',
+      'StartAssistantRun',
+      'GetAssistantRun',
+      'StreamAssistantRunEvents',
       'ListAppMessages',
+      'GetAppMessage',
+      'AckAppMessage',
+      'ReadAppMessage',
+      'CreateProfileUpdateProposal',
       'GetAppMessageUnreadCount',
       'ReportInteractionEvent',
       'ReportScorecard',
@@ -259,6 +266,8 @@ class AppUiSurfaces {
       'SearchConversations',
       'SearchMessages',
       'SearchCircles',
+      'ListCircleGroups',
+      'SearchCircleGroups',
       'UpsertRecentSearch',
     ],
   );
@@ -270,7 +279,12 @@ class AppUiSurfaces {
     pathTemplate: '/search/network',
     description: '网络结果页（小趣搜 assistant 结果 tab + 圈子频道分类内容结果）',
     operationIds: <String>[
+      'CreatePost',
+      'GetNearbyLocations',
+      'PublishPost',
+      'SearchLocations',
       'SearchPosts',
+      'GetPost',
       'SearchCircles',
       'SearchXiaoquResults',
       'UpsertRecentSearch',
@@ -330,6 +344,8 @@ class AppUiSurfaces {
       'GetObjectPageBundle',
       'GetEntityImpact',
       'GetHomepageDetail',
+      'FollowHomepage',
+      'UnfollowHomepage',
       'GetHomepageShell',
       'GetHomepageReviewSummary',
       'GetHomepageRelatedGroups',
@@ -393,11 +409,35 @@ class AppUiSurfaces {
       'GetCircle',
       'GetCircleImpact',
       'GetCircleFeed',
-      'ListCircleMembers',
+      'ListCircleMemberships',
       'ListCircleGroups',
+      'SearchCircleGroups',
+      'GetCircleGroup',
+      'CreateCircleGroup',
+      'UpdateCircleGroup',
+      'ArchiveCircleGroup',
+      'ApplyJoinCircleGroup',
+      'GetMyCircleGroupMembership',
+      'ListCircleGroupMemberships',
+      'LeaveCircleGroup',
+      'ApproveCircleGroupMember',
+      'RejectCircleGroupMember',
+      'RemoveCircleGroupMember',
+      'UpdateCircleGroupMemberRole',
+      'ListCircleFiles',
+      'GetCircleFile',
+      'CreateCircleFile',
+      'UpdateCircleFile',
+      'DeleteCircleFile',
+      'RequestOriginalImageAccess',
+      'InitMediaUpload',
+      'CompleteMediaUpload',
+      'AbortMediaUpload',
       'GetCircleStats',
+      'GetMyCircleMembership',
       'JoinCircle',
       'LeaveCircle',
+      'ReportCircleBehavior',
     ],
   );
 
@@ -422,11 +462,14 @@ class AppUiSurfaces {
       'GetUserProfile',
       'GetSubAccountProfile',
       'ListUserWorks',
+      'ListUserPosts',
       'ListUserLifeItems',
       'ListUserLikes',
       'GetRelationshipCapability',
       'FollowUser',
       'UnfollowUser',
+      'CreateReport',
+      'ListPersonaCircles',
     ],
   );
 
@@ -521,6 +564,407 @@ class AppUiSurfaces {
     ],
   );
 
+  static const AppUiSurface appShell = AppUiSurface(
+    id: 'appShell',
+    owner: 'app',
+    routeId: 'home',
+    pathTemplate: '/',
+    description: 'App 主导航壳与跨端导航 chrome',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface homeFeed = AppUiSurface(
+    id: 'homeFeed',
+    owner: 'content',
+    routeId: 'home',
+    pathTemplate: '/',
+    description: '首页推荐与关注内容流',
+    operationIds: <String>[
+      'CreateReport',
+      'LikePost',
+      'UnlikePost',
+      'GetContentReactionState',
+      'ListComments',
+      'ListCommentReplies',
+      'CreateComment',
+      'DeleteComment',
+      'ReactToComment',
+      'BindMediaAssetsToComment',
+      'GetMediaAsset',
+      'RequestOriginalImageAccess',
+      'InitMediaUpload',
+      'CompleteMediaUpload',
+      'AbortMediaUpload',
+      'CreateOutboundShare',
+      'PlacePostInCircle',
+      'ListPersonaCircles',
+    ],
+  );
+
+  static const AppUiSurface welcome = AppUiSurface(
+    id: 'welcome',
+    owner: 'app',
+    routeId: 'welcome',
+    pathTemplate: '/welcome',
+    description: 'Flutter 唯一启动欢迎页',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface circlesList = AppUiSurface(
+    id: 'circlesList',
+    owner: 'circle',
+    routeId: 'circles',
+    pathTemplate: '/circles',
+    description: '圈子发现与分类列表入口',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface profileHome = AppUiSurface(
+    id: 'profileHome',
+    owner: 'user',
+    routeId: 'profile',
+    pathTemplate: '/profile',
+    description: '我的主页根入口',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface interestMatch = AppUiSurface(
+    id: 'interestMatch',
+    owner: 'interest_match',
+    routeId: 'interestMatch',
+    pathTemplate: '/interest-match',
+    description: '找同趣与兴趣配对启动器',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface login = AppUiSurface(
+    id: 'login',
+    owner: 'user',
+    routeId: 'login',
+    pathTemplate: '/login',
+    description: '商用登录入口',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface legalUserAgreement = AppUiSurface(
+    id: 'legalUserAgreement',
+    owner: 'legal',
+    routeId: 'legalUserAgreement',
+    pathTemplate: '/legal/user-agreement',
+    description: '用户协议静态正文',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface legalPrivacyPolicy = AppUiSurface(
+    id: 'legalPrivacyPolicy',
+    owner: 'legal',
+    routeId: 'legalPrivacyPolicy',
+    pathTemplate: '/legal/privacy-policy',
+    description: '隐私政策静态正文',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface legalPermissions = AppUiSurface(
+    id: 'legalPermissions',
+    owner: 'legal',
+    routeId: 'legalPermissions',
+    pathTemplate: '/legal/permissions',
+    description: '权限说明静态正文',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface legalThirdPartySdkList = AppUiSurface(
+    id: 'legalThirdPartySdkList',
+    owner: 'legal',
+    routeId: 'legalThirdPartySdkList',
+    pathTemplate: '/legal/third-party-sdk-list',
+    description: '第三方 SDK 清单静态正文',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface createWorkspace = AppUiSurface(
+    id: 'createWorkspace',
+    owner: 'content',
+    routeId: 'create',
+    pathTemplate: '/create',
+    description: '内容创作工作台及其内嵌编辑流程',
+    operationIds: <String>[
+      'CreatePost',
+      'GetNearbyLocations',
+      'PublishPost',
+      'SearchLocations',
+      'InitMediaUpload',
+      'CompleteMediaUpload',
+      'AbortMediaUpload',
+      'CreateOutboundShare',
+      'PlacePostInCircle',
+      'ListPersonaCircles',
+      'CreateOutboundShare',
+      'PlacePostInCircle',
+      'GetMediaUploadSession',
+      'BindMediaAssetsToPost',
+      'SelectAutoVideoCover',
+      'SelectManualVideoCover',
+    ],
+  );
+
+  static const AppUiSurface imageEditor = AppUiSurface(
+    id: 'imageEditor',
+    owner: 'content',
+    routeId: 'createEditImage',
+    pathTemplate: '/create/edit-image',
+    description: '图片编辑全屏页',
+    operationIds: <String>[
+      'GetMediaAsset',
+      'SelectAutoVideoCover',
+      'SelectManualVideoCover',
+    ],
+  );
+
+  static const AppUiSurface workBrowser = AppUiSurface(
+    id: 'workBrowser',
+    owner: 'content',
+    routeId: 'workBrowser',
+    pathTemplate: '/works/browser/{workId}',
+    description: '作品浏览器与深链加载入口',
+    operationIds: <String>[
+      'CreateReport',
+      'GetPost',
+      'LikePost',
+      'UnlikePost',
+      'GetContentReactionState',
+      'ListComments',
+      'ListCommentReplies',
+      'CreateComment',
+      'DeleteComment',
+      'PinComment',
+      'UnpinComment',
+      'ReactToComment',
+      'BindMediaAssetsToComment',
+      'GetMediaAsset',
+      'RequestOriginalImageAccess',
+      'InitMediaUpload',
+      'CompleteMediaUpload',
+      'AbortMediaUpload',
+    ],
+  );
+
+  static const AppUiSurface circleStats = AppUiSurface(
+    id: 'circleStats',
+    owner: 'circle',
+    routeId: 'circleStats',
+    pathTemplate: '/circle/{id}/stats',
+    description: '圈子成员、群聊、粉丝与获赞统计列表',
+    operationIds: <String>[
+      'ListCircleMemberships',
+      'UpdateCircleMembershipRole',
+      'ListCircleGroupMemberships',
+      'UpdateCircleGroupMemberRole',
+    ],
+  );
+
+  static const AppUiSurface assistantManagement = AppUiSurface(
+    id: 'assistantManagement',
+    owner: 'assistant',
+    routeId: 'assistantManagement',
+    pathTemplate: '/assistant/management',
+    description: '私助偏好、隐私与记忆管理',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface assistantSkills = AppUiSurface(
+    id: 'assistantSkills',
+    owner: 'assistant',
+    routeId: 'assistantSkills',
+    pathTemplate: '/assistant/skills',
+    description: '私助技能中心',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface personalAssistantChatAlias = AppUiSurface(
+    id: 'personalAssistantChatAlias',
+    owner: 'assistant',
+    routeId: 'chatDetail',
+    pathTemplate: '/chat/{id}',
+    description: 'assistant 会话 ID 经聊天详情路由进入私助对话',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface settingsHome = AppUiSurface(
+    id: 'settingsHome',
+    owner: 'settings',
+    routeId: 'settings',
+    pathTemplate: '/settings',
+    description: '设置中枢',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface settingsPermissions = AppUiSurface(
+    id: 'settingsPermissions',
+    owner: 'settings',
+    routeId: 'settingsPermissions',
+    pathTemplate: '/settings/permissions',
+    description: '权限管理说明页',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface settingsDarkMode = AppUiSurface(
+    id: 'settingsDarkMode',
+    owner: 'settings',
+    routeId: 'settingsDarkMode',
+    pathTemplate: '/settings/dark-mode',
+    description: '外观与深色模式设置页',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface settingsAbout = AppUiSurface(
+    id: 'settingsAbout',
+    owner: 'settings',
+    routeId: 'settingsAbout',
+    pathTemplate: '/settings/about',
+    description: '关于趣我圈与法律入口',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface profileEdit = AppUiSurface(
+    id: 'profileEdit',
+    owner: 'user',
+    routeId: 'profileEdit',
+    pathTemplate: '/profile/edit',
+    description: '我的资料编辑页',
+    operationIds: <String>[
+      'InitMediaUpload',
+      'CompleteMediaUpload',
+      'AbortMediaUpload',
+      'ConfirmProposal',
+      'ApplyProposal',
+      'RejectProposal',
+      'GetProfileUpdateProposal',
+      'ListProfileUpdateProposals',
+    ],
+  );
+
+  static const AppUiSurface profilePersonas = AppUiSurface(
+    id: 'profilePersonas',
+    owner: 'user',
+    routeId: 'profilePersonas',
+    pathTemplate: '/profile/personas',
+    description: '分身管理页',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface profileComments = AppUiSurface(
+    id: 'profileComments',
+    owner: 'user',
+    routeId: 'profileComments',
+    pathTemplate: '/profile/comments',
+    description: '资料页评论列表',
+    operationIds: <String>[
+      'ListCommentsByAuthor',
+      'ListCommentsForPostAuthor',
+      'DeleteComment',
+      'ReactToComment',
+    ],
+  );
+
+  static const AppUiSurface profileStats = AppUiSurface(
+    id: 'profileStats',
+    owner: 'user',
+    routeId: 'profileStats',
+    pathTemplate: '/profile/stats',
+    description: '粉丝、关注与圈子统计列表',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface myIntersections = AppUiSurface(
+    id: 'myIntersections',
+    owner: 'user',
+    routeId: 'myIntersections',
+    pathTemplate: '/profile/intersections',
+    description: '我的交集与影响力收件箱',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface objectIntersections = AppUiSurface(
+    id: 'objectIntersections',
+    owner: 'recommendation',
+    routeId: 'objectIntersections',
+    pathTemplate: '/object/intersections',
+    description: '对象全部交集列表',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface rtcOutgoing = AppUiSurface(
+    id: 'rtcOutgoing',
+    owner: 'rtc',
+    routeId: 'rtcOutgoing',
+    pathTemplate: '/rtc/outgoing/{callId}',
+    description: '呼出等待页',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface rtcIncoming = AppUiSurface(
+    id: 'rtcIncoming',
+    owner: 'rtc',
+    routeId: 'rtcIncoming',
+    pathTemplate: '/rtc/incoming/{callId}',
+    description: '来电接听页',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface rtcVoice = AppUiSurface(
+    id: 'rtcVoice',
+    owner: 'rtc',
+    routeId: 'rtcVoice',
+    pathTemplate: '/rtc/voice/{callId}',
+    description: '语音通话页',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface rtcVideo = AppUiSurface(
+    id: 'rtcVideo',
+    owner: 'rtc',
+    routeId: 'rtcVideo',
+    pathTemplate: '/rtc/video/{callId}',
+    description: '视频通话页',
+    operationIds: <String>[
+    ],
+  );
+
+  static const AppUiSurface rtcPickParticipants = AppUiSurface(
+    id: 'rtcPickParticipants',
+    owner: 'rtc',
+    routeId: 'rtcPickParticipants',
+    pathTemplate: '/rtc/pick-participants',
+    description: '通话参与者选择页',
+    operationIds: <String>[
+    ],
+  );
+
   static const List<AppUiSurface> all = <AppUiSurface>[
     chatList,
     startGroupChat,
@@ -558,6 +1002,39 @@ class AppUiSurfaces {
     addContactPhone,
     addContactConfirm,
     myQrCode,
+    appShell,
+    homeFeed,
+    welcome,
+    circlesList,
+    profileHome,
+    interestMatch,
+    login,
+    legalUserAgreement,
+    legalPrivacyPolicy,
+    legalPermissions,
+    legalThirdPartySdkList,
+    createWorkspace,
+    imageEditor,
+    workBrowser,
+    circleStats,
+    assistantManagement,
+    assistantSkills,
+    personalAssistantChatAlias,
+    settingsHome,
+    settingsPermissions,
+    settingsDarkMode,
+    settingsAbout,
+    profileEdit,
+    profilePersonas,
+    profileComments,
+    profileStats,
+    myIntersections,
+    objectIntersections,
+    rtcOutgoing,
+    rtcIncoming,
+    rtcVoice,
+    rtcVideo,
+    rtcPickParticipants,
   ];
 
   static const Map<String, AppUiSurface> byId = <String, AppUiSurface>{
@@ -597,5 +1074,38 @@ class AppUiSurfaces {
     'addContactPhone': addContactPhone,
     'addContactConfirm': addContactConfirm,
     'myQrCode': myQrCode,
+    'appShell': appShell,
+    'homeFeed': homeFeed,
+    'welcome': welcome,
+    'circlesList': circlesList,
+    'profileHome': profileHome,
+    'interestMatch': interestMatch,
+    'login': login,
+    'legalUserAgreement': legalUserAgreement,
+    'legalPrivacyPolicy': legalPrivacyPolicy,
+    'legalPermissions': legalPermissions,
+    'legalThirdPartySdkList': legalThirdPartySdkList,
+    'createWorkspace': createWorkspace,
+    'imageEditor': imageEditor,
+    'workBrowser': workBrowser,
+    'circleStats': circleStats,
+    'assistantManagement': assistantManagement,
+    'assistantSkills': assistantSkills,
+    'personalAssistantChatAlias': personalAssistantChatAlias,
+    'settingsHome': settingsHome,
+    'settingsPermissions': settingsPermissions,
+    'settingsDarkMode': settingsDarkMode,
+    'settingsAbout': settingsAbout,
+    'profileEdit': profileEdit,
+    'profilePersonas': profilePersonas,
+    'profileComments': profileComments,
+    'profileStats': profileStats,
+    'myIntersections': myIntersections,
+    'objectIntersections': objectIntersections,
+    'rtcOutgoing': rtcOutgoing,
+    'rtcIncoming': rtcIncoming,
+    'rtcVoice': rtcVoice,
+    'rtcVideo': rtcVideo,
+    'rtcPickParticipants': rtcPickParticipants,
   };
 }

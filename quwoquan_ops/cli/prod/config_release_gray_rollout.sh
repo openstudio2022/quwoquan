@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 
 usage() {
   cat <<'EOF'
@@ -15,7 +16,7 @@ Usage:
 Behavior:
   - Validates rollout step sequence.
   - Ensures target config version file exists.
-  - Writes rollout state to .qwq_output/env/repo/local/release-state/<service>.state.
+  - Writes rollout state to QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/<service>.state.
 EOF
 }
 
@@ -58,7 +59,7 @@ if [[ ! -f "$cfg_file" ]]; then
   exit 1
 fi
 
-state_dir="$ROOT/.qwq_output/env/repo/local/release-state"
+state_dir="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state"
 mkdir -p "$state_dir"
 state_file="$state_dir/$SERVICE.state"
 audit_file="$state_dir/$SERVICE.audit.log"

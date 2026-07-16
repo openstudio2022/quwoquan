@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"go.opentelemetry.io/otel/attribute"
 	rterr "quwoquan_service/runtime/errors"
-	rtobs "quwoquan_service/runtime/observability"
-	"quwoquan_service/services/content-service/internal/application/identity"
-	commentdomain "quwoquan_service/services/content-service/internal/domain/comment"
+	commentmodel "quwoquan_service/services/content-service/internal/domain/comment/model"
+	commentports "quwoquan_service/services/content-service/internal/domain/comment/ports"
+	postdomain "quwoquan_service/services/content-service/internal/domain/post"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	reactiondomain "quwoquan_service/services/content-service/internal/domain/reaction"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 	"sort"
 	"strconv"
 	"strings"
@@ -49,108 +50,6 @@ func (s *PostService) GetPostOrTombstone(ctx context.Context, postID string) (*p
 	return nil, false, deleted
 }
 
-func (s *PostService) GetPostForViewer(
-	ctx context.Context,
-	postID, viewerID string,
-	viewerCircleIDs []string,
-) (*postmodel.Post, bool, bool, bool) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "content.GetPostForViewer",
-		attribute.String("post.id", postID))
-	defer func() { rtobs.EndSpan(span, nil) }()
-	post, ok, deleted := s.GetPostOrTombstone(ctx, postID)
-	if !ok {
-		return nil, false, deleted, false
-	}
-	if !canViewPost(post, viewerID, viewerCircleIDs) {
-		return nil, false, false, true
-	}
-	return post, true, false, false
-}
-
-// LikePost 点赞（幂等 upsert）。actor 维度由 userID（账号）优先、否则 deviceActorID
-// （隐私安全派生设备标识，游客设备维度）解析；账号维度与设备维度独立计数、不并账。
-func (s *PostService) LikePost(ctx context.Context, postID, userID, deviceActorID string) (int64, bool, error) {
-	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if !ok {
-		return 0, false, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
-	}
-	actorKey := identity.ReactionActorKey(userID, deviceActorID)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	byPost, ok := s.reactions[post.ID]
-	if !ok {
-		byPost = map[string]contentReactionState{}
-		s.reactions[post.ID] = byPost
-	}
-	state := byPost[actorKey]
-	changed := !state.Liked
-	if changed {
-		state.Liked = true
-		byPost[actorKey] = state
-		post.LikeCount++
-		post.UpdatedAt = time.Now().UTC()
-		_ = s.store.Update(ctx, post.ID, post)
-	}
-	return post.LikeCount, changed, nil
-}
-
-// UnlikePost 取消点赞（幂等）。actor 维度解析与 LikePost 一致。
-func (s *PostService) UnlikePost(ctx context.Context, postID, userID, deviceActorID string) (int64, bool, error) {
-	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if !ok {
-		return 0, false, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found"),
-			"内容不存在",
-			"post not found",
-		)
-	}
-	actorKey := identity.ReactionActorKey(userID, deviceActorID)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	byPost, ok := s.reactions[post.ID]
-	if !ok {
-		byPost = map[string]contentReactionState{}
-		s.reactions[post.ID] = byPost
-	}
-	state := byPost[actorKey]
-	changed := state.Liked
-	if changed {
-		state.Liked = false
-		byPost[actorKey] = state
-		if post.LikeCount > 0 {
-			post.LikeCount--
-		}
-		post.UpdatedAt = time.Now().UTC()
-		_ = s.store.Update(ctx, post.ID, post)
-	}
-	return post.LikeCount, changed, nil
-}
-
-// GetReactionState 读取当前 actor 的互动状态。actor 维度由 userID（账号）优先、
-// 否则 deviceActorID（游客设备维度）解析，使游客也能读回自身设备态点赞/分享。
-func (s *PostService) GetReactionState(postID, userID, deviceActorID string) (liked, shared bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	normalizedPostID := strings.TrimSpace(postID)
-	actorKey := identity.ReactionActorKey(userID, deviceActorID)
-	shared = hasActiveShareForUser(s.reshares[normalizedPostID], actorKey)
-	byPost, ok := s.reactions[normalizedPostID]
-	if !ok {
-		return false, shared
-	}
-	state, ok := byPost[actorKey]
-	if !ok {
-		return false, shared
-	}
-	return state.Liked, shared
-}
-
 func (s *PostService) ListProfileInteractionActivities(
 	ctx context.Context,
 	profileSubjectID string,
@@ -175,8 +74,17 @@ func (s *PostService) ListProfileInteractionActivities(
 		limit = profileInteractionActivityMaxLimit
 	}
 
-	// 点赞/转发仍为进程内互动：读锁内只做轻量快照（不触达外部 store、不构造投影）。
-	refs := s.snapshotProfileInteractionRefs(profileSubjectID, direction)
+	// 点赞来自 ContentReaction 权威聚合的公开 persona Slice；分享来自
+	// OutboundShareFact 消费者维护的耐久 projection。两者都禁止回退进程内状态。
+	reactionRefs, err := s.gatherReactionInteractionRefs(ctx, profileSubjectID, direction)
+	if err != nil {
+		return nil, "", false, err
+	}
+	shareRefs, err := s.gatherShareInteractionRefs(ctx, profileSubjectID, direction)
+	if err != nil {
+		return nil, "", false, err
+	}
+	refs := append(reactionRefs, shareRefs...)
 	// 评论互动已迁出内存：经 commentStore 持久化读取（Mongo+Redis 或内存降级）。
 	commentRefs, err := s.gatherCommentInteractionRefs(ctx, profileSubjectID, direction)
 	if err != nil {
@@ -191,9 +99,18 @@ func (s *PostService) ListProfileInteractionActivities(
 			commentIDs = append(commentIDs, ref.commentModel.ID)
 		}
 	}
-	viewerReactions := map[string]commentdomain.Reaction{}
+	viewerReactions := map[string]reactiondomain.Value{}
 	if viewerID != "" && len(commentIDs) > 0 {
-		if m, rerr := s.commentReactionStore.ReactionsForUser(ctx, viewerID, commentIDs); rerr == nil {
+		if s.commentReactionValues == nil {
+			return nil, "", false, rterr.NewUnavailable(
+				rterr.ModuleContent, "互动加载失败，请稍后重试", "CommentReactionValueReader is required",
+			)
+		}
+		viewerActor, actorErr := reactiondomain.NewActor(reactiondomain.ActorDimensionPersona, viewerID)
+		if actorErr != nil {
+			return nil, "", false, rterr.NewInvalidArgument(rterr.ModuleContent, "互动身份无效", actorErr.Error())
+		}
+		if m, rerr := s.commentReactionValues.ReadCommentReactionValues(ctx, viewerActor, commentIDs); rerr == nil {
 			viewerReactions = m
 		} else {
 			s.logger.Warn("ListProfileInteractionActivities: viewer reactions failed", "error", rerr.Error())
@@ -216,6 +133,9 @@ func (s *PostService) ListProfileInteractionActivities(
 			continue
 		}
 		createdAt := post.UpdatedAt
+		if !ref.occurredAt.IsZero() {
+			createdAt = ref.occurredAt
+		}
 		viewerReaction := ""
 		if ref.activityType == "comment" && ref.commentModel != nil {
 			createdAt = ref.commentModel.CreatedAt
@@ -318,7 +238,52 @@ type profileInteractionRef struct {
 	activityType string
 	actorID      string
 	postID       string
-	commentModel *postmodel.Comment
+	occurredAt   time.Time
+	commentModel *commentmodel.ReadModel
+}
+
+func (s *PostService) gatherReactionInteractionRefs(
+	ctx context.Context,
+	profileSubjectID string,
+	direction string,
+) ([]profileInteractionRef, error) {
+	if s.reactionActivityReader == nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"互动加载失败，请稍后重试",
+			"ContentReaction profile activity reader is required",
+		)
+	}
+	actorID := ""
+	if direction == "sent" {
+		actorID = profileSubjectID
+	}
+	slices, err := s.reactionActivityReader.ListActiveProfileReactions(
+		ctx,
+		actorID,
+		profileInteractionActivityGatherCap,
+	)
+	if err != nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent,
+			"互动加载失败，请稍后重试",
+			"gather ContentReaction profile activities failed: "+err.Error(),
+		)
+	}
+	refs := make([]profileInteractionRef, 0, len(slices))
+	for _, slice := range slices {
+		if !profileInteractionActorMatches(direction, slice.ActorID, profileSubjectID) {
+			continue
+		}
+		refs = append(refs, profileInteractionRef{
+			activityID:   "like:" + strings.TrimSpace(slice.ReactionID),
+			activityType: "like",
+			actorID:      strings.TrimSpace(slice.ActorID),
+			postID:       strings.TrimSpace(slice.PostID),
+			occurredAt:   slice.OccurredAt.UTC(),
+		})
+	}
+	return refs, nil
 }
 
 // gatherCommentInteractionRefs 经 commentStore 收集匹配方向的评论互动引用：
@@ -329,10 +294,17 @@ func (s *PostService) gatherCommentInteractionRefs(
 	profileSubjectID string,
 	direction string,
 ) ([]profileInteractionRef, error) {
-	var comments []postmodel.Comment
+	if s.commentAuthorPage == nil || s.commentReceivedPage == nil {
+		return nil, rterr.NewUnavailable(
+			rterr.ModuleContent, "互动加载失败，请稍后重试", "Comment profile readers are required",
+		)
+	}
+	var comments []commentmodel.ReadModel
 	if direction == "sent" {
-		drained, err := s.drainProfileInteractionComments(func(cursor string, limit int) (commentdomain.Page, error) {
-			return s.commentStore.ListByAuthor(ctx, profileSubjectID, cursor, limit)
+		drained, err := s.drainProfileInteractionComments(func(cursor string, limit int) (commentmodel.Page, error) {
+			return s.commentAuthorPage.ListByAuthor(
+				ctx, profileSubjectID, commentports.PageRequest{Cursor: cursor, Limit: limit},
+			)
 		})
 		if err != nil {
 			return nil, rterr.NewUnavailable(
@@ -349,8 +321,11 @@ func (s *PostService) gatherCommentInteractionRefs(
 		if len(postIDs) == 0 {
 			return nil, nil
 		}
-		drained, err := s.drainProfileInteractionComments(func(cursor string, limit int) (commentdomain.Page, error) {
-			return s.commentStore.ListReceivedByPostAuthor(ctx, profileSubjectID, postIDs, cursor, limit)
+		drained, err := s.drainProfileInteractionComments(func(cursor string, limit int) (commentmodel.Page, error) {
+			return s.commentReceivedPage.ListReceivedByPostAuthor(
+				ctx, profileSubjectID, postIDs,
+				commentports.PageRequest{Cursor: cursor, Limit: limit},
+			)
 		})
 		if err != nil {
 			return nil, rterr.NewUnavailable(
@@ -362,7 +337,7 @@ func (s *PostService) gatherCommentInteractionRefs(
 	refs := make([]profileInteractionRef, 0, len(comments))
 	for i := range comments {
 		c := comments[i]
-		actorID := strings.TrimSpace(c.AuthorId)
+		actorID := strings.TrimSpace(c.AuthorID)
 		if !profileInteractionActorMatches(direction, actorID, profileSubjectID) {
 			continue
 		}
@@ -371,7 +346,8 @@ func (s *PostService) gatherCommentInteractionRefs(
 			activityID:   fmt.Sprintf("comment:%s", c.ID),
 			activityType: "comment",
 			actorID:      actorID,
-			postID:       strings.TrimSpace(c.PostId),
+			postID:       strings.TrimSpace(c.PostID),
+			occurredAt:   c.CreatedAt.UTC(),
 			commentModel: &model,
 		})
 	}
@@ -381,18 +357,18 @@ func (s *PostService) gatherCommentInteractionRefs(
 // drainProfileInteractionComments 经评论存储游标逐页 drain 至物化上界（内存护栏），
 // 供主页互动列表 keyset 分页物化稳定全序；替换旧的“单次 50 条 + 静默丢尾”读取。
 func (s *PostService) drainProfileInteractionComments(
-	fetch func(cursor string, limit int) (commentdomain.Page, error),
-) ([]postmodel.Comment, error) {
+	fetch func(cursor string, limit int) (commentmodel.Page, error),
+) ([]commentmodel.ReadModel, error) {
 	const batch = 100
-	comments := make([]postmodel.Comment, 0, batch)
+	comments := make([]commentmodel.ReadModel, 0, batch)
 	cursor := ""
 	for len(comments) < profileInteractionActivityGatherCap {
 		page, err := fetch(cursor, batch)
 		if err != nil {
 			return nil, err
 		}
-		comments = append(comments, page.Comments...)
-		if page.NextCursor == "" || len(page.Comments) == 0 {
+		comments = append(comments, page.Items...)
+		if page.NextCursor == "" || len(page.Items) == 0 {
 			break
 		}
 		cursor = page.NextCursor
@@ -403,59 +379,33 @@ func (s *PostService) drainProfileInteractionComments(
 	return comments, nil
 }
 
-// snapshotProfileInteractionRefs 在读锁内收集匹配方向/主页主体的点赞/转发互动引用。
-// 仅做内存遍历与方向侧（actor）过滤，不调用外部 post store；received 的作者归属在锁外
-// hydrate 后再校验。评论互动改由 gatherCommentInteractionRefs 经持久化层收集。
-func (s *PostService) snapshotProfileInteractionRefs(
+func (s *PostService) gatherShareInteractionRefs(
+	ctx context.Context,
 	profileSubjectID string,
 	direction string,
-) []profileInteractionRef {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	refs := make([]profileInteractionRef, 0)
-
-	for postID, byUser := range s.reactions {
-		pid := strings.TrimSpace(postID)
-		for actorID, state := range byUser {
-			if !state.Liked {
-				continue
-			}
-			if !profileInteractionActorMatches(direction, actorID, profileSubjectID) {
-				continue
-			}
-			refs = append(refs, profileInteractionRef{
-				activityID:   fmt.Sprintf("like:%s:%s", pid, actorID),
-				activityType: "like",
-				actorID:      actorID,
-				postID:       pid,
-			})
-		}
+) ([]profileInteractionRef, error) {
+	if s.shareInteractionStore == nil {
+		return nil, contentgenerated.AppErrorFromInteractionReadModelUnavailable(
+			"OutboundShareFact interaction projection is not configured",
+		)
 	}
-
-	for postID, shares := range s.reshares {
-		pid := strings.TrimSpace(postID)
-		for shareKey, active := range shares {
-			if !active {
-				continue
-			}
-			actorID := shareActorID(shareKey)
-			if actorID == "" {
-				continue
-			}
-			if !profileInteractionActorMatches(direction, actorID, profileSubjectID) {
-				continue
-			}
-			refs = append(refs, profileInteractionRef{
-				activityID:   fmt.Sprintf("share:%s:%s", pid, actorID),
-				activityType: "share",
-				actorID:      actorID,
-				postID:       pid,
-			})
-		}
+	occurrences, _, err := s.shareInteractionStore.List(ctx, postdomain.ShareInteractionQuery{
+		SubAccountID: strings.TrimSpace(profileSubjectID),
+		Direction:    direction,
+		Limit:        profileInteractionActivityGatherCap,
+	})
+	if err != nil {
+		return nil, contentgenerated.AppErrorFromInteractionReadModelUnavailable(err.Error())
 	}
-
-	return refs
+	refs := make([]profileInteractionRef, 0, len(occurrences))
+	for _, item := range occurrences {
+		refs = append(refs, profileInteractionRef{
+			activityID: item.InteractionID, activityType: "share",
+			actorID: item.ActorSubAccountID, postID: item.TargetContentID,
+			occurredAt: item.OccurredAt,
+		})
+	}
+	return refs, nil
 }
 
 // profileInteractionActorMatches 仅做方向侧（actor）匹配：sent 要求 actor 即主页主体；
@@ -463,17 +413,9 @@ func (s *PostService) snapshotProfileInteractionRefs(
 func profileInteractionActorMatches(direction, actorID, profileSubjectID string) bool {
 	actorID = strings.TrimSpace(actorID)
 	if direction == "sent" {
-		return actorID == profileSubjectID
+		return actorID == strings.TrimSpace(profileSubjectID)
 	}
-	return actorID != profileSubjectID
-}
-
-func shareActorID(shareKey string) string {
-	parts := strings.Split(strings.TrimSpace(shareKey), ":")
-	if len(parts) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(parts[len(parts)-1])
+	return actorID != strings.TrimSpace(profileSubjectID)
 }
 
 // prepareCommentAttachments locks the in-memory media asset table only for the

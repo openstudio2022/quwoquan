@@ -34,7 +34,6 @@ List<CloudJsonMap>? _mutationMapList(Object? v) {
 /// HTTP body for CreatePost (metadata writable_fields).
 class CreatePostRequestWire {
   CreatePostRequestWire({
-    this.type,
     this.contentType,
     this.contentIdentity,
     this.title,
@@ -59,9 +58,6 @@ class CreatePostRequestWire {
     this.primaryHomepageType,
     this.primaryHomepageSnapshot,
     this.visibility,
-    this.circleIds,
-    this.groupId,
-    this.nodeId,
     this.assistantUsePolicy,
     this.sourcePostId,
     this.sourceType,
@@ -72,7 +68,6 @@ class CreatePostRequestWire {
     this.personaContextVersion,
   });
 
-  final String? type;
   final String? contentType;
   final String? contentIdentity;
   final String? title;
@@ -97,9 +92,6 @@ class CreatePostRequestWire {
   final String? primaryHomepageType;
   final CloudJsonMap? primaryHomepageSnapshot;
   final String? visibility;
-  final List<String>? circleIds;
-  final String? groupId;
-  final String? nodeId;
   final String? assistantUsePolicy;
   final String? sourcePostId;
   final String? sourceType;
@@ -111,7 +103,6 @@ class CreatePostRequestWire {
 
   CloudJsonMap toWire() {
     final m = <String, dynamic>{};
-    _mutationPutOpt(m, 'type', type);
     _mutationPutOpt(m, 'contentType', contentType);
     _mutationPutOpt(m, 'contentIdentity', contentIdentity);
     _mutationPutOpt(m, 'title', title);
@@ -136,9 +127,6 @@ class CreatePostRequestWire {
     _mutationPutOpt(m, 'primaryHomepageType', primaryHomepageType);
     if (primaryHomepageSnapshot != null) m['primaryHomepageSnapshot'] = primaryHomepageSnapshot!;
     _mutationPutOpt(m, 'visibility', visibility);
-    if (circleIds != null) m['circleIds'] = circleIds!;
-    _mutationPutOpt(m, 'groupId', groupId);
-    _mutationPutOpt(m, 'nodeId', nodeId);
     _mutationPutOpt(m, 'assistantUsePolicy', assistantUsePolicy);
     _mutationPutOpt(m, 'sourcePostId', sourcePostId);
     _mutationPutOpt(m, 'sourceType', sourceType);
@@ -152,7 +140,6 @@ class CreatePostRequestWire {
 
   factory CreatePostRequestWire.fromMap(CloudJsonMap m) {
     return CreatePostRequestWire(
-      type: m['type']?.toString(),
       contentType: m['contentType']?.toString(),
       contentIdentity: m['contentIdentity']?.toString(),
       title: m['title']?.toString(),
@@ -177,9 +164,6 @@ class CreatePostRequestWire {
       primaryHomepageType: m['primaryHomepageType']?.toString(),
       primaryHomepageSnapshot: _mutationStringKeyedMap(m['primaryHomepageSnapshot']),
       visibility: m['visibility']?.toString(),
-      circleIds: _mutationStringList(m['circleIds']),
-      groupId: m['groupId']?.toString(),
-      nodeId: m['nodeId']?.toString(),
       assistantUsePolicy: m['assistantUsePolicy']?.toString(),
       sourcePostId: m['sourcePostId']?.toString(),
       sourceType: m['sourceType']?.toString(),
@@ -219,9 +203,6 @@ class UpdatePostRequestWire {
     this.primaryHomepageType,
     this.primaryHomepageSnapshot,
     this.visibility,
-    this.circleIds,
-    this.groupId,
-    this.nodeId,
     this.assistantUsePolicy,
   });
 
@@ -249,9 +230,6 @@ class UpdatePostRequestWire {
   final String? primaryHomepageType;
   final CloudJsonMap? primaryHomepageSnapshot;
   final String? visibility;
-  final List<String>? circleIds;
-  final String? groupId;
-  final String? nodeId;
   final String? assistantUsePolicy;
 
   CloudJsonMap toWire() {
@@ -280,9 +258,6 @@ class UpdatePostRequestWire {
     _mutationPutOpt(m, 'primaryHomepageType', primaryHomepageType);
     if (primaryHomepageSnapshot != null) m['primaryHomepageSnapshot'] = primaryHomepageSnapshot!;
     _mutationPutOpt(m, 'visibility', visibility);
-    if (circleIds != null) m['circleIds'] = circleIds!;
-    _mutationPutOpt(m, 'groupId', groupId);
-    _mutationPutOpt(m, 'nodeId', nodeId);
     _mutationPutOpt(m, 'assistantUsePolicy', assistantUsePolicy);
     return m;
   }
@@ -313,9 +288,6 @@ class UpdatePostRequestWire {
       primaryHomepageType: m['primaryHomepageType']?.toString(),
       primaryHomepageSnapshot: _mutationStringKeyedMap(m['primaryHomepageSnapshot']),
       visibility: m['visibility']?.toString(),
-      circleIds: _mutationStringList(m['circleIds']),
-      groupId: m['groupId']?.toString(),
-      nodeId: m['nodeId']?.toString(),
       assistantUsePolicy: m['assistantUsePolicy']?.toString(),
     );
   }
@@ -329,9 +301,6 @@ class PublishPostRequestWire {
     this.primaryHomepageType,
     this.primaryHomepageSnapshot,
     this.visibility,
-    this.circleIds,
-    this.groupId,
-    this.nodeId,
     this.assistantUsePolicy,
   });
 
@@ -340,9 +309,6 @@ class PublishPostRequestWire {
   final String? primaryHomepageType;
   final CloudJsonMap? primaryHomepageSnapshot;
   final String? visibility;
-  final List<String>? circleIds;
-  final String? groupId;
-  final String? nodeId;
   final String? assistantUsePolicy;
 
   CloudJsonMap toWire() {
@@ -352,9 +318,6 @@ class PublishPostRequestWire {
     _mutationPutOpt(m, 'primaryHomepageType', primaryHomepageType);
     if (primaryHomepageSnapshot != null) m['primaryHomepageSnapshot'] = primaryHomepageSnapshot!;
     _mutationPutOpt(m, 'visibility', visibility);
-    if (circleIds != null) m['circleIds'] = circleIds!;
-    _mutationPutOpt(m, 'groupId', groupId);
-    _mutationPutOpt(m, 'nodeId', nodeId);
     _mutationPutOpt(m, 'assistantUsePolicy', assistantUsePolicy);
     return m;
   }
@@ -366,9 +329,6 @@ class PublishPostRequestWire {
       primaryHomepageType: m['primaryHomepageType']?.toString(),
       primaryHomepageSnapshot: _mutationStringKeyedMap(m['primaryHomepageSnapshot']),
       visibility: m['visibility']?.toString(),
-      circleIds: _mutationStringList(m['circleIds']),
-      groupId: m['groupId']?.toString(),
-      nodeId: m['nodeId']?.toString(),
       assistantUsePolicy: m['assistantUsePolicy']?.toString(),
     );
   }
@@ -381,9 +341,6 @@ class UpdatePostSettingsRequestWire {
     this.primaryHomepageId,
     this.primaryHomepageType,
     this.primaryHomepageSnapshot,
-    this.circleIds,
-    this.groupId,
-    this.nodeId,
     this.assistantUsePolicy,
   });
 
@@ -391,9 +348,6 @@ class UpdatePostSettingsRequestWire {
   final String? primaryHomepageId;
   final String? primaryHomepageType;
   final CloudJsonMap? primaryHomepageSnapshot;
-  final List<String>? circleIds;
-  final String? groupId;
-  final String? nodeId;
   final String? assistantUsePolicy;
 
   CloudJsonMap toWire() {
@@ -402,9 +356,6 @@ class UpdatePostSettingsRequestWire {
     _mutationPutOpt(m, 'primaryHomepageId', primaryHomepageId);
     _mutationPutOpt(m, 'primaryHomepageType', primaryHomepageType);
     if (primaryHomepageSnapshot != null) m['primaryHomepageSnapshot'] = primaryHomepageSnapshot!;
-    if (circleIds != null) m['circleIds'] = circleIds!;
-    _mutationPutOpt(m, 'groupId', groupId);
-    _mutationPutOpt(m, 'nodeId', nodeId);
     _mutationPutOpt(m, 'assistantUsePolicy', assistantUsePolicy);
     return m;
   }
@@ -415,9 +366,6 @@ class UpdatePostSettingsRequestWire {
       primaryHomepageId: m['primaryHomepageId']?.toString(),
       primaryHomepageType: m['primaryHomepageType']?.toString(),
       primaryHomepageSnapshot: _mutationStringKeyedMap(m['primaryHomepageSnapshot']),
-      circleIds: _mutationStringList(m['circleIds']),
-      groupId: m['groupId']?.toString(),
-      nodeId: m['nodeId']?.toString(),
       assistantUsePolicy: m['assistantUsePolicy']?.toString(),
     );
   }
@@ -439,9 +387,6 @@ class PromotePostToWorkRequestWire {
     this.primaryHomepageType,
     this.primaryHomepageSnapshot,
     this.visibility,
-    this.circleIds,
-    this.groupId,
-    this.nodeId,
     this.assistantUsePolicy,
   });
 
@@ -458,9 +403,6 @@ class PromotePostToWorkRequestWire {
   final String? primaryHomepageType;
   final CloudJsonMap? primaryHomepageSnapshot;
   final String? visibility;
-  final List<String>? circleIds;
-  final String? groupId;
-  final String? nodeId;
   final String? assistantUsePolicy;
 
   CloudJsonMap toWire() {
@@ -478,9 +420,6 @@ class PromotePostToWorkRequestWire {
     _mutationPutOpt(m, 'primaryHomepageType', primaryHomepageType);
     if (primaryHomepageSnapshot != null) m['primaryHomepageSnapshot'] = primaryHomepageSnapshot!;
     _mutationPutOpt(m, 'visibility', visibility);
-    if (circleIds != null) m['circleIds'] = circleIds!;
-    _mutationPutOpt(m, 'groupId', groupId);
-    _mutationPutOpt(m, 'nodeId', nodeId);
     _mutationPutOpt(m, 'assistantUsePolicy', assistantUsePolicy);
     return m;
   }
@@ -500,9 +439,6 @@ class PromotePostToWorkRequestWire {
       primaryHomepageType: m['primaryHomepageType']?.toString(),
       primaryHomepageSnapshot: _mutationStringKeyedMap(m['primaryHomepageSnapshot']),
       visibility: m['visibility']?.toString(),
-      circleIds: _mutationStringList(m['circleIds']),
-      groupId: m['groupId']?.toString(),
-      nodeId: m['nodeId']?.toString(),
       assistantUsePolicy: m['assistantUsePolicy']?.toString(),
     );
   }

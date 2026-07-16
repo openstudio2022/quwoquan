@@ -1,0 +1,7 @@
+{
+  "label": "地形地貌",
+  "labelEn": "Landform",
+  "description": "地理科学中的地表形态分类；具体自然地物实例可落入 Entity/地点/自然景观，并由 qwq-data taxonomy bootstrap-geo-landmarks 生成",
+  "createdAt": "2026-05-15T00:00:00+08:00",
+  "updatedAt": "2026-05-15T00:00:00+08:00"
+}

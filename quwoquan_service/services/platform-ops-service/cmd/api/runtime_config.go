@@ -21,6 +21,25 @@ type platformRuntimeConfig struct {
 			Addr string `yaml:"addr"`
 		} `yaml:"http"`
 	} `yaml:"service"`
+	Postgres struct {
+		DSN string `yaml:"dsn"`
+	} `yaml:"postgres"`
+}
+
+func applyPlatformEnvOverrides(cfg *platformRuntimeConfig) {
+	if dsn := strings.TrimSpace(os.Getenv("POSTGRES_DSN")); dsn != "" {
+		cfg.Postgres.DSN = dsn
+	}
+	if strings.HasPrefix(strings.TrimSpace(cfg.Postgres.DSN), "${") {
+		cfg.Postgres.DSN = ""
+	}
+}
+
+func validatePlatformRuntimeConfig(cfg platformRuntimeConfig) error {
+	if strings.TrimSpace(cfg.Postgres.DSN) == "" {
+		return fmt.Errorf("postgres.dsn is required")
+	}
+	return nil
 }
 
 func resolvePlatformRuntimeIdentity() (serviceName, appEnv, configRoot, configVersion, imageVersion string) {

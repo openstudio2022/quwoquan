@@ -1,7 +1,7 @@
 version: 1
 domain: user
-entity_name: UserWork
-aggregate_root: false
+entity: UserWork
+object_kind: projection
 
 description: |
   用户主页展示的代表作品/作品集。

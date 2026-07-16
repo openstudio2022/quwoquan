@@ -2,80 +2,63 @@
 name: /crawl
 id: crawl
 category: Workflow
-description: quwoquan_data 端到端内容供给总控
+description: quwoquan_data 单 execution 内容生产与发布总门面
 ---
 
 ## 目标
 
-`/crawl` 是自然语言路由入口，实际执行必须收束到 `qwq-data task` 主干。
-当前不再直接操作 `quwoquan_data/runtime/**`、`.qwq_sandbox/**`、`artifacts/**`
-或一次性 runner shell。
+把一个内容目标从运行参数、真实来源、五阶段生产、review、canonical publish、
+immutable release 一直编排到环境导入。只允许调用 `qwq-data task geo-homepages` 门面，
+不暴露阶段角色命令、退役的双层运行身份或第二运行根。
 
 ## 自然语言等价触发
 
-当用户说“跑抓取总控”“跑内容候选到发布闭环”“按省市区生成主页批次”等价于 `/crawl`。
+用户说“按省市区生成主页”“跑内容任务到发布”“生产内容并导入环境”时，均按本命令语义执行。
 
 ## Spec Entry
 
-- AppRoot Journey/Scenario：`runtime/system-architecture-and-engineering-guide`
-- L1/L2/L3：按当前数据任务或目录治理 Story 绑定。
-- 验收意图：`SIT + contract`
-- 测试证据：`local_contract + api_integration`
+- AppRoot Journey/Scenario：按内容消费 Journey 绑定。
+- L1/L2/L3：按当前内容垂类、能力与 Story 绑定。
+- 验收意图：`contract + SIT + UAT`。
+- 测试证据：`local_contract + api_integration + user_acceptance`。
 
 ## Pre-work Reflection
 
-- metadata-first：读取 `quwoquan_service/contracts/metadata/**`，不自建第二真相源。
-- data CLI-first：只用 `python3 quwoquan_data/scripts/cli.py`。
-- output-first：运行输出只进 `.qwq_output/**`。
-- E2E：需要证明 Data -> Service -> App -> Observability 无断点时再触发跨域验证。
+- 可复用 recipe/prompt/template/schema 不得包含地域、日期、实体或输出路径。
+- 运行参数必须包含可读 `executionId`；同 ID 只 resume，新尝试递增 sequence 并写 `retryOf`。
+- 正文由 Agent 基于 source 与 prompt 创作；不得用 fixture、拼接正文或历史产物补绿。
+- 凭证默认只从仓外 `~/.config/quwoquan/cursor_api_key` 动态读取；显式
+  `QWQ_CURSOR_API_KEY_FILE` 仅用于受控替换。开始前执行 `task preflight`。
 
-## 真相源
-
-- 任务定义：`quwoquan_data/control_plane/tasks/**/task.yaml`
-- 可复用配方：`quwoquan_data/control_plane/families/**/*.recipe.yaml`
-- 运行输出：`.qwq_output/local/data-runtime/**`
-- 运行报告：`.qwq_output/runs/data/**`
-- 发布真相源：`quwoquan_data/publish/**`
-- 发布包：`.qwq_output/release/data/**`
-
-## 主入口
-
-地域主页批次使用薄门面：
+## 唯一入口
 
 ```bash
+python3 quwoquan_data/scripts/cli.py task preflight --json
 python3 quwoquan_data/scripts/cli.py task geo-homepages \
-  --profile h100 \
+  --execution-id YYYYMMDD--travel-homepage-coverage--cn-zhejiang--canary-001 \
+  --milestone canary \
   --country 中国 \
-  --province 四川省 \
-  --limit 100 \
+  --province 浙江省 \
+  --discovery quwoquan_data/verticals/travel/coverage/中国/浙江省 \
+  --limit 1 \
   --stage run
 ```
 
-通用批次编排使用 recipe：
+## 输出边界
 
-```bash
-python3 quwoquan_data/scripts/cli.py task run-recipe \
-  content/travel/homepage/h100 \
-  --limit 100 \
-  --stage run
-```
-
-## 验收
-
-```bash
-python3 quwoquan_data/scripts/cli.py task lint
-python3 quwoquan_data/scripts/cli.py verify output-root-isolation
-python3 quwoquan_data/scripts/cli.py verify --scope current
-```
-
-禁止把旧 `runtime/`、`.qwq_sandbox/`、`artifacts/` 路径作为当前入口或证据。
+- 可复用源码：`quwoquan_data/{control_plane,verticals,reference,prompts,templates,schema}/`。
+- 单执行工作包：`.qwq_output/data/tasks/<executionId>/`。
+- 发布业务真相源：`quwoquan_data/publish/{creators,entities,posts,media,tags}/`。
+- 不可变发布包：`.qwq_output/data/releases/<releaseId>/`。
+- 环境执行证据：`.qwq_output/env/<env>/runs/data-release/<releaseId>/<runId>/`。
 
 ## Exit Review
 
-- 规格达成：任务定义、recipe、运行参数与发布真相源一致。
-- 测试证据：至少完成 `task lint` 与 `verify output-root-isolation`。
-- 剩余风险：如需真实下载、ship/import 或远端环境，必须单独列明未跑原因。
+```bash
+python3 quwoquan_data/scripts/cli.py verify execution-readiness --execution-id <executionId>
+python3 quwoquan_data/scripts/cli.py verify output-root-isolation
+python3 quwoquan_data/scripts/cli.py verify publish-purity
+```
 
-## 输出
-
-输出只允许是 `.qwq_output/**` 报告、`quwoquan_data/publish/**` 发布真相源和必要的验收摘要。
+如来源、权利、Cursor、环境导入、API 或 App UAT 未闭合，返回带 executionId 的
+`GATE_BLOCK`，不得跳过或复用旧输出。

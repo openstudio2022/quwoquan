@@ -58,21 +58,24 @@ void main() {
       );
     });
 
-    test('防死循环：buildLoginRouteLocation 可关闭 guest pop（关闭只走安全兜底）', () {
+    test('防死循环：buildLoginRouteLocation 显式编码安全关闭策略', () {
       final loc = buildLoginRouteLocation(
         reasonName: AuthGateReason.openChat.name,
         redirect: AppRoutePaths.chat,
         dismissFallback: AppRoutePaths.home,
-        allowGuestDismissPop: false,
+        dismissPolicy: LoginDismissPolicy.safeFallback,
       );
       final uri = Uri.parse(loc);
       expect(uri.path, AppRoutePaths.loginPathTemplate);
-      expect(uri.queryParameters[loginGuestDismissPopQueryParam], '0');
       expect(
-        loginGuestDismissCanPopFromQuery(
+        uri.queryParameters[loginGuestDismissPopQueryParam],
+        LoginDismissPolicy.safeFallback.name,
+      );
+      expect(
+        loginDismissPolicyFromQuery(
           uri.queryParameters[loginGuestDismissPopQueryParam],
         ),
-        isFalse,
+        LoginDismissPolicy.safeFallback,
       );
       // 即便游客 pop 失败兜底，也只会落到安全页而非受限路由。
       expect(
@@ -89,12 +92,15 @@ void main() {
         reasonName: AuthGateReason.comment.name,
       );
       final uri = Uri.parse(loc);
-      expect(uri.queryParameters[loginGuestDismissPopQueryParam], '1');
       expect(
-        loginGuestDismissCanPopFromQuery(
+        uri.queryParameters[loginGuestDismissPopQueryParam],
+        LoginDismissPolicy.popPrevious.name,
+      );
+      expect(
+        loginDismissPolicyFromQuery(
           uri.queryParameters[loginGuestDismissPopQueryParam],
         ),
-        isTrue,
+        LoginDismissPolicy.popPrevious,
       );
     });
 

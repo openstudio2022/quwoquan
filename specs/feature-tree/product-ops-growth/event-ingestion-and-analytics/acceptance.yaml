@@ -23,8 +23,8 @@ sit_acceptance:
       - file: quwoquan_service/scripts/runtime/observability/test_es_cli.py
       recorded:
       - file: quwoquan_service/services/product-ops-service/cmd/api/main__local_contract_test.go
-      - file: quwoquan_service/services/product-ops-service/tests/api_integration/visit_event_contract__api_integration_test.go
-    status: implemented
+      - file: quwoquan_service/services/product-ops-service/tests/local_contract/visit_event_contract__local_contract_test.go
+    status: partial
     test_evidence:
       primary:
       - layer: local_contract
@@ -33,13 +33,6 @@ sit_acceptance:
         - local_contract.product_ops_growth.event_ingestion_and_analytics.sit1.sit1_local_contract
         envs: &id001
         - local
-      - layer: api_integration
-        suite: sit1_api_integration
-        cases:
-        - api_integration.product_ops_growth.event_ingestion_and_analytics.sit1.sit1_api_integration
-        envs:
-        - beta
-        - gamma
       supporting:
       - layer: local_contract
         suite: sit1_local_contract
@@ -48,6 +41,7 @@ sit_acceptance:
         envs: *id001
     notes:
     - '[migrated_from_recorded_noncanonical] quwoquan_service/scripts/runtime/observability/test_es_cli.py'
+    - 真实持久化与镜像后端的 Beta/Gamma 集成证据未闭合，内存 Store 用例已归位 local_contract。
 execution:
   local_gate:
   - bash quwoquan_ops/gate/scaffold/verify_feature_tree_refactor.sh

@@ -115,6 +115,16 @@ func TestBackfillEnsureIndexFailurePropagates(t *testing.T) {
 	}
 }
 
+func TestBackfillListFailurePropagates(t *testing.T) {
+	bulk := &recordingBulk{}
+	if _, err := Backfill(context.Background(), bulk, fakeReader{listErr: errors.New("malformed primary key")}, 0); err == nil {
+		t.Fatal("expected list failure to stop search backfill")
+	}
+	if len(bulk.events) != 0 {
+		t.Fatalf("list failure must not write index documents: %#v", bulk.events)
+	}
+}
+
 func TestBackfillNilInputsNoOp(t *testing.T) {
 	if _, err := Backfill(context.Background(), nil, fakeReader{}, 0); err != nil {
 		t.Fatalf("nil indexer must be a no-op, got %v", err)

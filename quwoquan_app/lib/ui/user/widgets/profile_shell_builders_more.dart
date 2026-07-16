@@ -1,7 +1,7 @@
 part of 'profile_shell.dart';
 
 extension _ProfileShellBuildersMore on _ProfileShellState {
-  /// 举报用户：登录门保障 + 原因选择，经 [reportRepositoryProvider] 走 Remote。
+  /// 举报用户：登录门保障 + 原因选择，经类型化 command capability 走 Remote。
   void _gatedReportUser(BuildContext context) {
     runWhenLoggedIn(ref, context, AuthGateReason.report, () async {
       final reason = await showAppActionSheet<_ProfileReportReason>(
@@ -23,11 +23,13 @@ extension _ProfileShellBuildersMore on _ProfileShellState {
       if (reason == null || !context.mounted) return;
       try {
         await ref
-            .read(reportRepositoryProvider)
+            .read(userProfileContentReportCommandWriterProvider)
             .createReport(
-              targetId: widget.userId,
-              targetType: 'user',
-              reason: reason.code,
+              CreateContentReportCommand(
+                targetId: widget.userId,
+                targetType: ContentReportTargetType.user,
+                reason: reason.reason,
+              ),
             );
         if (context.mounted) {
           AppToast.show(context, UITextConstants.commentReportSubmitted);

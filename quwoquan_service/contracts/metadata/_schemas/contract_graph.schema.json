@@ -1,0 +1,590 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/contract_graph.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "objects",
+    "operations",
+    "projections",
+    "businessObjectMaps",
+    "readinessEvidence",
+    "objectReadiness",
+    "sources",
+    "documents"
+  ],
+  "properties": {
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "domain", "name", "kind", "kindExplicit", "sourcePath"]
+      }
+    },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "localId",
+          "domain",
+          "objectId",
+          "method",
+          "pathTemplate",
+          "kind",
+          "kindExplicit",
+          "authMode",
+          "commercial",
+          "reliability",
+          "privacy",
+          "telemetry",
+          "slo",
+          "sourcePath"
+        ],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "localId": { "type": "string", "minLength": 1 },
+          "domain": { "type": "string", "minLength": 1 },
+          "objectId": { "type": "string", "minLength": 1 },
+          "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+          "pathTemplate": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["command", "query", "session"] },
+          "kindExplicit": { "type": "boolean" },
+          "facet": { "type": "string", "minLength": 1 },
+          "facadeMethod": { "type": "string", "minLength": 1 },
+          "aggregateOwner": { "type": "string", "minLength": 1 },
+          "appendSink": { "type": "string", "minLength": 1 },
+          "mutationTarget": { "type": "string", "minLength": 1 },
+          "invariantTarget": { "type": "string", "minLength": 1 },
+          "sessionOwner": { "type": "string", "minLength": 1 },
+          "reader": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*Reader$"
+          },
+          "slice": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "actorRequirement": {
+            "enum": ["none", "account", "persona", "device", "persona_or_device"]
+          },
+          "requestEntity": { "type": "string", "minLength": 1 },
+          "requestBodyKind": { "enum": ["object", "none"] },
+          "responseEntity": { "type": "string", "minLength": 1 },
+          "responseBody": { "type": "string", "minLength": 1 },
+          "responseBodyKind": { "type": "string", "minLength": 1 },
+          "sourcePath": { "type": "string", "minLength": 1 },
+          "security": {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          },
+          "authMode": { "enum": ["deny", "public", "optional", "required"] },
+          "principal": {
+            "enum": ["public", "account", "persona", "device", "service", "admin", "operator"]
+          },
+          "scopes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "permissions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "ownershipPolicy": { "type": "string", "minLength": 1 },
+          "commercial": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["status", "explicit"],
+            "properties": {
+              "status": { "enum": ["ready", "blocked"] },
+              "explicit": { "type": "boolean" },
+              "blockReason": { "type": "string", "minLength": 1 },
+              "gapId": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_-]*$"
+              },
+              "targetStory": { "type": "string", "minLength": 1 }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": { "status": { "const": "blocked" } },
+                  "required": ["status"]
+                },
+                "then": {
+                  "required": ["blockReason"]
+                }
+              }
+            ]
+          },
+          "reliability": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "timeoutMilliseconds": { "type": "integer", "minimum": 1 },
+              "cancellation": { "enum": ["supported", "none"] },
+              "retryMode": { "enum": ["none", "idempotent"] },
+              "maxAttempts": { "type": "integer", "minimum": 1 },
+              "idempotency": { "enum": ["none", "optional", "required"] }
+            }
+          },
+          "errorCodes": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*\\.[A-Z][A-Z0-9_]*\\.[a-z][a-z0-9_]*$"
+            }
+          },
+          "privacy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "requestClassification": {
+                "enum": ["PUBLIC", "INTERNAL", "PII", "SENSITIVE", "SECRET"]
+              },
+              "responseClassification": {
+                "enum": ["PUBLIC", "INTERNAL", "PII", "SENSITIVE", "SECRET"]
+              },
+              "logPolicy": { "enum": ["none", "metadata_only", "redacted"] }
+            }
+          },
+          "telemetry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["trace"],
+            "properties": {
+              "metric": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9_]*$"
+              },
+              "trace": { "type": "boolean" },
+              "attributes": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "slo": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "latencyP95Milliseconds": { "type": "integer", "minimum": 1 },
+              "availabilityPercent": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              }
+            }
+          },
+          "clientContract": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "dartImport",
+              "requestType",
+              "responseType",
+              "requestEncoder",
+              "responseDecoder"
+            ],
+            "properties": {
+              "dartImport": { "type": "string", "minLength": 1 },
+              "requestType": { "type": "string", "minLength": 1 },
+              "responseType": { "type": "string", "minLength": 1 },
+              "requestEncoder": { "type": "string", "minLength": 1 },
+              "responseDecoder": { "type": "string", "minLength": 1 },
+              "pathBindings": {
+                "type": "object",
+                "additionalProperties": { "type": "string", "minLength": 1 }
+              },
+              "queryBindings": {
+                "type": "object",
+                "additionalProperties": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "kind": { "const": "command" } },
+              "required": ["kind"]
+            },
+            "then": {
+              "oneOf": [
+                { "required": ["aggregateOwner"] },
+                { "required": ["appendSink"] }
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": { "kind": { "const": "query" } },
+              "required": ["kind"]
+            },
+            "then": { "required": ["reader", "slice"] }
+          },
+          {
+            "if": {
+              "properties": { "kind": { "const": "session" } },
+              "required": ["kind"]
+            },
+            "then": { "required": ["sessionOwner"] }
+          },
+          {
+            "if": {
+              "properties": {
+                "commercial": {
+                  "properties": { "status": { "const": "ready" } },
+                  "required": ["status"]
+                }
+              },
+              "required": ["commercial"]
+            },
+            "then": {
+              "required": [
+                "actorRequirement",
+                "principal",
+                "ownershipPolicy",
+                "errorCodes"
+              ],
+              "properties": {
+                "authMode": { "enum": ["public", "optional", "required"] },
+                "reliability": {
+                  "required": [
+                    "timeoutMilliseconds",
+                    "cancellation",
+                    "retryMode",
+                    "maxAttempts",
+                    "idempotency"
+                  ]
+                },
+                "privacy": {
+                  "required": [
+                    "requestClassification",
+                    "responseClassification",
+                    "logPolicy"
+                  ]
+                },
+                "telemetry": {
+                  "required": ["metric", "trace"],
+                  "properties": { "trace": { "const": true } }
+                },
+                "slo": {
+                  "required": [
+                    "latencyP95Milliseconds",
+                    "availabilityPercent"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "projections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "domain", "objectId", "readModel", "sourcePath"]
+      }
+    },
+    "businessObjectMaps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["domain", "decisionRefs", "boundedContexts", "sourcePath", "objects"],
+        "properties": {
+          "domain": { "type": "string", "minLength": 1 },
+          "decisionRefs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "boundedContexts": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "#/$defs/boundedContext" }
+          },
+          "sourcePath": { "type": "string", "minLength": 1 },
+          "objects": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "canonicalObject",
+                "boundedContext",
+                "objectKind",
+                "identity",
+                "invariantRefs",
+                "memberBounds",
+                "storageRole",
+                "mutationEntrypoints",
+                "eventConsumers",
+                "lifecycleRefs",
+                "access",
+                "relationships",
+                "fieldRoles"
+              ],
+              "properties": {
+                "canonicalObject": { "type": "string", "minLength": 1 },
+                "boundedContext": { "type": "string", "minLength": 1 },
+                "objectKind": {
+                  "enum": [
+                    "aggregate_root",
+                    "owned_entity",
+                    "value_object",
+                    "append_only_fact",
+                    "projection",
+                    "external_reference",
+                    "runtime_session"
+                  ]
+                },
+                "aggregateOwner": { "type": "string", "minLength": 1 },
+                "identity": { "$ref": "#/$defs/objectIdentity" },
+                "invariantRefs": { "$ref": "#/$defs/stringList" },
+                "memberBounds": {
+                  "type": "object",
+                  "additionalProperties": { "type": "integer", "minimum": 1 }
+                },
+                "storageRole": {
+                  "enum": ["authoritative", "owned", "append_only", "projection", "external", "runtime"]
+                },
+                "storageBackend": { "type": "string", "minLength": 1 },
+                "mutationEntrypoints": { "$ref": "#/$defs/stringList" },
+                "eventConsumers": { "$ref": "#/$defs/stringList" },
+                "lifecycleRefs": { "$ref": "#/$defs/stringList" },
+                "sourceDocument": { "type": "string", "minLength": 1 },
+                "sourceEntity": { "type": "string", "minLength": 1 },
+                "access": { "$ref": "#/$defs/objectAccess" },
+                "relationships": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/relationship" }
+                },
+                "localIdentityReasons": {
+                  "type": "object",
+                  "propertyNames": { "type": "string", "minLength": 1 },
+                  "additionalProperties": { "type": "string", "minLength": 1 }
+                },
+                "fieldRoles": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "authoritative_state",
+                    "owned_value",
+                    "reference",
+                    "append_only_fact",
+                    "projection",
+                    "transport_only"
+                  ],
+                  "properties": {
+                    "authoritative_state": { "$ref": "#/$defs/fieldNames" },
+                    "owned_value": { "$ref": "#/$defs/fieldNames" },
+                    "reference": { "$ref": "#/$defs/fieldNames" },
+                    "append_only_fact": { "$ref": "#/$defs/fieldNames" },
+                    "projection": { "$ref": "#/$defs/fieldNames" },
+                    "transport_only": { "$ref": "#/$defs/fieldNames" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "readinessEvidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "objectId", "operationIds", "domainBehavior", "store", "outbox",
+          "reader", "transport", "appClient", "page", "localContract",
+          "apiIntegration", "userAcceptance", "environments", "sourcePath"
+        ],
+        "properties": {
+          "objectId": { "type": "string", "minLength": 1 },
+          "operationIds": { "$ref": "#/$defs/stringList" },
+          "domainBehavior": { "$ref": "#/$defs/evidenceArtifacts" },
+          "store": { "$ref": "#/$defs/evidenceArtifacts" },
+          "outbox": { "$ref": "#/$defs/evidenceArtifacts" },
+          "reader": { "$ref": "#/$defs/evidenceArtifacts" },
+          "transport": { "$ref": "#/$defs/evidenceArtifacts" },
+          "appClient": { "$ref": "#/$defs/evidenceArtifacts" },
+          "page": { "$ref": "#/$defs/evidenceArtifacts" },
+          "localContract": { "$ref": "#/$defs/evidenceArtifacts" },
+          "apiIntegration": { "$ref": "#/$defs/evidenceArtifacts" },
+          "userAcceptance": { "$ref": "#/$defs/evidenceArtifacts" },
+          "environments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "artifact"],
+              "properties": {
+                "name": { "enum": ["alpha", "beta", "gamma", "prod"] },
+                "artifact": { "$ref": "#/$defs/evidenceArtifact" }
+              }
+            }
+          },
+          "sourcePath": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "objectReadiness": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "objectId", "stage", "modeled", "contractReady", "implemented",
+          "commercialReady", "missing"
+        ],
+        "properties": {
+          "objectId": { "type": "string", "minLength": 1 },
+          "stage": { "enum": ["unmodeled", "modeled", "contract-ready", "implemented", "commercial-ready"] },
+          "modeled": { "type": "boolean" },
+          "contractReady": { "type": "boolean" },
+          "implemented": { "type": "boolean" },
+          "commercialReady": { "type": "boolean" },
+          "missing": { "$ref": "#/$defs/stringList" }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        }
+      }
+    },
+    "documents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "mediaType", "content"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "mediaType": { "enum": ["application/yaml", "application/json"] },
+          "content": {}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "boundedContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contextId", "name", "role", "accessPolicy"],
+      "properties": {
+        "contextId": { "type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$" },
+        "name": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["core", "supporting", "generic"] },
+        "accessPolicy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commands", "queries", "childObjects", "crossContext"],
+          "properties": {
+            "commands": { "const": "aggregate_facade_only" },
+            "queries": { "const": "named_reader_slice_only" },
+            "childObjects": { "const": "aggregate_root_only" },
+            "crossContext": { "const": "public_contract_only" }
+          }
+        }
+      }
+    },
+    "objectAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commands", "queries", "crossContext"],
+      "properties": {
+        "commands": { "enum": ["aggregate_facade", "via_aggregate_root", "append_only_sink", "session_facade", "none"] },
+        "queries": { "enum": ["named_reader", "via_aggregate_projection", "external_port", "none"] },
+        "crossContext": { "enum": ["public_contract_only", "event_only", "forbidden"] }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "referenceFields", "kind", "cardinality", "consistency", "access", "onDelete"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "targetObject": { "type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$" },
+        "targetObjects": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*\\.[A-Z][A-Za-z0-9]*$" }
+        },
+        "referenceFields": { "$ref": "#/$defs/fieldNames" },
+        "kind": { "enum": ["owned", "reference", "event_source", "projection_source", "external"] },
+        "cardinality": { "enum": ["1:1", "1:N", "N:1", "N:N"] },
+        "consistency": { "enum": ["strong", "eventual", "runtime"] },
+        "access": { "enum": ["aggregate_root", "command_facade", "named_reader", "event", "external_port", "none"] },
+        "onDelete": { "enum": ["cascade", "restrict", "tombstone", "retain", "detach"] }
+      },
+      "oneOf": [
+        { "required": ["targetObject"] },
+        { "required": ["targetObjects"] }
+      ]
+    },
+    "fieldNames": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "stringList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "evidenceArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "evidenceArtifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidenceArtifact" }
+    },
+    "objectIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields", "versionSource"],
+      "properties": {
+        "fields": { "$ref": "#/$defs/fieldNames" },
+        "versionSource": {
+          "enum": ["field", "store_commit", "owner", "immutable", "checkpoint", "external", "session"]
+        },
+        "versionField": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "versionSource": { "const": "field" } }, "required": ["versionSource"] },
+          "then": { "required": ["versionField"] }
+        }
+      ]
+    }
+  }
+}

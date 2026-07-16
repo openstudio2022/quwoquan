@@ -2,12 +2,20 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_app/app/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
+import 'package:quwoquan_app/cloud/runtime/config/cloud_runtime_environment.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/cloud/runtime/executor/cloud_operation_client_factory.dart';
+import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
+import 'package:quwoquan_app/cloud/runtime/observability/cloud_operation_telemetry.dart';
 import 'package:quwoquan_app/cloud/services/chat/remote/chat_repository_remote.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/remote/post_reader_remote.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 final RegExp _defaultNicknamePattern = RegExp(r'^新同学_\d{6}_\d{7}$');
 
@@ -21,6 +29,23 @@ void main() {
 
       final baseUrl = 'http://${server.address.host}:${server.port}';
       final contentRepository = RemoteContentRepository(baseUrl: baseUrl);
+      final contentPostReader = RemoteContentPostReaderAdapter(
+        client: buildGeneratedCloudOperationClient(
+          httpClient: CloudHttpClient(),
+          clientContextProvider: const _BusinessFixtureClientContext(),
+          telemetrySink: const _NoopCloudOperationTelemetrySink(),
+          environment: CloudRuntimeEnvironment(
+            environment: CloudEnvironment.beta,
+            gatewayBaseUri: Uri.parse(baseUrl),
+          ),
+        ),
+        invocationContext: (clientPageId) => CloudOperationInvocationContext(
+          surfaceId: AppUiSurfaces.workBrowser.id,
+          routeId: AppUiSurfaces.workBrowser.routeId,
+          clientPageId: clientPageId,
+          actor: const CloudOperationActorContext(),
+        ),
+      );
       const currentUserId = 'fixture_user_current';
       final chatRepository = RemoteChatRepository(
         baseUrl: baseUrl,
@@ -74,7 +99,7 @@ void main() {
         limit: 20,
       );
       expect(followingFeed.length, greaterThanOrEqualTo(3));
-      final post = await contentRepository.getPost(postId: 'fixture_photo_001');
+      final post = await contentPostReader.getPost(postId: 'fixture_photo_001');
       expect(post.post.id, 'fixture_photo_001');
 
       final inbox = await chatRepository.listInbox(limit: 20);
@@ -111,10 +136,7 @@ void main() {
         ),
         isTrue,
       );
-      expect(
-        messageHome.any((row) => row.mentionUnreadCount > 0),
-        isTrue,
-      );
+      expect(messageHome.any((row) => row.mentionUnreadCount > 0), isTrue);
 
       final contactHomeAll = await chatRepository.listContactHome(
         filter: 'all',
@@ -174,14 +196,6 @@ void main() {
       );
       final circle = await circleRepository.getCircle('fixture_circle_photo');
       expect(circle.circle.id, 'fixture_circle_photo');
-      final groups = await circleRepository.listCircleGroups(
-        'fixture_circle_photo',
-        limit: 20,
-      );
-      expect(
-        groups.map((item) => item.id),
-        contains('fixture_group_photo_public'),
-      );
       final circleHomeFeed = await circleRepository.listHomeCircleDiscoveryFeed(
         limit: 20,
       );
@@ -231,15 +245,6 @@ void main() {
         'fixture_user_photo',
       );
       expect(userWorks.map((item) => item.id), contains('fixture_photo_001'));
-      final userCircles = await userRepository.listUserCircles(
-        'fixture_user_current',
-        limit: 20,
-      );
-      expect(
-        userCircles.map((item) => item.id),
-        contains('fixture_circle_photo'),
-      );
-
       final userProfiles = await _getJsonList(
         '$baseUrl/v1/user/profile',
         'items',
@@ -625,9 +630,8 @@ class _ContractSeedHttpServer {
     if (filter == 'notification') {
       return const <Map<String, dynamic>>[];
     }
-    final conversations =
-        (_fixtures.chatSeed['conversations'] as List<dynamic>)
-            .cast<Map<String, dynamic>>();
+    final conversations = (_fixtures.chatSeed['conversations'] as List<dynamic>)
+        .cast<Map<String, dynamic>>();
     final rows = conversations
         .where((item) {
           switch (filter) {
@@ -653,7 +657,8 @@ class _ContractSeedHttpServer {
             'groupAvatarVersion': item['groupAvatarVersion'] ?? 1,
             'lastActiveAt': item['lastMessageTime'],
             'unreadCount': item['unreadCount'] ?? 0,
-            'mentionUnreadCount': item['mentionUnreadCount'] ??
+            'mentionUnreadCount':
+                item['mentionUnreadCount'] ??
                 (item['id'] == 'fixture_conv_group' ||
                         item['_id'] == 'fixture_conv_group'
                     ? 1
@@ -795,4 +800,28 @@ class _ContractSeedHttpServer {
     final userId = request.headers.value('X-Client-User-Id')?.trim() ?? '';
     return userId.isNotEmpty;
   }
+}
+
+final class _BusinessFixtureClientContext
+    implements CloudClientContextProvider {
+  const _BusinessFixtureClientContext();
+
+  @override
+  CloudClientContextSnapshot snapshot() {
+    return const CloudClientContextSnapshot(
+      sessionId: 'business-fixture-session',
+      deviceActorId: 'business-fixture-device',
+      platform: 'test',
+      appVersion: 'test',
+      locale: 'zh-CN',
+    );
+  }
+}
+
+final class _NoopCloudOperationTelemetrySink
+    implements CloudOperationTelemetrySink {
+  const _NoopCloudOperationTelemetrySink();
+
+  @override
+  void record(CloudOperationTelemetryEvent event) {}
 }

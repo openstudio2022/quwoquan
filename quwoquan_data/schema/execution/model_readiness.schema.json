@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schemaVersion", "executionId", "contractVersion", "ready", "runtime", "author", "reviewer"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.execution_model_readiness/1" },
+    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
+    "contractVersion": { "const": "execution-model-readiness-v1" },
+    "ready": { "const": true },
+    "runtime": { "enum": ["local", "cloud"] },
+    "author": { "$ref": "#/$defs/modelReadiness" },
+    "reviewer": { "$ref": "#/$defs/modelReadiness" }
+  },
+  "$defs": {
+    "modelReadiness": {
+      "type": "object",
+      "required": ["model", "modelFamily", "startup"],
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string", "minLength": 1 },
+        "modelFamily": { "enum": ["claude", "composer", "gemini", "gpt", "grok"] },
+        "startup": {
+          "type": "object",
+          "required": ["ready", "status", "errorClass", "errorCode", "httpStatus", "runtime", "model", "cacheHit"],
+          "additionalProperties": false,
+          "properties": {
+            "ready": { "const": true },
+            "status": { "type": "string", "minLength": 1 },
+            "errorClass": { "type": "string" },
+            "errorCode": { "type": "string" },
+            "httpStatus": { "type": ["integer", "null"] },
+            "runtime": { "enum": ["local", "cloud"] },
+            "model": { "type": "string", "minLength": 1 },
+            "cacheHit": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

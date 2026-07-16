@@ -16,7 +16,7 @@ import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/widgets/error_states/app_error_states.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/ui/circle/pages/circles_hub_page.dart';
 import 'package:quwoquan_app/ui/circle/widgets/home_circles_category_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';

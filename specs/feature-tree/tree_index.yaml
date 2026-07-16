@@ -1,5 +1,5 @@
 version: 1
-updated_at: 2026-07-09T10:17:47.734302Z
+updated_at: 2026-07-13T13:59:45.232459Z
 features:
     - id: assistant-run-learning
       name: assistant-run-learning
@@ -2508,13 +2508,6 @@ features:
               domain: ""
               status: specified
               tags: []
-            - id: system-creator-pool
-              name: system-creator-pool
-              level: L3_story
-              path: runtime/runtime-data-engineering/system-creator-pool
-              domain: ""
-              status: specified
-              tags: []
         - id: runtime-errors
           name: runtime-errors
           level: L2_business_capability
@@ -2857,50 +2850,6 @@ features:
           domain: ""
           status: specified
           tags: []
-        - id: runtime-registry
-          name: runtime-registry
-          level: L2_business_capability
-          path: runtime/runtime-registry
-          domain: ""
-          status: specified
-          tags: []
-          children:
-            - id: metadata-loader-and-entity-registry
-              name: metadata-loader-and-entity-registry
-              level: L3_story
-              path: runtime/runtime-registry/metadata-loader-and-entity-registry
-              domain: ""
-              status: specified
-              tags: []
-            - id: metadata-loader-and-entity-registry--v3-directory-parser-and-validator
-              name: metadata-loader-and-entity-registry--v3-directory-parser-and-validator
-              level: L3_story
-              path: runtime/runtime-registry/metadata-loader-and-entity-registry--v3-directory-parser-and-validator
-              domain: ""
-              status: specified
-              tags: []
-        - id: runtime-repository
-          name: runtime-repository
-          level: L2_business_capability
-          path: runtime/runtime-repository
-          domain: ""
-          status: specified
-          tags: []
-          children:
-            - id: repository-interface-layering
-              name: repository-interface-layering
-              level: L3_story
-              path: runtime/runtime-repository/repository-interface-layering
-              domain: ""
-              status: specified
-              tags: []
-            - id: repository-interface-layering--mongo-pg-vector-cache-adapters
-              name: repository-interface-layering--mongo-pg-vector-cache-adapters
-              level: L3_story
-              path: runtime/runtime-repository/repository-interface-layering--mongo-pg-vector-cache-adapters
-              domain: ""
-              status: specified
-              tags: []
         - id: runtime-rpc
           name: runtime-rpc
           level: L2_business_capability
@@ -3017,6 +2966,14 @@ features:
           domain: ""
           status: specified
           tags: []
+          children:
+            - id: app-cloud-business-object-commercial-closure
+              name: app-cloud-business-object-commercial-closure
+              level: L3_story
+              path: runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure
+              domain: ""
+              status: specified
+              tags: []
     - id: shared-homepage-network
       name: shared-homepage-network
       level: L1_domain_service

@@ -1,0 +1,17 @@
+version: 1
+aggregate: CallRecording
+
+entities:
+  CallRecording:
+    description: 通话录制的授权、启动、停止、产物和保留生命周期
+    fields:
+      - { name: id, type: string, constraints: [PK, NOT_NULL] }
+      - { name: callId, type: string, constraints: [NOT_NULL] }
+      - { name: requestedBy, type: string, constraints: [NOT_NULL] }
+      - { name: consentSnapshot, type: object, constraints: [NOT_NULL] }
+      - { name: status, type: string, constraints: [NOT_NULL] }
+      - { name: mediaAssetId, type: string, constraints: [NULLABLE] }
+      - { name: startedAt, type: timestamp, constraints: [NULLABLE] }
+      - { name: stoppedAt, type: timestamp, constraints: [NULLABLE] }
+      - { name: createdAt, type: timestamp, constraints: [NOT_NULL] }
+      - { name: updatedAt, type: timestamp, constraints: [NOT_NULL] }

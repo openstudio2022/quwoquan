@@ -197,6 +197,7 @@ func TestParseCodeAllowsMetadataUserSubKinds(t *testing.T) {
 		"USER.CONTACT.rate_limited",
 		"USER.INVITE.expired",
 		"USER.SETTING.invalid_call_ringtone",
+		"NOTIFICATION.USER.app_message_not_found",
 	}
 	for _, raw := range cases {
 		t.Run(raw, func(t *testing.T) {
@@ -249,5 +250,25 @@ func TestHTTPStatusFromErrorSupportsMetadataUserSubKinds(t *testing.T) {
 				t.Fatalf("status = %d, want %d", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestMetadataBindingPreservesStableCodeAndTransportSemantics(t *testing.T) {
+	code, err := ParseCode("CONTENT.USER.comment_pin_forbidden")
+	if err != nil {
+		t.Fatalf("ParseCode: %v", err)
+	}
+	appErr := NewAppError(code, "仅内容作者可置顶评论", "forbidden").
+		WithMetadata("forbidden", http.StatusForbidden)
+
+	if got := HTTPStatusFromError(appErr); got != http.StatusForbidden {
+		t.Fatalf("HTTP status = %d, want %d", got, http.StatusForbidden)
+	}
+	response := ToResponse(appErr, "request-1", "trace-1")
+	if response.Code != "CONTENT.USER.comment_pin_forbidden" {
+		t.Fatalf("stable code = %q", response.Code)
+	}
+	if response.Reason != "forbidden" || response.Kind != "permission" {
+		t.Fatalf("transport semantics = reason %q kind %q", response.Reason, response.Kind)
 	}
 }

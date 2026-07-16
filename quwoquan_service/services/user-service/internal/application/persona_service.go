@@ -5,23 +5,25 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel/attribute"
 
 	rtobs "quwoquan_service/runtime/observability"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
-	"quwoquan_service/services/user-service/internal/infrastructure/cache"
+	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 type PersonaService struct {
-	personas userrepo.PersonaRepository
-	pool     *pgxpool.Pool
-	pcache   *cache.ProfileCache
+	personas   PersonaStore
+	activation userrepo.PersonaActivationStore
+	pcache     ProfileCacheInvalidator
 }
 
-func NewPersonaService(personas userrepo.PersonaRepository, pool *pgxpool.Pool, pcache *cache.ProfileCache) *PersonaService {
-	return &PersonaService{personas: personas, pool: pool, pcache: pcache}
+func NewPersonaService(
+	personas PersonaStore,
+	activation userrepo.PersonaActivationStore,
+	pcache ProfileCacheInvalidator,
+) *PersonaService {
+	return &PersonaService{personas: personas, activation: activation, pcache: pcache}
 }
 
 func (s *PersonaService) List(ctx context.Context, userID string) (_ []model.Persona, err error) {
@@ -139,21 +141,7 @@ func (s *PersonaService) Activate(ctx context.Context, personaID string) (err er
 		return fmt.Errorf("persona not found: %s", personaID)
 	}
 
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
-
-	if _, err := tx.Exec(ctx,
-		`UPDATE personas SET is_active = false, updated_at = NOW() WHERE user_id = $1 AND is_active = true`, p.UserID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx,
-		`UPDATE personas SET is_active = true, updated_at = NOW() WHERE sub_account_id = $1`, personaID); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := s.activation.SwitchActive(ctx, p.UserID, p.SubAccountID); err != nil {
 		return err
 	}
 

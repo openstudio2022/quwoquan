@@ -1,0 +1,15 @@
+version: 1
+entity: DeletedPostTombstone
+description: 删除保留期内用于 410 语义、传播删除与投影重建的只追加事实
+
+fields:
+  - { name: _id, type: ObjectId, constraints: [PK], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+  - { name: postId, type: ObjectId, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+  - { name: authorId, type: string, constraints: [NOT_NULL], classification: PRIVATE, log_policy: hash, api_exposure: drop, ops_exposure: read }
+  - { name: reason, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+  - { name: deletedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read }
+  - { name: expireAt, type: timestamp, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: drop, ops_exposure: read }
+
+unique_constraints:
+  - columns: [postId]
+    description: 同一 Post 在保留期内只有一条删除事实

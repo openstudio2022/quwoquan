@@ -303,7 +303,7 @@ def check_consumers(exp: dict, problems: list[str]) -> None:
     # circle_service.go must reference rtimpact.Help* (not helpType string literals).
     if CIRCLE_GO.exists():
         circle = CIRCLE_GO.read_text(encoding="utf-8")
-        if "rtimpact.HelpRelationship" not in circle:
+        if not re.search(r"\brtimpact\.Help[A-Z][A-Za-z0-9_]*\b", circle):
             problems.append("circle_service.go must use rtimpact.Help* for helpType (no string literals)")
         if re.search(r'"helpType"\s*:\s*"(relationship|community|spread|decision|knowledge|audience)"', circle):
             problems.append("circle_service.go still has hardcoded helpType string literal")

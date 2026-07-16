@@ -24,6 +24,7 @@ import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/pages/create_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();
@@ -66,6 +67,11 @@ class _AuthedSessionStore implements AuthSessionStore {
     required String accessToken,
     required String refreshToken,
   }) async {}
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
 
   @override
   Future<void> softLogout() async {}
@@ -165,7 +171,7 @@ Widget _buildApp(_QueuedMediaPickerLauncher launcher) {
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
-      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      ...mockContentFacetOverrides(MockContentRepository()),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
     ],
@@ -410,13 +416,15 @@ void main() {
     ]);
   });
 
-  testWidgets('/create?type=capture&tab=photo 可显式直达拍照编辑后追加到创作页图片列表', (tester) async {
+  testWidgets('/create?type=capture&tab=photo 可显式直达拍照编辑后追加到创作页图片列表', (
+    tester,
+  ) async {
     _usePhoneSurface(tester);
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           currentUserIdProvider.overrideWithValue('user_001'),
-          contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+          ...mockContentFacetOverrides(MockContentRepository()),
           circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
           authSessionStoreProvider.overrideWithValue(
             const _AuthedSessionStore(),

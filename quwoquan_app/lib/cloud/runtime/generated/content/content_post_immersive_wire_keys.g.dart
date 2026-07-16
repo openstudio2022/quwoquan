@@ -6,16 +6,6 @@
 abstract final class ContentPostImmersiveWireKeys {
   const ContentPostImmersiveWireKeys._();
 
-  static const String circleSummaries = 'circleSummaries';
-
-  static const String circleIds = 'circleIds';
-
-  static const String circleNames = 'circleNames';
-
-  static const String circleId = 'circleId';
-
-  static const String circleName = 'circleName';
-
   static const String tagRefs = 'tagRefs';
 
   static const String visibility = 'visibility';

@@ -9,7 +9,15 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from quwoquan_ops.cli.lib.dev_up import resolve_app_endpoint_overrides
+from quwoquan_ops.cli.lib.dev_up import (
+    deployment_render_root,
+    env_cache_target_root,
+    observability_runtime_logs_root,
+    resolve_app_endpoint_overrides,
+    run_root,
+    target_process_root,
+)
+from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
 from quwoquan_ops.cli.lib.environment_topology import load_environment_topology
 
 STACKCTL = ROOT / "quwoquan_ops" / "cli" / "stackctl.py"
@@ -98,17 +106,69 @@ def main() -> int:
     beta_manual = (
         ROOT / "quwoquan_app/scripts/device/start_app_beta_manual.sh"
     ).read_text(encoding="utf-8")
+    beta_stack = (
+        ROOT / "quwoquan_ops/cli/beta/start_beta_stack.sh"
+    ).read_text(encoding="utf-8")
+    beta_stop = (
+        ROOT / "quwoquan_app/scripts/device/stop_app_beta_manual.sh"
+    ).read_text(encoding="utf-8")
+    legal_document_page = (
+        ROOT / "quwoquan_app/lib/ui/user/pages/legal_document_page.dart"
+    ).read_text(encoding="utf-8")
+    mock_public_plane = (
+        ROOT / "quwoquan_ops/cli/lib/mock_public_plane.py"
+    ).read_text(encoding="utf-8")
+    local_gamma_caddyfile = (
+        ROOT / "quwoquan_ops/environments/local-gamma/Caddyfile"
+    ).read_text(encoding="utf-8")
+    prod_plane_renderer = (
+        ROOT / "quwoquan_ops/cli/prod/render_prod_plane_stack.py"
+    ).read_text(encoding="utf-8")
     gamma_script = (
         ROOT / "quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh"
     ).read_text(encoding="utf-8")
     gamma_compose = (
         ROOT / "quwoquan_ops/environments/compose/docker-compose.gamma-local.yaml"
     ).read_text(encoding="utf-8")
+    prod_sim = (
+        ROOT / "quwoquan_ops/cli/prod_sim/start_prod_sim_stack.sh"
+    ).read_text(encoding="utf-8")
+
+    expected_default_paths = {
+        deployment_render_root("gamma-local"):
+            Path.home() / ".cache/quwoquan/deploy/gamma-local/rendered",
+        env_cache_target_root("gamma", "gamma-local"):
+            ROOT / ".qwq_output/env/gamma/local/gamma-local/cache",
+        target_process_root("gamma", "gamma-local"):
+            ROOT / ".qwq_output/env/gamma/local/gamma-local/process",
+        certificate_export_dir("gamma-local"):
+            Path.home() / ".cache/quwoquan/deploy/gamma-local/certificates",
+    }
+    for actual, expected in expected_default_paths.items():
+        if actual != expected:
+            issues.append(f"split runtime path mismatch: expected {expected}, got {actual}")
+    gamma_observability_logs = observability_runtime_logs_root("gamma")
+    if gamma_observability_logs.parts[-2:] != ("logs", "service"):
+        issues.append(f"gamma observability logs must use logs/service: {gamma_observability_logs}")
+    if "current" in gamma_observability_logs.parts or "current" in run_root("gamma").parts:
+        issues.append("local run paths must use an immutable runId, never current")
 
     if "QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED" not in build_gradle:
         issues.append("android debug build must require explicit local CA when launcher marks it required")
     if "tasks.withType<FlutterTask>()" not in build_gradle:
         issues.append("android debug build must patch FlutterTask dart-defines for plain flutter run")
+    if "alphaLocalTransportDartDefineKeys" not in build_gradle:
+        issues.append(
+            "android alpha plain flutter run must declare transport dart-define keys for force overwrite"
+        )
+    if "shouldForceTransport" not in build_gradle:
+        issues.append(
+            "android alpha plain flutter run must force-overwrite gateway/media localhost dart-defines"
+        )
+    if "existingKeys.add(key)" in build_gradle and "shouldForceTransport" not in build_gradle:
+        issues.append(
+            "android alpha mergeAlphaLocalDartDefines must not remain fill-only for transport URLs"
+        )
     if '"CLOUD_GATEWAY_BASE_URL" to "https://localhost:17000"' not in build_gradle:
         issues.append("plain android flutter run must default alpha gateway to localhost HTTPS transport")
     if '"APP_LEGAL_BASE_URL" to "https://localhost:17000/legal"' not in build_gradle:
@@ -136,13 +196,9 @@ def main() -> int:
     app_bootstrap = (ROOT / "quwoquan_app/lib/app_bootstrap.dart").read_text(
         encoding="utf-8"
     )
-    local_https_trust = (
-        ROOT / "quwoquan_app/lib/cloud/runtime/local_dev_https_trust_io.dart"
-    ).read_text(encoding="utf-8")
     platform_local_https_trust = (
         ROOT / "quwoquan_app/lib/core/platform/local_dev_https_trust_io.dart"
     ).read_text(encoding="utf-8")
-    local_https_trust_sources = local_https_trust + "\n" + platform_local_https_trust
     main_activity = (
         ROOT / "quwoquan_app/android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java"
     ).read_text(encoding="utf-8")
@@ -154,17 +210,52 @@ def main() -> int:
         issues.append("app bootstrap must install Dart local HTTPS trust before media/cache clients start")
     if "_installLocalDevHttpsTrustAfterFirstFrame" in app_bootstrap:
         issues.append("app bootstrap must not defer Dart local HTTPS trust until after the first frame")
+    if "source: 'local_dev_https_trust'" in app_bootstrap:
+        issues.append(
+            "app bootstrap must fail-fast on local HTTPS trust install errors (no swallow/log-only)"
+        )
     if (
         "_installLocalDevHttpsTrustBeforeMediaClients()" not in app_bootstrap
         or "startupPrerequisites: startupPrerequisites" not in app_bootstrap
     ):
         issues.append("app bootstrap must pass local HTTPS trust as startup prerequisites before media clients")
+    image_cache_controller = (
+        ROOT / "quwoquan_app/lib/core/media/app_image_cache_controller.dart"
+    ).read_text(encoding="utf-8")
+    trusted_http_file_service = (
+        ROOT / "quwoquan_app/lib/core/platform/trusted_http_file_service_io.dart"
+    ).read_text(encoding="utf-8")
+    if "createTrustedHttpFileService" not in image_cache_controller:
+        issues.append(
+            "App image cache managers must use the platform trusted HTTP file-service factory"
+        )
+    if "IOClient" not in trusted_http_file_service:
+        issues.append(
+            "Native trusted HTTP file service must use package:http IOClient"
+        )
+    if (
+        "HttpClient(context: SecurityContext.defaultContext)"
+        not in trusted_http_file_service
+    ):
+        issues.append(
+            "Native trusted HTTP file service must bind HttpClient to SecurityContext.defaultContext"
+        )
     if (
         "SecurityContext.defaultContext.setTrustedCertificatesBytes"
-        not in local_https_trust_sources
+        not in platform_local_https_trust
     ):
         issues.append("Dart local HTTPS trust must add the packaged CA to SecurityContext.defaultContext")
-    if "badCertificateCallback" in local_https_trust_sources:
+    if "appRuntimeEnv == 'prod'" in platform_local_https_trust:
+        issues.append(
+            "Dart local HTTPS trust must not hardcode APP_RUNTIME_ENV==prod; use runtime bases plane"
+        )
+    if "isLocalHttpsTransportBase" not in platform_local_https_trust:
+        issues.append(
+            "Dart local HTTPS trust must decide install from local HTTPS transport bases"
+        )
+    if "placeholderSubjectMarker" not in platform_local_https_trust:
+        issues.append("Dart local HTTPS trust must reject placeholder local CA certificates")
+    if "badCertificateCallback" in platform_local_https_trust:
         issues.append("Dart local HTTPS trust must not bypass certificate validation")
     if "localEnvDebugRootCertificate" not in main_activity:
         issues.append("Android MainActivity must expose packaged local_env_debug_root to Dart HttpClient")
@@ -219,16 +310,140 @@ def main() -> int:
         issues.append("iOS alpha prepare script must start the alpha HTTPS stack")
     if "QWQ_ALPHA_LOCAL_MACOS_KEYCHAIN_TRUST=skip" not in ios_prepare_alpha:
         issues.append("iOS alpha prepare script must skip macOS login keychain trust to avoid repeated password prompts")
-    if 'LOCAL_GAMMA_CADDY_DATA_ROOT="${LOCAL_GAMMA_CADDY_DATA_ROOT:-${LOCAL_GAMMA_LOCAL_ROOT}/caddy/data}"' not in gamma_script:
-        issues.append("gamma local mirror must expose host-readable caddy data root")
-    if 'LOCAL_GAMMA_CADDY_CONFIG_ROOT="${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-${LOCAL_GAMMA_LOCAL_ROOT}/caddy/config}"' not in gamma_script:
-        issues.append("gamma local mirror must expose host-readable caddy config root")
-    if '${LOCAL_GAMMA_CADDY_DATA_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/caddy/data}:/data' not in gamma_compose:
-        issues.append("gamma compose must bind caddy data to .qwq_output/env/gamma/local path")
-    if '${LOCAL_GAMMA_CADDY_CONFIG_ROOT:-../../../.qwq_output/env/gamma/local/gamma-local/caddy/config}:/config' not in gamma_compose:
-        issues.append("gamma compose must bind caddy config to .qwq_output/env/gamma/local path")
-    if "local-gamma-caddy/data:/data" in gamma_compose or "local-gamma-caddy/config:/config" in gamma_compose:
-        issues.append("gamma compose must not hide caddy CA inside named volumes")
+    if "legal_static_release_dir(self.runtime_env)" not in mock_public_plane:
+        issues.append("alpha mock public plane must resolve legal-static through output_paths")
+    if "utf8.decode(response.bodyBytes)" not in legal_document_page:
+        issues.append("legal document page must decode response bytes as UTF-8")
+    if "loadHtmlString(html, baseUrl: uri.toString())" not in legal_document_page:
+        issues.append("legal document page must render the explicitly decoded HTML string")
+    if "loadRequest(uri)" in legal_document_page:
+        issues.append("legal document page must not regress to charset-dependent WebView loadRequest")
+    if 'BETA_LEGAL_STATIC_ROOT="${QWQ_OUTPUT_ROOT}/env/beta/release/legal-static/current/public"' not in beta_manual:
+        issues.append("beta manual stack must mount the canonical legal-static release output")
+    if 'stackctl.py" package --env beta --kind legal-static' not in beta_manual:
+        issues.append("beta manual stack must package legal-static before starting its TLS gateway")
+    if 'handle /legal/manifest.json {' not in beta_manual or 'handle /legal/* {' not in beta_manual:
+        issues.append("beta TLS gateway must serve legal manifest and documents before proxying business routes")
+    if '-v "$BETA_LEGAL_STATIC_ROOT:/srv/legal:ro"' not in beta_manual:
+        issues.append("beta TLS gateway must mount legal-static under /srv/legal")
+    if '--legal-base-url "$GATEWAY_BASE_URL/legal"' not in beta_manual:
+        issues.append("beta app launch must inject its TLS gateway legal-static base URL")
+    if (
+        "beta_manual_verify_legal_document" not in beta_manual
+        or '"趣我圈用户协议"' not in beta_manual
+        or '"趣我圈隐私政策"' not in beta_manual
+    ):
+        issues.append("beta manual startup must verify UTF-8 agreement and privacy-policy content")
+    if 'PROD_SIM_LEGAL_STATIC_ROOT="${QWQ_OUTPUT_ROOT}/env/prod/release/legal-static/current/public"' not in prod_sim:
+        issues.append("prod-sim must mount the canonical prod legal-static release output")
+    if 'stackctl.py" package --env prod --kind legal-static' not in prod_sim:
+        issues.append("prod-sim must gate startup on a valid prod legal-static package")
+    if 'handle /legal/manifest.json {' not in prod_sim or 'handle /legal/* {' not in prod_sim:
+        issues.append("prod-sim TLS gateway must serve legal manifest and documents before proxying business routes")
+    if '-v "$PROD_SIM_LEGAL_STATIC_ROOT:/srv/legal:ro"' not in prod_sim:
+        issues.append("prod-sim TLS gateway must mount legal-static under /srv/legal")
+    if (
+        "verify_https_legal_document" not in prod_sim
+        or '"趣我圈用户协议"' not in prod_sim
+        or '"趣我圈隐私政策"' not in prod_sim
+    ):
+        issues.append("prod-sim startup must verify UTF-8 agreement and privacy-policy content")
+    for label, source in {"gamma Caddyfile": local_gamma_caddyfile}.items():
+        if "@api_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*" not in source:
+            issues.append(f"{label} must route auth and owner APIs to user-service")
+        if "@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*" not in source:
+            issues.append(f"{label} must expose auth and owner APIs on the public gateway")
+        if 'handle /legal/manifest.json {' not in source:
+            issues.append(f"{label} must preserve JSON content type for the legal manifest")
+        if 'Content-Type "text/html; charset=utf-8"' not in source:
+            issues.append(f"{label} must declare UTF-8 for extensionless legal documents")
+    if prod_plane_renderer.count('handle /legal/manifest.json {') != 2:
+        issues.append("prod renderer must preserve JSON content type for both legal route surfaces")
+    if prod_plane_renderer.count('Content-Type "text/html; charset=utf-8"') != 2:
+        issues.append("prod renderer must declare UTF-8 for both extensionless legal route surfaces")
+    if prod_plane_renderer.count(
+        "@api_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*"
+    ) != 1 or prod_plane_renderer.count(
+        "@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*"
+    ) != 1:
+        issues.append("prod renderer must route auth and owner APIs to user-service on both gateway surfaces")
+    if 'LOCAL_GAMMA_DEPLOY_RENDER_ROOT="${QWQ_DEPLOY_WORK_ROOT}/gamma-local/rendered"' not in gamma_script:
+        issues.append("gamma rendered deployment config must use the system deployment work root")
+    if 'LOCAL_GAMMA_CADDYFILE="$ROOT/quwoquan_ops/environments/local-gamma/Caddyfile"' not in gamma_script:
+        issues.append("gamma launcher must mount the single Ops-owned Caddyfile source")
+    if "prepare_caddyfile" in gamma_script or "MEDIA_ORIGIN_BASE_URL" in gamma_script:
+        issues.append("gamma launcher must not generate a second Caddyfile or launch a media origin")
+    if 'handle /healthz {\n\t\trespond "ok" 200\n\t}' not in local_gamma_caddyfile:
+        issues.append("gamma media edge must expose a direct /healthz endpoint")
+    if 'LOCAL_GAMMA_PROCESS_ROOT="${QWQ_OUTPUT_ROOT}/env/gamma/local/gamma-local/process"' not in gamma_script:
+        issues.append("gamma pid/env/status must live under output local/process")
+    for marker, message in (
+        (
+            'export LOCAL_GAMMA_NOTIFICATION_SERVICE_IMAGE=',
+            "gamma launcher must resolve the Notification image explicitly",
+        ),
+        (
+            'copy_service_package_config notification-service notification-service',
+            "gamma launcher must consume the Notification environment package",
+        ),
+        (
+            'local notification_port="${LOCAL_GAMMA_NOTIFICATION_PORT:-19320}"',
+            "gamma readiness must probe Notification directly",
+        ),
+        (
+            '-e ASSISTANT_NOTIFICATION_BASE_URL=http://notification-service:18087 \\',
+            "gamma podman composition must bind Assistant to Notification",
+        ),
+    ):
+        if marker not in gamma_script:
+            issues.append(message)
+    if "  notification-service:\n" not in gamma_compose:
+        issues.append("gamma compose must declare Notification as a first-class service")
+    if 'LOCAL_GAMMA_NOTIFICATION_PORT:-19320}:18087' not in gamma_compose:
+        issues.append("gamma compose must publish the canonical Notification port")
+    if 'LOCAL_GAMMA_CADDY_DATA_VOLUME="${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}"' not in gamma_script:
+        issues.append("gamma Caddy certificate state must use its named deployment volume")
+    if '/data/caddy/pki/authorities/local/root.crt' not in gamma_script:
+        issues.append("gamma launcher must export the public root CA into the deployment work root")
+    if '${LOCAL_GAMMA_CADDY_DATA_VOLUME:-local-gamma-caddy-data}:/data' not in gamma_compose:
+        issues.append("gamma compose must bind Caddy data to a named volume")
+    if '${LOCAL_GAMMA_CADDY_CONFIG_VOLUME:-local-gamma-caddy-config}:/config' not in gamma_compose:
+        issues.append("gamma compose must bind Caddy config to a named volume")
+    if ".qwq_output/env/gamma/runtime" in gamma_compose or ".qwq_output/env/gamma/local/gamma-local/pki" in gamma_compose:
+        issues.append("gamma compose must not place deployment config or certificates under output")
+    if "QWQ_STATE_ROOT" in gamma_script or ".qwq_state" in gamma_script:
+        issues.append("gamma launcher must not use a second state root")
+
+    launcher_sources = {
+        "beta stack": beta_stack,
+        "beta manual start": beta_manual,
+        "beta manual stop": beta_stop,
+        "gamma mirror": gamma_script,
+        "prod-sim": prod_sim,
+    }
+    for label, source in launcher_sources.items():
+        if 'QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT' not in source:
+            issues.append(f"{label} must default QWQ_OUTPUT_ROOT to repository .qwq_output")
+        if 'QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT' not in source:
+            issues.append(f"{label} must default QWQ_OUTPUT_ROOT to repository .qwq_output")
+    if ".env.beta.local" in beta_stack:
+        issues.append("beta stack must not write the repository-root .env.beta.local")
+    combined_launchers = "\n".join(launcher_sources.values())
+    for retired_path in (".qwq_state", "QWQ_STATE_ROOT", ".qwq_output/env/gamma/runtime"):
+        if retired_path in combined_launchers:
+            issues.append(f"local launchers must not retain retired path fallback: {retired_path}")
+    if 'LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"' not in beta_manual:
+        issues.append("beta runtime logs must use QWQ_OBSERVABILITY_RUN_ROOT/logs/service")
+    if 'REPORT="${QWQ_RUN_ROOT}/app-beta-manual-report.json"' not in beta_manual:
+        issues.append("beta report must use QWQ_RUN_ROOT")
+    if 'BETA_MANUAL_STATE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process"' not in beta_manual:
+        issues.append("beta pid/env state must use QWQ_OUTPUT_ROOT local/process")
+    if "--rotate-ca" not in beta_stop or 'volume rm -f "$TLS_PROXY_DATA_VOLUME" "$TLS_PROXY_CONFIG_VOLUME"' not in beta_stop:
+        issues.append("beta CA rotation must be an explicit stop action")
+    if 'rm -rf "$LOG_DIR"' in beta_stop:
+        issues.append("beta --purge-logs must not recursively remove a directory that can contain PKI")
+    if 'find "$LOG_DIR" -mindepth 1 -maxdepth 1 -delete' not in beta_stop:
+        issues.append("beta --purge-logs must delete runtime log entries only")
 
     if issues:
         print("[verify_dev_up_cli_surface] FAIL")

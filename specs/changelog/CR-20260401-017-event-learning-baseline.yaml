@@ -31,7 +31,7 @@ entries:
       - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/acceptance.yaml
         sections:
           - 全文
-      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/plan.yaml
+      - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/content.execution.planning.yaml
         sections:
           - 全文
       - path: specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/analytics-metric-dictionary/spec.md

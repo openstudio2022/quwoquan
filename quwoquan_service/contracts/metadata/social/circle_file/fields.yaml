@@ -1,0 +1,182 @@
+version: 1
+aggregate: CircleFile
+
+entities:
+  CircleFile:
+    description: 圈子空间中的目录或已完成 MediaAsset 引用
+    fields:
+      - name: _id
+        type: string
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: version
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_1]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: circleId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: groupId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: parentFolderId
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: name
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        search_field: true
+      - name: fileType
+        type: enum
+        enum_ref: CircleFileType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: assetId
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+        description: file 必填，folder 必须为空；由 MediaAsset owner Reader 验证。
+      - name: mimeType
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: sizeBytes
+        type: int64
+        constraints: [NOT_NULL, DEFAULT_0]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: uploaderPersonaId
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: read
+        ops_exposure: read
+      - name: status
+        type: enum
+        enum_ref: CircleFileStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: createdAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: updatedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  CircleFileSlice:
+    description: CircleFile named Reader 的稳定只读切片，不暴露 Mongo identity、object key 或上传凭证。
+    fields:
+      - { name: fileId, type: string, constraints: [NOT_NULL] }
+      - { name: version, type: int64, constraints: [NOT_NULL] }
+      - { name: circleId, type: string, constraints: [NOT_NULL] }
+      - { name: groupId, type: string, constraints: [NULLABLE] }
+      - { name: parentFolderId, type: string, constraints: [NULLABLE] }
+      - { name: name, type: string, constraints: [NOT_NULL] }
+      - { name: fileType, type: enum, enum_ref: CircleFileType, constraints: [NOT_NULL] }
+      - { name: assetId, type: string, constraints: [NULLABLE] }
+      - { name: mimeType, type: string, constraints: [NULLABLE] }
+      - { name: sizeBytes, type: int64, constraints: [NOT_NULL] }
+      - { name: uploaderPersonaId, type: string, constraints: [NOT_NULL] }
+      - { name: status, type: enum, enum_ref: CircleFileStatus, constraints: [NOT_NULL] }
+      - { name: createdAt, type: timestamp, constraints: [NOT_NULL] }
+      - { name: updatedAt, type: timestamp, constraints: [NOT_NULL] }
+
+  CircleFileCommandResult:
+    description: CircleFile command Facade 的版本化提交回执。
+    fields:
+      - { name: fileId, type: string, constraints: [NOT_NULL] }
+      - { name: version, type: int64, constraints: [NOT_NULL] }
+      - { name: status, type: enum, enum_ref: CircleFileStatus, constraints: [NOT_NULL] }
+      - { name: idempotentReplay, type: bool, constraints: [NOT_NULL] }
+
+  CircleFilePageSlice:
+    description: CircleFileReader 的游标分页读取结果。
+    fields:
+      - { name: items, type: array, constraints: [NOT_NULL] }
+      - { name: cursor, type: string, constraints: [NULLABLE] }
+
+  CircleFileCommandReceipt:
+    description: 与 CircleFile 聚合和 outbox 同一事务提交的幂等命令回执。
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL] }
+      - { name: commandDigest, type: string, constraints: [NOT_NULL] }
+      - { name: fileId, type: string, constraints: [NOT_NULL] }
+      - { name: version, type: int64, constraints: [NOT_NULL] }
+      - { name: status, type: enum, enum_ref: CircleFileStatus, constraints: [NOT_NULL] }
+      - { name: expiresAt, type: timestamp, constraints: [NOT_NULL] }
+
+  CircleFileOutbox:
+    description: 与聚合版本同事务写入、可重放的 CircleFile 领域事件。
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL] }
+      - { name: outboxSequence, type: int64, constraints: [NOT_NULL] }
+      - { name: eventType, type: string, constraints: [NOT_NULL] }
+      - { name: aggregateId, type: string, constraints: [NOT_NULL] }
+      - { name: aggregateVersion, type: int64, constraints: [NOT_NULL] }
+      - { name: payloadJson, type: string, constraints: [NOT_NULL] }
+      - { name: occurredAt, type: timestamp, constraints: [NOT_NULL] }
+
+  CircleFileOutboxSequence:
+    description: CircleFile outbox 的事务内全局序号分配器。
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL] }
+      - { name: value, type: int64, constraints: [NOT_NULL] }
+
+  CircleFileProjectionCheckpoint:
+    description: 每个 CircleFile outbox 消费者的持久水位。
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL] }
+      - { name: sequence, type: int64, constraints: [NOT_NULL] }
+      - { name: updatedAt, type: timestamp, constraints: [NOT_NULL] }
+
+  CircleFileQuotaLock:
+    description: 同一 Circle 的容量不变量串行化记录，不承载业务对象状态。
+    fields:
+      - { name: _id, type: string, constraints: [PK, NOT_NULL] }
+      - { name: revision, type: int64, constraints: [NOT_NULL] }
+      - { name: updatedAt, type: timestamp, constraints: [NOT_NULL] }

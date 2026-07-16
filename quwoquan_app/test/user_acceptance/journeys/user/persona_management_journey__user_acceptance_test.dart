@@ -1,9 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/user_setting_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_repository.dart';
+import 'package:quwoquan_app/cloud/services/user/user_setting_model.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/pages/persona_management_page.dart';
@@ -146,16 +146,16 @@ class _JourneyUserRepository implements UserRepository {
   }
 
   @override
-  Future<UserSettingDto> getNotificationSettings() async {
-    return UserSettingDto.fromJson(<String, dynamic>{
+  Future<UserSettingModel> getNotificationSettings() async {
+    return UserSettingModel.fromWire(<String, dynamic>{
       'userId': 'owner_persona',
       'enablePush': true,
     });
   }
 
   @override
-  Future<UserSettingDto> getPrivacySettings() async {
-    return UserSettingDto.fromJson(<String, dynamic>{
+  Future<UserSettingModel> getPrivacySettings() async {
+    return UserSettingModel.fromWire(<String, dynamic>{
       'userId': 'owner_persona',
       'profileVisibility': 'public',
     });

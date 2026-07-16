@@ -1,0 +1,22 @@
+version: 1
+
+service:
+  name: content-service
+  domain: content
+  owner: backend-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: CONTENT_DELETED_POST_TOMBSTONE_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
+  description: |
+    DeletedPostTombstone 无独立 transport；GetPost 的具名 Reader 在 Post 不存在时
+    查询本事实并返回 410，禁止暴露 tombstone 写 API。
+
+api_routes: []
+
+consumers:
+  - name: content-service
+    capabilities: [resolve_deleted_post]
+  - name: projection-rebuild
+    capabilities: [reconcile_deleted_post]

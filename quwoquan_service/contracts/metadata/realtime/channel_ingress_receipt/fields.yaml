@@ -1,0 +1,42 @@
+version: 1
+entity: ChannelIngressReceipt
+
+entities:
+  ChannelIngressReceipt:
+    description: 已验签外部渠道入站事实
+    fields:
+      - name: id
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: channelType
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: providerEventId
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: payloadDigest
+        type: string
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+      - name: receivedAt
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: INTERNAL
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read

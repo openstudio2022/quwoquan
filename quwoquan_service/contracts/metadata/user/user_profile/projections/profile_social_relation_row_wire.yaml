@@ -6,7 +6,7 @@ description: |
   与 ProfileSocialRelationRowViewData 对齐。
 
 source_entities:
-  - FollowEdge
+  - PersonaRelationship
 
 consumers:
   - app

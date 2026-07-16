@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -15,9 +16,14 @@ import (
 // PresignClient abstracts presigned URL generation and object existence checks,
 // enabling swap between S3/OSS/MinIO/R2 without changing business logic.
 type PresignClient interface {
-	PresignPutObject(ctx context.Context, bucket, key, contentType string, ttl time.Duration) (string, error)
+	PresignPutObject(ctx context.Context, bucket, key string, constraints PutObjectConstraints, ttl time.Duration) (string, error)
 	StatObject(ctx context.Context, bucket, key string) (*ObjectInfo, error)
 	PromoteObject(ctx context.Context, bucket, sourceKey, targetKey string, metadata map[string]string) error
+}
+
+type PutObjectConstraints struct {
+	ContentType string
+	SHA256      string
 }
 
 // S3PresignClient implements PresignClient using AWS SDK v2 (S3-compatible).
@@ -33,7 +39,11 @@ func NewS3PresignClient(cfg OSSConfig) *S3PresignClient {
 		Credentials: credentials.NewStaticCredentialsProvider(cfg.AccessKeyID, cfg.AccessKeySecret, ""),
 	}
 	if cfg.Endpoint != "" {
-		opts.BaseEndpoint = aws.String(fmt.Sprintf("https://%s", cfg.Endpoint))
+		endpoint := strings.TrimRight(strings.TrimSpace(cfg.Endpoint), "/")
+		if !strings.Contains(endpoint, "://") {
+			endpoint = "https://" + endpoint
+		}
+		opts.BaseEndpoint = aws.String(endpoint)
 		opts.UsePathStyle = true
 	}
 
@@ -44,12 +54,22 @@ func NewS3PresignClient(cfg OSSConfig) *S3PresignClient {
 	}
 }
 
-func (c *S3PresignClient) PresignPutObject(ctx context.Context, bucket, key, contentType string, ttl time.Duration) (string, error) {
-	result, err := c.presigner.PresignPutObject(ctx, &s3.PutObjectInput{
+func (c *S3PresignClient) PresignPutObject(ctx context.Context, bucket, key string, constraints PutObjectConstraints, ttl time.Duration) (string, error) {
+	input := &s3.PutObjectInput{
 		Bucket:      aws.String(bucket),
 		Key:         aws.String(key),
-		ContentType: aws.String(contentType),
-	}, s3.WithPresignExpires(ttl))
+		ContentType: aws.String(constraints.ContentType),
+	}
+	if digest := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(constraints.SHA256)), "sha256:"); digest != "" {
+		raw, err := hex.DecodeString(digest)
+		if err != nil || len(raw) != 32 {
+			return "", fmt.Errorf("s3 presign put: invalid SHA-256 constraint")
+		}
+		encoded := base64.StdEncoding.EncodeToString(raw)
+		input.ChecksumSHA256 = aws.String(encoded)
+		input.Metadata = map[string]string{"sha256": "sha256:" + digest}
+	}
+	result, err := c.presigner.PresignPutObject(ctx, input, s3.WithPresignExpires(ttl))
 	if err != nil {
 		return "", fmt.Errorf("s3 presign put: %w", err)
 	}
@@ -98,26 +118,13 @@ func (c *S3PresignClient) PromoteObject(ctx context.Context, bucket, sourceKey, 
 	if err != nil {
 		return fmt.Errorf("s3 copy object: %w", err)
 	}
-	return nil
-}
-
-// StubPresignClient is the URL-concatenation fallback for dev without S3.
-type StubPresignClient struct{}
-
-func (StubPresignClient) PresignPutObject(_ context.Context, bucket, key, contentType string, ttl time.Duration) (string, error) {
-	expires := time.Now().Add(ttl).Unix()
-	url := fmt.Sprintf("https://%s.s3.stub/%s?X-Amz-Expires=%d&X-Amz-ContentType=%s",
-		bucket, key, expires, contentType)
-	return url, nil
-}
-
-func (StubPresignClient) StatObject(_ context.Context, _, key string) (*ObjectInfo, error) {
-	return &ObjectInfo{
-		Exists: true,
-		Sha256: "sha256:" + fmt.Sprintf("%064x", len(key)),
-	}, nil
-}
-
-func (StubPresignClient) PromoteObject(_ context.Context, _, _, _ string, _ map[string]string) error {
+	if sourceKey != targetKey {
+		if _, err := c.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(sourceKey),
+		}); err != nil {
+			return fmt.Errorf("s3 delete promoted source object: %w", err)
+		}
+	}
 	return nil
 }

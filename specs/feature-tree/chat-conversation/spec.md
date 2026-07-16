@@ -87,7 +87,7 @@
 | **Message** | 消息实体 | MongoDB messages | 新增 seq (per-conversation 单调递增) |
 | **ConversationMember** | 成员关系 | MongoDB conversation_members（新） | 从嵌入拆出为独立 collection，新增 memberType（user/assistant） |
 | **ConversationUserState** | 用户级会话状态 | MongoDB conversation_user_states（新） | mute/pin/readCursor/unreadCount 独立 |
-| **ChatInbox** | 会话列表读模型 | MongoDB rm_chat_inbox | 改为 per-user 投影，source += MemberJoined |
+| **ChatInbox** | 会话列表读模型 | MongoDB rm_chat_inbox | 改为 per-user 投影，source += ConversationMemberAdded |
 | **MessageReceipt** | 消息回执 | MongoDB message_receipts（新，可选） | 仅 ≤50 人群启用 |
 
 ### 5.0 商用对象边界
@@ -222,7 +222,7 @@
 | 维度 | 内容 |
 |------|------|
 | ChatPage | 趣聊/同好 Tab 切换、会话列表加载、空态/错误态降级 |
-| ChatDetailPage | 消息列表 seq 排序、发送乐观插入、撤回超时灰显 |
+| ChatConversationPage | 消息列表 seq 排序、发送乐观插入、撤回超时灰显 |
 | ChatSettingsPage | 成员列表分页、mute/pin 切换、群名修改、错误态 |
 | ChatMessageBubble | 文本/图片/Markdown/assistant_reply 四种气泡正确渲染 |
 | 助手 UI | AssistantAnswerToolbar + ProcessDrawer + RegeneratePopup 交互 |
@@ -237,7 +237,7 @@
 | 消息核心 | seq 分配 + clientMsgId 幂等 + 撤回时效 + 并发安全 |
 | 离线同步 | SyncMessages lastSeq → delta 完整返回 |
 | 成员管理 | 添加/移除 + 助手邀请/移除 + memberCount 维护 |
-| 域事件 | 10 个事件 MessageSent/Recalled/MemberJoined 等 → EventSpy |
+| 域事件 | 12 个事件（MessageSent/Recalled、ConversationMemberAdded/Removed 等）→ EventSpy |
 | ChatInbox | 未读计数 + lastMessageTime 排序 + mute/pin |
 | 已读回执 | ≤50 人群写入/查询 + >50 关闭 |
 | HTTP 契约 | 端侧 staging 17 API 三维度（协议/结构/语义） |
@@ -272,7 +272,7 @@ test/
 ├── ui/chat/
 │   ├── widgets/
 │   │   ├── chat_page_widget_test.dart                # local_contract: ChatPage 渲染
-│   │   ├── chat_detail_page_widget_test.dart         # local_contract: ChatDetailPage 交互
+│   │   ├── chat_conversation_page_widget_test.dart         # local_contract: ChatConversationPage 交互
 │   │   ├── chat_settings_page_widget_test.dart       # local_contract: ChatSettingsPage 操作
 │   │   ├── chat_message_bubble_widget_test.dart      # local_contract: 消息气泡类型
 │   │   └── chat_assistant_ui_widget_test.dart        # local_contract: 助手 UI 组件

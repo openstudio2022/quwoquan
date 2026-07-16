@@ -31,6 +31,7 @@ class ObjectPageShell extends StatefulWidget {
     this.identityPinExtent = 0,
     this.cardRadius = AppSpacing.radiusTwenty,
     this.scrollController,
+    this.onRefresh,
     this.onSwipe,
     this.cacheExtentScreens = 4,
     this.toolbarContentHeight,
@@ -84,6 +85,7 @@ class ObjectPageShell extends StatefulWidget {
   final double identityPinExtent;
   final double cardRadius;
   final ScrollController? scrollController;
+  final Future<void> Function()? onRefresh;
 
   /// 一级页签左右滑动切换（可选）；返回是否消费。
   final void Function(DragEndDetails details)? onSwipe;
@@ -383,6 +385,8 @@ class _ObjectPageShellState extends State<ObjectPageShell> {
           parent: AlwaysScrollableScrollPhysics(),
         ),
         slivers: [
+          if (widget.onRefresh != null)
+            CupertinoSliverRefreshControl(onRefresh: widget.onRefresh),
           SliverToBoxAdapter(
             child: SizedBox(height: _backgroundSpacerHeight(context)),
           ),

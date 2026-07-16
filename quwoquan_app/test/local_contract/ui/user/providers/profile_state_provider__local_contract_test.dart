@@ -12,6 +12,7 @@ import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 class _TestUserProfileRepository extends MockUserProfileRepository {
   int followCalls = 0;
@@ -122,6 +123,7 @@ class _CountingProfileContentRepository extends MockContentRepository {
     required String userId,
     String? identity,
     String? type,
+    String? visibility,
     String? cursor,
     int limit = 20,
   }) async {
@@ -170,7 +172,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _TestRelationshipCapabilityRepository(),
         ),
-        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+        ...mockContentFacetOverrides(MockContentRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -229,7 +231,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _TestRelationshipCapabilityRepository(),
         ),
-        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+        ...mockContentFacetOverrides(MockContentRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -256,7 +258,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _TestRelationshipCapabilityRepository(),
         ),
-        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+        ...mockContentFacetOverrides(MockContentRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -283,7 +285,7 @@ void main() {
           _TestUserProfileRepository(),
         ),
         relationshipCapabilityRepositoryProvider.overrideWithValue(capRepo),
-        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+        ...mockContentFacetOverrides(MockContentRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -302,29 +304,32 @@ void main() {
     expect(capRepo.getCapabilityCalls, 0);
   });
 
-  test('loadProfile 的作品列表经 ContentRepository 读取以复用 query snapshot', () async {
-    final contentRepo = _CountingProfileContentRepository();
-    final container = ProviderContainer(
-      overrides: [
-        userProfileRepositoryProvider.overrideWithValue(
-          _TestUserProfileRepository(),
-        ),
-        contentRepositoryProvider.overrideWithValue(contentRepo),
-        relationshipCapabilityRepositoryProvider.overrideWithValue(
-          _TestRelationshipCapabilityRepository(),
-        ),
-      ],
-    );
-    addTearDown(container.dispose);
+  test(
+    'loadProfile 的作品列表经 ContentReadRepository 读取以复用 query snapshot',
+    () async {
+      final contentRepo = _CountingProfileContentRepository();
+      final container = ProviderContainer(
+        overrides: [
+          userProfileRepositoryProvider.overrideWithValue(
+            _TestUserProfileRepository(),
+          ),
+          ...mockContentFacetOverrides(contentRepo),
+          relationshipCapabilityRepositoryProvider.overrideWithValue(
+            _TestRelationshipCapabilityRepository(),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    container.read(profileNotifierProvider('profile-1').notifier);
-    await Future<void>.delayed(const Duration(milliseconds: 1));
-    await Future<void>.delayed(const Duration(milliseconds: 1));
+      container.read(profileNotifierProvider('profile-1').notifier);
+      await Future<void>.delayed(const Duration(milliseconds: 1));
+      await Future<void>.delayed(const Duration(milliseconds: 1));
 
-    final s = container.read(profileNotifierProvider('profile-1'));
-    expect(contentRepo.listUserPostsCalls, 1);
-    expect(s.creations.single.id, 'content_repo_post');
-  });
+      final s = container.read(profileNotifierProvider('profile-1'));
+      expect(contentRepo.listUserPostsCalls, 1);
+      expect(s.creations.single.id, 'content_repo_post');
+    },
+  );
 
   test('loadProfile 失败进入结构化错误态：errorMessage 非空且不静默', () async {
     final container = ProviderContainer(
@@ -335,7 +340,7 @@ void main() {
         relationshipCapabilityRepositoryProvider.overrideWithValue(
           _TestRelationshipCapabilityRepository(),
         ),
-        contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+        ...mockContentFacetOverrides(MockContentRepository()),
       ],
     );
     addTearDown(container.dispose);

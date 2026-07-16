@@ -4,8 +4,8 @@ read_model: ChatInbox
 description: |
   聊天列表 ReadModel（v2 per-user 投影）。
   由 ConversationUserState 驱动，按 pinned DESC + lastMessageTime DESC 排序。
-  source_events 扩展：MemberJoined 创建条目，MemberLeft 删除条目，
-  ConversationSettingsUpdated 更新 muted/pinned，ReadReceiptSent 负责未读回落。
+  source_events 扩展：ConversationMemberAdded 创建条目，ConversationMemberRemoved 删除条目，
+  ConversationUserSettingsChanged 更新 muted/pinned，ConversationReadWatermarkAdvanced 负责未读回落。
 
 storage_backend: mongodb
 collection: rm_chat_inbox
@@ -19,10 +19,10 @@ source_entities:
 source_events:
   - MessageSent
   - ConversationCreated
-  - MemberJoined
-  - MemberLeft
-  - ConversationSettingsUpdated
-  - ReadReceiptSent
+  - ConversationMemberAdded
+  - ConversationMemberRemoved
+  - ConversationUserSettingsChanged
+  - ConversationReadWatermarkAdvanced
 
 consumers:
   - app (chat list)

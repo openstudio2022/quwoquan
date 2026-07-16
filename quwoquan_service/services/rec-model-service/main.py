@@ -1,6 +1,6 @@
 """
-rec-model-service: recommendation model inference API.
-POST /v1/score (multi-scenario), GET /health, GET /metrics (Prometheus).
+recommendation-service: model-release lifecycle and inference API.
+Scoring is exposed only through the internal ModelRelease Reader contract.
 """
 from contextlib import asynccontextmanager
 import time
@@ -11,10 +11,11 @@ from prometheus_client import Counter, Histogram, make_asgi_app
 
 from api.capacity import refresh_capacity_metrics
 from api.metrics import refresh_rec_model_loaded_gauges
-from api.score import router as score_router
 from runtime_contract import bootstrap_runtime_contract_or_die
 
 bootstrap_runtime_contract_or_die()
+
+from api.score import router as score_router  # noqa: E402
 
 
 http_requests_total = Counter(

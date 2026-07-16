@@ -28,7 +28,7 @@ entries:
       - acceptance
       - observability
     changed_documents:
-      - path: .cursor/plans/推荐系统全链路自检与规划_90b5be26.plan.md
+      - path: .cursor/plans/推荐系统全链路自检与规划_90b5be26.content.execution.planning.md
         sections:
           - 执行前任务清单自检与本轮基线范围
       - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md

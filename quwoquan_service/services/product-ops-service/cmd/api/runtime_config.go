@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	platformredis "quwoquan_service/internal/platform/redis"
 	rtredis "quwoquan_service/runtime/redis"
 
 	"gopkg.in/yaml.v3"
@@ -46,6 +47,9 @@ type config struct {
 		URI      string `yaml:"uri"`
 		Database string `yaml:"database"`
 	} `yaml:"mongodb"`
+	Postgres struct {
+		DSN string `yaml:"dsn"`
+	} `yaml:"postgres"`
 	Redis struct {
 		Rec     redisSceneCfg `yaml:"rec"`
 		General redisSceneCfg `yaml:"general"`
@@ -117,6 +121,9 @@ func applyEnvOverrides(cfg *config) {
 	if v := strings.TrimSpace(os.Getenv("MONGODB_DATABASE")); v != "" {
 		cfg.MongoDB.Database = v
 	}
+	if v := strings.TrimSpace(os.Getenv("POSTGRES_DSN")); v != "" {
+		cfg.Postgres.DSN = v
+	}
 	if v := strings.TrimSpace(os.Getenv("PRODUCT_OPS_REDIS_GENERAL_ADDR")); v != "" {
 		cfg.Redis.General.Addr = v
 	}
@@ -131,6 +138,9 @@ func applyEnvOverrides(cfg *config) {
 	}
 	if strings.HasPrefix(strings.TrimSpace(cfg.MongoDB.URI), "${") {
 		cfg.MongoDB.URI = ""
+	}
+	if strings.HasPrefix(strings.TrimSpace(cfg.Postgres.DSN), "${") {
+		cfg.Postgres.DSN = ""
 	}
 }
 
@@ -174,29 +184,37 @@ func parseSemver(raw string) [3]int {
 	return out
 }
 
-func buildRedisRouter(cfg config) *rtredis.Router {
-	generalScene := rtredis.SceneConfig{
-		Mode:         fallbackMode(cfg.Redis.General.Mode, cfg.Redis.General.Addr, cfg.Redis.General.Addrs),
-		Addr:         cfg.Redis.General.Addr,
-		Addrs:        cfg.Redis.General.Addrs,
-		Password:     cfg.Redis.General.Password,
-		DB:           cfg.Redis.General.DB,
-		TLS:          cfg.Redis.General.TLS,
-		PoolSize:     cfg.Redis.General.Pool.Size,
-		MinIdleConns: cfg.Redis.General.Pool.MinIdle,
+func validateRequiredRuntimeConfig(cfg config) error {
+	if strings.TrimSpace(cfg.MongoDB.URI) == "" {
+		return fmt.Errorf("mongodb.uri is required")
 	}
-	return rtredis.MustNewRouter(rtredis.RouterConfig{
+	if strings.TrimSpace(cfg.MongoDB.Database) == "" {
+		return fmt.Errorf("mongodb.database is required")
+	}
+	if strings.TrimSpace(cfg.Postgres.DSN) == "" {
+		return fmt.Errorf("postgres.dsn is required")
+	}
+	if _, err := buildRedisSceneConfig("rec", cfg.Redis.Rec); err != nil {
+		return err
+	}
+	if _, err := buildRedisSceneConfig("general", cfg.Redis.General); err != nil {
+		return err
+	}
+	return nil
+}
+
+func buildRedisRouter(cfg config) (*rtredis.Router, error) {
+	recScene, err := buildRedisSceneConfig("rec", cfg.Redis.Rec)
+	if err != nil {
+		return nil, err
+	}
+	generalScene, err := buildRedisSceneConfig("general", cfg.Redis.General)
+	if err != nil {
+		return nil, err
+	}
+	return platformredis.NewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
-			"rec": {
-				Mode:         fallbackMode(cfg.Redis.Rec.Mode, cfg.Redis.Rec.Addr, cfg.Redis.Rec.Addrs),
-				Addr:         cfg.Redis.Rec.Addr,
-				Addrs:        cfg.Redis.Rec.Addrs,
-				Password:     cfg.Redis.Rec.Password,
-				DB:           cfg.Redis.Rec.DB,
-				TLS:          cfg.Redis.Rec.TLS,
-				PoolSize:     cfg.Redis.Rec.Pool.Size,
-				MinIdleConns: cfg.Redis.Rec.Pool.MinIdle,
-			},
+			"rec":      recScene,
 			"general":  generalScene,
 			"realtime": generalScene,
 		},
@@ -205,11 +223,63 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 	})
 }
 
-func fallbackMode(mode string, addr string, addrs []string) string {
-	if strings.TrimSpace(mode) != "" && (strings.TrimSpace(addr) != "" || len(addrs) > 0) {
-		return mode
+func buildRedisSceneConfig(name string, cfg redisSceneCfg) (rtredis.SceneConfig, error) {
+	mode := strings.ToLower(strings.TrimSpace(cfg.Mode))
+	addr := strings.TrimSpace(cfg.Addr)
+	addrs := normalizedRedisAddrs(cfg.Addrs)
+	if len(addrs) == 0 && addr != "" {
+		addrs = normalizedRedisAddrs(strings.Split(addr, ","))
 	}
-	return "memory"
+	if mode == "" {
+		switch {
+		case len(addrs) > 1:
+			mode = "cluster"
+		case addr != "" || len(addrs) == 1:
+			mode = "standalone"
+		default:
+			return rtredis.SceneConfig{}, fmt.Errorf("redis.%s endpoint is required", name)
+		}
+	}
+	switch mode {
+	case "standalone":
+		if addr == "" && len(addrs) == 1 {
+			addr = addrs[0]
+		}
+		if addr == "" || strings.Contains(addr, ",") {
+			return rtredis.SceneConfig{}, fmt.Errorf("redis.%s standalone addr is required", name)
+		}
+		addrs = nil
+	case "cluster":
+		if len(addrs) == 0 {
+			return rtredis.SceneConfig{}, fmt.Errorf("redis.%s cluster addrs are required", name)
+		}
+		addr = ""
+	default:
+		return rtredis.SceneConfig{}, fmt.Errorf("redis.%s mode %q is not supported in service wiring", name, mode)
+	}
+	return rtredis.SceneConfig{
+		Mode:           mode,
+		Addr:           addr,
+		Addrs:          addrs,
+		Password:       cfg.Password,
+		DB:             cfg.DB,
+		TLS:            cfg.TLS,
+		PoolSize:       cfg.Pool.Size,
+		MinIdleConns:   cfg.Pool.MinIdle,
+		ReadTimeoutMs:  cfg.Pool.ReadTimeoutMs,
+		WriteTimeoutMs: cfg.Pool.WriteTimeoutMs,
+		DialTimeoutMs:  cfg.Pool.DialTimeoutMs,
+	}, nil
+}
+
+func normalizedRedisAddrs(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func isValidAppEnv(env string) bool {

@@ -100,6 +100,31 @@ error_scenarios:
     input_status: 400
     expected_dart_const: invalidArgument
 
+  - name: parse_interaction_type_invalid
+    input_code: "CONTENT.USER.interaction_type_invalid"
+    input_status: 400
+    expected_dart_const: interactionTypeInvalid
+    expected_recovery_action: surface
+
+  - name: parse_interaction_cursor_invalid
+    input_code: "CONTENT.USER.interaction_cursor_invalid"
+    input_status: 400
+    expected_dart_const: interactionCursorInvalid
+    expected_recovery_action: refresh
+
+  - name: parse_interaction_owner_forbidden
+    input_code: "CONTENT.USER.interaction_owner_forbidden"
+    input_status: 403
+    expected_dart_const: interactionOwnerForbidden
+    expected_recovery_action: surface
+
+  - name: parse_interaction_read_model_unavailable
+    input_code: "CONTENT.SYSTEM.interaction_read_model_unavailable"
+    input_status: 503
+    expected_dart_const: interactionReadModelUnavailable
+    expected_recovery_action: retry
+    expected_recovery_after: 3
+
   - name: parse_assistant_mention_context_missing
     input_code: "CONTENT.USER.assistant_mention_context_missing"
     input_status: 400
@@ -141,6 +166,12 @@ error_scenarios:
     input_code: "CONTENT.SYSTEM.storage_write_failed"
     input_status: 500
     expected_dart_const: storageWriteFailed
+    expected_recovery_action: retry
+
+  - name: parse_storage_read_failed
+    input_code: "CONTENT.SYSTEM.storage_read_failed"
+    input_status: 500
+    expected_dart_const: storageReadFailed
     expected_recovery_action: retry
 
   - name: parse_upstream_timeout
@@ -249,6 +280,36 @@ error_scenarios:
   - name: parse_circle_distribution_forbidden
     input_code: "CONTENT.USER.circle_distribution_forbidden"
     expected_dart_const: circleDistributionForbidden
+  - name: parse_report_not_found
+    input_code: "CONTENT.USER.report_not_found"
+    input_status: 404
+    expected_dart_const: reportNotFound
+    expected_recovery_action: surface
+  - name: parse_version_conflict
+    input_code: "CONTENT.USER.version_conflict"
+    input_status: 409
+    expected_dart_const: versionConflict
+    expected_recovery_action: refresh
+  - name: parse_idempotency_conflict
+    input_code: "CONTENT.USER.idempotency_conflict"
+    input_status: 409
+    expected_dart_const: idempotencyConflict
+    expected_recovery_action: refresh
+  - name: parse_moderation_approval_required
+    input_code: "CONTENT.USER.moderation_approval_required"
+    input_status: 409
+    expected_dart_const: moderationApprovalRequired
+    expected_recovery_action: retry
+  - name: parse_moderation_decision_stale
+    input_code: "CONTENT.USER.moderation_decision_stale"
+    input_status: 409
+    expected_dart_const: moderationDecisionStale
+    expected_recovery_action: refresh
+  - name: parse_required_dependency_unavailable
+    input_code: "CONTENT.SYSTEM.required_dependency_unavailable"
+    input_status: 503
+    expected_dart_const: requiredDependencyUnavailable
+    expected_recovery_action: retry
 
 # ── 行为上报格式场景 ─────────────────────────────────────────────────
 behavior_scenarios:

@@ -12,6 +12,26 @@ import (
 
 var rawInteractionStatsPattern = regexp.MustCompile(`[0-9０-９]+\s*(赞|评|转|转发)`)
 
+const (
+	DisplayBindingExplicitLink     = "explicit_link"
+	DisplayBindingHostImplicit     = "host_implicit"
+	DisplayBindingHostPlain        = "host_plain"
+	DisplayBindingHidden           = "hidden"
+	DisplaySurfaceFeed             = "homeFeed"
+	DisplaySurfaceWorkBrowser      = "workBrowser"
+	DisplaySurfaceSearchResult     = "searchResult"
+	DisplaySurfaceObjectPage       = "objectPage"
+	DisplaySurfaceIntersectionList = "intersectionList"
+)
+
+// DisplayContext 是 Query Reader/Slice 输出口的展示绑定上下文。canonical reason
+// 仍只表达 evidence 与 target；只有输出到具体 surface 时，才决定宾语是显式链接还是宿主上下文。
+type DisplayContext struct {
+	Surface    string
+	HostTarget *IntersectionTargetView
+	Binding    string
+}
+
 // 交集理由的纯派生/水合辅助（freshness、point/icon/target/text span 推导）
 // 自 intersection_service.go 拆出（同 application 包，R03 行数预算，行为不变）。
 
@@ -205,9 +225,7 @@ func hydrateExplain(r IntersectionReasonView) IntersectionReasonView {
 	}
 	r = hydrateInteractionContract(r)
 	if !ValidateDisplayStatement(r) {
-		r.PrimaryText = ""
-		r.PrimarySpans = nil
-		r.ActionHints = nil
+		r = hideDisplayStatement(r)
 	}
 	if r.ObjectVisual == nil {
 		r.ObjectVisual = objectVisualForReason(r)
@@ -275,6 +293,7 @@ func hydrateInteractionContract(r IntersectionReasonView) IntersectionReasonView
 	if len(r.ActionHints) == 0 {
 		r.ActionHints = actionHintsForReason(r, target)
 	}
+	r.DisplayBinding = normalizedDisplayBinding(r.DisplayBinding)
 	return r
 }
 
@@ -379,6 +398,47 @@ func objectTypeForTarget(kind, objectID, routeID string) string {
 	return ""
 }
 
+func hostTargetForObjectRequest(objectID, objectType string) *IntersectionTargetView {
+	id := strings.TrimSpace(objectID)
+	if id == "" {
+		return nil
+	}
+	objectType = strings.TrimSpace(objectType)
+	switch objectType {
+	case "user", "person":
+		return &IntersectionTargetView{ObjectType: "user", ObjectID: id, ObjectKind: "person", RouteID: routeIDForObjectKind("person")}
+	case "circle":
+		return &IntersectionTargetView{ObjectType: "circle", ObjectID: id, ObjectKind: "circle", RouteID: routeIDForObjectKind("circle")}
+	case "homepage", "entity":
+		return &IntersectionTargetView{ObjectType: "homepage", ObjectID: id, ObjectKind: "place", RouteID: routeIDForObjectKind("place")}
+	case "post", "content":
+		return &IntersectionTargetView{ObjectType: "post", ObjectID: id, ObjectKind: "content", RouteID: routeIDForObjectKind("content")}
+	default:
+		return nil
+	}
+}
+
+// hostTargetForObjectReasons resolves open request objectType values through the
+// source-owned closed ObjectKind contract. This avoids maintaining a second,
+// inevitably incomplete objectType switch in the application read path.
+func hostTargetForObjectReasons(
+	objectID string,
+	objectType string,
+	reasons []IntersectionReasonView,
+) *IntersectionTargetView {
+	if target := hostTargetForObjectRequest(objectID, objectType); target != nil {
+		return target
+	}
+	id := strings.TrimSpace(objectID)
+	for _, reason := range reasons {
+		target := intersectionTargetForReason(reason)
+		if target != nil && strings.TrimSpace(target.ObjectID) == id {
+			return target
+		}
+	}
+	return nil
+}
+
 func assetKindForObjectKind(kind string) string {
 	// 真相源 = intersection_kind_registry.yaml objectKinds[].assetKind
 	// （codegen generated.IntersectionAssetKindByObjectKind；端 UnifiedObjectKind.assetKind 同表）。
@@ -459,9 +519,38 @@ func primarySpansForReason(r IntersectionReasonView, target *IntersectionTargetV
 	return []IntersectionTextSpanView{{Text: text, Role: "plain"}}
 }
 
-// ValidateDisplayStatement 是交集 v3 展示合同闸：服务端只允许完整 SVO 且可导航的实例
-// 进入 App 展示层。App 仍会 fail-closed 复核，但不再替云侧补主句。
+// ApplyDisplayContext 把 canonical explicit reason 投影成具体 Query Slice 的上下文表达。
+// 它只消费结构化 span/target，不按字符串猜当前对象。
+func ApplyDisplayContext(r IntersectionReasonView, ctx DisplayContext) IntersectionReasonView {
+	binding := normalizedDisplayBinding(ctx.Binding)
+	if binding == DisplayBindingExplicitLink && ctx.HostTarget != nil && sameIntersectionTarget(intersectionTargetForReason(r), ctx.HostTarget) {
+		binding = DisplayBindingHostImplicit
+	}
+	if binding == DisplayBindingHidden {
+		return hideDisplayStatement(r)
+	}
+	r.DisplayBinding = binding
+	switch binding {
+	case DisplayBindingHostImplicit:
+		r = removeHostObjectSpan(r, ctx.HostTarget)
+	case DisplayBindingHostPlain:
+		r = plainHostObjectSpan(r, ctx.HostTarget)
+	default:
+		r.DisplayBinding = DisplayBindingExplicitLink
+	}
+	if !ValidateDisplayStatementWithContext(r, ctx) {
+		return hideDisplayStatement(r)
+	}
+	return r
+}
+
+// ValidateDisplayStatement 是交集 v3 展示合同闸：默认严格按 explicit_link 校验，
+// 只有 Reader/Slice 输出口显式传 DisplayContext 时才允许 host_implicit/host_plain。
 func ValidateDisplayStatement(r IntersectionReasonView) bool {
+	return ValidateDisplayStatementWithContext(r, DisplayContext{})
+}
+
+func ValidateDisplayStatementWithContext(r IntersectionReasonView, ctx DisplayContext) bool {
 	if !displayStatementTextAllowed(r, r.PrimaryText) {
 		return false
 	}
@@ -471,7 +560,15 @@ func ValidateDisplayStatement(r IntersectionReasonView) bool {
 	if joinedSpanText(r.PrimarySpans) != strings.TrimSpace(r.PrimaryText) {
 		return false
 	}
-	hasObjectTarget := false
+	binding := normalizedDisplayBinding(r.DisplayBinding)
+	if binding == DisplayBindingHidden {
+		return false
+	}
+	reasonTarget := intersectionTargetForReason(r)
+	if reasonTarget == nil || !displayObjectTargetAllowed(reasonTarget) {
+		return false
+	}
+	hasReasonObjectTarget := false
 	for _, span := range r.PrimarySpans {
 		switch strings.TrimSpace(span.Role) {
 		case "count":
@@ -484,10 +581,25 @@ func ValidateDisplayStatement(r IntersectionReasonView) bool {
 			if span.Target == nil || !displayObjectTargetAllowed(span.Target) {
 				return false
 			}
-			hasObjectTarget = true
+			if sameIntersectionTarget(span.Target, reasonTarget) {
+				hasReasonObjectTarget = true
+			}
 		}
 	}
-	return hasObjectTarget
+	switch binding {
+	case DisplayBindingExplicitLink:
+		if ctx.HostTarget != nil && sameIntersectionTarget(reasonTarget, ctx.HostTarget) {
+			return false
+		}
+		return hasReasonObjectTarget
+	case DisplayBindingHostImplicit, DisplayBindingHostPlain:
+		if ctx.HostTarget == nil || !sameIntersectionTarget(reasonTarget, ctx.HostTarget) {
+			return false
+		}
+		return !hasReasonObjectTarget
+	default:
+		return false
+	}
 }
 
 func displayStatementTextAllowed(r IntersectionReasonView, text string) bool {
@@ -508,6 +620,9 @@ func displayStatementTextAllowed(r IntersectionReasonView, text string) bool {
 		"相关圈子",
 		"我的连接",
 		"我的影响力",
+		"这条记录",
+		"这篇内容",
+		"当前内容",
 		"你和这里",
 		"你和这个圈子",
 		"你们有共同",
@@ -524,6 +639,76 @@ func displayStatementTextAllowed(r IntersectionReasonView, text string) bool {
 		return false
 	}
 	return true
+}
+
+func normalizedDisplayBinding(value string) string {
+	switch strings.TrimSpace(value) {
+	case DisplayBindingHostImplicit:
+		return DisplayBindingHostImplicit
+	case DisplayBindingHostPlain:
+		return DisplayBindingHostPlain
+	case DisplayBindingHidden:
+		return DisplayBindingHidden
+	default:
+		return DisplayBindingExplicitLink
+	}
+}
+
+func hideDisplayStatement(r IntersectionReasonView) IntersectionReasonView {
+	r.DisplayBinding = DisplayBindingHidden
+	r.PrimaryText = ""
+	r.PrimarySpans = nil
+	r.ActionHints = nil
+	return r
+}
+
+func sameIntersectionTarget(a, b *IntersectionTargetView) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	if strings.TrimSpace(a.ObjectID) == "" || strings.TrimSpace(b.ObjectID) == "" {
+		return false
+	}
+	return strings.TrimSpace(a.ObjectID) == strings.TrimSpace(b.ObjectID) &&
+		strings.TrimSpace(a.ObjectType) == strings.TrimSpace(b.ObjectType)
+}
+
+func removeHostObjectSpan(r IntersectionReasonView, host *IntersectionTargetView) IntersectionReasonView {
+	reasonTarget := intersectionTargetForReason(r)
+	if host == nil || !sameIntersectionTarget(reasonTarget, host) {
+		return r
+	}
+	out := make([]IntersectionTextSpanView, 0, len(r.PrimarySpans))
+	removed := false
+	for _, span := range r.PrimarySpans {
+		if strings.TrimSpace(span.Role) == "object" && sameIntersectionTarget(span.Target, host) {
+			removed = true
+			continue
+		}
+		out = append(out, span)
+	}
+	if removed {
+		r.PrimarySpans = out
+		r.PrimaryText = strings.TrimSpace(joinedSpanText(out))
+	}
+	return r
+}
+
+func plainHostObjectSpan(r IntersectionReasonView, host *IntersectionTargetView) IntersectionReasonView {
+	reasonTarget := intersectionTargetForReason(r)
+	if host == nil || !sameIntersectionTarget(reasonTarget, host) {
+		return r
+	}
+	out := make([]IntersectionTextSpanView, 0, len(r.PrimarySpans))
+	for _, span := range r.PrimarySpans {
+		if strings.TrimSpace(span.Role) == "object" && sameIntersectionTarget(span.Target, host) {
+			span.Role = "plain"
+			span.Target = nil
+		}
+		out = append(out, span)
+	}
+	r.PrimarySpans = out
+	return r
 }
 
 func displayObjectTargetAllowed(target *IntersectionTargetView) bool {
@@ -623,7 +808,13 @@ func primaryStatementSpansForReason(
 	case "coWishlistedEntity":
 		return append(append(subject, plainSpan("都想去")), object)
 	case "followeeVisited":
-		return append(append(subject, plainSpan("来过")), object)
+		countedSubject := countedRepresentativeSubject(r, anchor, anchorAggregateCount(r, anchor))
+		countedSpans := splitCountSpan(
+			countedSubject,
+			anchorAggregateCount(r, anchor),
+			countTargetForReason(r, anchor),
+		)
+		return append(append(countedSpans, plainSpan("来过")), object)
 	case "followeeInObject":
 		return append(append(subject, plainSpan("在")), object)
 	case "followeeViewing":
@@ -898,22 +1089,6 @@ func countedRepresentativeSubject(r IntersectionReasonView, anchor IntersectionP
 	return fmt.Sprintf("%d位用户", n)
 }
 
-func hasMachineRepresentativeName(r IntersectionReasonView, anchor IntersectionPointView) bool {
-	name := strings.TrimSpace(representativeActorName(r, anchor))
-	switch {
-	case name == "":
-		return false
-	case strings.Contains(name, "_"):
-		return true
-	case strings.HasPrefix(name, "fixture_"):
-		return true
-	case strings.HasPrefix(name, "ixsrc_"):
-		return true
-	default:
-		return false
-	}
-}
-
 func representativeSubjectWithUnit(r IntersectionReasonView, anchor IntersectionPointView, n int, unit string) string {
 	base := representativeSubject(r, anchor, 1)
 	if n <= 1 {
@@ -1176,11 +1351,7 @@ func explainPrimaryText(r IntersectionReasonView, anchor IntersectionPointView) 
 		if objectName == "" {
 			return ""
 		}
-		subject := representativeSubject(r, anchor, n)
-		if hasMachineRepresentativeName(r, anchor) {
-			subject = countedRepresentativeSubject(r, anchor, n)
-		}
-		return fmt.Sprintf("%s来过%s", subject, objectName)
+		return fmt.Sprintf("%s来过%s", countedRepresentativeSubject(r, anchor, n), objectName)
 	case "followeeInObject":
 		objectName := renderedObjectNameForReason(r, anchor.SourceRef)
 		if objectName == "" {

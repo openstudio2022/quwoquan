@@ -26,6 +26,16 @@ func (s *MemorySkillSubscriptionStore) CreateSkillSubscription(_ context.Context
 	return subscription, nil
 }
 
+func (s *MemorySkillSubscriptionStore) UpsertSkillSubscription(_ context.Context, subscription assistant.SkillSubscription) (assistant.SkillSubscription, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing, ok := s.subscriptions[subscription.SubscriptionID]; ok {
+		subscription.CreatedAt = existing.CreatedAt
+	}
+	s.subscriptions[subscription.SubscriptionID] = subscription
+	return subscription, nil
+}
+
 func (s *MemorySkillSubscriptionStore) GetSkillSubscription(_ context.Context, userID, subscriptionID string) (assistant.SkillSubscription, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

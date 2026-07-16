@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _common.paths import RUNTIME_ROOT
+from core.paths import RUNTIME_ROOT
 
 CATALOG_DIR = RUNTIME_ROOT / "seed" / "school_catalog"
 MANIFEST_PATH = CATALOG_DIR / "source_manifest.json"

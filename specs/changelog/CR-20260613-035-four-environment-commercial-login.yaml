@@ -1,7 +1,7 @@
 id: CR-20260613-035-four-environment-commercial-login
 title: 登录四环境商用化：外部依赖注入矩阵、gamma 受控放通与社交三方落地
 slug: four-environment-commercial-login
-revision: 1
+revision: 2
 status: specified
 
 affected_nodes:
@@ -9,6 +9,51 @@ affected_nodes:
   - specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/two-state-one-tap-login--commercial-login-entry
 
 entries:
+  - timestamp: "2026-07-12T22:10:00+08:00"
+    summary: |
+      按当前发布范围移除 Apple/Passkey 的公开登录面：从 user metadata route、生成的 App API
+      metadata、AuthRepository/RemoteAuthRepository 与 user-service HTTP handler 同步删除未实现登录；
+      仅保留 NativeAuth 防腐层中的未来扩展枚举。local-gamma 与 prod gateway 均补齐
+      /v1/auth*、/v1/owner* 到 user-service 的路由，并增加无副作用 OTP 空请求探针。
+    reason: |
+      Apple 与 Passkey 尚未进入本期支持范围；此前 Apple 公开端点直接将未校验 token 当作稳定凭证，
+      会造成认证绕过风险，Passkey 则存在元数据与 handler 漂移。
+      同时，认证与 owner 路由未进入 gamma/prod 网关会使 Remote 登录链路得到 Caddy 404。
+    change_type:
+      - security
+      - contract
+      - ops
+    changed_documents:
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/spec.md
+        sections:
+          - 功能说明
+          - 范围
+          - 不做什么（Out of Scope）
+          - 验收标准
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/spec.md
+        sections:
+          - Out of Scope
+      - path: specs/feature-tree/user-identity-profile-relationship/onboarding-and-identity-entry/four-environment-commercial-login-maturity/acceptance.yaml
+        sections:
+          - scope
+          - contract_acceptance
+      - path: quwoquan_service/contracts/metadata/user/user_profile/service.yaml
+        sections:
+          - LoginWithApple / LoginWithPasskey removal
+      - path: quwoquan_ops/environments/local-gamma/Caddyfile
+        sections:
+          - user-service gateway routes
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - Apple/Passkey future implementation must begin with verified assertion metadata, server-side validation, native SDK UAT and a new approved CR; it must not restore the removed raw-token endpoint.
   - timestamp: "2026-06-13T18:05:00+08:00"
     summary: |
       将全部登录方式（手机号 OTP、运营商一键、微信/支付宝/QQ、匿名）收敛到统一"环境 × 外部依赖"注入矩阵：

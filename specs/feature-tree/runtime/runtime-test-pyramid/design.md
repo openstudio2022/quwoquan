@@ -17,12 +17,12 @@
 
 - `alpha` / `local`：`local_contract`
 - `beta` / `gamma`：`api_integration`
-- `gamma_local` / `prod_gray_initial`：`user_acceptance`
+- `gamma_local` / `prod + rollout_stage=gray_initial`：`user_acceptance`
 
 约束：
 
 - 生产只有 `prod` 一个环境；`gray-initial` 是 rollout stage，不是 `prod-gray`
-- 发布前允许在 `prod_gray_initial` 跑只读/幂等 `api_integration` 与 Journey/Page `user_acceptance`
+- 发布前允许在 `prod` 的 `gray_initial` rollout stage 跑只读/幂等 `api_integration` 与 Journey/Page `user_acceptance`
 - 不再新增 `T1-T4`、`L1-L4`、`contract-test` 等第二口径
 
 ## 顶层用例模型

@@ -23,6 +23,31 @@ class AppLogRedactor {
     return out;
   }
 
+  String redactText(String input) {
+    var value = input;
+    value = value.replaceAll(
+      RegExp(r'\bBearer\s+[A-Za-z0-9._~+/=-]+', caseSensitive: false),
+      'Bearer $_masked',
+    );
+    value = value.replaceAllMapped(
+      RegExp(
+        r'([?&](?:access_token|token|authcode|authorization|signature|'
+        r'x-amz-signature|x-amz-credential|secret)=)[^&#\s]+',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}$_masked',
+    );
+    value = value.replaceAllMapped(
+      RegExp(
+        r'((?:"|\\")?(?:access_token|token|authcode|'
+        r'signature|secret)(?:"|\\")?\s*[:=]\s*(?:"|\\")?)[^",}&\s]+',
+        caseSensitive: false,
+      ),
+      (match) => '${match.group(1)}$_masked',
+    );
+    return value;
+  }
+
   dynamic _redactValue({required String key, required dynamic value}) {
     if (_isSensitiveKey(key)) {
       return _masked;
@@ -39,8 +64,11 @@ class AppLogRedactor {
           .map((item) => _redactValue(key: key, value: item))
           .toList(growable: false);
     }
-    if (value is String && _looksSensitiveText(value)) {
-      return _masked;
+    if (value is String) {
+      if (_looksSensitiveText(value)) {
+        return _masked;
+      }
+      return redactText(value);
     }
     return value;
   }

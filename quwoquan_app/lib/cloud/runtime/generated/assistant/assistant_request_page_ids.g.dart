@@ -6,10 +6,9 @@ class AssistantRequestPageIds {
 
   static const Map<String, String> operationToPageId = <String, String>{
     'CreateAssistantConversation': 'assistant.create.assistant.conversation',
-    'CreateAssistantTurn': 'assistant.create.assistant.turn',
     'CreateSkillSubscription': 'assistant.create.skill.subscription',
     'GetAssistantConversation': 'assistant.get.assistant.conversation',
-    'GetAssistantTurn': 'assistant.get.assistant.turn',
+    'GetAssistantRun': 'assistant.get.assistant.run',
     'GetEntryPersonalization': 'assistant.get.entry.personalization',
     'GetLearningOpsSummary': 'assistant.get.learning.ops.summary',
     'GetPolicy': 'assistant.policy.get',
@@ -26,17 +25,17 @@ class AssistantRequestPageIds {
     'ReportScorecard': 'assistant.learning.scorecards.report',
     'RevokeSkillConsent': 'assistant.skills.consent.revoke',
     'SearchXiaoquResults': 'assistant.search.xiaoqu',
-    'StreamAssistantTurn': 'assistant.stream.assistant.turn',
+    'StartAssistantRun': 'assistant.start.assistant.run',
+    'StreamAssistantRunEvents': 'assistant.stream.assistant.run.events',
     'SuggestCreationAssistance': 'assistant.suggest.creation.assistance',
     'TickSkillSubscriptionCron': 'assistant.tick.skill.subscription.cron',
     'UpdateSkillSubscriptionStatus': 'assistant.update.skill.subscription.status',
   };
 
   static const String createAssistantConversation = 'assistant.create.assistant.conversation';
-  static const String createAssistantTurn = 'assistant.create.assistant.turn';
   static const String createSkillSubscription = 'assistant.create.skill.subscription';
   static const String getAssistantConversation = 'assistant.get.assistant.conversation';
-  static const String getAssistantTurn = 'assistant.get.assistant.turn';
+  static const String getAssistantRun = 'assistant.get.assistant.run';
   static const String getEntryPersonalization = 'assistant.get.entry.personalization';
   static const String getLearningOpsSummary = 'assistant.get.learning.ops.summary';
   static const String getPolicy = 'assistant.policy.get';
@@ -53,7 +52,8 @@ class AssistantRequestPageIds {
   static const String reportScorecard = 'assistant.learning.scorecards.report';
   static const String revokeSkillConsent = 'assistant.skills.consent.revoke';
   static const String searchXiaoquResults = 'assistant.search.xiaoqu';
-  static const String streamAssistantTurn = 'assistant.stream.assistant.turn';
+  static const String startAssistantRun = 'assistant.start.assistant.run';
+  static const String streamAssistantRunEvents = 'assistant.stream.assistant.run.events';
   static const String suggestCreationAssistance = 'assistant.suggest.creation.assistance';
   static const String tickSkillSubscriptionCron = 'assistant.tick.skill.subscription.cron';
   static const String updateSkillSubscriptionStatus = 'assistant.update.skill.subscription.status';

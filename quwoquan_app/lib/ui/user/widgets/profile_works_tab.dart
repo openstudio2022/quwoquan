@@ -451,6 +451,7 @@ class _WorksPostCard extends ConsumerWidget {
             ? _headlineText.trim()
             : _supportingText.trim(),
         contextObjectTarget: IntersectionTarget(
+          objectType: 'post',
           objectId: post.id,
           objectKind: 'content',
           routeId: 'workBrowser',

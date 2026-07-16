@@ -1,0 +1,54 @@
+id: CR-20260714-097-circle-post-placement-contract-hardening
+title: 圈内帖子放置命令的主体、权限与运行合同收口
+slug: circle-post-placement-contract-hardening
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/publish-comment-reaction
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide
+
+entries:
+  - timestamp: "2026-07-14T23:08:00+08:00"
+    summary: |
+      PlacePostInCircle 从未声明的 App exposure 补齐 persona 主体、
+      post owner 或 circle moderator 的所有权规则、稳定 Runtime Error 集、
+      INTERNAL 请求/响应分级与 metadata-only 日志策略，以及 trace、指标、
+      600ms P95 和 99.9% 可用性合同。路由、请求体和响应体没有删除或改名。
+    reason: |
+      ContractGraph handoff 检出 App lock 与当前 metadata 不一致。没有把
+      授权、错误、隐私和 SLO 放入同一 metadata 真相源，会使端侧 exposure
+      无法审计，也无法把运行风险绑定到对应操作。
+    change_type: [contract, security, reliability, observability, testing]
+    changed_documents:
+      - path: quwoquan_service/contracts/metadata/social/circle_post_placement/service.yaml
+        sections: [PlacePostInCircle]
+      - path: quwoquan_service/contracts/metadata/circle/openapi.yaml
+        sections: [/v1/circles/{circleId}/post-placements]
+      - path: quwoquan_app/tool/cloud_codegen/contract_graph.lock.json
+        sections: [circle.circle_post_placement.PlacePostInCircle]
+      - path: quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json
+        sections: [approved ContractGraph handoff]
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers: [local_contract, api_integration]
+      rollout_impact: low
+      breaking_contract: true
+      breaking_rationale: |
+        App exposure 从空的主体、权限、错误、隐私与 SLO 快照变为显式约束；
+        HTTP 路由和 DTO 保持不变，现有调用方需要遵守原已实际执行的 persona
+        授权语义，不存在旧合同兼容分支。
+    verification:
+      completed:
+        - command: cd quwoquan_service && go test ./services/circle-service/tests/api_integration -run 'TestCirclePostPlacementRealMongoTransactionAndTrustedActor' -count=1
+          result: PASS；真实 Mongo + Redis 验证 persona 授权、事务、幂等 receipt 与 outbox。
+        - command: cd quwoquan_service && go test ./services/circle-service/tests/api_integration -run 'TestContentPostStreamToPlacementAndPlacementOutboxConvergeOnRealStores' -count=1
+          result: PASS；真实 Mongo + Redis 验证内容事件、圈内放置与下游 outbox 收敛。
+      planned:
+        - cd quwoquan_service && make verify-metadata
+        - python3 quwoquan_ops/cli/cloud_contract_handoff.py accept --owner app-cloud-governance --approve-breaking
+        - python3 quwoquan_ops/cli/cloud_contract_handoff.py verify
+        - bash quwoquan_ops/gate/gate_repo.sh
+    remaining_blockers:
+      - 本 CR 只批准 PlacePostInCircle 已实现的 App exposure 强化；两省内容生成、Gamma 导入和动态 App UAT 仍由 zhejiang-sichuan-province-coverage 的 G0-G7 门顺序约束。

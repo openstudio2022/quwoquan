@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -116,8 +117,28 @@ Future<double> _averageSaturation(ui.Image image) async {
   return total / count;
 }
 
+class _ControlledImageLoader {
+  final Map<int, List<Completer<ui.Image>>> attempts =
+      <int, List<Completer<ui.Image>>>{};
+
+  Future<ui.Image> call({
+    required BuildContext context,
+    required int pageIndex,
+    required List<String> candidates,
+    required Size pageSize,
+  }) {
+    final completer = Completer<ui.Image>();
+    attempts
+        .putIfAbsent(pageIndex, () => <Completer<ui.Image>>[])
+        .add(completer);
+    return completer.future;
+  }
+
+  Completer<ui.Image> latest(int pageIndex) => attempts[pageIndex]!.last;
+}
+
 void main() {
-  test('ImageBookPageSurfaceFactory 将不同尺寸与失败态统一为双面书页材质', () async {
+  test('ImageBookPageSurfaceFactory 将不同尺寸 ready 图片统一为双面书页材质', () async {
     const factory = ImageBookPageSurfaceFactory();
     const pageSize = Size(320, 480);
     final wideImage = await _solidImage(640, 180, const Color(0xFFCC6633));
@@ -133,11 +154,7 @@ void main() {
       pageSize: pageSize,
       pixelRatio: 1,
     );
-    final loadingPair = await factory.buildLoadingTexture(
-      pageSize: pageSize,
-      pixelRatio: 1,
-    );
-    final failurePair = await factory.buildFailureTexture(
+    final neutralPair = await factory.buildNeutralTexture(
       pageSize: pageSize,
       pixelRatio: 1,
     );
@@ -145,8 +162,7 @@ void main() {
     for (final pair in <MediaPageFlipTexturePair>[
       widePair,
       tallPair,
-      loadingPair,
-      failurePair,
+      neutralPair,
     ]) {
       for (final snapshot in <MediaPageFlipTextureSnapshot>[
         pair.front,
@@ -161,10 +177,13 @@ void main() {
     expect(widePair.back.semanticSurfaceKind, 'image_book.success.back');
     expect(tallPair.front.semanticSurfaceKind, 'image_book.success.front');
     expect(tallPair.back.semanticSurfaceKind, 'image_book.success.back');
-    expect(loadingPair.front.semanticSurfaceKind, 'image_book.loading.front');
-    expect(loadingPair.back.semanticSurfaceKind, 'image_book.loading.back');
-    expect(failurePair.front.semanticSurfaceKind, 'image_book.failure.front');
-    expect(failurePair.back.semanticSurfaceKind, 'image_book.failure.back');
+    expect(neutralPair.front.semanticSurfaceKind, 'image_book.neutral.front');
+    expect(neutralPair.back.semanticSurfaceKind, 'image_book.neutral.back');
+    expect(
+      await _averageLuminance(neutralPair.back.image),
+      greaterThan(4),
+      reason: 'pending/failed 的中性背面必须完整可见，不能形成黑色缺口。',
+    );
     final wideFrontLuminance = await _averageLuminance(widePair.front.image);
     final wideBackLuminance = await _averageLuminance(widePair.back.image);
     expect(
@@ -188,16 +207,9 @@ void main() {
       lessThan(await _averageSaturation(widePair.front.image) * 0.72),
       reason: '图片书背面必须降低饱和度，降低连续翻页刺激。',
     );
-    expect(
-      await _averageLuminance(failurePair.back.image),
-      greaterThan(4),
-      reason: '失败页背面必须是可识别失败纹理，不允许纯黑。',
-    );
-
     widePair.dispose();
     tallPair.dispose();
-    loadingPair.dispose();
-    failurePair.dispose();
+    neutralPair.dispose();
     wideImage.dispose();
     tallImage.dispose();
   });
@@ -317,11 +329,11 @@ void main() {
     );
     expect(<String>{
       'image_book.success.front',
-      'image_book.failure.front',
+      'image_book.neutral.front',
     }, contains(pair.front.semanticSurfaceKind));
     expect(<String>{
       'image_book.success.back',
-      'image_book.failure.back',
+      'image_book.neutral.back',
     }, contains(pair.back.semanticSurfaceKind));
   });
 
@@ -414,5 +426,283 @@ void main() {
     await gesture.up();
     await tester.pump();
     _consumeImageExceptions(tester);
+  });
+
+  testWidgets('ImageBookCanvas pending 翻到中性纸面，拖动中 ready 落平后才淡入', (
+    tester,
+  ) async {
+    final loader = _ControlledImageLoader();
+    final targetImage = await _solidImage(240, 360, const Color(0xFF38A169));
+
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            imageUrls: const <String>[
+              'media/image/s/fixture/pending-0.jpg',
+              'media/image/s/fixture/pending-1.jpg',
+            ],
+            imageLoader: loader.call,
+            onImageChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(loader.attempts.keys, containsAll(<int>[0, 1]));
+
+    final gestureLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    final gesture = await tester.startGesture(
+      tester.getRect(gestureLayer).center,
+    );
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+      findsOneWidget,
+    );
+    final bottomLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-bottom-layer'),
+    );
+    final frozenBottomImage = tester
+        .widget<RawImage>(
+          find.descendant(of: bottomLayer, matching: find.byType(RawImage)),
+        )
+        .image;
+    expect(
+      find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsNothing,
+    );
+
+    loader.latest(1).complete(targetImage);
+    for (var i = 0; i < 6; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(
+      tester
+          .widget<RawImage>(
+            find.descendant(of: bottomLayer, matching: find.byType(RawImage)),
+          )
+          .image,
+      same(frozenBottomImage),
+      reason: '事务中的 ready 只能排队，不能替换正在翻动的中性 bottom 材质。',
+    );
+    expect(
+      find.byKey(const ValueKey<String>('image-book-decoded-surface')),
+      findsNothing,
+    );
+
+    await gesture.moveBy(const Offset(-120, 0));
+    await gesture.up();
+    for (var i = 0; i < 60; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find
+              .byKey(const ValueKey<String>('media-pageflip-static-page-1'))
+              .evaluate()
+              .isNotEmpty &&
+          find
+              .byKey(const ValueKey<String>('media-pageflip-flipping-layer'))
+              .evaluate()
+              .isEmpty) {
+        break;
+      }
+    }
+
+    expect(
+      find.byKey(const ValueKey<String>('media-pageflip-static-page-1')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('image-book-decoded-surface')),
+      findsNothing,
+      reason: '落页首个静态帧必须继续使用事务冻结的中性材质，不能同步换成晚到图片。',
+    );
+    for (var i = 0; i < 3; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+      if (find
+          .byKey(const ValueKey<String>('image-book-decoded-surface'))
+          .evaluate()
+          .isNotEmpty) {
+        break;
+      }
+    }
+    expect(
+      find.byKey(const ValueKey<String>('image-book-decoded-surface')),
+      findsOneWidget,
+      reason: '图片只能在目标页完全落平后进入静态页。',
+    );
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const ValueKey<String>('image-book-ready-fade')),
+          )
+          .duration,
+      const Duration(milliseconds: 160),
+    );
+  });
+
+  testWidgets('ImageBookCanvas loading 延迟、失败静态提示、翻动退出与重试成功', (tester) async {
+    final loader = _ControlledImageLoader();
+    final mediaEvents = <ImageBookMediaLoadEvent>[];
+
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            imageUrls: const <String>[
+              'media/image/s/fixture/failure-0.jpg',
+              'media/image/s/fixture/failure-1.jpg',
+            ],
+            imageLoader: loader.call,
+            onMediaLoad: mediaEvents.add,
+            onImageChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+      findsNothing,
+    );
+    await tester.pump(const Duration(milliseconds: 70));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-loading-overlay')),
+      findsOneWidget,
+    );
+
+    loader.latest(0).completeError(StateError('fixture failed'));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsOneWidget,
+    );
+
+    final gestureLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    final gesture = await tester.startGesture(
+      tester.getRect(gestureLayer).center,
+    );
+    await gesture.moveBy(const Offset(-80, 0));
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsNothing,
+      reason: '失败图标属于静态状态，拖动开始后不得随纸张翻动。',
+    );
+    await gesture.cancel();
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey<String>('image-book-retry')));
+    await tester.pump();
+    expect(loader.attempts[0], hasLength(2));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-failure-overlay')),
+      findsNothing,
+    );
+    final retryImage = await _solidImage(240, 360, const Color(0xFF3182CE));
+    loader.latest(0).complete(retryImage);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-decoded-surface')),
+      findsOneWidget,
+    );
+    expect(
+      mediaEvents.map((event) => event.result),
+      containsAllInOrder(<String>['failure', 'retry', 'success']),
+    );
+  });
+
+  testWidgets('ImageBookCanvas 等值 URL List 重建不释放已解码图片', (tester) async {
+    final loader = _ControlledImageLoader();
+    final image = await _solidImage(240, 360, const Color(0xFF2B6CB0));
+
+    Widget buildBook(List<String> urls) {
+      return _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: ImageBookCanvas(
+            imageUrls: urls,
+            imageLoader: loader.call,
+            onImageChanged: (_) {},
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      buildBook(<String>['media/image/s/fixture/stable-list.jpg']),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    loader.latest(0).complete(image);
+    await tester.pump(const Duration(milliseconds: 16));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-decoded-surface')),
+      findsOneWidget,
+    );
+    expect(loader.attempts[0], hasLength(1));
+
+    await tester.pumpWidget(
+      buildBook(<String>['media/image/s/fixture/stable-list.jpg']),
+    );
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(loader.attempts[0], hasLength(1));
+    expect(
+      find.byKey(const ValueKey<String>('image-book-decoded-surface')),
+      findsOneWidget,
+      reason: '父级等值重建不得把已落平图片释放成中性页后重新加载。',
+    );
+  });
+
+  testWidgets('ImageBookCanvas Reduce Motion 图片淡入最长 120ms', (tester) async {
+    final loader = _ControlledImageLoader();
+    final image = await _solidImage(240, 360, const Color(0xFF805AD5));
+
+    await tester.pumpWidget(
+      _host(
+        MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: SizedBox(
+            width: 320,
+            height: 480,
+            child: ImageBookCanvas(
+              imageUrls: const <String>['media/image/s/fixture/reduced.jpg'],
+              imageLoader: loader.call,
+              onImageChanged: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    loader.latest(0).complete(image);
+    await tester.pump(const Duration(milliseconds: 16));
+
+    expect(
+      tester
+          .widget<AnimatedOpacity>(
+            find.byKey(const ValueKey<String>('image-book-ready-fade')),
+          )
+          .duration,
+      const Duration(milliseconds: 120),
+    );
   });
 }

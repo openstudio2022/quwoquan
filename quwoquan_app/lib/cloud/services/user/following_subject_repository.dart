@@ -263,19 +263,19 @@ class RemoteFollowingSubjectRepository implements FollowingSubjectRepository {
     );
     final response = await _httpClient.postJson(
       _uri(
-        UserApiMetadata.markFollowingSubjectVisitedPath(
+        UserApiMetadata.markFollowedSubjectVisitedPath(
           subjectType: subject.subjectTypeWire,
           subjectId: subject.subjectId,
         ),
       ),
       headers: CloudRequestHeaders.forPage(
-        UserRequestPageIds.markFollowingSubjectVisited,
+        UserRequestPageIds.markFollowedSubjectVisited,
       ),
       body: request.toMap(),
     );
     final obj = CloudResponseDecoder.asObject(
       response,
-      context: UserApiMetadata.markFollowingSubjectVisitedPath(
+      context: UserApiMetadata.markFollowedSubjectVisitedPath(
         subjectType: subject.subjectTypeWire,
         subjectId: subject.subjectId,
       ),

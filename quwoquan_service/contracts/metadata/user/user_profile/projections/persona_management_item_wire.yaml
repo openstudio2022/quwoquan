@@ -5,7 +5,7 @@ description: |
   分身/子账号列表行 wire，与 PersonaManagementItemViewData 对齐。
 
 source_entities:
-  - UserProfile
+  - Persona
 
 consumers:
   - app
@@ -161,3 +161,10 @@ client_projection:
       source: subjectType
       aliases: [subjectType]
       default: "'persona'"
+
+    - name: version
+      dart_type: int
+      nullable: false
+      source: version
+      aliases: [version]
+      default: "1"

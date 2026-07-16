@@ -41,7 +41,7 @@
 - **S9**：  
   - 全表扫描 **○**：须变为 **✓** 或 **—**，或在矩阵「备注」/ 兄弟 L3 中登记 **技术债 ID**；  
   - 执行 `make verify-app-page-horizontal-quality`（快检）与 `bash quwoquan_ops/gate/gate_repo.sh --scope app`（或完整 `make gate`，视 PR 范围）；  
-  - **治理落盘**：Cursor 规则 `.cursor/rules/09-page-horizontal-quality.mdc`、`01-arch-constraints.mdc` §2.4、`page_horizontal_quality_pr_checklist.md` §S9；  
+  - **治理落盘**：Cursor 规则 `.cursor/rules/09-page-horizontal-content.review.quality.mdc`、`01-arch-constraints.mdc` §2.4、`page_horizontal_quality_pr_checklist.md` §S9；  
   - 更新 `specs/changelog/CR-*.yaml` 或在本 L3 `树内任务文档` 勾选完成。
 
 ## 与会话规划相关的仓库产物
@@ -121,7 +121,7 @@ bash quwoquan_ops/gate/gate_repo.sh --scope app
   - id: slice-6-mock-cloud-test-isolation-wave-b
     title: 实施波次 B（Mock·端云·测试编译隔离；policy §4.1 §9；清空 allowlist；prod 入口）
     outputs:
-      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-plan.md
+      - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/nine-session-rollout-content.execution.planning.md
       - specs/feature-tree/runtime/runtime-client-foundation/page-horizontal-quality/树内任务文档
       - specs/gates/mock_data_cloud_integration_policy.md
       - specs/gates/ui_mock_isolation_allowlist.yaml

@@ -6,8 +6,8 @@ status: implemented
 
 affected_nodes:
   - specs/product/intersection-definition-and-application.md
-  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
-  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_actor_evidence.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_reason.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_actor_evidence.yaml
   - quwoquan_service/services/content-service/internal/application/intersection
   - quwoquan_app/lib/cloud/runtime/generated/recommendation
 
@@ -31,10 +31,10 @@ entries:
         sections:
           - "§17.1.2 新增人数下钻逐人证据规则"
           - "§20.1 冻结契约表新增 IntersectionActorEvidence"
-      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_actor_evidence.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_actor_evidence.yaml
         sections:
           - "新增逐人证据投影，定义来源、动作、计数、target、rank、snapshot 与完整性消费约束"
-      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_reason.yaml
         sections:
           - "新增 actorEvidenceTotalCount / actorEvidenceCompleteness / actorEvidence 字段"
       - path: quwoquan_service/services/content-service/internal/application/intersection

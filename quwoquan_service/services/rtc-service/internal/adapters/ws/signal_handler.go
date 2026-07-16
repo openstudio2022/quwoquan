@@ -11,11 +11,12 @@ import (
 
 	"github.com/coder/websocket"
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/rtc-service/internal/infrastructure/cache"
+	"quwoquan_service/services/rtc-service/internal/application"
 )
 
+var _ application.CallSignaler = (*SignalHandler)(nil)
+
 type SignalHandler struct {
-	cache       *cache.CallStateCache
 	mu          sync.RWMutex
 	connections map[string]*userConn
 	logger      *slog.Logger
@@ -42,12 +43,15 @@ func (r *acceptResponseRecorder) Write(data []byte) (int, error) {
 	return r.ResponseWriter.Write(data)
 }
 
-func NewSignalHandler(c *cache.CallStateCache, logger *slog.Logger) *SignalHandler {
+func NewSignalHandler(logger *slog.Logger) *SignalHandler {
 	return &SignalHandler{
-		cache:       c,
 		connections: make(map[string]*userConn),
 		logger:      logger,
 	}
+}
+
+func (h *SignalHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	h.HandleSignal(w, r)
 }
 
 func (h *SignalHandler) HandleSignal(w http.ResponseWriter, r *http.Request) {
@@ -155,19 +159,19 @@ func (h *SignalHandler) writePump(ctx context.Context, uc *userConn) {
 	}
 }
 
-func (h *SignalHandler) PushToUser(ctx context.Context, userID string, event map[string]any) {
+func (h *SignalHandler) PushToUser(ctx context.Context, userID string, signal application.CallSignal) {
 	h.mu.RLock()
 	uc, ok := h.connections[userID]
 	h.mu.RUnlock()
 	if !ok {
 		return
 	}
-	_ = writeJSON(ctx, uc.conn, event)
+	_ = writeJSON(ctx, uc.conn, signal)
 }
 
-func (h *SignalHandler) PushToUsers(ctx context.Context, userIDs []string, event map[string]any) {
+func (h *SignalHandler) PushToUsers(ctx context.Context, userIDs []string, signal application.CallSignal) {
 	for _, uid := range userIDs {
-		h.PushToUser(ctx, uid, event)
+		h.PushToUser(ctx, uid, signal)
 	}
 }
 

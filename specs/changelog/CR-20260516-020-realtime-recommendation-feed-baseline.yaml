@@ -39,7 +39,7 @@ entries:
           - A6_model_grayscale_quality
           - A7_data_import_closure
           - A8_rollback_drill
-      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/realtime-feed-baseline/plan.yaml
+      - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/realtime-feed-baseline/content.execution.planning.yaml
         sections:
           - slices
       - path: quwoquan_service/contracts/metadata/content/post/behaviors.yaml

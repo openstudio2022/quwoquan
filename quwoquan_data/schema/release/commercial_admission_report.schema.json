@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/release/commercial_admission_report.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "evaluatedAt",
+    "passed",
+    "decision",
+    "metrics",
+    "evidence",
+    "blockers"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.commercial_admission/1" },
+    "evaluatedAt": { "type": "string", "minLength": 1 },
+    "passed": { "type": "boolean" },
+    "decision": { "enum": ["GO", "NO-GO"] },
+    "metrics": { "type": "object" },
+    "evidence": { "type": "object" },
+    "blockers": { "type": "array", "items": { "type": "string" } }
+  }
+}

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"quwoquan_service/runtime/repository"
+	messaging "quwoquan_service/runtime/messaging"
 )
 
 type VisitInput struct {
@@ -172,12 +172,20 @@ type EventDrilldown struct {
 	Items      []EventDrilldownItem `json:"items"`
 }
 
-type TelemetryStore interface {
+type VisitTelemetryStore interface {
 	RecordVisit(ctx context.Context, input VisitInput) (VisitRecord, error)
 	GetVisitStats(ctx context.Context, query VisitStatsQuery) (VisitStats, error)
+}
+
+type EventTelemetryStore interface {
 	ReportEventBatch(ctx context.Context, events []EventRecordInput) (EventBatchAck, []EventDrilldownItem, error)
 	GetEventSummary(ctx context.Context, query EventSummaryQuery) (EventSummary, error)
 	GetEventDrilldown(ctx context.Context, query EventDrilldownQuery) (EventDrilldown, error)
+}
+
+type TelemetryStore interface {
+	VisitTelemetryStore
+	EventTelemetryStore
 }
 
 type EventMirror interface {
@@ -186,7 +194,7 @@ type EventMirror interface {
 
 type TelemetryService struct {
 	store     TelemetryStore
-	publisher repository.EventPublisher
+	publisher messaging.EventPublisher
 	mirror    EventMirror
 }
 
@@ -195,11 +203,11 @@ type EventTelemetrySnapshot struct {
 	Drilldown EventDrilldown
 }
 
-func NewTelemetryService(store TelemetryStore, publisher repository.EventPublisher) *TelemetryService {
+func NewTelemetryService(store TelemetryStore, publisher messaging.EventPublisher) *TelemetryService {
 	return NewTelemetryServiceWithMirror(store, publisher, nil)
 }
 
-func NewTelemetryServiceWithMirror(store TelemetryStore, publisher repository.EventPublisher, mirror EventMirror) *TelemetryService {
+func NewTelemetryServiceWithMirror(store TelemetryStore, publisher messaging.EventPublisher, mirror EventMirror) *TelemetryService {
 	return &TelemetryService{store: store, publisher: publisher, mirror: mirror}
 }
 
@@ -240,7 +248,7 @@ func (s *TelemetryService) ReportEventBatch(ctx context.Context, events []EventR
 				"occurredAt":       item.OccurredAt,
 				"source":           item.Source,
 			}
-			_ = s.publisher.Publish(ctx, repository.DomainEvent{
+			_ = s.publisher.Publish(ctx, messaging.DomainEvent{
 				Type:          "EventBatchReported",
 				AggregateType: "EventRecord",
 				AggregateID:   item.EventID,

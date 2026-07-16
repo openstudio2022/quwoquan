@@ -3,7 +3,6 @@ package feed
 import (
 	"context"
 	"encoding/base64"
-	"sort"
 	"strings"
 	"time"
 
@@ -13,24 +12,16 @@ import (
 	rtrec "quwoquan_service/runtime/recommendation"
 	"quwoquan_service/services/content-service/internal/application/identity"
 	"quwoquan_service/services/content-service/internal/application/intersection"
-	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
 )
-
-type postReader interface {
-	GetByID(ctx context.Context, id string) (*postmodel.Post, bool)
-}
-
-type publishedPostReader interface {
-	ListPublished(ctx context.Context, limit int, cursor string) []postmodel.Post
-}
 
 type FeedService struct {
 	engine        *rtrec.Engine
-	postReader    postReader
+	postReader    postports.PostFeedReader
 	intersections feedIntersectionProvider
 }
 
-func NewFeedService(engine *rtrec.Engine, reader postReader, opts ...FeedServiceOption) *FeedService {
+func NewFeedService(engine *rtrec.Engine, reader postports.PostFeedReader, opts ...FeedServiceOption) *FeedService {
 	s := &FeedService{
 		engine:     engine,
 		postReader: reader,
@@ -145,33 +136,33 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	blockedKeywords := toLowerSet(req.BlockedKeywords)
 
 	requestedCursor := strings.TrimSpace(req.Cursor)
-	repositoryCursor := decodeRepositoryFeedCursor(requestedCursor)
+	postReaderCursor := decodePostReaderFeedCursor(requestedCursor)
 	cursor := requestedCursor
 	nextCursor := ""
 	seenPostIDs := map[string]struct{}{}
-	// 强负反馈（dislike / 隐藏作者 / 隐藏内容类型）是产品硬规则：必须在所有 feed 路径生效，
-	// 包括绕过推荐召回的 repository fallback 兜底。来源与召回过滤同一真相源（hotpath 负反馈/
-	// 隐藏集），不引入 served/impressed 重复曝光治理（那是召回管线内部职责，避免误伤兜底分页）。
+	// 强负反馈（dislike / 隐藏作者 / 隐藏内容类型）是产品硬规则，
+	// 必须在推荐召回和显式类型/身份查询两种具名读路径生效。
 	feedbackExclusions := s.engine.LoadFeedbackExclusions(ctx, req.UserID, req.SessionID)
-	_, cursorIsPostID := s.postReader.GetByID(ctx, repositoryCursor)
-	useRepositoryPagination := cursorIsPostID || requestedType != "" || requestedIdentity != ""
-	appendPost := func(post *postmodel.Post, recItem *rtrec.FeedItem) bool {
+	usePostReaderQuery := postReaderCursor != "" || requestedType != "" || requestedIdentity != ""
+	appendPost := func(post *postports.PostFeedItemSlice, recItem *rtrec.FeedItem) bool {
 		if post == nil {
 			return false
 		}
-		if _, seen := seenPostIDs[post.ID]; seen {
+		postID := string(post.PostID)
+		if _, seen := seenPostIDs[postID]; seen {
 			return false
 		}
-		if _, blocked := blockedUsers[strings.ToLower(strings.TrimSpace(post.AuthorId))]; blocked {
+		authorID := string(post.AuthorPersonaID)
+		if _, blocked := blockedUsers[strings.ToLower(strings.TrimSpace(authorID))]; blocked {
 			return false
 		}
-		if feedbackExclusions.NegativeContentIDs[strings.TrimSpace(post.ID)] {
+		if feedbackExclusions.NegativeContentIDs[strings.TrimSpace(postID)] {
 			return false
 		}
-		if feedbackExclusions.HiddenAuthors[strings.TrimSpace(post.AuthorId)] {
+		if feedbackExclusions.HiddenAuthors[strings.TrimSpace(authorID)] {
 			return false
 		}
-		if feedbackExclusions.HiddenContentTypes[strings.TrimSpace(post.ContentType)] {
+		if feedbackExclusions.HiddenContentTypes[strings.TrimSpace(string(post.ContentType))] {
 			return false
 		}
 		if !postMatchesVertical(post, route.Vertical) {
@@ -180,39 +171,38 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		if containsBlockedKeyword(post, blockedKeywords) {
 			return false
 		}
-		postIdentity := resolvedContentIdentity(post.ContentType, post.ContentIdentity)
+		postIdentity := resolvedContentIdentity(string(post.ContentType), string(post.ContentIdentity))
 		if requestedIdentity != "" && postIdentity != requestedIdentity {
 			return false
 		}
-		viewType := mapContentTypeToViewType(post.ContentType)
+		viewType := mapContentTypeToViewType(string(post.ContentType))
 		if requestedType != "" && requestedIdentity != "moment" && viewType != requestedType {
 			return false
 		}
-		seenPostIDs[post.ID] = struct{}{}
-		width, height := resolvePostDimensions(post)
-		thumbnailURL := strings.TrimSpace(post.ThumbnailUrl)
+		seenPostIDs[postID] = struct{}{}
+		thumbnailURL := strings.TrimSpace(post.ThumbnailURL)
 		if thumbnailURL == "" {
-			thumbnailURL = strings.TrimSpace(post.CoverUrl)
+			thumbnailURL = strings.TrimSpace(post.CoverURL)
 		}
 		qualityScore, recallPath, contentVertical, supplySource := feedItemAttribution(post, recItem)
 		views = append(views, FeedItemView{
-			ID:               post.ID,
-			PostID:           post.ID,
-			WireID:           post.ID,
+			ID:               postID,
+			PostID:           postID,
+			WireID:           postID,
 			Type:             viewType,
-			ContentType:      post.ContentType,
-			AuthorID:         post.AuthorId,
+			ContentType:      string(post.ContentType),
+			AuthorID:         authorID,
 			Title:            post.Title,
 			Body:             post.Body,
-			Images:           toStringSlice(post.MediaUrls),
-			VideoURL:         post.VideoUrl,
-			CoverURL:         post.CoverUrl,
+			Images:           append([]string(nil), post.MediaURLs...),
+			VideoURL:         post.VideoURL,
+			CoverURL:         post.CoverURL,
 			ThumbnailURL:     thumbnailURL,
 			CoverStrategy:    post.CoverStrategy,
-			CoverFrameTimeMs: post.CoverFrameTimeMs,
-			DurationMs:       resolvePostDurationMs(post),
-			Width:            width,
-			Height:           height,
+			CoverFrameTimeMs: post.CoverFrameTimeMS,
+			DurationMs:       post.DurationMS,
+			Width:            post.Width,
+			Height:           post.Height,
 			LikeCount:        post.LikeCount,
 			CommentCount:     post.CommentCount,
 			ShareCount:       post.ShareCount,
@@ -223,11 +213,11 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			RecallPath:       recallPath,
 			ContentVertical:  contentVertical,
 			SupplySource:     supplySource,
-			SourceTaskID:     post.SourceTaskId,
+			SourceTaskID:     post.SourceTaskID,
 		})
 		return true
 	}
-	for attempt := 0; !useRepositoryPagination && attempt < 4 && len(views) < limit; attempt++ {
+	for attempt := 0; !usePostReaderQuery && attempt < 4 && len(views) < limit; attempt++ {
 		recResp, err := s.engine.GetFeed(ctx, rtrec.GetFeedRequest{
 			UserID:        req.UserID,
 			SessionID:     req.SessionID,
@@ -245,11 +235,17 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}
 		nextCursor = recResp.NextCursor
 		for _, item := range recResp.Items {
-			post, ok := s.postReader.GetByID(ctx, item.ContentID)
+			post, ok, readErr := s.postReader.FindPublishedFeedPost(
+				ctx,
+				postports.NewPostID(item.ContentID),
+			)
+			if readErr != nil {
+				return nil, readErr
+			}
 			if !ok {
 				continue
 			}
-			appendPost(post, &item)
+			appendPost(&post, &item)
 			if len(views) >= limit {
 				break
 			}
@@ -259,26 +255,45 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		}
 		cursor = nextCursor
 	}
-	if len(views) < limit && route.Surface != "premium_stream" {
-		if publishedReader, ok := s.postReader.(publishedPostReader); ok {
-			fallbackCursor := repositoryCursor
-			for attempt := 0; attempt < 4 && len(views) < limit; attempt++ {
-				posts := publishedReader.ListPublished(ctx, limit*2, fallbackCursor)
-				if len(posts) == 0 {
-					break
-				}
-				for i := range posts {
-					post := posts[i]
-					if appendPost(&post, nil) && len(views) >= limit {
-						nextCursor = encodeRepositoryFeedCursor(post.ID)
-						break
-					}
-				}
-				if len(views) >= limit || len(posts) < limit*2 {
-					break
-				}
-				fallbackCursor = posts[len(posts)-1].ID
+	// 只有显式类型/身份过滤或 PostReader cursor 才使用具名查询。
+	// 普通推荐请求不允许在召回不足时偷渡到第二读主线。
+	if len(views) < limit && route.Surface != "premium_stream" && usePostReaderQuery {
+		pageCursor := postReaderCursor
+		feedContentType := requestedType
+		readerLimit := limit * 2
+		if readerLimit > postports.MaxPostQueryPageSize {
+			readerLimit = postports.MaxPostQueryPageSize
+		}
+		if requestedIdentity == "moment" {
+			feedContentType = ""
+		}
+		for attempt := 0; attempt < 4 && len(views) < limit; attempt++ {
+			page, readErr := s.postReader.ListPublishedFeedPosts(
+				ctx,
+				postports.NewPostFeedReadRequest(
+					postports.ContentIdentity(requestedIdentity),
+					postports.ContentType(feedContentType),
+					postports.NewPostID(pageCursor),
+					readerLimit,
+				),
+			)
+			if readErr != nil {
+				return nil, readErr
 			}
+			if len(page.Items) == 0 {
+				break
+			}
+			for i := range page.Items {
+				post := page.Items[i]
+				if appendPost(&post, nil) && len(views) >= limit {
+					nextCursor = encodePostReaderFeedCursor(string(post.PostID))
+					break
+				}
+			}
+			if len(views) >= limit || len(page.Items) < readerLimit {
+				break
+			}
+			pageCursor = string(page.Items[len(page.Items)-1].PostID)
 		}
 	}
 	if s.intersections != nil && strings.TrimSpace(req.UserID) != "" {
@@ -296,28 +311,24 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	}, nil
 }
 
-func encodeRepositoryFeedCursor(postID string) string {
+func encodePostReaderFeedCursor(postID string) string {
 	trimmed := strings.TrimSpace(postID)
 	if trimmed == "" {
 		return ""
 	}
-	return "repo:" + base64.RawURLEncoding.EncodeToString([]byte(trimmed))
+	return "post:" + base64.RawURLEncoding.EncodeToString([]byte(trimmed))
 }
 
-func decodeRepositoryFeedCursor(cursor string) string {
+func decodePostReaderFeedCursor(cursor string) string {
 	trimmed := strings.TrimSpace(cursor)
-	if strings.HasPrefix(trimmed, "repo:") {
-		decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(trimmed, "repo:"))
-		if err == nil {
-			return strings.TrimSpace(string(decoded))
-		}
+	if !strings.HasPrefix(trimmed, "post:") {
 		return ""
 	}
-	return trimmed
-}
-
-func (s *FeedService) GetPost(ctx context.Context, id string) (*postmodel.Post, bool) {
-	return s.postReader.GetByID(ctx, id)
+	decoded, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(trimmed, "post:"))
+	if err == nil {
+		return strings.TrimSpace(string(decoded))
+	}
+	return ""
 }
 
 func normalizeFeedSort(sortValue string) string {
@@ -393,7 +404,7 @@ func resolveFeedRoute(req ListFeedRequest) feedRoute {
 	}
 }
 
-func feedItemAttribution(post *postmodel.Post, item *rtrec.FeedItem) (float64, string, string, string) {
+func feedItemAttribution(post *postports.PostFeedItemSlice, item *rtrec.FeedItem) (float64, string, string, string) {
 	if item != nil {
 		return item.QualityScore,
 			strings.TrimSpace(item.RecallPath),
@@ -401,7 +412,7 @@ func feedItemAttribution(post *postmodel.Post, item *rtrec.FeedItem) (float64, s
 			firstNonEmptyLocal(item.SupplySource, postSupplySource(post))
 	}
 	return 0,
-		"repository_fallback",
+		"post_query",
 		postContentVertical(post),
 		postSupplySource(post)
 }
@@ -415,7 +426,7 @@ func firstNonEmptyLocal(values ...string) string {
 	return ""
 }
 
-func postContentVertical(post *postmodel.Post) string {
+func postContentVertical(post *postports.PostFeedItemSlice) string {
 	if post == nil {
 		return "general"
 	}
@@ -428,17 +439,17 @@ func postContentVertical(post *postmodel.Post) string {
 	return "general"
 }
 
-func postSupplySource(post *postmodel.Post) string {
+func postSupplySource(post *postports.PostFeedItemSlice) string {
 	if post == nil {
 		return "unknown"
 	}
-	if strings.TrimSpace(post.SourceTaskId) != "" {
+	if strings.TrimSpace(post.SourceTaskID) != "" {
 		return "data_engineering"
 	}
 	return "ugc"
 }
 
-func postMatchesVertical(post *postmodel.Post, vertical string) bool {
+func postMatchesVertical(post *postports.PostFeedItemSlice, vertical string) bool {
 	vertical = strings.TrimSpace(strings.ToLower(vertical))
 	if vertical == "" {
 		return true
@@ -460,8 +471,8 @@ func postMatchesVertical(post *postmodel.Post, vertical string) bool {
 	}
 }
 
-func postVerticalTokens(post *postmodel.Post) []string {
-	tokens := []string{post.ContentType, post.SourceTaskId}
+func postVerticalTokens(post *postports.PostFeedItemSlice) []string {
+	tokens := []string{string(post.ContentType), post.SourceTaskID}
 	tokens = append(tokens, post.TagRefs...)
 	tokens = append(tokens, post.EntityRefs...)
 	return tokens
@@ -487,118 +498,6 @@ func resolvedContentIdentity(contentType, contentIdentity string) string {
 	return "work"
 }
 
-func resolvePostDimensions(post *postmodel.Post) (int64, int64) {
-	if post == nil {
-		return 0, 0
-	}
-	if width, height, ok := extractDimensions(post.DeviceInfo); ok {
-		return width, height
-	}
-	if width, height, ok := extractDimensions(post.ArticleRenderProfile); ok {
-		return width, height
-	}
-	if width, height, ok := extractDimensions(post.PrimaryHomepageSnapshot); ok {
-		return width, height
-	}
-	return 0, 0
-}
-
-func resolvePostDurationMs(post *postmodel.Post) int64 {
-	if post == nil {
-		return 0
-	}
-	for _, source := range []map[string]any{
-		post.DeviceInfo,
-		post.ArticleRenderProfile,
-		post.PrimaryHomepageSnapshot,
-	} {
-		if duration, ok := extractDimension(source, "durationMs", "duration_ms", "duration"); ok {
-			return duration
-		}
-	}
-	return 0
-}
-
-func extractDimensions(source map[string]any) (int64, int64, bool) {
-	if len(source) == 0 {
-		return 0, 0, false
-	}
-	width, widthOK := extractDimension(source, "width", "imageWidth", "image_width", "w")
-	height, heightOK := extractDimension(source, "height", "imageHeight", "image_height", "h")
-	return width, height, widthOK && heightOK
-}
-
-func extractDimension(source map[string]any, keys ...string) (int64, bool) {
-	for _, key := range keys {
-		value, ok := source[key]
-		if !ok || value == nil {
-			continue
-		}
-		switch v := value.(type) {
-		case int:
-			if v > 0 {
-				return int64(v), true
-			}
-		case int32:
-			if v > 0 {
-				return int64(v), true
-			}
-		case int64:
-			if v > 0 {
-				return v, true
-			}
-		case uint:
-			if v > 0 {
-				return int64(v), true
-			}
-		case uint32:
-			if v > 0 {
-				return int64(v), true
-			}
-		case uint64:
-			if v > 0 {
-				return int64(v), true
-			}
-		case float32:
-			if v > 0 {
-				return int64(v), true
-			}
-		case float64:
-			if v > 0 {
-				return int64(v), true
-			}
-		}
-	}
-	return 0, false
-}
-
-func toStringSlice(v any) []string {
-	switch vv := v.(type) {
-	case []string:
-		return vv
-	case []any:
-		out := make([]string, 0, len(vv))
-		for _, item := range vv {
-			s := strings.TrimSpace(toString(item))
-			if s != "" {
-				out = append(out, s)
-			}
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
-func toString(v any) string {
-	switch vv := v.(type) {
-	case string:
-		return vv
-	default:
-		return ""
-	}
-}
-
 func toLowerSet(items []string) map[string]struct{} {
 	out := make(map[string]struct{}, len(items))
 	for _, item := range items {
@@ -610,7 +509,7 @@ func toLowerSet(items []string) map[string]struct{} {
 	return out
 }
 
-func containsBlockedKeyword(post *postmodel.Post, blocked map[string]struct{}) bool {
+func containsBlockedKeyword(post *postports.PostFeedItemSlice, blocked map[string]struct{}) bool {
 	if len(blocked) == 0 {
 		return false
 	}
@@ -618,8 +517,8 @@ func containsBlockedKeyword(post *postmodel.Post, blocked map[string]struct{}) b
 		post.Title,
 		post.Body,
 	}
-	if tags := toStringSlice(post.TagRefs); len(tags) > 0 {
-		targets = append(targets, tags...)
+	if len(post.TagRefs) > 0 {
+		targets = append(targets, post.TagRefs...)
 	}
 	for _, text := range targets {
 		normalized := strings.ToLower(strings.TrimSpace(text))
@@ -633,10 +532,4 @@ func containsBlockedKeyword(post *postmodel.Post, blocked map[string]struct{}) b
 		}
 	}
 	return false
-}
-
-func SortPostsByCreatedAtDesc(posts []postmodel.Post) {
-	sort.Slice(posts, func(i, j int) bool {
-		return posts[i].CreatedAt.After(posts[j].CreatedAt)
-	})
 }

@@ -7,41 +7,33 @@ import (
 
 	"github.com/google/uuid"
 
-	blockrepo "quwoquan_service/services/user-service/internal/domain/block/repository"
-	followrepo "quwoquan_service/services/user-service/internal/domain/follow/repository"
+	relports "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/ports"
 	userevent "quwoquan_service/services/user-service/internal/domain/user/event"
 	usermodel "quwoquan_service/services/user-service/internal/domain/user/model"
-	greetingrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	greetingrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 	"quwoquan_service/services/user-service/internal/generated"
 )
 
 const greetingDefaultTTL = 30 * 24 * time.Hour
 
 type GreetingService struct {
-	greetings     greetingrepo.GreetingRepository
-	follows       followrepo.FollowRepository
-	blocks        blockrepo.BlockRepository
+	greetings     greetingrepo.GreetingRequestStore
+	relationships relports.RelationshipReader
 	conversations ConversationGateway
 	events        UserEventPublisher
 }
 
 func NewGreetingService(
-	greetings greetingrepo.GreetingRepository,
-	follows followrepo.FollowRepository,
-	blocks blockrepo.BlockRepository,
+	greetings greetingrepo.GreetingRequestStore,
+	relationships relports.RelationshipReader,
 	conversations ConversationGateway,
 	events UserEventPublisher,
 ) *GreetingService {
-	if conversations == nil {
-		conversations = NoopConversationGateway()
-	}
-	if events == nil {
-		events = NoopUserEventPublisher()
-	}
+	conversations = requireConversationGateway(conversations)
+	events = requireUserEventPublisher(events)
 	return &GreetingService{
 		greetings:     greetings,
-		follows:       follows,
-		blocks:        blocks,
+		relationships: relationships,
 		conversations: conversations,
 		events:        events,
 	}
@@ -169,10 +161,10 @@ func (s *GreetingService) Ignore(ctx context.Context, actorID, requestID string)
 		return nil, err
 	}
 	_ = s.events.PublishUserEvent(ctx, userevent.GreetingRequestIgnored, greeting.RequesterSubAccountID, greeting.TargetSubAccountID, map[string]any{
-		"id":                   greeting.ID,
+		"id":                    greeting.ID,
 		"requesterSubAccountId": greeting.RequesterSubAccountID,
-		"targetSubAccountId":   greeting.TargetSubAccountID,
-		"decisionAt":           now.Format(time.RFC3339),
+		"targetSubAccountId":    greeting.TargetSubAccountID,
+		"decisionAt":            now.Format(time.RFC3339),
 	})
 	return greeting, nil
 }
@@ -193,9 +185,9 @@ func (s *GreetingService) Cancel(ctx context.Context, actorID, requestID string)
 		return nil, err
 	}
 	_ = s.events.PublishUserEvent(ctx, userevent.GreetingRequestCancelled, greeting.TargetSubAccountID, greeting.RequesterSubAccountID, map[string]any{
-		"id":                   greeting.ID,
+		"id":                    greeting.ID,
 		"requesterSubAccountId": greeting.RequesterSubAccountID,
-		"targetSubAccountId":   greeting.TargetSubAccountID,
+		"targetSubAccountId":    greeting.TargetSubAccountID,
 	})
 	return greeting, nil
 }
@@ -227,36 +219,25 @@ func (s *GreetingService) loadAuthorizedGreeting(ctx context.Context, actorID, r
 }
 
 func (s *GreetingService) isBlockedEitherWay(ctx context.Context, subAccountA, subAccountB string) (bool, error) {
-	if !hasBlockRepository(s.blocks) {
+	if s.relationships == nil {
 		return false, nil
 	}
-	blocked, err := s.blocks.Exists(ctx, subAccountA, subAccountB)
+	relationship, err := s.relationships.GetRelationship(ctx, subAccountA, subAccountB)
 	if err != nil {
 		return false, err
 	}
-	if blocked {
-		return true, nil
-	}
-	return s.blocks.Exists(ctx, subAccountB, subAccountA)
+	return relationship.IsBlocked || relationship.IsBlockedBy, nil
 }
 
 func (s *GreetingService) isMutual(ctx context.Context, subAccountA, subAccountB string) (bool, error) {
-	if !hasFollowRepository(s.follows) {
+	if s.relationships == nil {
 		return false, nil
 	}
-	ab, err := s.follows.Exists(ctx, subAccountA, subAccountB)
+	relationship, err := s.relationships.GetRelationship(ctx, subAccountA, subAccountB)
 	if err != nil {
 		return false, err
 	}
-	ba, err := s.follows.Exists(ctx, subAccountB, subAccountA)
-	if err != nil {
-		return false, err
-	}
-	return ab && ba, nil
-}
-
-func hasBlockRepository(blocks blockrepo.BlockRepository) bool {
-	return blocks != nil
+	return relationship.IsMutual, nil
 }
 
 func normalizeGreetingSource(source string) string {

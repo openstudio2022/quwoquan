@@ -14,7 +14,7 @@ import 'package:quwoquan_app/core/models/start_group_chat_route_extra.dart';
 import 'package:quwoquan_app/core/models/user_profile_route_extra.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';

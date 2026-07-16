@@ -56,6 +56,42 @@ void main() {
       expect(dto.avatarVersion, 7);
     });
 
+    test('canonical creator 复用公开 profile DTO 且不消费内部 CAS/hash 字段', () {
+      final dto = SubAccountProfileWireDto.fromMap(<String, dynamic>{
+        'userId': 'sys_travelphoto_0800',
+        'subAccountId': 'sys_travelphoto_0800_sub_01',
+        'subjectType': 'creator',
+        'userHandle': 'set-marker',
+        'displayName': '片场坐标',
+        'nickname': '片场坐标',
+        'avatarUrl': 'https://media.example/media/objects/avatar.png',
+        'backgroundUrl': 'https://media.example/media/objects/cover.jpg',
+        'bio': '路线写给脚步，照片写给回忆。',
+        'identityTags': <String>['creator', 'travel', 'photography'],
+        'postCount': 0,
+        'avatarObjectKey': 'media/objects/avatar.png',
+        'avatarSha256': 'internal-only',
+        'packageDigest': 'internal-only',
+      });
+      expect(dto.subjectType, 'creator');
+      expect(dto.subAccountId, 'sys_travelphoto_0800_sub_01');
+      expect(dto.userHandle, 'set-marker');
+      expect(dto.displayName, '片场坐标');
+      expect(dto.avatarUrl, endsWith('/avatar.png'));
+      expect(dto.backgroundUrl, endsWith('/cover.jpg'));
+      expect(dto.identityTags, containsAll(<String>['creator', 'travel']));
+      expect(
+        dto.toMap().keys,
+        isNot(
+          containsAll(<String>[
+            'avatarObjectKey',
+            'avatarSha256',
+            'packageDigest',
+          ]),
+        ),
+      );
+    });
+
     test('toMap round-trip 稳定', () {
       final dto = SubAccountProfileWireDto.fromMap(<String, dynamic>{
         'subAccountId': 'ps1',

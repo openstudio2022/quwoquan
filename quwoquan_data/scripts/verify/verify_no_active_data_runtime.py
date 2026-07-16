@@ -16,9 +16,8 @@ ACTIVE_CLI_MARKERS = (
     str(REPO_ROOT / "quwoquan_data" / "scripts" / "cli.py"),
 )
 ACTIVE_COMMAND_MARKERS = (
-    " task run-recipe ",
+    " task geo-homepages ",
     " task scaled-e2e run ",
-    " data workflow run ",
 )
 
 

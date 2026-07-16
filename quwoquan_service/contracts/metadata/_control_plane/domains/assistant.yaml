@@ -37,7 +37,7 @@ minimum_package:
     - contracts/metadata/assistant/assistant_run/service.yaml
     t2:
     - runtime/controlplane/assistant_seedbox_contract_test.go
-    - ../quwoquan_app/test/local_contract/ui/assistant/contract/assistant_message_history_contract__local_contract_test.dart
+    - ../quwoquan_app/test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart
     - ../quwoquan_app/test/local_contract/ui/chat/widgets/chat_assistant_ui_widget__local_contract_test.dart
     t3:
     - ../quwoquan_app/test/local_contract/quality/shared/assistant/assistant_environment_smoke__local_contract_test.dart

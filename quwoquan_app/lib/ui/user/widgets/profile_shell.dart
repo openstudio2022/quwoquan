@@ -22,6 +22,9 @@ import 'package:quwoquan_app/core/widgets/global_surface_actions.dart';
 import 'package:quwoquan_app/ui/user/models/profile_mode.dart';
 import 'package:quwoquan_app/ui/user/models/profile_tab.dart';
 import 'package:quwoquan_app/ui/user/providers/profile_state_provider.dart';
+import 'package:quwoquan_app/ui/user/providers/share_interaction_provider.dart';
+import 'package:quwoquan_app/ui/user/models/share_interaction_models.dart';
+import 'package:quwoquan_app/core/trackers/share_interaction_observability.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_action_bar.dart';
 import 'package:quwoquan_app/ui/user/providers/author_impact_provider.dart';
 import 'package:quwoquan_app/ui/user/widgets/author_impact_card.dart';
@@ -35,6 +38,7 @@ import 'package:quwoquan_app/components/object_page/profile_ios_components.dart'
 import 'package:quwoquan_app/ui/user/widgets/profile_slogan_card.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_works_tab.dart';
 import 'package:quwoquan_app/ui/user/widgets/profile_footprint_tab.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 part 'profile_shell_builders.dart';
 part 'profile_shell_builders_parts.dart';
@@ -71,13 +75,105 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
   static const double _profileSurfaceBridge = _profileCardRadius;
   final GlobalKey _worksSecondaryTabKey = GlobalKey();
   final GlobalKey _interactionSecondaryTabKey = GlobalKey();
+  late final ScrollController _profileScrollController;
 
   late String _activeTabId;
 
   @override
   void initState() {
     super.initState();
+    _profileScrollController = ScrollController()
+      ..addListener(_saveActiveShareScrollOffset);
     _activeTabId = UserProfileUIConfig.defaultTabId;
+  }
+
+  @override
+  void dispose() {
+    _profileScrollController
+      ..removeListener(_saveActiveShareScrollOffset)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _saveActiveShareScrollOffset() {
+    if (!_profileScrollController.hasClients || _activeTabId != 'interaction') {
+      return;
+    }
+    final profileState = ref.read(profileNotifierProvider(widget.userId));
+    if (profileState.interactionSubTab != InteractionSubTab.shares) return;
+    final direction =
+        profileState.interactionDirection == InteractionDirection.received
+        ? ShareInteractionDirection.received
+        : ShareInteractionDirection.initiated;
+    ref
+        .read(
+          shareInteractionProvider(
+            ShareInteractionBucketKey(
+              subAccountId: widget.userId,
+              direction: direction,
+            ),
+          ).notifier,
+        )
+        .saveScrollOffset(_profileScrollController.offset);
+  }
+
+  void _selectInteractionDirection(InteractionDirection direction) {
+    final profileState = ref.read(profileNotifierProvider(widget.userId));
+    if (profileState.interactionDirection == direction) return;
+    _saveActiveShareScrollOffset();
+    ref
+        .read(profileNotifierProvider(widget.userId).notifier)
+        .setInteractionDirection(direction);
+    if (profileState.interactionSubTab != InteractionSubTab.shares) return;
+    final shareDirection = direction == InteractionDirection.received
+        ? ShareInteractionDirection.received
+        : ShareInteractionDirection.initiated;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_profileScrollController.hasClients) return;
+      final targetOffset = ref
+          .read(
+            shareInteractionProvider(
+              ShareInteractionBucketKey(
+                subAccountId: widget.userId,
+                direction: shareDirection,
+              ),
+            ),
+          )
+          .scrollOffset
+          .clamp(
+            _profileScrollController.position.minScrollExtent,
+            _profileScrollController.position.maxScrollExtent,
+          )
+          .toDouble();
+      _profileScrollController.jumpTo(targetOffset);
+    });
+  }
+
+  Future<void> _refreshActiveShare() async {
+    if (_activeTabId != 'interaction') return;
+    final profileState = ref.read(profileNotifierProvider(widget.userId));
+    if (profileState.interactionSubTab != InteractionSubTab.shares) return;
+    final direction =
+        profileState.interactionDirection == InteractionDirection.received
+        ? ShareInteractionDirection.received
+        : ShareInteractionDirection.initiated;
+    ref
+        .read(shareInteractionObservabilityProvider)
+        .track(
+          eventName: ShareInteractionEventNames.refresh,
+          subAccountId: widget.userId,
+          direction: direction,
+        );
+    await ref
+        .read(
+          shareInteractionProvider(
+            ShareInteractionBucketKey(
+              subAccountId: widget.userId,
+              direction: direction,
+            ),
+          ).notifier,
+        )
+        .refresh();
   }
 
   void _onPrimaryTabChange(String tabId) {
@@ -123,7 +219,9 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
       if (!_isSecondaryTabVisible(_interactionSecondaryTabKey)) {
         return false;
       }
-      final filters = UserProfileUIConfig.interactionSubTabs;
+      final filters = UserProfileUIConfig.interactionSubTabs
+          .where((filter) => filter.visibleInMode(widget.mode.name))
+          .toList(growable: false);
       final currentIndex = filters.indexWhere(
         (filter) =>
             _interactionSubTabForId(filter.id) == state.interactionSubTab,
@@ -313,6 +411,8 @@ class _ProfileShellState extends ConsumerState<ProfileShell> {
     return AppScaffold(
       backgroundColor: bg,
       body: ObjectPageShell(
+        scrollController: _profileScrollController,
+        onRefresh: _refreshActiveShare,
         keyPrefix: 'profile-shell',
         pinMode: ObjectPagePinMode.full,
         cardRadius: _profileCardRadius,
@@ -379,17 +479,23 @@ enum _ProfileMoreAction { share, block, report }
 
 /// 用户举报原因（与 content/report 后端 reason code 对齐）。
 enum _ProfileReportReason {
-  spam('spam', UITextConstants.profileReportReasonSpam),
+  spam(ContentReportReason.spam, UITextConstants.profileReportReasonSpam),
   misinformation(
-    'misinformation',
+    ContentReportReason.other,
     UITextConstants.profileReportReasonMisinformation,
   ),
-  harassment('harassment', UITextConstants.profileReportReasonHarassment),
-  pornography('pornography', UITextConstants.profileReportReasonPornography),
-  other('other', UITextConstants.profileReportReasonOther);
+  harassment(
+    ContentReportReason.harassment,
+    UITextConstants.profileReportReasonHarassment,
+  ),
+  pornography(
+    ContentReportReason.adult,
+    UITextConstants.profileReportReasonPornography,
+  ),
+  other(ContentReportReason.other, UITextConstants.profileReportReasonOther);
 
-  const _ProfileReportReason(this.code, this.label);
+  const _ProfileReportReason(this.reason, this.label);
 
-  final String code;
+  final ContentReportReason reason;
   final String label;
 }

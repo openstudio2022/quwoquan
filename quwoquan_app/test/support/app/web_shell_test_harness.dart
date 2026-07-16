@@ -75,7 +75,7 @@ class WebShellTestHarness {
             redirect: state.uri.queryParameters['redirect'],
             dismissFallback:
                 state.uri.queryParameters[loginDismissFallbackQueryParam],
-            allowGuestDismissPop: loginGuestDismissCanPopFromQuery(
+            dismissPolicy: loginDismissPolicyFromQuery(
               state.uri.queryParameters[loginGuestDismissPopQueryParam],
             ),
           ),
@@ -140,8 +140,9 @@ class _UnavailableOneTapLoginClient implements OneTapLoginClient {
   Future<bool> isAvailable() async => false;
 
   @override
-  Future<OneTapLoginProbe> probe() async =>
-      const OneTapLoginProbe(isAvailable: false);
+  Future<OneTapLoginProbe> probe() async => const OneTapLoginProbe(
+    availability: OneTapAvailability.unsupportedPlatform,
+  );
 
   @override
   Future<OneTapLoginResult> requestLoginToken() {
@@ -220,6 +221,11 @@ class _TestAuthSessionStore implements AuthSessionStore {
     required String accessToken,
     required String refreshToken,
   }) async {}
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
 
   @override
   Future<void> updateActiveSubAccount(String subAccountId) async {}

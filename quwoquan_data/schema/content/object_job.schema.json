@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Production object-stage job contract. Stable, idempotent, backend-routable.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "executionId",
+    "ref",
+    "stage",
+    "queueBackend",
+    "partitionKey",
+    "state",
+    "attempt",
+    "maxAttempts",
+    "resultEnvelopeRequired",
+    "resultEnvelopeRef",
+    "gateVerdicts",
+    "tokenLedger"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan.object_job" },
+    "jobId": { "type": "string", "minLength": 8 },
+    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
+    "ref": { "type": "string", "minLength": 1 },
+    "stage": { "type": "string", "minLength": 1 },
+    "queueBackend": { "enum": ["local_file", "reliabletask"] },
+    "partitionKey": { "type": "string", "minLength": 1 },
+    "reliableTaskRef": {
+      "type": ["object", "null"],
+      "properties": {
+        "taskType": { "const": "data.content_object.execute" },
+        "queue": { "const": "reliabletask.data.content_supply" },
+        "dedupeKey": { "type": "string", "minLength": 5 },
+        "idempotencyKey": { "type": "string", "minLength": 5 },
+        "partitionKey": { "type": "string" },
+        "payloadAllowlist": { "const": "object_job" },
+        "payload": {
+          "type": "object",
+          "required": ["entityRef", "carrier", "sourceRevision", "idempotencyKey"]
+        }
+      }
+    },
+    "authorId": { "type": ["string", "null"] },
+    "creatorProfileId": { "type": ["string", "null"] },
+    "creatorArchetype": { "type": ["string", "null"] },
+    "creatorProfileVersion": { "type": ["string", "null"] },
+    "contentType": { "type": ["string", "null"] },
+    "state": { "enum": ["queued", "leased", "succeeded", "failed", "blocked", "dead", "spilled"] },
+    "attempt": { "type": "integer", "minimum": 0 },
+    "maxAttempts": { "type": "integer", "minimum": 1 },
+    "resultEnvelopeRequired": { "type": "boolean" },
+    "resultEnvelopeRef": { "type": ["string", "null"] },
+    "gateVerdicts": { "type": "array" },
+    "tokenLedger": { "type": "array" }
+  }
+}

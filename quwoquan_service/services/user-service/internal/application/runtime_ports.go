@@ -15,10 +15,9 @@ type UserSyncStream interface {
 	Pull(ctx context.Context, userID string, afterSeq int64, limit int) (runtimesync.PullResponse, error)
 }
 
-type noopUserEventPublisher struct{}
-
-func (noopUserEventPublisher) PublishUserEvent(context.Context, string, string, string, map[string]any) error {
-	return nil
+func requireUserEventPublisher(publisher UserEventPublisher) UserEventPublisher {
+	if publisher == nil {
+		panic("user application requires UserEventPublisher")
+	}
+	return publisher
 }
-
-func NoopUserEventPublisher() UserEventPublisher { return noopUserEventPublisher{} }

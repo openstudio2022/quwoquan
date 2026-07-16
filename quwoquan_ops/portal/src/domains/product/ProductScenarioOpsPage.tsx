@@ -1,7 +1,7 @@
 import { SectionCard } from '../../shared/components/SectionCard.js';
 import { PageScaffold } from '../../shared/layout/PageScaffold.js';
 
-type ScenarioKind = 'entityHomepages' | 'circlesOps' | 'xiaoquComments' | 'campusBootstrap';
+type ScenarioKind = 'entityHomepages' | 'circlesOps' | 'xiaoquComments';
 
 const scenarioConfig = {
   entityHomepages: {
@@ -32,16 +32,6 @@ const scenarioConfig = {
       ['用户主动 @小趣', 'user_mention', '待抽检回复质量与引用来源', 'review'],
       ['高质量作品主动点评', 'quality_boost', '需要审核推广边界', 'review'],
       ['用户纠错', 'correction', '等待运营确认是否修正', 'pending'],
-    ],
-  },
-  campusBootstrap: {
-    title: '校园冷启动',
-    subtitle: '跟踪首批 5 所大学的主页资料、AI 内容、校友圈与活跃贡献者闭环。',
-    badge: 'campus_bootstrap',
-    rows: [
-      ['北京大学', 'university', '主页 + 校友圈 + AI 内容 ready', 'green'],
-      ['清华大学', 'university', '主页 + 摄影圈 ready', 'green'],
-      ['复旦大学 / 浙江大学 / 南京大学', 'university', '种子已入库，等待 T4 验证', 'watching'],
     ],
   },
 } as const;
@@ -95,7 +85,7 @@ export function ProductScenarioOpsPage({ kind }: { kind: ScenarioKind }) {
                 <td>{type}</td>
                 <td>{summary}</td>
                 <td>
-                  <span className={`badge badge--${status === 'green' || status === 'live' || status === 'published' ? 'success' : 'warning'}`}>
+                  <span className={`badge badge--${status === 'live' || status === 'published' ? 'success' : 'warning'}`}>
                     {status}
                   </span>
                 </td>

@@ -6,13 +6,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 // PgWorkStore extends pgWorkStoreBase with cursor-based pagination.
 type PgWorkStore struct{ pgWorkStoreBase }
 
-var _ repository.WorkRepository = (*PgWorkStore)(nil)
+var _ repository.UserWorkReader = (*PgWorkStore)(nil)
 
 func NewPgWorkStore(pool *pgxpool.Pool) *PgWorkStore {
 	return &PgWorkStore{pgWorkStoreBase{pool: pool}}

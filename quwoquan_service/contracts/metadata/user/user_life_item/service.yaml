@@ -1,20 +1,17 @@
 version: 1
-entity: UserLifeItem
 
 service:
   name: user-service
   domain: user
+  owner: user-platform
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: USER_USER_LIFE_ITEM_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
 
-api_routes:
-  - method: GET
-    path: /v1/users/{userId}/life-items
-    operation: ListUserLifeItems
-    description: 用户生活记录列表
-    query_params: [category, cursor, limit]
-    response_entity: UserLifeItem
-    response_body: UserLifeItem
-    response_body_kind: page
+api_routes: []
 
-consumers:
-  - name: app
-    capabilities: [read_life_items]
+# UserLifeItem 是 Profile/My 组合投影，不拥有公开 API。
+# 页面经 user_profile/service.yaml 的 canonical query Slice 读取。
+consumers: []

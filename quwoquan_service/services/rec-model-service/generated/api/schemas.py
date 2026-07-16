@@ -7,6 +7,8 @@ from ..models.request_response import (
     CandidateScore,
     ModelScoreRequest,
     ModelScoreResponse,
+    BatchModelScoreRequest,
+    BatchModelScoreResponse,
 )
 
 __all__ = [
@@ -14,4 +16,6 @@ __all__ = [
     "CandidateScore",
     "ModelScoreRequest",
     "ModelScoreResponse",
+    "BatchModelScoreRequest",
+    "BatchModelScoreResponse",
 ]

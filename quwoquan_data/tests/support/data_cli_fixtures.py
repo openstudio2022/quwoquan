@@ -36,17 +36,10 @@ from pathlib import Path
 
 _TMP = Path(tempfile.mkdtemp(prefix="data_cli_"))
 
-os.environ["QWQ_DATA_ROOT"] = str(_TMP)
 
-os.environ["QWQ_RUNTIME_ROOT"] = str(_TMP / "runtime")
 
-os.environ["QWQ_PUBLISH_ROOT"] = str(_TMP / "publish")
 
-os.environ["QWQ_RELEASE_ROOT"] = str(_TMP / "release")
-
-os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(_TMP / "tasks")
-
-for _readonly_dir in ("schema", "sop"):
+for _readonly_dir in ("schema",):
     _src = DATA_ROOT / _readonly_dir
     _dst = _TMP / _readonly_dir
     if _dst.exists():
@@ -58,50 +51,44 @@ for _readonly_dir in ("schema", "sop"):
 
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from _common.command_packet import build_packet, write_packet
+from core.command_packet import build_packet, write_packet
 
-from _common.article_package import compute_document_sha256, sha256_text
+from core.article_package import compute_document_sha256, sha256_text
 
-from _common.batch_manifest import write_batch_manifest
+from content.execution.runtime_state import write_execution_runtime_state
 
-from _common.io import read_json, read_ndjson, write_json
+from core.io import read_json, read_ndjson, write_json
 
-from _common.paths import (  # noqa: E402
-    batch_audit_markdown_path,
-    batch_audit_summary_path,
-    batch_entity_object_dir,
-    batch_workflow_state_path,
-    ensure_batch_layout,
-    ensure_task_layout,
-    committed_task_spec,
-    committed_task_progress,
-    fanout_plan_path,
-    fanout_run_matrix_path,
-    task_baseline_freeze_packet_path,
-    task_catalog,
-    task_explore_packet_path,
-    task_shared_dir,
+from core.paths import (  # noqa: E402
+    execution_audit_markdown_path,
+    execution_audit_summary_path,
+    execution_entity_object_dir,
+    execution_workflow_state_path,
+    ensure_execution_command_layout,
+    ensure_execution_layout,
+    execution_spec_path,
+    execution_progress_path,
+    execution_baseline_freeze_packet_path,
+    execution_catalog,
+    execution_explore_packet_path,
+    execution_shared_dir,
 )
 
-from data.baseline import handle_baseline
+from content.execution.baseline import handle_baseline
 
-from explore.handler import handle_explore
+from content.source.discovery.handler import handle_explore
 
-from _common import fanout_plan as fp
 
-from _common.source_unit import write_source_unit
+from content.source.source_unit import write_source_unit
 
-from task import run as run_mod
+from content import handler as task_handler_mod
 
-from task import handler as task_handler_mod
+from content.execution import store
 
-from task import store
-
-from _common import python_runtime
 
 CLI = SCRIPTS_ROOT / "cli.py"
 
-def _make_task(task_id: str = "旅行/地域/四川省/景区/景区精选", *, with_baseline: bool = True) -> str:
+def _make_task(execution_id: str = "旅行/地域/四川省/景区/景区精选", *, with_baseline: bool = True) -> str:
     spec = store.scaffold_spec(
         vertical="travel",
         organize_by="地域",
@@ -127,66 +114,57 @@ def _make_task(task_id: str = "旅行/地域/四川省/景区/景区精选", *, 
         },
         created_by="test",
     )
-    spec["taskId"] = task_id
+    spec["executionId"] = execution_id
     spec["title"] = "四川景区精选"
     spec["workflowPolicy"] = {
-        "allowPartialContent": True,
-        "allowContentQuotaShortfall": True,
-        "deliveryMode": "partial_with_replacement_report",
-        "minBatchCompletionMode": "best_effort_with_reasoned_rejects",
+        "selectionPolicy": "frozen",
+        "targetEntityCount": 2,
+        "targetObjectCount": 2,
     }
     store.save_spec(spec)
-    store.save_progress(store.init_progress(task_id, remaining=["地点/景区/峨眉山", "地点/景区/乐山大佛"]))
+    store.save_progress(store.init_progress(execution_id, remaining=["地点/景区/峨眉山", "地点/景区/乐山大佛"]))
     if with_baseline:
-        _seed_baseline(task_id)
+        _seed_baseline(execution_id)
     else:
-        baseline_packet = task_baseline_freeze_packet_path(task_id)
+        baseline_packet = execution_baseline_freeze_packet_path(execution_id)
         if baseline_packet.exists():
             baseline_packet.unlink()
-    return task_id
+    return execution_id
 
-def _seed_baseline(task_id: str) -> None:
+def _seed_baseline(execution_id: str) -> None:
     packet = build_packet(
-        task_id=task_id,
+        execution_id=execution_id,
         command="data baseline",
         object_kind="task",
-        object_ref=task_id,
+        object_ref=execution_id,
         stage="baseline",
-        read_policy=["task.yaml", "progress.json", "catalog.ndjson"],
-        stop_if=["taskId mismatch"],
+        read_policy=["content.yaml", "progress.json", "catalog.ndjson"],
+        stop_if=["executionId mismatch"],
         output_policy=["write task/_shared/baseline_freeze_packet.json"],
         inputs={
-            "taskSpecPath": str(committed_task_spec(task_id)),
-            "progressPath": str(committed_task_progress(task_id)),
-            "catalogPath": str(task_catalog(task_id)),
+            "taskSpecPath": str(execution_spec_path(execution_id)),
+            "progressPath": str(execution_progress_path(execution_id)),
+            "catalogPath": str(execution_catalog(execution_id)),
         },
-        outputs={"packetPath": str(task_baseline_freeze_packet_path(task_id))},
-        handoff_to="data workflow run",
+        outputs={"packetPath": str(execution_baseline_freeze_packet_path(execution_id))},
+        handoff_to="task geo-homepages",
         evidence={"required": ["baseline_freeze_packet.json"]},
         summary={"coverageTargetCount": 2, "catalogRowCount": 2},
     )
-    write_packet(task_baseline_freeze_packet_path(task_id), packet)
+    write_packet(execution_baseline_freeze_packet_path(execution_id), packet)
 
-def _seed_frozen_plan(plan_id: str = "plan_cli") -> dict:
-    plan = fp.new_plan(plan_id, "测试 fanout", "travel", defaults={"entityType": "地点/景区", "taskName": f"{plan_id}_task"})
-    fp.add_partition(plan, "四川省")
-    fp.add_leaves(plan, ["四川省"], [{"name": "峨眉山"}])
-    fp.freeze_plan(plan, confirmed=True)
-    fp.save_plan(plan)
-    return plan
-
-def _audit_entity_source_refs(task_id: str, batch_id: str, name: str) -> tuple[str, str]:
-    ent = batch_entity_object_dir(task_id, batch_id, "地点", "景区", name)
+def _audit_entity_source_refs(execution_id: str, name: str) -> tuple[str, str]:
+    ent = execution_entity_object_dir(execution_id, "地点", "景区", name)
     refs = read_json(ent / "1.download" / "source_refs.json")
     row = (refs.get("sources") or [])[0]
     source_ref = str(row["sourceRef"])
     return source_ref, source_ref.rsplit("/", 1)[0]
 
-def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> None:
-    from _common.batch_asset_registry import BatchAssetRegistry, allocate_post_asset_id
-    from _common.batch_manifest import load_batch_manifest
+def _seed_entity_object_for_audit(execution_id: str, *, name: str) -> None:
+    from content.execution.asset_registry import ExecutionAssetRegistry, allocate_post_asset_id
+    from content.execution.runtime_state import load_execution_runtime_state
 
-    ent = batch_entity_object_dir(task_id, batch_id, "地点", "景区", name)
+    ent = execution_entity_object_dir(execution_id, "地点", "景区", name)
     manifest = write_source_unit(
         ent,
         ordinal=1,
@@ -198,8 +176,7 @@ def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> 
         url=f"https://example.com/{name}",
         title=f"{name}百科",
         target_ref=f"/entity/地点/景区/{name}",
-        task_id=task_id,
-        batch_id=batch_id,
+        execution_id=execution_id,
     )
     source_ref = str(manifest["sourceRef"])
     write_json(
@@ -208,16 +185,16 @@ def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> 
             "label": name,
             "domain": "地点",
             "type": "景区",
-            "sourceTaskId": task_id,
+            "originTaskId": execution_id,
         },
     )
-    global_seq = int(load_batch_manifest(task_id, batch_id)["globalBatchSeq"])
-    registry = BatchAssetRegistry(task_id=task_id, batch_id=batch_id, global_batch_seq=global_seq)
+    global_seq = int(load_execution_runtime_state(execution_id)["executionSequence"])
+    registry = ExecutionAssetRegistry(execution_id=execution_id, execution_sequence=global_seq)
     asset_id = allocate_post_asset_id(
         entity_name=name,
         role="cover",
         ref=f"{name}_主页",
-        global_batch_seq=global_seq,
+        execution_sequence=global_seq,
         registry=registry,
     )
     (ent / "page.md").write_text(
@@ -256,7 +233,7 @@ def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> 
             "fallbackStage": None,
             "checks": {
                 "entityPageQuality": {"passed": True, "issues": []},
-                "sourceReadiness": {"passed": True, "issues": []},
+                "sourceQualification": {"passed": True, "issues": []},
             },
         },
     )
@@ -268,7 +245,7 @@ def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> 
             "final": {"generator": "agent", "agentRunId": f"run-{name}", "entityRefs": [f"/entity/地点/景区/{name}"], "articleDigest": None},
             "agentInput": {"writingPack": f"entities/地点/景区/{name}/3.compose/entity_page_input.json"},
             "originalSources": [{"path": source_ref, "url": f"https://example.com/{name}"}],
-            "gateResults": {"decision": "approved", "checks": {"entityPageQuality": True, "sourceReadiness": True}},
+            "gateResults": {"decision": "approved", "checks": {"entityPageQuality": True, "sourceQualification": True}},
             "citedSourcePaths": [source_ref],
         },
     )
@@ -283,12 +260,12 @@ def _seed_entity_object_for_audit(task_id: str, batch_id: str, *, name: str) -> 
         },
     )
 
-def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, title: str, name: str) -> None:
-    from _common.content_object import register_content_object
+def _seed_verified_post_for_audit(execution_id: str, *, ref: str, title: str, name: str) -> None:
+    from content.post.object_index import register_content_object
 
-    register_content_object(task_id, batch_id, ref, content_type="article", angle="攻略", title=title)
-    from _common.content_object import content_object_dir
-    obj = content_object_dir(task_id, batch_id, ref)
+    register_content_object(execution_id, ref, content_type="article", angle="攻略", title=title)
+    from content.post.object_index import content_object_dir
+    obj = content_object_dir(execution_id, ref)
     article = (
         f"# {title}\n\n"
         f"第一次去[{name}](/entity/地点/景区/{name})，更适合把行程当成“先看主线工程、再看城内转场、最后处理返程”的顺序题，而不是临场想到哪走到哪。\n\n"
@@ -315,15 +292,15 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
     (obj / "4.draft" / "draft.article.md").write_text(article, encoding="utf-8")
     (obj / "1.download").mkdir(parents=True, exist_ok=True)
     (obj / "5.review").mkdir(parents=True, exist_ok=True)
-    source_ref, source_unit_ref = _audit_entity_source_refs(task_id, batch_id, name)
+    source_ref, source_unit_ref = _audit_entity_source_refs(execution_id, name)
     source_md = f"# {name}\n\n概述"
     article_digest = compute_document_sha256(article)
     write_json(
         obj / "2.quality" / "quality_analysis.json",
         {
             "schemaVersion": "quwoquan_data.stage_envelope",
-            "taskId": task_id,
-            "batchId": batch_id,
+            "executionId": execution_id,
+            "executionId": execution_id,
             "step": "quality_analysis",
             "ref": ref,
             "payload": {
@@ -364,8 +341,8 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
             "publishSeq": 1,
             "createdAt": "2026-06-12T00:00:00Z",
             "updatedAt": "2026-06-12T00:00:00Z",
-            "sourceTaskId": task_id,
-            "sourceBatchId": batch_id,
+            "originTaskId": execution_id,
+            "sourceBatchId": execution_id,
             "writingIntent": "planning_consultation",
             "baseSourceRef": source_ref,
             "intersectionHints": [
@@ -440,8 +417,8 @@ def _seed_verified_post_for_audit(task_id: str, batch_id: str, *, ref: str, titl
         obj / "5.review" / "review_ledger.json",
         {
             "schemaVersion": "quwoquan_data.review_ledger",
-            "taskId": task_id,
-            "batchId": batch_id,
+            "executionId": execution_id,
+            "executionId": execution_id,
             "ref": ref,
             "policy": {
                 "autoApprove": {"agentMinScore": 3, "requireHumanWhenDoubtful": True, "autoDiscardScoreAtMost": 1},

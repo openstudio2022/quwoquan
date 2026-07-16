@@ -55,8 +55,8 @@ func (p *RecommendFeatureProjector) Name() string { return "RecommendFeatureProj
 
 func (p *RecommendFeatureProjector) EventTypes() []string {
 	return []string{
-		"PostCreated", "ContentReacted", "BehaviorBatchReported",
-		"UserFollowed", "CircleMemberJoined", "SearchRecommendationSignalPublished",
+		"PostCreated", "EventBatchReported",
+		"PersonaFollowStateChanged", "CircleMemberJoined", "SearchRecommendationSignalPublished",
 	}
 }
 
@@ -64,12 +64,10 @@ func (p *RecommendFeatureProjector) Project(ctx context.Context, event Projector
 	switch event.Type {
 	case "PostCreated":
 		return p.onPostCreated(ctx, event)
-	case "BehaviorBatchReported":
+	case "EventBatchReported":
 		return p.onBehaviorBatch(ctx, event)
-	case "ContentReacted":
-		return p.onContentReacted(ctx, event)
-	case "UserFollowed":
-		return p.onUserFollowed(ctx, event)
+	case "PersonaFollowStateChanged":
+		return p.onPersonaFollowStateChanged(ctx, event)
 	case "CircleMemberJoined":
 		return p.onCircleMemberJoined(ctx, event)
 	case "SearchRecommendationSignalPublished":
@@ -478,42 +476,6 @@ func intVal(m map[string]any, key string) int {
 	}
 }
 
-func (p *RecommendFeatureProjector) onContentReacted(ctx context.Context, event ProjectorEvent) error {
-	userID := strVal(event.Payload, "userId")
-	if userID == "" {
-		return nil
-	}
-
-	contentID := strVal(event.Payload, "contentId")
-	tags := anySlice(event.Payload, "tagRefs")
-
-	inc := bson.M{}
-	if boolVal(event.Payload, "liked") {
-		inc["userFeatures.totalLikes"] = 1
-		p.injectSignal(ctx, userID, contentID, "like", tags)
-	}
-	if boolVal(event.Payload, "shared") {
-		inc["userFeatures.totalShares"] = 1
-		p.injectSignal(ctx, userID, contentID, "share", tags)
-	}
-
-	if len(inc) == 0 {
-		return nil
-	}
-
-	update := bson.M{
-		"$inc": inc,
-		"$set": bson.M{
-			"userId":    userID,
-			"updatedAt": time.Now().UTC(),
-		},
-	}
-
-	opts := options.UpdateOne().SetUpsert(true)
-	_, err := p.coll.UpdateOne(ctx, bson.M{"userId": userID}, update, opts)
-	return err
-}
-
 func (p *RecommendFeatureProjector) injectSignal(ctx context.Context, userID, contentID, action string, tags []string) {
 	if p.signalProcessor == nil {
 		return
@@ -527,18 +489,20 @@ func (p *RecommendFeatureProjector) injectSignal(ctx context.Context, userID, co
 	}})
 }
 
-func (p *RecommendFeatureProjector) onUserFollowed(ctx context.Context, event ProjectorEvent) error {
-	userID := strVal(event.Payload, "followerId")
-	if userID == "" {
-		userID = strVal(event.Payload, "userId")
-	}
+
+func (p *RecommendFeatureProjector) onPersonaFollowStateChanged(ctx context.Context, event ProjectorEvent) error {
+	userID := strVal(event.Payload, "sourcePersonaId")
 	if userID == "" {
 		return nil
+	}
+	delta := -0.1
+	if boolVal(event.Payload, "following") {
+		delta = 0.1
 	}
 
 	update := bson.M{
 		"$inc": bson.M{
-			"userFeatures.socialInterestScore": 0.1,
+			"userFeatures.socialInterestScore": delta,
 		},
 		"$set": bson.M{
 			"userId":    userID,

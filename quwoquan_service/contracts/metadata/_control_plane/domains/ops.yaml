@@ -5,7 +5,8 @@ template_role: backlog_candidate
 rollout_group: wave_2_backfill
 acceptance_status: integration_pass
 metadata_paths:
-- ops/experiment_bucket
+- ops/experiment
+- ops/experiment_assignment_fact
 - ops/visit_record
 service_names:
 - product-ops-service
@@ -29,9 +30,11 @@ control_planes:
     - ops.experiment.
 minimum_package:
   metadata_files:
-  - contracts/metadata/ops/experiment_bucket/service.yaml
+  - contracts/metadata/ops/experiment/service.yaml
+  - contracts/metadata/ops/experiment_assignment_fact/service.yaml
   - contracts/metadata/ops/visit_record/service.yaml
-  - contracts/metadata/ops/experiment_bucket/tests/e2e.yaml
+  - contracts/metadata/ops/experiment/tests/e2e.yaml
+  - contracts/metadata/ops/experiment_assignment_fact/tests/e2e.yaml
   - contracts/metadata/ops/visit_record/tests/e2e.yaml
   codegen_targets:
   - go_runtime
@@ -39,12 +42,14 @@ minimum_package:
   - ops_portal
   test_evidence:
     t1:
-    - contracts/metadata/ops/experiment_bucket/service.yaml
+    - contracts/metadata/ops/experiment/service.yaml
+    - contracts/metadata/ops/experiment_assignment_fact/service.yaml
     - contracts/metadata/ops/visit_record/service.yaml
     t2:
     - services/product-ops-service/cmd/api/main__local_contract_test.go
     t3:
-    - contracts/metadata/ops/experiment_bucket/tests/e2e.yaml
+    - contracts/metadata/ops/experiment/tests/e2e.yaml
+    - contracts/metadata/ops/experiment_assignment_fact/tests/e2e.yaml
     - contracts/metadata/ops/visit_record/tests/e2e.yaml
     t4: []
 deployment:

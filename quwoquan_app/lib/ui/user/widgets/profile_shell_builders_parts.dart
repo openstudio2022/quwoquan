@@ -706,20 +706,6 @@ extension _ProfileShellBuilders on _ProfileShellState {
           (tab) => TabItem(id: tab.id, label: _profileObjectTabLabel(tab.id)),
         )
         .toList(growable: false);
-    final state = ref.watch(profileNotifierProvider(widget.userId));
-    final showInteractionDirectionSwitch =
-        widget.mode == ProfileMode.mine && _activeTabId == 'interaction';
-    final directionSwitch = showInteractionDirectionSwitch
-        ? ProfileInteractionDirectionSwitch(
-            isDark: CupertinoTheme.brightnessOf(context) == Brightness.dark,
-            current: state.interactionDirection,
-            onSelected: (direction) {
-              ref
-                  .read(profileNotifierProvider(widget.userId).notifier)
-                  .setInteractionDirection(direction);
-            },
-          )
-        : null;
     final surface = Container(
       key: pinned
           ? const ValueKey<String>('profile-shell-primary-tabs-pinned')
@@ -731,23 +717,13 @@ extension _ProfileShellBuilders on _ProfileShellState {
       ),
       child: SizedBox(
         height: _primaryTabBarHeight(context),
-        child: Stack(
-          alignment: Alignment.center,
-          children: <Widget>[
-            CenteredScrollableTabBar(
-              tabs: tabs,
-              activeTab: _activeTabId,
-              onTabChange: _onPrimaryTabChange,
-              onHorizontalDragEnd: _handleTabSwipeDragEnd,
-              transparentBackground: true,
-              selectedLabelColor: AppColors.iosAccent(context),
-            ),
-            if (directionSwitch != null)
-              PositionedDirectional(
-                end: AppSpacing.containerMd,
-                child: directionSwitch,
-              ),
-          ],
+        child: CenteredScrollableTabBar(
+          tabs: tabs,
+          activeTab: _activeTabId,
+          onTabChange: _onPrimaryTabChange,
+          onHorizontalDragEnd: _handleTabSwipeDragEnd,
+          transparentBackground: true,
+          selectedLabelColor: AppColors.iosAccent(context),
         ),
       ),
     );
@@ -814,6 +790,7 @@ extension _ProfileShellBuilders on _ProfileShellState {
         inlineScroll: true,
         secondaryTabBarKey: _interactionSecondaryTabKey,
         onSecondaryHorizontalDragEnd: _handleTabSwipeDragEnd,
+        onDirectionSelected: _selectInteractionDirection,
       ),
       // 足迹=浏览历史，隐私门控仅本人主页可见（ui_config modes: [mine]）；body 复用既有
       // ProfileFootprintTab（myFootprintListProvider，scope 限 mine），不新建第二取数路径。

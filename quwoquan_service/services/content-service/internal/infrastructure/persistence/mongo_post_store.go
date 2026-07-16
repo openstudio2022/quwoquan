@@ -2,7 +2,8 @@ package persistence
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -10,38 +11,275 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
+	postports "quwoquan_service/services/content-service/internal/domain/post/ports"
+	contentgenerated "quwoquan_service/services/content-service/internal/generated"
 )
 
-// MongoPostStore implements PostRepository backed by MongoDB.
-// Used by L2 contract tests (testcontainers mongo:7) and production deployments.
+type postCommandReceiptDocument struct {
+	ID               string         `bson:"_id"`
+	AggregateID      string         `bson:"aggregateId"`
+	AggregateVersion int64          `bson:"aggregateVersion"`
+	CommandName      string         `bson:"commandName"`
+	CommandDigest    string         `bson:"commandDigest"`
+	Result           postmodel.Post `bson:"result"`
+	CreatedAt        time.Time      `bson:"createdAt"`
+	ExpiresAt        time.Time      `bson:"expiresAt"`
+}
+
+// MongoPostStore 是 Post 聚合、幂等 receipt 与 content outbox 的同库 adapter。
 type MongoPostStore struct {
-	coll *mongo.Collection
+	coll        *mongo.Collection
+	receipts    *mongo.Collection
+	outbox      *mongo.Collection
+	sequences   *mongo.Collection
+	checkpoints *mongo.Collection
 }
 
 func NewMongoPostStore(coll *mongo.Collection) *MongoPostStore {
-	return &MongoPostStore{coll: coll}
-}
-
-func (s *MongoPostStore) Create(ctx context.Context, post *postmodel.Post) error {
-	_, err := s.coll.InsertOne(ctx, post)
-	return err
-}
-
-func (s *MongoPostStore) Update(ctx context.Context, id string, post *postmodel.Post) bool {
-	result, err := s.coll.ReplaceOne(ctx, bson.M{"_id": id}, post)
-	if err != nil {
-		return false
+	db := coll.Database()
+	return &MongoPostStore{
+		coll:        coll,
+		receipts:    db.Collection("post_command_receipts"),
+		outbox:      db.Collection("content_outbox"),
+		sequences:   db.Collection("content_outbox_sequences"),
+		checkpoints: db.Collection("projection_checkpoints"),
 	}
-	return result.MatchedCount > 0
+}
+
+func (s *MongoPostStore) EnsureIndexes(ctx context.Context) error {
+	if _, err := s.coll.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "authorId", Value: 1}, {Key: "status", Value: 1}, {Key: "publishedAt", Value: -1}},
+			Options: options.Index().SetName("idx_posts_author_status"),
+		},
+		{
+			Keys:    bson.D{{Key: "contentType", Value: 1}, {Key: "publishedAt", Value: -1}},
+			Options: options.Index().SetName("idx_posts_content_type"),
+		},
+		{
+			Keys:    bson.D{{Key: "visibility", Value: 1}, {Key: "publishedAt", Value: -1}},
+			Options: options.Index().SetName("idx_posts_visibility"),
+		},
+		{
+			Keys:    bson.D{{Key: "status", Value: 1}, {Key: "publishedAt", Value: -1}},
+			Options: options.Index().SetName("idx_posts_status_published"),
+		},
+		{
+			Keys:    bson.D{{Key: "lastActiveAt", Value: -1}},
+			Options: options.Index().SetName("idx_posts_last_active").SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{Key: "tagRefs", Value: 1}},
+			Options: options.Index().SetName("idx_posts_tag_refs"),
+		},
+		{
+			Keys:    bson.D{{Key: "entityRefs", Value: 1}},
+			Options: options.Index().SetName("idx_posts_entity_refs"),
+		},
+		{
+			Keys:    bson.D{{Key: "semanticMentions.candidateId", Value: 1}},
+			Options: options.Index().SetName("idx_posts_semantic_candidate").SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{Key: "semanticMentions.targetRef", Value: 1}},
+			Options: options.Index().SetName("idx_posts_semantic_target").SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{Key: "location", Value: "2dsphere"}},
+			Options: options.Index().SetName("idx_posts_location").SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{Key: "moderationStatus", Value: 1}, {Key: "createdAt", Value: -1}},
+			Options: options.Index().SetName("idx_posts_moderation"),
+		},
+		{
+			Keys:    bson.D{{Key: "sourceType", Value: 1}, {Key: "sourcePostId", Value: 1}},
+			Options: options.Index().SetName("idx_posts_source").SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{Key: "articleMarkdownDigest", Value: 1}},
+			Options: options.Index().SetName("idx_posts_article_markdown_digest").SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{Key: "canonicalEntityId", Value: 1}, {Key: "publishedAt", Value: -1}},
+			Options: options.Index().SetName("idx_posts_canonical_entity").SetSparse(true),
+		},
+		{
+			Keys:    bson.D{{Key: "_id", Value: 1}, {Key: "version", Value: 1}},
+			Options: options.Index().SetName("idx_posts_version").SetUnique(true),
+		},
+	}); err != nil {
+		return err
+	}
+	if _, err := s.receipts.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "aggregateId", Value: 1}, {Key: "aggregateVersion", Value: -1}},
+			Options: options.Index().SetName("idx_post_command_receipts_aggregate"),
+		},
+		{
+			Keys:    bson.D{{Key: "expiresAt", Value: 1}},
+			Options: options.Index().SetName("idx_post_command_receipts_expire").SetExpireAfterSeconds(0),
+		},
+	}); err != nil {
+		return err
+	}
+	return s.ensureOutboxIndexes(ctx)
+}
+
+func (s *MongoPostStore) Load(ctx context.Context, id string) (*postmodel.Post, bool, error) {
+	var post postmodel.Post
+	err := s.coll.FindOne(ctx, bson.M{"_id": strings.TrimSpace(id)}).Decode(&post)
+	if err == mongo.ErrNoDocuments {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return &post, true, nil
+}
+
+func validatePostCommit(commit postports.Commit) error {
+	if commit.Post == nil || strings.TrimSpace(commit.Post.ID) == "" {
+		return contentgenerated.AppErrorFromVersionConflict("post commit requires aggregate")
+	}
+	if commit.ExpectedVersion < 0 {
+		return contentgenerated.AppErrorFromVersionConflict("post commit expected version must not be negative")
+	}
+	if strings.TrimSpace(commit.IdempotencyKey) == "" {
+		return contentgenerated.AppErrorFromIdempotencyConflict("post command requires idempotency key")
+	}
+	nextVersion := commit.ExpectedVersion + 1
+	for _, event := range commit.Events {
+		if strings.TrimSpace(event.EventID) == "" ||
+			strings.TrimSpace(event.EventType) == "" ||
+			event.AggregateType != "Post" ||
+			event.AggregateID != commit.Post.ID ||
+			event.AggregateVersion != nextVersion ||
+			event.OccurredAt.IsZero() {
+			return contentgenerated.AppErrorFromVersionConflict(
+				"post outbox event does not match aggregate commit",
+			)
+		}
+	}
+	return nil
+}
+
+func (s *MongoPostStore) Commit(ctx context.Context, commit postports.Commit) (postports.CommitResult, error) {
+	if err := validatePostCommit(commit); err != nil {
+		return postports.CommitResult{}, err
+	}
+	session, err := s.coll.Database().Client().StartSession()
+	if err != nil {
+		return postports.CommitResult{}, err
+	}
+	defer session.EndSession(ctx)
+
+	var result postports.CommitResult
+	_, err = session.WithTransaction(ctx, func(txCtx context.Context) (any, error) {
+		var receipt postCommandReceiptDocument
+		receiptErr := s.receipts.FindOne(txCtx, bson.M{"_id": commit.IdempotencyKey}).Decode(&receipt)
+		if receiptErr == nil {
+			if !receipt.ExpiresAt.After(time.Now().UTC()) {
+				if _, err := s.receipts.DeleteOne(txCtx, bson.M{"_id": commit.IdempotencyKey}); err != nil {
+					return nil, err
+				}
+			} else {
+				if receipt.CommandName != commit.CommandName || receipt.CommandDigest != commit.CommandDigest {
+					return nil, contentgenerated.AppErrorFromIdempotencyConflict("idempotency key was reused with a different command")
+				}
+				replayed := receipt.Result
+				result = postports.CommitResult{Post: &replayed, Replayed: true}
+				return nil, nil
+			}
+		}
+		if receiptErr != mongo.ErrNoDocuments {
+			return nil, receiptErr
+		}
+
+		next := *commit.Post
+		next.Version = commit.ExpectedVersion + 1
+		if commit.ExpectedVersion == 0 {
+			if _, insertErr := s.coll.InsertOne(txCtx, &next); insertErr != nil {
+				return nil, insertErr
+			}
+		} else {
+			replaceResult, replaceErr := s.coll.ReplaceOne(
+				txCtx,
+				bson.M{"_id": next.ID, "version": commit.ExpectedVersion},
+				&next,
+			)
+			if replaceErr != nil {
+				return nil, replaceErr
+			}
+			if replaceResult.MatchedCount != 1 {
+				return nil, contentgenerated.AppErrorFromVersionConflict("post version changed before commit")
+			}
+		}
+
+		if len(commit.Events) > 0 {
+			var sequenceCounter struct {
+				Value int64 `bson:"value"`
+			}
+			if sequenceErr := s.sequences.FindOneAndUpdate(
+				txCtx,
+				bson.M{"_id": "Post"},
+				bson.M{"$inc": bson.M{"value": int64(len(commit.Events))}},
+				options.FindOneAndUpdate().
+					SetUpsert(true).
+					SetReturnDocument(options.After),
+			).Decode(&sequenceCounter); sequenceErr != nil {
+				return nil, sequenceErr
+			}
+			firstSequence := sequenceCounter.Value - int64(len(commit.Events)) + 1
+			documents := make([]any, 0, len(commit.Events))
+			for index, event := range commit.Events {
+				documents = append(documents, contentOutboxDocument{
+					ID:               event.EventID,
+					OutboxSequence:   firstSequence + int64(index),
+					EventType:        event.EventType,
+					AggregateType:    event.AggregateType,
+					AggregateID:      next.ID,
+					AggregateVersion: next.Version,
+					PayloadJSON:      event.Payload,
+					OccurredAt:       event.OccurredAt,
+				})
+			}
+			if _, insertErr := s.outbox.InsertMany(txCtx, documents); insertErr != nil {
+				return nil, insertErr
+			}
+		}
+
+		expiresAt := commit.ReceiptExpiresAt
+		if expiresAt.IsZero() {
+			expiresAt = time.Now().UTC().Add(24 * time.Hour)
+		}
+		if _, insertErr := s.receipts.InsertOne(txCtx, postCommandReceiptDocument{
+			ID:               commit.IdempotencyKey,
+			AggregateID:      next.ID,
+			AggregateVersion: next.Version,
+			CommandName:      commit.CommandName,
+			CommandDigest:    commit.CommandDigest,
+			Result:           next,
+			CreatedAt:        time.Now().UTC(),
+			ExpiresAt:        expiresAt,
+		}); insertErr != nil {
+			return nil, insertErr
+		}
+		result = postports.CommitResult{Post: &next}
+		return nil, nil
+	})
+	if err != nil {
+		return postports.CommitResult{}, err
+	}
+	return result, nil
 }
 
 func (s *MongoPostStore) FindByID(ctx context.Context, id string) (*postmodel.Post, bool) {
-	var post postmodel.Post
-	err := s.coll.FindOne(ctx, bson.M{"_id": id}).Decode(&post)
-	if err != nil {
+	post, ok, err := s.Load(ctx, id)
+	if err != nil || !ok {
 		return nil, false
 	}
-	return &post, true
+	return post, true
 }
 
 func (s *MongoPostStore) AdjustCommentCount(ctx context.Context, id string, delta int64) (int64, bool, error) {
@@ -78,34 +316,44 @@ func (s *MongoPostStore) SetCommentCount(ctx context.Context, id string, count i
 	return res.MatchedCount > 0, nil
 }
 
-func (s *MongoPostStore) ListAll(ctx context.Context) []postmodel.Post {
+// SetLikeCount 只写由 ContentReaction 权威集合重建的 projection。
+func (s *MongoPostStore) SetLikeCount(ctx context.Context, id string, count int64) (bool, error) {
+	if count < 0 {
+		return false, fmt.Errorf("Post likeCount cannot be negative")
+	}
+	res, err := s.coll.UpdateOne(
+		ctx,
+		bson.M{"_id": strings.TrimSpace(id)},
+		bson.M{"$set": bson.M{"likeCount": count, "updatedAt": time.Now().UTC()}},
+	)
+	if err != nil {
+		return false, err
+	}
+	return res.MatchedCount == 1, nil
+}
+
+func (s *MongoPostStore) ListAll(ctx context.Context) ([]postmodel.Post, error) {
 	opts := options.Find().SetSort(bson.D{{Key: "createdAt", Value: -1}})
 	cur, err := s.coll.Find(ctx, bson.M{}, opts)
 	if err != nil {
-		log.Printf("WARN: post ListAll find: %v", err)
-		return nil
+		return nil, fmt.Errorf("find posts: %w", err)
 	}
 	defer cur.Close(ctx)
 
-	// 逐条解码：单条脏文档（如 _id 非 string 的迁移前数据）不能让整批
-	// 列表静默返回空，否则 search-backfill 等 reconcile 工具会误报 total=0。
+	// 主键、字段类型和读取模型必须同源。任一文档无法解码时，reconcile
+	// 必须失败并暴露损坏记录，不能以部分列表继续生成派生读模型。
 	var posts []postmodel.Post
-	skipped := 0
 	for cur.Next(ctx) {
 		var post postmodel.Post
 		if err := cur.Decode(&post); err != nil {
-			skipped++
-			continue
+			return nil, fmt.Errorf("decode post: %w", err)
 		}
 		posts = append(posts, post)
 	}
 	if err := cur.Err(); err != nil {
-		log.Printf("WARN: post ListAll cursor: %v (decoded=%d)", err, len(posts))
+		return nil, fmt.Errorf("iterate posts: %w", err)
 	}
-	if skipped > 0 {
-		log.Printf("WARN: post ListAll skipped %d undecodable documents", skipped)
-	}
-	return posts
+	return posts, nil
 }
 
 // ListPublished returns published/public posts in reverse-chronological order.
@@ -173,4 +421,39 @@ func (s *MongoPostStore) ListByAuthor(ctx context.Context, authorID string, limi
 		return nil
 	}
 	return posts
+}
+
+// Create 通过 AggregateStore Commit 写入新 Post，供缓存装饰器与集成测试使用。
+func (s *MongoPostStore) Create(ctx context.Context, post *postmodel.Post) error {
+	if post == nil || strings.TrimSpace(post.ID) == "" {
+		return contentgenerated.AppErrorFromVersionConflict("post create requires aggregate id")
+	}
+	if post.Version == 0 {
+		post.Version = 1
+	}
+	_, err := s.Commit(ctx, postports.Commit{
+		Post:             post,
+		ExpectedVersion:  0,
+		IdempotencyKey:   "create:" + post.ID,
+		CommandName:      "CreatePost",
+		CommandDigest:    post.ID,
+		ReceiptExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+	})
+	return err
+}
+
+// Update 通过乐观版本 Commit 更新 Post，供缓存装饰器与集成测试使用。
+func (s *MongoPostStore) Update(ctx context.Context, id string, post *postmodel.Post) bool {
+	if post == nil || strings.TrimSpace(id) == "" {
+		return false
+	}
+	result, err := s.Commit(ctx, postports.Commit{
+		Post:             post,
+		ExpectedVersion:  post.Version,
+		IdempotencyKey:   "update:" + id + ":" + post.ID,
+		CommandName:      "UpdatePost",
+		CommandDigest:    id,
+		ReceiptExpiresAt: time.Now().UTC().Add(24 * time.Hour),
+	})
+	return err == nil && result.Post != nil
 }

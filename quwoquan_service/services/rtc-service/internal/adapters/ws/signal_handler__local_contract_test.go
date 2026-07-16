@@ -9,7 +9,7 @@ import (
 )
 
 func TestSignalHandler_InvalidUpgradeWritesRuntimeErrorResponse(t *testing.T) {
-	handler := NewSignalHandler(nil, slog.Default())
+	handler := NewSignalHandler(slog.Default())
 	req := httptest.NewRequest(http.MethodGet, "/ws?userId=u1", nil)
 	req.Header.Set("X-Request-Id", "req-ws")
 	req.Header.Set("X-Trace-Id", "trace-ws")

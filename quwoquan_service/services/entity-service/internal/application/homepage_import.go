@@ -2,78 +2,104 @@ package application
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
 
-// ImportedHomepageInput 是数据工程 publish 实体（page.md 三件套）→ 主页读模型的
-// 导入投影输入。字段语义与 contracts/metadata/entity/homepage/projections/
-// homepage_introduction*.yaml 同源；由 cmd/homepage-import 从 publish 树构建。
+// ImportedHomepageInput is one approved data entity projected to a homepage.
+// The release-level source identity lives in HomepageImportRequest so every
+// object in one invocation is reconciled against the same immutable release.
 type ImportedHomepageInput struct {
-	// EntityRef 是数据工程实体相对引用（如 地点/景区/九寨沟），用于幂等查找。
 	EntityRef            string
 	Title                string
 	HomepageType         string
 	City                 string
 	IntroductionMarkdown string
 	IntroductionAssets   []HomepageIntroductionAsset
-	// CategoryTags 承载 _entity.json.tagRefs（Entity 类型 + Topic 地理/主题标签），
-	// 与 content-service import 导 entities.tagRefs 同源（WP3 统一打标）。
-	CategoryTags []string
-	SourceTaskID string
+	PrimarySource        *HomepageSource
+	SourceURLs           []string
+	CategoryTags         []string
+	SourceTaskID         string
 }
 
-// HomepageImportReport 汇总一次导入的幂等结果（审计证据随 import report 落盘）。
-// EntityRefToHomepageID 是数据工程 entityRef → 运行库 homepageId 的映射产物
-// （WP4 覆盖账本核对面消费：coverage 索引/运营核对用它换算 introduction URL）。
+type HomepageImportMode string
+
+const (
+	HomepageImportModeUpsert HomepageImportMode = "upsert"
+	HomepageImportModeSync   HomepageImportMode = "sync"
+)
+
+// HomepageImportRequest is the only importer application boundary. Sync is
+// source-owner scoped: it never deletes or offlines an independently managed
+// homepage, even where title or type overlaps with a data-owned homepage.
+type HomepageImportRequest struct {
+	Mode            HomepageImportMode
+	SourceOwner     string
+	SourceReleaseID string
+	Inputs          []ImportedHomepageInput
+}
+
 type HomepageImportReport struct {
-	Created               []string          `json:"created"`
-	Updated               []string          `json:"updated"`
-	Skipped               []string          `json:"skipped"`
-	EntityRefToHomepageID map[string]string `json:"entityRefToHomepageId"`
+	Mode                  HomepageImportMode `json:"mode"`
+	SourceOwner           string             `json:"sourceOwner"`
+	Created               []string           `json:"created"`
+	Updated               []string           `json:"updated"`
+	Offlined              []string           `json:"offlined"`
+	Skipped               []string           `json:"skipped"`
+	EntityRefToHomepageID map[string]string  `json:"entityRefToHomepageId"`
 }
 
-// UpsertImportedHomepages 幂等灌入数据工程主页投影：
-//   - 已存在（按 entityRef/title 经 resolveHomepageLocked 命中）→ 只更新
-//     introduction 投影字段与空缺的基础字段（不覆盖运营/认领侧已有编辑）；
-//   - 不存在 → 创建并直接发布（sourceType=official_seed，与 publish 语义一致）。
-//
-// 全部变更共享一次快照持久化；search projector 事件在锁外逐个补发。
-func (s *HomepageService) UpsertImportedHomepages(
+// ReconcileImportedHomepages atomically applies one immutable desired state.
+// Upsert only changes declared entities. Sync additionally offlines stale
+// homepages owned by the same source owner. It never uses title matching: a
+// release source reference is the only safe identity across independent owners.
+func (s *HomepageService) ReconcileImportedHomepages(
 	ctx context.Context,
-	inputs []ImportedHomepageInput,
+	request HomepageImportRequest,
 ) (HomepageImportReport, error) {
+	request.Mode = HomepageImportMode(strings.TrimSpace(string(request.Mode)))
+	request.SourceOwner = strings.TrimSpace(request.SourceOwner)
+	request.SourceReleaseID = strings.TrimSpace(request.SourceReleaseID)
+	if request.Mode != HomepageImportModeUpsert && request.Mode != HomepageImportModeSync {
+		return HomepageImportReport{}, fmt.Errorf("unsupported homepage import mode %q", request.Mode)
+	}
+	if request.SourceOwner == "" || request.SourceReleaseID == "" {
+		return HomepageImportReport{}, fmt.Errorf("homepage import source owner and release id are required")
+	}
+	if err := validateImportedHomepageInputs(request.Inputs); err != nil {
+		return HomepageImportReport{}, err
+	}
+
 	report := HomepageImportReport{
+		Mode:                  request.Mode,
+		SourceOwner:           request.SourceOwner,
 		Created:               []string{},
 		Updated:               []string{},
+		Offlined:              []string{},
 		Skipped:               []string{},
 		EntityRefToHomepageID: map[string]string{},
 	}
-	var emits []ProjectorEvent
+	emits := make([]ProjectorEvent, 0, len(request.Inputs))
+	desiredRefs := make(map[string]struct{}, len(request.Inputs))
 
 	s.mu.Lock()
 	now := time.Now().UTC()
-	for _, input := range inputs {
-		title := strings.TrimSpace(input.Title)
-		if title == "" || validateHomepageInput(HomepageInput{Title: title, HomepageType: input.HomepageType}) != nil {
-			report.Skipped = append(report.Skipped, input.EntityRef)
-			continue
-		}
-		homepage, found := s.resolveHomepageLocked(input.EntityRef)
-		if !found {
-			homepage, found = s.resolveHomepageLocked(title)
-		}
+	for _, input := range request.Inputs {
+		entityRef := strings.TrimSpace(input.EntityRef)
+		desiredRefs[entityRef] = struct{}{}
+		homepage, found := s.importedHomepageBySourceLocked(request.SourceOwner, entityRef)
 		if found {
-			applyImportedProjection(homepage, input, now)
+			applyImportedProjection(homepage, input, request.SourceOwner, request.SourceReleaseID, now)
 			report.Updated = append(report.Updated, homepage.ID)
-			report.EntityRefToHomepageID[input.EntityRef] = homepage.ID
 		} else {
 			id := s.nextID("homepage")
 			homepage = &Homepage{
 				ID:                 id,
-				Title:              title,
+				Title:              strings.TrimSpace(input.Title),
 				HomepageType:       strings.TrimSpace(input.HomepageType),
-				CanonicalEntityID:  canonicalEntityIDFromTypeAndTitle(input.HomepageType, title),
+				CanonicalEntityID:  canonicalEntityIDFromTypeAndTitle(input.HomepageType, input.Title),
 				ObjectPageTemplate: objectPageTemplate(input.HomepageType, ""),
 				Status:             "published",
 				SourceType:         "official_seed",
@@ -82,18 +108,34 @@ func (s *HomepageService) UpsertImportedHomepages(
 				CreatedAt:          now,
 				PublishedAt:        &now,
 			}
-			applyImportedProjection(homepage, input, now)
+			applyImportedProjection(homepage, input, request.SourceOwner, request.SourceReleaseID, now)
 			applyDefaultShellData(homepage)
 			s.homepages[id] = homepage
 			report.Created = append(report.Created, id)
-			report.EntityRefToHomepageID[input.EntityRef] = id
 		}
+		report.EntityRefToHomepageID[entityRef] = homepage.ID
 		out := cloneHomepage(homepage)
-		emits = append(emits, ProjectorEvent{
-			Type:       ProjectorEventHomepageUpserted,
-			HomepageID: out.ID,
-			Homepage:   &out,
-		})
+		emits = append(emits, ProjectorEvent{Type: ProjectorEventHomepageUpserted, HomepageID: out.ID, Homepage: &out})
+	}
+	if request.Mode == HomepageImportModeSync {
+		for _, homepage := range s.homepages {
+			if homepage.SourceOwner != request.SourceOwner {
+				continue
+			}
+			if _, retained := desiredRefs[strings.TrimSpace(homepage.SourceEntityRef)]; retained {
+				continue
+			}
+			if homepage.Status == "offline" && homepage.SourceReleaseID == request.SourceReleaseID {
+				continue
+			}
+			homepage.Status = "offline"
+			homepage.OfflineAt = &now
+			homepage.SourceReleaseID = request.SourceReleaseID
+			homepage.UpdatedAt = now
+			report.Offlined = append(report.Offlined, homepage.ID)
+			out := cloneHomepage(homepage)
+			emits = append(emits, ProjectorEvent{Type: ProjectorEventHomepageRemoved, HomepageID: out.ID, Homepage: &out})
+		}
 	}
 	err := s.persistLocked(ctx)
 	s.mu.Unlock()
@@ -103,16 +145,58 @@ func (s *HomepageService) UpsertImportedHomepages(
 	for _, event := range emits {
 		s.emitSearchIndex(ctx, event)
 	}
+	sort.Strings(report.Created)
+	sort.Strings(report.Updated)
+	sort.Strings(report.Offlined)
 	return report, nil
 }
 
-// applyImportedProjection 把投影字段写入主页：introduction 永远以数据工程最新
-// 发布为准；categoryTags 在数据工程有打标时以最新为准（标签唯一真相源是
-// publish/tags 契约树，无打标不清空既有值）；封面/城市只在原值为空时补齐
-// （保护认领方/运营侧的既有编辑）。
-func applyImportedProjection(homepage *Homepage, input ImportedHomepageInput, now time.Time) {
+func validateImportedHomepageInputs(inputs []ImportedHomepageInput) error {
+	seen := make(map[string]struct{}, len(inputs))
+	for index, input := range inputs {
+		ref := strings.TrimSpace(input.EntityRef)
+		if ref == "" {
+			return fmt.Errorf("homepage import input[%d] has empty entity ref", index)
+		}
+		if _, duplicate := seen[ref]; duplicate {
+			return fmt.Errorf("homepage import has duplicate entity ref %q", ref)
+		}
+		seen[ref] = struct{}{}
+		if err := validateHomepageInput(HomepageInput{
+			Title:        strings.TrimSpace(input.Title),
+			HomepageType: strings.TrimSpace(input.HomepageType),
+		}); err != nil {
+			return fmt.Errorf("homepage import input %q is invalid: %w", ref, err)
+		}
+	}
+	return nil
+}
+
+func (s *HomepageService) importedHomepageBySourceLocked(sourceOwner string, entityRef string) (*Homepage, bool) {
+	for _, homepage := range s.homepages {
+		if homepage.SourceOwner == sourceOwner && homepage.SourceEntityRef == entityRef {
+			return homepage, true
+		}
+	}
+	return nil, false
+}
+
+func applyImportedProjection(
+	homepage *Homepage,
+	input ImportedHomepageInput,
+	sourceOwner string,
+	sourceReleaseID string,
+	now time.Time,
+) {
 	homepage.IntroductionMarkdown = strings.TrimSpace(input.IntroductionMarkdown)
 	homepage.IntroductionAssets = cloneIntroductionAssets(input.IntroductionAssets)
+	if input.PrimarySource != nil {
+		source := *input.PrimarySource
+		homepage.PrimarySource = &source
+	} else {
+		homepage.PrimarySource = nil
+	}
+	homepage.SourceURLs = cloneStrings(input.SourceURLs)
 	if len(input.CategoryTags) > 0 {
 		homepage.CategoryTags = cloneStrings(input.CategoryTags)
 	}
@@ -121,6 +205,15 @@ func applyImportedProjection(homepage *Homepage, input ImportedHomepageInput, no
 	}
 	if strings.TrimSpace(homepage.City) == "" {
 		homepage.City = strings.TrimSpace(input.City)
+	}
+	homepage.SourceOwner = sourceOwner
+	homepage.SourceEntityRef = strings.TrimSpace(input.EntityRef)
+	homepage.SourceReleaseID = sourceReleaseID
+	homepage.Status = "published"
+	homepage.OfflineAt = nil
+	if homepage.PublishedAt == nil {
+		publishedAt := now
+		homepage.PublishedAt = &publishedAt
 	}
 	homepage.UpdatedAt = now
 }

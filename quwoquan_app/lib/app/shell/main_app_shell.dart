@@ -351,7 +351,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
     }
 
     // 「我的」tab 为强登录入口：游客切到「我」立即弹登录，登录成功进入 /profile，
-    // 关闭则安全回首页（allowGuestDismissPop=false）。这里在 tap 级（动作门）拦截，
+    // 关闭则安全回首页（safeFallback）。这里在 tap 级（动作门）拦截，
     // 不把 /profile 接入路由级守卫，避免登录页关闭后原路回 /profile 再次命中守卫
     // 形成死循环；MyProfilePage 的游客占位仅作为深链兜底。
     if (nextTab == MainTabDestination.profile &&
@@ -475,7 +475,7 @@ class _MainAppShellState extends ConsumerState<MainAppShell> {
       dismissFallback: AppRoutePaths.home,
       // 强入口已先归位首页：关闭只 go 首页，禁止 pop 回到 create/chat/profile
       // 这类受限路由再次触发守卫，从根上杜绝「关闭→又弹登录」死循环。
-      allowGuestDismissPop: false,
+      dismissPolicy: LoginDismissPolicy.safeFallback,
     );
     return false;
   }

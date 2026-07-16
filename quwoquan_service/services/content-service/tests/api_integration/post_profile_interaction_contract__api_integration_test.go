@@ -3,10 +3,15 @@ package api_integration
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	postdomain "quwoquan_service/services/content-service/internal/domain/post"
+	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
 )
 
 func TestProfileInteractionActivitiesReceived(t *testing.T) {
@@ -43,14 +48,16 @@ func TestProfileInteractionActivitiesReceived(t *testing.T) {
 		t.Fatalf("comment post failed: %d %s", commentRec.Code, commentRec.Body.String())
 	}
 
-	if _, err := testPostService.RepostToCircle(
+	if err := persistence.NewMongoShareInteractionStore(mongoDB, slog.Default()).Save(
 		context.Background(),
-		postID,
-		"actor_share",
-		"circle_profile_interaction",
-		"",
+		postdomain.ShareInteractionOccurrence{
+			InteractionID:     "outbound-share-profile-interaction",
+			ActorSubAccountID: "actor_share", TargetSubAccountID: "author_profile_subject",
+			TargetContentID: postID, TargetContentType: "image", TargetKind: "record",
+			TargetAvailability: "active", OccurredAt: time.Now().UTC(),
+		},
 	); err != nil {
-		t.Fatalf("repost to circle failed: %v", err)
+		t.Fatalf("seed outbound share projection: %v", err)
 	}
 
 	req := httptest.NewRequest(

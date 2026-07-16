@@ -4,13 +4,15 @@ import 'package:flutter/foundation.dart' show setEquals;
 export 'package:quwoquan_app/core/models/search_hit_payload.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/content/post_search_item_view_dto.g.dart';
 export 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
-export 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
+export 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show LocationPoiDto;
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_search_views.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/recent_search_entry_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relation_search_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/social_relationship_capability_wire_dto.g.dart';
 import 'package:quwoquan_app/core/media/avatar_image_url.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show LocationPoiDto;
 part 'search_models_selection.dart';
 
 /// 与集合迭代顺序无关的稳定 hash（用于 [SearchObjectSelection.hashCode]）。
@@ -382,7 +384,7 @@ class MessageSearchItemView {
     required this.conversationId,
     this.conversationTitle,
     this.conversationAvatarUrl,
-    this.senderSubAccountId,
+    this.senderPersonaId,
     this.senderDisplayName,
     this.senderAvatarUrl,
     required this.messageType,
@@ -397,7 +399,7 @@ class MessageSearchItemView {
   final String conversationId;
   final String? conversationTitle;
   final String? conversationAvatarUrl;
-  final String? senderSubAccountId;
+  final String? senderPersonaId;
   final String? senderDisplayName;
   final String? senderAvatarUrl;
   final String messageType;
@@ -415,11 +417,7 @@ class MessageSearchItemView {
       conversationId: (map['conversationId'] ?? '').toString().trim(),
       conversationTitle: map['conversationTitle']?.toString(),
       conversationAvatarUrl: map['conversationAvatarUrl']?.toString(),
-      senderSubAccountId:
-          (map['senderSubAccountId'] ??
-                  map['senderProfileSubjectId'] ??
-                  map['senderId'])
-              ?.toString(),
+      senderPersonaId: map['senderPersonaId']?.toString(),
       senderDisplayName:
           (map['senderDisplayName'] ??
                   map['senderDisplayNameSnapshot'] ??

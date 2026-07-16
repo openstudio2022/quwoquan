@@ -11,6 +11,7 @@ import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/ui/circle/models/circle_stats_list_view_data.dart';
 import 'package:quwoquan_app/ui/circle/services/circle_stats_row_wire.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 圈子成员/群聊/粉丝/获赞列表页（1:1 对应 AuthorStatsList 的 members/groups/fans/likes 圈子维度）
 /// 路由：/circle/:id/stats?type=members|groups|fans|likes
@@ -104,7 +105,6 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
   }
 
   Future<void> _loadFromRepository() async {
-    final repo = ref.read(circleRepositoryProvider);
     if (mounted) {
       setState(() {
         _isLoading = true;
@@ -114,13 +114,17 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
     try {
       switch (_type) {
         case 'groups':
-          final groups = await repo.listCircleGroups(widget.circleId, limit: 200);
+          final groups = await ref
+              .read(circleStatsGroupQueryProvider)
+              .list(
+                CircleGroupListQuery(circleId: widget.circleId, limit: 100),
+              );
           if (!mounted) {
             return;
           }
           setState(() {
-            _groups = groups
-                .map(circleStatsGroupRowFromGroupDto)
+            _groups = groups.items
+                .map(circleStatsGroupRowFromGroupSlice)
                 .toList(growable: false);
             _pageErrorSemantic = null;
             _isLoading = false;
@@ -139,14 +143,21 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
         case 'members':
         case 'fans':
         default:
-          final roster = await repo.listMembers(widget.circleId, limit: 200);
+          final roster = await ref
+              .read(circleStatsMembershipQueryProvider)
+              .listMemberships(
+                CircleMembershipListQuery(
+                  circleId: widget.circleId,
+                  limit: 100,
+                ),
+              );
           if (!mounted) {
             return;
           }
           setState(() {
-            _users = roster.map(circleStatsMemberRowFromRosterItem).toList(
-                  growable: false,
-                );
+            _users = roster.items
+                .map(circleStatsMemberRowFromMembership)
+                .toList(growable: false);
             _pageErrorSemantic = null;
             _isLoading = false;
           });
@@ -168,25 +179,19 @@ class _CircleStatsPageState extends ConsumerState<CircleStatsPage> {
   List<CircleStatsMemberRowViewData> get _filteredUsers {
     if (_searchQuery.isEmpty) return _users;
     final q = _searchQuery.toLowerCase();
-    return _users
-        .where((u) => u.name.toLowerCase().contains(q))
-        .toList();
+    return _users.where((u) => u.name.toLowerCase().contains(q)).toList();
   }
 
   List<CircleStatsGroupRowViewData> get _filteredGroups {
     if (_searchQuery.isEmpty) return _groups;
     final q = _searchQuery.toLowerCase();
-    return _groups
-        .where((u) => u.name.toLowerCase().contains(q))
-        .toList();
+    return _groups.where((u) => u.name.toLowerCase().contains(q)).toList();
   }
 
   List<CircleStatsLikeRowViewData> get _filteredLikes {
     if (_searchQuery.isEmpty) return _likes;
     final q = _searchQuery.toLowerCase();
-    return _likes
-        .where((i) => i.userName.toLowerCase().contains(q))
-        .toList();
+    return _likes.where((i) => i.userName.toLowerCase().contains(q)).toList();
   }
 
   @override

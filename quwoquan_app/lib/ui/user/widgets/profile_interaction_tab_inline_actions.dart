@@ -198,8 +198,15 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
     });
     try {
       await ref
-          .read(contentRepositoryProvider)
-          .reactToComment(commentId: commentId, reaction: next);
+          .read(profileCommentsContentCommentFacetProvider)
+          .reactToComment(
+            ReactToContentCommentCommand(
+              commentId: commentId,
+              reaction: next == 'like'
+                  ? ContentCommentReactionValue.like
+                  : ContentCommentReactionValue.none,
+            ),
+          );
       if (mounted) {
         setState(() => _commentReactionInFlight.remove(item.activityId));
       }
@@ -267,14 +274,22 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
       if (conversationId.isEmpty) {
         throw StateError('createConversation returned empty conversationId');
       }
-      await chat.sendMessage(
-        conversationId: conversationId,
-        type: 'text',
-        content: UITextConstants.profileInteractionThanksLikeMessage,
-        clientMsgId:
-            'profile-interaction-thanks-${item.activityId}-'
-            '${DateTime.now().microsecondsSinceEpoch}',
-      );
+      final activeContext = await ref.read(activePersonaContextProvider.future);
+      await ref
+          .read(chatMessageCommandWriterProvider)
+          .sendMessage(
+            ChatSendMessageCommand(
+              conversationId: conversationId,
+              type: 'text',
+              content: UITextConstants.profileInteractionThanksLikeMessage,
+              senderDisplayNameSnapshot: activeContext.displayName,
+              senderAvatarUrlSnapshot: activeContext.avatarUrl,
+              personaContextVersion: _positivePersonaVersion(
+                activeContext.contextVersion,
+              ),
+              clientMsgId: 'profile-interaction-thanks-${item.activityId}',
+            ),
+          );
       if (!mounted) {
         return;
       }
@@ -303,5 +318,10 @@ mixin _ProfileInlineActionsMixin on ConsumerState<ProfileInteractionTab> {
         );
       }
     }
+  }
+
+  int? _positivePersonaVersion(String raw) {
+    final parsed = int.tryParse(raw.trim());
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 }

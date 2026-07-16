@@ -5,7 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
@@ -19,44 +18,9 @@ import 'package:quwoquan_app/ui/content/entry/pages/local_draft_page.dart';
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-class _TrackingContentRepository extends MockContentRepository {
-  int createCallCount = 0;
-  int publishCallCount = 0;
-
-  @override
-  Future<PostBaseDto> createPost({required CreatePostRequestWire body}) async {
-    createCallCount += 1;
-    const postId = 'post_from_draft';
-    return postBaseDtoFromMap(<String, dynamic>{
-      'postId': postId,
-      ...body.toWire(),
-      'authorId': 'user_001',
-      'displayName': 'Tester',
-      'authorAvatarUrl': 'https://example.com/avatar.jpg',
-      'publishedAt': DateTime.now().toUtc().toIso8601String(),
-    });
-  }
-
-  @override
-  Future<PostBaseDto> publishPost({
-    required String postId,
-    PublishPostRequestWire? body,
-  }) async {
-    publishCallCount += 1;
-    final wire = body ?? PublishPostRequestWire();
-    return postBaseDtoFromMap(<String, dynamic>{
-      'postId': postId,
-      ...wire.toWire(),
-      'authorId': 'user_001',
-      'displayName': 'Tester',
-      'authorAvatarUrl': 'https://example.com/avatar.jpg',
-      'contentType': 'micro',
-      'body': '',
-      'publishedAt': DateTime.now().toUtc().toIso8601String(),
-    });
-  }
-}
+import '../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../support/recording_content_media_facet.dart';
+import '../../../../support/recording_content_post_lifecycle_writer.dart';
 
 class _AuthedSessionStore implements AuthSessionStore {
   const _AuthedSessionStore();
@@ -99,6 +63,11 @@ class _AuthedSessionStore implements AuthSessionStore {
     required String accessToken,
     required String refreshToken,
   }) async {}
+
+  @override
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {}
 
   @override
   Future<void> softLogout() async {}
@@ -146,7 +115,10 @@ class _CreateHostApp extends StatelessWidget {
   }
 }
 
-Widget _buildApp(_TrackingContentRepository repository) {
+Widget _buildApp(
+  MockContentRepository repository,
+  RecordingContentPostLifecycleWriter postLifecycle,
+) {
   final router = GoRouter(
     routes: <RouteBase>[
       GoRoute(path: '/', builder: (context, state) => const _CreateHostApp()),
@@ -176,7 +148,21 @@ Widget _buildApp(_TrackingContentRepository repository) {
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
-      contentRepositoryProvider.overrideWithValue(repository),
+      ...mockContentFacetOverrides(repository),
+      createContentPostLifecycleCommandWriterProvider.overrideWithValue(
+        postLifecycle,
+      ),
+      createContentMediaFacetProvider.overrideWithValue(
+        RecordingContentMediaFacet(),
+      ),
+      contentMediaObjectUploadProvider.overrideWithValue(
+        (
+          uploadUri,
+          bytes, {
+          required contentType,
+          required expectedSha256,
+        }) async {},
+      ),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       startupAuthRestoreGateProvider.overrideWith(() => _OpenStartupAuthGate()),
       authSessionStoreProvider.overrideWithValue(const _AuthedSessionStore()),
@@ -206,12 +192,13 @@ void main() {
   });
 
   testWidgets('退出保存后可从本地草稿页恢复，并在发布成功后清稿', (tester) async {
-    final repository = _TrackingContentRepository();
+    final repository = MockContentRepository();
+    final postLifecycle = RecordingContentPostLifecycleWriter();
     final draftRepository = SharedPreferencesCreateDraftRepository(
       scopeKey: CreateDraftLocalStorage.scopeKeyForUser('user_001'),
     );
 
-    await tester.pumpWidget(_buildApp(repository));
+    await tester.pumpWidget(_buildApp(repository, postLifecycle));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('打开创作'));
@@ -250,8 +237,8 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 1));
 
-    expect(repository.createCallCount, 1);
-    expect(repository.publishCallCount, 1);
+    expect(postLifecycle.createCommands, hasLength(1));
+    expect(postLifecycle.publishCommands, hasLength(1));
     expect(find.byKey(TestKeys.localDraftPage), findsOneWidget);
     expect(find.byKey(TestKeys.localDraftEmptyState), findsOneWidget);
     expect((await draftRepository.load()).drafts, isEmpty);

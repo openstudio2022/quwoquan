@@ -3,8 +3,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/realtime/realtime_request_page_ids.g.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
+import 'package:quwoquan_app/cloud/runtime/auth/realtime_connection_credential.dart';
 import 'package:quwoquan_app/cloud/services/realtime/realtime_config.dart';
 
 /// Callback for incoming realtime events from WebSocket.
@@ -15,19 +15,21 @@ typedef RealtimeEventCallback = void Function(Map<String, dynamic> event);
 class WebSocketTransport {
   WebSocketTransport({
     required this.config,
-    required this.userId,
+    required this.authTokenProvider,
     required this.onEvent,
     required this.onDisconnect,
   });
 
   final RealtimeConfig config;
-  final String userId;
+  final CloudAuthTokenProvider authTokenProvider;
   final RealtimeEventCallback onEvent;
   final VoidCallback onDisconnect;
 
   WebSocketChannel? _channel;
   Timer? _heartbeatTimer;
+  Completer<void>? _authAck;
   bool _disposed = false;
+  bool _authenticated = false;
   final _connected = ValueNotifier(false);
   ValueListenable<bool> get isConnected => _connected;
 
@@ -35,8 +37,14 @@ class WebSocketTransport {
     if (_disposed) return;
     WebSocketChannel? pendingChannel;
     try {
-      final topicParam = topics.isNotEmpty ? '&topics=${topics.join(",")}' : '';
-      final uri = Uri.parse('${config.wsUrl}?userId=$userId$topicParam');
+      final credential = await RealtimeConnectionCredential.resolveWebSocket(
+        authTokenProvider,
+      );
+      if (credential == null) {
+        _handleDisconnect();
+        return;
+      }
+      final uri = credential.authorizeWebSocket(Uri.parse(config.wsUrl));
       pendingChannel = WebSocketChannel.connect(uri);
       await pendingChannel.ready;
       if (_disposed) {
@@ -44,38 +52,47 @@ class WebSocketTransport {
         return;
       }
       _channel = pendingChannel;
+      _authAck = Completer<void>();
 
       _channel!.stream.listen(
         _onMessage,
-        onError: (_) => _handleDisconnect(),
+        onError: (_) {
+          _completeAuthFailure();
+          _handleDisconnect();
+        },
         onDone: _handleDisconnect,
       );
 
-      _connected.value = true;
-
-      final headers = CloudRequestHeaders.forPage(
-        RealtimeRequestPageIds.webSocketUpgrade,
+      await _authAck!.future.timeout(
+        Duration(seconds: config.authAckTimeoutSec),
       );
-      _send({'type': 'auth', 'userId': userId, ...headers});
-
+      if (_disposed || !_authenticated) {
+        await pendingChannel.sink.close();
+        return;
+      }
+      _connected.value = true;
+      for (final topic in topics) {
+        subscribeTopic(topic);
+      }
       _startHeartbeat();
-    } catch (e) {
+    } catch (_) {
       try {
         await pendingChannel?.sink.close();
       } catch (_) {
         /* best-effort: 连接失败后清理半开的 channel，close 二次报错无副作用可忽略 */
       }
-      debugPrint('WebSocketTransport: connect failed: $e');
       _connected.value = false;
       onDisconnect();
     }
   }
 
   void subscribeTopic(String topic) {
+    if (!_authenticated || topic.trim().isEmpty) return;
     _send({'type': 'subscribe', 'topic': topic});
   }
 
   void unsubscribeTopic(String topic) {
+    if (!_authenticated || topic.trim().isEmpty) return;
     _send({'type': 'unsubscribe', 'topic': topic});
   }
 
@@ -83,17 +100,41 @@ class WebSocketTransport {
     try {
       final json = jsonDecode(data as String) as Map<String, dynamic>;
       final type = json['type'] as String? ?? '';
+      if (type == 'auth_ack') {
+        if (json['authenticated'] == true) {
+          _authenticated = true;
+          if (!(_authAck?.isCompleted ?? true)) {
+            _authAck!.complete();
+          }
+        } else {
+          _completeAuthFailure();
+          _handleDisconnect();
+        }
+        return;
+      }
+      if (!_authenticated) return;
       if (type == 'pong') return;
       onEvent(json);
-    } catch (e) {
-      debugPrint('WebSocketTransport: parse error: $e');
+    } catch (_) {
+      if (kDebugMode) {
+        debugPrint('WebSocketTransport: dropped malformed frame');
+      }
     }
   }
 
   void _handleDisconnect() {
+    _completeAuthFailure();
+    _authenticated = false;
     _connected.value = false;
     _stopHeartbeat();
     if (!_disposed) onDisconnect();
+  }
+
+  void _completeAuthFailure() {
+    final authAck = _authAck;
+    if (authAck != null && !authAck.isCompleted) {
+      authAck.complete();
+    }
   }
 
   void _startHeartbeat() {
@@ -121,6 +162,8 @@ class WebSocketTransport {
     _stopHeartbeat();
     await _channel?.sink.close();
     _channel = null;
+    _authAck = null;
+    _authenticated = false;
     _connected.value = false;
   }
 

@@ -4,6 +4,7 @@
 class ArticleEntityMentionDto {
   final String subjectType;
   final String subjectId;
+  final String homepageId;
   final String displayName;
   final int rangeStart;
   final int rangeEnd;
@@ -11,6 +12,7 @@ class ArticleEntityMentionDto {
   ArticleEntityMentionDto({
     this.subjectType = '',
     this.subjectId = '',
+    this.homepageId = '',
     this.displayName = '',
     this.rangeStart = 0,
     this.rangeEnd = 0,
@@ -19,7 +21,8 @@ class ArticleEntityMentionDto {
   factory ArticleEntityMentionDto.fromMap(Map<String, dynamic> m) {
     return ArticleEntityMentionDto(
       subjectType: m['subjectType']?.toString() ?? m['type']?.toString() ?? '',
-      subjectId: m['subjectId']?.toString() ?? m['id']?.toString() ?? m['homepageId']?.toString() ?? '',
+      subjectId: m['subjectId']?.toString() ?? m['id']?.toString() ?? '',
+      homepageId: m['homepageId']?.toString() ?? '',
       displayName: m['displayName']?.toString() ?? m['label']?.toString() ?? m['name']?.toString() ?? '',
       rangeStart: (m['rangeStart'] as num?)?.toInt() ?? (m['start'] as num?)?.toInt() ?? 0,
       rangeEnd: (m['rangeEnd'] as num?)?.toInt() ?? (m['end'] as num?)?.toInt() ?? 0,
@@ -30,6 +33,7 @@ class ArticleEntityMentionDto {
     return <String, dynamic>{
       'subjectType': subjectType,
       'subjectId': subjectId,
+      'homepageId': homepageId,
       'displayName': displayName,
       'rangeStart': rangeStart,
       'rangeEnd': rangeEnd,
@@ -39,6 +43,7 @@ class ArticleEntityMentionDto {
   ArticleEntityMentionDto copyWith({
     String? subjectType,
     String? subjectId,
+    String? homepageId,
     String? displayName,
     int? rangeStart,
     int? rangeEnd,
@@ -46,10 +51,10 @@ class ArticleEntityMentionDto {
     return ArticleEntityMentionDto(
       subjectType: subjectType ?? this.subjectType,
       subjectId: subjectId ?? this.subjectId,
+      homepageId: homepageId ?? this.homepageId,
       displayName: displayName ?? this.displayName,
       rangeStart: rangeStart ?? this.rangeStart,
       rangeEnd: rangeEnd ?? this.rangeEnd,
     );
   }
 }
-

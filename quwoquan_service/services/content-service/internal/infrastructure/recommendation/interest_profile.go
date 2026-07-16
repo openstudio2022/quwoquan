@@ -9,7 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
-	"quwoquan_service/runtime/repository"
+	messaging "quwoquan_service/runtime/messaging"
 )
 
 // InterestDimension is one of the four tag-affinity dimensions tracked per user.
@@ -280,7 +280,7 @@ func InterestEntropy(top []TopInterest) float64 {
 type InterestProfileAggregator struct {
 	coll      *mongo.Collection
 	cfg       InterestProfileConfig
-	publisher repository.EventPublisher
+	publisher messaging.EventPublisher
 	segments  []SegmentDef
 }
 
@@ -293,7 +293,7 @@ func WithSegments(defs []SegmentDef) InterestProfileAggregatorOption {
 	return func(a *InterestProfileAggregator) { a.segments = defs }
 }
 
-func NewInterestProfileAggregator(db *mongo.Database, cfg InterestProfileConfig, publisher repository.EventPublisher, opts ...InterestProfileAggregatorOption) *InterestProfileAggregator {
+func NewInterestProfileAggregator(db *mongo.Database, cfg InterestProfileConfig, publisher messaging.EventPublisher, opts ...InterestProfileAggregatorOption) *InterestProfileAggregator {
 	a := &InterestProfileAggregator{
 		coll:      db.Collection("rm_recommend_feature"),
 		cfg:       cfg.withDefaults(),
@@ -367,7 +367,7 @@ func (a *InterestProfileAggregator) Recompute(ctx context.Context, userID string
 		interestRecomputeTotal.WithLabelValues("segment_persist_error").Inc()
 	}
 
-	return a.publisher.Publish(ctx, repository.DomainEvent{
+	return a.publisher.Publish(ctx, messaging.DomainEvent{
 		Type:          "UserInterestRecomputed",
 		AggregateType: "UserProfile",
 		AggregateID:   userID,

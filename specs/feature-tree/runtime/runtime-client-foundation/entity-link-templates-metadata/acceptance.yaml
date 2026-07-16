@@ -33,7 +33,7 @@ gwt_acceptance:
     done_when:
     - codegen/verify 校验所有 route_id 存在；不存在则阻断合入。
     edge_cases:
-    - circle_visible 内容追加 scope=circle query。
+    - Post 链接不生成 scope 或圈子可见性 query。
     - private 实体不生成可分享链接（由分享策略裁决）。
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml

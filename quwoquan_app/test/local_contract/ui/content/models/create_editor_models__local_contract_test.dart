@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 

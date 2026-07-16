@@ -1,0 +1,50 @@
+# Generated from quwoquan_app/pubspec.yaml; DO NOT EDIT.
+dependency_overrides:
+  audio_session:
+    path: ../../vendor/plugins/audio_session
+  camera_android_camerax:
+    path: ../../vendor/plugins/camera_android_camerax
+  device_info_plus:
+    path: ../../vendor/plugins/device_info_plus
+  flutter_callkit_incoming:
+    path: ../../vendor/plugins/flutter_callkit_incoming
+  flutter_webrtc:
+    path: ../../vendor/plugins/flutter_webrtc
+  image_picker_android:
+    path: ../../vendor/plugins/image_picker_android
+  livekit_client:
+    path: ../../vendor/plugins/livekit_client
+  mobile_scanner:
+    path: ../../vendor/plugins/mobile_scanner
+  package_info_plus:
+    path: ../../vendor/plugins/package_info_plus
+  patrol:
+    path: ../../vendor/plugins/patrol
+  photo_manager:
+    path: ../../vendor/plugins/photo_manager
+  record_web:
+    path: ../../vendor/plugins/record_web
+  share_plus:
+    path: ../../vendor/plugins/share_plus
+  shared_preferences_android:
+    path: ../../vendor/plugins/shared_preferences_android
+  video_thumbnail:
+    path: ../../vendor/plugins/video_thumbnail
+  video_player_android:
+    path: ../../vendor/plugins/video_player_android
+  url_launcher_android:
+    path: ../../vendor/plugins/url_launcher_android
+  wakelock_plus:
+    path: ../../vendor/plugins/wakelock_plus
+  webview_flutter_android:
+    path: ../../vendor/plugins/webview_flutter_android
+  win32: ^6.3.0
+  vector_math: ^2.4.0
+  characters: ^1.4.1
+  matcher: ^0.12.20
+  meta: ^1.18.3
+  test: ^1.31.1
+  test_api: ^0.7.12
+  test_core: ^0.6.18
+  dart_style: ^3.1.9
+  material_color_utilities: ^0.13.0

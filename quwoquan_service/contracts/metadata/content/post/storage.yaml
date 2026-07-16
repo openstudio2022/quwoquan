@@ -10,8 +10,6 @@ collections:
       - { name: idx_posts_content_type, keys: { contentType: 1, publishedAt: -1 } }
       - { name: idx_posts_visibility, keys: { visibility: 1, publishedAt: -1 } }
       - { name: idx_posts_status_published, keys: { status: 1, publishedAt: -1 } }
-      - { name: idx_posts_group_published, keys: { groupId: 1, publishedAt: -1 }, sparse: true }
-      - { name: idx_posts_node_published, keys: { nodeId: 1, publishedAt: -1 }, sparse: true }
       - { name: idx_posts_last_active, keys: { lastActiveAt: -1 }, sparse: true }
       - { name: idx_posts_tag_refs, keys: { tagRefs: 1 } }
       - { name: idx_posts_entity_refs, keys: { entityRefs: 1 } }
@@ -22,6 +20,7 @@ collections:
       - { name: idx_posts_source, keys: { sourceType: 1, sourcePostId: 1 }, sparse: true }
       - { name: idx_posts_article_markdown_digest, keys: { articleMarkdownDigest: 1 }, sparse: true }
       - { name: idx_posts_canonical_entity, keys: { canonicalEntityId: 1, publishedAt: -1 }, sparse: true }
+      - { name: idx_posts_version, keys: { _id: 1, version: 1 }, unique: true }
     search_indexes:
       - name: search_posts_text
         type: text
@@ -39,83 +38,41 @@ collections:
       key: { _id: "hashed" }
       description: 按 _id 哈希分片，均匀分布
 
-  comments:
-    entity: Comment
-    indexes:
-      # 一级列表/扁平列表 keyset 复合索引均把 _id 纳入排序尾键：(排序键..., createdAt, _id)
-      # 全量覆盖 ListTopLevel/ListReplies 的稳定排序，消除 _id tiebreak 触发的阻塞内存 SORT。
-      - { name: idx_comments_post_created, keys: { postId: 1, createdAt: -1, _id: -1 }, description: "一级 latest keyset：(createdAt,_id) 倒序 seek" }
-      - { name: idx_comments_author, keys: { authorId: 1, createdAt: -1, _id: -1 }, description: "我的评论 keyset" }
-      - { name: idx_comments_reply, keys: { replyToCommentId: 1 }, sparse: true }
-      - { name: idx_comments_parent_created, keys: { postId: 1, parentCommentId: 1, createdAt: -1, _id: -1 }, description: "二级回复展开 keyset seek：(createdAt,_id) 倒序" }
-      - { name: idx_comments_hot, keys: { postId: 1, likeCount: -1, createdAt: -1, _id: -1 }, description: "most_liked 排序索引（非置顶段 keyset seek，全覆盖排序）" }
-      - { name: idx_comments_recommended, keys: { postId: 1, recommendedScore: -1, createdAt: -1, _id: -1 }, description: "默认 recommended 排序索引（非置顶段 keyset seek，全覆盖排序）" }
-      - { name: idx_comments_pinned, keys: { postId: 1, pinnedAt: -1, _id: -1 }, partialFilterExpression: { isPinned: true }, description: "置顶段两段查询索引：消除一级列表 {isPinned,pinnedAt} 阻塞内存 SORT，置顶按 (pinnedAt,_id) 倒序 keyset seek" }
-      - { name: idx_comments_deleted, keys: { postId: 1, deletedAt: -1 }, partialFilterExpression: { status: "deleted" }, description: "GetCommentCountsDelta 删除增量索引：status=deleted 且 deletedAt>since 计数" }
-      - { name: idx_comments_homepage_created, keys: { primaryHomepageId: 1, createdAt: -1 }, sparse: true }
-      - { name: idx_comments_canonical_entity, keys: { canonicalEntityId: 1, createdAt: -1 }, sparse: true }
-    search_indexes:
-      - name: search_comments_text
-        type: text
-        fields: [content]
-
-  comment_reactions:
-    entity: Comment
-    description: 评论三态反应权威成员关系（_id = commentId|userId）；评论赞/踩计数由本集合 idx_comment_reactions_comment 索引 CountDocuments 直接派生，无 Redis 镜像（消除只写不读集合与读穿计数器 stale-backfill 竞态）
-    indexes:
-      - { name: idx_comment_reactions_comment, keys: { commentId: 1, reaction: 1 }, description: "按评论聚合 like/dislike 计数派生" }
-      - { name: idx_comment_reactions_user, keys: { userId: 1, commentId: 1 }, description: "viewer 对一批评论的反应批量解析" }
-    write_pattern: upsert
-
-  media_assets:
-    entity: MediaAsset
-    indexes:
-      - { name: idx_media_post, keys: { postId: 1 } }
-      - { name: idx_media_status, keys: { status: 1, createdAt: -1 } }
-      - { name: idx_media_sha256, keys: { sha256: 1 }, sparse: true }
-      - { name: idx_media_object_key, keys: { objectKey: 1 }, unique: true, sparse: true }
-
-  content_reactions:
-    entity: ContentReaction
-    indexes:
-      - { name: idx_reactions_post_user, keys: { postId: 1, userId: 1 }, unique: true }
-      - { name: idx_reactions_user_liked, keys: { userId: 1, liked: 1, likedAt: -1 }, sparse: true }
-    write_pattern: upsert
-
-  post_circle_distribution:
-    entity: PostCircleDistribution
-    indexes:
-      - { name: idx_dist_post_circle, keys: { postId: 1, circleId: 1 }, unique: true }
-      - { name: idx_dist_circle_active, keys: { circleId: 1, state: 1, updatedAt: -1 } }
-      - { name: idx_dist_circle_last_active, keys: { circleId: 1, state: 1, lastActiveAt: -1 }, sparse: true }
-      - { name: idx_dist_group_last_active, keys: { groupId: 1, state: 1, lastActiveAt: -1 }, sparse: true }
-      - { name: idx_dist_node_last_active, keys: { nodeId: 1, state: 1, lastActiveAt: -1 }, sparse: true }
-      - { name: idx_dist_owner, keys: { ownerAuthorId: 1, updatedAt: -1 } }
-
-  post_circle_reshare:
-    entity: PostCircleReshare
-    indexes:
-      - { name: idx_reshare_post_circle_user, keys: { postId: 1, circleId: 1, resharerUserId: 1 }, unique: true }
-      - { name: idx_reshare_circle_active, keys: { circleId: 1, state: 1, updatedAt: -1 } }
-      - { name: idx_reshare_user, keys: { resharerUserId: 1, updatedAt: -1 } }
 
   deleted_post_tombstones:
     entity: DeletedPostTombstone
     indexes:
       - { name: idx_tombstone_post, keys: { postId: 1 }, unique: true }
       - { name: idx_tombstone_deleted_at, keys: { deletedAt: -1 } }
-      - { name: idx_tombstone_expire, keys: { expireAt: 1 }, sparse: true }
+      - { name: idx_tombstone_expire, keys: { expireAt: 1 }, expireAfterSeconds: 0 }
+
+  post_command_receipts:
+    entity: Post
+    description: Post command 幂等结果；与聚合版本和 outbox 在同一 Mongo transaction 提交
+    indexes:
+      - { name: idx_post_command_receipts_key, keys: { _id: 1 }, unique: true }
+      - { name: idx_post_command_receipts_aggregate, keys: { aggregateId: 1, aggregateVersion: -1 } }
+      - { name: idx_post_command_receipts_expire, keys: { expiresAt: 1 }, expireAfterSeconds: 0 }
+
+  content_outbox:
+    entity: Post
+    description: Mongo authoritative aggregate 的同库事务 outbox；projection worker 以 checkpoint 幂等消费
+    indexes:
+      - { name: idx_content_outbox_event, keys: { _id: 1 }, unique: true }
+      - { name: idx_content_outbox_replay, keys: { aggregateType: 1, occurredAt: 1, _id: 1 } }
+      - { name: idx_content_outbox_aggregate_version, keys: { aggregateType: 1, aggregateId: 1, aggregateVersion: 1 }, unique: true }
+
+  projection_checkpoints:
+    entity: Post
+    description: Feed/Search/Recommendation/Homepage/Circle replay/rebuild checkpoint
+    indexes:
+      - { name: idx_projection_checkpoint_consumer, keys: { _id: 1 }, unique: true }
 
 redis_cache:
   - key: "cache:post:{postId}"
     ttl_seconds: 300
     entity: Post
     invalidate_on: [PostUpdated, PostDeleted]
-
-  - key: "reaction:{userId}:{postId}"
-    ttl_seconds: 300
-    entity: ContentReaction
-    invalidate_on: [ContentReacted]
 
   - key: "counter:{postId}:{type}"
     ttl_seconds: null
@@ -126,14 +83,3 @@ redis_cache:
     ttl_seconds: 86400
     type: hash
     description: 内容多模态分析缓存
-
-  - key: "comment_summary:{postId}"
-    ttl_seconds: 3600
-    type: hash
-    description: 评论总结缓存
-
-  # 评论排行 ZSet（comment_hot / comment_recommended）已删除：旧实现只写不读
-  # （读路径直接走 Mongo 复合索引 keyset 分页），ZSet 与可变分值 + 置顶两段序的
-  # 一致性成本过高且属第二排序真相源（R24）。评论赞踩集合镜像与 per-comment 读穿
-  # 计数器（comment_like/comment_dislike/counter:comment:*）同样只写不读且存在
-  # stale-backfill 竞态，已删除：赞踩计数由 comment_reactions 集合权威派生。

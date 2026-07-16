@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/feed_item_dto.g.dart';
-import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/content/feed_item_discovery_wire_map.dart';
 import 'package:quwoquan_app/cloud/services/content/mock/generated/home_showcase_core_fixture.g.dart';
 
@@ -19,44 +18,6 @@ import 'package:quwoquan_app/cloud/services/content/mock/generated/home_showcase
 /// 注意：FeedItemDto.fromMap 会通过 alias 兼容旧字段名，此文件只写 canonical 名。
 class ContentMockData {
   ContentMockData._();
-
-  static final Map<String, String> _circleNameById = {
-    CircleMockData.primaryCircleDto.id: CircleMockData.primaryCircleDto.name,
-    for (final circle in CircleMockData.catalogCircleDtos)
-      circle.id: circle.name,
-  };
-
-  static const Map<String, List<String>> _circleIdsByPostId = {
-    'd1': ['circle_photo_01', 'c1'],
-    'd2': ['c2', 'c-car-2'],
-    'd4': ['c1', 'c-human-1'],
-    'd5': ['circle_photo_01'],
-    'd6': ['c2'],
-    'd10': ['c-human-1'],
-    'd11': ['circle_photo_01', 'c-tech-admin'],
-    'd12': ['c2', 'c-meet-2'],
-    'd13': ['c1'],
-    'd14': ['circle_photo_01', 'c-human-1'],
-    'v1': ['c-meet-1', 'c-meet-2'],
-    'v2': ['circle_photo_01'],
-    'v3': ['c-tech-admin'],
-    'm1': ['c-meet-1'],
-    'm2': ['c2', 'c-car-2'],
-    'm3': ['c-tech-admin', 'c-human-1'],
-    'm4': ['circle_photo_01'],
-    'web-dev': ['c-tech-admin'],
-    'tech_plain': ['c-tech-admin'],
-    'calligraphy': ['c-human-1', 'c1'],
-    'ritual_plain': ['c-human-1'],
-    'pasta': ['c3'],
-    'gentle_plain': ['c3'],
-    'art_1': ['c-human-1', 'circle_photo_01'],
-    'diffuse_plain': ['c1'],
-    'diffuse_cover_body_only': ['c1', 'c-human-1'],
-    'journal_cover': ['c2'],
-    'journal_plain': ['c2'],
-    'journal_plain_body_only': ['c2'],
-  };
 
   static Map<String, dynamic> _normalizeArchivedSeedMediaMap(
     Map<String, dynamic> item,
@@ -92,39 +53,12 @@ class ContentMockData {
         );
   }
 
-  static List<FeedItemDto> _withCircleContext(
+  static List<FeedItemDto> _withCanonicalMedia(
     List<Map<String, dynamic>> items,
   ) {
     return items
-        .map((item) {
-          final normalizedItem = _normalizeArchivedSeedMediaMap(item);
-          final postId = item['postId']?.toString() ?? '';
-          final configuredCircleIds = _circleIdsByPostId[postId];
-          if (configuredCircleIds == null || configuredCircleIds.isEmpty) {
-            return FeedItemDto.fromMap(normalizedItem);
-          }
-          final circleNames = configuredCircleIds
-              .map((id) => _circleNameById[id] ?? '')
-              .where((name) => name.isNotEmpty)
-              .toList(growable: false);
-          return FeedItemDto.fromMap(<String, dynamic>{
-            ...normalizedItem,
-            'circleIds': configuredCircleIds,
-            'circleNames': circleNames,
-            'circleSummaries': [
-              for (var i = 0; i < configuredCircleIds.length; i++)
-                {
-                  'id': configuredCircleIds[i],
-                  'name': i < circleNames.length
-                      ? circleNames[i]
-                      : configuredCircleIds[i],
-                },
-            ],
-            if (configuredCircleIds.isNotEmpty)
-              'circleId': configuredCircleIds.first,
-            if (circleNames.isNotEmpty) 'circleName': circleNames.first,
-          });
-        })
+        .map(_normalizeArchivedSeedMediaMap)
+        .map(FeedItemDto.fromMap)
         .toList(growable: false);
   }
 
@@ -415,7 +349,7 @@ class ContentMockData {
   // 比例来源于 Unsplash 图片的真实宽高比。
   // authorBackgroundUrl：作者主页背景图，每个作者 ID 固定一张。
   static List<FeedItemDto> get discoveryPhotoData => _expandDiscoveryFeed(
-    _withCircleContext([
+    _withCanonicalMedia([
       {
         'postId': 'd1',
         'contentType': 'image',
@@ -659,7 +593,7 @@ class ContentMockData {
   // 竖屏短视频通常为 1080×1920，横屏为 1920×1080。
 
   static List<FeedItemDto> get discoveryVideoData => _expandDiscoveryFeed(
-    _withCircleContext([
+    _withCanonicalMedia([
       {
         'postId': 'v1',
         'contentType': 'video',
@@ -739,7 +673,7 @@ class ContentMockData {
 
   // ─── Moment feed（微趣 tab）───────────────────────────────────────────────
 
-  static List<FeedItemDto> get discoveryMomentData => _withCircleContext([
+  static List<FeedItemDto> get discoveryMomentData => _withCanonicalMedia([
     {
       'postId': 'm4',
       'contentType': 'micro',
@@ -879,7 +813,7 @@ class ContentMockData {
   // ─── Article feed（文章 tab）──────────────────────────────────────────────
 
   static List<FeedItemDto> get discoveryArticleData => _expandDiscoveryFeed(
-    _withCircleContext([
+    _withCanonicalMedia([
       _buildArticlePost(
         postId: 'web-dev',
         authorId: 'tech_daily',

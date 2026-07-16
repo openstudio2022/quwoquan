@@ -6,49 +6,61 @@ import (
 	"fmt"
 	"go/format"
 	"os"
+	"path"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"text/template"
 
-	"gopkg.in/yaml.v3"
-	"quwoquan_service/runtime/codegen"
-	"quwoquan_service/runtime/registry"
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
 )
 
 func main() {
 	var metadataDir string
 	var outputDir string
 	var aggregate string
+	var routeService string
 	flag.StringVar(&metadataDir, "metadata-dir", "contracts/metadata", "metadata root directory")
 	flag.StringVar(&outputDir, "output-dir", "services/content-service/internal", "content-service internal output directory")
 	flag.StringVar(&aggregate, "aggregate", "Post", "aggregate name to generate")
+	flag.StringVar(
+		&routeService,
+		"route-service",
+		"content-service",
+		"service.name whose complete object route union is generated",
+	)
 	flag.Parse()
 
-	reg, err := registry.LoadFromDirectory(metadataDir)
+	source, err := contractcodegen.NewSource(metadataDir, validate.ProfileBaseline)
 	if err != nil {
-		exitErr(fmt.Errorf("load registry: %w", err))
+		exitErr(fmt.Errorf("compile ContractGraph: %w", err))
 	}
-
-	g := codegen.NewGenerator(reg, filepath.Clean(outputDir))
-	if err := g.GenerateForAggregate(aggregate); err != nil {
-		exitErr(fmt.Errorf("generate aggregate %s: %w", aggregate, err))
+	generator := contractcodegen.NewDomainGenerator(
+		source,
+		filepath.Clean(outputDir),
+	)
+	if err := generator.GenerateDomainModel(aggregate); err != nil {
+		exitErr(fmt.Errorf("generate model %s: %w", aggregate, err))
 	}
-	if err := patchRepositoryImport(outputDir, strings.ToLower(aggregate)); err != nil {
-		exitErr(fmt.Errorf("patch repository import for %s: %w", aggregate, err))
+	if err := generator.GenerateDomainEvents(aggregate); err != nil {
+		exitErr(fmt.Errorf("generate events %s: %w", aggregate, err))
 	}
-
-	if err := generateContracts(reg, aggregate, outputDir); err != nil {
-		exitErr(fmt.Errorf("generate contracts for %s: %w", aggregate, err))
+	if err := generateContracts(source, routeService, outputDir); err != nil {
+		exitErr(fmt.Errorf("generate contracts for service routes %s: %w", routeService, err))
 	}
-	if err := generateHTTPScaffold(reg, metadataDir, aggregate, outputDir); err != nil {
-		exitErr(fmt.Errorf("generate http scaffold for %s: %w", aggregate, err))
+	if err := generateHTTPScaffold(source, routeService, outputDir); err != nil {
+		exitErr(fmt.Errorf("generate http scaffold for service routes %s: %w", routeService, err))
 	}
-	if err := generateErrorConstants(metadataDir, aggregate, outputDir); err != nil {
+	if err := generateErrorConstants(source, aggregate, outputDir); err != nil {
 		exitErr(fmt.Errorf("generate error constants for %s: %w", aggregate, err))
 	}
-	fmt.Printf("generated content-service domain for aggregate=%s at %s\n", aggregate, outputDir)
+	fmt.Printf(
+		"generated content-service domain for aggregate=%s route-service=%s at %s\n",
+		aggregate,
+		routeService,
+		outputDir,
+	)
 }
 
 type contractData struct {
@@ -66,6 +78,9 @@ type routeData struct {
 }
 
 type serviceYAML struct {
+	Service struct {
+		Name string `yaml:"name"`
+	} `yaml:"service"`
 	APIRoutes []serviceRouteYAML `yaml:"api_routes"`
 }
 
@@ -77,13 +92,17 @@ type serviceRouteYAML struct {
 	WritableFields []string `yaml:"writable_fields"`
 }
 
-func generateContracts(reg *registry.EntityRegistry, aggregate, outputDir string) error {
-	agg, err := reg.GetAggregate(aggregate)
+func generateContracts(
+	source *contractcodegen.Source,
+	routeService string,
+	outputDir string,
+) error {
+	serviceRoutes, err := loadServiceRoutes(source, routeService)
 	if err != nil {
 		return err
 	}
-	routes := make([]routeData, 0, len(agg.Service.APIRoutes))
-	for _, r := range agg.Service.APIRoutes {
+	routes := make([]routeData, 0, len(serviceRoutes))
+	for _, r := range serviceRoutes {
 		if strings.TrimSpace(r.Path) == "" || strings.TrimSpace(r.Method) == "" {
 			continue
 		}
@@ -95,10 +114,16 @@ func generateContracts(reg *registry.EntityRegistry, aggregate, outputDir string
 		})
 	}
 	sort.Slice(routes, func(i, j int) bool { return routes[i].ConstName < routes[j].ConstName })
-	contentTypes, _ := reg.GetEnum("ContentType")
+	var shared struct {
+		Enums map[string][]string `yaml:"enums"`
+	}
+	if err := source.Decode("_shared/types.yaml", &shared); err != nil {
+		return err
+	}
+	contentTypes := shared.Enums["ContentType"]
 	data := contractData{
 		PackageName: "generated",
-		Aggregate:   aggregate,
+		Aggregate:   routeService,
 		Routes:      routes,
 		ContentType: contentTypes,
 	}
@@ -110,7 +135,6 @@ const (
 	{{ .ConstName }}Method = "{{ .Method }}"
 	{{ .ConstName }}Path = "{{ .Path }}"
 {{- end }}
-	OrchestratorDiscoveryFeedPath = "/v1/orch/discovery/feed"
 )
 
 var AllowedContentTypes = map[string]struct{}{
@@ -176,48 +200,20 @@ type httpScaffoldData struct {
 	GetFeedLimitInQuery bool
 }
 
-func aggregateDirPath(metadataDir string, dirName string) string {
-	// Support domain-centric layout: content/post/ alongside current post/.
-	direct := filepath.Join(metadataDir, dirName)
-	if _, err := os.Stat(direct); err == nil {
-		return direct
-	}
-	// Search one domain level deep
-	entries, err := os.ReadDir(metadataDir)
+func generateHTTPScaffold(
+	source *contractcodegen.Source,
+	routeService string,
+	outputDir string,
+) error {
+	serviceRoutes, err := loadServiceRoutes(source, routeService)
 	if err != nil {
-		return direct
-	}
-	for _, e := range entries {
-		if !e.IsDir() || strings.HasPrefix(e.Name(), "_") {
-			continue
-		}
-		candidate := filepath.Join(metadataDir, e.Name(), dirName)
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	return direct
-}
-
-func generateHTTPScaffold(reg *registry.EntityRegistry, metadataDir, aggregate, outputDir string) error {
-	agg, err := reg.GetAggregate(aggregate)
-	if err != nil {
-		return err
-	}
-	servicePath := filepath.Join(aggregateDirPath(metadataDir, agg.DirName), "service.yaml")
-	raw, err := os.ReadFile(servicePath)
-	if err != nil {
-		return err
-	}
-	var spec serviceYAML
-	if err := yaml.Unmarshal(raw, &spec); err != nil {
 		return err
 	}
 	data := httpScaffoldData{
-		Routes:              make([]routeBindingData, 0, len(spec.APIRoutes)),
+		Routes:              make([]routeBindingData, 0, len(serviceRoutes)),
 		WritableByOperation: map[string][]string{},
 	}
-	for _, r := range spec.APIRoutes {
+	for _, r := range serviceRoutes {
 		if strings.TrimSpace(r.Method) == "" || strings.TrimSpace(r.Path) == "" || strings.TrimSpace(r.Operation) == "" {
 			continue
 		}
@@ -254,15 +250,6 @@ func generateHTTPScaffold(reg *registry.EntityRegistry, metadataDir, aggregate, 
 			QueryParams:    qp,
 			WritableFields: wf,
 		})
-		if r.Operation == "GetFeed" {
-			data.Routes = append(data.Routes, routeBindingData{
-				Method:         strings.ToUpper(r.Method),
-				Path:           "/v1/orch/discovery/feed",
-				Operation:      r.Operation,
-				QueryParams:    qp,
-				WritableFields: wf,
-			})
-		}
 		if len(wf) > 0 {
 			data.WritableByOperation[r.Operation] = wf
 		}
@@ -311,7 +298,7 @@ import (
 
 func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		op, ok := resolveGeneratedOperation(r.Method, r.URL.Path)
+		op, ok := resolveGeneratedOperation(r)
 		if !ok {
 			rterr.WriteHTTPError(
 				w,
@@ -334,14 +321,48 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "{{ . }}":
 		{{- if eq . "GetFeed" }}
 		h.handleGetFeed(w, r)
+		{{- else if eq . "SearchPosts" }}
+		h.handleSearchPosts(w, r)
 		{{- else if eq . "GetPost" }}
 		h.handleGetPost(w, r)
+		{{- else if eq . "ListUserPosts" }}
+		h.handleListUserPosts(w, r)
 		{{- else if eq . "CreatePost" }}
 		h.handleCreatePost(w, r)
+		{{- else if eq . "CreateReport" }}
+		h.handleCreateReport(w, r)
+		{{- else if eq . "ListReports" }}
+		h.handleListReports(w, r)
+		{{- else if eq . "GetReport" }}
+		h.handleGetReport(w, r)
+		{{- else if eq . "BeginReportReview" }}
+		h.handleBeginReportReview(w, r)
+		{{- else if eq . "ResolveReport" }}
+		h.handleResolveReport(w, r)
 		{{- else if eq . "UpdatePost" }}
 		h.handleUpdatePost(w, r)
 		{{- else if eq . "ReportBehaviors" }}
 		h.handleReportBehaviors(w, r)
+		{{- else if eq . "CreateComment" }}
+		h.handleCreateComment(w, r, postIDFromPath(r.URL.Path))
+		{{- else if eq . "DeleteComment" }}
+		h.handleDeleteComment(w, r)
+		{{- else if eq . "PinComment" }}
+		h.handleSetCommentPinned(w, r, true)
+		{{- else if eq . "UnpinComment" }}
+		h.handleSetCommentPinned(w, r, false)
+		{{- else if eq . "BindMediaAssetsToComment" }}
+		h.handleBindMediaAssetsToComment(w, r, commentIDFromPath(r.URL.Path))
+		{{- else if eq . "ListComments" }}
+		h.handleListComments(w, r, postIDFromPath(r.URL.Path))
+		{{- else if eq . "ListCommentReplies" }}
+		h.handleListCommentReplies(w, r)
+		{{- else if eq . "ListCommentsByAuthor" }}
+		h.handleListCommentsByAuthor(w, r)
+		{{- else if eq . "ListCommentsForPostAuthor" }}
+		h.handleListCommentsForPostAuthor(w, r)
+		{{- else if eq . "ReactToComment" }}
+		h.handleReactToComment(w, r, commentIDFromPath(r.URL.Path))
 		{{- else if eq . "GetMyIntersectionSummary" }}
 		h.handleGetMyIntersectionSummary(w, r)
 		{{- else if eq . "ListMyIntersections" }}
@@ -354,6 +375,44 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleGetAuthorImpact(w, r)
 		{{- else if eq . "ListAuthorImpactEvidence" }}
 		h.handleListAuthorImpactEvidence(w, r)
+		{{- else if eq . "GetAppConfig" }}
+		h.handleGetAppConfig(w, r)
+		{{- else if eq . "ListProfileInteractionActivitiesReceived" }}
+		h.handleListProfileInteractionActivitiesReceived(w, r)
+		{{- else if eq . "ListProfileInteractionActivitiesSent" }}
+		h.handleListProfileInteractionActivitiesSent(w, r)
+		{{- else if eq . "UpdateProfileInteractionState" }}
+		h.handleUpdateProfileInteractionState(w, r)
+		{{- else if eq . "InitMediaUpload" }}
+		h.handleInitMediaUpload(w, r)
+		{{- else if eq . "CompleteMediaUpload" }}
+		h.handleCompleteMediaUpload(w, r)
+		{{- else if eq . "AbortMediaUpload" }}
+		h.handleAbortMediaUpload(w, r)
+		{{- else if eq . "GetMediaAsset" }}
+		h.handleGetMediaAsset(w, r)
+		{{- else if eq . "GetMediaAssetReference" }}
+		h.handleGetMediaAssetReference(w, r)
+		{{- else if eq . "GetMediaAssetDeliveryReference" }}
+		h.handleGetMediaAssetDeliveryReference(w, r)
+		{{- else if eq . "GetMediaUploadSession" }}
+		h.handleGetMediaUploadSession(w, r)
+		{{- else if eq . "GetOwnedMediaAsset" }}
+		h.handleGetOwnedMediaAsset(w, r)
+		{{- else if eq . "RecordMediaProcessingResult" }}
+		h.handleRecordMediaProcessingResult(w, r)
+		{{- else if eq . "UpdateMediaAssetAccessPolicy" }}
+		h.handleUpdateMediaAssetAccessPolicy(w, r)
+		{{- else if eq . "RequestOriginalImageAccess" }}
+		h.handleRequestOriginalImageAccess(w, r)
+		{{- else if eq . "SelectAutoVideoCover" }}
+		h.handleSelectAutoVideoCover(w, r)
+		{{- else if eq . "SelectManualVideoCover" }}
+		h.handleSelectManualVideoCover(w, r)
+		{{- else if eq . "BindMediaAssetsToPost" }}
+		h.handleBindMediaAssetsToPost(w, r)
+		{{- else if eq . "CreateOutboundShare" }}
+		h.handleCreateOutboundShare(w, r)
 		{{- else }}
 		h.handleNotImplemented(w, r, operation)
 		{{- end }}
@@ -375,50 +434,96 @@ type generatedRouteDef struct {
 	operation    string
 }
 
-func resolveGeneratedOperation(method, path string) (string, bool) {
-	m := strings.ToUpper(strings.TrimSpace(method))
+func resolveGeneratedOperation(r *http.Request) (string, bool) {
+	m := strings.ToUpper(strings.TrimSpace(r.Method))
+	bestScore := -1
+	bestOperation := ""
+	var bestValues map[string]string
 	for _, route := range generatedRouteTable {
 		if route.method != m {
 			continue
 		}
-		if generatedPathMatch(route.pathTemplate, path) {
-			return route.operation, true
+		pathValues, matched := generatedPathValues(route.pathTemplate, r.URL.Path)
+		if !matched {
+			continue
+		}
+		score := generatedPathSpecificity(route.pathTemplate)
+		if score == bestScore && bestOperation != "" && bestOperation != route.operation {
+			return "", false
+		}
+		if score > bestScore {
+			bestScore = score
+			bestOperation = route.operation
+			bestValues = pathValues
 		}
 	}
-	return "", false
+	if bestOperation == "" {
+		return "", false
+	}
+	for name, value := range bestValues {
+		r.SetPathValue(name, value)
+	}
+	return bestOperation, true
 }
 
-func generatedPathMatch(templatePath, requestPath string) bool {
+func generatedPathSpecificity(templatePath string) int {
+	score := 0
+	inParameter := false
+	for _, char := range templatePath {
+		switch char {
+		case '{':
+			inParameter = true
+		case '}':
+			inParameter = false
+		default:
+			if !inParameter {
+				score++
+			}
+		}
+	}
+	return score
+}
+
+func generatedPathValues(templatePath, requestPath string) (map[string]string, bool) {
 	tParts := generatedSplitPath(templatePath)
 	rParts := generatedSplitPath(requestPath)
 	if len(tParts) != len(rParts) {
-		return false
+		return nil, false
 	}
+	values := make(map[string]string)
 	for i := range tParts {
-		if !generatedSegmentMatch(tParts[i], rParts[i]) {
-			return false
+		name, value, matched := generatedSegmentValue(tParts[i], rParts[i])
+		if !matched {
+			return nil, false
+		}
+		if name != "" {
+			values[name] = value
 		}
 	}
-	return true
+	return values, true
 }
 
-func generatedSegmentMatch(templateSegment, requestSegment string) bool {
+func generatedSegmentValue(templateSegment, requestSegment string) (string, string, bool) {
 	paramStart := strings.Index(templateSegment, "{")
 	if paramStart < 0 {
-		return templateSegment == requestSegment
+		return "", "", templateSegment == requestSegment
 	}
 	paramEndOffset := strings.Index(templateSegment[paramStart:], "}")
 	if paramEndOffset < 0 {
-		return false
+		return "", "", false
 	}
 	paramEnd := paramStart + paramEndOffset
+	name := strings.TrimSpace(templateSegment[paramStart+1 : paramEnd])
+	if name == "" {
+		return "", "", false
+	}
 	prefix := templateSegment[:paramStart]
 	suffix := templateSegment[paramEnd+1:]
 	if !strings.HasPrefix(requestSegment, prefix) || !strings.HasSuffix(requestSegment, suffix) {
-		return false
+		return "", "", false
 	}
 	value := strings.TrimSuffix(strings.TrimPrefix(requestSegment, prefix), suffix)
-	return value != ""
+	return name, value, value != ""
 }
 
 func generatedSplitPath(raw string) []string {
@@ -521,24 +626,73 @@ func BindGeneratedWritableBodyFromRequest(r *http.Request, operation string) (ma
 	return os.WriteFile(filepath.Join(targetDir, "generated_routes.go"), out, 0o644)
 }
 
-func patchRepositoryImport(outputDir, packageName string) error {
-	repoPath := filepath.Join(outputDir, "domain", packageName, "repository", "repository.go")
-	data, err := os.ReadFile(repoPath)
-	if err != nil {
-		return err
+func findObjectDir(
+	source *contractcodegen.Source,
+	aggregateName string,
+) (string, error) {
+	for _, object := range source.Graph().Objects {
+		if object.Name == aggregateName {
+			return path.Dir(object.SourcePath), nil
+		}
 	}
-	raw := string(data)
-	targetImport := fmt.Sprintf("quwoquan_service/services/content-service/internal/domain/%s/model", packageName)
-	re := regexp.MustCompile(`model\s+"[^"]+"`)
-	updated := re.ReplaceAllString(raw, fmt.Sprintf(`model "%s"`, targetImport))
-	if updated == raw {
-		return nil
+	return "", fmt.Errorf("business object %q not found", aggregateName)
+}
+
+func loadServiceRoutes(
+	source *contractcodegen.Source,
+	serviceName string,
+) ([]serviceRouteYAML, error) {
+	routes := make([]serviceRouteYAML, 0)
+	byMethodPath := map[string]string{}
+	byOperation := map[string]string{}
+	serviceName = strings.TrimSpace(serviceName)
+	if serviceName == "" {
+		return nil, fmt.Errorf("route service name is required")
 	}
-	formatted := []byte(updated)
-	if out, err := format.Source(formatted); err == nil {
-		formatted = out
+	for _, servicePath := range source.Paths("", "service.yaml") {
+		var service serviceYAML
+		if err := source.Decode(servicePath, &service); err != nil {
+			return nil, err
+		}
+		if !strings.EqualFold(strings.TrimSpace(service.Service.Name), serviceName) {
+			continue
+		}
+		for _, route := range service.APIRoutes {
+			method := strings.ToUpper(strings.TrimSpace(route.Method))
+			routePath := strings.TrimSpace(route.Path)
+			operation := strings.TrimSpace(route.Operation)
+			if method == "" || routePath == "" || operation == "" {
+				continue
+			}
+			key := method + " " + routePath
+			if existing, exists := byMethodPath[key]; exists {
+				if existing != operation {
+					return nil, fmt.Errorf(
+						"route %s is claimed by both %s and %s",
+						key,
+						existing,
+						operation,
+					)
+				}
+				continue
+			}
+			byMethodPath[key] = operation
+			if existing, exists := byOperation[operation]; exists && existing != key {
+				return nil, fmt.Errorf(
+					"operation %s is bound to both %s and %s",
+					operation,
+					existing,
+					key,
+				)
+			}
+			byOperation[operation] = key
+			route.Method = method
+			route.Path = routePath
+			route.Operation = operation
+			routes = append(routes, route)
+		}
 	}
-	return os.WriteFile(repoPath, formatted, 0o644)
+	return routes, nil
 }
 
 // ── errors.yaml → Go errors.go ────────────────────────────────────────────────
@@ -547,6 +701,7 @@ type errorEntryYAML struct {
 	Code                 string            `yaml:"code"`
 	Kind                 string            `yaml:"kind"`
 	Reason               string            `yaml:"reason"`
+	HTTPStatus           int               `yaml:"http_status"`
 	GoConst              string            `yaml:"go_const"`
 	RecoveryAction       string            `yaml:"recovery_action"`
 	RecoveryAfterSeconds int               `yaml:"recovery_after_seconds"`
@@ -558,22 +713,21 @@ type errorsYAML struct {
 	Errors []errorEntryYAML `yaml:"errors"`
 }
 
-func generateErrorConstants(metadataDir, aggregate, outputDir string) error {
-	// Support both current (post/) and domain-centric (content/post/) locations.
+func generateErrorConstants(
+	source *contractcodegen.Source,
+	aggregate,
+	outputDir string,
+) error {
 	aggLower := strings.ToLower(aggregate)
-	errsPath := filepath.Join(metadataDir, aggLower, "errors.yaml")
-	if _, err := os.Stat(errsPath); os.IsNotExist(err) {
-		errsPath = filepath.Join(metadataDir, "content", aggLower, "errors.yaml")
+	errsPath := filepath.Join(aggLower, "errors.yaml")
+	if !source.Has(errsPath) {
+		errsPath = filepath.Join("content", aggLower, "errors.yaml")
 	}
-	data, err := os.ReadFile(errsPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil // errors.yaml is optional
-		}
-		return err
+	if !source.Has(errsPath) {
+		return nil
 	}
 	var spec errorsYAML
-	if err := yaml.Unmarshal(data, &spec); err != nil {
+	if err := source.Decode(errsPath, &spec); err != nil {
 		return fmt.Errorf("parse errors.yaml: %w", err)
 	}
 	if len(spec.Errors) == 0 {
@@ -602,7 +756,7 @@ func generateErrorConstants(metadataDir, aggregate, outputDir string) error {
 		if e.GoConst == "" {
 			continue
 		}
-		kind, reason := errorKindAndReason(e)
+		_, reason := errorKindAndReason(e)
 		userMessage := strings.TrimSpace(e.UserMessage["zh"])
 		if userMessage == "" {
 			userMessage = "内容服务异常，请稍后重试"
@@ -610,8 +764,8 @@ func generateErrorConstants(metadataDir, aggregate, outputDir string) error {
 		funcName := "AppErrorFrom" + strings.TrimPrefix(e.GoConst, "Err")
 		buf.WriteString(fmt.Sprintf("\n// %s returns *AppError for %s (user_message from errors.yaml).\n", funcName, e.Code))
 		buf.WriteString(fmt.Sprintf("func %s(debugMessage string) *rterr.AppError {\n", funcName))
-		buf.WriteString(fmt.Sprintf("\tcode := rterr.NewCode(rterr.ModuleContent, %s, %q)\n", goRuntimeKind(kind), reason))
-		buf.WriteString(fmt.Sprintf("\treturn rterr.NewAppError(code, %q, debugMessage)%s\n", userMessage, goErrorRecoveryCall(e)))
+		buf.WriteString(fmt.Sprintf("\tcode, _ := rterr.ParseCode(%q)\n", e.Code))
+		buf.WriteString(fmt.Sprintf("\treturn rterr.NewAppError(code, %q, debugMessage).WithMetadata(%q, %d)%s\n", userMessage, reason, e.HTTPStatus, goErrorRecoveryCall(e)))
 		buf.WriteString("}\n")
 	}
 

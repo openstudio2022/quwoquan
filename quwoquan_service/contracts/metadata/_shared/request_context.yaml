@@ -48,24 +48,26 @@ domain_operation_page_ids:
     GetCircleFeed: circle.feed.list
     GetCircleFile: circle.files.get
     GetCircleStats: circle.stats
+    GetMyCircleMembership: circle.members.self
     JoinCircle: circle.join
     LeaveCircle: circle.leave
     ListCircleFiles: circle.files.list
-    ListCircleMembers: circle.members.list
+    ListCircleMemberships: circle.members.list
     ListCircles: circle.list
-    ListUserCircles: circle.user.list
+    ListPersonaCircles: circle.user.list
     PinCirclePost: circle.post.pin
     ReportCircleBehavior: circle.behaviors.report
     SearchCircles: circle.search
     UpdateCircle: circle.update
     UpdateCircleFile: circle.files.update
     UpdateCircleSections: circle.sections.update
-    UpdateMemberRole: circle.members.updateRole
+    UpdateCircleMembershipRole: circle.members.updateRole
 
   content:
     AbortMediaUpload: content.media.abort
     CompleteMediaUpload: content.media.complete
     CreateComment: content.comment.create
+    CreateOutboundShare: content.outbound_share.create
     CreatePost: content.post.create
     CreateReport: content.report.create
     DeleteComment: content.comment.delete
@@ -74,9 +76,10 @@ domain_operation_page_ids:
     GetCounters: content.post.counters
     GetFeed: content.feed.list
     GetMediaAsset: content.media.get
+    GetMediaAssetReference: content.media.reference
     GetMyFootprint: content.footprint.list
     GetPost: content.post.get
-    GetReactionState: content.post.reactions
+    GetContentReactionState: content.post.reactions
     InitMediaUpload: content.media.init
     LikePost: content.post.like
     ListComments: content.comment.list
@@ -84,15 +87,12 @@ domain_operation_page_ids:
     ListProfileInteractionActivitiesSent: content.profile.interactions.sent
     ListUserPosts: content.user.posts
     PublishPost: content.post.publish
-    QuoteToCircle: content.post.quote
     ReportBehaviors: content.behaviors.report
-    RepostToCircle: content.post.repost
     SelectAutoVideoCover: content.media.cover.auto
     SelectManualVideoCover: content.media.cover.manual
     SearchPosts: content.search
     UnlikePost: content.post.unlike
     UpdatePost: content.post.update
-    UpdatePostCircles: content.post.circles
     UpdatePostSettings: content.post.settings
     PromotePostToWork: content.post.promote
 

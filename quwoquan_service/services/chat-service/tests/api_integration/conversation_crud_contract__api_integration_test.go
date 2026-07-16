@@ -29,7 +29,7 @@ func TestCreateConversation(t *testing.T) {
 func TestGetConversation(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	created := createConversation(t, `{"type":"direct","title":"私聊"}`)
+	created := createConversation(t, `{"type":"direct","title":"私聊","initialMemberIds":["user_test_002"]}`)
 	convId := created["_id"].(string)
 
 	code, result := doGet(t, "/v1/chat/conversations/"+convId, "user_test_001")

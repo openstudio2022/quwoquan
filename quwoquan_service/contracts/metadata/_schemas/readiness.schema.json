@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quwoquan.local/contracts/metadata/readiness.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["object", "operations", "implementation", "tests", "environments"],
+  "properties": {
+    "object": { "type": "string", "minLength": 1 },
+    "operations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain_behavior", "store", "outbox", "reader", "transport", "app_client", "page"],
+      "properties": {
+        "domain_behavior": { "$ref": "#/$defs/paths" },
+        "store": { "$ref": "#/$defs/paths" },
+        "outbox": { "$ref": "#/$defs/paths" },
+        "reader": { "$ref": "#/$defs/paths" },
+        "transport": { "$ref": "#/$defs/paths" },
+        "app_client": { "$ref": "#/$defs/paths" },
+        "page": { "$ref": "#/$defs/paths" }
+      }
+    },
+    "tests": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["local_contract", "api_integration", "user_acceptance"],
+      "properties": {
+        "local_contract": { "$ref": "#/$defs/paths" },
+        "api_integration": { "$ref": "#/$defs/paths" },
+        "user_acceptance": { "$ref": "#/$defs/paths" }
+      }
+    },
+    "environments": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "artifact"],
+        "properties": {
+          "name": { "enum": ["alpha", "beta", "gamma", "prod"] },
+          "artifact": { "$ref": "#/$defs/path" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^/].*$"
+    },
+    "paths": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/path" }
+    }
+  }
+}

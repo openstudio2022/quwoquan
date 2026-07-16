@@ -151,7 +151,7 @@ modules:
     requiredStores: [assistant.mongodb]
     requiredQueues: []
     planes: [user-plane, platform-control-plane, product-control-plane]
-    allowOnebox: false
+    allowOnebox: true
     allowStandalonePackage: true
 
   assistant.task_outbox_dispatcher:
@@ -160,7 +160,7 @@ modules:
     requiredStores: [assistant.mongodb, reliabletask.outbox]
     requiredQueues: [reliabletask.assistant.projection]
     planes: [user-plane, platform-control-plane, product-control-plane]
-    allowOnebox: false
+    allowOnebox: true
     allowStandalonePackage: true
   assistant.run_projection_worker:
     domain: assistant
@@ -168,7 +168,7 @@ modules:
     requiredStores: [assistant.mongodb, reliabletask.task]
     requiredQueues: [reliabletask.assistant.projection]
     planes: [user-plane, platform-control-plane, product-control-plane]
-    allowOnebox: false
+    allowOnebox: true
     allowStandalonePackage: true
 
   notification.api:
@@ -237,7 +237,7 @@ modules:
     requiredStores: [entity.mongodb]
     requiredQueues: []
     planes: [user-plane, platform-control-plane, product-control-plane]
-    allowOnebox: false
+    allowOnebox: true
     allowStandalonePackage: true
 
   entity.task_outbox_dispatcher:
@@ -246,7 +246,7 @@ modules:
     requiredStores: [entity.mongodb, reliabletask.outbox]
     requiredQueues: [reliabletask.entity.projection]
     planes: [user-plane, platform-control-plane, product-control-plane]
-    allowOnebox: false
+    allowOnebox: true
     allowStandalonePackage: true
   entity.readmodel_projection_worker:
     domain: entity
@@ -254,7 +254,16 @@ modules:
     requiredStores: [entity.mongodb, reliabletask.task]
     requiredQueues: [reliabletask.entity.projection]
     planes: [user-plane, platform-control-plane, product-control-plane]
-    allowOnebox: false
+    allowOnebox: true
+    allowStandalonePackage: true
+
+  tag.api:
+    domain: tag
+    capabilities: [api]
+    requiredStores: [tag.mongodb]
+    requiredQueues: []
+    planes: [user-plane, platform-control-plane]
+    allowOnebox: true
     allowStandalonePackage: true
 
   ops.api:
@@ -487,6 +496,10 @@ tasks:
       - costBudgetUsd
       - resultEnvelopeRequired
       - resultEnvelopeRef
+      - entityRef
+      - carrier
+      - sourceRevision
+      - idempotencyKey
     mergePolicy:
       delayFromNow: 0s
       maxDelay: 0s

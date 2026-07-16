@@ -124,7 +124,7 @@ type AuthorRecallSource struct {
 func NewAuthorRecallSource(db *mongo.Database) *AuthorRecallSource {
 	return &AuthorRecallSource{
 		feedColl:   db.Collection("rm_discovery_feed"),
-		followColl: db.Collection("follow_edges"),
+		followColl: db.Collection("persona_follow_projection"),
 	}
 }
 
@@ -140,8 +140,8 @@ func (s *AuthorRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest
 
 	// Fetch followed author IDs
 	cursor, err := s.followColl.Find(ctx,
-		bson.M{"followerId": req.UserID},
-		options.Find().SetProjection(bson.M{"followeeId": 1}).SetLimit(200),
+		bson.M{"sourcePersonaId": req.UserID, "following": true},
+		options.Find().SetProjection(bson.M{"targetPersonaId": 1}).SetLimit(200),
 	)
 	if err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ func (s *AuthorRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest
 	defer cursor.Close(ctx)
 
 	var followDocs []struct {
-		FolloweeID string `bson:"followeeId"`
+		TargetPersonaID string `bson:"targetPersonaId"`
 	}
 	if err := cursor.All(ctx, &followDocs); err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func (s *AuthorRecallSource) Recall(ctx context.Context, req rtrec.RecallRequest
 
 	authorIDs := make([]string, 0, len(followDocs))
 	for _, f := range followDocs {
-		authorIDs = append(authorIDs, f.FolloweeID)
+		authorIDs = append(authorIDs, f.TargetPersonaID)
 	}
 
 	filter := bson.M{"authorId": bson.M{"$in": authorIDs}}

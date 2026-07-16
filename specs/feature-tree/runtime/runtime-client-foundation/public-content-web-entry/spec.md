@@ -158,7 +158,7 @@ flowchart TB
 - `OG / Twitter card`：每类对象输出 `og:title/og:description/og:image/og:type` 与 `twitter:card`，图片走 CDN 资产，比例适配（内容 1.91:1，主页 1:1 头图）。
 - `JSON-LD`：按上表类型输出结构化数据。
 - `robots.txt` + 分类型 `sitemap.xml`（content/circle/user/homepages 各一组 sitemap index）。
-- 权限过滤：public 完整可索引；circle_visible 受控预览 + 不进 sitemap；private/审核未过 `noindex` 且不渲染正文，与 App 详情同一 visibility 判断。
+- 权限过滤：Post 只允许 public/private；public 完整可索引，private/审核未过 `noindex` 且不渲染正文，与 App 详情同一 visibility 判断。圈内分发由 CirclePostPlacement 拥有，不改变 Post 可见性。
 
 ### 智能中转落地页（universal landing，协同 external-inbound-deeplink-routing）
 

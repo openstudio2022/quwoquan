@@ -2,53 +2,17 @@ version: 1
 entity: FollowingSubject
 
 entities:
-  FollowingSubjectVisitState:
-    description: 当前 viewer 对关注对象的访问水位
+  FollowingSubjectItemView:
+    description: 首页关注频道顶部“关注动态”单项
     fields:
       - name: viewerSubAccountId
         type: string
         constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: drop
         ops_exposure: read
 
-      - name: subjectType
-        type: enum
-        enum_ref: FollowingSubjectType
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: subjectId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: lastVisitedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: updatedAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-  FollowingSubjectItemView:
-    description: 首页关注频道顶部“关注动态”单项
-    fields:
       - name: subjectId
         type: string
         constraints: [NOT_NULL]
@@ -162,79 +126,3 @@ entities:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-
-  MarkFollowingSubjectVisitedRequest:
-    description: 标记关注对象已访问
-    fields:
-      - name: subjectId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: subjectType
-        type: enum
-        enum_ref: FollowingSubjectType
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: visitedAt
-        type: timestamp
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-      - name: clientRequestId
-        type: string
-        constraints: [NULLABLE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read_write
-        ops_exposure: read
-
-  FollowingSubjectVisitResult:
-    description: 关注对象访问水位更新结果
-    fields:
-      - name: subjectId
-        type: string
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: subjectType
-        type: enum
-        enum_ref: FollowingSubjectType
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: lastVisitedAt
-        type: timestamp
-        constraints: [NOT_NULL]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-      - name: hasUnreadChanges
-        type: bool
-        constraints: [NOT_NULL, DEFAULT_FALSE]
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
-
-enums:
-  FollowingSubjectType:
-    values: [user, circle, homepage]

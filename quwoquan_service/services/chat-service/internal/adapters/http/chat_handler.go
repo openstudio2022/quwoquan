@@ -7,6 +7,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	runtimesync "quwoquan_service/runtime/sync"
 	"quwoquan_service/services/chat-service/internal/application"
+	"quwoquan_service/services/chat-service/internal/generated"
 )
 
 type ChatHandler struct {
@@ -14,7 +15,6 @@ type ChatHandler struct {
 	messageService      *application.MessageService
 	memberService       *application.MemberService
 	inboxService        *application.InboxService
-	mediaUploadService  *application.ChatMediaUploadService
 	userSyncService     *runtimesync.Service
 }
 
@@ -30,7 +30,6 @@ func NewChatHandler(
 		messageService:      messageService,
 		memberService:       memberService,
 		inboxService:        inboxService,
-		mediaUploadService:  application.NewChatMediaUploadService(),
 		userSyncService:     userSyncService,
 	}
 }
@@ -48,7 +47,6 @@ func (h *ChatHandler) Routes() http.Handler {
 	mux.HandleFunc("PATCH /v1/chat/conversations/{conversationId}/owner", h.handleTransferOwnership)
 	mux.HandleFunc("PUT /v1/chat/conversations/{conversationId}/admins", h.handleUpdateGroupAdmins)
 	mux.HandleFunc("DELETE /v1/chat/conversations/{conversationId}", h.handleDissolveConversation)
-	h.registerMediaUploadRoutes(mux)
 	RegisterGeneratedRoutes(mux, h)
 	h.registerInternalRoutes(mux)
 	return mux
@@ -190,7 +188,8 @@ func (h *ChatHandler) handleListMessages(w http.ResponseWriter, r *http.Request)
 	beforeSeq := queryInt64(r, "beforeSeq", 0)
 
 	msgs, err := h.messageService.ListMessages(r.Context(), application.ListMessagesRequest{
-		ConversationId: convId, Limit: limit, AfterSeq: afterSeq, BeforeSeq: beforeSeq,
+		ConversationId: convId, ViewerID: resolvePersonaID(r),
+		Limit: limit, AfterSeq: afterSeq, BeforeSeq: beforeSeq,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -199,7 +198,7 @@ func (h *ChatHandler) handleListMessages(w http.ResponseWriter, r *http.Request)
 
 	cursor := ""
 	if len(msgs) > 0 {
-		cursor = msgs[len(msgs)-1].ID
+		cursor = msgs[len(msgs)-1].Message.ID
 	}
 	items := make([]map[string]any, 0, len(msgs))
 	for i := range msgs {
@@ -213,31 +212,23 @@ func (h *ChatHandler) handleListMessages(w http.ResponseWriter, r *http.Request)
 func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages", "conversationId")
 	var body struct {
-		Type                      string         `json:"type"`
-		Content                   string         `json:"content"`
-		MediaUrl                  string         `json:"mediaUrl"`
-		Media                     map[string]any `json:"media"`
-		CardPayload               map[string]any `json:"cardPayload"`
-		ReplyToMessageId          string         `json:"replyToMessageId"`
-		Mentions                  []string       `json:"mentions"`
-		ClientMsgId               string         `json:"clientMsgId"`
-		SenderSubAccountId        string         `json:"senderSubAccountId"`
-		PersonaContextVersion     int64          `json:"personaContextVersion"`
-		SenderDisplayNameSnapshot string         `json:"senderDisplayNameSnapshot"`
-		SenderAvatarUrlSnapshot   string         `json:"senderAvatarUrlSnapshot"`
+		Type                      string                          `json:"type"`
+		Content                   string                          `json:"content"`
+		MediaAssetID              string                          `json:"mediaAssetId"`
+		Card                      *application.MessageCardCommand `json:"card"`
+		ReplyToMessageId          string                          `json:"replyToMessageId"`
+		Mentions                  []string                        `json:"mentions"`
+		ClientMsgId               string                          `json:"clientMsgId"`
+		PersonaContextVersion     int64                           `json:"personaContextVersion"`
+		SenderDisplayNameSnapshot string                          `json:"senderDisplayNameSnapshot"`
+		SenderAvatarUrlSnapshot   string                          `json:"senderAvatarUrlSnapshot"`
 	}
-	if err := readJSON(r, &body); err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
+	if err := readStrictJSON(r, &body); err != nil {
+		writeHTTPError(w, r, generated.AppErrorFromMessageInvalid(err.Error()))
 		return
 	}
 
-	senderID := strings.TrimSpace(r.Header.Get("X-Client-Sub-Account-Id"))
-	if senderID == "" {
-		senderID = resolveUserID(r)
-	}
-	if senderID == "" {
-		senderID = strings.TrimSpace(body.SenderSubAccountId)
-	}
+	senderID := resolvePersonaID(r)
 	if senderID == "" {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(
 			rterr.ModuleChat,
@@ -251,7 +242,7 @@ func (h *ChatHandler) handleSendMessage(w http.ResponseWriter, r *http.Request) 
 		PersonaContextVersion:     body.PersonaContextVersion,
 		SenderDisplayNameSnapshot: strings.TrimSpace(body.SenderDisplayNameSnapshot),
 		SenderAvatarUrlSnapshot:   strings.TrimSpace(body.SenderAvatarUrlSnapshot), Type: body.Type,
-		Content: body.Content, MediaUrl: body.MediaUrl, Media: body.Media, CardPayload: body.CardPayload,
+		Content: body.Content, MediaAssetID: body.MediaAssetID, Card: body.Card,
 		ReplyToMessageId: body.ReplyToMessageId, Mentions: body.Mentions, ClientMsgId: body.ClientMsgId,
 	})
 	if err != nil {
@@ -265,7 +256,7 @@ func (h *ChatHandler) handleRecallMessage(w http.ResponseWriter, r *http.Request
 	convId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/recall", "conversationId")
 	msgId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/recall", "messageId")
 
-	err := h.messageService.RecallMessage(r.Context(), convId, msgId, resolveUserID(r))
+	err := h.messageService.RecallMessage(r.Context(), convId, msgId, resolvePersonaID(r))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -279,13 +270,13 @@ func (h *ChatHandler) handleSyncMessages(w http.ResponseWriter, r *http.Request)
 		LastSeq int64 `json:"lastSeq"`
 		Limit   int   `json:"limit"`
 	}
-	if err := readJSON(r, &body); err != nil {
+	if err := readStrictJSON(r, &body); err != nil {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleChat, "invalid body", err.Error()))
 		return
 	}
 
 	resp, err := h.messageService.SyncMessages(r.Context(), application.SyncMessagesRequest{
-		ConversationId: convId, LastSeq: body.LastSeq, Limit: body.Limit,
+		ConversationId: convId, ViewerID: resolvePersonaID(r), LastSeq: body.LastSeq, Limit: body.Limit,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -306,7 +297,7 @@ func (h *ChatHandler) handleMarkAsRead(w http.ResponseWriter, r *http.Request) {
 	msgId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/read", "messageId")
 
 	err := h.messageService.MarkAsRead(r.Context(), application.MarkAsReadRequest{
-		ConversationId: convId, MessageId: msgId, UserId: resolveUserID(r),
+		ConversationId: convId, MessageId: msgId, UserId: resolvePersonaID(r),
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -320,7 +311,7 @@ func (h *ChatHandler) handleGetReceipts(w http.ResponseWriter, r *http.Request) 
 	msgId := extractPathParam(r.URL.Path, "/v1/chat/conversations/{conversationId}/messages/{messageId}/receipts", "messageId")
 	_ = convId
 
-	receipts, err := h.messageService.GetReceipts(r.Context(), convId, msgId)
+	receipts, err := h.messageService.GetReceipts(r.Context(), convId, msgId, resolvePersonaID(r))
 	if err != nil {
 		writeHTTPError(w, r, err)
 		return
@@ -732,8 +723,8 @@ func (h *ChatHandler) handleSearchMessages(w http.ResponseWriter, r *http.Reques
 			"conversationId":        hit.Conversation.ID,
 			"conversationTitle":     hit.Conversation.Title,
 			"conversationAvatarUrl": h.resolveConversationAvatarURL(r.Context(), hit.Conversation),
-			"senderSubAccountId":    hit.Message.SenderId,
-			"senderDisplayName":     hit.Message.SenderId,
+			"senderPersonaId":       hit.Message.SenderID,
+			"senderDisplayName":     hit.Message.SenderID,
 			"senderAvatarUrl":       "",
 			"messageType":           hit.Message.Type,
 			"contentSnippet":        hit.Message.Content,

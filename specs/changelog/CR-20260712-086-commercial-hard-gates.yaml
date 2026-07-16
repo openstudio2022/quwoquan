@@ -1,0 +1,66 @@
+id: CR-20260712-086-commercial-hard-gates
+title: 商用元数据、分层、真实测试与生产纯度硬门
+slug: commercial-hard-gates
+revision: 1
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/runtime/system-architecture-and-engineering-guide
+
+entries:
+  - timestamp: "2026-07-12T23:58:00+08:00"
+    summary: |
+      将 ContractGraph commercial profile、Go DDD 依赖方向、生产服务装配纯度和
+      canonical 测试假绿检查提升为阻断门禁；缺少真实数据库时 API 集成测试直接失败，
+      不再以 os.Exit(0) 记为通过。同步启动全部业务对象 operation binding 与页面对象
+      契约收敛。
+    reason: |
+      F1 只证明唯一编译链可运行，尚不能证明旧 metadata、服务分层、页面可达性、
+      API 集成测试和生产装配达到商用要求。G1 必须先让错误状态可见并阻断，再逐项清零，
+      禁止 warning、allowlist、Memory Store 或动态 skip 掩盖。
+    change_type:
+      - architecture
+      - contract
+      - breaking
+      - testing
+      - operations
+    changed_documents:
+      - path: quwoquan_service/Makefile
+        sections:
+          - verify-contract-graph-commercial
+          - verify-service-layering
+          - verify-production-wiring-purity
+      - path: quwoquan_service/scripts/gate.sh
+        sections:
+          - ContractGraph commercial profile
+          - DDD layering gate
+          - production wiring purity gate
+      - path: quwoquan_service/scripts/verify/verify_service_layering.py
+        sections:
+          - domain/application/adapters 依赖方向
+          - runtime 存储驱动隔离
+      - path: quwoquan_service/scripts/verify/verify_production_wiring_purity.py
+        sections:
+          - 全部 cmd 二进制 Memory/Noop/Mock 阻断
+          - application 隐式 Memory/Noop/Mock 回退阻断
+          - beta/gamma/prod 假存储配置阻断与 prod seed 纯度
+      - path: quwoquan_ops/gate/scaffold/verify_test_no_fake.py
+        sections:
+          - API 集成 Memory/Noop/Mock/Stub/Fake 依赖
+          - API 集成 miniredis 与 memory scene
+          - os.Exit(0) 假绿
+      - path: specs/feature-tree/runtime/system-architecture-and-engineering-guide/acceptance.yaml
+        sections:
+          - SIT5
+    impact:
+      replan_required: false
+      redesign_required: false
+      retest_layers:
+        - local_contract
+        - api_integration
+        - user_acceptance
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - 本 CR 只有在 commercial metadata、页面对象契约、分层、真实测试和生产纯度门禁全部为零问题后才能改为 implemented。
+      - 当前发现的服务分层、内存生产装配和 API 集成内存 Store 都是待清零事实，不登记豁免。

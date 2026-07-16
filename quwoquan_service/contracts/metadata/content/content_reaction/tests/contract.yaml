@@ -1,0 +1,36 @@
+version: 1
+entity: ContentReaction
+
+scenarios:
+  - name: comment_reaction_three_state
+    operation: ReactToComment
+    go_func: TestReactToCommentThreeStateContract
+    evidence: api_integration
+    assertions:
+      - identity 为 targetKind、targetId、actorDimension、actorId
+      - 同一 actor 只保留一个 none/like/dislike 聚合
+      - like/dislike 计数只由 content_reaction_aggregates 派生
+      - 旧 viewerReaction 请求别名被 strict decoder 拒绝
+
+  - name: post_like_identity
+    operation: LikePost
+    go_func: TestPostReactionContract
+    evidence: api_integration
+    assertions:
+      - Post 目标只允许 none/like
+      - persona 与 device actor 使用不相交 identity
+
+  - name: post_unlike_idempotency
+    operation: UnlikePost
+    go_func: TestPostUnlikeReactionContract
+    evidence: api_integration
+    assertions:
+      - receipt replay 不重复写 outbox fact
+
+  - name: post_reaction_state_slice
+    operation: GetContentReactionState
+    go_func: TestPostReactionContract
+    evidence: api_integration
+    assertions:
+      - query 只返回 typed state Slice
+      - 不返回 aggregate、actorId、receipt 或存储文档

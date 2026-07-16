@@ -145,7 +145,6 @@ class _UnifiedMediaViewerPageState
         initialImageIndex: widget.extra.initialImageIndex,
         source: widget.extra.source,
         rawPostsById: widget.extra.rawPostsById,
-        defaultCircleId: widget.extra.circleId,
         initialInteractionSnapshot: widget.extra.interactionSnapshot,
         initialCommentContext: widget.extra.commentContext,
         onPostIndexChanged: (newIndex) {

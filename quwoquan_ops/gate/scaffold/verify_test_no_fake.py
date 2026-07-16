@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -26,6 +27,21 @@ SKIP_PATTERNS = (
     re.compile(r"@unittest\.skip\b"),
     re.compile(r"\b(?:t|b)\.Skip(?:f)?\s*\("),
     re.compile(r"\bskip\s*:\s*true\b"),
+    re.compile(r"\bos\.Exit\s*\(\s*0\s*\)"),
+)
+FAKE_INTEGRATION_DEPENDENCY_PATTERNS = (
+    re.compile(
+        r"\b(?:New)?(?:InMemory|Memory|Noop|Mock|Stub|Fake)[A-Za-z0-9_]*\s*\("
+    ),
+    re.compile(
+        r"\b[A-Za-z0-9_]*(?:Mock|Stub|Fake)[A-Za-z0-9_]*\s*\{"
+    ),
+    re.compile(r"\bminiredis(?:\.|/v[0-9]+)"),
+    re.compile(r'\bMode\s*:\s*"memory"'),
+)
+FAKE_INTEGRATION_FILENAME_RE = re.compile(
+    r"(?:^|[_-])(?:fake|mock|stub|memory|test[_-]?double)(?:[_\-.]|$)",
+    re.IGNORECASE,
 )
 DART_TEST_RE = re.compile(r"\b(?:test(?:Widgets)?|patrolTest)\s*\(")
 PYTHON_TEST_RE = re.compile(r"^\s*def\s+test_[A-Za-z0-9_]+\s*\(", re.MULTILINE)
@@ -36,7 +52,8 @@ class Failures:
         self.items: list[str] = []
 
     def add(self, message: str) -> None:
-        self.items.append(message)
+        if message not in self.items:
+            self.items.append(message)
 
     def exit_code(self) -> int:
         if not self.items:
@@ -58,6 +75,13 @@ def verify_canonical_files(failures: Failures) -> None:
         for pattern in SKIP_PATTERNS:
             if pattern.search(text):
                 failures.add(f"{path.relative_to(ROOT)} contains skip pattern {pattern.pattern!r}")
+        if "api_integration" in path.parts:
+            for pattern in FAKE_INTEGRATION_DEPENDENCY_PATTERNS:
+                if pattern.search(text):
+                    failures.add(
+                        f"{path.relative_to(ROOT)} uses fake integration dependency "
+                        f"{pattern.pattern!r}"
+                    )
         if path.suffix == ".go" and not go_has_test_entrypoint(path):
             failures.add(f"{path.relative_to(ROOT)} go canonical test lacks Test*/Benchmark*/TestMain entrypoint")
         if path.suffix == ".py" and "importlib.util.spec_from_file_location" not in text and "def test_" not in text:
@@ -76,9 +100,67 @@ def verify_test_artifacts(failures: Failures) -> None:
             failures.add(f"{path.relative_to(ROOT)} report.json missing exit_code or case_results")
 
 
+def verify_all_test_sources(failures: Failures) -> None:
+    excluded_dirs = {
+        ".git",
+        ".dart_tool",
+        ".qwq_output",
+        ".qwq_sandbox",
+        ".qwq_test_venv",
+        ".worktrees",
+        ".venv",
+        "build",
+        "node_modules",
+        "site-packages",
+        "vendor",
+    }
+    for current_root, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = sorted(
+            dirname for dirname in dirnames if dirname not in excluded_dirs
+        )
+        current = Path(current_root)
+        for name in sorted(filenames):
+            path = current / name
+            is_canonical_test_source = (
+                name.endswith(("_test.go", "_test.py", "_test.dart", "_test.ts"))
+                or (name.startswith("test_") and name.endswith(".py"))
+            )
+            is_api_integration_source = (
+                "api_integration" in path.parts
+                and path.suffix in {".go", ".py", ".dart", ".ts"}
+            )
+            if is_api_integration_source:
+                text = path.read_text(encoding="utf-8", errors="ignore")
+                if FAKE_INTEGRATION_FILENAME_RE.search(path.name):
+                    failures.add(
+                        f"{path.relative_to(ROOT)} uses fake integration source filename"
+                    )
+                for pattern in FAKE_INTEGRATION_DEPENDENCY_PATTERNS:
+                    if pattern.search(text):
+                        failures.add(
+                            f"{path.relative_to(ROOT)} uses fake integration dependency "
+                            f"{pattern.pattern!r}"
+                        )
+                for pattern in SKIP_PATTERNS:
+                    if pattern.search(text):
+                        failures.add(
+                            f"{path.relative_to(ROOT)} contains skip pattern "
+                            f"{pattern.pattern!r}"
+                        )
+            if not is_canonical_test_source:
+                continue
+            text = path.read_text(encoding="utf-8", errors="ignore")
+            for pattern in SKIP_PATTERNS:
+                if pattern.search(text):
+                    failures.add(
+                        f"{path.relative_to(ROOT)} contains skip pattern {pattern.pattern!r}"
+                    )
+
+
 def main() -> int:
     failures = Failures()
     verify_canonical_files(failures)
+    verify_all_test_sources(failures)
     verify_test_artifacts(failures)
     return failures.exit_code()
 

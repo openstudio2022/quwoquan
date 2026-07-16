@@ -38,6 +38,10 @@ EXTERNAL_ATTR_RE = re.compile(
     re.IGNORECASE,
 )
 EVENT_HANDLER_RE = re.compile(r"""\son[a-z]+\s*=""", re.IGNORECASE)
+UTF8_META_RE = re.compile(
+    r"""<meta\b[^>]*\bcharset\s*=\s*["']?\s*utf-8\s*["']?[^>]*>""",
+    re.IGNORECASE,
+)
 PLACEHOLDER_TOKENS = (
     "待法务",
     "待备案",
@@ -53,9 +57,9 @@ PLACEHOLDER_TOKENS = (
 
 @contextmanager
 def _package_lock(output_root: Path, env_name: str, *, exclusive: bool) -> Any:
-    legal_root = _legal_static_root(output_root, env_name)
-    legal_root.mkdir(parents=True, exist_ok=True)
-    lock_path = legal_root / ".legal-static.lock"
+    lock_root = output_root / env_name / "local" / "legal-static" / "process"
+    lock_root.mkdir(parents=True, exist_ok=True)
+    lock_path = lock_root / "package.lock"
     with lock_path.open("w", encoding="utf-8") as handle:
         try:
             import fcntl  # type: ignore
@@ -138,9 +142,14 @@ def _validate_html(
     allowlist: list[str],
     env_name: str,
 ) -> list[str]:
-    text = path.read_text(encoding="utf-8")
     issues: list[str] = []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return [f"{relpath(path)} must be UTF-8 encoded"]
     lower = text.lower()
+    if UTF8_META_RE.search(text) is None:
+        issues.append(f"{relpath(path)} missing UTF-8 charset meta")
     if "<script" in lower or "</script" in lower:
         issues.append(f"{relpath(path)} must not include script tags")
     if "javascript:" in lower:
@@ -434,6 +443,15 @@ def _verify_package_locked(
         existing = [path for path in (stable, stable_html, versioned, versioned_html) if path.is_file()]
         if existing and len({_sha256_file(path) for path in existing}) != 1:
             issues.append(f"{slug}: stable and versioned published files differ")
+        if stable.is_file():
+            try:
+                stable_text = stable.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                issues.append(f"{slug}: published document is not UTF-8 encoded")
+            else:
+                title = str(doc.get("title") or "").strip()
+                if title and title not in stable_text:
+                    issues.append(f"{slug}: published document is missing its title")
     return {
         "status": "ok" if not issues else "failed",
         "env": env_name,

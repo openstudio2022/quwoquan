@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "quwoquan_data/schema/execution/workflow_state.schema.json",
+  "title": "Execution workflow state (执行工作流状态机)",
+  "description": "workflow_state.json 唯一字段定义（写入口 content/run_context.save_workflow_state）。运行时代码不得维护第二套字段定义；新增字段必须先补本 Schema。",
+  "type": "object",
+  "required": ["schemaVersion", "executionId", "completed", "status", "updatedAt"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "quwoquan.content.workflow_state" },
+    "executionId": { "type": "string", "minLength": 1 },
+    "completed": { "type": "array", "items": { "type": "string" } },
+    "status": { "type": "string", "minLength": 1 },
+    "waitingCheckpoint": { "type": ["string", "null"] },
+    "owner": { "type": ["string", "null"] },
+    "heartbeatAt": { "type": ["string", "null"] },
+    "startedAt": { "type": ["string", "null"] },
+    "updatedAt": { "type": "string" },
+    "nextAction": { "type": ["string", "object", "null"] },
+    "stoppedAtStage": { "type": ["string", "null"] },
+    "interruptReason": { "type": ["string", "object", "null"] },
+    "lastFailedStage": { "type": ["string", "null"] },
+
+    "retryCounts": { "type": "object" },
+    "infrastructureRetryCounts": { "type": "object" },
+    "failedObjects": { "type": "array" },
+    "failedIssueRecords": { "type": "array", "items": { "type": "object" } },
+
+    "baselinePacketPath": { "type": ["string", "null"] },
+    "baselinePacketSummary": { "type": ["object", "null"] },
+    "workspaceCleanupReports": { "type": "array" },
+    "completionGateIssues": { "type": "array" },
+    "quality": { "type": "object" },
+    "throughput": { "type": "object" },
+
+    "controller": { "type": "object" },
+    "controllerYield": { "type": ["object", "null"] },
+    "controllerYieldRecoveryActions": { "type": "array" },
+    "recoveryActions": { "type": "array" },
+    "schedulerRecoveryActions": { "type": "array" },
+    "autoResearchRecoveryActions": { "type": "array" },
+    "activeAgentScheduler": { "type": ["object", "null"] },
+    "activeAutoResearch": { "type": ["object", "null"] },
+    "agentRunHistory": { "type": "array" },
+    "lastAgentRun": { "type": ["object", "null"] },
+    "reactRewinds": { "type": ["array", "object"] },
+    "managedCheckpointInterruption": { "type": ["object", "null"] },
+    "managedInfraRecoveryCutoffs": { "type": ["object", "array"] },
+    "manualRepairResumes": { "type": "array" },
+    "produceReviewRetryHistory": { "type": ["array", "object"] },
+
+    "lastAuthorFinalizeCount": { "type": "integer" },
+    "lastObjectQueueAuthorFinalizeCount": { "type": "integer" },
+
+    "quarantine": { "type": "object" }
+  }
+}

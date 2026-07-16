@@ -7,7 +7,6 @@ package recintersectionmeta
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -94,12 +93,7 @@ func (d KindDef) MomentOrDefault() string {
 	return d.Moment
 }
 
-// Read 读取并反序列化注册表 yaml。
-func Read(path string) (*Registry, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
+func Parse(raw []byte) (*Registry, error) {
 	var out Registry
 	if err := yaml.Unmarshal(raw, &out); err != nil {
 		return nil, err

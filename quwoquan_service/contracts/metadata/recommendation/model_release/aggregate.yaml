@@ -1,0 +1,31 @@
+version: 1
+domain: recommendation
+aggregate_root: RecommendationModelRelease
+object_kind: aggregate_root
+description: 推荐模型发布、激活、灰度和回滚的唯一生命周期根。
+storage_backend: postgres
+cache_layer: redis
+cache_ttl_seconds: 300
+capabilities: [commandable, queryable]
+taggable: false
+vector_enabled: false
+members: []
+business_rules:
+  - release_id_and_model_digest_are_immutable
+  - only_staged_release_can_be_activated
+  - only_active_release_can_change_rollout_percent
+  - one_scenario_has_at_most_one_active_release
+  - rollback_target_must_be_a_previously_activated_release
+lifecycle:
+  initial: staged
+  terminal: [retired]
+  transitions:
+    - { from: staged, command: ActivateRecommendationModelRelease, to: active }
+    - { from: active, command: RollbackRecommendationModelRelease, to: retired }
+    - { from: staged, command: RollbackRecommendationModelRelease, to: retired }
+ddd_layer_mapping:
+  domain_model: internal/domain/recommendation/model_release
+  repository: internal/domain/recommendation/ports
+  application: internal/application/recommendation
+  adapter_rest: internal/adapter/rest/recommendation
+  adapter_event: internal/adapter/event/recommendation

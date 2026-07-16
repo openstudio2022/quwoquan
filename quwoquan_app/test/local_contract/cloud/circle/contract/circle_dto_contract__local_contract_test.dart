@@ -22,10 +22,8 @@ void main() {
         conversationId: 'conv_1',
         autoSyncChat: true,
         sectionConfig: [
-          CircleSectionConfigDto(
-              sectionType: 'works', visible: true, order: 0),
-          CircleSectionConfigDto(
-              sectionType: 'chat', visible: true, order: 1),
+          CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
+          CircleSectionConfigDto(sectionType: 'chat', visible: true, order: 1),
         ],
         storageUsedBytes: 1024,
         storageQuotaBytes: 1073741824,
@@ -136,8 +134,7 @@ void main() {
         name: 'Test',
         ownerId: 'u1',
         sectionConfig: [
-          CircleSectionConfigDto(
-              sectionType: 'works', visible: true, order: 0),
+          CircleSectionConfigDto(sectionType: 'works', visible: true, order: 0),
         ],
         createdAt: DateTime.utc(2025),
         updatedAt: DateTime.utc(2025),
@@ -287,105 +284,6 @@ void main() {
     });
   });
 
-  group('CircleFileDto — 常规契约', () {
-    test('fromMap / toMap round-trip 保留全字段', () {
-      final map = {
-        'id': 'f1',
-        'circleId': 'c1',
-        'parentFolderId': 'folder_1',
-        'name': 'test.pdf',
-        'fileType': 'file',
-        'mimeType': 'application/pdf',
-        'sizeBytes': 2048,
-        'uploaderId': 'u1',
-        'status': 'active',
-        'createdAt': '2025-03-01T00:00:00.000Z',
-        'updatedAt': '2025-03-01T00:00:00.000Z',
-      };
-      final file = CircleFileDto.fromMap(map);
-      expect(file.id, 'f1');
-      expect(file.name, 'test.pdf');
-      expect(file.fileType, 'file');
-      expect(file.mimeType, 'application/pdf');
-      expect(file.sizeBytes, 2048);
-      expect(file.parentFolderId, 'folder_1');
-      expect(file.isFolder, isFalse);
-
-      final restored = CircleFileDto.fromMap(file.toMap());
-      expect(restored.id, file.id);
-      expect(restored.name, file.name);
-      expect(restored.sizeBytes, file.sizeBytes);
-    });
-
-    test('isFolder computed getter 正确', () {
-      final folder = CircleFileDto.fromMap({
-        'id': 'f2',
-        'circleId': 'c1',
-        'name': 'Documents',
-        'fileType': 'folder',
-        'uploaderId': 'u1',
-        'createdAt': '2025-01-01T00:00:00.000Z',
-        'updatedAt': '2025-01-01T00:00:00.000Z',
-      });
-      expect(folder.isFolder, isTrue);
-
-      final file = CircleFileDto.fromMap({
-        'id': 'f3',
-        'circleId': 'c1',
-        'name': 'doc.pdf',
-        'fileType': 'file',
-        'uploaderId': 'u1',
-        'createdAt': '2025-01-01T00:00:00.000Z',
-        'updatedAt': '2025-01-01T00:00:00.000Z',
-      });
-      expect(file.isFolder, isFalse);
-    });
-
-    test('fromMap 支持 _id alias', () {
-      final file = CircleFileDto.fromMap({
-        '_id': 'mongo_file_id',
-        'circleId': 'c1',
-        'name': 'test.txt',
-        'uploaderId': 'u1',
-        'createdAt': '2025-01-01T00:00:00.000Z',
-        'updatedAt': '2025-01-01T00:00:00.000Z',
-      });
-      expect(file.id, 'mongo_file_id');
-    });
-  });
-
-  group('CircleFileDto — 兼容性契约', () {
-    test('toMap 中 nullable 字段为空时不输出', () {
-      final file = CircleFileDto(
-        id: 'f1',
-        circleId: 'c1',
-        name: 'test.txt',
-        fileType: 'file',
-        uploaderId: 'u1',
-        createdAt: DateTime.utc(2025),
-        updatedAt: DateTime.utc(2025),
-      );
-      final map = file.toMap();
-      expect(map.containsKey('parentFolderId'), isFalse);
-      expect(map.containsKey('mimeType'), isFalse);
-    });
-  });
-
-  group('CircleFileDto — 异常/边界契约', () {
-    test('fromMap 缺失字段降级为默认值', () {
-      final file = CircleFileDto.fromMap(const <String, dynamic>{});
-      expect(file.id, '');
-      expect(file.circleId, '');
-      expect(file.name, '');
-      expect(file.fileType, 'file');
-      expect(file.sizeBytes, 0);
-      expect(file.uploaderId, '');
-      expect(file.status, 'active');
-      expect(file.parentFolderId, isNull);
-      expect(file.mimeType, isNull);
-    });
-  });
-
   group('CircleSectionConfigDto — 常规契约', () {
     test('fromMap / toMap round-trip 保留全字段', () {
       final config = CircleSectionConfigDto(
@@ -432,8 +330,7 @@ void main() {
 
   group('CircleSectionConfigDto — 异常/边界契约', () {
     test('fromMap 缺失字段降级为默认值', () {
-      final config =
-          CircleSectionConfigDto.fromMap(const <String, dynamic>{});
+      final config = CircleSectionConfigDto.fromMap(const <String, dynamic>{});
       expect(config.sectionType, 'works');
       expect(config.visible, true);
       expect(config.order, 0);
@@ -467,16 +364,13 @@ void main() {
 
   group('CircleMemberRosterItemDto', () {
     test('fromMap 解析 Mock 成员展示字段', () {
-      final m = CircleMemberRosterItemDto.fromMap(
-        {
-          'id': 'u1',
-          'name': '张三',
-          'avatar': 'https://example.com/a.jpg',
-          'role': 'member',
-          'joinedAt': '2024-01-15',
-        },
-        circleId: 'c1',
-      );
+      final m = CircleMemberRosterItemDto.fromMap({
+        'id': 'u1',
+        'name': '张三',
+        'avatar': 'https://example.com/a.jpg',
+        'role': 'member',
+        'joinedAt': '2024-01-15',
+      }, circleId: 'c1');
       expect(m.userId, 'u1');
       expect(m.circleId, 'c1');
       expect(m.displayName, '张三');

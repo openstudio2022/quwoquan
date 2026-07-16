@@ -2,6 +2,8 @@ package main
 
 import (
 	"strings"
+
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
 )
 
 // ── shared/types.yaml ────────────────────────────────────────────────────────
@@ -53,16 +55,17 @@ type routeSecurity struct {
 }
 
 type routeDef struct {
-	Method         string   `yaml:"method"`
-	Path           string   `yaml:"path"`
-	Operation      string   `yaml:"operation"`
-	Description    string   `yaml:"description"`
-	QueryParams    []string `yaml:"query_params"`
-	WritableFields []string `yaml:"writable_fields"`
-	RequestFields  []string `yaml:"request_fields"`
-	ResponseFields []string `yaml:"response_fields"`
-	RequestEntity  string   `yaml:"request_entity"`
-	ResponseEntity string   `yaml:"response_entity"`
+	Method          string   `yaml:"method"`
+	Path            string   `yaml:"path"`
+	Operation       string   `yaml:"operation"`
+	Description     string   `yaml:"description"`
+	QueryParams     []string `yaml:"query_params"`
+	WritableFields  []string `yaml:"writable_fields"`
+	RequestFields   []string `yaml:"request_fields"`
+	ResponseFields  []string `yaml:"response_fields"`
+	RequestEntity   string   `yaml:"request_entity"`
+	RequestBodyKind string   `yaml:"request_body_kind"`
+	ResponseEntity  string   `yaml:"response_entity"`
 	// 框架级响应契约（R-ID02）：response_body 指向 projection read_model，
 	// response_body_kind ∈ object|page|ack（ack 无读模型，仅状态确认）。
 	ResponseBody     string        `yaml:"response_body"`
@@ -74,7 +77,8 @@ type routeDef struct {
 }
 
 // resolveAuthMode 返回 public | optional | required 三态。
-// 优先 security.auth_mode；其次兼容旧 auth/auth_required；默认 public。
+// 优先 security.auth_mode；其次兼容旧 auth/auth_required；缺失声明默认 required，
+// 公开/可选 operation 必须由 metadata 显式授权，禁止 fail-open。
 func (r routeDef) resolveAuthMode() string {
 	mode := strings.ToLower(strings.TrimSpace(r.Security.AuthMode))
 	switch mode {
@@ -93,7 +97,7 @@ func (r routeDef) resolveAuthMode() string {
 		}
 		return "public"
 	}
-	return "public"
+	return "required"
 }
 
 type serviceInfo struct {
@@ -117,6 +121,7 @@ type integrationLocationServiceFile struct {
 type projectionFieldDef struct {
 	Name                   string   `yaml:"name"`
 	DartType               string   `yaml:"dart_type"`
+	WireType               string   `yaml:"type"`
 	Nullable               bool     `yaml:"nullable"`
 	Source                 string   `yaml:"source"`
 	Aliases                []string `yaml:"aliases"`
@@ -138,38 +143,34 @@ type computedGetterDef struct {
 }
 
 type clientProjection struct {
-	DartClass       string               `yaml:"dart_class"`
-	BaseClass       string               `yaml:"base_class"`
-	OutputPath      string               `yaml:"output_path"`
-	DartImports     []string             `yaml:"dart_imports"`
-	Fields          []projectionFieldDef `yaml:"fields"`
-	ComputedGetters []computedGetterDef  `yaml:"computed_getters"`
+	DartClass        string               `yaml:"dart_class"`
+	BaseClass        string               `yaml:"base_class"`
+	OutputPath       string               `yaml:"output_path"`
+	ExternalDartPath string               `yaml:"external_dart_path"`
+	Strict           bool                 `yaml:"strict"`
+	DartImports      []string             `yaml:"dart_imports"`
+	Fields           []projectionFieldDef `yaml:"fields"`
+	ComputedGetters  []computedGetterDef  `yaml:"computed_getters"`
 }
 
 type projectionFile struct {
+	ReadModel        string               `yaml:"read_model"`
+	ClientProjection clientProjection     `yaml:"client_projection"`
+	Fields           []projectionFieldDef `yaml:"fields"`
+}
+
+// projectionBinding 只承载 operation response_body 解析所需的投影身份和端侧类型绑定。
+// 这条链路不读取 projection.fields，避免简写字段列表影响强类型绑定索引。
+type projectionBinding struct {
 	ReadModel        string           `yaml:"read_model"`
 	ClientProjection clientProjection `yaml:"client_projection"`
 }
 
 // ── errors.yaml ───────────────────────────────────────────────────────────────
 
-type errorDef struct {
-	Code              string            `yaml:"code"`
-	Kind              string            `yaml:"kind"`
-	Reason            string            `yaml:"reason"`
-	HTTPStatus        int               `yaml:"http_status"`
-	RecoveryAction    string            `yaml:"recovery_action"`
-	RecoveryAfterSecs int               `yaml:"recovery_after_seconds"`
-	DartConst         string            `yaml:"dart_const"`
-	GoConst           string            `yaml:"go_const"`
-	L10nKey           string            `yaml:"l10n_key"` // AppLocalizations getter name for display message
-	UserMessage       map[string]string `yaml:"user_message"`
-}
-
-type errorsFile struct {
-	Domain string     `yaml:"domain"`
-	Errors []errorDef `yaml:"errors"`
-}
+type errorRecoveryDef = contractcodegen.ErrorRecovery
+type errorDef = contractcodegen.ErrorDefinition
+type errorsFile = contractcodegen.ErrorsFile
 
 // ── behaviors.yaml ─────────────────────────────────────────────────────────────
 
@@ -258,6 +259,9 @@ type profileSubTabDef struct {
 	ContentType  string `yaml:"content_type"`
 	LifeCategory string `yaml:"life_category"`
 	Order        int    `yaml:"order"`
+	Default      bool   `yaml:"default"`
+	// Modes 限制二级 Tab 仅在指定主页模式（mine/other）可见；空表示全模式可见。
+	Modes []string `yaml:"modes"`
 }
 
 type profileTabDef struct {
@@ -288,15 +292,14 @@ type profileScrollMotionDef struct {
 }
 
 type shareTemplateProfileDef struct {
-	ID                   string `yaml:"id"`
-	TitleKey             string `yaml:"title_key"`
-	SubtitleKey          string `yaml:"subtitle_key"`
-	Layout               string `yaml:"layout"`
-	CoverStrategy        string `yaml:"cover_strategy"`
-	IncludeAuthor        bool   `yaml:"include_author"`
-	IncludeTimeContext   bool   `yaml:"include_time_context"`
-	IncludeCircleContext bool   `yaml:"include_circle_context"`
-	IncludeTags          bool   `yaml:"include_tags"`
+	ID                 string `yaml:"id"`
+	TitleKey           string `yaml:"title_key"`
+	SubtitleKey        string `yaml:"subtitle_key"`
+	Layout             string `yaml:"layout"`
+	CoverStrategy      string `yaml:"cover_strategy"`
+	IncludeAuthor      bool   `yaml:"include_author"`
+	IncludeTimeContext bool   `yaml:"include_time_context"`
+	IncludeTags        bool   `yaml:"include_tags"`
 }
 
 type articleDistributionProfileDef struct {

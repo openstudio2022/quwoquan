@@ -1,10 +1,10 @@
 version: 1
-entity: TagNode
+entity: TagNodeView
 backend: mongodb
 
 collections:
   tag_nodes:
-    entity: TagNode
+    entity: TagNodeView
     indexes:
       - { name: idx_tag_ref, keys: { tagRef: 1 }, unique: true }
       - { name: idx_tag_group, keys: { group: 1 } }

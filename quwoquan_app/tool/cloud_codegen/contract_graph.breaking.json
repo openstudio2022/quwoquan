@@ -1,0 +1,9 @@
+{
+  "baselineEstablished": false,
+  "breakingChanges": [],
+  "changes": [],
+  "decision": "approved",
+  "generator": "app-cloud-handoff",
+  "graphSha256": "635a57032f8a0923914f505c4bdc6fd6faa6cbd6de6f20a32a881cf8a0d1c470",
+  "previousGraphSha256": "c44b4e94abd5840f86ab7e803c852cab4d6e8fec5d89980808d6122a31b36c19"
+}

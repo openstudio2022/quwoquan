@@ -51,7 +51,9 @@ scenarios:
 
   - name: error_code_mapping
     cases:
-      - http_status: 429, code: CHAT.USER.rate_limited
+      - http_status: 429
+        code: CHAT.USER.rate_limited
         expected_dart_const: rateLimited
-      - http_status: 400, code: CHAT.USER.message_too_long
+      - http_status: 400
+        code: CHAT.USER.message_too_long
         expected_dart_const: messageTooLong

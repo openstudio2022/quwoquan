@@ -9,8 +9,11 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	"quwoquan_service/services/rtc-service/internal/application"
 	"quwoquan_service/services/rtc-service/internal/domain/call_session/model"
 )
+
+var _ application.CallStore = (*MongoCallStore)(nil)
 
 type MongoCallStore struct {
 	calls *mongo.Collection

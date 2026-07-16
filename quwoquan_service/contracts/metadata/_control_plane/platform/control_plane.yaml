@@ -48,15 +48,9 @@ object_types:
     view_model: ServiceConfig
     risk_level: high
     deployment_profile: latency_sensitive
-    operations:
-      - operation: ListServiceConfigs
-        method: GET
-        path: /v1/control-plane/platform/configs
-        scopes: [ops.platform.config.read]
-      - operation: UpdateServiceConfig
-        method: POST
-        path: /v1/control-plane/platform/configs/{configKey}:update
-        scopes: [ops.platform.config.write]
+    operation_refs:
+      - operation_id: ops.config_layer.ListServiceConfigs
+      - operation_id: ops.config_layer.UpdateServiceConfig
         danger_level: high
         approval_mode: single
     analytics_views:
@@ -71,15 +65,9 @@ object_types:
     view_model: ConfigLayerValue
     risk_level: high
     deployment_profile: latency_sensitive
-    operations:
-      - operation: ListConfigLayers
-        method: GET
-        path: /v1/control-plane/platform/configs/layers
-        scopes: [ops.platform.config.read]
-      - operation: ResolveEffectiveConfig
-        method: GET
-        path: /v1/control-plane/platform/configs/resolve
-        scopes: [ops.platform.config.read]
+    operation_refs:
+      - operation_id: ops.config_layer.ListConfigLayers
+      - operation_id: ops.config_layer.ResolveEffectiveConfig
 
   - object_type: config_package
     object_kind: release

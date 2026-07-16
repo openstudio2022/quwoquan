@@ -9,8 +9,6 @@ import (
 
 func TestManagedMigrationsAreIdempotent(t *testing.T) {
 	ctx := context.Background()
-	runTestMigrations(ctx, pgPool)
-
 	if _, err := pgPool.Exec(ctx, `
 		INSERT INTO user_profiles (
 			user_id,
@@ -36,6 +34,9 @@ func TestManagedMigrationsAreIdempotent(t *testing.T) {
 	`); err != nil {
 		t.Fatalf("seed persisted row: %v", err)
 	}
+	t.Cleanup(func() {
+		_, _ = pgPool.Exec(context.Background(), `DELETE FROM user_profiles WHERE user_id = 'migration_repeat_user'`)
+	})
 
 	if err := persistence.RunManagedMigrations(ctx, pgPool); err != nil {
 		t.Fatalf("rerun managed migrations: %v", err)

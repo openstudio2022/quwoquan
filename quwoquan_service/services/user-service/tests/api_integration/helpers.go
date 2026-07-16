@@ -11,6 +11,8 @@ import (
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"go.mongodb.org/mongo-driver/v2/bson"
+	rtauth "quwoquan_service/runtime/auth"
+	reltelemetry "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/telemetry"
 )
 
 func doRequest(t *testing.T, method, path string, body string, headers map[string]string) *httptest.ResponseRecorder {
@@ -31,7 +33,8 @@ func doRequest(t *testing.T, method, path string, body string, headers map[strin
 	return rec
 }
 
-// requestOtpCode 发送一次 OTP 并返回非生产环境暴露的调试码，供手机号登录用例使用。
+// requestOtpCode 发送一次 OTP；测试仅从进程外 provider contract probe 读取投递内容，
+// API response 永远不暴露验证码。
 func requestOtpCode(t *testing.T, phone string) string {
 	t.Helper()
 	rec := doRequest(t, "POST", "/v1/auth/otp/send", `{"phone":"`+phone+`","deviceId":"ios-test","platform":"ios","appVersion":"1.0.0","sourceOperation":"test"}`, nil)
@@ -39,9 +42,12 @@ func requestOtpCode(t *testing.T, phone string) string {
 		t.Fatalf("send otp: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	body := parseJSON(t, rec)
-	code, _ := body["debugCode"].(string)
+	if _, leaked := body["debugCode"]; leaked {
+		t.Fatalf("send otp response leaked debugCode: %#v", body)
+	}
+	code := externalInteractionRuntime.client.OTPCode(phone)
 	if code == "" {
-		t.Fatalf("send otp: expected debugCode, got %#v", body)
+		t.Fatalf("send otp: provider contract probe did not observe delivery, got %#v", body)
 	}
 	return code
 }
@@ -111,20 +117,26 @@ func createTestPersona(t *testing.T, personaID, userID, displayName string, isPr
 func cleanAll(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	_, _ = pgPool.Exec(ctx, `TRUNCATE user_profiles, user_auth, personas, user_settings, block_edges,
-		greeting_requests, user_works, user_life_items, credential_bindings, anonymous_device_bindings,
-		contact_discovery_records, invite_records, profile_qr_tokens CASCADE`)
-	if mongoDB != nil {
-		// Clear documents but DO NOT Drop the collections: dropping a collection
-		// also drops its indexes (e.g. follow_edges' unique idx_follow_unique,
-		// created once at suite startup), which silently breaks insert-based
-		// idempotency for every later test in the same run. DeleteMany preserves
-		// indexes and is a no-op on a missing collection.
-		for _, name := range []string{"follow_edges", "posts", "comments", "messages", "notifications"} {
-			_, _ = mongoDB.Collection(name).DeleteMany(ctx, bson.M{})
-		}
+	reltelemetry.Reset()
+	if chatContractRuntime != nil {
+		chatContractRuntime.Reset()
 	}
-	mr.FlushAll()
+	_, _ = pgPool.Exec(ctx, `TRUNCATE user_profiles, user_auth, personas, user_settings,
+		persona_relationships, persona_relationship_directions,
+		persona_relationship_command_receipts, persona_relationship_outbox,
+		personas_command_receipts, personas_outbox,
+		profile_update_proposals, profile_update_proposals_command_receipts, profile_update_proposals_outbox,
+		greeting_requests, user_works, user_life_items, credential_bindings, anonymous_device_bindings,
+		contact_discovery_records, invite_records, profile_qr_tokens, otp_challenges CASCADE`)
+	if mongoDB != nil {
+		_, _ = mongoDB.Collection("posts").DeleteMany(ctx, map[string]any{})
+		_, _ = mongoDB.Collection("comments").DeleteMany(ctx, map[string]any{})
+		_, _ = mongoDB.Collection("messages").DeleteMany(ctx, map[string]any{})
+		_, _ = mongoDB.Collection("notifications").DeleteMany(ctx, map[string]any{})
+	}
+	if err := integrationRedis.FlushDBs(ctx, 0); err != nil {
+		t.Fatalf("flush user integration Redis: %v", err)
+	}
 }
 
 // createTestPersonaFull creates a persona fixture keyed by sub_account_id.
@@ -156,15 +168,22 @@ func createTestCredential(t *testing.T, id, ownerID, credType, credKey string) {
 }
 
 func authHeaders(userID string) map[string]string {
-	return map[string]string{"X-Client-User-Id": userID}
+	token, err := testAccessSigner.Sign(rtauth.TokenSubject{AccountID: userID})
+	if err != nil {
+		panic("sign user-service api integration access token: " + err.Error())
+	}
+	return map[string]string{"Authorization": "Bearer " + token}
 }
 
 func authHeadersForPersona(userID, subAccountID string) map[string]string {
-	headers := authHeaders(userID)
-	if subAccountID != "" {
-		headers["X-Client-Sub-Account-Id"] = subAccountID
+	token, err := testAccessSigner.Sign(rtauth.TokenSubject{
+		AccountID: userID,
+		PersonaID: subAccountID,
+	})
+	if err != nil {
+		panic("sign user-service api integration persona access token: " + err.Error())
 	}
-	return headers
+	return map[string]string{"Authorization": "Bearer " + token}
 }
 
 func seedPersonaPostHistory(t *testing.T, subAccountID string) {

@@ -1,0 +1,27 @@
+schemaVersion: quwoquan.content.recipe
+recipeId: content/travel/video/video
+title: 旅行视频作品执行（通用模板）
+presetRef: content/travel/video/base
+runtimeProfile: cursor_local_calibrated
+instanceParams:
+  required: [region, discovery, name, limit]
+selection:
+  intentLabel: 旅行视频作品生成
+  entityHomepagesPerTarget: 0
+  entityArticlesPerTarget: 0
+  imageWorksPerTarget: 0
+  mandatory: ""
+contract:
+  requireActiveStatus: true
+execution:
+  runtime: local
+  model: composer
+  modelFamily: composer
+  reviewModel: gpt-5.5
+  reviewModelFamily: gpt
+readiness:
+  minPassRate: 1.0
+  mode: commercial
+  failOnNoGo: true
+  acceptEstimatedTokenLedger: false
+  requireReviewed: true

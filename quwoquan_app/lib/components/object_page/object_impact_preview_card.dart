@@ -24,7 +24,7 @@ enum ObjectImpactTarget { homepage, circle }
 
 /// 「打动」预览卡（实体 / 圈子主页共享）。
 ///
-/// 与 [ObjectIntersectionPreviewCard] 同壳：最多 3 条、只读云侧 [primaryText]、
+/// 与 [ObjectIntersectionSection] 同壳：最多 3 条、只读云侧 [primaryText]、
 /// 数字片段可点开来源说明；无真实打动事实时整卡收起（G2）。
 class ObjectImpactPreviewCard extends ConsumerWidget {
   const ObjectImpactPreviewCard({

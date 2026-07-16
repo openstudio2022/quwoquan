@@ -123,17 +123,24 @@ if service == "chat-service":
             raise SystemExit("prod chat-service group avatar CDN must not use local/test host")
 PY
 
-out_dir=".qwq_output/env/${env_name}/release/service/${service}"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
+out_dir="${QWQ_OUTPUT_ROOT}/env/${env_name}/release/service/${service}"
 rm -rf "$out_dir"
 mkdir -p "$out_dir"
 cp "$default_cfg" "$out_dir/default_config.yaml"
 cp "$env_cfg" "$out_dir/config.yaml"
 cp "$topology_manifest" "$out_dir/environment_topology_manifest.yaml"
+if [[ -d "$ROOT/quwoquan_service/services/$service/configs/releases" ]]; then
+  cp -R "$ROOT/quwoquan_service/services/$service/configs/releases" "$out_dir/releases"
+fi
 python3 - "$service" "$env_name" "$topology_manifest" "$out_dir/report.json" <<'PY'
+import hashlib
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
+from typing import Optional
 
 try:
     import yaml  # type: ignore
@@ -148,6 +155,18 @@ retention_path = root / "quwoquan_ops/environments/reliable_task_retention_polic
 topology = json.loads(Path(topology_path).read_text(encoding="utf-8"))
 env_topology = ((topology.get("environments") or {}).get(env_name) or {})
 artifact_policy = ((env_topology.get("artifactPolicy") or {}).get("service") or {})
+
+def digest(path: Path) -> str:
+    return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+
+revision = subprocess.run(
+    ["git", "rev-parse", "HEAD"],
+    text=True,
+    capture_output=True,
+    check=False,
+).stdout.strip()
+if not re.fullmatch(r"[0-9a-f]{40}", revision):
+    raise SystemExit("unable to resolve package git revision")
 
 module_package = None
 catalog_version = None
@@ -165,7 +184,7 @@ def _parse_inline_list(value: str) -> list[str]:
     return [item.strip().strip("'\"") for item in inner.split(",") if item.strip()]
 
 
-def _fallback_load_mapping(path: Path, target_env: str, target_service: str) -> tuple[str | None, list[str]]:
+def _fallback_load_mapping(path: Path, target_env: str, target_service: str) -> tuple[Optional[str], list[str]]:
     env_indent = None
     service_indent = None
     package = None
@@ -216,7 +235,7 @@ def _fallback_load_mapping(path: Path, target_env: str, target_service: str) -> 
     return package, modules
 
 
-def _fallback_load_top_level_version(path: Path) -> int | str | None:
+def _fallback_load_top_level_version(path: Path) -> Optional[object]:
     for raw in path.read_text(encoding="utf-8").splitlines():
         stripped = raw.strip()
         if not stripped or stripped.startswith("#"):
@@ -248,6 +267,11 @@ if retention_path.exists():
     else:
         retention_version = _fallback_load_top_level_version(retention_path)
 
+release_files = {
+    path.name: digest(path)
+    for path in sorted((Path(report_path).parent / "releases").glob("*.yaml"))
+}
+
 report = {
     "status": "packaged",
     "service": service,
@@ -260,6 +284,15 @@ report = {
     "retentionPolicyVersion": retention_version,
     "topologySchemaVersion": topology.get("schemaVersion"),
     "artifactPolicy": artifact_policy,
+    "provenance": {
+        "gitRevision": revision,
+        "files": {
+            "defaultConfig": digest(Path(report_path).parent / "default_config.yaml"),
+            "environmentConfig": digest(Path(report_path).parent / "config.yaml"),
+            "topologyManifest": digest(Path(topology_path)),
+        },
+        "releaseFiles": release_files,
+    },
 }
 Path(report_path).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 PY

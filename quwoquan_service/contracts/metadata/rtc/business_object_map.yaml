@@ -1,0 +1,238 @@
+bounded_contexts:
+- access_policy:
+    child_objects: aggregate_root_only
+    commands: aggregate_facade_only
+    cross_context: public_contract_only
+    queries: named_reader_slice_only
+  context_id: rtc.rtc
+  name: RTC
+  role: core
+decision_refs:
+- DDD-OBJ-001
+- CTX-OWNERSHIP-007
+- CONSISTENCY-006
+domain: rtc
+objects:
+- access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: RTC
+  canonical_object: CallSession
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - _id
+    - callType
+    - status
+    - roomId
+    - maxParticipants
+    - participantCount
+    - isRecording
+    - recordingUrl
+    - isScreenSharing
+    - screenShareUserId
+    - endReason
+    - durationMs
+    - startedAt
+    - endedAt
+    - createdAt
+    - updatedAt
+    - circleId
+    - conversationId
+    - initiatorId
+    - initiatorRingtoneId
+    owned_value:
+    - participants
+    projection: []
+    reference:
+    - circleId
+    - conversationId
+    - initiatorId
+    - initiatorRingtoneId
+    transport_only: []
+  identity:
+    fields:
+    - _id
+    version_source: store_commit
+  invariant_refs:
+  - rtc/call_session/aggregate.yaml#business_rules
+  lifecycle_refs:
+  - rtc/call_session/aggregate.yaml#lifecycle
+  member_bounds:
+    CallParticipant: 32
+  mutation_entrypoints:
+  - AnswerCall
+  - CancelCall
+  - HangupCall
+  - InitiateCall
+  - InviteToCall
+  - JoinCall
+  - LeaveCall
+  - RejectCall
+  - StartScreenShare
+  - StopScreenShare
+  - ToggleCamera
+  - ToggleMute
+  object_kind: aggregate_root
+  relationships:
+  - access: aggregate_root
+    cardinality: 1:N
+    consistency: strong
+    kind: owned
+    name: participants
+    on_delete: cascade
+    reference_fields: []
+    target_object: rtc.CallParticipant
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: circle
+    on_delete: detach
+    reference_fields:
+    - circleId
+    target_object: circle.Circle
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: conversation
+    on_delete: detach
+    reference_fields:
+    - conversationId
+    target_object: chat.Conversation
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: initiatorPersona
+    on_delete: retain
+    reference_fields:
+    - initiatorId
+    target_object: user.Persona
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: initiatorRingtone
+    on_delete: detach
+    reference_fields:
+    - initiatorRingtoneId
+    target_object: content.MediaAsset
+  source_document: rtc/call_session/fields.yaml
+  source_entity: CallSession
+  storage_backend: mongodb
+  storage_role: authoritative
+  local_identity_reasons:
+    roomId: external RTC provider room key governed by the CallSession external port
+    screenShareUserId: CallSession-owned participant selector validated against the bounded participants collection; no child
+      Store or Facade exists
+- access:
+    commands: via_aggregate_root
+    cross_context: forbidden
+    queries: via_aggregate_projection
+  aggregate_owner: CallSession
+  bounded_context: RTC
+  canonical_object: CallParticipant
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - userId
+    - role
+    - status
+    - isMuted
+    - isCameraOn
+    - joinedAt
+    - leftAt
+    - displayName
+    - avatarUrl
+    - trustRelation
+    - sourceLabel
+    - isKnownContact
+    - mutualContext
+    - inviteStatus
+    - invitedBy
+    - connectionQuality
+    - isSpeaking
+    owned_value: []
+    projection: []
+    reference: []
+    transport_only: []
+  identity:
+    fields:
+    - userId
+    version_source: owner
+  invariant_refs: []
+  lifecycle_refs: []
+  member_bounds: {}
+  mutation_entrypoints: []
+  object_kind: owned_entity
+  relationships: []
+  source_document: rtc/call_session/fields.yaml
+  source_entity: CallParticipant
+  storage_role: owned
+- access:
+    commands: aggregate_facade
+    cross_context: public_contract_only
+    queries: named_reader
+  bounded_context: RTC
+  canonical_object: CallRecording
+  event_consumers: []
+  field_roles:
+    append_only_fact: []
+    authoritative_state:
+    - id
+    - requestedBy
+    - consentSnapshot
+    - status
+    - startedAt
+    - stoppedAt
+    - createdAt
+    - updatedAt
+    - callId
+    - mediaAssetId
+    owned_value: []
+    projection: []
+    reference:
+    - callId
+    - mediaAssetId
+    transport_only: []
+  identity:
+    fields:
+    - id
+    version_source: store_commit
+  invariant_refs:
+  - rtc/call_recording/entity.yaml#business_rules
+  lifecycle_refs:
+  - rtc/call_recording/entity.yaml#lifecycle
+  member_bounds: {}
+  mutation_entrypoints:
+  - StartCallRecording
+  - StopCallRecording
+  object_kind: aggregate_root
+  relationships:
+  - access: named_reader
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: mediaAsset
+    on_delete: tombstone
+    reference_fields:
+    - mediaAssetId
+    target_object: content.MediaAsset
+  - access: command_facade
+    cardinality: N:1
+    consistency: eventual
+    kind: reference
+    name: call
+    on_delete: retain
+    reference_fields:
+    - callId
+    target_object: rtc.CallSession
+  source_document: rtc/call_recording/fields.yaml
+  source_entity: CallRecording
+  storage_backend: mongodb
+  storage_role: authoritative

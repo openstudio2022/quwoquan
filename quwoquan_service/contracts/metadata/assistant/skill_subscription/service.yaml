@@ -1,0 +1,119 @@
+api_routes:
+- actor: persona
+  application:
+    facet: SkillSubscriptionQueryFacade
+    kind: query
+    method: listSubscriptions
+    reader: SkillSubscriptionListReader
+    slice: SkillSubscriptionListView
+  method: GET
+  operation: ListSkillSubscriptions
+  path: /v1/assistant/skill-subscriptions
+  query_params:
+  - limit
+  - status
+  response_entity: SkillSubscriptionListView
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    aggregate_owner: SkillSubscription
+    mutation_target: SkillSubscription
+    invariant_target: SkillSubscription
+    facet: SkillSubscriptionCommandFacade
+    kind: command
+    method: createSubscription
+  method: POST
+  operation: CreateSkillSubscription
+  path: /v1/assistant/skill-subscriptions
+  request_fields:
+  - skillId
+  - domainId
+  - tagRefs
+  - searchQueryPlan
+  - trigger
+  - destination
+  - clientRequestId
+  response_entity: SkillSubscription
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    facet: SkillSubscriptionQueryFacade
+    kind: query
+    method: getSubscription
+    reader: SkillSubscriptionDetailReader
+    slice: SkillSubscription
+  method: GET
+  operation: GetSkillSubscription
+  path: /v1/assistant/skill-subscriptions/{subscriptionId}
+  response_entity: SkillSubscription
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: persona
+  application:
+    aggregate_owner: SkillSubscription
+    mutation_target: SkillSubscription
+    invariant_target: SkillSubscription
+    facet: SkillSubscriptionCommandFacade
+    kind: command
+    method: updateSubscriptionStatus
+  method: PATCH
+  operation: UpdateSkillSubscriptionStatus
+  path: /v1/assistant/skill-subscriptions/{subscriptionId}/status
+  request_fields:
+  - status
+  - expectedVersion
+  - idempotencyKey
+  response_entity: SkillSubscription
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: owner
+    token_transport: bearer
+    visibility: private
+- actor: none
+  application:
+    aggregate_owner: SkillSubscription
+    mutation_target: SkillSubscription
+    invariant_target: SkillSubscription
+    facet: SkillSubscriptionCommandFacade
+    kind: command
+    method: acquireDueLeases
+  method: POST
+  operation: TickSkillSubscriptionCron
+  path: /internal/v1/assistant/skill-subscriptions:tick
+  request_fields:
+  - now
+  - leaseOwner
+  - leaseDurationMs
+  response_entity: SkillSubscriptionCronTickResult
+  security:
+    anonymous_policy: deny
+    auth_mode: required
+    principal: service
+    token_transport: bearer
+    visibility: internal
+service:
+  commercial_defaults:
+    block_reason: Mongo Store/outbox、调度租约与 generated transport 尚未完成生产装配
+    gap_id: ASSISTANT_SKILL_SUBSCRIPTION_WIRING
+    status: blocked
+    target_story: app-cloud-business-object-commercial-closure
+  description: SkillSubscription 对象专属 command/query packet。
+  domain: assistant
+  name: assistant-service
+  owner: assistant-team
+version: 1

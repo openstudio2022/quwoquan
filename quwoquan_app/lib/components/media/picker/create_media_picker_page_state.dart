@@ -883,7 +883,6 @@ class _CreateMediaPickerPageState extends State<CreateMediaPickerPage> {
                       );
                       return;
                     case UiErrorActionType.dismiss:
-                    case UiErrorActionType.back:
                       if (mounted) {
                         Navigator.of(context).pop();
                       }

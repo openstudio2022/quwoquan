@@ -18,12 +18,12 @@ import re
 import sys
 from pathlib import Path
 
-from _common import quality_gates as qg
-from _common.article_package import sha256_file
-from _common.entity_annotation import annotation_publish_issues
-from _common.intersection_signal import intersection_hint_issues
-from _common.provenance import provenance_issues
-from produce.materialize import _normalized_runtime_entity_refs
+from core import quality_gates as qg
+from core.article_package import sha256_file
+from content.review.annotation.entity_annotation import annotation_publish_issues
+from core.intersection_signal import intersection_hint_issues
+from core.provenance import provenance_issues
+from content.post.materialize_contract import _normalized_runtime_entity_refs
 # asset:// 引用 token：允许中文实体名（assetId 可读化后含中文）。
 _ASSET_REF_RE = re.compile(r"asset://([A-Za-z0-9_./\u4e00-\u9fff-]+)")
 
@@ -72,10 +72,10 @@ def _normalized_entity_ref_issues(manifest_path: Path, manifest: dict) -> list[s
     return issues
 
 
-def _default_posts_root(task: str | None, batch: str | None) -> Path | None:
-    if task and batch:
-        from _common.paths import batch_posts_root
-        return batch_posts_root(task, batch)
+def _default_posts_root(execution_id: str | None) -> Path | None:
+    if execution_id:
+        from core.paths import execution_posts_root
+        return execution_posts_root(execution_id)
     return None
 
 
@@ -122,8 +122,8 @@ def verify_posts(
         # 字数门形态自适应（唯一真相源 base_draft_readiness）：图片作品(image/gallery)
         # 不受正文长度门约束；article 长文需≥600，图文混排正文≥200且有足量内联图/图注。
         carrier = str(manifest.get("carrier") or "")
-        if carrier not in ("image", "gallery"):
-            from _common.base_draft import base_draft_readiness
+        if carrier != "image":
+            from content.post.base_draft import base_draft_readiness
 
             readiness = base_draft_readiness(
                 article,
@@ -147,8 +147,8 @@ def verify_posts(
         if not isinstance(entity_refs, list):
             issues.append(f"{manifest_path}: entityRefs must be an array")
         issues.extend(_normalized_entity_ref_issues(manifest_path, manifest))
-        if not manifest.get("sourceTaskId"):
-            issues.append(f"{manifest_path}: missing sourceTaskId provenance (task trace/hydrate 必需)")
+        if not manifest.get("executionId"):
+            issues.append(f"{manifest_path}: missing executionId provenance")
 
         issues.extend(asset_closure_issues(post_dir, manifest))
         # 出处强制门：交付 post 必须有完整且一致的 provenance.json。
@@ -192,7 +192,7 @@ def _semantic_gate_issues(
     """复用单一 gate library，在发布面复跑图文闭环/主线一致性/语域门。
 
     软门（``quality_gates.SOFT_QUALITY_GATES``：writingIntentConsistency / mechanicalHeading）
-    命中只进 ``advisories``（软扣分+建议），绝不 hard-block；与 produce review 的 SOFT_CHECKS
+    命中只进 ``advisories``（软扣分+建议），绝不 hard-block；与 post review 的 SOFT_CHECKS
     同口径（消除第二真相源）。硬门（图文闭环/语域/联系方式/段内重复）仍 hard-block。
     """
     out: list[str] = []
@@ -212,7 +212,7 @@ def _semantic_gate_issues(
     if isinstance(banned, list) and banned:
         for msg in qg.register_lexicon_issues(article, [str(b) for b in banned]):
             out.append(f"{article_path}: {msg}")
-    from _common import public_contacts as pc
+    from core import public_contacts as pc
 
     allowed_contacts = manifest.get("allowedContactNumbers") if isinstance(manifest.get("allowedContactNumbers"), list) else []
     for msg in qg.contact_info_issues(article, allowed_numbers=pc.allowed_numbers([str(n) for n in allowed_contacts])):
@@ -290,12 +290,11 @@ def asset_closure_issues(post_dir: Path, manifest: dict) -> list[str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Verify materialized content quality")
-    parser.add_argument("--task")
-    parser.add_argument("--batch")
+    parser.add_argument("--execution-id")
     parser.add_argument("--posts-root")
     args = parser.parse_args()
 
-    posts_root = Path(args.posts_root) if args.posts_root else _default_posts_root(args.task, args.batch)
+    posts_root = Path(args.posts_root) if args.posts_root else _default_posts_root(args.execution_id)
     if posts_root is None:
         print("[content-quality] No posts root specified; template-only gate skipped")
         return

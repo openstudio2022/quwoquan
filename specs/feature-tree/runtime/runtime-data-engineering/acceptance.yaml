@@ -23,7 +23,8 @@ sit_acceptance:
     - alpha/beta/gamma/prod 数据策略不漂移。
     - 对象主页网络可引用同一数据工程输入构建交集、推荐和小艺上下文。
     integration_points:
-    - quwoquan_data/publish/tags
+    - quwoquan_data/control_plane/governance/taxonomy
+    - quwoquan_data/publish/tags consumer snapshots
     - quwoquan_service/contracts/metadata
     - quwoquan_service/contracts/metadata/_shared/test_fixtures
     - quwoquan_app/lib/cloud/services

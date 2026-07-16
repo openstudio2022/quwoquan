@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	rterr "quwoquan_service/runtime/errors"
+	"quwoquan_service/runtime/operation"
 )
 
 var (
@@ -182,6 +183,7 @@ func HTTPServerMiddleware(
 
 			EnrichCorrelationMetaFromSpan(&meta, ctx)
 			ctx = WithCorrelationMeta(ctx, meta)
+			ctx = operation.WithContext(ctx, buildOperationContextFromHeaders(r.Header, meta))
 			r = r.WithContext(ctx)
 			_ = processLogger.Write(ProcessTraceLog{
 				Service:           cfg.Service,

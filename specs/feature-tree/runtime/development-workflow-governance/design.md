@@ -276,7 +276,7 @@
 - `specs/feature-tree/00_FEATURE_TREE_STANDARD.md`
 - `specs/feature-tree/01_FEATURE_TREE_LEVEL_DEFINITIONS.md`
 - `.cursor/rules/03-testing.mdc`
-- `.cursor/commands/explore.md`
+- `.cursor/commands/content.source.discovery.md`
 - `.cursor/commands/prd.md`
 - `.cursor/commands/design.md`
 - `.cursor/commands/dev.md`

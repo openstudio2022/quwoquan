@@ -2,7 +2,7 @@
 
 > 适用于所有涉及云端交互、系统权限、登录门禁与提交动作的端侧页面。  
 > **特性树**：`runtime/runtime-client-foundation/error-permission-display-semantics`（L3）  
-> 参考：`02-dart-coding.mdc`、`06-semantic-consistency-audit.mdc`、`07-error-permission-semantics.mdc`
+> 参考：`02-dart-coding.mdc`、`06-semantic-consistency-verify.audit.mdc`、`07-error-permission-semantics.mdc`
 
 ---
 
@@ -283,6 +283,29 @@ networkUnavailable      # 暂时无法加载，请检查网络后重试
 
 - 单测守护：`quwoquan_app/test/local_contract/core/errors/ui_error_semantics__local_contract_test.dart` 的"错误展示载体决策矩阵"测试组必须逐条断言 1.13.2 的 7 条映射（覆盖每个 `category × scope` 组合到目标 `presentation`），任何对 `_presentationFor` 的改动若未同步本表与测试即失败。
 - 静态门禁：`quwoquan_app/scripts/runtime/verify_unified_error_semantics_ratchet.py` 继续阻断"页面直接消费 raw 异常字符串 / 失败态裸 `AppToast` 字面量 / 旧式加载失败标题 / 惊叹图标"等回归。
+
+### 1.14 错误恢复与页面导航所有权（强制）
+
+错误载体只负责解释失败和提供**恢复动作**，不得自行猜测当前页面应当返回还是关闭。退出控件由宿主容器唯一持有：
+
+| 宿主形态 | 唯一退出控件 | 错误载体允许的主操作 | 禁止 |
+|---|---|---|---|
+| 导航栈页面 | 顶部返回 | 再试一次 / 登录 / 去设置 | 错误态额外注入 X 或“返回”按钮 |
+| 底部 sheet / 全屏模态 | 顶部 X、barrier 或下滑关闭 | 再试一次 / 登录 / 去设置 | 同时出现返回箭头、X 和“返回” CTA |
+| 页面内区块 | 无退出控件 | 再试一次 | 区块错误改变整页导航 |
+
+- `AppPageErrorState`、`AppSectionErrorState`、`AppSectionErrorCard` 不拥有路由依赖，也不自动 `pop` 或跳首页。
+- 宿主仍必须保证可退出：栈页面在成功态和失败态使用同一顶部返回；模态在成功态和失败态使用同一关闭方式。
+- `back` / `dismiss` 只有在业务恢复语义明确要求时才能由调用方显式传入，不得作为通用错误默认次操作。
+- 自动化至少断言“同一错误页只有一个宿主退出控件”和“重试不会触发返回/关闭”。
+
+### 1.15 表单内错误（强制）
+
+- 字段本身可修正的问题使用 `AppInlineFieldError`，与输入框错误边框同组出现。
+- 请求发送、提交、限流、网络和第三方依赖错误使用 `AppFormErrorCard`，放在触发输入/操作之后、主动作之前；社交登录错误放在社交入口组之前。
+- 卡片使用页面同源软填充、语义圆角、警示色圆点、标题/正文和最小 44dp 恢复动作；只有输入错误或不可恢复阻断使用破坏性色。
+- 同一失败只允许一个主反馈，不同时展示 Toast、caption、dialog 或第二张卡片；新错误通过 live region 播报一次，用户编辑、重试或成功后清除。
+- 当系统已经自动完成降级或切换到可恢复表单时，使用无嵌套动作的紧凑 `AppFormErrorCard`；目标表单的主按钮唯一承担后续动作，禁止错误卡复制“重试/登录/获取验证码”。
 
 ---
 

@@ -18,6 +18,8 @@ import (
 	"sort"
 	"strings"
 
+	contractcodegen "quwoquan_service/internal/metadata/codegen"
+	"quwoquan_service/internal/metadata/validate"
 	"quwoquan_service/tools/recintersectionmeta"
 )
 
@@ -26,8 +28,16 @@ func main() {
 	outputDir := flag.String("output-dir", "services/content-service/internal/generated", "生成 Go 表的输出目录")
 	flag.Parse()
 
-	contractPath := filepath.Join(*metadataDir, "recommendation", "rec_model", "intersection_kind_registry.yaml")
-	registry, err := recintersectionmeta.Read(contractPath)
+	source, err := contractcodegen.NewSource(*metadataDir, validate.ProfileBaseline)
+	if err != nil {
+		fail(fmt.Errorf("compile ContractGraph: %w", err))
+	}
+	const contractPath = "recommendation/rec_model/intersection_kind_registry.yaml"
+	raw, err := source.Content(contractPath)
+	if err != nil {
+		fail(fmt.Errorf("read intersection kind registry: %w", err))
+	}
+	registry, err := recintersectionmeta.Parse(raw)
 	if err != nil {
 		fail(fmt.Errorf("read intersection kind registry: %w", err))
 	}

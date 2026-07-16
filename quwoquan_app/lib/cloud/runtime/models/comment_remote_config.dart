@@ -1,5 +1,4 @@
 import 'package:quwoquan_app/cloud/runtime/models/content_app_config_wire.dart';
-import 'package:quwoquan_app/components/comment_system/comment_models.dart';
 
 class CommentRemoteConfig {
   const CommentRemoteConfig({
@@ -25,18 +24,6 @@ class CommentRemoteConfig {
   final bool enabled;
 
   static const CommentRemoteConfig fallback = CommentRemoteConfig();
-
-  CommentConfig toComposerConfig({CommentConfig? fallbackConfig}) {
-    final base = fallbackConfig ?? const CommentConfig();
-    return CommentConfig(
-      maxLength: _positiveOrFallback(maxLength, base.maxLength),
-      maxImageAttachments: _positiveOrFallback(
-        maxImageAttachments,
-        base.maxImageAttachments,
-      ),
-      enabled: enabled && base.enabled,
-    );
-  }
 
   factory CommentRemoteConfig.fromAppConfigRoot(
     ContentAppConfigWireRoot root, {

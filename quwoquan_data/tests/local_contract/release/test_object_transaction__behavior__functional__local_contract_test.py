@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from core.tree_integrity import tree_integrity_stats
+from content.release.canonical import object_transaction as transaction
+from content.release.canonical.application import (
+    apply_object_transaction,
+    rollback_object_transaction,
+)
+from support.object_transaction_fixtures import (
+    OBJECT_REF,
+    RELEASE_ID,
+    TRANSACTION_ID,
+    build_canonical,
+    build_package,
+)
+
+
+def _audit(tmp_path: Path) -> tuple[Path, Path, Path, dict]:
+    canonical = build_canonical(tmp_path)
+    output = tmp_path / ".qwq_output"
+    package = build_package(tmp_path, canonical)
+    report = transaction.audit_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=package,
+        transaction_id=TRANSACTION_ID,
+        expected_canonical_merkle=tree_integrity_stats(canonical)["merkleRoot"],
+    )
+    return canonical, output, package, report
+
+
+def test_audit_binds_current_merkle_freeze_policy_closure_and_review(
+    tmp_path: Path,
+) -> None:
+    canonical = build_canonical(tmp_path)
+    package = build_package(tmp_path, canonical)
+    before = tree_integrity_stats(canonical)["merkleRoot"]
+
+    with pytest.raises(
+        transaction.ObjectTransactionError,
+        match="current canonical Merkle",
+    ):
+        transaction.audit_object_transaction(
+            publish_root=canonical,
+            output_root=tmp_path / ".qwq_output",
+            package_root=package,
+            transaction_id=TRANSACTION_ID,
+            expected_canonical_merkle="sha256:" + "0" * 64,
+        )
+
+    assert tree_integrity_stats(canonical)["merkleRoot"] == before
+
+
+def test_apply_is_atomic_create_once_idempotent_and_has_no_layout_parent(
+    tmp_path: Path,
+) -> None:
+    canonical, output, package, audit = _audit(tmp_path)
+
+    applied = apply_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=package,
+        transaction_id=TRANSACTION_ID,
+        dry_run_attestation_sha256=audit["dryRunAttestationSha256"],
+    )
+
+    assert applied["status"] == "applied"
+    assert (canonical / "entities" / OBJECT_REF / "_entity.json").is_file()
+    assert (canonical / "tags/Topic/旅行/_definition.json").is_file()
+    assert Path(applied["rollbackRef"]).is_dir()
+    assert "releaseRef" not in applied
+    serialized = json.dumps(applied, ensure_ascii=False)
+    assert "publish-layout" not in serialized
+
+    rerun = apply_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=package,
+        transaction_id=TRANSACTION_ID,
+        dry_run_attestation_sha256=audit["dryRunAttestationSha256"],
+    )
+    assert rerun["idempotent"] is True
+
+
+def test_rollback_restores_before_merkle_and_preserves_transaction_evidence(
+    tmp_path: Path,
+) -> None:
+    canonical, output, package, audit = _audit(tmp_path)
+    applied = apply_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        package_root=package,
+        transaction_id=TRANSACTION_ID,
+        dry_run_attestation_sha256=audit["dryRunAttestationSha256"],
+    )
+
+    rolled_back = rollback_object_transaction(
+        publish_root=canonical,
+        output_root=output,
+        transaction_id=TRANSACTION_ID,
+    )
+
+    assert rolled_back["restoredMerkle"] == applied["beforeMerkle"]
+    assert not (canonical / "entities" / OBJECT_REF).exists()
+    assert Path(rolled_back["rollbackRefPreserved"]).is_dir()

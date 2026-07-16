@@ -1,8 +1,8 @@
-"""批次级审计摘要：脚本验收结果 + 人工抽检清单。
+"""Execution 审计摘要：脚本验收结果 + 人工抽检清单。
 
 目标：
-- 为 `qwq-data verify --task ... --batch ...` / `task scaled-e2e verify` 生成可直接复核的审计包。
-- 把脚本硬门结果、都江堰锚点对象、以及人工抽检项收敛到批次 `_shared/` 下。
+- 为 `qwq-data verify --execution-id ...` 生成可直接复核的审计包。
+- 把脚本硬门结果、都江堰锚点对象、以及人工抽检项收敛到 execution `_shared/` 下。
 """
 from __future__ import annotations
 
@@ -10,18 +10,18 @@ import math
 from pathlib import Path
 from typing import Any, Mapping
 
-from _common.content_object import iter_content_refs, content_object_dir
-from _common.io import read_json, write_json
-from _common.paths import (
-    batch_audit_markdown_path,
-    batch_audit_summary_path,
-    batch_entity_object_dir,
-    batch_root,
+from content.post.object_index import iter_content_refs, content_object_dir
+from core.io import read_json, write_json
+from core.paths import (
+    execution_audit_markdown_path,
+    execution_audit_summary_path,
+    execution_entity_object_dir,
+    execution_root,
     now_iso,
 )
-from task import store
+from content.execution import store
 
-AUDIT_SUMMARY_SCHEMA = "quwoquan_data.batch_audit_summary/1"
+AUDIT_SUMMARY_SCHEMA = "quwoquan_data.execution_audit_summary/1"
 _FOCUS_ENTITY_NAME = "都江堰"
 
 
@@ -40,11 +40,11 @@ def _payload_or_self(path: Path) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else data
 
 
-def _batch_rel(batch_dir: Path, path: Path | None) -> str:
+def _execution_rel(execution_dir: Path, path: Path | None) -> str:
     if path is None:
         return ""
     try:
-        return path.relative_to(batch_dir).as_posix()
+        return path.relative_to(execution_dir).as_posix()
     except ValueError:
         return str(path)
 
@@ -58,9 +58,9 @@ def _normalize_entity_ref(raw: str) -> str:
     return f"/{text}"
 
 
-def _coverage_targets(task_id: str) -> list[dict[str, str]]:
+def _coverage_targets(execution_id: str) -> list[dict[str, str]]:
     try:
-        spec = store.load_spec(task_id)
+        spec = store.load_spec(execution_id)
     except Exception:
         return []
     targets = ((spec.get("scope") or {}).get("coverageTargets")) or []
@@ -77,8 +77,8 @@ def _coverage_targets(task_id: str) -> list[dict[str, str]]:
     return out
 
 
-def _iter_entity_dirs(batch_dir: Path) -> list[Path]:
-    root = batch_dir / "entities"
+def _iter_entity_dirs(execution_dir: Path) -> list[Path]:
+    root = execution_dir / "entities"
     if not root.is_dir():
         return []
     found: dict[str, Path] = {}
@@ -88,45 +88,45 @@ def _iter_entity_dirs(batch_dir: Path) -> list[Path]:
     return sorted(found.values())
 
 
-def _pick_focus_entity(task_id: str, batch_dir: Path) -> dict[str, str] | None:
-    targets = _coverage_targets(task_id)
+def _pick_focus_entity(execution_id: str, execution_dir: Path) -> dict[str, str] | None:
+    targets = _coverage_targets(execution_id)
     for row in targets:
         if row["name"] == _FOCUS_ENTITY_NAME:
             return row
-    for entity_dir in _iter_entity_dirs(batch_dir):
-        rel = entity_dir.relative_to(batch_dir)
+    for entity_dir in _iter_entity_dirs(execution_dir):
+        rel = entity_dir.relative_to(execution_dir)
         parts = rel.parts
         if len(parts) == 4 and parts[0] == "entities" and parts[3] == _FOCUS_ENTITY_NAME:
             return {"domain": parts[1], "type": parts[2], "name": parts[3]}
     if targets:
         return targets[0]
-    entities = _iter_entity_dirs(batch_dir)
+    entities = _iter_entity_dirs(execution_dir)
     if not entities:
         return None
-    rel = entities[0].relative_to(batch_dir)
+    rel = entities[0].relative_to(execution_dir)
     parts = rel.parts
     if len(parts) != 4:
         return None
     return {"domain": parts[1], "type": parts[2], "name": parts[3]}
 
 
-def _iter_post_dirs(task_id: str, batch_id: str) -> list[Path]:
+def _iter_post_dirs(execution_id: str) -> list[Path]:
     found: dict[str, Path] = {}
-    for ref in iter_content_refs(task_id, batch_id):
+    for ref in iter_content_refs(execution_id):
         try:
-            obj = content_object_dir(task_id, batch_id, ref)
+            obj = content_object_dir(execution_id, ref)
         except Exception:
             continue
         found[str(obj)] = obj
     return sorted(found.values())
 
 
-def _pick_focus_article(task_id: str, batch_id: str, focus: Mapping[str, str] | None) -> Path | None:
+def _pick_focus_article(execution_id: str, focus: Mapping[str, str] | None) -> Path | None:
     focus_ref = ""
     if focus:
         focus_ref = _normalize_entity_ref(f"{focus['domain']}/{focus['type']}/{focus['name']}")
     fallback: Path | None = None
-    for post_dir in _iter_post_dirs(task_id, batch_id):
+    for post_dir in _iter_post_dirs(execution_id):
         if not (post_dir / "article.md").is_file():
             continue
         manifest = _read_json_if_file(post_dir / "manifest.json") or {}
@@ -146,17 +146,17 @@ def _bool_map(required: list[str], existing: set[str]) -> dict[str, bool]:
     return {name: name in existing for name in required}
 
 
-def _entity_sample(batch_dir: Path, task_id: str, batch_id: str, focus: Mapping[str, str] | None) -> dict[str, Any]:
+def _entity_sample(execution_dir: Path, execution_id: str, focus: Mapping[str, str] | None) -> dict[str, Any]:
     if not focus:
         return {"exists": False}
-    entity_dir = batch_entity_object_dir(task_id, batch_id, focus["domain"], focus["type"], focus["name"])
+    entity_dir = execution_entity_object_dir(execution_id, focus["domain"], focus["type"], focus["name"])
     if not entity_dir.is_dir():
         return {
             "exists": False,
             "name": focus["name"],
             "domain": focus["domain"],
             "type": focus["type"],
-            "path": _batch_rel(batch_dir, entity_dir),
+            "path": _execution_rel(execution_dir, entity_dir),
         }
     required = [
         "_entity.json",
@@ -195,7 +195,7 @@ def _entity_sample(batch_dir: Path, task_id: str, batch_id: str, focus: Mapping[
         "name": focus["name"],
         "domain": focus["domain"],
         "type": focus["type"],
-        "path": _batch_rel(batch_dir, entity_dir),
+        "path": _execution_rel(execution_dir, entity_dir),
         "requiredArtifacts": _bool_map(required, existing),
         "sourceUnitCount": len(source_units),
         "qualityRecommendation": quality.get("recommendation"),
@@ -203,15 +203,15 @@ def _entity_sample(batch_dir: Path, task_id: str, batch_id: str, focus: Mapping[
         "baseDraftSourceRef": ((quality.get("baseDraft") or {}) if isinstance(quality.get("baseDraft"), Mapping) else {}).get("sourceRef"),
         "sourcePathsCount": len(quality.get("sourcePaths") or []),
         "reviewDecision": review.get("decision"),
-        "sourceReadinessPassed": bool((((review.get("checks") or {}).get("sourceReadiness") or {}).get("passed"))),
+        "sourceQualificationPassed": bool((((review.get("checks") or {}).get("sourceQualification") or {}).get("passed"))),
         "provenanceOriginalSources": len(provenance.get("originalSources") or []),
         "finalizationDraftRef": finalization.get("draftArticleRef"),
         "finalizationFinalRef": finalization.get("finalArticleRef"),
     }
 
 
-def _post_sample(batch_dir: Path, task_id: str, batch_id: str, focus: Mapping[str, str] | None) -> dict[str, Any]:
-    post_dir = _pick_focus_article(task_id, batch_id, focus)
+def _post_sample(execution_dir: Path, execution_id: str, focus: Mapping[str, str] | None) -> dict[str, Any]:
+    post_dir = _pick_focus_article(execution_id, focus)
     if post_dir is None:
         return {"exists": False}
     required = [
@@ -251,7 +251,7 @@ def _post_sample(batch_dir: Path, task_id: str, batch_id: str, focus: Mapping[st
     entity_refs = [_normalize_entity_ref(str(ref)) for ref in (manifest.get("entityRefs") or [])]
     return {
         "exists": True,
-        "path": _batch_rel(batch_dir, post_dir),
+        "path": _execution_rel(execution_dir, post_dir),
         "requiredArtifacts": _bool_map(required, existing),
         "contentType": manifest.get("contentType"),
         "publishTitle": manifest.get("publishTitle"),
@@ -282,7 +282,7 @@ def _post_sample(batch_dir: Path, task_id: str, batch_id: str, focus: Mapping[st
 
 
 def _manual_checklist(
-    batch_dir: Path,
+    execution_dir: Path,
     focus: Mapping[str, str] | None,
     article: Mapping[str, Any],
     entity: Mapping[str, Any],
@@ -305,7 +305,7 @@ def _manual_checklist(
                         str(article.get("baseSourceRef") or ""),
                     ],
                     "whatToCheck": "核对文章对象是否自持底稿/引证来源镜像，并且都能回查到实体来源单元。",
-                    "passCondition": "baseSourceRef、citedSourceRefs、sources[*].sourceRef 全部非空、为 batch 相对路径、且指向 sources/{sourceUnitId}/source.md。",
+                    "passCondition": "baseSourceRef、citedSourceRefs、sources[*].sourceRef 全部非空、为 execution 相对路径、且指向 sources/{sourceUnitId}/source.md。",
                 },
                 {
                     "id": "article-light-edit",
@@ -357,7 +357,7 @@ def _manual_checklist(
                         f"{entity_path}/5.review/finalization_report.json",
                     ],
                     "whatToCheck": "确认实体主页从 draft 到 final 的 review/provenance/finalization 三件套完整，且 review 已正式采纳。",
-                    "passCondition": "review.decision=approved；review.checks.sourceReadiness.passed=true；provenance.originalSources 非空；finalization_report 指向 4.draft/page.md -> page.md。",
+                    "passCondition": "review.decision=approved；review.checks.sourceQualification.passed=true；provenance.originalSources 非空；finalization_report 指向 4.draft/page.md -> page.md。",
                 },
                 {
                     "id": "entity-light-edit-semantics",
@@ -379,26 +379,24 @@ def _manual_checklist(
 
 def _summary_markdown(summary: Mapping[str, Any]) -> str:
     script_gate = summary.get("scriptGate") or {}
-    batch_stats = summary.get("batchStats") or {}
+    execution_stats = summary.get("executionStats") or {}
     focus = summary.get("focusEntity") or {}
     article = (summary.get("samples") or {}).get("article") or {}
     entity = (summary.get("samples") or {}).get("entity") or {}
     manual = summary.get("manualChecklist") or {}
     lines = [
-        "# 批次审计摘要",
+        "# Execution 审计摘要",
         "",
-        f"- taskId: `{summary.get('taskId')}`",
-        f"- batchId: `{summary.get('batchId')}`",
+        f"- executionId: `{summary.get('executionId')}`",
         f"- 生成时间: `{summary.get('generatedAt')}`",
         f"- 脚本门结果: `{script_gate.get('status')}`（issues={script_gate.get('issueCount', 0)}）",
-        f"- 内容对象: `{batch_stats.get('postObjectCount', 0)}`（article={batch_stats.get('articleCount', 0)}, gallery={batch_stats.get('galleryCount', 0)}）",
-        f"- 实体对象: `{batch_stats.get('entityObjectCount', 0)}`",
+        f"- 内容对象: `{execution_stats.get('postObjectCount', 0)}`（article={execution_stats.get('articleCount', 0)}, gallery={execution_stats.get('galleryCount', 0)}）",
+        f"- 实体对象: `{execution_stats.get('entityObjectCount', 0)}`",
         f"- 10% 人工抽检基线: 至少 `{manual.get('minimumHumanSampleCount', 1)}` 篇内容；本清单固定锚定 `{focus.get('name') or _FOCUS_ENTITY_NAME}` 文章对象与实体对象。",
         "",
         "## 复核入口",
         "",
-        f"- `python3 quwoquan_data/scripts/cli.py verify --task {summary.get('taskId')} --batch {summary.get('batchId')}`",
-        f"- `python3 quwoquan_data/scripts/cli.py annotate --task {summary.get('taskId')} --batch {summary.get('batchId')} --list`",
+        f"- `python3 quwoquan_data/scripts/cli.py verify execution-readiness --execution-id {summary.get('executionId')}`",
         "",
         "## 脚本门摘要",
         "",
@@ -437,19 +435,19 @@ def _summary_markdown(summary: Mapping[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def write_batch_audit_summary(task_id: str, batch_id: str, *, roots: list[Path], issues: list[str]) -> tuple[Path, Path] | None:
-    batch_dir = batch_root(task_id, batch_id)
-    if not batch_dir.is_dir():
+def write_execution_audit_summary(execution_id: str, *, roots: list[Path], issues: list[str]) -> tuple[Path, Path] | None:
+    execution_dir = execution_root(execution_id)
+    if not execution_dir.is_dir():
         return None
-    focus = _pick_focus_entity(task_id, batch_dir)
-    entity_dirs = _iter_entity_dirs(batch_dir)
-    post_dirs = _iter_post_dirs(task_id, batch_id)
+    focus = _pick_focus_entity(execution_id, execution_dir)
+    entity_dirs = _iter_entity_dirs(execution_dir)
+    post_dirs = _iter_post_dirs(execution_id)
     article_count = sum(1 for post_dir in post_dirs if (post_dir / "article.md").is_file())
     gallery_count = sum(1 for post_dir in post_dirs if (post_dir / "gallery.md").is_file())
-    article = _post_sample(batch_dir, task_id, batch_id, focus)
-    entity = _entity_sample(batch_dir, task_id, batch_id, focus)
+    article = _post_sample(execution_dir, execution_id, focus)
+    entity = _entity_sample(execution_dir, execution_id, focus)
     manual = _manual_checklist(
-        batch_dir,
+        execution_dir,
         focus,
         article,
         entity,
@@ -457,16 +455,15 @@ def write_batch_audit_summary(task_id: str, batch_id: str, *, roots: list[Path],
     )
     summary = {
         "schemaVersion": AUDIT_SUMMARY_SCHEMA,
-        "taskId": task_id,
-        "batchId": batch_id,
+        "executionId": execution_id,
         "generatedAt": now_iso(),
         "scriptGate": {
             "status": "passed" if not issues else "failed",
             "issueCount": len(issues),
             "issuesPreview": list(issues[:20]),
-            "postRoots": [_batch_rel(batch_dir, root) for root in roots],
+            "postRoots": [_execution_rel(execution_dir, root) for root in roots],
         },
-        "batchStats": {
+        "executionStats": {
             "entityObjectCount": len(entity_dirs),
             "postObjectCount": len(post_dirs),
             "articleCount": article_count,
@@ -479,8 +476,8 @@ def write_batch_audit_summary(task_id: str, batch_id: str, *, roots: list[Path],
         },
         "manualChecklist": manual,
     }
-    json_path = batch_audit_summary_path(task_id, batch_id)
-    md_path = batch_audit_markdown_path(task_id, batch_id)
+    json_path = execution_audit_summary_path(execution_id)
+    md_path = execution_audit_markdown_path(execution_id)
     json_path.parent.mkdir(parents=True, exist_ok=True)
     write_json(json_path, summary)
     md_path.write_text(_summary_markdown(summary), encoding="utf-8")
@@ -489,5 +486,5 @@ def write_batch_audit_summary(task_id: str, batch_id: str, *, roots: list[Path],
 
 __all__ = [
     "AUDIT_SUMMARY_SCHEMA",
-    "write_batch_audit_summary",
+    "write_execution_audit_summary",
 ]

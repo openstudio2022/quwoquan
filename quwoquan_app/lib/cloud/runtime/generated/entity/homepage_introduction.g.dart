@@ -3,6 +3,7 @@
 
 import 'homepage_introduction_section.g.dart';
 import 'homepage_related_group_summary.g.dart';
+import 'homepage_source.g.dart';
 
 class HomepageIntroduction {
   final String homepageId;
@@ -12,7 +13,8 @@ class HomepageIntroduction {
   final String summary;
   final List<HomepageIntroductionSection> sections;
   final List<HomepageRelatedGroupSummary> relatedObjects;
-  final List<String> sourceRefs;
+  final HomepageSource? primarySource;
+  final List<String> sourceUrls;
   final String updatedAt;
 
   HomepageIntroduction({
@@ -23,7 +25,8 @@ class HomepageIntroduction {
     this.summary = '',
     this.sections = const <HomepageIntroductionSection>[],
     this.relatedObjects = const <HomepageRelatedGroupSummary>[],
-    this.sourceRefs = const <String>[],
+    this.primarySource,
+    this.sourceUrls = const <String>[],
     this.updatedAt = '',
   });
 
@@ -36,7 +39,8 @@ class HomepageIntroduction {
       summary: m['summary']?.toString() ?? m['subtitle']?.toString() ?? '',
       sections: _parseProjectionDtoList(m['sections'], HomepageIntroductionSection.fromMap),
       relatedObjects: _parseProjectionDtoList(m['relatedObjects'], HomepageRelatedGroupSummary.fromMap),
-      sourceRefs: _parseStringList(m['sourceRefs']) ?? <String>[],
+      primarySource: m['primarySource'] == null ? null : HomepageSource.fromMap(_parseStringKeyMap(m['primarySource'])!),
+      sourceUrls: _parseStringList(m['sourceUrls']) ?? <String>[],
       updatedAt: m['updatedAt']?.toString() ?? '',
     );
   }
@@ -50,7 +54,8 @@ class HomepageIntroduction {
       'summary': summary,
       'sections': sections,
       'relatedObjects': relatedObjects,
-      'sourceRefs': sourceRefs,
+      'primarySource': primarySource,
+      'sourceUrls': sourceUrls,
       'updatedAt': updatedAt,
     };
   }
@@ -63,7 +68,8 @@ class HomepageIntroduction {
     String? summary,
     List<HomepageIntroductionSection>? sections,
     List<HomepageRelatedGroupSummary>? relatedObjects,
-    List<String>? sourceRefs,
+    HomepageSource? primarySource,
+    List<String>? sourceUrls,
     String? updatedAt,
   }) {
     return HomepageIntroduction(
@@ -74,7 +80,8 @@ class HomepageIntroduction {
       summary: summary ?? this.summary,
       sections: sections ?? this.sections,
       relatedObjects: relatedObjects ?? this.relatedObjects,
-      sourceRefs: sourceRefs ?? this.sourceRefs,
+      primarySource: primarySource ?? this.primarySource,
+      sourceUrls: sourceUrls ?? this.sourceUrls,
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
@@ -102,3 +109,14 @@ List<T> _parseProjectionDtoList<T>(
   return out;
 }
 
+
+Map<String, dynamic>? _parseStringKeyMap(dynamic v) {
+  if (v == null) return null;
+  if (v is Map<String, dynamic>) return v;
+  if (v is Map) {
+    return Map<String, dynamic>.from(
+      v.map((k, val) => MapEntry(k.toString(), val)),
+    );
+  }
+  return null;
+}

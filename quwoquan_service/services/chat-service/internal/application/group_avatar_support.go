@@ -13,9 +13,8 @@ import (
 
 	runtimegovernance "quwoquan_service/runtime/governance"
 	runtimemedia "quwoquan_service/runtime/media"
-	event "quwoquan_service/services/chat-service/internal/domain/conversation/event"
+	event "quwoquan_service/services/chat-service/internal/domain/chat/event"
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
-	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
 const groupAvatarLayoutVersion = "v1"
@@ -141,7 +140,7 @@ func RegisterGroupAvatarAsset(
 
 func RecomputeGroupAvatar(
 	ctx context.Context,
-	repo persistence.ChatRepository,
+	storage ChatStoragePorts,
 	publisher EventPublisher,
 	media GroupAvatarAssetizer,
 	syncPublisher UserSyncPublisher,
@@ -152,7 +151,7 @@ func RecomputeGroupAvatar(
 	if !runtimegovernance.FeatureEnabled("chat.group_avatar_precompose_enabled", true) {
 		return nil
 	}
-	conv, err := repo.FindConversationByID(ctx, conversationID)
+	conv, err := storage.Conversations.FindConversationByID(ctx, conversationID)
 	if err != nil {
 		return err
 	}
@@ -170,13 +169,13 @@ func RecomputeGroupAvatar(
 	if memberLimit > 200 {
 		memberLimit = 200
 	}
-	members, err := repo.ListMembers(
+	members, err := storage.Members.ListMembers(
 		ctx,
 		conversationID,
-		memberLimit,
-		"",
-		"",
-		persistence.SortMembersJoinedAsc,
+		ListMembersQuery{
+			Limit: memberLimit,
+			Sort:  MemberListSortJoinedAsc,
+		},
 	)
 	if err != nil {
 		return err
@@ -190,7 +189,7 @@ func RecomputeGroupAvatar(
 	if sourceHash == strings.TrimSpace(conv.GroupAvatarSourceHash) &&
 		conv.GroupAvatarVersion > 0 &&
 		strings.TrimSpace(conv.GroupAvatarAssetId) != "" {
-		return ensureConversationAvatarNotification(ctx, repo, publisher, syncPublisher, scheduler, conv, actorID)
+		return ensureConversationAvatarNotification(ctx, storage, publisher, syncPublisher, scheduler, conv, actorID)
 	}
 	if media == nil {
 		return nil
@@ -199,7 +198,7 @@ func RecomputeGroupAvatar(
 	if err != nil {
 		return err
 	}
-	latestHash, err := latestGroupAvatarSourceHash(ctx, repo, conv.ID, conv.MemberCount)
+	latestHash, err := latestGroupAvatarSourceHash(ctx, storage.Members, conv.ID, conv.MemberCount)
 	if err != nil {
 		return err
 	}
@@ -229,13 +228,13 @@ func RecomputeGroupAvatar(
 		"groupAvatarSourceHash": conv.GroupAvatarSourceHash,
 		"updatedAt":             conv.UpdatedAt,
 	}
-	recipients, recipientUserIDs, err := resolveConversationAvatarRecipients(ctx, repo, conv)
+	recipients, recipientUserIDs, err := resolveConversationAvatarRecipients(ctx, storage.Members, conv)
 	if err != nil {
 		return err
 	}
 
-	if err := repo.RunInTransaction(ctx, func(txCtx context.Context) error {
-		if err := repo.UpdateConversation(txCtx, conv.ID, conv); err != nil {
+	if err := storage.Transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := storage.Conversations.UpdateConversation(txCtx, conv.ID, conv); err != nil {
 			return err
 		}
 		if !avatarPatchEnabled || scheduler == nil || len(recipientUserIDs) == 0 {
@@ -263,7 +262,7 @@ func RecomputeGroupAvatar(
 		return nil
 	}
 	if publisher == nil {
-		publisher = NoopEventPublisher()
+		return fmt.Errorf("group avatar notification requires EventPublisher")
 	}
 	if err := publisher.PublishDomainEvent(ctx, event.ConversationAvatarUpdated, conv.ID, actorID, payload); err != nil {
 		return err
@@ -287,7 +286,7 @@ func RecomputeGroupAvatar(
 
 func latestGroupAvatarSourceHash(
 	ctx context.Context,
-	repo persistence.ChatRepository,
+	membersStore MemberStore,
 	conversationID string,
 	memberCount int,
 ) (string, error) {
@@ -298,13 +297,13 @@ func latestGroupAvatarSourceHash(
 	if memberLimit > 200 {
 		memberLimit = 200
 	}
-	members, err := repo.ListMembers(
+	members, err := membersStore.ListMembers(
 		ctx,
 		conversationID,
-		memberLimit,
-		"",
-		"",
-		persistence.SortMembersJoinedAsc,
+		ListMembersQuery{
+			Limit: memberLimit,
+			Sort:  MemberListSortJoinedAsc,
+		},
 	)
 	if err != nil {
 		return "", err
@@ -318,7 +317,7 @@ func latestGroupAvatarSourceHash(
 
 func ensureConversationAvatarNotification(
 	ctx context.Context,
-	repo persistence.ChatRepository,
+	storage ChatStoragePorts,
 	publisher EventPublisher,
 	syncPublisher UserSyncPublisher,
 	scheduler GroupAvatarTaskScheduler,
@@ -336,12 +335,12 @@ func ensureConversationAvatarNotification(
 		"groupAvatarSourceHash": conv.GroupAvatarSourceHash,
 		"updatedAt":             conv.UpdatedAt,
 	}
-	recipients, recipientUserIDs, err := resolveConversationAvatarRecipients(ctx, repo, conv)
+	recipients, recipientUserIDs, err := resolveConversationAvatarRecipients(ctx, storage.Members, conv)
 	if err != nil {
 		return err
 	}
 	if scheduler != nil && len(recipientUserIDs) > 0 {
-		if err := repo.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := storage.Transactions.RunInTransaction(ctx, func(txCtx context.Context) error {
 			return scheduler.EnqueueConversationAvatarPatch(txCtx, ConversationAvatarPatchTask{
 				ConversationID:   conv.ID,
 				ActorID:          actorID,
@@ -354,7 +353,7 @@ func ensureConversationAvatarNotification(
 		}
 	}
 	if publisher == nil {
-		publisher = NoopEventPublisher()
+		return fmt.Errorf("conversation avatar notification requires EventPublisher")
 	}
 	if err := publisher.PublishDomainEvent(ctx, event.ConversationAvatarUpdated, conv.ID, actorID, payload); err != nil {
 		return err
@@ -375,23 +374,23 @@ func ensureConversationAvatarNotification(
 
 func resolveConversationAvatarRecipients(
 	ctx context.Context,
-	repo persistence.ChatRepository,
+	membersStore MemberStore,
 	conv *model.Conversation,
 ) ([]model.ConversationMember, []string, error) {
 	memberLimit := conv.MemberCount
 	if memberLimit <= 0 {
-		memberLimit, _ = repo.CountMembers(ctx, conv.ID)
+		memberLimit, _ = membersStore.CountMembers(ctx, conv.ID)
 	}
 	if memberLimit <= 0 {
 		memberLimit = 200
 	}
-	recipients, err := repo.ListMembers(
+	recipients, err := membersStore.ListMembers(
 		ctx,
 		conv.ID,
-		memberLimit,
-		"",
-		"",
-		persistence.SortMembersJoinedAsc,
+		ListMembersQuery{
+			Limit: memberLimit,
+			Sort:  MemberListSortJoinedAsc,
+		},
 	)
 	if err != nil {
 		return nil, nil, err

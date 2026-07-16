@@ -1,14 +1,11 @@
-import 'dart:developer' as developer;
-
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
+import 'package:quwoquan_app/application/content/media/content_media_upload_coordinator.dart';
+import 'package:quwoquan_app/core/platform/content_addressed_upload_headers.dart';
 import 'package:quwoquan_app/core/platform/file_storage_gateway.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/models/publish_settings_models.dart';
 import 'package:quwoquan_app/ui/content/article_render/markdown/qwq_markdown.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 int paragraphCountForPayload(String text) {
   return text
@@ -297,7 +294,6 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
       final coverUrl = thumbnailUrl.isNotEmpty ? thumbnailUrl : coverAssetPath;
       final coverStrategy = _videoCoverStrategyForPayload(state);
       return <String, Object?>{
-        'type': 'video',
         'contentType': 'video',
         'title': state.title.trim(),
         'body': state.body.trim(),
@@ -337,7 +333,6 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
       };
     }
     return <String, Object?>{
-      'type': 'image',
       'contentType': 'image',
       'title': state.title.trim(),
       'body': state.body.trim(),
@@ -350,7 +345,6 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
   final asArticle = shouldPublishAsArticleForPayload(state);
   if (asArticle) {
     return <String, Object?>{
-      'type': 'article',
       'contentType': 'article',
       'title': state.title.trim(),
       'summary': summary,
@@ -363,7 +357,6 @@ Map<String, Object?> buildCreatePostPayloadMap(CreateEditorState state) {
     };
   }
   return <String, Object?>{
-    'type': 'micro',
     'contentType': 'micro',
     'title': state.title.trim(),
     'body': state.body.trim(),
@@ -379,6 +372,7 @@ typedef CreateMediaObjectUploader =
       Uri uploadUri,
       List<int> bytes, {
       required String contentType,
+      required String expectedSha256,
     });
 
 class PreparedCreatePostPayload {
@@ -392,7 +386,7 @@ class PreparedCreatePostPayload {
 }
 
 Future<PreparedCreatePostPayload> buildCreatePostPayloadWithRemoteImageMedia({
-  required ContentRepository repository,
+  required ContentMediaFacet media,
   required FileStorageGateway fileStorageGateway,
   required CreateEditorState state,
   CreateMediaObjectUploader? uploadObject,
@@ -408,7 +402,7 @@ Future<PreparedCreatePostPayload> buildCreatePostPayloadWithRemoteImageMedia({
   }
   if (state.hasVideo) {
     return _buildCreatePostPayloadWithRemoteVideoMedia(
-      repository: repository,
+      media: media,
       fileStorageGateway: fileStorageGateway,
       state: state,
       basePayload: basePayload,
@@ -427,10 +421,10 @@ Future<PreparedCreatePostPayload> buildCreatePostPayloadWithRemoteImageMedia({
   final assetIds = <String>[];
   for (final path in state.imagePaths) {
     final resolved = await _resolveMediaReference(
-      repository: repository,
+      media: media,
       fileStorageGateway: fileStorageGateway,
       localOrRemotePath: path,
-      mediaType: 'image',
+      mediaType: ContentMediaType.image,
       uploadObject: uploader,
     );
     remoteUrls.add(resolved.url);
@@ -447,23 +441,23 @@ Future<PreparedCreatePostPayload> buildCreatePostPayloadWithRemoteImageMedia({
 }
 
 Future<PreparedCreatePostPayload> _buildCreatePostPayloadWithRemoteVideoMedia({
-  required ContentRepository repository,
+  required ContentMediaFacet media,
   required FileStorageGateway fileStorageGateway,
   required CreateEditorState state,
   required Map<String, Object?> basePayload,
   required CreateMediaObjectUploader uploadObject,
 }) async {
   final video = await _resolveMediaReference(
-    repository: repository,
+    media: media,
     fileStorageGateway: fileStorageGateway,
     localOrRemotePath: state.videoPath,
-    mediaType: 'video',
+    mediaType: ContentMediaType.video,
     uploadObject: uploadObject,
   );
   final assetIds = <String>[if (video.assetId.isNotEmpty) video.assetId];
 
   final cover = await _resolveRemoteVideoCover(
-    repository: repository,
+    media: media,
     fileStorageGateway: fileStorageGateway,
     videoAssetId: video.assetId,
     localOrRemoteCoverPath: state.videoThumbnail,
@@ -534,10 +528,10 @@ class _ResolvedVideoCoverReference {
 }
 
 Future<_ResolvedMediaReference> _resolveMediaReference({
-  required ContentRepository repository,
+  required ContentMediaFacet media,
   required FileStorageGateway fileStorageGateway,
   required String localOrRemotePath,
-  required String mediaType,
+  required ContentMediaType mediaType,
   required CreateMediaObjectUploader uploadObject,
 }) async {
   final path = localOrRemotePath.trim();
@@ -552,43 +546,19 @@ Future<_ResolvedMediaReference> _resolveMediaReference({
           : '',
     );
   }
-  final init = await repository.initMediaUpload(mediaType: mediaType);
-  final sessionId = init.sessionId.trim();
-  if (sessionId.isEmpty) {
-    throw StateError('media upload session is missing');
-  }
-  try {
-    final uploadUrl = (init.presignUrl ?? init.uploadUrl ?? '').trim();
-    if (uploadUrl.isNotEmpty) {
-      final bytes = await fileStorageGateway.readAsBytes(path);
-      await uploadObject(
-        Uri.parse(uploadUrl),
-        bytes,
-        contentType: _contentTypeForMediaPath(path, mediaType),
-      );
-    }
-    final completed = await repository.completeMediaUpload(
-      sessionId: sessionId,
-    );
-    final assetId = (completed.assetId ?? init.mediaId ?? '').trim();
-    final cdnUrl = (completed.cdnUrl ?? '').trim();
-    final url = cdnUrl.isNotEmpty
-        ? cdnUrl
-        : assetId.isNotEmpty
-        ? 'media://$assetId'
-        : '';
-    if (url.isEmpty) {
-      throw StateError('completed media upload is missing remote url');
-    }
-    return _ResolvedMediaReference(url: url, assetId: assetId);
-  } catch (_) {
-    await repository.abortMediaUpload(sessionId: sessionId);
-    rethrow;
-  }
+  final uploaded = await ContentMediaUploadCoordinator(
+    media: media,
+    fileStorage: fileStorageGateway,
+    uploadObject: uploadObject,
+  ).uploadLocalPath(localPath: path, mediaType: mediaType);
+  return _ResolvedMediaReference(
+    url: uploaded.cdnUrl?.toString() ?? 'media://${uploaded.assetId}',
+    assetId: uploaded.assetId,
+  );
 }
 
 Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
-  required ContentRepository repository,
+  required ContentMediaFacet media,
   required FileStorageGateway fileStorageGateway,
   required String videoAssetId,
   required String localOrRemoteCoverPath,
@@ -599,26 +569,27 @@ Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
   final coverPath = localOrRemoteCoverPath.trim();
   if (coverPath.isNotEmpty) {
     final cover = await _resolveMediaReference(
-      repository: repository,
+      media: media,
       fileStorageGateway: fileStorageGateway,
       localOrRemotePath: coverPath,
-      mediaType: 'image',
+      mediaType: ContentMediaType.image,
       uploadObject: uploadObject,
     );
     var thumbnailUrl = cover.url;
     var coverUrl = cover.url;
     var resolvedStrategy = coverStrategy == 'manual' ? 'manual' : 'first_frame';
     if (videoAssetId.isNotEmpty && cover.assetId.isNotEmpty) {
-      final selected = await repository.selectManualVideoCover(
-        mediaId: videoAssetId,
-        coverAssetId: cover.assetId,
-        coverFrameTimeMs: coverFrameTimeMs,
+      final selected = await media.selectManualCover(
+        SelectManualContentMediaCoverCommand(
+          mediaId: videoAssetId,
+          coverAssetId: cover.assetId,
+        ),
       );
-      thumbnailUrl = selected.thumbnailUrl.trim().isNotEmpty
-          ? selected.thumbnailUrl.trim()
+      thumbnailUrl = selected.thumbnailUrl.toString().trim().isNotEmpty
+          ? selected.thumbnailUrl.toString().trim()
           : thumbnailUrl;
-      coverUrl = selected.coverUrl.trim().isNotEmpty
-          ? selected.coverUrl.trim()
+      coverUrl = selected.coverUrl.toString().trim().isNotEmpty
+          ? selected.coverUrl.toString().trim()
           : coverUrl;
       resolvedStrategy = selected.coverStrategy.trim().isNotEmpty
           ? selected.coverStrategy.trim()
@@ -635,10 +606,19 @@ Future<_ResolvedVideoCoverReference> _resolveRemoteVideoCover({
   if (videoAssetId.isEmpty) {
     throw StateError('video cover is missing');
   }
-  final selected = await repository.selectAutoVideoCover(mediaId: videoAssetId);
-  final thumbnailUrl = selected.thumbnailUrl.trim();
-  final coverUrl = selected.coverUrl.trim().isNotEmpty
-      ? selected.coverUrl.trim()
+  final selected = coverStrategy == 'manual'
+      ? await media.selectManualCover(
+          SelectManualContentMediaCoverCommand(
+            mediaId: videoAssetId,
+            coverFrameTimeMs: coverFrameTimeMs,
+          ),
+        )
+      : await media.selectAutoCover(
+          SelectAutoContentMediaCoverCommand(mediaId: videoAssetId),
+        );
+  final thumbnailUrl = selected.thumbnailUrl.toString().trim();
+  final coverUrl = selected.coverUrl.toString().trim().isNotEmpty
+      ? selected.coverUrl.toString().trim()
       : thumbnailUrl;
   if (thumbnailUrl.isEmpty && coverUrl.isEmpty) {
     throw StateError('video cover selection is missing remote url');
@@ -660,41 +640,6 @@ bool _isRemoteMediaReference(String value) {
       lower.startsWith('asset://');
 }
 
-String _contentTypeForMediaPath(String path, String mediaType) {
-  if (mediaType == 'video') {
-    return _videoContentTypeForPath(path);
-  }
-  return _imageContentTypeForPath(path);
-}
-
-String _imageContentTypeForPath(String path) {
-  final lower = path.toLowerCase();
-  if (lower.endsWith('.png')) {
-    return 'image/png';
-  }
-  if (lower.endsWith('.gif')) {
-    return 'image/gif';
-  }
-  if (lower.endsWith('.webp')) {
-    return 'image/webp';
-  }
-  return 'image/jpeg';
-}
-
-String _videoContentTypeForPath(String path) {
-  final lower = path.toLowerCase();
-  if (lower.endsWith('.mov')) {
-    return 'video/quicktime';
-  }
-  if (lower.endsWith('.m4v')) {
-    return 'video/x-m4v';
-  }
-  if (lower.endsWith('.webm')) {
-    return 'video/webm';
-  }
-  return 'video/mp4';
-}
-
 String _videoCoverStrategyForPayload(CreateEditorState state) {
   final strategy = state.videoCoverStrategy.trim();
   if (strategy == 'manual') {
@@ -707,12 +652,17 @@ Future<void> _defaultUploadMediaObject(
   Uri uploadUri,
   List<int> bytes, {
   required String contentType,
+  required String expectedSha256,
 }) async {
   final client = http.Client();
   try {
+    final uploadHeaders = ContentAddressedUploadHeaders(
+      contentType: contentType,
+      expectedSha256: expectedSha256,
+    );
     final response = await client.put(
       uploadUri,
-      headers: <String, String>{'Content-Type': contentType},
+      headers: uploadHeaders.toHttpHeaders(),
       body: bytes,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -720,39 +670,6 @@ Future<void> _defaultUploadMediaObject(
     }
   } finally {
     client.close();
-  }
-}
-
-Future<void> reportCreateEditorSurfaceEvent(
-  WidgetRef ref,
-  String event, [
-  Map<String, Object?> extras = const {},
-  String surfaceId = 'create_editor',
-]) async {
-  try {
-    final row = <String, Object?>{
-      'event': event,
-      'surface': surfaceId,
-      'timestamp': DateTime.now().toIso8601String(),
-      ...extras,
-    };
-    await ref
-        .read(contentRepositoryProvider)
-        .reportBehaviors(
-          events: <ContentBehaviorBatchEventDto>[
-            ContentBehaviorBatchEventDto.fromMap(
-              Map<String, dynamic>.from(row),
-            ),
-          ],
-        );
-  } catch (e, st) {
-    // 创作埋点上报为非关键路径：失败仅降级为日志，不阻断创作流程（R17）。
-    developer.log(
-      'reportCreateEditorSurfaceEvent failed: event=$event',
-      name: 'CreateEditor',
-      error: e,
-      stackTrace: st,
-    );
   }
 }
 
@@ -768,33 +685,67 @@ List<CreateDraft> decodeCreateDraftsList(Object? decoded) {
       .toList(growable: false);
 }
 
-Future<Map<String, Object?>> attachActivePersonaToCreatePayload(
-  WidgetRef ref,
-  Map<String, Object?> payload,
-) async {
-  final activeContext = await ref.read(activePersonaContextProvider.future);
-  if (ref.read(contentRepositoryProvider).requiresResolvedPersonaForMutations &&
-      activeContext.isFallback) {
-    throw StateError('active persona context unavailable');
-  }
-  return <String, Object?>{
-    ...payload,
-    ...activeContext.toTypedEnvelope(sourceSurfaceId: 'create_editor'),
-    if (activeContext.displayName.isNotEmpty)
-      'authorDisplayNameSnapshot': activeContext.displayName,
-    if (activeContext.avatarUrl.isNotEmpty)
-      'authorAvatarUrlSnapshot': activeContext.avatarUrl,
-  };
-}
-
-Future<PostBaseDto> repositoryCreatePost(
-  ContentRepository repository,
-  Map<String, Object?> payload,
-) async {
-  return repository.createPost(
-    body: CreatePostRequestWire.fromMap(Map<String, dynamic>.from(payload)),
-  );
-}
+CreateContentPostCommand createContentPostCommandFromPreparedPayload(
+  Map<String, Object?> payload, {
+  String? authorDisplayNameSnapshot,
+  String? authorAvatarUrlSnapshot,
+  int? personaContextVersion,
+}) => CreateContentPostCommand(
+  contentType: _requiredPostType(payload['contentType']),
+  contentIdentity: _optionalPostIdentity(payload['contentIdentity']),
+  title: _optionalPayloadText(payload['title']),
+  body: _optionalPayloadText(payload['body']),
+  summary: _optionalPayloadText(payload['summary']),
+  semanticMentions: _structuredObjectList(
+    payload['semanticMentions'],
+    'semanticMentions',
+  ),
+  mediaUrls: _stringList(payload['mediaUrls'], 'mediaUrls'),
+  mediaItems: _structuredObjectList(payload['mediaItems'], 'mediaItems'),
+  coverUrl: _optionalPayloadText(payload['coverUrl']),
+  thumbnailUrl: _optionalPayloadText(payload['thumbnailUrl']),
+  articleMarkdown: _optionalPayloadText(payload['articleMarkdown']),
+  articleMarkdownVersion: _optionalPayloadText(
+    payload['articleMarkdownVersion'],
+  ),
+  articleAssetManifest: _optionalStructuredObject(
+    payload['articleAssetManifest'],
+    'articleAssetManifest',
+  ),
+  articleRenderProfile: _optionalStructuredObject(
+    payload['articleRenderProfile'],
+    'articleRenderProfile',
+  ),
+  videoUrl: _optionalPayloadText(payload['videoUrl']),
+  coverStrategy: _optionalPayloadText(payload['coverStrategy']),
+  coverFrameTimeMs: _optionalPayloadInt(
+    payload['coverFrameTimeMs'],
+    'coverFrameTimeMs',
+  ),
+  illustrationAssetId: _optionalPayloadText(payload['illustrationAssetId']),
+  location: _optionalStructuredObject(payload['location'], 'location'),
+  locationName: _optionalPayloadText(payload['locationName']),
+  primaryHomepageId: _optionalPayloadText(payload['primaryHomepageId']),
+  primaryHomepageType: _optionalPayloadText(payload['primaryHomepageType']),
+  primaryHomepageSnapshot: _optionalStructuredObject(
+    payload['primaryHomepageSnapshot'],
+    'primaryHomepageSnapshot',
+  ),
+  visibility: _optionalPostVisibility(payload['visibility']),
+  assistantUsePolicy: _optionalAssistantUsePolicy(
+    payload['assistantUsePolicy'],
+  ),
+  sourcePostId: _optionalPayloadText(payload['sourcePostId']),
+  sourceType: _optionalPostSourceType(payload['sourceType']),
+  deviceInfo: _optionalStructuredObject(payload['deviceInfo'], 'deviceInfo'),
+  publishLocation: _optionalStructuredObject(
+    payload['publishLocation'],
+    'publishLocation',
+  ),
+  authorDisplayNameSnapshot: _optionalPayloadText(authorDisplayNameSnapshot),
+  authorAvatarUrlSnapshot: _optionalPayloadText(authorAvatarUrlSnapshot),
+  personaContextVersion: personaContextVersion,
+);
 
 // ─── 创作页埋点 extras（避免在 UI 散写 Map 字面量）────────────────────────────
 
@@ -830,13 +781,153 @@ Map<String, Object?> createEditorSurfaceExtrasPublishSuccess(
   Map<String, Object?> payload,
 ) => <String, Object?>{'contentType': payload['contentType']};
 
-Future<void> repositoryPublishPostWithSettings(
-  ContentRepository repository, {
+PublishContentPostCommand publishContentPostCommandFromSettings({
   required String postId,
   required PublishSettings settings,
-}) async {
-  await repository.publishPost(
-    postId: postId,
-    body: PublishPostRequestWire.fromMap(settings.toPayloadFields()),
-  );
+}) => PublishContentPostCommand(
+  postId: postId,
+  primaryHomepageId: settings.homepage?.id,
+  primaryHomepageType: settings.homepage?.homepageType,
+  primaryHomepageSnapshot: settings.homepage == null
+      ? null
+      : _optionalStructuredObject(
+          settings.homepage!.toPayloadFields()['primaryHomepageSnapshot'],
+          'primaryHomepageSnapshot',
+        ),
+  visibility: settings.isPublic
+      ? ContentPostVisibility.public
+      : ContentPostVisibility.private,
+  assistantUsePolicy: _optionalAssistantUsePolicy(settings.assistantUsePolicy),
+);
+
+ContentPostType _requiredPostType(Object? raw) => switch ('$raw'.trim()) {
+  'image' => ContentPostType.image,
+  'video' => ContentPostType.video,
+  'micro' => ContentPostType.micro,
+  'article' => ContentPostType.article,
+  final value => throw ArgumentError.value(value, 'contentType', 'unsupported'),
+};
+
+ContentPostIdentity? _optionalPostIdentity(Object? raw) =>
+    switch (_optionalPayloadText(raw)) {
+      null => null,
+      'moment' => ContentPostIdentity.moment,
+      'work' => ContentPostIdentity.work,
+      final value => throw ArgumentError.value(
+        value,
+        'contentIdentity',
+        'unsupported',
+      ),
+    };
+
+ContentPostVisibility? _optionalPostVisibility(Object? raw) =>
+    switch (_optionalPayloadText(raw)) {
+      null => null,
+      'public' => ContentPostVisibility.public,
+      'private' => ContentPostVisibility.private,
+      final value => throw ArgumentError.value(
+        value,
+        'visibility',
+        'unsupported',
+      ),
+    };
+
+ContentPostAssistantUsePolicy? _optionalAssistantUsePolicy(Object? raw) =>
+    switch (_optionalPayloadText(raw)) {
+      null => null,
+      'inherit' => ContentPostAssistantUsePolicy.inherit,
+      'exclude' => ContentPostAssistantUsePolicy.exclude,
+      final value => throw ArgumentError.value(
+        value,
+        'assistantUsePolicy',
+        'unsupported',
+      ),
+    };
+
+ContentPostSourceType? _optionalPostSourceType(Object? raw) =>
+    switch (_optionalPayloadText(raw)) {
+      null => null,
+      'original' => ContentPostSourceType.original,
+      'repost' => ContentPostSourceType.repost,
+      'quote' => ContentPostSourceType.quote,
+      final value => throw ArgumentError.value(
+        value,
+        'sourceType',
+        'unsupported',
+      ),
+    };
+
+String? _optionalPayloadText(Object? raw) {
+  final value = raw?.toString().trim() ?? '';
+  return value.isEmpty ? null : value;
+}
+
+int? _optionalPayloadInt(Object? raw, String field) {
+  if (raw == null) return null;
+  if (raw is int) return raw;
+  final parsed = int.tryParse('$raw');
+  if (parsed == null) {
+    throw ArgumentError.value(raw, field, 'must be an integer');
+  }
+  return parsed;
+}
+
+List<String> _stringList(Object? raw, String field) {
+  if (raw == null) return const <String>[];
+  if (raw is! List) throw ArgumentError.value(raw, field, 'must be a list');
+  return raw
+      .map((value) {
+        final text = _optionalPayloadText(value);
+        if (text == null) {
+          throw ArgumentError.value(value, field, 'items must not be empty');
+        }
+        return text;
+      })
+      .toList(growable: false);
+}
+
+List<ContentPostStructuredObject> _structuredObjectList(
+  Object? raw,
+  String field,
+) {
+  if (raw == null) return const <ContentPostStructuredObject>[];
+  if (raw is! List) throw ArgumentError.value(raw, field, 'must be a list');
+  return raw
+      .map((value) => _requiredStructuredObject(value, field))
+      .toList(growable: false);
+}
+
+ContentPostStructuredObject? _optionalStructuredObject(
+  Object? raw,
+  String field,
+) => raw == null ? null : _requiredStructuredObject(raw, field);
+
+ContentPostStructuredObject _requiredStructuredObject(
+  Object? raw,
+  String field,
+) {
+  final value = _structuredValue(raw, field);
+  if (value is! ContentPostStructuredObject) {
+    throw ArgumentError.value(raw, field, 'must be an object');
+  }
+  return value;
+}
+
+ContentPostStructuredValue _structuredValue(Object? raw, String field) {
+  if (raw == null) return const ContentPostStructuredNull();
+  if (raw is String) return ContentPostStructuredText(raw);
+  if (raw is num) return ContentPostStructuredNumber(raw);
+  if (raw is bool) return ContentPostStructuredBoolean(raw);
+  if (raw is List) {
+    return ContentPostStructuredArray(
+      raw.map((value) => _structuredValue(value, field)),
+    );
+  }
+  if (raw is Map) {
+    return ContentPostStructuredObject(<String, ContentPostStructuredValue>{
+      for (final entry in raw.entries)
+        entry.key.toString(): _structuredValue(entry.value, field),
+    });
+  }
+  throw ArgumentError.value(raw, field, 'unsupported structured value');
 }

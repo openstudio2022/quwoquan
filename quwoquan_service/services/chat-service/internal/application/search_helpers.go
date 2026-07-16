@@ -5,15 +5,15 @@ import (
 	"sort"
 	"strings"
 
-	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
-	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
+	messagemodel "quwoquan_service/services/chat-service/internal/domain/chat/message/model"
+	conversationmodel "quwoquan_service/services/chat-service/internal/domain/conversation/model"
 )
 
 const searchFetchBatchSize = 200
 
 type MessageSearchHit struct {
-	Conversation model.Conversation
-	Message      model.Message
+	Conversation conversationmodel.Conversation
+	Message      messagemodel.Message
 }
 
 type ContactSearchHit struct {
@@ -35,14 +35,15 @@ type ContactSearchHit struct {
 
 func listUserConversations(
 	ctx context.Context,
-	repo persistence.ChatRepository,
+	conversationStore ConversationStore,
+	userStates UserStateStore,
 	userID string,
-) ([]model.Conversation, error) {
-	states, err := repo.ListUserStates(ctx, userID, searchFetchBatchSize, "")
+) ([]conversationmodel.Conversation, error) {
+	states, err := userStates.ListUserStates(ctx, userID, searchFetchBatchSize, "")
 	if err != nil {
 		return nil, err
 	}
-	conversations := make([]model.Conversation, 0, len(states))
+	conversations := make([]conversationmodel.Conversation, 0, len(states))
 	seen := make(map[string]struct{}, len(states))
 	for _, state := range states {
 		conversationID := strings.TrimSpace(state.ConversationId)
@@ -52,7 +53,7 @@ func listUserConversations(
 		if _, ok := seen[conversationID]; ok {
 			continue
 		}
-		conversation, err := repo.FindConversationByID(ctx, conversationID)
+		conversation, err := conversationStore.FindConversationByID(ctx, conversationID)
 		if err != nil || conversation == nil {
 			continue
 		}

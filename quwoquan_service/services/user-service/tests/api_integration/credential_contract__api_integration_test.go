@@ -6,57 +6,25 @@ import (
 	"testing"
 
 	"quwoquan_service/services/user-service/internal/application"
-	"quwoquan_service/services/user-service/internal/infrastructure/cache"
-	"quwoquan_service/services/user-service/internal/infrastructure/integration"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
 )
 
 // T3 CredentialBinding 全场景契约测试
 
-func TestLogin_CreatesOwnerAccountOnFirstUse(t *testing.T) {
-	t.Cleanup(func() { cleanAll(t) })
-
-	// 登录路由已按凭证类型拆分（phone 走 OTP，社交方走 authCode 置换）；凭证直登
-	// （credentialType+credentialKey 一步创建/复用绑定）现由 typed credential 端点
-	// /v1/auth/login/apple 承载（appleIdToken 即稳定凭证 key）。
-	rec := doRequest(t, http.MethodPost, "/v1/auth/login/apple",
-		`{"appleIdToken":"apple_subject_new","displayLabel":"13900000001"}`,
-		nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("login: expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	result := parseJSON(t, rec)
-	ownerID, _ := result["ownerId"].(string)
-	if ownerID == "" {
-		t.Fatal("expected ownerId in login response")
-	}
-	token, _ := result["accessToken"].(string)
-	if token == "" {
-		t.Fatal("expected accessToken in login response")
-	}
-
-	// DB 验证：owner_account 和 credential_binding 均已创建
-	var profileCount int
-	_ = pgPool.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM user_profiles WHERE user_id = $1`, ownerID).Scan(&profileCount)
-	if profileCount != 1 {
-		t.Errorf("expected user_profile to be created, got count=%d", profileCount)
-	}
-
-	var credCount int
-	_ = pgPool.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM credential_bindings WHERE owner_id = $1 AND credential_type = 'apple'`,
-		ownerID).Scan(&credCount)
-	if credCount != 1 {
-		t.Errorf("expected credential_binding to be created, got count=%d", credCount)
-	}
-
-	// DB 验证：同时创建了默认子账号
-	var personaCount int
-	_ = pgPool.QueryRow(context.Background(),
-		`SELECT COUNT(*) FROM personas WHERE user_id = $1`, ownerID).Scan(&personaCount)
-	if personaCount != 1 {
-		t.Errorf("expected default persona to be created, got count=%d", personaCount)
+func TestUnsupportedFutureLoginMethodsAreNotPublic(t *testing.T) {
+	for _, route := range []string{
+		"/v1/auth/login/apple",
+		"/v1/auth/login/passkey",
+	} {
+		rec := doRequest(t, http.MethodPost, route, `{"credential":"must-not-be-accepted"}`, nil)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf(
+				"%s is out of scope and must not be publicly routable: got %d: %s",
+				route,
+				rec.Code,
+				rec.Body.String(),
+			)
+		}
 	}
 }
 
@@ -67,7 +35,6 @@ func TestLoginWithSocialProvider_FirstSyncSeedsAvatarVersion(t *testing.T) {
 	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
 	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
-	profileCache := cache.NewProfileCache(redisClient)
 	shardDirectory, err := application.LoadDefaultShardDirectory()
 	if err != nil {
 		t.Fatalf("load shard directory: %v", err)
@@ -77,9 +44,8 @@ func TestLoginWithSocialProvider_FirstSyncSeedsAvatarVersion(t *testing.T) {
 		personaStore,
 		credentialStore,
 		anonymousDeviceBindingStore,
-		profileCache,
 		shardDirectory,
-		application.WithExternalAuthProviderClient(integration.NewMockExternalAuthProviderClient()),
+		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
 		application.WithAccessTokenSigner(testAccessSigner),
 	)
 
@@ -133,20 +99,47 @@ func TestLoginWithSocialProvider_FirstSyncSeedsAvatarVersion(t *testing.T) {
 
 func TestLogin_ExistingCredentialReturnsOwner(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
-	createTestProfile(t, "existing_owner", "existing_user")
-	createTestCredential(t, "cred_existing", "existing_owner", "apple", "apple_subject_existing")
-
-	// 已存在凭证再次登录：typed credential 端点按 (type,key) 命中既有绑定并返回原 owner，
-	// 不重复建号。
-	rec := doRequest(t, http.MethodPost, "/v1/auth/login/apple",
-		`{"appleIdToken":"apple_subject_existing"}`, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("login: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	shardDirectory, err := application.LoadDefaultShardDirectory()
+	if err != nil {
+		t.Fatalf("load shard directory: %v", err)
 	}
-	result := parseJSON(t, rec)
-	ownerID, _ := result["ownerId"].(string)
-	if ownerID != "existing_owner" {
-		t.Errorf("expected ownerId=existing_owner, got %s", ownerID)
+	authService := application.NewAuthService(
+		persistence.NewPgProfileStore(pgPool),
+		persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB),
+		persistence.NewPgCredentialBindingStore(pgPool),
+		persistence.NewPgAnonymousDeviceBindingStore(pgPool),
+		shardDirectory,
+		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
+		application.WithAccessTokenSigner(testAccessSigner),
+	)
+	firstLogin, err := authService.LoginWithSocialProvider(
+		context.Background(),
+		"wechat",
+		"sandbox-wechat-existing",
+		"device-existing",
+		"ios",
+		"1.0.0",
+	)
+	if err != nil {
+		t.Fatalf("first WeChat credential login failed: %v", err)
+	}
+	secondLogin, err := authService.LoginWithSocialProvider(
+		context.Background(),
+		"wechat",
+		"sandbox-wechat-existing",
+		"device-existing",
+		"ios",
+		"1.0.0",
+	)
+	if err != nil {
+		t.Fatalf("second WeChat credential login failed: %v", err)
+	}
+	if secondLogin.OwnerID != firstLogin.OwnerID {
+		t.Errorf(
+			"expected existing credential ownerId=%s, got %s",
+			firstLogin.OwnerID,
+			secondLogin.OwnerID,
+		)
 	}
 }
 

@@ -213,19 +213,6 @@ class RemoteTagRepository implements TagRepository {
   }
 
   @override
-  Future<bool> feedback(String tagRef, String action, {String? context}) async {
-    final body = <String, dynamic>{'tagRef': tagRef, 'action': action};
-    if (context != null) body['context'] = context;
-    final obj = await _postObject<CloudJsonMap>(
-      TagApiMetadata.tagFeedbackPath,
-      TagRequestPageIds.tagFeedback,
-      body,
-      (m) => m,
-    );
-    return obj['accepted'] == true;
-  }
-
-  @override
   Future<List<TagCooccurrence>> cooccurrence({
     String? tagRef,
     int minCount = TagApiDefaults.minCooccurCount,

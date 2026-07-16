@@ -91,7 +91,6 @@ class ShareTemplateProfileConfig {
   final String coverStrategy;
   final bool includeAuthor;
   final bool includeTimeContext;
-  final bool includeCircleContext;
   final bool includeTags;
 
   const ShareTemplateProfileConfig({
@@ -102,7 +101,6 @@ class ShareTemplateProfileConfig {
     required this.coverStrategy,
     required this.includeAuthor,
     required this.includeTimeContext,
-    required this.includeCircleContext,
     required this.includeTags,
   });
 }
@@ -231,8 +229,8 @@ class ContentUIConfig {
   ];
 
   static const List<ShareTemplateProfileConfig> shareTemplateProfiles = <ShareTemplateProfileConfig>[
-    ShareTemplateProfileConfig(id: "moment", titleKey: "share_template_moment_title", subtitleKey: "share_template_moment_subtitle", layout: "moment_card", coverStrategy: "first_media_or_gradient", includeAuthor: true, includeTimeContext: true, includeCircleContext: true, includeTags: false),
-    ShareTemplateProfileConfig(id: "work", titleKey: "share_template_work_title", subtitleKey: "share_template_work_subtitle", layout: "work_card", coverStrategy: "cover_or_first_media", includeAuthor: true, includeTimeContext: false, includeCircleContext: false, includeTags: true),
+    ShareTemplateProfileConfig(id: "moment", titleKey: "share_template_moment_title", subtitleKey: "share_template_moment_subtitle", layout: "moment_card", coverStrategy: "first_media_or_gradient", includeAuthor: true, includeTimeContext: true, includeTags: false),
+    ShareTemplateProfileConfig(id: "work", titleKey: "share_template_work_title", subtitleKey: "share_template_work_subtitle", layout: "work_card", coverStrategy: "cover_or_first_media", includeAuthor: true, includeTimeContext: false, includeTags: true),
   ];
 
   static const List<ArticleDistributionProfileConfig> articleDistributionProfiles = <ArticleDistributionProfileConfig>[

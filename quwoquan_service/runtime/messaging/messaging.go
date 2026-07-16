@@ -1,13 +1,15 @@
 package runtimemessaging
 
 import (
+	"context"
+
 	robs "quwoquan_service/runtime/observability"
 )
 
 // MessageEnvelope is aligned with contracts/messages/envelope.schema.json.
 type MessageEnvelope struct {
-	Meta    MessageMeta      `json:"meta"`
-	Payload map[string]any   `json:"payload"`
+	Meta    MessageMeta    `json:"meta"`
+	Payload map[string]any `json:"payload"`
 }
 
 type MessageMeta struct {
@@ -25,6 +27,23 @@ type MessageProducer struct {
 	Service string `json:"service"`
 	Env     string `json:"env,omitempty"`
 	Version string `json:"version,omitempty"`
+}
+
+// EventPublisher 是跨域事件发布的公共机制接口；业务事件 payload 的强类型由
+// ContractGraph 为各对象生成，公共层不提供通用 CRUD Repository。
+type EventPublisher interface {
+	Publish(ctx context.Context, event DomainEvent) error
+}
+
+// DomainEvent 是旧通用 Repository 退役期间保留的事件信封。
+// 新事件必须由 metadata 生成 typed payload，并逐对象替换动态 Payload。
+type DomainEvent struct {
+	EventID       string         `json:"eventId,omitempty"`
+	Type          string         `json:"type"`
+	AggregateType string         `json:"aggregateType"`
+	AggregateID   string         `json:"aggregateId"`
+	Payload       map[string]any `json:"payload"`
+	OccurredAt    string         `json:"occurredAt"`
 }
 
 type MQMiddlewareConfig = robs.MQMiddlewareConfig

@@ -1,29 +1,21 @@
 package api_integration
 
 import (
-	"encoding/json"
 	"fmt"
+	"net/http"
 	"testing"
 )
 
 func TestSendAudioMessageWithMedia(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"audio test"}`)
+	conv := createConversation(t, `{"type":"direct","title":"audio test","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
 	payload := `{
 		"type": "audio",
 		"content": "",
-		"mediaUrl": "https://cdn.example.com/media/voice_001.m4a",
-		"media": {
-			"url": "https://cdn.example.com/media/voice_001.m4a",
-			"mimeType": "audio/mp4",
-			"fileSizeBytes": 48000,
-			"durationMs": 5200,
-			"waveform": [0.1, 0.3, 0.7, 0.5, 0.2],
-			"codec": "aac"
-		},
+		"mediaAssetId": "asset-audio-001",
 		"clientMsgId": "audio-uuid-1"
 	}`
 
@@ -43,21 +35,13 @@ func TestSendAudioMessageWithMedia(t *testing.T) {
 func TestSendAudioMessagePersistsMediaField(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"audio persist test"}`)
+	conv := createConversation(t, `{"type":"direct","title":"audio persist test","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
 	payload := `{
 		"type": "audio",
 		"content": "",
-		"mediaUrl": "https://cdn.example.com/media/voice_002.m4a",
-		"media": {
-			"url": "https://cdn.example.com/media/voice_002.m4a",
-			"mimeType": "audio/mp4",
-			"fileSizeBytes": 96000,
-			"durationMs": 10500,
-			"waveform": [0.2, 0.5, 0.8, 0.4, 0.1],
-			"codec": "aac"
-		},
+		"mediaAssetId": "asset-audio-002",
 		"clientMsgId": "audio-uuid-2"
 	}`
 
@@ -76,32 +60,30 @@ func TestSendAudioMessagePersistsMediaField(t *testing.T) {
 	if msg["type"] != "audio" {
 		t.Errorf("expected type=audio, got %v", msg["type"])
 	}
-	if msg["mediaUrl"] != "https://cdn.example.com/media/voice_002.m4a" {
-		t.Errorf("expected mediaUrl preserved, got %v", msg["mediaUrl"])
+	if msg["mediaAssetId"] != "asset-audio-002" {
+		t.Errorf("expected mediaAssetId preserved, got %v", msg["mediaAssetId"])
 	}
-
-	media, ok := msg["media"].(map[string]any)
-	if !ok {
-		t.Fatal("expected media field to be a map")
+	if msg["mediaDeliveryUrl"] != "https://media.test/asset-audio-002" {
+		t.Errorf("expected MediaAsset Reader delivery URL, got %v", msg["mediaDeliveryUrl"])
 	}
-	if media["mimeType"] != "audio/mp4" {
-		t.Errorf("expected media.mimeType=audio/mp4, got %v", media["mimeType"])
+	if msg["mediaType"] != "audio" || msg["mediaContentType"] != "audio/test" {
+		t.Errorf("expected typed media projection, got %#v", msg)
 	}
-	if durationMs, ok := media["durationMs"].(float64); !ok || int(durationMs) != 10500 {
-		t.Errorf("expected media.durationMs=10500, got %v", media["durationMs"])
+	if msg["mediaFileSizeBytes"] != float64(2048) {
+		t.Errorf("expected mediaFileSizeBytes=2048, got %v", msg["mediaFileSizeBytes"])
 	}
 }
 
 func TestSendAudioMessageUpdatesConversationPreview(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"preview test"}`)
+	conv := createConversation(t, `{"type":"direct","title":"preview test","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
 	payload := `{
 		"type": "audio",
 		"content": "",
-		"media": {"url": "https://cdn.example.com/voice.m4a", "durationMs": 3000},
+		"mediaAssetId": "asset-audio-preview",
 		"clientMsgId": "audio-uuid-3"
 	}`
 	sendMessage(t, convId, payload)
@@ -119,13 +101,13 @@ func TestSendAudioMessageUpdatesConversationPreview(t *testing.T) {
 func TestSendAudioMessageDedup(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"audio dedup test"}`)
+	conv := createConversation(t, `{"type":"direct","title":"audio dedup test","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
 	payload := `{
 		"type": "audio",
 		"content": "",
-		"media": {"url": "https://cdn.example.com/voice.m4a", "durationMs": 5000},
+		"mediaAssetId": "asset-audio-dedup",
 		"clientMsgId": "audio-dedup-1"
 	}`
 
@@ -140,7 +122,7 @@ func TestSendAudioMessageDedup(t *testing.T) {
 func TestSendAudioMessageSyncIncludesMedia(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"audio sync test"}`)
+	conv := createConversation(t, `{"type":"direct","title":"audio sync test","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
 	sendMessage(t, convId, `{"type":"text","content":"hello","clientMsgId":"sync-text-1"}`)
@@ -148,7 +130,7 @@ func TestSendAudioMessageSyncIncludesMedia(t *testing.T) {
 	payload := `{
 		"type": "audio",
 		"content": "",
-		"media": {"url": "https://cdn.example.com/voice.m4a", "durationMs": 7000, "codec": "aac"},
+		"mediaAssetId": "asset-audio-sync",
 		"clientMsgId": "sync-audio-1"
 	}`
 	sendMessage(t, convId, payload)
@@ -168,13 +150,9 @@ func TestSendAudioMessageSyncIncludesMedia(t *testing.T) {
 		msg := m.(map[string]any)
 		if msg["type"] == "audio" {
 			found = true
-			media, ok := msg["media"].(map[string]any)
-			if !ok {
-				t.Error("synced audio message missing media field")
-			} else {
-				if media["codec"] != "aac" {
-					t.Errorf("expected codec=aac, got %v", media["codec"])
-				}
+			if msg["mediaAssetId"] != "asset-audio-sync" ||
+				msg["mediaDeliveryUrl"] != "https://media.test/asset-audio-sync" {
+				t.Errorf("synced audio message MediaAsset projection drift: %#v", msg)
 			}
 		}
 	}
@@ -190,7 +168,7 @@ func TestSendAudioMessage_MixedTypes(t *testing.T) {
 	convId := conv["_id"].(string)
 
 	sendMessage(t, convId, `{"type":"text","content":"before audio","clientMsgId":"mix-1"}`)
-	sendMessage(t, convId, `{"type":"audio","content":"","media":{"url":"https://cdn.example.com/v.m4a","durationMs":3000},"clientMsgId":"mix-2"}`)
+	sendMessage(t, convId, `{"type":"audio","content":"","mediaAssetId":"asset-audio-mixed","clientMsgId":"mix-2"}`)
 	sendMessage(t, convId, `{"type":"text","content":"after audio","clientMsgId":"mix-3"}`)
 
 	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/messages?limit=10", "user_test_001")
@@ -214,28 +192,52 @@ func TestSendAudioMessage_MixedTypes(t *testing.T) {
 	}
 }
 
-func TestSendAudioMessage_MediaFieldBackwardCompatibility(t *testing.T) {
+func TestSendAudioMessageRejectsRemovedMediaURL(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"compat test"}`)
+	conv := createConversation(t, `{"type":"direct","title":"typed audio test","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
-	// Old-style: only mediaUrl, no media field
-	sendMessage(t, convId, `{"type":"audio","content":"","mediaUrl":"https://cdn.example.com/old.m4a","clientMsgId":"compat-1"}`)
-
-	code, result := doGet(t, "/v1/chat/conversations/"+convId+"/messages?limit=10", "user_test_001")
-	if code != 200 {
-		t.Fatalf("expected 200, got %d", code)
+	failure := doPost(
+		t,
+		"/v1/chat/conversations/"+convId+"/messages",
+		`{"type":"audio","content":"","mediaUrl":"https://cdn.example.com/old.m4a","clientMsgId":"removed-media-url"}`,
+		"user_test_001",
+		http.StatusBadRequest,
+	)
+	if failure["code"] != "CHAT.USER.message_invalid" {
+		t.Fatalf("removed mediaUrl must fail strict request decoding: %#v", failure)
 	}
-	items := result["items"].([]any)
-	msg := items[0].(map[string]any)
+}
 
-	if msg["mediaUrl"] != "https://cdn.example.com/old.m4a" {
-		t.Errorf("old-style mediaUrl should be preserved, got %v", msg["mediaUrl"])
+func TestSendAudioMessageRejectsMissingMediaAssetID(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	conv := createConversation(t, `{"type":"direct","title":"missing asset","initialMemberIds":["user_test_002"]}`)
+	convID := conv["_id"].(string)
+	failure := doPost(
+		t,
+		"/v1/chat/conversations/"+convID+"/messages",
+		`{"type":"audio","content":"","clientMsgId":"missing-media-asset"}`,
+		"user_test_001",
+		http.StatusBadRequest,
+	)
+	if failure["code"] != "CHAT.USER.message_media_invalid" {
+		t.Fatalf("missing mediaAssetId must fail with stable media error: %#v", failure)
 	}
+}
 
-	mediaBytes, _ := json.Marshal(msg["media"])
-	if string(mediaBytes) != "null" && string(mediaBytes) != "" {
-		t.Logf("media field present on old-style message (acceptable): %s", string(mediaBytes))
+func TestSendAudioMessageRejectsWrongMediaAssetType(t *testing.T) {
+	t.Cleanup(func() { cleanAll(t) })
+	conv := createConversation(t, `{"type":"direct","title":"wrong asset type","initialMemberIds":["user_test_002"]}`)
+	convID := conv["_id"].(string)
+	failure := doPost(
+		t,
+		"/v1/chat/conversations/"+convID+"/messages",
+		`{"type":"audio","content":"","mediaAssetId":"asset-image-not-voice","clientMsgId":"wrong-media-type"}`,
+		"user_test_001",
+		http.StatusBadRequest,
+	)
+	if failure["code"] != "CHAT.USER.message_media_invalid" {
+		t.Fatalf("wrong MediaAsset type must fail with stable media error: %#v", failure)
 	}
 }

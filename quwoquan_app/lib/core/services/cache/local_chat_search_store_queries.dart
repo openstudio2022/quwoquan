@@ -155,8 +155,8 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
         message.conversationAvatarUrl,
         fallbackConversationAvatar,
       ]);
-      final senderSubAccountId = _firstNonEmpty(<Object?>[
-        message.senderSubAccountId,
+      final senderPersonaId = _firstNonEmpty(<Object?>[
+        message.senderPersonaId,
       ]);
       final senderDisplayName = _firstNonEmpty(<Object?>[
         message.senderDisplayName,
@@ -176,7 +176,7 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
             conversationType: conversationType,
             conversationTitle: conversationTitle,
             conversationAvatarUrl: conversationAvatarUrl,
-            senderSubAccountId: senderSubAccountId,
+            senderPersonaId: senderPersonaId,
             senderDisplayName: senderDisplayName,
             senderAvatarUrl: senderAvatarUrl,
             messageType: messageType,
@@ -186,7 +186,7 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
             recalledAt: recalledAt,
             deleted: deleted,
           )
-          .toWireMap();
+          .toProjectionMap();
       final searchableText = _searchableText(<Object?>[
         contentPreview,
         senderDisplayName,
@@ -199,7 +199,7 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
         'conversation_type': conversationType,
         'conversation_title': conversationTitle,
         'conversation_avatar_url': conversationAvatarUrl,
-        'sender_sub_account_id': senderSubAccountId,
+        'sender_persona_id': senderPersonaId,
         'sender_display_name': senderDisplayName,
         'sender_avatar_url': senderAvatarUrl,
         'message_type': messageType,
@@ -314,7 +314,7 @@ extension LocalChatSearchStoreQueries on LocalChatSearchStore {
         conversation_type TEXT NOT NULL,
         conversation_title TEXT NOT NULL,
         conversation_avatar_url TEXT NOT NULL,
-        sender_sub_account_id TEXT NOT NULL,
+        sender_persona_id TEXT NOT NULL,
         sender_display_name TEXT NOT NULL,
         sender_avatar_url TEXT NOT NULL,
         message_type TEXT NOT NULL,

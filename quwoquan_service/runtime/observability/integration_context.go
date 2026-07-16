@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/operation"
+
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -25,6 +27,23 @@ type CorrelationMeta struct {
 	DevicePlatform string
 	AppVersion     string
 }
+
+const (
+	headerClientAccountID     = "X-Client-Account-Id"
+	headerClientPersonaID     = "X-Client-Persona-Id"
+	headerClientDeviceActorID = "X-Client-Device-Actor-Id"
+	headerClientOperationID   = "X-Client-Operation-Id"
+	headerClientPageID        = "X-Client-Page-Id"
+	headerClientSurfaceID     = "X-Client-Surface-Id"
+	headerClientRouteID       = "X-Client-Route-Id"
+	headerClientSessionID     = "X-Client-Session-Id"
+	headerReferralSource      = "X-Referral-Source"
+	headerFeedRequestID       = "X-Feed-Request-Id"
+	headerShareID             = "X-Share-Id"
+	headerModelID             = "X-Model-Id"
+	headerExperimentBucket    = "X-Experiment-Bucket"
+	headerIdempotencyKey      = "Idempotency-Key"
+)
 
 type EndpointMeta struct {
 	Origin            string
@@ -70,6 +89,59 @@ func buildCorrelationMetaFromHeaders(h http.Header) CorrelationMeta {
 		DevicePlatform: h.Get("X-Client-Device-Platform"),
 		AppVersion:     h.Get("X-Client-App-Version"),
 	}
+}
+
+func buildOperationContextFromHeaders(h http.Header, meta CorrelationMeta) operation.Context {
+	idempotencyKey := strings.TrimSpace(h.Get(headerIdempotencyKey))
+	if idempotencyKey == "" {
+		idempotencyKey = strings.TrimSpace(meta.RequestID)
+	}
+	return operation.Context{
+		OperationID:      strings.TrimSpace(h.Get(headerClientOperationID)),
+		RequestID:        strings.TrimSpace(meta.RequestID),
+		TraceID:          strings.TrimSpace(meta.TraceID),
+		IdempotencyKey:   idempotencyKey,
+		SessionID:        strings.TrimSpace(meta.SessionID),
+		ClientPageID:     strings.TrimSpace(h.Get(headerClientPageID)),
+		SurfaceID:        strings.TrimSpace(h.Get(headerClientSurfaceID)),
+		RouteID:          strings.TrimSpace(h.Get(headerClientRouteID)),
+		ReferralSource:   strings.TrimSpace(h.Get(headerReferralSource)),
+		FeedRequestID:    strings.TrimSpace(h.Get(headerFeedRequestID)),
+		ShareID:          strings.TrimSpace(h.Get(headerShareID)),
+		ModelID:          strings.TrimSpace(h.Get(headerModelID)),
+		ExperimentBucket: strings.TrimSpace(h.Get(headerExperimentBucket)),
+		Actor: operation.ActorContext{
+			AccountID:     strings.TrimSpace(h.Get(headerClientAccountID)),
+			PersonaID:     strings.TrimSpace(h.Get(headerClientPersonaID)),
+			DeviceActorID: strings.TrimSpace(h.Get(headerClientDeviceActorID)),
+		},
+	}
+}
+
+func applyOperationContextHeaders(h http.Header, current operation.Context) {
+	setHeaderIfAbsent(h, headerClientOperationID, current.OperationID)
+	setHeaderIfAbsent(h, "X-Request-Id", current.RequestID)
+	setHeaderIfAbsent(h, "X-Trace-Id", current.TraceID)
+	setHeaderIfAbsent(h, headerIdempotencyKey, current.IdempotencyKey)
+	setHeaderIfAbsent(h, headerClientSessionID, current.SessionID)
+	setHeaderIfAbsent(h, headerClientPageID, current.ClientPageID)
+	setHeaderIfAbsent(h, headerClientSurfaceID, current.SurfaceID)
+	setHeaderIfAbsent(h, headerClientRouteID, current.RouteID)
+	setHeaderIfAbsent(h, headerReferralSource, current.ReferralSource)
+	setHeaderIfAbsent(h, headerFeedRequestID, current.FeedRequestID)
+	setHeaderIfAbsent(h, headerShareID, current.ShareID)
+	setHeaderIfAbsent(h, headerModelID, current.ModelID)
+	setHeaderIfAbsent(h, headerExperimentBucket, current.ExperimentBucket)
+	setHeaderIfAbsent(h, headerClientAccountID, current.Actor.AccountID)
+	setHeaderIfAbsent(h, headerClientPersonaID, current.Actor.PersonaID)
+	setHeaderIfAbsent(h, headerClientDeviceActorID, current.Actor.DeviceActorID)
+}
+
+func setHeaderIfAbsent(h http.Header, name, value string) {
+	if strings.TrimSpace(value) == "" || strings.TrimSpace(h.Get(name)) != "" {
+		return
+	}
+	h.Set(name, value)
 }
 
 type contextKey string

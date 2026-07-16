@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -14,6 +15,8 @@ from quwoquan_ops.cli.lib.observability import (
     validate_log_payload,
     write_run_manifest,
 )
+from quwoquan_ops.cli.lib.local_run import resolve_local_run
+from quwoquan_ops.cli.lib.runtime_log_process import run_logged_process
 from quwoquan_ops.gate.verify_observability_envelope import envelope_issues
 from quwoquan_ops.gate.verify_observability_layout import layout_issues
 
@@ -112,3 +115,52 @@ def test_delimited_log_parser_keeps_message_commas_and_stack_lines() -> None:
 
     assert issues == []
     assert records[0]["msg"] == "message, with comma\nat frame one\nat frame two"
+
+
+def test_local_run_uses_immutable_id_and_persists_manifest(tmp_path: Path) -> None:
+    output_root = tmp_path / ".qwq_output"
+
+    started = resolve_local_run(
+        env="alpha",
+        target="alpha-local",
+        action="up",
+        root=output_root,
+    )
+    resumed = resolve_local_run(
+        env="alpha",
+        target="alpha-local",
+        action="status",
+        root=output_root,
+    )
+
+    assert started.run_id != "current"
+    assert resumed == started
+    manifest = json.loads(
+        (started.observability_root / "manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["runId"] == started.run_id
+    assert manifest["target"] == "alpha-local"
+
+
+def test_runtime_stdout_adapter_emits_valid_runtime_records(tmp_path: Path) -> None:
+    root = tmp_path / ".qwq_output"
+    run = root / "env" / "alpha" / "observability" / "run-1"
+    write_run_manifest(
+        run,
+        env_name="alpha",
+        run_id="run-1",
+        command="local up",
+        target="alpha-local",
+        report_dir=root / "env" / "alpha" / "runs" / "run-1",
+    )
+    log_path = run / "logs" / "service" / "api-edge" / "local" / "runtime.log"
+
+    result = run_logged_process(
+        [sys.executable, "-c", "print('ready, with comma')"],
+        log_path=log_path,
+        event="api-edge",
+    )
+
+    assert result == 0
+    assert layout_issues(root) == []
+    assert envelope_issues(root) == []

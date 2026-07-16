@@ -3,6 +3,9 @@ module quwoquan_service
 go 1.24.3
 
 require (
+	github.com/alibabacloud-go/darabonba-openapi/v2 v2.1.12
+	github.com/alibabacloud-go/dypnsapi-20170525/v3 v3.0.0
+	github.com/alibabacloud-go/tea-utils/v2 v2.0.7
 	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.16
@@ -14,7 +17,9 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/lib/pq v1.10.9
 	github.com/prometheus/client_golang v1.23.2
+	github.com/prometheus/client_model v0.6.2
 	github.com/redis/go-redis/v9 v9.18.0
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/mongodb v0.40.0
 	go.opentelemetry.io/otel v1.39.0
@@ -29,6 +34,10 @@ require (
 	dario.cat/mergo v1.0.2 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
+	github.com/alibabacloud-go/alibabacloud-gateway-spi v0.0.5 // indirect
+	github.com/alibabacloud-go/debug v1.0.1 // indirect
+	github.com/alibabacloud-go/tea v1.3.12 // indirect
+	github.com/aliyun/credentials-go v1.4.5 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.10 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.23 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.23 // indirect
@@ -40,6 +49,7 @@ require (
 	github.com/aws/smithy-go v1.25.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/clbanning/mxj/v2 v2.7.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
@@ -60,6 +70,7 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
@@ -70,6 +81,8 @@ require (
 	github.com/moby/sys/user v0.4.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/moby/term v0.5.0 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
+	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
@@ -77,12 +90,12 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
-	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/shirou/gopsutil/v4 v4.25.6 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
+	github.com/tjfoc/gmsm v1.4.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
@@ -101,6 +114,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260209200024-4cfbd4190f57 // indirect
 	google.golang.org/grpc v1.79.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
+	gopkg.in/ini.v1 v1.67.0 // indirect
 )
 
 require (

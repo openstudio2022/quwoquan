@@ -215,7 +215,9 @@ func cleanAllBench(b *testing.B) {
 	for _, name := range collections {
 		_, _ = mongoDB.Collection(name).DeleteMany(ctx, map[string]any{})
 	}
-	mr.FlushAll()
+	if err := integrationRedis.FlushDBs(ctx, 0, 1, 2, 3); err != nil {
+		b.Fatalf("flush chat benchmark Redis: %v", err)
+	}
 }
 
 func benchCreateConversation(b *testing.B, payload string) map[string]any {

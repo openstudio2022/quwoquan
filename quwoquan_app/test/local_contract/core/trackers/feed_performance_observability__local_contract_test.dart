@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/analytics/analytics.dart';
 import 'package:quwoquan_app/cloud/services/ops/ops_event_repository.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 import 'package:quwoquan_app/core/trackers/feed_performance_observability.dart';
 
 /// 任务 B · FeedPerformanceObservability 单元测试。

@@ -1,8 +1,8 @@
-# 旅行实体主页（homepage-only）任务基线 preset。
+# 旅行实体主页（homepage-only）内容基线 preset。
 # 家族契约：只产实体主页，article/image 配额为 0；research 单 homepage lane。
-schemaVersion: quwoquan.task.preset
+schemaVersion: quwoquan.content.preset
 presetId: content/travel/homepage/base
-title: 旅行实体主页任务基线
+title: 旅行实体主页内容基线
 defaults:
   content:
     angles:

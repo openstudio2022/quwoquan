@@ -1,408 +1,98 @@
-# L3 特性：comment-thread（商用级评论系统）
-
-> **版本**：V2 PRD — 2026-06-04
-> **归属**：discovery-content / publish-comment-reaction / comment-thread
-> **目标用户**：所有 App 用户（发帖者、评论者、浏览者）
-> **核心问题**：现有评论能力已有基础端云链路，但仍停留在统一底部 Sheet 和纯文本评论形态，无法覆盖平铺文章内联评论、沉浸式上压评论、回复分页、赞踩状态重入、图片评论与 @ 候选等完整社交互动闭环。
-
----
-
-## 一、功能定位
-
-端云一体化的商用级评论系统，支持所有内容类型（微趣/图片/视频/文章）的评论互动，覆盖评论发表、展示、回复、赞踩、删除、排序、分页、图片附件、@ 提及，以及个人主页评论管理。评论展示需同时适配非侵入式平铺浏览与沉浸式浏览，具备 10 万+ 评论/帖的性能与容量承载能力。
-
-### 与父/子节点关系
-
-| 节点 | 关系 | 说明 |
-|------|------|------|
-| publish-comment-reaction (L2) | 父节点 | 评论是内容互动的核心组成 |
-| reaction-state-counter (L3) | 兄弟节点 | 评论点赞复用反应计数基础设施 |
-| comment-reply-pagination-contract (L4) | 子节点 | 游标分页与回复关联契约 |
-| moderation-delete-audit-guard (L5) | 孙节点 | 删除权限与审核策略 |
-
----
-
-## 二、功能规格（F1~F20）
-
-### 2.1 核心交互
-
-| 编号 | 功能 | 规格 | 对标来源 |
-|------|------|------|----------|
-| F1 | 评论层级 | **2 级**：一级评论 + 回复（reply 展平在一级评论下方） | TikTok/小红书/微博/微信 共识 |
-| F2 | 评论入口 | 8 个入口全部打通（见 §2.2 入口矩阵） | — |
-| F3 | 双浏览模式 | 平铺文章评论为正文后的内联 section；沉浸式内容评论为内容上压分屏，保留上半屏内容上下文 | 小红书/抖音 |
-| F4 | 评论列表 | 游标分页，每页 20 条，滚动到底自动加载 | 全平台共识 |
-| F5 | 排序策略 | 默认（recommended）/ 最新（latest）/ 最多赞（most_liked），用户可切换 | 小红书/Instagram |
-| F6 | 回复折叠分页 | 默认展示 `reply_preview_count` 条回复（fallback=1）；**首次**展开最多 `reply_first_expand_page_size` 条（fallback=5），**后续**每次展开 `reply_expand_page_size` 条（fallback=10）；展示数超过预览数时提供"收起" | TikTok/小红书 |
-| F7 | 评论赞踩 | 单评论可赞/取消赞、踩/取消踩；赞踩互斥，赞数展示，状态随列表重入恢复 | 全平台共识 |
-| F8 | 评论删除 | 评论作者可删除自己的评论；帖主可删除帖下任意评论；软删除 + 审计 | 全平台共识 |
-| F9 | 回复与 @ | 回复时自动绑定被回复评论；输入支持 @小趣、联系人、关注对象，提及结构化入库 | 全平台共识 |
-| F10 | 长评论折叠 | 超过 3 行折叠，"展开全文"按钮 | TikTok/微博 |
-| F11 | 评论计数 | 帖外评论计数实时更新（乐观更新 + 最终一致） | 全平台共识 |
-| F12 | 空态 | "暂无评论，来抢沙发吧" + 引导输入 | 小红书 |
-| F13 | 作者标识 | 帖主评论带"作者"标签 | TikTok/小红书 |
-| F14 | 时间显示 | 相对时间（刚刚 / x分钟前 / x小时前 / x天前） | 全平台共识 |
-| F21 | 图片评论 | 评论可附带图片附件，复用媒体上传与审核链路 | 小红书 |
-| F22 | 评论输入面板 | 支持 emoji、图片、@，键盘态输入保留原内容上下文 | 小红书 |
-
-### 2.2 入口自检矩阵
-
-所有入口不得只验“能打开评论”，必须验同一套闭环：首屏加载、发起评论、发起回复、展开回复、评论赞踩互斥、关闭/返回后重入状态、评论计数最终一致。
-
-| 入口 | 代码入口 | 浏览形态 | 目标行为 | 自检项 |
-|------|----------|----------|----------|--------|
-| E1 发现页·微趣 Feed ActionRow | `home_multi_form_feed.dart` / `discovery_page.dart` | Feed 弹层 | 打开评论面板，保留 Feed 滚动位置 | 评论/回复/展开/赞踩/删除权限态；游客登录续接；关闭后 Feed 不跳位 |
-| E2 发现页·作品沉浸 EngagementBar | `works_immersive_viewer.dart` | 内容上压分屏 | 当前作品上压，评论区在下方，关闭后恢复沉浸浏览 | 图片/视频/文章内容上下文保留；评论/回复/展开/赞踩；计数同步 |
-| E3 发现页·微趣评论数文字 | `home_multi_form_feed.dart` / `media_post_card.dart` | Feed 弹层或详情锚点 | 与 E1 使用同一评论能力，不维护第二套入口逻辑 | 评论数、入口文案、打开目标一致；重复点击不产生多层弹窗 |
-| E4 图片沉浸查看器 | `immersive_image_viewer.dart` | 内容上压分屏 | 保留当前 post 与图片索引，上半区展示图片上下文 | 关闭后图片索引不丢；评论/回复/展开/赞踩；图片评论附件回显 |
-| E5 视频沉浸查看器 | `immersive_video_viewer.dart` | 内容上压分屏 | 保留当前 post 与视频上下文，上半区展示视频内容 | 关闭后视频页不丢；评论/回复/展开/赞踩；弱网提交保留草稿 |
-| E6 MediaPostCard 评论按钮 | `media_post_card.dart` | Feed 弹层或详情锚点 | 从卡片进入同一 CommentThread，不复制评论状态 | postId、commentCount、viewerReaction 与详情/沉浸一致 |
-| E7 平铺文章详情 BottomBar（未落地） | 待落地的平铺文章详情页 | 正文后内联 section | 未来落地时点击评论入口滚动到正文后内联评论区，不打开弹窗；**必须复用 `CommentDetailSurface`（同一 widget + mode），禁止再造第二套阉割评论壳** | 可滑回正文；内联首屏、排序、回复展开、赞踩、输入能力完整且与 CommentDetailSurface 一致 |
-| E8 文章翻页阅读 | `works_immersive_viewer.dart` + article reader host | 内容上压分屏 | 评论层只作为宿主 chrome，不进入 pageflip geometry/paint 链路 | pageflip 当前页保持；关闭恢复；评论/回复/展开/赞踩；不得改动 BACK 几何真相源 |
-| E9 个人主页评论 | `profile_comments_page.dart` | 评论列表跳转原内容 | “我的评论”/“收到的评论”可回原内容并定位评论 | 原内容 postId、commentId、reply target 正确；收到评论可继续回复 |
-
-### 2.3 扩展功能
-
-| 编号 | 功能 | 规格 |
-|------|------|------|
-| F15 | 先发后审 | 评论提交后立即可见；异步审核流水线处理 → 违规内容隐藏 + 通知评论者 |
-| F16 | Persona 身份 | 评论时可选择 persona 身份发表，展示 persona 头像/昵称；默认使用主身份 |
-| F17 | 我发出的评论 | 个人主页 Tab，按时间倒序，点击可跳回原帖评论区 |
-| F18 | 我收到的评论 | 个人主页 Tab，按时间倒序，含快捷回复入口 |
-| F19 | 评论字数限制 | 500 字上限，端云一致（云侧校验 + 端侧通过 App Config 同步） |
-| F20 | 评论通知 | 收到回复 / 帖子被评论时推送通知（协调 notification 域，V1 骨架接入） |
-| F23 | 评论置顶 | 内容作者可置顶/取消置顶一级评论（二级回复不可置顶）；置顶项排在列表最前，多条置顶按置顶时间倒序；`canPin` 仅内容作者且为一级评论时为 true，端侧据此渲染置顶图标与「置顶」徽标 |
-| F24 | IP 属地显示 | 创建评论时按受信客户端 IP（X-Forwarded-For 首段 > X-Real-IP > RemoteAddr）解析省级属地快照（`ipLocation`）落库，读取原样透传；无法解析时留空不臆造 |
-| F25 | 作者赞过标识 | 内容作者点赞过的评论展示「作者赞过」标识（`authorLiked` 由云侧按内容作者反应派生），增强社交信任信号 |
-
-### 2.4 视觉规格
-
-```
-┌──────────────────────────────────────────────┐
-│ ─────────── 拖拽条 ───────────                │  ← iOS DragHandle，下拉手势关闭
-│  评论 (1.2万)           最热 ▾ │ 最新        │  ← 标题 + 排序切换
-├──────────────────────────────────────────────┤
-│  ┌──┐  用户名              作者   3小时前     │  ← 36px 圆形头像 + 名字 + 标签 + 时间
-│  │头│  评论内容最多三行显示，超出部分折叠      │     AppTypography.body
-│  │像│  展开全文                              │
-│  └──┘  ❤ 128    💬 回复                     │  ← 评论点赞 + 回复按钮
-│        ┌──┐  回复人A：回复内容               │  ← 缩进回复（2级，左缩进 48px）
-│        └──┘  ❤ 12                           │     AppTypography.caption
-│        ┌──┐  回复人B 回复 @A：...            │
-│        └──┘  ❤ 3                            │
-│        ── 展开 12 条回复 ──                   │  ← 折叠/展开
-│                                              │
-│  ┌──┐  用户名2             5小时前            │  ← 下一条一级评论
-│  │头│  评论内容...                            │
-│  └──┘  ❤ 56    💬 回复                       │
-│        ...                                   │
-│  ──── 滚动加载更多 ────                       │
-├──────────────────────────────────────────────┤
-│  [头像] [  说点什么...            ] [😀] [发送] │  ← 输入栏
-│         回复 @xxx                  ✕          │  ← 回复指示（条件显示）
-└──────────────────────────────────────────────┘
-```
-
-**视觉 Token 约束**（遵从 `02-dart-coding`）：
-
-| 元素 | Token | 值 |
-|------|-------|-----|
-| 头像尺寸 | `AppSpacing.xxxl` | 36px |
-| 用户名字体 | `AppTypography.bodyBold` | — |
-| 评论正文字体 | `AppTypography.body` | — |
-| 时间/附属信息 | `AppTypography.caption` | — |
-| 文本主色 | `AppColors.textPrimary` | — |
-| 时间/附属色 | `AppColors.textSecondary` | — |
-| 点赞激活色 | `AppColors.danger` | — |
-| 评论间距 | `AppSpacing.md` | — |
-| 回复缩进 | `AppSpacing.xl` × 2 | 48px |
-| 弹窗圆角 | `AppSpacing.lg` | — |
-
-**禁止硬编码视觉字面量**：所有 width/height/fontSize/EdgeInsets 必须使用设计系统 Token。
-
----
-
-## 三、适用范围与约束
-
-### 3.1 适用场景
-
-- 所有内容类型（微趣/图片/视频/文章）的帖下评论
-- 单帖评论数从 0 到 10 万+的全量级覆盖
-- 用户在弱网/断网环境下的评论体验降级
-- 多 persona 身份切换的社交互动
-
-### 3.1.1 对象级缓存规格
-
-- 评论缓存必须遵守 `runtime-client-foundation/local-cache-architecture`，对象策略以 [`object-cache-policy.yaml`](../../../runtime/runtime-client-foundation/local-cache-architecture/object-cache-policy.yaml) 中 `Comment` 为准。
-- 评论分页缓存 key 使用 `postId + sort + cursor`，值只保存评论 id 列表、cursor 与分页元数据；评论正文、作者快照与点赞状态进入 `Comment` 对象缓存。
-- 评论作者头像只保存 resource ref 与版本，字节由资源缓存层管理。
-- 本地新发评论、删除评论、评论点赞必须进入 overlay/outbox；普通缓存清理不得删除待发送评论。
-- 评论页缓存默认短于 post 详情缓存；清理离线内容时可删除已确认的 comment page，保留 pending local comment。
-- post 评论计数以 post 对象为主，本地新增/删除评论通过 overlay 叠加显示，云端确认后合并。
-
-### 3.2 前置条件
-
-- Post 实体及其 commentCount 字段已存在
-- Comment 实体 metadata（fields.yaml / storage.yaml / events.yaml / service.yaml）已完备
-- ContentRepository 三层模式已建立
-- 推送通知基础设施（notification 域）已有骨架
-
-### 3.3 不适用 / 超出范围
-
-| 项目 | 说明 |
-|------|------|
-| 评论搜索 | 全文检索能力不在 V1 范围，V2+ 可接入 ES |
-| 视频评论附件 | V2 评论附件已支持 emoji + 图片（见 F21/F22、GWT7、GWT10）；评论内视频附件仍超出范围 |
-| ~~评论置顶~~ | **已交付**：内容作者可置顶/取消置顶一级评论，置顶项排在列表最前（见 F23、GWT12、§6.2 权限） |
-| ~~IP 属地显示~~ | **已交付**：创建评论时按受信客户端 IP 解析省级属地快照落库并展示（见 F24、GWT13、§6.3） |
-| 评论翻译 | V2+ |
-| 敏感词实时拦截 | V1 采用先发后审，不做前置拦截；V2 可增加前置检测 |
-| 评论区关闭 | 帖主关闭评论区功能，V2 引入 |
-
----
-
-## 四、业界对标
-
-### 4.1 对标对象
-
-TikTok/抖音、小红书、网易云音乐、微博、微信视频号。
-
-### 4.2 借鉴总结
-
-| 对标点 | 结论 | 理由 |
-|--------|------|------|
-| 2 级层级 | ✅ 借鉴 | 业界共识，控制复杂度 |
-| 底部半屏弹窗 + 下拉手势 | ✅ 借鉴 | iOS 语义契合，TikTok/小红书统一范式 |
-| 热评优先排序 | ✅ 借鉴 | 提升内容发现效率 |
-| 回复折叠分页（预览 1 条、每次展开 10 条） | ✅ 借鉴 | 信息密度与性能平衡；具体数值云端可配置 |
-| 评论赞踩 | ✅ 借鉴 | 排序、反作弊和用户反馈基础 |
-| 长评论折叠 | ✅ 借鉴 | 必要的密度控制 |
-| 作者标识 | ✅ 借鉴 | 社交信任信号 |
-| 先发后审 | ✅ 借鉴 | 用户体验优先，业界主流 |
-| 图片评论 | ✅ 借鉴 | 本次进入 V2，必须复用媒体上传与审核 |
-| IP 属地 | ✅ 借鉴（已交付） | 受信代理头解析省级属地快照，无法解析留空 |
-| 评论置顶 | ✅ 借鉴（已交付） | 内容作者置顶一级评论，置顶优先排序 |
-| 作者赞过 | ✅ 借鉴（已交付） | 内容作者反应派生，社交信任信号 |
-| AI 辅助回复 | ❌ 不借鉴 | 适合 B 端，C 端场景不同 |
-
-### 4.3 当前差距与收敛路径
-
-| 差距 | 收敛路径 | 时间窗口 |
-|------|----------|---------|
-| 评论完全不可用 | V1 端云闭环 | 本次交付 |
-| 无嵌套回复 | V1 2 级层级 | 本次交付 |
-| 排序不足 | V2 默认/最新/最多赞三排序 | 本次交付 |
-| 无评论赞踩 | V2 赞踩互斥 + viewer state | 本次交付 |
-| 无个人主页评论 | V1 我的/收到的评论 | 本次交付 |
-| 无表情/图片/@ | V2 输入面板 | 本次交付 |
-| 无评论置顶 | 内容作者置顶一级评论 + 置顶优先排序 | 本次交付 |
-| 无 IP 属地 | 受信代理头解析省级属地快照 | 本次交付 |
-| 无作者赞过标识 | 内容作者反应派生 authorLiked | 本次交付 |
-
----
-
-## 五、非功能规格（NFR）
-
-### 5.1 性能目标
-
-| 指标 | V1 目标 | 对标参考 |
-|------|---------|---------|
-| 评论列表首屏加载 | < 800ms（P95） | 小红书 < 1s |
-| 评论提交响应 | < 500ms（P95） | TikTok/小红书 < 500ms |
-| 评论弹窗打开动画 | < 300ms | — |
-| 乐观更新本地渲染 | < 100ms | — |
-| 热评排序查询 | < 500ms（P95） | — |
-| 回复展开查询 | < 500ms（P95） | — |
-
-### 5.2 容量目标
-
-| 指标 | V1 目标 | 演进目标 |
-|------|---------|---------|
-| 单帖评论上限 | 10 万+ 条 | 100 万+ |
-| 并发读 QPS | 1,000 | 10,000+ |
-| 并发写 QPS | 200 | 2,000+ |
-| 总评论存储 | 千万级 | 十亿级 |
-
-### 5.3 一致性模型
-
-| 场景 | 策略 | 说明 |
-|------|------|------|
-| 评论创建 | **乐观更新** | 本地立即插入列表 + 计数+1 → 异步写后端 → 失败回滚 |
-| 评论删除 | **乐观更新** | 本地立即移除 + 计数-1 → 异步删除后端 → 失败回滚 |
-| 评论赞踩 | **最终一致** | Redis/计数器先写 → 异步持久化；端侧使用 viewerReaction 重入恢复 |
-| 评论计数 | **最终一致** | 写入后异步更新 post.commentCount → 定期修复任务 |
-| 列表排序 | **最终一致** | 热评排序基于缓存快照，非实时精确 |
-
-### 5.4 弱网降级
-
-| 场景 | 策略 |
-|------|------|
-| 列表加载超时 (>3s) | 显示"加载失败，点击重试"，保留已加载数据 |
-| 评论提交超时 | 本地队列缓存，恢复后自动重试（最多 3 次），UI 标记"发送中" |
-| 断网 | 可查看已缓存评论，提交操作排入待发队列 |
-| 网络恢复 | 自动重试队列中的待发评论 |
-
-### 5.5 热帖防护
-
-| 策略 | 规格 |
-|------|------|
-| 单用户频率限制 | 5 条/分钟 |
-| 单帖频率限制 | 1000 条/分钟 |
-| 热帖缓存阈值 | 评论数 ≥ 100 条触发 Redis ZSet 热评缓存 |
-| 热评缓存 Top-N | 缓存 Top 50 热评 |
-| 游标分页保护 | 不支持深翻页（offset），仅游标前进 |
-
----
-
-## 六、配置管理规格
-
-### 6.1 配置项与分层
-
-| 配置项 | config.yaml Key | 默认值 | 端侧同步 |
-|--------|----------------|--------|----------|
-| 评论字数上限 | `sys.content.comment.max_length` | 500 | ✅ App Config |
-| 回复预览数 | `sys.content.comment.reply_preview_count` | 1 | ✅ App Config |
-| 回复首次展开数 | `sys.content.comment.reply_first_expand_page_size` | 5 | ✅ App Config |
-| 回复后续展开数 | `sys.content.comment.reply_expand_page_size` | 10 | ✅ App Config |
-| 长评论折叠行数 | `sys.content.comment.fold_line_count` | 3 | ✅ App Config |
-| 默认排序 | `sys.content.comment.sort.default` | recommended | ✅ App Config |
-| 图片评论数量上限 | `sys.content.comment.attachment.max_images` | 1 | ✅ App Config |
-| 单用户评论频率 | `sys.content.comment.rate_limit.per_user_rpm` | 5 | ❌ |
-| 单帖评论频率 | `sys.content.comment.rate_limit.per_post_rpm` | 1000 | ❌ |
-| 热帖缓存阈值 | `sys.content.comment.hot_post.threshold` | 100 | ❌ |
-| 热评缓存 Top-N | `sys.content.comment.hot_post.cache_top_n` | 50 | ❌ |
-| 热评缓存 TTL | `sys.content.comment.hot_post.cache_ttl_seconds` | 300 | ❌ |
-| 赞数刷盘间隔 | `sys.content.comment.like_flush_interval_ms` | 5000 | ❌ |
-| 评论分页默认值 | metadata paginationLimitDefault | 20 | ✅ codegen |
-
-### 6.2 端云一致保障
-
-- 云侧校验使用 `RuntimeConfigProvider.GetInt("sys.content.comment.max_length")` 读取
-- 端侧通过 App Config Endpoint（`GET /v1/config/app`）同步业务规则
-- 端侧 codegen 产出 **fallback 默认值**，网络不可达时使用
-- 云侧是"最终裁判"——即使端侧因 fallback 允许提交，云侧仍校验并拒绝超限
-
-### 6.3 权限与属地策略（V2 新增能力）
-
-| 能力 | 规则 | 错误码 |
-|------|------|--------|
-| 评论置顶 | 仅内容作者（`viewerId == post.authorId`）可置顶/取消置顶；仅一级评论（无 `parentCommentId`）可置顶；已删除评论不可置顶 | `comment_pin_forbidden`（非作者）/ `comment_pin_invalid_target`（非一级评论） |
-| 置顶排序 | 置顶评论恒排列表最前；多条置顶按 `pinnedAt` 倒序；二级回复不可置顶不影响 | — |
-| `canPin` 派生 | 云侧投影按 `viewer 是内容作者 && 一级评论 && 未删除` 派生，端侧据此渲染入口，不在端侧二次判权 | — |
-| IP 属地解析 | 仅在**创建评论**时按受信代理头解析省级属地快照落库（`X-Forwarded-For` 首段 > `X-Real-IP` > `RemoteAddr`）；读取原样透传，不二次解析 | — |
-| IP 属地降级 | 无法解析为已知省份时 `ipLocation` 留空，端侧不展示属地，绝不臆造 | — |
-
-> **属地解析器（生产化路径）**：alpha/测试环境使用确定性 `deterministicProvinceResolver` stub（固定 IP 段→省份），便于契约与回归测试。生产环境需替换为真实 GeoIP 库（如 MaxMind GeoLite2 / ip2region），通过 `WithIPLocationResolver` 注入，不改动调用方。该替换为已登记长期风险（见 `docs/outstanding_risks_backlog.md`）。
-
----
-
-## 七、Metadata 扩展需求
-
-### 7.1 现有（已完备，无需新建）
-
-| 维度 | 状态 |
-|------|------|
-| Comment 实体定义（aggregate.yaml） | ✅ 1:N 成员，cascade_delete |
-| Comment 字段（fields.yaml） | ✅ _id, postId, authorId, personaId, content, replyToCommentId, replyToUserId, likeCount, status, createdAt |
-| Comment 存储（storage.yaml） | ✅ comments 集合 + 3 个索引 |
-| CommentCreated 事件 | ✅ |
-| ListComments / CreateComment / DeleteComment 路由 | ✅ |
-| Comment 实体注册 | ✅ |
-
-### 7.2 需新增
-
-| 类型 | 内容 | 说明 |
-|------|------|------|
-| fields.yaml | `Comment.replyCount`、`dislikeCount`、`viewerReaction`、`attachments`、`mentions`、`replyPreview`、`replyNextCursor` | 回复折叠、赞踩、附件与 @ 所需。**已交付**：`attachments` 形态 `[{mediaId,type,url,thumbnailUrl,width,height,moderationStatus}]`，端侧 codegen 产出类型化 `CommentAttachmentDto`（消除 Map 穿透，见 GWT10），不再以 `List<Map<String,dynamic>>` 穿透到消费层 |
-| fields.yaml | **已交付** `Comment.isPinned`、`pinnedAt`、`canPin`、`ipLocation`、`authorLiked` | 置顶状态/时间、当前 viewer 可否置顶、评论属地快照、内容作者是否赞过；均为 PUBLIC + read，端侧 codegen 产出 `CommentDto` 对应类型化字段 |
-| fields.yaml | **已交付** `ProfileInteractionActivityView.commentId`、`parentCommentId` | 我的-互动评论类深链精确定位到具体评论/父评论（见 GWT9、GWT14） |
-| service.yaml | `ListCommentReplies`、`ReactToComment` | 回复独立分页与赞踩统一入口 |
-| service.yaml | 仅保留 `ReactToComment` 端点 | 评论反应统一为 like/dislike/none 三态 |
-| service.yaml | `ListCommentsByAuthor` 端点 | 个人主页"我发出的评论" |
-| service.yaml | `ListCommentsForPostAuthor` 端点 | 个人主页"我收到的评论" |
-| service.yaml | **已交付** `PinComment`（POST `/v1/content/posts/{postId}/comments/{commentId}/pin`）、`UnpinComment`（DELETE 同路径） | 内容作者置顶/取消置顶一级评论 |
-| events.yaml | `CommentReacted` 事件 | 评论赞踩三态事件 |
-| events.yaml | `CommentModerated` 事件 | 审核结果回调 |
-| storage.yaml | `idx_comments_hot` 索引 | (postId, likeCount DESC, createdAt DESC) |
-| storage.yaml | 评论域缓存 key 定义 | 热评/最新/回复/点赞缓存 |
-| errors.yaml | `comment_too_long` | 评论超长错误 |
-| errors.yaml | `comment_rate_limited` | 评论频率限制错误 |
-| errors.yaml | `comment_like_duplicate` | 重复点赞错误 |
-| errors.yaml | **已交付** `comment_pin_forbidden`（403）、`comment_pin_invalid_target`（400） | 非内容作者置顶 / 置顶非一级评论 |
-
-### 7.3 需修复
-
-| 项目 | 现状 | 目标 |
-|------|------|------|
-| OpenAPI Delete 路径 | `/v1/content/comments/{commentId}` | 统一为 `/v1/content/posts/{postId}/comments/{commentId}` |
-
----
-
-## 八、端云不一致修复（随本特性一并修复）
-
-| 项目 | 现状 | 修复 | 优先级 |
-|------|------|------|--------|
-| OpenAPI Delete 路径 | openapi.yaml 与 service.yaml 不一致 | 统一为带 postId 的路径 | P0 |
-| chatVideo 时长 | Dart=600s / Go=300s | 统一为 300s | P1 |
-| RTC cache TTL | 代码=3600s / metadata=60s | 代码对齐 metadata | P1 |
-| 评论字数限制 | Dart=500 / Go 无校验 | Go Handler 增加 max_length 校验 | P0 |
-
----
-
-## 九、灰度发布规格
-
-### 9.1 灰度步进
-
-| 阶段 | 范围 | 观测期 | 放量条件 |
-|------|------|--------|---------|
-| Canary | 内部测试账号（~10 用户） | 48 小时 | 功能正常 + 无 P0 Bug |
-| Beta | 1% 用户 | 72 小时 | 错误率 < 0.1%，P95 延迟达标 |
-| GA-50 | 50% 用户 | 48 小时 | 错误率 < 0.05%，无容量报警 |
-| GA-100 | 全量 | — | 各项 SLO 达标 |
-
-### 9.2 SLO 与观测
-
-| 指标 | SLO | 报警阈值 |
-|------|-----|---------|
-| 评论列表成功率 | ≥ 99.5% | < 99% |
-| 评论提交成功率 | ≥ 99% | < 98% |
-| 列表 P95 延迟 | ≤ 800ms | > 1200ms |
-| 提交 P95 延迟 | ≤ 500ms | > 800ms |
-| 评论计数一致性 | 最终一致（≤ 5min） | 偏差 > 10% 且持续 > 30min |
-
-### 9.3 回滚条件
-
-- 评论提交成功率 < 95% 持续 5 分钟
-- 评论列表 P95 延迟 > 2s 持续 10 分钟
-- 出现数据丢失或计数严重偏差
-- 审核流水线完全失效导致违规内容暴露
-
----
-
-## 十、验收标准概要
-
-详见 `acceptance.yaml`，共 14 条 GWT 验收标准（GWT1~GWT14），覆盖：
-
-- **GWT1**：平铺文章评论入口定位到正文后内联评论区。
-- **GWT2**：图片/视频/文章翻页沉浸式内容打开上压评论分屏并可恢复上下文。
-- **GWT3**：评论与回复提交支持游客登录续接、失败保留草稿。
-- **GWT4**：回复预览与展开数量由云端配置（`reply_preview_count` / `reply_expand_page_size`）控制，端云一致。
-- **GWT5**：默认/最新/最多赞三档排序端云一致，端侧不维护第二套排序。
-- **GWT6**：评论赞踩 like/dislike/none 互斥并由 `viewerReaction` 重入恢复。
-- **GWT7**：评论输入支持 emoji、图片附件与 @ 提及，结构化回显。
-- **GWT8**：alpha/beta/gamma 非生产种子与 三层测试 四层证据完整。
-- **GWT9**：我的-互动评论类点击深链进入评论区并滚动定位高亮。
-- **GWT10**：评论附件类型化端云契约（`CommentAttachmentDto`，消除 Map 穿透）。
-- **GWT11**：评论可观测埋点（曝光/深链/赞踩/延迟）真实发射。
-- **GWT12**：内容作者置顶/取消置顶一级评论，置顶项优先排序，`canPin` 仅作者可见入口；非作者/非一级评论返回对应错误码（新增）。
-- **GWT13**：创建评论按受信代理头解析省级属地快照落库并透传展示，无法解析留空（新增）。
-- **GWT14**：内容作者赞过的评论展示「作者赞过」标识（`authorLiked` 云侧派生）；互动深链精确定位到 `commentId`/`parentCommentId`（新增）。
-
-### 测试层责任
-
-| 层级 | 职责 |
-|------|------|
-| local_contract | 防契约漂移：Comment DTO ↔ metadata fields.yaml；API 路径 ↔ service.yaml |
-| local_contract | 防交互回归：入口形态、内联/上压、提交、回复、展开、赞踩、图片、@；缓存命中时先显示最近 comment page |
-| api_integration | 防端云联调断裂：Remote Repository 与 Go Handler 路径/参数/响应一致；评论 overlay/outbox 与云端确认合并 |
-| user_acceptance | 防真实设备失效：真实键盘、图片附件、@选择、弱网 >3s 降级提示；10 万评论滚动流畅度 ≥ 50fps |
+# L3 特性：comment-thread（Comment / ContentReaction 商用对象闭环）
+
+> 版本：V3 — 2026-07-14
+> 归属：`discovery-content / publish-comment-reaction / comment-thread`
+> 架构约束：受 `runtime/system-architecture-and-engineering-guide/app-cloud-business-object-commercial-closure` 统一约束
+
+## 1. 目标与用户价值
+
+为图片、视频、微趣和文章提供同一套二层评论体验。用户可以读取一级评论与回复、发表和删除评论、赞/踩、回复、附图、@、置顶并从互动页回到原评论；所有页面都消费 Comment 与 ContentReaction 的服务端权威投影，不维护端侧业务对象副本或第二套排序规则。
+
+## 2. 领域边界
+
+### 2.1 对象所有权
+
+| 对象 | Command owner | Query owner | 权威存储 | 事务边界 |
+|---|---|---|---|---|
+| `Comment` | `CommentCommandFacade` | `CommentQueryFacade` | MongoDB `comments` | Comment aggregate + outbox |
+| `ContentReaction(comment)` | `CommentReactionCommandFacade` | Comment 商用投影组合器 | MongoDB `content_reactions` | ContentReaction aggregate + outbox |
+| `Post` | `PostCommandFacade` | `PostQueryFacade` | MongoDB `posts` | 只提供目标存在性、ownership 与计数投影 |
+| `MediaAsset` | Media Facade | `CommentAttachmentReader` | Media 权威存储 | Comment 只绑定已验证 media id |
+
+`PostService`、聚合 `ContentRepository`、动态 `Map` DTO、UI 自算权限和本地排序都不是 Comment 主线。Data importer、Ops 和页面不得直写 `comments`、reaction 或 Post 计数投影。
+
+### 2.2 层级与顺序
+
+- 仅支持两级：一级 Comment 与一级 Comment 下的回复；回复目标可指向回复，但 `parentCommentId` 必须归一到一级 Comment。
+- 一级列表唯一顺序为 `isPinned desc, pinnedAt desc, createdAt desc, id desc`。
+- 回复唯一顺序为 `createdAt asc, id asc`。
+- 不提供 `recommended/latest/most_liked` 兼容参数、别名或端侧切换器。
+- 分页只使用服务端 opaque cursor；禁止 offset 深翻页和端侧重排。
+
+## 3. 功能规格
+
+| 编号 | 能力 | 规格 |
+|---|---|---|
+| F1 | 一级评论 | 首屏与追加页返回 typed `CommentPageSlice`，默认 20 条。 |
+| F2 | 回复 | 一级项携带 `replyCount/replyPreview/replyNextCursor`；展开使用 typed `ReplyPageSlice`。 |
+| F3 | 创建 | 命令携带正文、reply target、media ids、typed mentions 与 persona 快照；必须有 actor 和幂等键。 |
+| F4 | 删除 | 作者使用 aggregate version 做 CAS 软删除；陈旧 version 返回稳定冲突错误。 |
+| F5 | 赞踩 | `like/dislike/none` 三态互斥；服务端返回精确计数，列表重入以 `viewerReaction` 为准。 |
+| F6 | 置顶 | 仅 Post owner 可置顶未删除的一级 Comment；pin/unpin 使用 aggregate version。 |
+| F7 | 附件 | Comment 只持有 media id；查询投影返回 typed attachment 与 available 状态。 |
+| F8 | @ | 输入、登录续接、command 全程使用 `ContentCommentMention`，不转换为 UI wire map。 |
+| F9 | 登录续接 | 保留 post、reply target、正文、附件和 mentions；目标不一致时不得误提交。 |
+| F10 | 个人互动 | “我的评论”“收到的评论”和互动深链使用 typed Facet，携带 post/comment/parent identity。 |
+| F11 | 权限投影 | `isAuthor/canDelete/canReply/canReport/canPin` 由 Service 派生，App 只渲染。 |
+| F12 | 计数 | Comment count 的权威值来自 Comment reader；Post 计数是可修复投影，不是第二真相源。 |
+
+## 4. 端云接口
+
+### 4.1 Service
+
+- Go 只暴露对象专属 `CommentCommandFacade`、`CommentQueryFacade`、`CommentAggregateStore`、具名 Reader 和 typed Slice。
+- Comment commit 必须把 aggregate 与 outbox event 原子写入；dispatcher 使用 checkpoint、重试和 replay-safe delivery。
+- 查询组合 Comment、ContentReaction、Post ownership、MediaAsset；任何必要依赖失败都 fail closed，不返回默认零值伪成功。
+- HTTP handler 只把 generated operation 转为 typed command/query；业务 command 不携带 operation id、route、surface 或 actor metadata。
+
+### 4.2 App
+
+- pure contracts 定义 command/result/Slice/`ContentCommentMention`/`ContentCommentAttachment`。
+- production 只装配 `RemoteContentCommentFacet`，且只调用 generated operation client。
+- alpha 只在独立 runner 装配 `AlphaContentCommentFacet`；production kernel 不可达 mock/fixture。
+- `CommentNotifier` 在 command 成功后强制读取权威投影；不得构造一个字段不完整的乐观 Comment。
+- Runtime failure、401 refresh、429/deadline/retry 和 telemetry 走统一 Runtime execution path。
+
+## 5. 页面与体验
+
+- Feed、沉浸式作品、文章详情、图片/视频查看器和个人互动页复用同一 Comment surface/facet，不复制状态机。
+- 评论项展示作者快照、正文、时间、回复摘要、赞踩、附件、权限动作和置顶状态。
+- 评论总数只有在已确认时展示；首屏阻塞失败显示“评论”，不得把未知总数伪装成“共 0 条评论”。
+- 输入支持 emoji、图片和 @；失败保留草稿并提供显式恢复动作，不静默切换 Mock 或伪造成功。
+- light/dark、多屏、无障碍、键盘、弱网和返回恢复由 UAT 验证。
+
+## 6. 一致性、安全与性能
+
+- Command 必须有 authenticated persona actor、Idempotency-Key 和需要时的 expected version。
+- 相同 actor + idempotency key + digest 重放返回原 receipt；不同 digest 返回稳定 idempotency conflict。
+- Comment 与 outbox 原子；ContentReaction 与 outbox 原子；投影消费者按 event id 去重。
+- 一级/回复 keyset 查询必须命中声明索引，无 `COLLSCAN` 和阻塞排序。
+- 目标：列表 P95 < 800ms，回复 P95 < 500ms，命令确认 P95 < 500ms。
+- 指标至少覆盖 list/append/command latency、version conflict、idempotency replay、outbox lag/retry/DLQ、projection convergence 与 UI recovery。
+
+## 7. 测试证据
+
+- `local_contract`：aggregate 不变量、typed codec、严格 decoder、能力投影、RuntimeFailure、alpha/Remote parity、安全负例。
+- `api_integration`：真实 HTTP、Mongo、outbox、reaction、pin、keyset 索引与计数收敛；禁止 Memory、自 seed 和动态 skip。
+- `user_acceptance`：真实页面执行评论、回复、赞踩、置顶、登录续接、深链与恢复；文件存在性不算 UAT。
+
+## 8. Out of Scope
+
+- 评论全文搜索、翻译、视频附件与 ML rerank。
+- 通用 CRUD Repository、Event Sourcing 框架或跨对象 Saga 平台。
+- IP 属地与“作者赞过”展示；未形成 metadata、服务投影和三层证据前不得以旧 DTO 字段保留。
+- 历史 `CommentDto`、`CommentPage`、`ContentCommentRepository`、三档排序和失败回退 Mock 的任何兼容。
+
+## 9. 准出条件
+
+仅当 metadata/codegen、Comment/ContentReaction Facade、Mongo/outbox、production Remote-only、alpha 隔离、三层证据、Gamma UAT、观测/告警/runbook 和相关门禁都通过时，本 Story 才能整体准出。未验证环境或 Journey 必须保持 `GATE_BLOCK`。

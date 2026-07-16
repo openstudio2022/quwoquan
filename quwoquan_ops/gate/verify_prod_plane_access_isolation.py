@@ -13,7 +13,7 @@
   4. 凭据：每平面 sshKeySecret 唯一且命名 PROD_<PLANE>_SSH_KEY；relay=PROD_OPS_SSH_KEY；禁止复用单一全权 secret。
   5. 读写平面：composeProjectRoot 非空 + governedWorkloads 非空；data 平面 read-only-audit、composeProjectRoot=null、
      governedWorkloads 空、appliesToStages 空。
-  6. governedWorkloads ⊆ workload_topology_inventory.workloads，且每个 workload 的 inventory plane == 本平面 workloadDeployPlane。
+  6. governedWorkloads ⊆ workload_topology_inventory 的业务或外部 workload，且每个 workload 的 inventory plane == 本平面 workloadDeployPlane。
   7. 退役断言：仓库不得在访问隔离层重新引入 PROD_KUBECONFIG 单一全权凭据或 gamma-hosted 远端目标。
 """
 from __future__ import annotations
@@ -86,8 +86,14 @@ def main() -> int:
     if len(plane_names) != len(set(plane_names)):
         errors.append("planes 存在重复 plane 名")
 
-    # workload 归属表：name -> inventory plane
-    inv_plane_of = {w["name"]: w.get("plane") for w in inventory.get("workloads", [])}
+    # workload 归属表：name -> inventory plane。访问隔离既要约束业务服务，也要
+    # 约束 SFU/TURN 这类已接入 prod root 的外部基础能力；两者在 inventory 中
+    # 分栏是为了避免把 capability 当业务 domain，而不是为了从访问控制中遗漏它们。
+    inventory_workloads = [
+        *(inventory.get("workloads") or []),
+        *(inventory.get("external_workloads") or []),
+    ]
+    inv_plane_of = {w["name"]: w.get("plane") for w in inventory_workloads}
 
     seen_accounts: dict[str, str] = {}
     seen_secrets: dict[str, str] = {}
@@ -150,12 +156,26 @@ def main() -> int:
                     f"与 workloadDeployPlane={deploy_plane} 不一致"
                 )
 
+        if plane == "service":
+            runtime_layout = p.get("rootlessRuntimeLayout") or {}
+            if "mediaRoot" in runtime_layout:
+                errors.append("service: mediaRoot 物理路径已退役，必须使用 mediaStateRef")
+            media_state_ref = str(runtime_layout.get("mediaStateRef") or "")
+            if not media_state_ref.startswith(("process/", "cache/")):
+                errors.append(
+                    "service: mediaStateRef 必须归属 env/prod/local/prod-hosted 的 process 或 cache"
+                )
+            if ".." in Path(media_state_ref).parts:
+                errors.append("service: mediaStateRef 禁止路径穿越")
+
     # 7. 退役断言：访问隔离层不得重新引入单一全权 kube 凭据或远端 gamma
     raw = ACCESS.read_text(encoding="utf-8")
     if re.search(r"\bPROD_KUBECONFIG\b", raw) and "已退役" not in raw:
         errors.append("访问隔离层不得重新引入 PROD_KUBECONFIG 单一全权凭据")
     if "gamma-hosted" in raw:
         errors.append("访问隔离层不得引用已退役的 gamma-hosted 远端目标")
+    if "/opt/quwoquan/gamma/.qwq_output" in raw:
+        errors.append("prod 访问隔离层不得依赖 gamma-local 物理输出路径")
 
     # 8. 控制面投影：control_plane.yaml 必须有只读 prod_plane_access_isolation 投影对象，
     #    且不得引入 config scope（不污染现有配置面）。

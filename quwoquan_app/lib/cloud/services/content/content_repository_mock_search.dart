@@ -20,33 +20,6 @@ extension _MockContentRepositorySearch on MockContentRepository {
     final allRaw = _allDiscoveryPosts().map((e) => e.toMap()).toList();
     final results = <PostSearchItemView>[];
     for (final item in allRaw) {
-      final circleIds = <String>{
-        if ((item['circleId'] ?? '').toString().trim().isNotEmpty)
-          (item['circleId'] ?? '').toString().trim(),
-        ...((item['circleIds'] as List?)
-                ?.map((value) => value.toString().trim())
-                .where((value) => value.isNotEmpty) ??
-            const <String>[]),
-      };
-      final associatedCircles = circleIds
-          .map(CircleMockData.tryResolveCircleDto)
-          .whereType<CircleDto>()
-          .toList(growable: false);
-      final matchedCategory = associatedCircles
-          .where(
-            (circle) =>
-                (expectedCategoryId.isEmpty ||
-                    (circle.category ?? '').toLowerCase() ==
-                        expectedCategoryId) &&
-                (expectedSubCategory.isEmpty ||
-                    (circle.subCategory ?? '').toLowerCase() ==
-                        expectedSubCategory),
-          )
-          .toList(growable: false);
-      final matchedCircle = matchedCategory.isNotEmpty
-          ? matchedCategory.first
-          : (associatedCircles.isEmpty ? null : associatedCircles.first);
-      final fallbackCategoryId = _mockCategoryForCircleIds(circleIds);
       final itemIdentity =
           (item['contentIdentity'] ??
                   (item['contentType'] == 'micro' ? 'moment' : 'work'))
@@ -56,13 +29,12 @@ extension _MockContentRepositorySearch on MockContentRepository {
           .toString()
           .toLowerCase();
       final itemCategoryId =
-          (item['categoryId'] ?? matchedCircle?.category ?? fallbackCategoryId)
+          (item['categoryId'] ?? item['contentVertical'] ?? '')
               .toString()
               .toLowerCase();
-      final itemSubCategory =
-          (item['subCategory'] ?? matchedCircle?.subCategory ?? '')
-              .toString()
-              .toLowerCase();
+      final itemSubCategory = (item['subCategory'] ?? '')
+          .toString()
+          .toLowerCase();
       if (expectedIdentity.isNotEmpty && itemIdentity != expectedIdentity) {
         continue;
       }
@@ -94,8 +66,8 @@ extension _MockContentRepositorySearch on MockContentRepository {
       results.add(
         PostSearchItemView.fromMap(<String, dynamic>{
           ...item,
-          'categoryId': item['categoryId'] ?? matchedCircle?.category,
-          'subCategory': item['subCategory'] ?? matchedCircle?.subCategory,
+          'categoryId': item['categoryId'] ?? item['contentVertical'],
+          'subCategory': item['subCategory'],
           'highlightText': matched,
           'matchedField': matched == (item['title']?.toString() ?? '')
               ? 'title'

@@ -9,11 +9,11 @@ ARG GOSUMDB=sum.golang.google.cn
 ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
 WORKDIR /build
-COPY . .
-WORKDIR /build/services/product-ops-service
+COPY go.mod go.sum ./
 RUN go mod download
+COPY . .
 RUN CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-    go build ${GO_BUILD_FLAGS} -o /product-ops-service ./cmd/api
+    go build ${GO_BUILD_FLAGS} -o /product-ops-service ./services/product-ops-service/cmd/api
 
 FROM ${ALPINE_BASE_IMAGE}
 RUN if command -v apk >/dev/null 2>&1; then \

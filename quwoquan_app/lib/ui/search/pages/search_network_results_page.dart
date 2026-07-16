@@ -8,9 +8,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_reason.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_target.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/assistant/assistant_repository.dart';
+import 'package:quwoquan_app/cloud/services/content/intersection_statement_synthesizer.dart';
 import 'package:quwoquan_app/ui/entity/models/homepage_route_models.dart';
 import 'package:quwoquan_app/ui/content/models/content_route_models.dart';
 import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dart';
@@ -874,7 +877,6 @@ class _NetworkResultCardModel {
 
   factory _NetworkResultCardModel.fromSearchItem(PostSearchItemView item) {
     final footerSegments = <String>[
-      if ((item.circleName ?? '').trim().isNotEmpty) item.circleName!.trim(),
       if ((item.authorDisplayName ?? '').trim().isNotEmpty)
         item.authorDisplayName!.trim(),
     ];
@@ -898,9 +900,7 @@ class _NetworkResultCardModel {
       footerLabel: footerSegments.isEmpty ? '内容结果' : footerSegments.join(' · '),
       eyebrowText: item.subCategory?.trim().isNotEmpty == true
           ? item.subCategory!.trim()
-          : (item.circleName?.trim().isNotEmpty == true
-                ? item.circleName!.trim()
-                : '网络结果'),
+          : '网络结果',
       likeCount: item.likeCount,
       showVideoBadge: item.contentType == 'video',
     );

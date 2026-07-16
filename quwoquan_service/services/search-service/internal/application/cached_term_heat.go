@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"quwoquan_service/services/search-service/internal/application/queryheat"
-	"quwoquan_service/services/search-service/internal/infrastructure/searchmetrics"
 )
 
 // CachedTermHeat wraps a TermHeatProvider with a short-TTL, size-bounded
@@ -17,10 +16,11 @@ import (
 // the underlying provider, and errors are never cached (so a transient Mongo
 // failure is not pinned for the whole TTL).
 type CachedTermHeat struct {
-	inner   TermHeatProvider
-	ttl     time.Duration
-	maxKeys int
-	now     func() time.Time
+	inner    TermHeatProvider
+	ttl      time.Duration
+	maxKeys  int
+	now      func() time.Time
+	observer RelatedTermsCacheObserver
 
 	mu      sync.Mutex
 	entries map[string]cachedHeatEntry
@@ -31,9 +31,8 @@ type cachedHeatEntry struct {
 	expiresAt time.Time
 }
 
-// NewCachedTermHeat wraps inner. A nil inner yields a nil wrapper (caller keeps
-// base ranking). Non-positive ttl/maxKeys fall back to safe defaults.
-func NewCachedTermHeat(inner TermHeatProvider, ttl time.Duration, maxKeys int) *CachedTermHeat {
+// NewCachedTermHeat 包装热词读取端口；observer 可为空。
+func NewCachedTermHeat(inner TermHeatProvider, ttl time.Duration, maxKeys int, observer RelatedTermsCacheObserver) *CachedTermHeat {
 	if inner == nil {
 		return nil
 	}
@@ -44,11 +43,12 @@ func NewCachedTermHeat(inner TermHeatProvider, ttl time.Duration, maxKeys int) *
 		maxKeys = 1024
 	}
 	return &CachedTermHeat{
-		inner:   inner,
-		ttl:     ttl,
-		maxKeys: maxKeys,
-		now:     time.Now,
-		entries: make(map[string]cachedHeatEntry, maxKeys),
+		inner:    inner,
+		ttl:      ttl,
+		maxKeys:  maxKeys,
+		now:      time.Now,
+		observer: observer,
+		entries:  make(map[string]cachedHeatEntry, maxKeys),
 	}
 }
 
@@ -62,12 +62,12 @@ func (c *CachedTermHeat) RelatedTerms(ctx context.Context, normalizedQuery strin
 	c.mu.Lock()
 	if e, ok := c.entries[normalizedQuery]; ok && now.Before(e.expiresAt) {
 		c.mu.Unlock()
-		searchmetrics.ObserveRelatedTermsCache(true)
+		c.observeCache(true)
 		return trimHeats(e.heats, limit), nil
 	}
 	c.mu.Unlock()
 
-	searchmetrics.ObserveRelatedTermsCache(false)
+	c.observeCache(false)
 	heats, err := c.inner.RelatedTerms(ctx, normalizedQuery, limit)
 	if err != nil {
 		return nil, err
@@ -78,6 +78,12 @@ func (c *CachedTermHeat) RelatedTerms(ctx context.Context, normalizedQuery strin
 	c.entries[normalizedQuery] = cachedHeatEntry{heats: heats, expiresAt: now.Add(c.ttl)}
 	c.mu.Unlock()
 	return heats, nil
+}
+
+func (c *CachedTermHeat) observeCache(hit bool) {
+	if c.observer != nil {
+		c.observer.ObserveRelatedTermsCache(hit)
+	}
 }
 
 // evictIfNeededLocked keeps the map bounded: it first drops expired keys, then,

@@ -1,0 +1,23 @@
+version: 1
+domain: user
+aggregate_root: SubjectFollow
+object_kind: aggregate_root
+description: Persona 对非 Persona 主体的版本化关注关系。
+storage_backend: postgres
+members: []
+capabilities: [queryable, idempotent_commands, transactional_outbox]
+business_rules:
+  - subjectType 不得为 persona，persona 间关系只能写 PersonaRelationship
+  - personaId + subjectType + subjectId 全局唯一
+  - follow/unfollow 必须以 expectedVersion 和 idempotency receipt 提交
+lifecycle:
+  states: [following, unfollowed]
+  optimistic_concurrency: version
+  idempotency: command_receipt
+ddd_layer_mapping:
+  domain_model: internal/domain/relationship/subject_follow/model
+  ports: internal/domain/relationship/subject_follow/ports
+  application: internal/application/relationship/subject_follow
+  persistence: internal/infrastructure/relationship/subject_follow/persistence
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/adapters/mq

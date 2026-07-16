@@ -1,53 +1,56 @@
+"""The only local output-root contract.
+
+``.qwq_output`` contains only release payloads, run evidence, process records
+and disposable caches. Deployment source configuration and certificate exports are
+outside the repository output tree; configuration/network truth stays in domain
+deploy assets and Ops environment manifests.
+"""
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-OUTPUT_ROOT = ROOT / ".qwq_output"
-
+DEFAULT_OUTPUT_ROOT = ROOT / ".qwq_output"
 DEPLOY_ENVS = frozenset({"alpha", "beta", "gamma", "prod"})
 ENV_SEGMENTS = DEPLOY_ENVS | {"repo"}
-DATA_SEGMENT = "data"
 
 
 def safe_segment(value: str, *, fallback: str = "run") -> str:
-    text = str(value or "").strip().replace("/", "-")
-    return text or fallback
+    text = str(value or "").strip().replace("/", "-").replace("\\", "-")
+    return text if text and text not in {".", ".."} else fallback
 
 
 def output_root() -> Path:
-    return OUTPUT_ROOT
+    return Path(os.environ.get("QWQ_OUTPUT_ROOT") or DEFAULT_OUTPUT_ROOT)
 
 
 def env_for_target(target: str) -> str:
     target = str(target or "").strip()
-    if target.startswith("alpha"):
-        return "alpha"
-    if target.startswith("beta"):
-        return "beta"
-    if target.startswith("gamma"):
-        return "gamma"
-    if target.startswith("prod"):
-        return "prod"
-    return "repo"
+    for env in sorted(DEPLOY_ENVS):
+        if target == env or target.startswith(f"{env}-"):
+            return env
+    raise ValueError(f"cannot resolve environment from target {target!r}")
 
 
 def normalize_env(env_name: str, *, target: str = "") -> str:
     env_name = str(env_name or "").strip()
-    if env_name in ENV_SEGMENTS:
+    if env_name in DEPLOY_ENVS:
         return env_name
-    if env_name == DATA_SEGMENT:
-        return DATA_SEGMENT
-    return env_for_target(target)
+    if not env_name and target:
+        return env_for_target(target)
+    raise ValueError(f"unknown environment {env_name!r}; expected one of {sorted(DEPLOY_ENVS)}")
+
+
+def _timestamped_dir(parent: Path, command_name: str, target: str) -> Path:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return parent / f"{stamp}-{safe_segment(command_name)}-{safe_segment(target, fallback='local')}"
 
 
 def env_root(env_name: str) -> Path:
-    env = normalize_env(env_name)
-    if env == DATA_SEGMENT:
-        raise ValueError("data output must use data_* helpers")
-    return OUTPUT_ROOT / "env" / env
+    return output_root() / "env" / normalize_env(env_name)
 
 
 def env_runs_root(env_name: str) -> Path:
@@ -55,9 +58,7 @@ def env_runs_root(env_name: str) -> Path:
 
 
 def env_run_dir(env_name: str, command_name: str, *, target: str = "local") -> Path:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    env = normalize_env(env_name, target=target)
-    return env_runs_root(env) / f"{stamp}-{safe_segment(command_name)}-{safe_segment(target, fallback='local')}"
+    return _timestamped_dir(env_runs_root(normalize_env(env_name, target=target)), command_name, target)
 
 
 def env_observability_root(env_name: str) -> Path:
@@ -92,34 +93,61 @@ def target_local_dir(target: str) -> Path:
     return env_local_root(env_for_target(target)) / safe_segment(target, fallback="local")
 
 
+def target_process_dir(target: str) -> Path:
+    return target_local_dir(target) / "process"
+
+
+def target_cache_dir(target: str) -> Path:
+    return target_local_dir(target) / "cache"
+
+
+def deployment_work_root(target: str) -> Path:
+    """Ephemeral rendered deployment files; never a repository output/config source."""
+    configured = os.environ.get("QWQ_DEPLOY_WORK_ROOT", "").strip()
+    base = (
+        Path(configured).expanduser()
+        if configured
+        else Path.home() / ".cache" / "quwoquan" / "deploy"
+    )
+    return base / safe_segment(target, fallback="local")
+
+
+def certificate_export_dir(target: str) -> Path:
+    """Temporary host copy of a container-managed CA for device trust injection."""
+    return deployment_work_root(target) / "certificates"
+
+
+def repo_root() -> Path:
+    return output_root() / "env" / "repo"
+
+
+def repo_runs_root() -> Path:
+    return repo_root() / "runs"
+
+
+def repo_run_dir(command_name: str, *, target: str = "repo") -> Path:
+    return _timestamped_dir(repo_runs_root(), command_name, target)
+
+
 def repo_local_dir(name: str) -> Path:
-    return env_local_root("repo") / safe_segment(name, fallback="local")
+    return repo_root() / "local" / safe_segment(name, fallback="workspace") / "process"
 
 
 def data_root() -> Path:
-    return OUTPUT_ROOT / DATA_SEGMENT
+    return output_root() / "data"
 
 
-def data_runs_root() -> Path:
-    return data_root() / "runs"
+def data_tasks_root() -> Path:
+    return data_root() / "tasks"
 
 
-def data_run_dir(command_name: str, *, target: str = "data") -> Path:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    return data_runs_root() / f"{stamp}-{safe_segment(command_name)}-{safe_segment(target, fallback='data')}"
-
-
-def data_observability_root() -> Path:
-    return data_root() / "observability"
-
-
-def data_observability_run_dir(run_id: str) -> Path:
-    return data_observability_root() / safe_segment(run_id)
-
-
-def data_release_root() -> Path:
-    return data_root() / "release"
+def data_releases_root() -> Path:
+    return data_root() / "releases"
 
 
 def data_local_root() -> Path:
-    return data_root() / "local" / "runtime"
+    return data_root() / "local"
+
+
+def env_data_release_run_dir(env_name: str, release_id: str, run_id: str) -> Path:
+    return env_runs_root(env_name) / "data-release" / safe_segment(release_id, fallback="release") / safe_segment(run_id)

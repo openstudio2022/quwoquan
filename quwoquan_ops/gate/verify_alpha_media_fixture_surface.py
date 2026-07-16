@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli.lib.environment_topology import get_target, load_environment_topology
+from quwoquan_ops.cli.lib.output_paths import certificate_export_dir
 
 
 BUNDLE_PATH = ROOT / "quwoquan_ops" / "environments" / "gamma_curated_media_bundle.json"
@@ -49,43 +50,6 @@ DEFAULT_TARGET_BY_ENV = {
     "alpha": "alpha-local",
     "beta": "beta-local",
     "gamma": "gamma-local",
-}
-LOCAL_ROOT_CA_BY_TARGET = {
-    "alpha-local": ROOT
-    / ".qwq_output"
-    / "env"
-    / "alpha"
-    / "local"
-    / "alpha-local"
-    / "tls"
-    / "ca"
-    / "root.crt",
-    "beta-local": ROOT
-    / ".qwq_output"
-    / "env"
-    / "beta"
-    / "local"
-    / "beta-local"
-    / "caddy"
-    / "data"
-    / "caddy"
-    / "pki"
-    / "authorities"
-    / "local"
-    / "root.crt",
-    "gamma-local": ROOT
-    / ".qwq_output"
-    / "env"
-    / "gamma"
-    / "local"
-    / "gamma-local"
-    / "caddy"
-    / "data"
-    / "caddy"
-    / "pki"
-    / "authorities"
-    / "local"
-    / "root.crt",
 }
 MEDIA_PREFIXES = (
     "media/avatar/",
@@ -300,12 +264,10 @@ def _resolve_public_bases(
 def _resolve_local_root_ca(target_name: str, explicit_cacert: str) -> Path:
     if explicit_cacert:
         return Path(explicit_cacert)
-    direct = LOCAL_ROOT_CA_BY_TARGET[target_name]
-    if direct.is_file():
-        return direct
-    env_prefix = target_name.split("-", maxsplit=1)[0]
-    candidates = sorted((ROOT / ".qwq_output" / "env" / env_prefix / "local").glob("**/root.crt"))
-    return candidates[0] if candidates else direct
+    certificate_root = certificate_export_dir(target_name)
+    if target_name == "alpha-local":
+        return certificate_root / "tls" / "ca" / "root.crt"
+    return certificate_root / "root.crt"
 
 
 def _base_url_for_object_key(object_key: str, base_urls: dict[str, str]) -> str:
@@ -407,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
             f"{base_url}/{object_key}",
             cacert=local_root_ca,
             range_probe=is_video,
-            resolve_local=target_name in LOCAL_ROOT_CA_BY_TARGET,
+            resolve_local=target_name in DEFAULT_TARGET_BY_ENV.values(),
         )
         expected_statuses = {"206"} if is_video else {"200", "206"}
         if is_video:

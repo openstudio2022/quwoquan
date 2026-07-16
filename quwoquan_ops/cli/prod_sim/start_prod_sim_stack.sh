@@ -2,12 +2,20 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-STATE_DIR="$ROOT_DIR/.qwq_output/env/prod/local/prod-sim"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
+ACTION="${1:-up}"
+eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
+  --env prod --target prod-sim --action "$ACTION" --output-root "$QWQ_OUTPUT_ROOT")"
+RUNTIME_CONFIG_DIR="${QWQ_OUTPUT_ROOT}/env/prod/local/prod-sim/process/config"
+CACHE_DIR="${QWQ_OUTPUT_ROOT}/env/prod/local/prod-sim/cache"
+STATE_DIR="${QWQ_OUTPUT_ROOT}/env/prod/local/prod-sim/process"
+LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
+REPORT="${QWQ_RUN_ROOT}/prod-sim-report.json"
 MEDIA_DIR="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
+PROD_SIM_LEGAL_STATIC_ROOT="${QWQ_OUTPUT_ROOT}/env/prod/release/legal-static/current/public"
 
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile prod-sim --format shell-defaults)"
 
-ACTION="${1:-up}"
 PUBLIC_API_HOST="prod-api.quwoquan-env.test"
 PUBLIC_PRODUCT_OPS_HOST="prod-product-ops.quwoquan-env.test"
 PUBLIC_MEDIA_HOSTS=(
@@ -39,18 +47,25 @@ INTERNAL_API_BASE_URL="http://127.0.0.1:${CONTENT_PORT}"
 INTERNAL_PRODUCT_OPS_BASE_URL="http://127.0.0.1:${PRODUCT_OPS_SERVICE_PORT}"
 INTERNAL_MEDIA_BASE_URL="http://127.0.0.1:${MEDIA_PROCESSOR_PORT}"
 TLS_PROXY_NAME="quwoquan_prod_sim_tls_proxy"
-TLS_CADDYFILE="$STATE_DIR/Caddyfile"
-TLS_DATA_DIR="$STATE_DIR/caddy/data"
-TLS_CONFIG_DIR="$STATE_DIR/caddy/config"
+TLS_CADDYFILE="$RUNTIME_CONFIG_DIR/Caddyfile"
+TLS_DATA_DIR="${QWQ_OUTPUT_ROOT}/env/prod/local/prod-sim/pki/caddy"
+TLS_CONFIG_DIR="$RUNTIME_CONFIG_DIR/caddy-autosave"
 CONTAINER_RUNTIME=""
 CONTAINER_HOST_ALIAS=""
 
-mkdir -p "$STATE_DIR"
+mkdir -p \
+  "$RUNTIME_CONFIG_DIR" \
+  "$CACHE_DIR" \
+  "$STATE_DIR" \
+  "$LOG_DIR" \
+  "$QWQ_RUN_ROOT"
 
 start_bg() {
   local name="$1"
   shift
-  python3 - "$STATE_DIR/${name}.pid" "$STATE_DIR/${name}.pgid" "$STATE_DIR/${name}.log" "$@" <<'PY'
+  python3 - "$STATE_DIR/${name}.pid" "$STATE_DIR/${name}.pgid" \
+    "$ROOT_DIR/quwoquan_ops/cli/lib/runtime_log_process.py" \
+    "$LOG_DIR/${name}/local/runtime.log" "$name" "$@" <<'PY'
 import os
 import subprocess
 import sys
@@ -58,20 +73,19 @@ from pathlib import Path
 
 pid_path = Path(sys.argv[1])
 pgid_path = Path(sys.argv[2])
-log_path = Path(sys.argv[3])
-argv = sys.argv[4:]
-
-log_path.parent.mkdir(parents=True, exist_ok=True)
-with log_path.open("wb", buffering=0) as log:
-    proc = subprocess.Popen(
-        argv,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-        stdin=subprocess.DEVNULL,
-        start_new_session=True,
-    )
-    pid_path.write_text(f"{proc.pid}\n", encoding="utf-8")
-    pgid_path.write_text(f"{os.getpgid(proc.pid)}\n", encoding="utf-8")
+wrapper = sys.argv[3]
+log_path = sys.argv[4]
+event = sys.argv[5]
+argv = sys.argv[6:]
+proc = subprocess.Popen(
+    [sys.executable, wrapper, "--log-file", log_path, "--event", event, "--", *argv],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    stdin=subprocess.DEVNULL,
+    start_new_session=True,
+)
+pid_path.write_text(f"{proc.pid}\n", encoding="utf-8")
+pgid_path.write_text(f"{os.getpgid(proc.pid)}\n", encoding="utf-8")
 PY
 }
 
@@ -167,7 +181,26 @@ prepare_tls_caddyfile() {
 ${PUBLIC_API_HOST},
 ${LOCAL_API_HOST} {
 	import local_tls
-	reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+	handle /legal/manifest.json {
+		header {
+			Cache-Control "public, max-age=300"
+			X-Content-Type-Options "nosniff"
+		}
+		root * /srv/legal
+		file_server
+	}
+	handle /legal/* {
+		header {
+			Cache-Control "public, max-age=300"
+			X-Content-Type-Options "nosniff"
+			Content-Type "text/html; charset=utf-8"
+		}
+		root * /srv/legal
+		file_server
+	}
+	handle {
+		reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+	}
 }
 
 ${PUBLIC_PRODUCT_OPS_HOST},
@@ -203,6 +236,7 @@ start_tls_proxy() {
   "$CONTAINER_RUNTIME" run -d \
     --name "$TLS_PROXY_NAME" \
     -v "$TLS_CADDYFILE:/etc/caddy/Caddyfile:ro" \
+    -v "$PROD_SIM_LEGAL_STATIC_ROOT:/srv/legal:ro" \
     -v "$TLS_DATA_DIR:/data" \
     -v "$TLS_CONFIG_DIR:/config" \
     -p "${API_EDGE_PORT}:443" \
@@ -225,6 +259,35 @@ wait_https_ok() {
     fi
     sleep 0.5
   done
+}
+
+verify_https_legal_document() {
+  local host="$1"
+  local port="$2"
+  local path="$3"
+  local expected_title="$4"
+  local content_type=""
+  local body=""
+  content_type="$(
+    curl -kfsSI \
+      --resolve "${host}:${port}:127.0.0.1" \
+      "https://${host}:${port}${path}" \
+      | tr -d '\r' \
+      | awk -F ': ' 'tolower($1) == "content-type" { print tolower($2); exit }'
+  )"
+  if [[ "$content_type" != "text/html; charset=utf-8" ]]; then
+    echo "[prod-sim] FAIL: ${path} must return text/html; charset=utf-8, got ${content_type:-missing}" >&2
+    return 1
+  fi
+  body="$(
+    curl -kfsS \
+      --resolve "${host}:${port}:127.0.0.1" \
+      "https://${host}:${port}${path}"
+  )"
+  if [[ "$body" != *"$expected_title"* ]]; then
+    echo "[prod-sim] FAIL: ${path} is missing expected UTF-8 title ${expected_title}" >&2
+    return 1
+  fi
 }
 
 wait_https_range_ok() {
@@ -251,7 +314,7 @@ wait_https_range_ok() {
 }
 
 write_report() {
-  python3 - "$STATE_DIR/report.json" "$API_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$MEDIA_ORIGIN_BASE_URL" <<'PY'
+  python3 - "$REPORT" "$API_BASE_URL" "$PRODUCT_OPS_BASE_URL" "$MEDIA_BASE_URL" "$MEDIA_ORIGIN_BASE_URL" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -288,6 +351,11 @@ status_one() {
 
 case "$ACTION" in
   up)
+    python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" package --env prod --kind legal-static >/dev/null
+    if [[ ! -f "$PROD_SIM_LEGAL_STATIC_ROOT/legal/user-agreement" ]]; then
+      echo "[prod-sim] FAIL: legal-static package missing user-agreement at $PROD_SIM_LEGAL_STATIC_ROOT" >&2
+      exit 2
+    fi
     stop_bg api-edge
     stop_bg product-ops
     stop_bg media-edge
@@ -318,6 +386,7 @@ case "$ACTION" in
         --mode api \
         --runtime-env prod \
         --data-source remote \
+        --legal-static-root "$PROD_SIM_LEGAL_STATIC_ROOT" \
         --gateway-base-url "$API_BASE_URL" \
         --product-ops-base-url "$PRODUCT_OPS_BASE_URL" \
         --media-base-url "$MEDIA_BASE_URL"
@@ -337,6 +406,9 @@ case "$ACTION" in
     start_tls_proxy
     wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/healthz" 30
     wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/v1/config/app" 30
+    wait_https_ok "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/user-agreement" 30
+    verify_https_legal_document "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/user-agreement" "趣我圈用户协议"
+    verify_https_legal_document "$PUBLIC_API_HOST" "$API_EDGE_PORT" "/legal/privacy-policy" "趣我圈隐私政策"
     wait_https_ok "$PUBLIC_PRODUCT_OPS_HOST" "$PRODUCT_OPS_PORT" "/healthz" 30
     wait_https_ok "prod-image.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" 30
     wait_https_range_ok "prod-video.quwoquan-env.test" "$MEDIA_EDGE_PORT" "/media/video/s/archived-video/beta-sample.mp4" 30
@@ -349,7 +421,7 @@ case "$ACTION" in
     stop_bg media-edge
     stop_bg media-origin
     stop_tls_proxy
-    rm -f "$STATE_DIR/report.json"
+    rm -f "$REPORT"
     echo "[prod-sim] public plane stopped"
     ;;
   status)

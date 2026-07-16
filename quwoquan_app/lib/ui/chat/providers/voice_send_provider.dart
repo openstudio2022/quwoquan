@@ -1,12 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/media/media_upload_manager.dart';
 import 'package:quwoquan_app/cloud/media/upload_policy.dart';
-import 'package:quwoquan_app/cloud/runtime/codec/cloud_wire_json_types.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/trackers/voice_message_observability.dart';
 import 'package:quwoquan_app/ui/chat/providers/chat_message_provider.dart';
 import 'package:quwoquan_app/ui/chat/widgets/voice/voice_recorder.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+import 'package:quwoquan_app/ui/chat/models/chat_message_media_view_data.dart';
 
 /// Orchestrates: record result → upload → send voice message.
 enum VoiceSendStatus { idle, uploading, sending, completed, failed }
@@ -32,38 +33,6 @@ class VoiceSendState {
       error: error,
       uploadProgress: uploadProgress ?? this.uploadProgress,
     );
-  }
-}
-
-class VoiceMessageMediaPayload {
-  const VoiceMessageMediaPayload({
-    required this.url,
-    required this.mediaId,
-    required this.mimeType,
-    required this.fileSizeBytes,
-    required this.durationMs,
-    required this.waveform,
-    required this.codec,
-  });
-
-  final String url;
-  final String mediaId;
-  final String mimeType;
-  final int fileSizeBytes;
-  final int durationMs;
-  final List<double> waveform;
-  final String codec;
-
-  CloudJsonMap toWireJson() {
-    return <String, dynamic>{
-      'url': url,
-      'mediaId': mediaId,
-      'mimeType': mimeType,
-      'fileSizeBytes': fileSizeBytes,
-      'durationMs': durationMs,
-      'waveform': waveform,
-      'codec': codec,
-    };
   }
 }
 
@@ -108,15 +77,11 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
         );
         return;
       }
-      final ownerId = ref.read(currentUserIdProvider).trim();
       final task = UploadTask(
         localPath: result.filePath,
         category: MediaCategory.chatVoice,
         contentType: 'audio/mp4',
         fileSize: result.fileSize,
-        ownerId: ownerId.isEmpty ? 'current_user' : ownerId,
-        fileName: result.filePath.split('/').last,
-        completionMetadata: {'durationMs': result.durationMs},
       );
 
       final enqueued = await _uploadManager.enqueue(task);
@@ -182,8 +147,11 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       waveformSamples: result.waveform.length,
     );
     final cdnUrl = update.cdnUrl?.trim() ?? '';
-    if (cdnUrl.isEmpty) {
-      _trackUploadFailed('empty_cdn_url');
+    final assetId = update.assetId?.trim() ?? '';
+    if (cdnUrl.isEmpty || assetId.isEmpty) {
+      _trackUploadFailed(
+        cdnUrl.isEmpty ? 'empty_cdn_url' : 'empty_media_asset_id',
+      );
       state = state.copyWith(
         status: VoiceSendStatus.failed,
         error: UITextConstants.chatVoicePendingRetry,
@@ -191,14 +159,14 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
       return;
     }
 
-    final mediaPayload = VoiceMessageMediaPayload(
-      url: cdnUrl,
-      mediaId: update.assetId ?? '',
-      mimeType: 'audio/mp4',
+    final mediaPayload = ChatMessageMediaViewData(
+      deliveryUrl: cdnUrl,
+      assetId: assetId,
+      mediaType: 'audio',
+      contentType: 'audio/mp4',
       fileSizeBytes: result.fileSize,
       durationMs: result.durationMs,
       waveform: _compactWaveform(result.waveform),
-      codec: 'aac',
     );
 
     _observability.trackAction(
@@ -211,8 +179,7 @@ class VoiceSendNotifier extends Notifier<VoiceSendState> {
     final sent = await _messageNotifier.sendMessage(
       'audio',
       '',
-      mediaUrl: cdnUrl,
-      media: mediaPayload.toWireJson(),
+      media: mediaPayload,
     );
     if (!sent) {
       _observability.trackAction(

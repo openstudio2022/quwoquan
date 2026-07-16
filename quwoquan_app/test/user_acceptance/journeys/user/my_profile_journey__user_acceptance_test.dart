@@ -85,4 +85,46 @@ void main() {
 
     expect(find.text('生活'), findsNothing);
   });
+
+  testWidgets('我的主页互动转发可在二级同行切换收到与我发起', (tester) async {
+    _setPhoneSize(tester);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(_scopedApp());
+    await _pumpFrames(tester);
+    await revealProfilePrimaryTabs(tester);
+    await tapProfilePrimaryTab(tester, '互动');
+    await _pumpFrames(tester);
+
+    expect(find.text(UITextConstants.interactionSubAll), findsNothing);
+    await revealProfileSummaryWidget(
+      tester,
+      find.text(UITextConstants.interactionSubShares),
+    );
+    await tester.tap(find.text(UITextConstants.interactionSubShares));
+    await _pumpFrames(tester, count: 4);
+    expect(
+      find.text(UITextConstants.profileInteractionDirectionReceived),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.profileInteractionDirectionSent),
+      findsOneWidget,
+    );
+    expect(
+      find.text(UITextConstants.profileShareReceivedEmptyTitle),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.text(UITextConstants.profileInteractionDirectionSent),
+    );
+    await _pumpFrames(tester, count: 4);
+    expect(
+      find.text(UITextConstants.profileShareInitiatedEmptyTitle),
+      findsOneWidget,
+    );
+    expect(find.text('互动明细'), findsNothing);
+  });
 }

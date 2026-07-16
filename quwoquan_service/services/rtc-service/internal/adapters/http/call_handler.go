@@ -7,16 +7,15 @@ import (
 	"strconv"
 
 	rterr "quwoquan_service/runtime/errors"
-	"quwoquan_service/services/rtc-service/internal/adapters/ws"
 	"quwoquan_service/services/rtc-service/internal/application"
 )
 
 type CallHandler struct {
 	orchestrator  *application.CallOrchestrator
-	signalHandler *ws.SignalHandler
+	signalHandler http.Handler
 }
 
-func NewCallHandler(orch *application.CallOrchestrator, sh *ws.SignalHandler) *CallHandler {
+func NewCallHandler(orch *application.CallOrchestrator, sh http.Handler) *CallHandler {
 	return &CallHandler{orchestrator: orch, signalHandler: sh}
 }
 
@@ -26,7 +25,7 @@ func (h *CallHandler) Routes() http.Handler {
 	mux.HandleFunc("GET /livez", h.handleHealthz)
 	mux.HandleFunc("GET /startupz", h.handleHealthz)
 	if h.signalHandler != nil {
-		mux.HandleFunc("/v1/rtc/signal", h.signalHandler.HandleSignal)
+		mux.Handle("/v1/rtc/signal", h.signalHandler)
 	}
 
 	for _, r := range generatedRouteTable {

@@ -72,7 +72,7 @@ sit_acceptance:
       markVisited 清零，2026-06-16 green）'
     - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/cloud/content/intersection_repository_contract__local_contract_test.dart（summary/list/visit
       契约对齐，2026-06-16 green）'
-    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，.qwq_output/env/gamma/local/gamma-local/search_intersection_smoke.json）：content-service
+    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，已迁移 canonical run evidence：search_intersection_smoke.json）：content-service
       在 stackctl gamma 运行栈内，`/v1/content/intersections/{summary,object}`、`/v1/content/intersections`
       GET 路由全部上线并强制 viewer 鉴权（匿名返回 CONTENT.USER.invalid_argument『需要登录』）；`/v1/content/feed/intersections`
       200。BLOCKED：populated summary→list→visit 需网关可识别 token + 已 seed viewer 关系，见 backlog
@@ -205,7 +205,7 @@ sit_acceptance:
       过滤，2026-06-16 green）'
     - '[migrated_from_recorded] local_contract quwoquan_app/test/local_contract/ui/discovery/home_intersection_object_nav__local_contract_test.dart（事实/概率交集卡点击经
       metadata 路由进对象页，2026-06-16 green）'
-    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，.qwq_output/env/gamma/local/gamma-local/search_intersection_smoke.json）：`/v1/content/feed/intersections`
+    - '[migrated_from_recorded] PARTIAL api_integration（2026-06-16 gamma-local 实测，已迁移 canonical run evidence：search_intersection_smoke.json）：`/v1/content/feed/intersections`
       经网关 200（匿名诚实返回空 items，不伪造）；BLOCKED：校园/旅行频道分通道混排的 populated 结果需 seed viewer 关系
       + 频道参数，见 backlog R-IX05/R-IX07。'
     - '[recorded] 2026-07-05 continue-dev：`flutter test test/ui/discovery/home_intersection_multiform_feed_widget_test.dart
@@ -298,7 +298,9 @@ sit_acceptance:
     - circle-homepage-intersection-redesign
     - object-homepage-gamma-real-data-closure
     done_when:
-    - 交集触点统一遵循产品主轴「别人帮你刷内容，我们帮你遇到对的人」；所有可见交集句只读云侧 primaryText/primarySpans，端不拼句，join(spans.text)==primaryText 不变量成立。
+    - 交集触点统一遵循产品主轴「别人帮你刷内容，我们帮你遇到对的人」；所有可见交集句只读云侧 primaryText/primarySpans/displayBinding，端不拼句，join(spans.text)==primaryText 不变量成立。
+    - 上下文 SVO 成立：explicit_link 必须有 typed object span；host_implicit/host_plain 必须由当前内容卡/视频书/搜索 hit/主页宿主对象证明，禁止可点击 self-target 和 reason 池随机附着。
+    - 主句禁止 raw stats、泛对象和旧术语：不出现 `2赞1评`、`这条记录`、`TA的内容`、`相关圈子`、`我的连接`。
     - 前台用户维度收敛为「交集 / 打动」两词，入口统一「交集配对」、收件箱统一「我的交集」；“今日”只保留为最小时间粒度的次级说明，辐射他人用「打动」；旧「兴趣配对 / 找同趣 / 今日同趣机会 / 影响力」前台退场（机器标识 interest_match/impact 保留，见 00_GLOBAL_TERMINOLOGY.md §18.7）。
     - 七触点（视频书/首页内容卡/用户主页/我的主页/圈子主页/实体主页/交集配对 launcher）密度与行动重心符合定义文档 §24.8；四主页复用 ObjectIntersectionSection/ObjectIntersectionCard，不新增第四套抽象。
     - C0 差异化切片「共同想去→约伴」用已有 coWishlistedEntity + 关注 + 交集信号触发 start_companion；safetyGate 未满足时优雅降级为查看证据/进入对象，无登录死循环。
@@ -361,7 +363,7 @@ sit_acceptance:
       在 local-gamma seed 后观测到 `coWishlistedEntity` 与 `start_companion` action hint。'
     - '[recorded] user_acceptance/gamma_local 2026-07-02（工作包 E/F）：`LOCAL_GAMMA_SKIP_FIXTURE_SEEDS=0
       quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh --skip-build` 通过，落盘
-      `.qwq_output/env/gamma/local/gamma-local/intersection-seed-report.json` 与 `.qwq_output/env/gamma/local/gamma-local/premium-pool-seed-report.json`；
+      已迁移 canonical run evidence（`intersection-seed-report.json`、`premium-pool-seed-report.json`）；
       premium stream 只返回 `gamma_premium_pool_eligible_post`，`recallPath=premium_pool`，expired/rolled_back/takedown
       三类 ineligible 未泄漏。'
     - '[recorded] local_contract 2026-07-02（工作包 F 推荐差异化）：`go test

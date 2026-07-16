@@ -1,13 +1,9 @@
-import 'dart:io';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tabs_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dto.dart';
 import 'package:quwoquan_app/components/navigation/centered_scrollable_tab_bar.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
@@ -26,37 +22,8 @@ Future<void> _circlesPumpSettled(WidgetTester tester) async {
   }
 }
 
-/// 与 [CircleCategoryTabsLoader.assetPath] 同源；单测里避免 `rootBundle.loadString` 在部分环境下挂起。
-Map<String, CircleCategoryTabConfigDto> _fixtureCategoryTabsConfig() {
-  final candidates = <File>[
-    File(
-      '${Directory.current.path}/../quwoquan_service/contracts/metadata/social/circle/ui_category_tabs.yaml',
-    ),
-    File(
-      '${Directory.current.path}/quwoquan_service/contracts/metadata/social/circle/ui_category_tabs.yaml',
-    ),
-  ];
-  for (final f in candidates) {
-    if (f.existsSync()) {
-      return CircleCategoryTabsLoader.parseFromYamlString(f.readAsStringSync());
-    }
-  }
-  return Map<String, CircleCategoryTabConfigDto>.from(
-    CircleCategoryTabDefaults.remoteStyleFallback,
-  );
-}
-
-/// 避免单测里 [CircleCategoryTabsLoader.loadFromAsset] 走 `rootBundle` 挂起。
-class _FixtureCategoryMockRepo extends MockCircleRepository {
-  @override
-  Future<Map<String, CircleCategoryTabConfigDto>>
-  getCircleCategoryConfig() async {
-    return _fixtureCategoryTabsConfig();
-  }
-}
-
 Widget _scopedApp({CircleRepository? mock, double textScaleFactor = 1.0}) {
-  final repo = mock ?? _FixtureCategoryMockRepo();
+  final repo = mock ?? MockCircleRepository();
   return ProviderScope(
     overrides: [circleRepositoryProvider.overrideWithValue(repo)],
     child: MaterialApp.router(
@@ -104,8 +71,8 @@ void main() {
     });
 
     testWidgets('展示圈子搜索、小趣与实体主页入口', (tester) async {
-      final mock = _FixtureCategoryMockRepo();
-      final cfg = _fixtureCategoryTabsConfig();
+      final mock = MockCircleRepository();
+      final cfg = CircleCategoryTabDefaults.remoteStyleFallback;
       await tester.pumpWidget(_scopedApp(mock: mock));
       await tester.pump();
       await _circlesPumpSettled(tester);
@@ -131,7 +98,7 @@ void main() {
     });
 
     testWidgets('展示五个固定业务垂类并隐藏频道管理入口', (tester) async {
-      final mock = _FixtureCategoryMockRepo();
+      final mock = MockCircleRepository();
       await tester.pumpWidget(_scopedApp(mock: mock));
       await tester.pump();
       await _circlesPumpSettled(tester);
@@ -194,7 +161,7 @@ void main() {
   });
 }
 
-class _EmptyCircleRepository extends _FixtureCategoryMockRepo {
+class _EmptyCircleRepository extends MockCircleRepository {
   @override
   Future<List<CircleDto>> listCircles({
     String? category,

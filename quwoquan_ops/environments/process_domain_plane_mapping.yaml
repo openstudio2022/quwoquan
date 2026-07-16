@@ -8,7 +8,7 @@ environments:
     content-service:
       bindings:
         - domain: content
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
     search-service:
       bindings:
         - domain: search
@@ -28,19 +28,23 @@ environments:
     chat-service:
       bindings:
         - domain: chat
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
     circle-service:
       bindings:
         - domain: circle
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
     user-service:
       bindings:
         - domain: user
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
     integration-service:
       bindings:
         - domain: integration
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    notification-service:
+      bindings:
+        - domain: notification
+          planes: [user-plane, platform-control-plane, product-control-plane]
     recommendation-service:
       bindings:
         - domain: recommendation
@@ -56,26 +60,12 @@ environments:
     assistant-service:
       bindings:
         - domain: assistant
-          planes: [user-plane, platform-control-plane, product-control-plane]
-    seed-box:
-      bindings:
-        - domain: content
-          planes: [platform-control-plane, product-control-plane]
-        - domain: chat
-          planes: [platform-control-plane, product-control-plane]
-        - domain: circle
-          planes: [platform-control-plane, product-control-plane]
-        - domain: user
-          planes: [platform-control-plane, product-control-plane]
-        - domain: integration
-          planes: [platform-control-plane, product-control-plane]
-        - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]
   alpha:
     content-service:
       bindings:
         - domain: content
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
     search-service:
       bindings:
         - domain: search
@@ -95,19 +85,23 @@ environments:
     chat-service:
       bindings:
         - domain: chat
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
     circle-service:
       bindings:
         - domain: circle
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
     user-service:
       bindings:
         - domain: user
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
     integration-service:
       bindings:
         - domain: integration
-          planes: [user-plane]
+          planes: [user-plane, platform-control-plane, product-control-plane]
+    notification-service:
+      bindings:
+        - domain: notification
+          planes: [user-plane, platform-control-plane, product-control-plane]
     recommendation-service:
       bindings:
         - domain: recommendation
@@ -123,34 +117,12 @@ environments:
     assistant-service:
       bindings:
         - domain: assistant
-          planes: [user-plane, platform-control-plane, product-control-plane]
-    seed-box:
-      bindings:
-        - domain: content
-          planes: [platform-control-plane, product-control-plane]
-        - domain: chat
-          planes: [platform-control-plane, product-control-plane]
-        - domain: circle
-          planes: [platform-control-plane, product-control-plane]
-        - domain: user
-          planes: [platform-control-plane, product-control-plane]
-        - domain: integration
-          planes: [platform-control-plane, product-control-plane]
-        - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]
   beta:
     search-service:
       bindings:
         - domain: search
           planes: [user-plane]
-    entity-service:
-      bindings:
-        - domain: entity
-          planes: [user-plane, platform-control-plane, product-control-plane]
-    tag-service:
-      bindings:
-        - domain: tag
-          planes: [user-plane, platform-control-plane]
     product-ops-service:
       bindings:
         - domain: ops
@@ -167,10 +139,6 @@ environments:
       bindings:
         - domain: rtc
           planes: [user-plane, platform-control-plane, product-control-plane]
-    assistant-service:
-      bindings:
-        - domain: assistant
-          planes: [user-plane, platform-control-plane, product-control-plane]
     seed-box:
       bindings:
         - domain: content
@@ -182,6 +150,12 @@ environments:
         - domain: user
           planes: [user-plane, platform-control-plane, product-control-plane]
         - domain: circle
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: entity
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: tag
+          planes: [user-plane, platform-control-plane]
+        - domain: assistant
           planes: [user-plane, platform-control-plane, product-control-plane]
         - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]
@@ -190,14 +164,6 @@ environments:
       bindings:
         - domain: search
           planes: [user-plane]
-    entity-service:
-      bindings:
-        - domain: entity
-          planes: [user-plane, platform-control-plane, product-control-plane]
-    tag-service:
-      bindings:
-        - domain: tag
-          planes: [user-plane, platform-control-plane]
     product-ops-service:
       bindings:
         - domain: ops
@@ -214,10 +180,6 @@ environments:
       bindings:
         - domain: rtc
           planes: [user-plane, platform-control-plane, product-control-plane]
-    assistant-service:
-      bindings:
-        - domain: assistant
-          planes: [user-plane, platform-control-plane, product-control-plane]
     seed-box:
       bindings:
         - domain: content
@@ -229,6 +191,12 @@ environments:
         - domain: user
           planes: [user-plane, platform-control-plane, product-control-plane]
         - domain: circle
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: entity
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: tag
+          planes: [user-plane, platform-control-plane]
+        - domain: assistant
           planes: [user-plane, platform-control-plane, product-control-plane]
         - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]
@@ -237,14 +205,6 @@ environments:
       bindings:
         - domain: search
           planes: [user-plane]
-    entity-service:
-      bindings:
-        - domain: entity
-          planes: [user-plane, platform-control-plane, product-control-plane]
-    tag-service:
-      bindings:
-        - domain: tag
-          planes: [user-plane, platform-control-plane]
     product-ops-service:
       bindings:
         - domain: ops
@@ -261,10 +221,6 @@ environments:
       bindings:
         - domain: rtc
           planes: [user-plane, platform-control-plane, product-control-plane]
-    assistant-service:
-      bindings:
-        - domain: assistant
-          planes: [user-plane, platform-control-plane, product-control-plane]
     seed-box:
       bindings:
         - domain: content
@@ -276,6 +232,12 @@ environments:
         - domain: user
           planes: [user-plane, platform-control-plane, product-control-plane]
         - domain: circle
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: entity
+          planes: [user-plane, platform-control-plane, product-control-plane]
+        - domain: tag
+          planes: [user-plane, platform-control-plane]
+        - domain: assistant
           planes: [user-plane, platform-control-plane, product-control-plane]
         - domain: notification
           planes: [user-plane, platform-control-plane, product-control-plane]

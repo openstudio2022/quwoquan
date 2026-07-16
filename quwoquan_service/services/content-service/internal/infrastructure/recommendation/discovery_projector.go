@@ -11,7 +11,8 @@ import (
 )
 
 // DiscoveryFeedProjector maintains the rm_discovery_feed read model.
-// Source events: PostCreated, PostPublished, ContentReacted, BehaviorBatchReported.
+// Source events: Post lifecycle and EventBatchReported. ContentReaction uses
+// its own aggregate outbox + exact-count projector and must not enter this delta path.
 // Aligned with contracts/metadata/_projections/discovery_feed.yaml.
 type DiscoveryFeedProjector struct {
 	coll *mongo.Collection
@@ -30,8 +31,7 @@ func (p *DiscoveryFeedProjector) EventTypes() []string {
 		"PostSettingsUpdated",
 		"PostPromotedToWork",
 		"PostDeleted",
-		"ContentReacted",
-		"BehaviorBatchReported",
+		"EventBatchReported",
 	}
 }
 
@@ -57,9 +57,7 @@ func (p *DiscoveryFeedProjector) Project(ctx context.Context, event ProjectorEve
 		return p.onPostPromotedToWork(ctx, event)
 	case "PostDeleted":
 		return p.onPostDeleted(ctx, event)
-	case "ContentReacted":
-		return p.onContentReacted(ctx, event)
-	case "BehaviorBatchReported":
+	case "EventBatchReported":
 		return p.onBehaviorReported(ctx, event)
 	default:
 		return nil
@@ -124,7 +122,6 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 		"status":               normalizedStatus(event.Payload),
 		"visibility":           normalizeVisibility(strVal(event.Payload, "visibility")),
 		"assistantUsePolicy":   strVal(event.Payload, "assistantUsePolicy"),
-		"circleIds":            anySlice(event.Payload, "circleIds"),
 		"entityRefs":           anySlice(event.Payload, "entityRefs"),
 		"semanticMentions":     event.Payload["semanticMentions"],
 		"contentVertical":      strVal(event.Payload, "contentVertical"),
@@ -163,24 +160,6 @@ func (p *DiscoveryFeedProjector) syncPost(ctx context.Context, event ProjectorEv
 	return err
 }
 
-func (p *DiscoveryFeedProjector) onContentReacted(ctx context.Context, event ProjectorEvent) error {
-	postID := strVal(event.Payload, "postId")
-	if postID == "" {
-		return nil
-	}
-
-	inc := bson.M{}
-	if boolVal(event.Payload, "liked") {
-		inc["likeCount"] = int64(1)
-	}
-
-	if len(inc) == 0 {
-		return nil
-	}
-	_, err := p.coll.UpdateOne(ctx, bson.M{"postId": postID}, bson.M{"$inc": inc})
-	return err
-}
-
 func (p *DiscoveryFeedProjector) onBehaviorReported(ctx context.Context, event ProjectorEvent) error {
 	events, ok := event.Payload["events"].([]any)
 	if !ok || len(events) == 0 {
@@ -202,8 +181,6 @@ func (p *DiscoveryFeedProjector) onBehaviorReported(ctx context.Context, event P
 		switch action {
 		case "impression":
 			inc["viewCount"] = int64(1)
-		case "like":
-			inc["likeCount"] = int64(1)
 		}
 
 		if len(inc) > 0 {
@@ -248,15 +225,14 @@ func normalizedStatus(payload map[string]any) string {
 }
 
 func normalizeVisibility(value string) string {
-	switch strings.TrimSpace(strings.ToLower(value)) {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	switch normalized {
 	case "", "public":
 		return "public"
-	case "circle_visible", "circle-visible", "circle":
-		return "circle_visible"
 	case "private":
 		return "private"
 	default:
-		return "public"
+		return normalized
 	}
 }
 

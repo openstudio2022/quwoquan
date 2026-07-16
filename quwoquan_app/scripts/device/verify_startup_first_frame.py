@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -32,7 +33,14 @@ DEFAULT_ANDROID_APK = DEFAULT_ANDROID_APK_DIR / "app-debug.apk"
 DEFAULT_ANDROID_APK_METADATA = APP_DIR / "build/app/outputs/apk/debug/output-metadata.json"
 DEFAULT_IOS_BUNDLE = "com.example.quwoquanApp"
 DEFAULT_IOS_APP = APP_DIR / "build/ios/iphonesimulator/Runner.app"
-DEFAULT_OUTPUT_DIR = ROOT / ".qwq_output/env/repo/runs/startup_first_frame/probe"
+DEFAULT_OUTPUT_DIR = (
+    Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
+    / "env"
+    / "alpha"
+    / "runs"
+    / "startup_first_frame"
+    / "probe"
+)
 FORBIDDEN_NATIVE_WELCOME_LOG_PATTERNS = (
     "android_startup_welcome_first_draw",
     "android_startup_activity_handoff",
@@ -98,6 +106,15 @@ def read_android_device_abi(device: str) -> str:
     if not abi:
         raise RuntimeError(f"Unable to resolve Android ABI for device {device}")
     return abi
+
+
+def android_device_kind(device: str) -> str:
+    qemu = run(
+        ["adb", "-s", device, "shell", "getprop", "ro.kernel.qemu"],
+        check=False,
+        timeout=15,
+    ).stdout.strip()
+    return "simulator" if qemu == "1" else "true_device"
 
 
 def resolve_android_apk(apk: Path, device: str) -> Path:
@@ -221,6 +238,85 @@ def parse_qwqstartup_log(raw: str) -> dict[str, int]:
     return values
 
 
+def parse_startup_sequence_log(raw: str) -> dict[str, Any]:
+    events: list[dict[str, Any]] = []
+    for line in raw.splitlines():
+        json_marker = "startup_event "
+        if json_marker in line:
+            payload = line.split(json_marker, 1)[1].strip()
+            try:
+                decoded = json.loads(payload)
+            except json.JSONDecodeError:
+                decoded = None
+            if (
+                isinstance(decoded, dict)
+                and decoded.get("eventName") == "startup_welcome_sequence"
+            ):
+                events.append(decoded)
+            continue
+        marker = "startup_welcome_sequence "
+        if marker not in line:
+            continue
+        payload = line.split(marker, 1)[1]
+        event: dict[str, Any] = {}
+        for key, value in re.findall(r"([A-Za-z][A-Za-z0-9]*)=([^\s]+)", payload):
+            if re.fullmatch(r"-?\d+", value):
+                event[key] = int(value)
+            elif value in ("true", "false"):
+                event[key] = value == "true"
+            else:
+                event[key] = value
+        if event:
+            events.append(event)
+
+    finished = next(
+        (event for event in reversed(events) if event.get("phase") == "finished"),
+        None,
+    )
+    shell = next(
+        (
+            event
+            for event in reversed(events)
+            if event.get("phase") == "main_shell_first_paint"
+        ),
+        None,
+    )
+    overlay_removed = next(
+        (
+            event
+            for event in reversed(events)
+            if event.get("phase") == "welcome_overlay_removed"
+        ),
+        None,
+    )
+    return {
+        "events": events,
+        "motionSpecVersion": next(
+            (
+                event.get("motionSpecVersion")
+                for event in reversed(events)
+                if event.get("motionSpecVersion") is not None
+            ),
+            None,
+        ),
+        "firstVisibleMs": next(
+            (
+                event.get("elapsedSinceProcessStartMs")
+                for event in events
+                if event.get("phase") == "nativeStatic"
+            ),
+            None,
+        ),
+        "welcomeExitMs": finished.get("welcomeExitMs") if finished else None,
+        "exitReason": finished.get("exitReason") if finished else None,
+        "replayCount": finished.get("replayCount") if finished else None,
+        "shellFirstPaintMs": shell.get("shellFirstPaintMs") if shell else None,
+        "overlayRemovedMs": (
+            overlay_removed.get("overlayRemovedMs") if overlay_removed else None
+        ),
+    }
+
+
 def percentile(values: list[int], ratio: float) -> int | None:
     if not values:
         return None
@@ -236,6 +332,65 @@ def summarize_metric_runs(samples: list[dict[str, Any]], key: str) -> dict[str, 
     return {
         "p50": percentile(values, 0.5),
         "p95": percentile(values, 0.95),
+    }
+
+
+def build_platform_samples(
+    results: list[dict[str, Any]],
+    platform: str,
+    *,
+    stamp: str,
+    runs: int,
+    output_dir: Path,
+) -> list[dict[str, Any]]:
+    platform_results = [item for item in results if item.get("platform") == platform]
+    return [
+        {
+            "runId": stamp if runs <= 1 else f"{stamp}-run-{index + 1:02d}",
+            "platform": platform,
+            "activityDisplayedMs": item.get("activityDisplayedMs"),
+            "activityOnCreateMs": item.get("activityOnCreateMs"),
+            "flutterEngineConfiguredMs": item.get("flutterEngineConfiguredMs"),
+            "firstVisibleMs": item.get("firstVisibleMs"),
+            "welcomeExitMs": item.get("startupSequence", {}).get("welcomeExitMs"),
+            "shellFirstPaintMs": item.get("startupSequence", {}).get(
+                "shellFirstPaintMs"
+            ),
+            "overlayRemovedMs": item.get("startupSequence", {}).get(
+                "overlayRemovedMs"
+            ),
+            "replayCount": item.get("startupSequence", {}).get("replayCount"),
+            "exitReason": item.get("startupSequence", {}).get("exitReason"),
+            "motionSpecVersion": item.get("startupSequence", {}).get(
+                "motionSpecVersion"
+            ),
+            "deviceKind": item.get("deviceKind", "unknown"),
+            "reportPath": str(output_dir),
+        }
+        for index, item in enumerate(platform_results)
+    ]
+
+
+def summarize_startup_samples(samples: list[dict[str, Any]]) -> dict[str, Any]:
+    metric_names = (
+        "activityDisplayedMs",
+        "activityOnCreateMs",
+        "flutterEngineConfiguredMs",
+        "firstVisibleMs",
+        "welcomeExitMs",
+        "shellFirstPaintMs",
+        "overlayRemovedMs",
+    )
+    return {
+        "samples": samples,
+        "p50": {
+            metric: summarize_metric_runs(samples, metric)["p50"]
+            for metric in metric_names
+        },
+        "p95": {
+            metric: summarize_metric_runs(samples, metric)["p95"]
+            for metric in metric_names
+        },
     }
 
 
@@ -294,6 +449,7 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         (output_dir / "android-install.txt").write_text(install_output, encoding="utf-8")
     run(["adb", "-s", args.android_device, "logcat", "-c"])
     run(["adb", "-s", args.android_device, "shell", "am", "force-stop", args.android_package])
+    start_clock = time.monotonic()
     start = run(
         [
             "adb",
@@ -310,33 +466,48 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     (output_dir / "android-am-start.txt").write_text(start.stdout, encoding="utf-8")
 
     analyses: list[ScreenshotAnalysis] = []
-    start_clock = time.monotonic()
-    for offset in args.android_offsets_ms:
-        target = start_clock + offset / 1000
-        time.sleep(max(target - time.monotonic(), 0))
-        actual_offset_ms = round((time.monotonic() - start_clock) * 1000)
-        screenshot = output_dir / f"android-{offset:04d}ms.png"
-        with screenshot.open("wb") as handle:
-            run(
-                ["adb", "-s", args.android_device, "exec-out", "screencap", "-p"],
-                stdout=handle,
-                timeout=15,
-            )
-        analyses.append(analyze_screenshot(screenshot, actual_offset_ms))
+    log: str | None = None
+    if args.skip_screenshots:
+        log = _wait_for_android_startup_log(
+            args.android_device,
+            hard_deadline_ms=args.welcome_exit_hard_ms,
+        )
+    else:
+        for offset in args.android_offsets_ms:
+            target = start_clock + offset / 1000
+            time.sleep(max(target - time.monotonic(), 0))
+            actual_offset_ms = round((time.monotonic() - start_clock) * 1000)
+            screenshot = output_dir / f"android-{offset:04d}ms.png"
+            with screenshot.open("wb") as handle:
+                run(
+                    ["adb", "-s", args.android_device, "exec-out", "screencap", "-p"],
+                    stdout=handle,
+                    timeout=15,
+                )
+            analyses.append(analyze_screenshot(screenshot, actual_offset_ms))
 
-    log = run(["adb", "-s", args.android_device, "logcat", "-d"], timeout=15).stdout
+    if log is None:
+        log = run(
+            ["adb", "-s", args.android_device, "logcat", "-d"],
+            timeout=15,
+        ).stdout
     (output_dir / "android-logcat.txt").write_text(log, encoding="utf-8")
     timings = parse_qwqstartup_log(log)
+    sequence = parse_startup_sequence_log(log)
     native_welcome_hits = [
         pattern
         for pattern in FORBIDDEN_NATIVE_WELCOME_LOG_PATTERNS
         if pattern in log
     ]
     native_welcome_detected = bool(native_welcome_hits)
-    first_visible = resolve_first_visible_ms(
-        analyses,
-        args.android_visible_by_ms,
-        require_branded=args.require_branded_visible,
+    first_visible = (
+        sequence.get("firstVisibleMs")
+        if args.skip_screenshots
+        else resolve_first_visible_ms(
+            analyses,
+            args.android_visible_by_ms,
+            require_branded=args.require_branded_visible,
+        )
     )
     flutter_ui_ms = timings.get("android_flutter_ui_displayed")
     activity_displayed_ms = timings.get("android_activity_displayed_ms")
@@ -358,6 +529,23 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
     flutter_ui_within_budget = (
         flutter_ui_ms is None or flutter_ui_ms <= args.android_flutter_ui_max_ms
     )
+    welcome_exit_ms = sequence.get("welcomeExitMs")
+    shell_first_paint_ms = sequence.get("shellFirstPaintMs")
+    overlay_removed_ms = sequence.get("overlayRemovedMs")
+    sequence_events_present = bool(sequence["events"])
+    sequence_motion_current = sequence.get("motionSpecVersion") == "petal_bloom_v2"
+    welcome_exit_within_deadline = (
+        welcome_exit_ms is not None
+        and welcome_exit_ms <= args.welcome_exit_hard_ms
+    )
+    shell_first_paint_within_target = (
+        shell_first_paint_ms is not None
+        and shell_first_paint_ms <= args.shell_first_paint_target_ms
+    )
+    overlay_removed_within_deadline = (
+        overlay_removed_ms is not None
+        and overlay_removed_ms <= args.welcome_exit_hard_ms
+    )
     plain_background_detected = (
         not ttid_within_budget
         and any(
@@ -374,10 +562,24 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         and ttid_within_budget
         and (first_visible is not None or not args.require_branded_visible)
         and flutter_ui_within_budget
+        and (
+            not args.require_startup_sequence_events
+            or (
+                sequence_events_present
+                and sequence_motion_current
+                and welcome_exit_within_deadline
+                and overlay_removed_within_deadline
+            )
+        )
+        and (
+            not args.enforce_shell_target
+            or shell_first_paint_within_target
+        )
     )
     return {
         "platform": "android",
         "device": args.android_device,
+        "deviceKind": android_device_kind(args.android_device),
         "apk": str(apk) if args.android_install else None,
         "passed": passed,
         "visibleByMs": args.android_visible_by_ms,
@@ -392,9 +594,46 @@ def capture_android(args: argparse.Namespace, output_dir: Path) -> dict[str, Any
         "plainBackgroundDetected": plain_background_detected,
         "flutterUiDisplayedMaxMs": args.android_flutter_ui_max_ms,
         "flutterUiDisplayedWithinBudget": flutter_ui_within_budget,
+        "startupSequenceEventsPresent": sequence_events_present,
+        "startupSequenceMotionCurrent": sequence_motion_current,
+        "welcomeExitHardMs": args.welcome_exit_hard_ms,
+        "welcomeExitWithinDeadline": welcome_exit_within_deadline,
+        "overlayRemovedWithinDeadline": overlay_removed_within_deadline,
+        "shellFirstPaintTargetMs": args.shell_first_paint_target_ms,
+        "shellFirstPaintWithinTarget": shell_first_paint_within_target,
+        "startupSequence": sequence,
         "timings": timings,
         "screenshots": [item.to_json() for item in analyses],
     }
+
+
+def _wait_for_android_startup_log(device: str, *, hard_deadline_ms: int) -> str:
+    host_deadline = time.monotonic() + hard_deadline_ms / 1000 + 12
+    process_seen_at: float | None = None
+    latest = ""
+    while time.monotonic() < host_deadline:
+        latest = run(
+            ["adb", "-s", device, "logcat", "-d"],
+            check=False,
+            timeout=15,
+        ).stdout
+        if process_seen_at is None and "android_activity_on_create" in latest:
+            process_seen_at = time.monotonic()
+        sequence = parse_startup_sequence_log(latest)
+        if (
+            sequence.get("welcomeExitMs") is not None
+            and sequence.get("shellFirstPaintMs") is not None
+            and sequence.get("overlayRemovedMs") is not None
+        ):
+            return latest
+        if (
+            process_seen_at is not None
+            and time.monotonic() - process_seen_at
+            > hard_deadline_ms / 1000 + 4
+        ):
+            return latest
+        time.sleep(0.25)
+    return latest
 
 
 def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
@@ -411,29 +650,74 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         check=False,
         timeout=15,
     )
+    start_clock = time.monotonic()
     launch = run(
         ["xcrun", "simctl", "launch", args.ios_device, args.ios_bundle],
         timeout=15,
     )
     (output_dir / "ios-simctl-launch.txt").write_text(launch.stdout, encoding="utf-8")
+    launch_pid_match = re.search(r":\s*(\d+)\s*$", launch.stdout)
+    launch_pid = int(launch_pid_match.group(1)) if launch_pid_match else None
 
     analyses: list[ScreenshotAnalysis] = []
-    start_clock = time.monotonic()
-    for offset in args.ios_offsets_ms:
-        target = start_clock + offset / 1000
-        time.sleep(max(target - time.monotonic(), 0))
-        actual_offset_ms = round((time.monotonic() - start_clock) * 1000)
-        screenshot = output_dir / f"ios-{offset:04d}ms.png"
-        run(
-            ["xcrun", "simctl", "io", args.ios_device, "screenshot", str(screenshot)],
-            timeout=15,
+    ios_log: str | None = None
+    if args.skip_screenshots:
+        ios_log = _wait_for_ios_startup_log(
+            args.ios_device,
+            launch_pid=launch_pid,
+            hard_deadline_ms=args.welcome_exit_hard_ms,
         )
-        analyses.append(analyze_screenshot(screenshot, actual_offset_ms))
+    else:
+        for offset in args.ios_offsets_ms:
+            target = start_clock + offset / 1000
+            time.sleep(max(target - time.monotonic(), 0))
+            actual_offset_ms = round((time.monotonic() - start_clock) * 1000)
+            screenshot = output_dir / f"ios-{offset:04d}ms.png"
+            run(
+                [
+                    "xcrun",
+                    "simctl",
+                    "io",
+                    args.ios_device,
+                    "screenshot",
+                    str(screenshot),
+                ],
+                timeout=15,
+            )
+            analyses.append(analyze_screenshot(screenshot, actual_offset_ms))
 
-    first_visible = resolve_first_visible_ms(
-        analyses,
-        args.ios_visible_by_ms,
-        require_branded=True,
+    if ios_log is None:
+        ios_log = _read_ios_startup_log(args.ios_device, launch_pid=launch_pid)
+    (output_dir / "ios-startup-log.txt").write_text(
+        ios_log,
+        encoding="utf-8",
+    )
+    sequence = parse_startup_sequence_log(ios_log)
+    welcome_exit_ms = sequence.get("welcomeExitMs")
+    shell_first_paint_ms = sequence.get("shellFirstPaintMs")
+    sequence_events_present = bool(sequence["events"])
+    sequence_motion_current = sequence.get("motionSpecVersion") == "petal_bloom_v2"
+    welcome_exit_within_deadline = (
+        welcome_exit_ms is not None
+        and welcome_exit_ms <= args.welcome_exit_hard_ms
+    )
+    shell_first_paint_within_target = (
+        shell_first_paint_ms is not None
+        and shell_first_paint_ms <= args.shell_first_paint_target_ms
+    )
+    overlay_removed_ms = sequence.get("overlayRemovedMs")
+    overlay_removed_within_deadline = (
+        overlay_removed_ms is not None
+        and overlay_removed_ms <= args.welcome_exit_hard_ms
+    )
+    first_visible = (
+        sequence.get("firstVisibleMs")
+        if args.skip_screenshots
+        else resolve_first_visible_ms(
+            analyses,
+            args.ios_visible_by_ms,
+            require_branded=True,
+        )
     )
     ttid_within_budget = (
         first_visible is not None and first_visible <= args.ios_visible_by_ms
@@ -461,18 +745,85 @@ def capture_ios(args: argparse.Namespace, output_dir: Path) -> dict[str, Any]:
         ttid_within_budget
         and not blue_screen_detected
         and not plain_background_detected
+        and (
+            not args.require_startup_sequence_events
+            or (
+                sequence_events_present
+                and sequence_motion_current
+                and welcome_exit_within_deadline
+                and overlay_removed_within_deadline
+            )
+        )
+        and (
+            not args.enforce_shell_target
+            or shell_first_paint_within_target
+        )
     )
     return {
         "platform": "ios",
         "device": args.ios_device,
+        "deviceKind": "simulator",
         "passed": passed,
         "visibleByMs": args.ios_visible_by_ms,
         "firstVisibleMs": first_visible,
         "ttidWithinBudget": ttid_within_budget,
         "blueScreenDetected": blue_screen_detected,
         "plainBackgroundDetected": plain_background_detected,
+        "startupSequenceEventsPresent": sequence_events_present,
+        "startupSequenceMotionCurrent": sequence_motion_current,
+        "welcomeExitHardMs": args.welcome_exit_hard_ms,
+        "welcomeExitWithinDeadline": welcome_exit_within_deadline,
+        "overlayRemovedWithinDeadline": overlay_removed_within_deadline,
+        "shellFirstPaintTargetMs": args.shell_first_paint_target_ms,
+        "shellFirstPaintWithinTarget": shell_first_paint_within_target,
+        "startupSequence": sequence,
         "screenshots": [item.to_json() for item in analyses],
     }
+
+
+def _read_ios_startup_log(device: str, *, launch_pid: int | None) -> str:
+    predicate = 'eventMessage CONTAINS "startup_welcome_sequence"'
+    if launch_pid is not None:
+        predicate = f"processIdentifier == {launch_pid} AND ({predicate})"
+    return run(
+        [
+            "xcrun",
+            "simctl",
+            "spawn",
+            device,
+            "log",
+            "show",
+            "--last",
+            "2m",
+            "--style",
+            "compact",
+            "--predicate",
+            predicate,
+        ],
+        check=False,
+        timeout=30,
+    ).stdout
+
+
+def _wait_for_ios_startup_log(
+    device: str,
+    *,
+    launch_pid: int | None,
+    hard_deadline_ms: int,
+) -> str:
+    deadline = time.monotonic() + hard_deadline_ms / 1000 + 4
+    latest = ""
+    while time.monotonic() < deadline:
+        latest = _read_ios_startup_log(device, launch_pid=launch_pid)
+        sequence = parse_startup_sequence_log(latest)
+        if (
+            sequence.get("welcomeExitMs") is not None
+            and sequence.get("shellFirstPaintMs") is not None
+            and sequence.get("overlayRemovedMs") is not None
+        ):
+            return latest
+        time.sleep(0.25)
+    return latest
 
 
 def analyze_existing_screenshots(args: argparse.Namespace) -> list[dict[str, Any]]:
@@ -506,10 +857,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--android-offsets-ms",
         type=parse_offsets,
-        default=[400, 600, 800, 1000, 1500, 2000],
+        default=[400, 600, 800, 1000, 1500, 2000, 3000, 6000],
     )
     parser.add_argument("--android-visible-by-ms", type=int, default=2000)
     parser.add_argument("--android-flutter-ui-max-ms", type=int, default=3000)
+    parser.add_argument("--shell-first-paint-target-ms", type=int, default=3000)
+    parser.add_argument("--welcome-exit-hard-ms", type=int, default=6000)
+    parser.add_argument(
+        "--require-startup-sequence-events",
+        action="store_true",
+        help="Require structured Flutter startup sequence events and <= hard deadline.",
+    )
+    parser.add_argument(
+        "--skip-screenshots",
+        action="store_true",
+        help="Measure startup timing without screencap-induced renderer stalls.",
+    )
+    parser.add_argument(
+        "--enforce-shell-target",
+        action="store_true",
+        help="Fail when shellFirstPaintMs exceeds shell-first-paint-target-ms.",
+    )
     parser.add_argument(
         "--runs",
         type=int,
@@ -532,7 +900,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--ios-offsets-ms",
         type=parse_offsets,
-        default=[200, 400, 600, 800, 1000, 1400],
+        default=[200, 400, 600, 800, 1000, 1400, 3000, 6000],
     )
     parser.add_argument("--ios-visible-by-ms", type=int, default=1500)
     parser.add_argument(
@@ -579,65 +947,32 @@ def main() -> int:
         if args.runs > 1 and args.android_device and run_index + 1 < args.runs:
             time.sleep(1.5)
 
-    summary: dict[str, Any] | None = None
-    android_samples = [
-        {
-            "runId": stamp if args.runs <= 1 else f"{stamp}-run-{index + 1:02d}",
-            "activityDisplayedMs": item.get("activityDisplayedMs"),
-            "activityOnCreateMs": item.get("activityOnCreateMs"),
-            "flutterEngineConfiguredMs": item.get("flutterEngineConfiguredMs"),
-            "firstVisibleMs": item.get("firstVisibleMs"),
-            "reportPath": str(output_dir),
-        }
-        for index, item in enumerate(results)
-        if item.get("platform") == "android"
-    ]
-    if android_samples:
-        summary = {
-            "samples": android_samples,
-            "p50": {
-                "activityDisplayedMs": summarize_metric_runs(
-                    android_samples,
-                    "activityDisplayedMs",
-                )["p50"],
-                "activityOnCreateMs": summarize_metric_runs(
-                    android_samples,
-                    "activityOnCreateMs",
-                )["p50"],
-                "flutterEngineConfiguredMs": summarize_metric_runs(
-                    android_samples,
-                    "flutterEngineConfiguredMs",
-                )["p50"],
-                "firstVisibleMs": summarize_metric_runs(
-                    android_samples,
-                    "firstVisibleMs",
-                )["p50"],
-            },
-            "p95": {
-                "activityDisplayedMs": summarize_metric_runs(
-                    android_samples,
-                    "activityDisplayedMs",
-                )["p95"],
-                "activityOnCreateMs": summarize_metric_runs(
-                    android_samples,
-                    "activityOnCreateMs",
-                )["p95"],
-                "flutterEngineConfiguredMs": summarize_metric_runs(
-                    android_samples,
-                    "flutterEngineConfiguredMs",
-                )["p95"],
-                "firstVisibleMs": summarize_metric_runs(
-                    android_samples,
-                    "firstVisibleMs",
-                )["p95"],
-            },
-        }
+    platform_samples = {
+        platform: build_platform_samples(
+            results,
+            platform,
+            stamp=stamp,
+            runs=args.runs,
+            output_dir=output_dir,
+        )
+        for platform in ("android", "ios")
+    }
+    platform_summaries = {
+        platform: summarize_startup_samples(samples)
+        for platform, samples in platform_samples.items()
+        if samples
+    }
+    summary: dict[str, Any] | None = (
+        platform_summaries.get("android")
+        or platform_summaries.get("ios")
+    )
 
     report = {
         "outputDir": str(output_dir),
         "runs": args.runs,
         "passed": all(item["passed"] for item in results),
         "summary": summary,
+        "summaryByPlatform": platform_summaries,
         "runReports": run_reports or None,
         "results": results,
     }
@@ -647,17 +982,34 @@ def main() -> int:
     if args.write_baseline:
         baseline_path = Path(args.write_baseline)
         baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        selected_platforms = [
+            platform for platform, samples in platform_samples.items() if samples
+        ]
+        baseline_samples = [
+            sample
+            for platform in selected_platforms
+            for sample in platform_samples[platform]
+        ]
         baseline = {
-            "schemaVersion": 1,
+            "schemaVersion": 2,
             "capturedAt": time.strftime("%Y-%m-%d"),
-            "platform": "android",
-            "deviceProfile": args.android_device or "unknown",
+            "platform": "+".join(selected_platforms),
+            "deviceProfile": args.android_device or args.ios_device or "unknown",
+            "deviceKind": "+".join(
+                sorted({str(sample["deviceKind"]) for sample in baseline_samples})
+            ),
             "buildMode": "release",
-            "metric": "brandWelcomeFirstVisibleMs",
-            "samples": android_samples,
+            "metric": "startupWelcome3s6s",
+            "sampleCount": len(baseline_samples),
+            "samples": baseline_samples,
             "p50": summary["p50"] if summary else {},
             "p95": summary["p95"] if summary else {},
-            "slaTargetRelease": {"ttidP50Ms": 1000, "ttidP95Ms": 2000},
+            "slaTargetRelease": {
+                "ttidP50Ms": 1000,
+                "ttidP95Ms": 2000,
+                "shellFirstPaintMs": args.shell_first_paint_target_ms,
+                "welcomeExitHardMs": args.welcome_exit_hard_ms,
+            },
             "sourceReport": str(report_path),
         }
         baseline_path.write_text(

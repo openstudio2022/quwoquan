@@ -1,8 +1,8 @@
-"""目录与资产证据链静态门 (T1) ——「对象同构 + 来源内聚 + 相对路径 + 文风 + 命名 + 路由同步」收口。
+"""Execution 工作包与资产证据链静态门。
 
-真相源：docs/pipeline_directory_layout_spec.md。扫描批次新布局对象目录：
-  batches/{batch}/entities/{domain}/{type}/{name}/   （实体对象）
-  batches/{batch}/posts/{contentType}/{angle}/{title}/{seq}/   （内容对象）
+扫描唯一工作包：
+  tasks/{executionId}/entities/{domain}/{type}/{name}/
+  tasks/{executionId}/posts/{contentType}/{angle}/{title}/{seq}/
 
 阻断（BLOCK）：
 1. 对象内出现散落 images/（图片必须在来源单元 assets/ 内）。
@@ -12,15 +12,15 @@
 5. manifest.assets[].sourceAssetRef 指向的源图缺失（资产闭环断裂）。
 6. 【命名门】对象目录层级/命名不符（posts/{type}/{angle}/{title}/{seq}、entities/{domain}/{type}/{name}、
    阶段子目录 ∉ 编号阶段∪assets、来源单元 ∉ {NN}.{kind}）。
-7. 【回退门】task_produce stage-first 扁平面被重新写入（task_produce/{posts,inputs,drafts,results,review/*}），
+7. 【回退门】`_shared/workspace/post` 的 stage-first 扁平面被重新写入，
    即 M3/M4 已迁对象根的成品/草稿/brief/阶段报告/账本不得回退。
 8. 【同步门】成品对象目录与 `_shared/content_object_index.json` 路由漂移（对象在盘上但未登记）。
-9. 【证据面门】batch/_shared 出现未登记条目（不属于 paths.BATCH_SHARED_AUTHORITATIVE_ENTRIES
-   权威证据，也不属于 BATCH_SHARED_RECLAIMABLE_ENTRIES / `tmp_*` 可清理层）。
+9. 【证据面门】execution/_shared 出现未登记条目（不属于 paths.EXECUTION_SHARED_AUTHORITATIVE_ENTRIES
+   权威证据，也不属于 EXECUTION_SHARED_RECLAIMABLE_ENTRIES / `tmp_*` 可清理层）。
 
 旧 stage-first 布局（download/sources）已废弃；若被写入，按回退门直接 BLOCK。
 
-可直接运行：python3 quwoquan_data/scripts/verify/verify_directory_evidence_chain.py [--task T --batch B]
+可直接运行：python3 quwoquan_data/scripts/verify/verify_directory_evidence_chain.py [--execution-id ID]
 """
 from __future__ import annotations
 
@@ -32,29 +32,25 @@ from pathlib import Path
 SCRIPTS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_ROOT))
 
-from _common.batch_scan import iter_batch_object_dirs  # noqa: E402
-from _common.article_package import compute_document_sha256  # noqa: E402
-from _common.io import read_json  # noqa: E402
-from _common.image_rules import pixel_size_issue, relevance_issue  # noqa: E402
-from _common.paths import (  # noqa: E402
+from content.execution.object_scan import iter_execution_object_dirs  # noqa: E402
+from core.article_package import compute_document_sha256  # noqa: E402
+from core.io import read_json  # noqa: E402
+from core.image_rules import pixel_size_issue, relevance_issue  # noqa: E402
+from core.paths import (  # noqa: E402
     OBJECT_STAGES,
-    TASKS_ROOT,
-    TASK_ROOT_ALLOWED_ENTRIES,
-    TASK_ROOT_LEGACY_COMPAT_ENTRIES,
-    TASK_SHARED_ALLOWED_ENTRIES,
-    batch_root,
-    batch_shared_entry_role,
-    batch_task_id,
-    iter_all_batch_dirs,
-    normalize_task_id,
-    task_root,
-    task_shared_dir,
+    DATA_EXECUTIONS_ROOT,
+    EXECUTION_ROOT_ALLOWED_ENTRIES,
+    execution_root,
+    execution_shared_entry_role,
+    execution_id_from_dir,
+    iter_all_execution_dirs,
+    normalize_execution_id,
 )
-from _common.asset_identity import parse_post_asset_id  # noqa: E402
-from _common.prose_style import mechanical_ending_title_issues  # noqa: E402
-from _common.source_catalog import source_unit_category_issues  # noqa: E402
-from _common.entity_object import batch_entity_type_conflicts  # noqa: E402
-from verify.verify_asset_id_zero_collision import scan_batch as scan_asset_ids  # noqa: E402
+from core.asset_identity import parse_post_asset_id  # noqa: E402
+from core.prose_style import mechanical_ending_title_issues  # noqa: E402
+from core.source_catalog import source_unit_category_issues  # noqa: E402
+from core.entity_object import execution_entity_type_conflicts  # noqa: E402
+from verify.verify_asset_id_zero_collision import scan_execution as scan_asset_ids  # noqa: E402
 
 _REF_FIELDS = (
     "baseSourceRef",
@@ -73,69 +69,38 @@ _REF_FIELDS = (
     "composeSnapshotRef",
 )
 _UNIT_RE = __import__("re").compile(r"^(\d{2})\.(.+)$")
-_OBJECT_CHILD_ALLOW = set(OBJECT_STAGES) | {"assets"}
-# task/_shared 最小证据面（真相源：paths.TASK_SHARED_ALLOWED_ENTRIES）。
-_TASK_SHARED_ALLOW = set(TASK_SHARED_ALLOWED_ENTRIES)
+_OBJECT_CHILD_ALLOW = set(OBJECT_STAGES) | {"assets", "evidence"}
+# execution 顶层只允许稳定工作包合同；内部命令临时面统一在 `_shared/workspace/`。
+_EXECUTION_TOP_ALLOW = set(EXECUTION_ROOT_ALLOWED_ENTRIES)
 
-# 批次顶层允许集（§2/§12 A5）：对象目录 + 批次公共 + 受控 workspace 命令目录。
-# workspace 命令目录不得承载对象证据（由回退门 _regression_issues 保证）。
-_BATCH_TOP_ALLOW = {
-    "entities", "posts", "sources", "_shared", "batch_manifest.json",
-    "task_workflow", "task_download", "task_build", "task_produce", "task_publish",
-    "media",
-}
-
-# M3/M4 已迁对象根的 produce 扁平面：若被重新写入（非空）即 stage-first 回退，BLOCK。
+# M3/M4 已迁对象根的 post 扁平面：若被重新写入（非空）即 stage-first 回退，BLOCK。
 _REGRESSION_FACES = (
-    ("task_produce/posts", "manifest.json", True, "成品须落对象根 posts/{type}/{angle}/{title}/{seq}"),
-    ("task_produce/inputs/compose", "*.json", False, "compose 输入须落对象 3.compose/brief.json"),
-    ("task_produce/drafts", "*", True, "草稿须落对象 3.compose/4.draft"),
-    ("task_produce/results/compose", "*.json", False, "compose 报告须落对象 5.review"),
-    ("task_produce/results/review", "*.json", False, "review 报告须落对象 5.review"),
-    ("task_produce/results/quality_analysis", "*.json", False, "quality 报告须落对象 2.quality"),
-    ("task_produce/results/media_check", "*.json", False, "media_check 报告须落对象 5.review"),
-    ("task_produce/review/ledger", "*.json", False, "复核账本须落对象 5.review/review_ledger.json"),
-    ("task_produce/review/entities", "*.json", False, "复核实体边车须落对象 5.review/review_entities.json"),
+    ("_shared/workspace/post/posts", "manifest.json", True, "成品须落对象根 posts/{type}/{angle}/{title}/{seq}"),
+    ("_shared/workspace/post/inputs/compose", "*.json", False, "compose 输入须落对象 3.compose/brief.json"),
+    ("_shared/workspace/post/drafts", "*", True, "草稿须落对象 3.compose/4.draft"),
+    ("_shared/workspace/post/results/compose", "*.json", False, "compose 报告须落对象 5.review"),
+    ("_shared/workspace/post/results/review", "*.json", False, "review 报告须落对象 5.review"),
+    ("_shared/workspace/post/results/quality_analysis", "*.json", False, "quality 报告须落对象 2.quality"),
+    ("_shared/workspace/post/results/media_check", "*.json", False, "media_check 报告须落对象 5.review"),
+    ("_shared/workspace/post/review/ledger", "*.json", False, "复核账本须落对象 5.review/review_ledger.json"),
+    ("_shared/workspace/post/review/entities", "*.json", False, "复核实体边车须落对象 5.review/review_entities.json"),
 )
 
 
-def _task_shared_issues(task_id: str) -> list[str]:
-    issues: list[str] = []
-    shared_dir = task_shared_dir(task_id)
-    if not shared_dir.is_dir():
-        return issues
-    for entry in sorted(shared_dir.iterdir()):
-        if entry.name.startswith("."):
-            continue
-        if entry.name not in _TASK_SHARED_ALLOW:
-            issues.append(
-                f"task/_shared/{entry.name}: 非法 task 共享条目（仅允许 {sorted(_TASK_SHARED_ALLOW)}）"
-            )
-    return issues
-
-
-def scan_task(task_id: str) -> list[str]:
-    """task 根目录门：只允许真相源根条目与最小 `_shared/` 账本。"""
-    root = task_root(task_id)
+def scan_execution_root(execution_id: str) -> list[str]:
+    """Execution 根目录只允许稳定工作包条目。"""
+    root = execution_root(execution_id)
     if not root.is_dir():
-        return [f"task not found: {root}"]
+        return [f"execution not found: {root}"]
     issues: list[str] = []
     for entry in sorted(root.iterdir()):
         if entry.name.startswith("."):
             continue
-        if entry.name == "batches":
-            # 批次工作区已上提到顶层 runtime/batches/，任务根不得再出现 batches/。
-            issues.append("task/batches: 批次工作区不得挂任务根，须上提到顶层 runtime/batches/<intentLabel>__<batch>/")
-            continue
-        if entry.name in TASK_ROOT_ALLOWED_ENTRIES:
-            continue
-        if entry.name in TASK_ROOT_LEGACY_COMPAT_ENTRIES:
-            issues.append(f"task/{entry.name}: 历史兼容位仍存在，需运行 task cleanup-runtime 清理")
+        if entry.name in EXECUTION_ROOT_ALLOWED_ENTRIES:
             continue
         issues.append(
-            f"task/{entry.name}: 非法 task 顶层条目（仅允许 {sorted(TASK_ROOT_ALLOWED_ENTRIES)}）"
+            f"execution/{entry.name}: 非法顶层条目（仅允许 {sorted(EXECUTION_ROOT_ALLOWED_ENTRIES)}）"
         )
-    issues.extend(_task_shared_issues(task_id))
     return issues
 
 
@@ -168,7 +133,7 @@ def _scan_json_for_absolute(path: Path, issues: list[str]) -> None:
     walk(data)
 
 
-def _source_refs_issues(obj: Path, batch: Path) -> list[str]:
+def _source_refs_issues(obj: Path, execution: Path) -> list[str]:
     """post `1.download/source_refs.json` 必须满足单底稿零参考宪法 v2：
 
     - `sources` 长度恒为 1（唯一底稿来源单元，`role == base`）。
@@ -177,9 +142,9 @@ def _source_refs_issues(obj: Path, batch: Path) -> list[str]:
     - 禁止内联 `sourceMarkdown` / `sourceCleanMarkdown` 原文镜像（只留 sha256）。
     - 文件体积受限（避免回归到全文镜像的臃肿索引）。
     """
-    from _common.post_evidence_chain import SOURCE_REFS_MAX_BYTES
+    from core.post_evidence_chain import SOURCE_REFS_MAX_BYTES
 
-    rel = obj.relative_to(batch)
+    rel = obj.relative_to(execution)
     has_final = (obj / "article.md").is_file() or (obj / "gallery.md").is_file()
     if not has_final:
         return []
@@ -232,15 +197,15 @@ def _source_refs_issues(obj: Path, batch: Path) -> list[str]:
         issues.append(f"{rel}: source_refs.json.sources[0].role 必须为 base，实得 {role}")
     if entry.get("sourceMarkdown") is not None or entry.get("sourceCleanMarkdown") is not None:
         issues.append(f"{rel}: source_refs.json 禁止内联 sourceMarkdown 原文镜像（只留 sha256）")
-    source_path = batch / source_ref
+    source_path = execution / source_ref
     if not source_path.is_file():
         issues.append(f"{rel}: sourceRef 源文件缺失（证据链断裂）：{source_ref}")
-    elif unit_ref and not (batch / unit_ref).is_dir():
+    elif unit_ref and not (execution / unit_ref).is_dir():
         issues.append(f"{rel}: sourceUnitRef 源单元缺失（不可回查）：{unit_ref}")
     return issues
 
 
-def _object_source_unit_records(obj: Path, batch: Path) -> list[tuple[str, str]]:
+def _object_source_unit_records(obj: Path, execution: Path) -> list[tuple[str, str]]:
     """Return (sourceId, sourceKind) pairs from canonical object source refs."""
     snapshot_path = obj / "1.download" / "source_refs.json"
     if not snapshot_path.is_file():
@@ -264,11 +229,11 @@ def _object_source_unit_records(obj: Path, batch: Path) -> list[tuple[str, str]]
         meta_ref = str(row.get("metaRef") or "").strip()
         unit_ref = str(row.get("sourceUnitRef") or "").strip()
         source_ref = str(row.get("sourceRef") or "").strip()
-        meta_path = batch / meta_ref if meta_ref else Path()
+        meta_path = execution / meta_ref if meta_ref else Path()
         if not meta_path.is_file() and unit_ref:
-            meta_path = batch / unit_ref / "meta.json"
+            meta_path = execution / unit_ref / "meta.json"
         if not meta_path.is_file() and source_ref:
-            meta_path = batch / source_ref
+            meta_path = execution / source_ref
             meta_path = meta_path.parent / "meta.json"
         category = ""
         if meta_path.is_file():
@@ -282,8 +247,8 @@ def _object_source_unit_records(obj: Path, batch: Path) -> list[tuple[str, str]]
     return records
 
 
-def _finalization_report_issues(obj: Path, batch: Path) -> list[str]:
-    rel = obj.relative_to(batch)
+def _finalization_report_issues(obj: Path, execution: Path) -> list[str]:
+    rel = obj.relative_to(execution)
     has_final = (obj / "article.md").is_file() or (obj / "gallery.md").is_file()
     if not has_final:
         return []
@@ -318,8 +283,8 @@ def _finalization_report_issues(obj: Path, batch: Path) -> list[str]:
     return issues
 
 
-def _entity_quality_stage_issues(obj: Path, batch: Path) -> list[str]:
-    rel = obj.relative_to(batch)
+def _entity_quality_stage_issues(obj: Path, execution: Path) -> list[str]:
+    rel = obj.relative_to(execution)
     if not ((obj / "page.md").is_file() or (obj / "_entity.json").is_file()):
         return []
     path = obj / "2.quality" / "quality_analysis.json"
@@ -345,8 +310,8 @@ def _entity_quality_stage_issues(obj: Path, batch: Path) -> list[str]:
     return issues
 
 
-def _entity_review_sidecar_issues(obj: Path, batch: Path) -> list[str]:
-    rel = obj.relative_to(batch)
+def _entity_review_sidecar_issues(obj: Path, execution: Path) -> list[str]:
+    rel = obj.relative_to(execution)
     if not ((obj / "page.md").is_file() or (obj / "_entity.json").is_file()):
         return []
     review_dir = obj / "5.review"
@@ -373,11 +338,11 @@ def _entity_review_sidecar_issues(obj: Path, batch: Path) -> list[str]:
             if not isinstance(checks, dict):
                 issues.append(f"{rel}: review.checks 须为对象")
             else:
-                source_readiness = checks.get("sourceReadiness") or {}
-                if not isinstance(source_readiness, dict):
-                    issues.append(f"{rel}: review.checks.sourceReadiness 须为对象")
-                elif "passed" not in source_readiness:
-                    issues.append(f"{rel}: review.checks.sourceReadiness.passed 缺失")
+                source_qualification = checks.get("sourceQualification") or {}
+                if not isinstance(source_qualification, dict):
+                    issues.append(f"{rel}: review.checks.sourceQualification 须为对象")
+                elif "passed" not in source_qualification:
+                    issues.append(f"{rel}: review.checks.sourceQualification.passed 缺失")
                 page_quality = checks.get("entityPageQuality") or {}
                 if not isinstance(page_quality, dict):
                     issues.append(f"{rel}: review.checks.entityPageQuality 须为对象")
@@ -431,7 +396,7 @@ def _naming_issues(obj: Path, rel: Path) -> list[str]:
     for child in sorted(obj.iterdir()):
         if child.is_dir() and child.name not in _OBJECT_CHILD_ALLOW:
             issues.append(
-                f"{rel}: 非法对象子目录 '{child.name}'（仅允许编号阶段 {list(OBJECT_STAGES)} 或 assets）"
+                f"{rel}: 非法对象子目录 '{child.name}'（仅允许编号阶段 {list(OBJECT_STAGES)}、assets 或 evidence）"
             )
     sources_dir = obj / "1.download" / "sources"
     if sources_dir.is_dir():
@@ -441,47 +406,47 @@ def _naming_issues(obj: Path, rel: Path) -> list[str]:
     return issues
 
 
-def _batch_shared_issues(batch: Path) -> list[str]:
-    """证据面门：batch/_shared 条目 ⊆ 权威证据 ∪ 可清理层（真相源 paths）。
+def _execution_shared_issues(execution: Path) -> list[str]:
+    """证据面门：execution/_shared 条目 ⊆ 权威证据 ∪ 可清理层（真相源 paths）。
 
     - authoritative：不可重算真相源，readiness/审计只认这些条目。
     - reclaimable（含 `tmp_*`）：调试/过程层，允许存在、可随时清理，不算证据。
     - unknown：未登记条目直接 BLOCK，防止证据面无限膨胀出第二真相源。
     """
     issues: list[str] = []
-    shared_dir = batch / "_shared"
+    shared_dir = execution / "_shared"
     if not shared_dir.is_dir():
         return issues
     for entry in sorted(shared_dir.iterdir()):
         if entry.name.startswith("."):
             continue
-        if batch_shared_entry_role(entry.name) == "unknown":
+        if execution_shared_entry_role(entry.name) == "unknown":
             issues.append(
-                f"_shared/{entry.name}: 未登记的批次共享条目"
-                "（须先在 paths.BATCH_SHARED_AUTHORITATIVE_ENTRIES 或 "
-                "BATCH_SHARED_RECLAIMABLE_ENTRIES 登记角色）"
+                f"_shared/{entry.name}: 未登记的 execution 共享条目"
+                "（须先在 paths.EXECUTION_SHARED_AUTHORITATIVE_ENTRIES 或 "
+                "EXECUTION_SHARED_RECLAIMABLE_ENTRIES 登记角色）"
             )
     return issues
 
 
-def _top_level_issues(batch: Path) -> list[str]:
-    """顶层结构门：批次根条目 ⊆ 允许集（§2/§12 A5），拦截漂移/散落文件。"""
+def _top_level_issues(execution: Path) -> list[str]:
+    """顶层结构门：execution 根条目 ⊆ 允许集，拦截漂移/散落文件。"""
     issues: list[str] = []
-    for entry in sorted(batch.iterdir()):
+    for entry in sorted(execution.iterdir()):
         if entry.name.startswith("."):
             continue
-        if entry.name not in _BATCH_TOP_ALLOW:
+        if entry.name not in _EXECUTION_TOP_ALLOW:
             issues.append(
-                f"{entry.name}: 非法批次顶层条目（仅允许 {sorted(_BATCH_TOP_ALLOW)}）"
+                f"{entry.name}: 非法 execution 顶层条目（仅允许 {sorted(_EXECUTION_TOP_ALLOW)}）"
             )
     return issues
 
 
-def _regression_issues(batch: Path) -> list[str]:
-    """回退门：produce 已迁对象根的扁平面被重新写入即 BLOCK。"""
+def _regression_issues(execution: Path) -> list[str]:
+    """回退门：post 已迁对象根的扁平面被重新写入即 BLOCK。"""
     issues: list[str] = []
     for relpath, pattern, recursive, msg in _REGRESSION_FACES:
-        d = batch / Path(relpath)
+        d = execution / Path(relpath)
         if not d.is_dir():
             continue
         matches = d.rglob(pattern) if recursive else d.glob(pattern)
@@ -498,18 +463,18 @@ _SOURCE_UNIT_LEGACY_HASH_RE = re.compile(r"^su_[0-9a-f]{20}$")
 _PRODUCT_ASSET_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
-def _batch_assets_naming_issues(batch: Path) -> list[str]:
+def _execution_assets_naming_issues(execution: Path) -> list[str]:
     """命名门：对象 assets/ 成品图片文件名必须是 v2 assetId
     （实体_角色_图注_批次号_hash，见 asset_id_zero_collision_spec §3）。
 
     与 sources 命名门平级：旧 v1 四段格式（无图注段）在新批次成品中禁止回归。
     """
     issues: list[str] = []
-    for obj in iter_batch_object_dirs(batch):
+    for obj in iter_execution_object_dirs(execution):
         assets_dir = obj / "assets"
         if not assets_dir.is_dir():
             continue
-        rel = obj.relative_to(batch)
+        rel = obj.relative_to(execution)
         for item in sorted(assets_dir.iterdir()):
             if not item.is_file() or item.suffix.lower() not in _PRODUCT_ASSET_EXTS:
                 continue
@@ -530,10 +495,10 @@ def _batch_assets_naming_issues(batch: Path) -> list[str]:
     return issues
 
 
-def _batch_sources_naming_issues(batch: Path) -> list[str]:
+def _execution_sources_naming_issues(execution: Path) -> list[str]:
     """命名门：批次级 sources/ 目录必须用可读命名，禁止回归纯哈希 su_ 目录。"""
     issues: list[str] = []
-    sources_root = batch / "sources"
+    sources_root = execution / "sources"
     if not sources_root.is_dir():
         return issues
     for unit in sorted(sources_root.iterdir()):
@@ -554,22 +519,22 @@ def _batch_sources_naming_issues(batch: Path) -> list[str]:
     return issues
 
 
-def _sync_issues(task_id: str, batch_id: str, batch: Path) -> list[str]:
+def _sync_issues(execution_id: str, execution: Path) -> list[str]:
     """同步门：盘上成品对象目录必须在 content_object_index 路由中登记（防漂移）。"""
-    from _common import content_object  # 延迟导入避免循环依赖
+    from content.post import object_index as content_object  # 延迟导入避免循环依赖
 
     issues: list[str] = []
     registered: set[str] = set()
-    for ref in content_object.iter_content_refs(task_id, batch_id):
-        registered.add(content_object.content_object_rel(task_id, batch_id, ref))
-    post_root = batch / "posts"
+    for ref in content_object.iter_content_refs(execution_id):
+        registered.add(content_object.content_object_rel(execution_id, ref))
+    post_root = execution / "posts"
     if not post_root.is_dir():
         return issues
     for manifest in sorted(post_root.rglob("manifest.json")):
         pd = manifest.parent
         if not ((pd / "article.md").exists() or (pd / "gallery.md").exists()):
             continue
-        rel = pd.relative_to(batch).as_posix()
+        rel = pd.relative_to(execution).as_posix()
         if rel not in registered:
             issues.append(f"{rel}: 成品对象未登记内容路由（content_object_index 漂移）")
     return issues
@@ -581,22 +546,22 @@ _POST_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.r
 _ENTITY_REQUIRED_STAGES = ("1.download", "2.quality", "3.compose", "4.draft", "5.review")
 
 
-def _orphan_post_object_issues(task_id: str, batch_id: str, batch: Path) -> list[str]:
+def _orphan_post_object_issues(execution_id: str, execution: Path) -> list[str]:
     """孤儿内容对象门：posts/ 下出现阶段残骸/manifest/成品，但未登记到当前路由，即 BLOCK。"""
-    from _common import content_object  # 延迟导入避免循环依赖
+    from content.post import object_index as content_object  # 延迟导入避免循环依赖
 
     issues: list[str] = []
-    post_root = batch / "posts"
+    post_root = execution / "posts"
     if not post_root.is_dir():
         return issues
     registered = {
-        content_object.content_object_rel(task_id, batch_id, ref)
-        for ref in content_object.iter_content_refs(task_id, batch_id)
+        content_object.content_object_rel(execution_id, ref)
+        for ref in content_object.iter_content_refs(execution_id)
     }
     for obj in sorted(post_root.rglob("*")):
         if not obj.is_dir():
             continue
-        rel = obj.relative_to(batch)
+        rel = obj.relative_to(execution)
         parts = rel.parts
         if not parts or parts[0] != "posts":
             continue
@@ -644,7 +609,7 @@ def _has_image_asset(obj: Path) -> bool:
     )
 
 
-def stage_completeness_issues(batch: Path) -> list[str]:
+def stage_completeness_issues(execution: Path) -> list[str]:
     """阶段树完整性门（opt-in）：成品对象必须物化完整 1-5 过程阶段证据。
 
     成品判定以 `manifest.json` 为准（图片作品没有 article.md/gallery.md，旧口径会漏判）。
@@ -654,8 +619,8 @@ def stage_completeness_issues(batch: Path) -> list[str]:
     - 全部成品：必须物化 1.download→5.review 全链过程阶段。
     """
     issues: list[str] = []
-    for obj in iter_batch_object_dirs(batch):
-        rel = obj.relative_to(batch)
+    for obj in iter_execution_object_dirs(execution):
+        rel = obj.relative_to(execution)
         parts = rel.parts
         if parts and parts[0] == "posts":
             manifest_present = (obj / "manifest.json").is_file()
@@ -682,37 +647,13 @@ def stage_completeness_issues(batch: Path) -> list[str]:
     return issues
 
 
-def _task_batch_from_path(batch: Path) -> tuple[str, str]:
-    """从顶层批次目录反推 (task_id, batch_id)。
-
-    新布局 runtime/batches/{intentLabel}-{taskHash}__{batch}/：taskId 取自 batch_manifest.taskId
-    （反查唯一依据）；batchId 取自 manifest.batchId，回退按目录名首个 `__` 之后的部分。
-    """
-    task_id = batch_task_id(batch)
-    batch_id = ""
-    manifest = batch / "batch_manifest.json"
-    if manifest.is_file():
-        try:
-            data = read_json(manifest)
-        except Exception:
-            data = {}
-        if isinstance(data, dict):
-            batch_id = str(data.get("batchId") or "")
-            if not task_id:
-                task_id = normalize_task_id(str(data.get("taskId") or ""))
-    if not batch_id:
-        name = batch.name
-        batch_id = name.split("__", 1)[1] if "__" in name else name
-    return task_id, batch_id
-
-
-def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
-    rel = obj.relative_to(batch)
+def _scan_object(obj: Path, execution: Path, issues: list[str]) -> None:
+    rel = obj.relative_to(execution)
     issues.extend(_naming_issues(obj, rel))
     # 1. 散落 images/
     for images_dir in obj.rglob("images"):
         if images_dir.is_dir():
-            issues.append(f"{rel}: 禁止对象级散落 images/（图片必须归属来源单元 assets/）：{images_dir.relative_to(batch)}")
+            issues.append(f"{rel}: 禁止对象级散落 images/（图片必须归属来源单元 assets/）：{images_dir.relative_to(execution)}")
     # 2/5. manifest / provenance 绝对路径 + 资产闭环
     for jname in (
         "manifest.json",
@@ -723,10 +664,10 @@ def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
         jpath = obj / jname
         if jpath.is_file():
             _scan_json_for_absolute(jpath, issues)
-    issues.extend(_source_refs_issues(obj, batch))
-    issues.extend(_finalization_report_issues(obj, batch))
-    issues.extend(_entity_quality_stage_issues(obj, batch))
-    issues.extend(_entity_review_sidecar_issues(obj, batch))
+    issues.extend(_source_refs_issues(obj, execution))
+    issues.extend(_finalization_report_issues(obj, execution))
+    issues.extend(_entity_quality_stage_issues(obj, execution))
+    issues.extend(_entity_review_sidecar_issues(obj, execution))
     manifest_path = obj / "manifest.json"
     if manifest_path.is_file():
         try:
@@ -736,7 +677,7 @@ def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
         for asset in manifest.get("assets") or []:
             ref = str(asset.get("sourceAssetRef") or "")
             if ref and not _is_absolute_ref(ref):
-                if not (batch / ref).is_file():
+                if not (execution / ref).is_file():
                     issues.append(f"{rel}: sourceAssetRef 源图缺失（证据链断裂）：{ref}")
     # 3. 机械收尾标题
     for mdname in ("article.md", "page.md"):
@@ -745,7 +686,7 @@ def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
             for issue in mechanical_ending_title_issues(mpath.read_text(encoding="utf-8")):
                 issues.append(f"{rel}/{mdname}: {issue}")
     # 4. 无类别 weather_* 来源单元
-    for source_id, category in _object_source_unit_records(obj, batch):
+    for source_id, category in _object_source_unit_records(obj, execution):
         for issue in source_unit_category_issues(source_id, category):
             issues.append(f"{rel}: {issue}")
     sources_dir = obj / "1.download" / "sources"
@@ -787,80 +728,51 @@ def _scan_object(obj: Path, batch: Path, issues: list[str]) -> None:
                         issues.append(f"{rel}: {px}")
 
 
-def scan_batch(task_id: str, batch_id: str, *, require_stage_tree: bool = True) -> list[str]:
-    batch = batch_root(task_id, batch_id)
+def scan_execution(execution_id: str, *, require_stage_tree: bool = True) -> list[str]:
+    execution = execution_root(execution_id)
     issues: list[str] = []
-    if not batch.is_dir():
-        return [f"batch not found: {batch}"]
-    for conflict in batch_entity_type_conflicts(task_id, batch_id):
+    if not execution.is_dir():
+        return [f"execution not found: {execution}"]
+    for conflict in execution_entity_type_conflicts(execution_id):
         issues.append(
-            "entity type drift: same batch contains dual scenic-location trees "
+            "entity type drift: same execution contains dual scenic-location trees "
             f"for {conflict['domain']}/{conflict['name']} -> {conflict['paths']}"
         )
-    for obj in iter_batch_object_dirs(batch):
-        _scan_object(obj, batch, issues)
-    issues.extend(_top_level_issues(batch))
-    issues.extend(_batch_shared_issues(batch))
-    issues.extend(_regression_issues(batch))
-    issues.extend(_batch_sources_naming_issues(batch))
-    issues.extend(_batch_assets_naming_issues(batch))
-    issues.extend(_sync_issues(task_id, batch_id, batch))
-    issues.extend(_orphan_post_object_issues(task_id, batch_id, batch))
-    issues.extend(scan_asset_ids(task_id, batch_id))
+    for obj in iter_execution_object_dirs(execution):
+        _scan_object(obj, execution, issues)
+    issues.extend(_top_level_issues(execution))
+    issues.extend(_execution_shared_issues(execution))
+    issues.extend(_regression_issues(execution))
+    issues.extend(_execution_sources_naming_issues(execution))
+    issues.extend(_execution_assets_naming_issues(execution))
+    issues.extend(_sync_issues(execution_id, execution))
+    issues.extend(_orphan_post_object_issues(execution_id, execution))
+    issues.extend(scan_asset_ids(execution_id))
     if require_stage_tree:
-        issues.extend(stage_completeness_issues(batch))
+        issues.extend(stage_completeness_issues(execution))
     return issues
 
 
 def scan_all() -> list[str]:
     issues: list[str] = []
-    # 任务根门：批次工作区已上提到顶层 runtime/batches/，任务根不得再出现 batches/。
-    if TASKS_ROOT.is_dir():
-        seen_tasks: set[str] = set()
-        for legacy_batches in TASKS_ROOT.rglob("batches"):
-            if legacy_batches.is_dir():
-                rel = legacy_batches.relative_to(TASKS_ROOT).as_posix()
-                issues.append(
-                    f"task/{rel}: 批次工作区不得挂任务根，须上提到顶层 runtime/batches/<intentLabel>__<batch>/"
-                )
-    else:
-        seen_tasks = set()
-    # 顶层批次门：遍历 runtime/batches/，taskId 取自 batch_manifest.taskId。
-    for batch in iter_all_batch_dirs():
-        current_task_id, batch_id = _task_batch_from_path(batch)
-        if current_task_id and current_task_id not in seen_tasks:
-            issues.extend(scan_task(current_task_id))
-            seen_tasks.add(current_task_id)
-        for obj in iter_batch_object_dirs(batch):
-            _scan_object(obj, batch, issues)
-        issues.extend(_top_level_issues(batch))
-        issues.extend(_batch_shared_issues(batch))
-        issues.extend(_regression_issues(batch))
-        issues.extend(_batch_sources_naming_issues(batch))
-        issues.extend(_batch_assets_naming_issues(batch))
-        issues.extend(_sync_issues(current_task_id, batch_id, batch))
-        issues.extend(_orphan_post_object_issues(current_task_id, batch_id, batch))
-        issues.extend(scan_asset_ids(current_task_id, batch_id))
-        issues.extend(stage_completeness_issues(batch))
+    for execution in iter_all_execution_dirs():
+        issues.extend(scan_execution(execution.name))
     return issues
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="目录与资产证据链静态门 (T1)")
-    parser.add_argument("--task", default="")
-    parser.add_argument("--batch", default="")
+    parser.add_argument("--execution-id", default="")
     parser.add_argument(
         "--no-require-stage-tree",
         action="store_true",
-        help="关闭对象 1-5 阶段树完整性校验（默认开启；仅兼容历史批次排障时使用）",
+        help="关闭对象 1-5 阶段树完整性校验（默认开启）",
     )
     args = parser.parse_args(argv)
-    if args.task and args.batch:
-        normalized_task = normalize_task_id(args.task)
-        issues = scan_task(normalized_task)
-        issues.extend(scan_batch(normalized_task, args.batch, require_stage_tree=not args.no_require_stage_tree))
-    elif args.task:
-        issues = scan_task(normalize_task_id(args.task))
+    if args.execution_id:
+        execution_id = normalize_execution_id(args.execution_id)
+        issues = scan_execution_root(execution_id)
+        issues.extend(scan_execution(execution_id, require_stage_tree=not args.no_require_stage_tree))
     else:
         issues = scan_all()
     if issues:

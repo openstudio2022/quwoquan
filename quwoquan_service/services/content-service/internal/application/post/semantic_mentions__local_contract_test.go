@@ -5,24 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"quwoquan_service/services/content-service/internal/application/ports"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 	postsemantic "quwoquan_service/services/content-service/internal/domain/post/semantic"
-	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
+	"quwoquan_service/services/content-service/internal/testsupport"
 )
-
-type recordingProjector struct {
-	events []ports.ProjectorEvent
-}
-
-func (p *recordingProjector) Project(_ context.Context, event ports.ProjectorEvent) error {
-	p.events = append(p.events, event)
-	return nil
-}
 
 func TestApplySemanticMentionGovernanceEventReprojectsActiveRefs(t *testing.T) {
 	now := time.Now().UTC()
-	store := persistence.NewPostStore([]postmodel.Post{{
+	store := testsupport.NewPostStore([]postmodel.Post{{
 		ID:          "post_semantic_1",
 		AuthorId:    "author_1",
 		ContentType: "article",
@@ -39,8 +29,7 @@ func TestApplySemanticMentionGovernanceEventReprojectsActiveRefs(t *testing.T) {
 			"candidateId": "candidate_entity_1",
 		}},
 	}})
-	projector := &recordingProjector{}
-	service := NewPostService(store, WithProjector(projector))
+	service := NewPostService(BindDataPorts(store))
 
 	published, err := service.ApplySemanticMentionGovernanceEvent(context.Background(), postsemantic.GovernanceEvent{
 		CandidateID: "candidate_entity_1",
@@ -73,8 +62,5 @@ func TestApplySemanticMentionGovernanceEventReprojectsActiveRefs(t *testing.T) {
 	post, _ = store.FindByID(context.Background(), "post_semantic_1")
 	if len(post.EntityRefs) != 0 {
 		t.Fatalf("offline entity refs = %#v", post.EntityRefs)
-	}
-	if len(projector.events) != 2 {
-		t.Fatalf("projected events = %d", len(projector.events))
 	}
 }

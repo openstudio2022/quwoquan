@@ -29,10 +29,3 @@ events:
     consumers: [platform-ops]
     channel: event_store
     payload_fields: [deadLetterId, requestId, operation, finalError, recoveryAction, createdAt]
-
-  - name: ExternalInteractionPassThroughDebtUsed
-    description: 非生产短信验证码 pass-through 债务配置被使用，必须带 debtId、owner 和过期时间。
-    producer: user-service
-    consumers: [platform-ops]
-    channel: event_store
-    payload_fields: [requestId, challengeId, passThroughMode, debtId, owner, expiresAt]

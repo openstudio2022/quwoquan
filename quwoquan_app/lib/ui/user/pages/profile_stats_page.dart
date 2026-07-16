@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/application/circle/membership/persona_circle_summary_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
@@ -18,6 +19,7 @@ import 'package:quwoquan_app/core/trackers/journey_event_tracker.dart';
 import 'package:quwoquan_app/core/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/core/widgets/app_cached_network_image.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 part 'profile_stats_page_widgets.dart';
 
@@ -518,16 +520,30 @@ class _ProfileStatsPageState extends ConsumerState<ProfileStatsPage> {
     final repo = ref.read(userProfileRepositoryProvider);
     switch (tab) {
       case _ProfileStatsTab.circles:
-        final page = await repo.listUserCirclesPage(
-          _userId,
-          query: query,
-          cursor: cursor,
-          limit: _pageSize,
-        );
+        final page = await ref
+            .read(userProfileCircleMembershipQueryProvider)
+            .listPersonaCircles(
+              PersonaCircleListQuery(
+                personaId: _userId,
+                cursor: cursor,
+                limit: _pageSize,
+              ),
+            );
+        final normalizedQuery = query?.trim().toLowerCase() ?? '';
+        final items = page.items
+            .map(circleDtoFromPersonaCircleSummary)
+            .where(
+              (circle) =>
+                  normalizedQuery.isEmpty ||
+                  circle.name.toLowerCase().contains(normalizedQuery) ||
+                  (circle.description ?? '').toLowerCase().contains(
+                    normalizedQuery,
+                  ),
+            )
+            .toList(growable: false);
         return CursorPage<Object>(
-          items: page.items.cast<Object>(),
+          items: items.cast<Object>(),
           nextCursor: page.nextCursor,
-          totalCount: page.totalCount,
         );
       case _ProfileStatsTab.following:
         final page = await repo.listFollowingPage(

@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 // PgAnonymousDeviceBindingStore extends pgAnonymousDeviceBindingStoreBase with lookup helpers.
@@ -16,7 +16,7 @@ type PgAnonymousDeviceBindingStore struct {
 	pgAnonymousDeviceBindingStoreBase
 }
 
-var _ repository.AnonymousDeviceBindingRepository = (*PgAnonymousDeviceBindingStore)(nil)
+var _ repository.AnonymousDeviceBindingStore = (*PgAnonymousDeviceBindingStore)(nil)
 
 func NewPgAnonymousDeviceBindingStore(pool *pgxpool.Pool) *PgAnonymousDeviceBindingStore {
 	return &PgAnonymousDeviceBindingStore{pgAnonymousDeviceBindingStoreBase{pool: pool}}

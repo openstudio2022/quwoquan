@@ -1,0 +1,7 @@
+# source_plan article lane checkpoint prompt 变量契约。
+system:
+  required: []
+  optional: []
+task:
+  required: [execution_id, entity_id, output_path, lane_source_prompt]
+  optional: [repair_block]

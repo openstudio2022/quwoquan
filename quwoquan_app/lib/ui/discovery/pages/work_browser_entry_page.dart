@@ -7,6 +7,7 @@ import 'package:quwoquan_app/cloud/services/behavior/behavior_repository.dart'
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
 import 'package:quwoquan_app/core/providers/feed_session_provider.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
+import 'package:quwoquan_app/core/widgets/app_scaffold.dart';
 import 'package:quwoquan_app/core/interactions/media_viewer_interaction_bridge.dart';
 import 'package:quwoquan_app/ui/discovery/pages/unified_media_viewer_page.dart';
 import 'package:quwoquan_app/ui/content/services/single_post_media_viewer.dart';
@@ -64,7 +65,7 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
     }
     try {
       final detail = await ref
-          .read(contentRepositoryProvider)
+          .read(workBrowserContentPostDetailReaderProvider)
           .getPost(postId: workId);
       if (!mounted) {
         return;
@@ -159,17 +160,29 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
                         color: AppColors.iosLabel(themedContext),
                       ),
                     )
-                  : AppPageErrorState(
-                      key: const ValueKey('work-browser-entry-error'),
-                      semantic: _error!,
-                      onAction: (action) async {
-                        if (action.type == UiErrorActionType.retry ||
-                            action.type == UiErrorActionType.resubmit) {
-                          await _resolve();
-                        } else {
-                          _back();
-                        }
-                      },
+                  : Stack(
+                      children: <Widget>[
+                        AppPageErrorState(
+                          key: const ValueKey('work-browser-entry-error'),
+                          semantic: _error!,
+                          onAction: (action) async {
+                            if (action.type == UiErrorActionType.retry ||
+                                action.type == UiErrorActionType.resubmit) {
+                              await _resolve();
+                            }
+                          },
+                        ),
+                        Align(
+                          alignment: AlignmentDirectional.topStart,
+                          child: AppNavigationBarIconButton(
+                            key: const ValueKey<String>(
+                              'work-browser-entry-error-back',
+                            ),
+                            icon: CupertinoIcons.back,
+                            onPressed: _back,
+                          ),
+                        ),
+                      ],
                     ),
             ),
           );

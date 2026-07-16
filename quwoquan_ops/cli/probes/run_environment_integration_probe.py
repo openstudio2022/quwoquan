@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
+import ipaddress
 import json
 import os
+import socket
 import ssl
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +35,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--product-ops-base-url", default="")
     parser.add_argument("--media-base-url", default="")
+    parser.add_argument(
+        "--resolve-host",
+        default="",
+        help="Connect this probe to an explicit IP while retaining the URL host for TLS.",
+    )
     parser.add_argument("--test-auth-token", default="")
     parser.add_argument("--report", default=str(DEFAULT_REPORT))
     parser.add_argument("--request-timeout-seconds", type=int, default=12)
@@ -47,6 +56,11 @@ def parse_args() -> argparse.Namespace:
         default="readonly",
     )
     args = parser.parse_args()
+    if args.resolve_host:
+        try:
+            ipaddress.ip_address(args.resolve_host)
+        except ValueError as exc:
+            parser.error(f"--resolve-host must be an IP address: {exc}")
     args.test_auth_token = _resolve_test_auth_token(args.env, args.test_auth_token)
     return args
 
@@ -77,6 +91,7 @@ def request(
     timeout: int = 12,
     retry_attempts: int = 2,
     retry_sleep_seconds: float = 2.0,
+    resolve_host: str = "",
 ) -> tuple[bool, int | None, str]:
     retry_markers = (
         "timed out",
@@ -89,9 +104,10 @@ def request(
         req = urllib.request.Request(url, headers=headers or {}, data=body, method=method)
         ctx = ssl._create_unverified_context()
         try:
-            with urllib.request.urlopen(req, timeout=timeout, context=ctx) as response:
-                payload = response.read().decode("utf-8", errors="replace")
-                return True, int(response.status), payload
+            with _temporary_host_resolution(url, resolve_host):
+                with urllib.request.urlopen(req, timeout=timeout, context=ctx) as response:
+                    payload = response.read().decode("utf-8", errors="replace")
+                    return True, int(response.status), payload
         except urllib.error.HTTPError as exc:
             payload = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
             return False, int(exc.code), payload
@@ -103,16 +119,36 @@ def request(
     return False, None, "unknown request failure"
 
 
+@contextlib.contextmanager
+def _temporary_host_resolution(url: str, resolve_host: str):
+    """Resolve only this probe URL's host to an explicit local address."""
+    expected_host = urlparse(url).hostname or ""
+    if not resolve_host or not expected_host:
+        yield
+        return
+
+    original_getaddrinfo = socket.getaddrinfo
+
+    def getaddrinfo(host: str | bytes | None, *args: Any, **kwargs: Any) -> Any:
+        if host == expected_host:
+            return original_getaddrinfo(resolve_host, *args, **kwargs)
+        return original_getaddrinfo(host, *args, **kwargs)
+
+    socket.getaddrinfo = getaddrinfo
+    try:
+        yield
+    finally:
+        socket.getaddrinfo = original_getaddrinfo
+
+
 def _common_headers(test_auth_token: str) -> dict[str, str]:
     headers = {
         "Accept": "application/json",
-        "X-Client-User-Id": "fixture_user_current",
         "X-Test-Local-Gamma": "true",
     }
     token = test_auth_token.strip()
     if token:
         headers["Authorization"] = "Bearer " + token
-        headers["X-Test-Auth-Token"] = token
     return headers
 
 
@@ -124,16 +160,6 @@ def _json_headers(test_auth_token: str) -> dict[str, str]:
 
 def _public_headers() -> dict[str, str]:
     return {"Accept": "application/json"}
-
-
-def _readonly_sync_headers() -> dict[str, str]:
-    # user_sync readiness只验证 route/handler/data-plane 是否可读。
-    # user-service 若收到当前 stage 无法本地验签的 Bearer token，会按安全逻辑清空
-    # X-Client-User-Id 并返回 400；这里显式走稳定的 header-only 探针，避免把
-    # stage-secret 不一致误判成部署后业务不就绪。
-    headers = _common_headers("")
-    headers["Content-Type"] = "application/json"
-    return headers
 
 
 def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
@@ -162,23 +188,26 @@ def build_checks(args: argparse.Namespace) -> list[dict[str, Any]]:
             "expected_statuses": [200],
         },
         {
-            "name": "chat_inbox",
+            "name": "entity_homepage_search",
             "method": "GET",
-            "url": f"{base}/v1/chat/inbox?limit=1",
+            "url": f"{base}/v1/homepages/search?query=%E8%A5%BF%E6%B9%96&limit=1",
             "headers": _common_headers(args.test_auth_token),
             "expected_statuses": [200],
         },
-        {
-            "name": "user_sync",
-            "method": "POST",
-            "url": f"{base}/v1/user/sync",
-            "headers": _readonly_sync_headers(),
-            "body": json.dumps({"afterSeq": 0, "limit": 1}, ensure_ascii=False).encode(
-                "utf-8"
-            ),
-            "expected_statuses": [200],
-        },
     ]
+    if args.test_auth_token:
+        checks.append(
+            {
+                "name": "user_sync",
+                "method": "POST",
+                "url": f"{base}/v1/user/sync",
+                "headers": _json_headers(args.test_auth_token),
+                "body": json.dumps({"afterSeq": 0, "limit": 1}, ensure_ascii=False).encode(
+                    "utf-8"
+                ),
+                "expected_statuses": [200],
+            }
+        )
     product_ops = args.product_ops_base_url.rstrip("/")
     if product_ops:
         checks.append(
@@ -229,6 +258,10 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
     started_at = utc_now()
     findings: list[str] = []
     results: list[dict[str, Any]] = []
+    if args.mode == "post-deploy" and not args.test_auth_token:
+        findings.append(
+            "GATE_BLOCK: post-deploy integration requires a valid environment test auth token"
+        )
     for check in build_checks(args):
         ok, status_code, payload = request(
             check["method"],
@@ -238,6 +271,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
             timeout=max(1, int(args.request_timeout_seconds)),
             retry_attempts=max(1, int(args.retry_attempts)),
             retry_sleep_seconds=max(0.0, float(args.retry_sleep_seconds)),
+            resolve_host=args.resolve_host,
         )
         expected_statuses = list(check.get("expected_statuses") or [])
         matched = ok and status_code in expected_statuses
@@ -279,6 +313,7 @@ def run_checks(args: argparse.Namespace) -> dict[str, Any]:
         "baseUrl": args.base_url.rstrip("/"),
         "productOpsBaseUrl": args.product_ops_base_url.rstrip("/"),
         "mediaBaseUrl": args.media_base_url.rstrip("/"),
+        "resolveHost": args.resolve_host,
         "requestTimeoutSeconds": args.request_timeout_seconds,
         "retryAttempts": args.retry_attempts,
         "retrySleepSeconds": args.retry_sleep_seconds,

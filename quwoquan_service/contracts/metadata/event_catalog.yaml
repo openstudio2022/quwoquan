@@ -16,15 +16,60 @@ events:
     entity: Comment
     canonical: contracts/metadata/content/post/events.yaml
 
-  - name: ContentReacted
+  - name: ContentReactionActivated
     domain: content
-    entity: Post
-    canonical: contracts/metadata/content/post/events.yaml
+    entity: ContentReaction
+    canonical: contracts/metadata/content/content_reaction/events.yaml
+
+  - name: ContentReactionRemoved
+    domain: content
+    entity: ContentReaction
+    canonical: contracts/metadata/content/content_reaction/events.yaml
 
   - name: MessageSent
     domain: messages
+    entity: Message
+    canonical: contracts/metadata/messages/message/events.yaml
+
+  - name: MessageRecalled
+    domain: messages
+    entity: Message
+    canonical: contracts/metadata/messages/message/events.yaml
+
+  - name: AssistantMentioned
+    domain: messages
+    entity: Message
+    canonical: contracts/metadata/messages/message/events.yaml
+
+  - name: ConversationRosterUpdated
+    domain: messages
     entity: Conversation
     canonical: contracts/metadata/messages/conversation/events.yaml
+
+  - name: ConversationMemberAdded
+    domain: messages
+    entity: ConversationMembership
+    canonical: contracts/metadata/messages/conversation_membership/events.yaml
+
+  - name: ConversationMemberRemoved
+    domain: messages
+    entity: ConversationMembership
+    canonical: contracts/metadata/messages/conversation_membership/events.yaml
+
+  - name: ConversationMemberRoleChanged
+    domain: messages
+    entity: ConversationMembership
+    canonical: contracts/metadata/messages/conversation_membership/events.yaml
+
+  - name: ConversationReadWatermarkAdvanced
+    domain: messages
+    entity: ConversationUserState
+    canonical: contracts/metadata/messages/conversation_user_state/events.yaml
+
+  - name: ConversationUserSettingsChanged
+    domain: messages
+    entity: ConversationUserState
+    canonical: contracts/metadata/messages/conversation_user_state/events.yaml
 
   - name: AssistantRunStarted
     domain: assistant

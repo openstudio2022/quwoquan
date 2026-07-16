@@ -1,9 +1,9 @@
 """data verify — scoped post-package quality verification (CLI)。
 
-`qwq-data verify [--task T --batch B] [--release R] [--scope current|all]`
+`qwq-data verify [--execution-id E] [--release R] [--scope current|all]`
 
-收紧扫描范围：默认 current（仅当前 schema 的 posts 根），可指定 task/batch 或 release。
-逻辑全部沉到 _common.post_verify，旧 verify_*.py 仅作薄壳委托本命令。
+收紧扫描范围：默认 current（仅当前 schema 的 posts 根），可指定 execution 或 release。
+逻辑全部沉到 verify.post_verify，旧 verify_*.py 仅作薄壳委托本命令。
 """
 from __future__ import annotations
 
@@ -12,15 +12,16 @@ import json
 import sys
 from pathlib import Path
 
+from core.io import read_json
+from core import paths
 from verify.gate import gate_verify
-from verify.verify_batch_stability_compare import compare_batches, write_report, write_snapshot
-from ship.consistency import report_to_text, scan_release_file, write_consistency_report
+from content.release.environment.consistency import report_to_text, scan_release_file, write_consistency_report
 
 
 def handle_verify(args: argparse.Namespace) -> None:
     cmd = getattr(args, "verify_command", None)
-    if cmd == "batch-stability":
-        handle_batch_stability(args)
+    if cmd == "all":
+        handle_all()
         return
     if cmd == "rubric":
         handle_rubric(args)
@@ -42,11 +43,6 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_single_contract_source import main as single_contract_source_main
 
         raise SystemExit(single_contract_source_main())
-    if cmd == "content-supply-production":
-        from verify.verify_content_supply_production import main as content_supply_gate_main
-
-        content_supply_gate_main()
-        return
     if cmd == "works-classification":
         from verify.verify_works_classification import main as works_classification_main
 
@@ -55,6 +51,57 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_output_root_isolation import main as output_root_isolation_main
 
         raise SystemExit(output_root_isolation_main())
+    if cmd == "content-execution-layout":
+        from verify.verify_content_execution_layout import main as execution_layout_main
+
+        raise SystemExit(execution_layout_main())
+    if cmd == "execution-readiness":
+        from verify.verify_execution_readiness import main as execution_readiness_main
+
+        argv = ["--execution-id", str(args.execution_id)]
+        if bool(getattr(args, "require_reviewed", False)):
+            argv.append("--require-reviewed")
+        raise SystemExit(execution_readiness_main(argv))
+    if cmd == "data-input-ownership":
+        from verify.verify_data_input_ownership import main as data_input_ownership_main
+
+        raise SystemExit(data_input_ownership_main())
+    if cmd == "publish-purity":
+        from verify.verify_publish_purity import main as publish_purity_main
+
+        raise SystemExit(publish_purity_main())
+    if cmd == "publish-closure":
+        from verify.verify_publish_closure import main as publish_closure_main
+
+        raise SystemExit(publish_closure_main())
+    if cmd == "script-architecture":
+        from verify.verify_script_architecture import main as script_architecture_main
+
+        raise SystemExit(script_architecture_main())
+    if cmd == "control-literals":
+        from verify.verify_control_literals import main as control_literals_main
+
+        raise SystemExit(control_literals_main())
+    if cmd == "execution-identity-purity":
+        from verify.verify_execution_identity_purity import main as identity_purity_main
+
+        raise SystemExit(identity_purity_main())
+    if cmd == "release-lifecycle":
+        from verify.verify_release_lifecycle import main as release_lifecycle_main
+
+        raise SystemExit(release_lifecycle_main(["--release", str(args.release)]))
+    if cmd == "cursor-credential-contract":
+        from verify.verify_cursor_credential_contract import main as credential_contract_main
+
+        raise SystemExit(credential_contract_main())
+    if cmd == "two-province-coverage-release":
+        from verify.verify_two_province_coverage_release import main as province_release_main
+
+        raise SystemExit(province_release_main(["--release", str(args.release)]))
+    if cmd == "homepage-media-completeness":
+        from verify.verify_homepage_media_completeness import main as homepage_media_main
+
+        raise SystemExit(homepage_media_main(["--execution", str(args.execution)]))
     if cmd == "active-runtime-preflight":
         from verify.verify_no_active_data_runtime import main as active_runtime_preflight_main
 
@@ -63,139 +110,29 @@ def handle_verify(args: argparse.Namespace) -> None:
         from verify.verify_data_layout import main as data_layout_main
 
         raise SystemExit(data_layout_main())
-    if cmd == "coverage-master-list":
-        from verify.verify_coverage_master_list import main as coverage_master_list_main
+    if cmd == "coverage-static-identity":
+        from verify.verify_coverage_static_identity import main as coverage_static_identity_main
 
-        raise SystemExit(coverage_master_list_main())
+        raise SystemExit(coverage_static_identity_main())
+    if cmd == "stage-artifacts":
+        from verify.stage_artifacts import verify_stage_artifacts
+
+        report = verify_stage_artifacts(
+            execution_id=str(args.execution_id),
+            publish_root=Path(args.publish_root) if args.publish_root else paths.PUBLISH_ROOT,
+            release_root=Path(args.release_root) if args.release_root else paths.RELEASE_ROOT,
+            commercial=not bool(args.trial),
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        if not report["passed"]:
+            raise SystemExit(1)
+        return
     if cmd == "release-integrity":
-        from _common.release_integrity import scan_release_integrity
+        from content.release.canonical.integrity import scan_release_integrity
 
         report = scan_release_integrity(args.release)
         print(json.dumps(report, ensure_ascii=False, indent=2))
         if not report.get("passed"):
-            raise SystemExit(1)
-        return
-    if cmd == "scale-readiness":
-        from verify.scale_readiness import build_scale_readiness_report, write_scale_readiness_report
-
-        if not args.task or not args.batch:
-            print("[verify scale-readiness] --task and --batch are required", file=sys.stderr)
-            raise SystemExit(2)
-        report = build_scale_readiness_report(
-            args.task,
-            args.batch,
-            daily_target=int(args.daily_target),
-            target_goal=int(getattr(args, "target", 0) or 0) or None,
-            min_pass_rate=float(getattr(args, "min_pass_rate", 0.0) or 0.0),
-            source_ready_goal=int(getattr(args, "source_ready_goal", 0) or 0) or None,
-            release_id=getattr(args, "release", None),
-            require_import=True,
-            mode=str(getattr(args, "mode", "commercial") or "commercial"),
-            accept_estimated_token_ledger=bool(getattr(args, "accept_estimated_token_ledger", False)),
-            accept_text_only_articles=bool(getattr(args, "accept_text_only_articles", False)),
-        )
-        if getattr(args, "report_out", None):
-            from _common.artifacts_index import register_artifact_report
-
-            write_scale_readiness_report(Path(args.report_out), report)
-            register_artifact_report(
-                Path(args.report_out),
-                task_id=str(args.task),
-                batch_id=str(args.batch),
-                report_kind="scale_readiness",
-                release_id=str(getattr(args, "release", "") or ""),
-            )
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-        if not report.get("passed"):
-            raise SystemExit(1)
-        return
-    if cmd == "creator-scale-readiness":
-        from governance.creator_pool.readiness import (
-            build_creator_readiness_report,
-            write_creator_readiness_report,
-        )
-
-        if not args.batch:
-            print("[verify creator-scale-readiness] --batch is required", file=sys.stderr)
-            raise SystemExit(2)
-        report = build_creator_readiness_report(
-            vertical=str(getattr(args, "vertical", "travel") or "travel"),
-            batch_id=str(args.batch),
-            target=int(getattr(args, "target", 10) or 10),
-            mode=str(getattr(args, "mode", "trial") or "trial"),
-            min_pass_rate=float(getattr(args, "min_pass_rate", 1.0) or 1.0),
-        )
-        if getattr(args, "report_out", None):
-            write_creator_readiness_report(Path(args.report_out), report)
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-        if not report.get("passed"):
-            raise SystemExit(1)
-        return
-    if cmd == "prefab-user-readiness":
-        import subprocess
-
-        repo_root = Path(__file__).resolve().parents[3]
-        mode = str(getattr(args, "mode", "four_env") or "four_env")
-        script = (
-            repo_root / "quwoquan_data/scripts/verify/emit_creator_prefab_user_t2_stability_report.py"
-            if mode == "t2"
-            else repo_root / "quwoquan_data/scripts/verify/emit_creator_prefab_user_four_env_readiness.py"
-        )
-        cmd_args = ["python3", str(script)]
-        if getattr(args, "report_out", None):
-            cmd_args.extend(["--report-out", str(args.report_out)])
-        result = subprocess.run(cmd_args, cwd=repo_root, check=False)
-        raise SystemExit(result.returncode)
-    if cmd == "site-scale-readiness":
-        from verify.site_scale_readiness import build_site_scale_readiness_report, write_site_scale_readiness_report
-
-        report = build_site_scale_readiness_report(
-            vertical=str(args.vertical),
-            batch_id=str(args.batch),
-            batch_ids=[str(x).strip() for x in str(getattr(args, "batches", "") or "").split(",") if str(x).strip()] or None,
-            site_id=getattr(args, "site_id", None),
-            daily_target=int(args.daily_target),
-            require_import=True,
-            mode=str(getattr(args, "mode", "commercial") or "commercial"),
-            min_lane_counts={
-                "article": int(getattr(args, "min_article_count", 0) or 0),
-                "image": int(getattr(args, "min_image_count", 0) or 0),
-                "video": int(getattr(args, "min_video_count", 0) or 0),
-            },
-        )
-        if getattr(args, "report_out", None):
-            write_site_scale_readiness_report(Path(args.report_out), report)
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-        if not report.get("passed"):
-            raise SystemExit(1)
-        return
-    if cmd == "sdk-monitoring":
-        from verify.sdk_monitoring import build_sdk_monitoring_report, write_sdk_monitoring_report
-
-        if not args.task or not args.batch:
-            print("[verify sdk-monitoring] --task and --batch are required", file=sys.stderr)
-            raise SystemExit(2)
-        report = build_sdk_monitoring_report(
-            str(args.task),
-            str(args.batch),
-            plan_id=getattr(args, "plan", None),
-            startup_probe_path=getattr(args, "startup_probe_file", None),
-            watchdog_log_path=getattr(args, "watchdog_log", None),
-            run_matrix_path=getattr(args, "run_matrix", None),
-            accept_estimated_token_ledger=bool(getattr(args, "accept_estimated_token_ledger", False)),
-        )
-        if getattr(args, "report_out", None):
-            from _common.artifacts_index import register_artifact_report
-
-            write_sdk_monitoring_report(Path(args.report_out), report)
-            register_artifact_report(
-                Path(args.report_out),
-                task_id=str(args.task),
-                batch_id=str(args.batch),
-                report_kind="sdk_monitoring",
-            )
-        print(json.dumps(report, ensure_ascii=False, indent=2))
-        if getattr(args, "strict", False) and not report.get("passed"):
             raise SystemExit(1)
         return
     if getattr(args, "data_release_file", None):
@@ -212,10 +149,10 @@ def handle_verify(args: argparse.Namespace) -> None:
             raise SystemExit(1)
         return
 
-    explicit = bool((getattr(args, "task", None) and getattr(args, "batch", None)) or getattr(args, "release", None))
+    execution_id = getattr(args, "execution_id", None)
+    explicit = bool(execution_id or getattr(args, "release", None))
     roots, issues = gate_verify(
-        task=getattr(args, "task", None),
-        batch=getattr(args, "batch", None),
+        execution_id=execution_id,
         release=getattr(args, "release", None),
         scope=args.scope,
     )
@@ -223,7 +160,7 @@ def handle_verify(args: argparse.Namespace) -> None:
         print(f"[verify] No in-scope post packages found (scope={args.scope}).")
         return
     if not roots and explicit:
-        # 显式 --task/--batch：即使没有 post 包，也要跑并上报目录与资产证据链门。
+        # 显式 execution：即使没有 post 包，也要跑并上报目录与资产证据链门。
         print(f"[verify] no post packages; running directory/asset evidence-chain gate only.")
     if roots:
         print(f"[verify] scope={args.scope} roots={len(roots)}")
@@ -237,31 +174,64 @@ def handle_verify(args: argparse.Namespace) -> None:
     print("[verify] PASSED")
 
 
-def handle_batch_stability(args: argparse.Namespace) -> None:
-    baseline, candidate, issues = compare_batches(args.task, args.baseline, args.candidate)
-    report = {
-        "schemaVersion": "quwoquan_data.batch_stability_compare/1",
-        "taskId": args.task,
-        "baseline": baseline,
-        "candidate": candidate,
-        "issues": issues,
-        "passed": not issues,
-    }
-    if getattr(args, "baseline_snapshot_out", None):
-        write_snapshot(Path(args.baseline_snapshot_out), baseline)
-    if getattr(args, "report_out", None):
-        write_report(Path(args.report_out), report)
-    if issues:
-        print(f"[verify] batch-stability FAILED ({len(issues)} issue(s))", file=sys.stderr)
-        for issue in issues[:200]:
-            print(f"  - {issue}", file=sys.stderr)
-        raise SystemExit(1)
-    print("[verify] batch-stability PASSED")
+def handle_all() -> None:
+    """Run the repository-owned static Data gate through the one public CLI.
+
+    Environment import/API/UAT proofs are intentionally not hidden here: they
+    remain explicit `ship` and `verify two-province-coverage-release` commands
+    because they require a concrete release and a live environment.
+    """
+    from verify import verify_cli_first
+    from verify import verify_content_execution_layout
+    from verify import verify_cursor_credential_contract
+    from verify import verify_data_input_ownership
+    from verify import verify_data_layout
+    from verify import verify_data_role_gate_inventory
+    from verify import verify_execution_identity_purity
+    from verify import verify_no_active_data_runtime
+    from verify import verify_output_root_isolation
+    from verify import verify_publish_closure
+    from verify import verify_publish_purity
+    from verify import verify_script_architecture
+    from verify import verify_control_literals
+    from verify import verify_single_contract_source
+    from verify import verify_works_classification
+    from verify import verify_coverage_static_identity
+
+    gates = (
+        ("active-runtime-preflight", verify_no_active_data_runtime.main),
+        ("cli-first", verify_cli_first.main),
+        ("data-layout", verify_data_layout.main),
+        ("script-architecture", verify_script_architecture.main),
+        ("control-literals", verify_control_literals.main),
+        ("execution-identity-purity", verify_execution_identity_purity.main),
+        ("content-execution-layout", verify_content_execution_layout.main),
+        ("data-input-ownership", verify_data_input_ownership.main),
+        ("cursor-credential-contract", verify_cursor_credential_contract.main),
+        ("output-root-isolation", verify_output_root_isolation.main),
+        ("coverage-static-identity", verify_coverage_static_identity.main),
+        ("publish-purity", verify_publish_purity.main),
+        ("publish-closure", verify_publish_closure.main),
+        ("single-contract-source", verify_single_contract_source.main),
+        ("works-classification", verify_works_classification.main),
+        ("data-role-gate", verify_data_role_gate_inventory.main),
+    )
+    failed: list[str] = []
+    for name, run in gates:
+        try:
+            result = run()
+        except SystemExit as exc:
+            result = int(exc.code or 0)
+        if result not in (None, 0):
+            failed.append(name)
+    if failed:
+        raise SystemExit(f"[verify all] FAIL: {', '.join(failed)}")
+    print("[verify all] OK")
 
 
 def handle_rubric(args: argparse.Namespace) -> None:
     """I：校验一份 rubric_review.json 满足 LLM-as-judge 严格性（判官元数据/族分离/二元+理由/偏差/jury）。"""
-    from _common import rubric_judge as rj
+    from core import rubric_judge as rj
 
     review = json.loads(Path(args.file).read_text(encoding="utf-8"))
     issues = rj.review_rigor_issues(
@@ -299,11 +269,11 @@ def handle_goldenset(args: argparse.Namespace) -> None:
     print("[verify goldenset] PASSED")
 
 
-def _collect_batch_samples(task: str, batch: str, fraction: float) -> list[dict]:
-    """K：从批次产出抽样 article.md/draft.article.md（确定性 stride 抽样）。"""
-    from _common.paths import batch_root
+def _collect_execution_samples(execution_id: str, fraction: float) -> list[dict]:
+    """K：从 execution 产出抽样 article.md/draft.article.md（确定性 stride 抽样）。"""
+    from core.paths import execution_root
 
-    root = batch_root(task, batch)
+    root = execution_root(execution_id)
     found: list[Path] = []
     if root.is_dir():
         for name in ("article.md", "draft.article.md"):
@@ -318,13 +288,15 @@ def _collect_batch_samples(task: str, batch: str, fraction: float) -> list[dict]
 
 
 def handle_sample_drift(args: argparse.Namespace) -> None:
-    from _common import content_drift as cd
+    from core import content_drift as cd
 
     samples: list[dict]
     if getattr(args, "samples_file", None):
         samples = json.loads(Path(args.samples_file).read_text(encoding="utf-8")).get("samples", [])
     else:
-        samples = _collect_batch_samples(args.task, args.batch, args.fraction)
+        if not getattr(args, "execution_id", None):
+            raise SystemExit("[verify sample-drift] --execution-id is required without --samples-file")
+        samples = _collect_execution_samples(args.execution_id, args.fraction)
     baseline = None
     if getattr(args, "baseline", None) and Path(args.baseline).is_file():
         baseline = json.loads(Path(args.baseline).read_text(encoding="utf-8"))
@@ -339,7 +311,7 @@ def handle_sample_drift(args: argparse.Namespace) -> None:
 
 
 def handle_promote_golden(args: argparse.Namespace) -> None:
-    from _common import content_drift as cd
+    from core import content_drift as cd
 
     article = Path(args.article_file).read_text(encoding="utf-8")
     meta = json.loads(args.meta) if getattr(args, "meta", None) else {}
@@ -360,10 +332,10 @@ def handle_promote_golden(args: argparse.Namespace) -> None:
 def register_parser(subparsers: argparse._SubParsersAction) -> None:
     p = subparsers.add_parser("verify", help="Verify post packages (scoped)")
     sub = p.add_subparsers(dest="verify_command")
-    p.add_argument("--task", help="Task ID (verify a produced batch)")
-    p.add_argument("--batch", help="Batch ID")
+    sub.add_parser("all", help="运行唯一的仓内 Data 静态门禁；环境闭环另行显式验证")
+    p.add_argument("--execution-id", help="Execution ID (verify one runtime work package)")
     p.add_argument("--release", help="Release ID under release/")
-    p.add_argument("--data-release-file", help="Verify publish/env_releases/<releaseId>/<env>.json consistency")
+    p.add_argument("--data-release-file", help="Verify immutable release <releaseId>/desired_state.json consistency")
     p.add_argument("--publish-root", help="Publish root for data release consistency")
     p.add_argument("--metadata-root", help="Metadata root for fixture user consistency")
     p.add_argument("--phase", choices=["preflight", "post-write-pre-activation", "post-activation"], default="preflight")
@@ -372,15 +344,8 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
         "--scope",
         choices=["current", "all"],
         default="current",
-        help="批量审计针对 release/ 交付面：current=默认视图; all=全量视图。runtime 中间批次用 --task/--batch 显式校验。",
+        help="聚合审计针对 release/ 交付面：current=默认视图; all=全量视图。runtime 工作包用 --execution-id 显式校验。",
     )
-    bs = sub.add_parser("batch-stability", help="Compare two batches for structural and quality stability")
-    bs.add_argument("--task", required=True, help="Task ID")
-    bs.add_argument("--baseline", required=True, help="Baseline batch ID")
-    bs.add_argument("--candidate", required=True, help="Candidate batch ID")
-    bs.add_argument("--baseline-snapshot-out", help="Optional baseline snapshot path")
-    bs.add_argument("--report-out", help="Optional report path")
-
     # I：LLM-as-judge 严格性门
     pr = sub.add_parser("rubric", help="校验 rubric_review.json 的 judge 严格性（元数据/族分离/二元+理由/偏差/jury）")
     pr.add_argument("--file", required=True, help="rubric_review.json 路径")
@@ -394,8 +359,7 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     # K：漂移检测
     pd = sub.add_parser("sample-drift", help="抽样已产出复跑 rule 门，检测线上质量漂移")
-    pd.add_argument("--task", help="Task ID（批次扫描）")
-    pd.add_argument("--batch", help="Batch ID（批次扫描）")
+    pd.add_argument("--execution-id", help="Execution ID（工作包扫描）")
     pd.add_argument("--fraction", type=float, default=0.1, help="抽样比例（默认 0.1=10%%）")
     pd.add_argument("--samples-file", help="可选：显式 samples JSON（{samples:[{ref,article,meta}]}）")
     pd.add_argument("--baseline", help="可选 baseline drift 报告，用于触发率漂移比对")
@@ -413,73 +377,36 @@ def register_parser(subparsers: argparse._SubParsersAction) -> None:
 
     sub.add_parser("data-role-gate", help="校验数据工程七角色准出清单与文档/门禁接线")
     sub.add_parser("single-contract-source", help="校验内容供给生产契约只有一个无版本真源")
-    sub.add_parser("content-supply-production", help="校验生产级内容供给 current 契约与队列/envelope/账本闭环")
     sub.add_parser("works-classification", help="校验作品 vs 随记判定 schema/config/registry 一致性 + 判定 smoke")
     sub.add_parser("output-root-isolation", help="仓外输出根隔离门：repo allowlist/阶段树/批次轴/摘要索引")
-    sub.add_parser("active-runtime-preflight", help="校验 data runtime 工作区已静默，无活跃 run-recipe/scaled-e2e/workflow 进程")
+    sub.add_parser("content-execution-layout", help="校验唯一 execution 工作包与五阶段目录")
+    per = sub.add_parser("execution-readiness", help="校验单个 execution 工作包的准出证据")
+    per.add_argument("--execution-id", required=True)
+    per.add_argument("--require-reviewed", action="store_true")
+    sub.add_parser("data-input-ownership", help="校验 recipe/prompt/template/schema 不含运行实例值")
+    sub.add_parser("publish-purity", help="校验 publish 只含 approved 最终对象")
+    sub.add_parser("publish-closure", help="校验 canonical publish 无孤立 creator/media 或悬空引用")
+    sub.add_parser("script-architecture", help="校验脚本目录职责、模块尺寸与 core 依赖方向")
+    sub.add_parser("control-literals", help="校验双省链路控制字面量只有一个真相源")
+    sub.add_parser("execution-identity-purity", help="校验 active code 已删除旧运行身份与旧路径")
+    release_lifecycle = sub.add_parser("release-lifecycle", help="校验 immutable release 的闭环证据")
+    release_lifecycle.add_argument("--release", required=True)
+    sub.add_parser("cursor-credential-contract", help="校验只使用仓外受限 key file 且无旧 alias/secret")
+    ptp = sub.add_parser("two-province-coverage-release", help="校验浙川实体主页全覆盖 release 闭环")
+    ptp.add_argument("--release", required=True)
+    phm = sub.add_parser("homepage-media-completeness", help="校验实体主页图片枚举、下载与角色闭环")
+    phm.add_argument("--execution", required=True)
+    sub.add_parser("active-runtime-preflight", help="校验 data execution 工作区已静默，无活跃 geo-homepages/workflow 进程")
     sub.add_parser("data-layout", help="校验数据工程源码目录归一化与退休路径")
-    sub.add_parser("coverage-master-list", help="全国地点主清单门禁：目录归属/schema/类型 scope/行政区叶子/canonicalName 全局唯一")
+    sub.add_parser("coverage-static-identity", help="全国地点静态覆盖身份门：目录/schema/类型/行政区/coverageKey 全局唯一")
+    psa = sub.add_parser(
+        "stage-artifacts",
+        help="校验四 lane 五阶段、immutable execution identity 与 runtime/runs/release/env/publish 边界",
+    )
+    psa.add_argument("--execution-id", required=True)
+    psa.add_argument("--publish-root")
+    psa.add_argument("--release-root")
+    psa.add_argument("--trial", action="store_true", help="trial 允许 independent reviewer 尚未通过")
     pri = sub.add_parser("release-integrity", help="校验 release 级证据链、一稿一用与跨作品资产溯源完整性")
     pri.add_argument("--release", required=True, help="Release ID under release/")
-    psr = sub.add_parser("scale-readiness", help="校验批次是否具备日产万级/商用放量证据")
-    psr.add_argument("--task", required=True, help="Task ID")
-    psr.add_argument("--batch", required=True, help="Batch ID")
-    psr.add_argument("--daily-target", type=int, default=10000, help="目标日产内容对象数，默认 10000")
-    psr.add_argument("--target", type=int, default=0, help="本批目标质量对象数；百级用 100")
-    psr.add_argument("--min-pass-rate", type=float, default=0.0, help="本批目标满足率门槛；百级用 0.9")
-    psr.add_argument("--source-ready-goal", type=int, default=0, help="source-ready 对象容量门槛；不传时按 target*1.2")
-    psr.add_argument("--mode", choices=["trial", "commercial"], default="commercial", help="trial 允许已替补 abandoned；commercial 要求零未替补失败")
-    psr.add_argument("--release", help="可选 isolated release ID，用于证明 release verify 入口存在")
-    psr.add_argument(
-        "--accept-estimated-token-ledger",
-        action="store_true",
-        help="显式接受 estimated_from_artifacts 账本（H100 口径，2026-07-06 裁定）；默认严格阻断",
-    )
-    psr.add_argument(
-        "--accept-text-only-articles",
-        action="store_true",
-        help="显式接受 text_only 文章准出（R-CS10 收口口径，图文同源为后续升级）；默认严格阻断",
-    )
-    psr.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
-    pcsr = sub.add_parser("creator-scale-readiness", help="校验创作者池 Scale-10/100 放量证据")
-    pcsr.add_argument("--vertical", default="travel")
-    pcsr.add_argument("--batch", required=True)
-    pcsr.add_argument("--target", type=int, default=10)
-    pcsr.add_argument("--mode", choices=["trial", "commercial"], default="trial")
-    pcsr.add_argument("--min-pass-rate", type=float, default=1.0)
-    pcsr.add_argument("--report-out", help="写出 creator readiness JSON")
-    pss = sub.add_parser("site-scale-readiness", help="校验网站维度内容供给是否具备日产 10 万级准出证据")
-    pss.add_argument("--vertical", default="travel", help="垂类，默认 travel")
-    pss.add_argument("--site-id", help="可选：只校验单个 siteId；不传则聚合同垂类该 batch 全部站点")
-    pss.add_argument("--batch", required=True, help="site_supply batch ID")
-    pss.add_argument("--batches", help="逗号分隔多个 site_supply batchId；用于同垂类多站点真实放量聚合")
-    pss.add_argument("--daily-target", type=int, default=100000, help="目标日产内容对象数，默认 100000")
-    pss.add_argument("--mode", choices=["trial", "commercial"], default="commercial", help="trial 只验结构/吞吐/账本，commercial 要求 release/import/search/rec 证据")
-    pss.add_argument("--min-article-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计文章最低数")
-    pss.add_argument("--min-image-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计图片作品最低数")
-    pss.add_argument("--min-video-count", type=int, default=0, help="可选：trial 按 content_plan handoff，commercial 按已 release/import postRefs 统计视频作品最低数")
-    pss.add_argument("--report-out", help="可选：写出 readiness JSON 报告")
-
-    psm = sub.add_parser("sdk-monitoring", help="聚合 managed/local/fanout/supervisor 的 Cursor SDK 运行证据")
-    psm.add_argument("--task", required=True, help="Task ID")
-    psm.add_argument("--batch", required=True, help="Batch ID")
-    psm.add_argument("--plan", help="可选：fanout planId，用于读取 run_matrix.json")
-    psm.add_argument(
-        "--startup-probe-file",
-        help="可选：额外记录批外 startup probe JSON 作为诊断；batch 准入仍只认 _shared/env_ready_report.json",
-    )
-    psm.add_argument("--watchdog-log", help="可选：watchdog 逗号分隔日志")
-    psm.add_argument("--run-matrix", help="可选：显式 run_matrix.json 路径")
-    psm.add_argument(
-        "--accept-estimated-token-ledger",
-        action="store_true",
-        help="显式接受 estimated_from_artifacts 账本（H100 口径，2026-07-06 裁定）；默认仍计为 issue",
-    )
-    psm.add_argument("--report-out", help="可选：写出 SDK 监控 JSON 报告")
-    psm.add_argument("--strict", action="store_true", help="发现 issues 时返回非 0")
-
-    ppur = sub.add_parser("prefab-user-readiness", help="T4 四环境 prefab user readiness 报告")
-    ppur.add_argument("--mode", choices=["four_env", "t2"], default="four_env")
-    ppur.add_argument("--report-out", help="可选：覆盖默认 artifact 路径")
-
     p.set_defaults(handler=handle_verify)

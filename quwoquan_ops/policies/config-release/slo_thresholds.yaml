@@ -12,6 +12,17 @@ thresholds:
   redis_error_rate:
     warn: 0.01
     critical: 0.03
+  startup_welcome:
+    ttid_p50_ms: 1000
+    ttid_p95_ms: 2000
+    shell_first_paint_target_ms: 3000
+    welcome_exit_hard_ms: 6000
+    overlay_removed_hard_ms: 6000
+    replay_1_rate_warn: 0.05
+    replay_2_rate_warn: 0.005
+    degraded_or_deadline_rate_critical: 0.001
+    consecutive_slow_frame_ms: 32
+    consecutive_slow_frame_count: 2
 
 decisions:
   continue_when: "all metrics below warn"

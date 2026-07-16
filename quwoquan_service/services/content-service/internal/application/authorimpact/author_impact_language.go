@@ -8,30 +8,14 @@ import (
 	"quwoquan_service/services/content-service/internal/generated"
 )
 
-// DecorateAuthorImpact 在云侧按 viewer 视角补齐影响结论句（G2：端禁止本地拼装文案）。
-// 规格语义：强调「帮助结果」而非运营指标，且禁止“收藏/认识新朋友”等退场词。
-// viewer 为作者本人时使用第一人称（我的影响力）。
+// DecorateAuthorImpact only attaches deterministic metadata that can be
+// derived from the persisted aggregate. It must not fabricate a primaryText or
+// representative actor: until the projection carries a named actor and an
+// evidence-bound object target, the App receives an empty primaryText and
+// fails the row closed.
 func DecorateAuthorImpact(summary ports.AuthorImpactSummary, viewerIsAuthor bool) ports.AuthorImpactSummary {
+	_ = viewerIsAuthor
 	for i := range summary.Items {
-		perspective := rtimpact.ActorTA
-		if viewerIsAuthor {
-			perspective = rtimpact.ActorSelf
-		}
-		if strings.TrimSpace(summary.Items[i].PrimaryText) == "" {
-			summary.Items[i].PrimaryText = rtimpact.PrimaryText(
-				summary.Items[i].HelpType,
-				summary.Items[i].Action,
-				summary.Items[i].Count,
-				perspective,
-			)
-		}
-		if summary.Items[i].RepresentativeActor == nil && summary.Items[i].Count > 0 {
-			summary.Items[i].RepresentativeActor = &ports.ImpactRepresentativeActor{
-				DisplayName:   "一位用户",
-				RelationLabel: "被影响的人",
-				PrivacyState:  "anonymous",
-			}
-		}
 		if strings.TrimSpace(summary.Items[i].IconKey) == "" {
 			summary.Items[i].IconKey = impactIconKey(summary.Items[i].HelpType)
 		}

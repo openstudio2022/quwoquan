@@ -16,7 +16,7 @@ sit_acceptance:
     story_refs: []
     done_when:
     - 能力内 Story 组合、状态机、异常路径和端云协同可验证。
-    - 微信 / Apple 原生登录入口、系统凭据入口、passkey 入口的显隐和降级由 PlatformCapabilities 驱动，不依赖 UI 层平台判断。
+    - 微信 / 支付宝 / QQ 原生登录入口、三网本机号一键入口、系统凭据入口的显隐和降级由 PlatformCapabilities 驱动，不依赖 UI 层平台判断。
     - Android `Credential Manager` 与 iOS `AuthenticationServices / Password AutoFill`
       的客户端接口与产品语义已预留，未开通时统一降级到手机号 OTP。
     performance_points: []

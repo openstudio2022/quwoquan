@@ -8,7 +8,7 @@ import (
 	"time"
 
 	mqpkg "quwoquan_service/services/user-service/internal/adapters/mq"
-	followtelemetry "quwoquan_service/services/user-service/internal/domain/follow/telemetry"
+	reltelemetry "quwoquan_service/services/user-service/internal/domain/relationship/persona_relationship/telemetry"
 )
 
 func TestFollow_Success(t *testing.T) {
@@ -52,17 +52,17 @@ func TestFollow_Success(t *testing.T) {
 	}
 
 	event := waitForUserEvent(t, eventCh)
-	if event.Type != "UserFollowed" {
-		t.Fatalf("expected UserFollowed event, got %+v", event)
+	if event.Type != "PersonaFollowStateChanged" {
+		t.Fatalf("expected PersonaFollowStateChanged event, got %+v", event)
 	}
 	if event.UserID != "ps_followee_1" || event.ActorID != "ps_follower_1" {
 		t.Fatalf("unexpected event routing: %+v", event)
 	}
-	if event.Payload["followeeId"] != "ps_followee_1" || event.Payload["followerId"] != "ps_follower_1" {
+	if event.Payload["targetPersonaId"] != "ps_followee_1" || event.Payload["sourcePersonaId"] != "ps_follower_1" {
 		t.Fatalf("unexpected event payload: %+v", event.Payload)
 	}
-	snapshot := followtelemetry.Collector().Snapshot()
-	if snapshot[followtelemetry.MetricFollowCommandLatencyMs] <= 0 {
+	snapshot := reltelemetry.Collector().Snapshot()
+	if snapshot[reltelemetry.MetricCommandLatencyMs] <= 0 {
 		t.Fatalf("expected follow command latency metric > 0, got %v", snapshot)
 	}
 }
@@ -99,8 +99,8 @@ func TestFollow_Idempotent(t *testing.T) {
 	if count != 1 {
 		t.Errorf("expected follower_count=1 after idempotent follow, got %d", count)
 	}
-	snapshot := followtelemetry.Collector().Snapshot()
-	if snapshot[followtelemetry.MetricFollowDuplicateRequestCount] != 1 {
+	snapshot := reltelemetry.Collector().Snapshot()
+	if snapshot[reltelemetry.MetricDuplicateCommandCount] != 1 {
 		t.Fatalf("expected duplicate follow metric=1, got %v", snapshot)
 	}
 }
@@ -155,8 +155,8 @@ func TestFollow_ReconcilesDriftedCounters(t *testing.T) {
 	if followingCount != 1 {
 		t.Fatalf("expected repaired following_count=1, got %d", followingCount)
 	}
-	snapshot := followtelemetry.Collector().Snapshot()
-	if snapshot[followtelemetry.MetricFollowCounterMismatchCount] <= 0 {
+	snapshot := reltelemetry.Collector().Snapshot()
+	if snapshot[reltelemetry.MetricCounterMismatchCount] <= 0 {
 		t.Fatalf("expected counter mismatch metric > 0 after repair, got %v", snapshot)
 	}
 }
@@ -179,8 +179,8 @@ func TestUnfollow_Success(t *testing.T) {
 		authHeadersForPersona("follower_3", "ps_follower_3"),
 	)
 	firstEvent := waitForUserEvent(t, eventCh)
-	if firstEvent.Type != "UserFollowed" {
-		t.Fatalf("expected first event UserFollowed, got %+v", firstEvent)
+	if firstEvent.Type != "PersonaFollowStateChanged" {
+		t.Fatalf("expected first event PersonaFollowStateChanged, got %+v", firstEvent)
 	}
 
 	rec := doRequest(
@@ -208,11 +208,33 @@ func TestUnfollow_Success(t *testing.T) {
 	}
 
 	event := waitForUserEvent(t, eventCh)
-	if event.Type != "UserUnfollowed" {
-		t.Fatalf("expected UserUnfollowed event, got %+v", event)
+	if event.Type != "PersonaFollowStateChanged" {
+		t.Fatalf("expected PersonaFollowStateChanged event, got %+v", event)
 	}
-	if event.Payload["followeeId"] != "ps_followee_3" || event.Payload["followerId"] != "ps_follower_3" {
+	if event.Payload["targetPersonaId"] != "ps_followee_3" || event.Payload["sourcePersonaId"] != "ps_follower_3" {
 		t.Fatalf("unexpected unfollow payload: %+v", event.Payload)
+	}
+}
+
+func TestUnfollowWithoutExistingRelationshipReturnsIdempotentReceipt(t *testing.T) {
+	requireMongoBackedRuntime(t)
+	t.Cleanup(func() { cleanAll(t) })
+	createTestProfile(t, "unfollow_missing_owner", "unfollow_missing_owner")
+	createTestPersonaFull(t, "unfollow_missing_owner_persona", "unfollow_missing_owner", "ps_unfollow_missing_owner", "unfollow_missing_owner", "default", true)
+
+	rec := doRequest(
+		t,
+		http.MethodDelete,
+		"/v1/user/sub-accounts/ps_unfollow_missing_target/follow",
+		`{"clientRequestId":"unfollow-missing-001"}`,
+		authHeadersForPersona("unfollow_missing_owner", "ps_unfollow_missing_owner"),
+	)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unfollow missing relationship: expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	body := parseJSON(t, rec)
+	if body["idempotentReplay"] != true {
+		t.Fatalf("missing relationship unfollow must be idempotent, got %#v", body)
 	}
 }
 
@@ -250,8 +272,8 @@ func TestGetRelationship_Mutual(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	result := parseJSON(t, rec)
-	if result["isMutual"] != true {
-		t.Errorf("expected isMutual=true, got %v", result["isMutual"])
+	if result["relationState"] != "mutual" {
+		t.Errorf("expected relationState=mutual, got %v", result["relationState"])
 	}
 }
 
@@ -297,8 +319,8 @@ func TestListFollowing_Pagination(t *testing.T) {
 func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
-	followtelemetry.Reset()
-	t.Cleanup(followtelemetry.Reset)
+	reltelemetry.Reset()
+	t.Cleanup(reltelemetry.Reset)
 	createTestProfile(t, "paginator_filtered", "paginator_filtered")
 	createTestPersonaFull(t, "paginator_filtered_persona", "paginator_filtered", "ps_paginator_filtered", "paginator_filtered", "default", true)
 
@@ -367,11 +389,11 @@ func TestListFollowing_PaginationFillsVisibleItemsAfterFiltering(t *testing.T) {
 		}
 		seen[subAccountID.(string)] = struct{}{}
 	}
-	snapshot := followtelemetry.Collector().Snapshot()
-	if snapshot[followtelemetry.MetricGraphFilterMismatchCount] <= 0 {
+	snapshot := reltelemetry.Collector().Snapshot()
+	if snapshot[reltelemetry.MetricFilterMismatchCount] <= 0 {
 		t.Fatalf("expected graph filter mismatch metric > 0, got %v", snapshot)
 	}
-	if snapshot[followtelemetry.MetricGraphListLatencyMs] <= 0 {
+	if snapshot[reltelemetry.MetricListLatencyMs] <= 0 {
 		t.Fatalf("expected graph list latency metric > 0, got %v", snapshot)
 	}
 }
@@ -449,8 +471,8 @@ func TestListFollowers_DoesNotExposeOwnerMapping(t *testing.T) {
 func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 	requireMongoBackedRuntime(t)
 	t.Cleanup(func() { cleanAll(t) })
-	followtelemetry.Reset()
-	t.Cleanup(followtelemetry.Reset)
+	reltelemetry.Reset()
+	t.Cleanup(reltelemetry.Reset)
 	createTestProfile(t, "block_owner_a", "block_owner_a")
 	createTestProfile(t, "block_owner_b", "block_owner_b")
 	createTestPersonaFull(t, "block_owner_a_persona", "block_owner_a", "ps_block_owner_a", "block_owner_a", "default", true)
@@ -488,53 +510,9 @@ func TestFollow_BlockGateRejectsBothDirections(t *testing.T) {
 		t.Fatalf("expected 403 for blocked->blocker follow, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	snapshot := followtelemetry.Collector().Snapshot()
-	if snapshot[followtelemetry.MetricFollowBlockRejectionCount] != 2 {
+	snapshot := reltelemetry.Collector().Snapshot()
+	if snapshot[reltelemetry.MetricBlockRejectionCount] != 2 {
 		t.Fatalf("expected block rejection metric=2, got %v", snapshot)
-	}
-}
-
-func TestFollow_FlagOffPreservesExistingPersonaEdge(t *testing.T) {
-	requireMongoBackedRuntime(t)
-	t.Cleanup(func() { cleanAll(t) })
-	followtelemetry.Reset()
-	t.Cleanup(followtelemetry.Reset)
-	createTestProfile(t, "rollback_viewer_owner", "rollback_viewer_owner")
-	createTestProfile(t, "rollback_target_owner", "rollback_target_owner")
-	createTestPersonaFull(t, "rollback_viewer_persona", "rollback_viewer_owner", "ps_rollback_viewer", "rollback_viewer", "default", true)
-	createTestPersonaFull(t, "rollback_target_persona", "rollback_target_owner", "ps_rollback_target", "rollback_target", "default", true)
-
-	rec := doRequest(
-		t,
-		http.MethodPost,
-		"/v1/user/sub-accounts/ps_rollback_target/follow",
-		"",
-		authHeadersForPersona("rollback_viewer_owner", "ps_rollback_viewer"),
-	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("initial follow failed: %d %s", rec.Code, rec.Body.String())
-	}
-
-	t.Setenv("OPS_USER_PERSONA_GRAPH_V1", "false")
-	t.Setenv("OPS_USER_PERSONA_CONTEXT_V1", "false")
-
-	rec = doRequest(
-		t,
-		http.MethodGet,
-		"/v1/user/sub-accounts/ps_rollback_target/relationship",
-		"",
-		authHeadersForPersona("rollback_viewer_owner", "ps_rollback_viewer"),
-	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("relationship under flag-off failed: %d %s", rec.Code, rec.Body.String())
-	}
-	body := parseJSON(t, rec)
-	if body["isFollowing"] != true {
-		t.Fatalf("expected existing follow edge to remain readable under flag-off, got %#v", body)
-	}
-	snapshot := followtelemetry.Collector().Snapshot()
-	if snapshot[followtelemetry.MetricGraphCurrentEdgeReadCount] <= 0 {
-		t.Fatalf("expected current graph read metric > 0, got %v", snapshot)
 	}
 }
 

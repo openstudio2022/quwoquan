@@ -1,11 +1,6 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_config_dto.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tab_defaults.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_category_tabs_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/circle/circle_repository.dart';
@@ -13,34 +8,6 @@ import 'package:quwoquan_app/components/navigation/secondary_capsule_tab_bar.dar
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
 import 'package:quwoquan_app/ui/search/pages/search_network_results_page.dart';
-
-/// 与 [circles_page_widget_test] 同源：避免单测里 [CircleCategoryTabsLoader.loadFromAsset] 走 rootBundle 失败或挂起。
-Map<String, CircleCategoryTabConfigDto> _searchNetworkCategoryTabsFixture() {
-  final candidates = <File>[
-    File(
-      '${Directory.current.path}/../quwoquan_service/contracts/metadata/social/circle/ui_category_tabs.yaml',
-    ),
-    File(
-      '${Directory.current.path}/quwoquan_service/contracts/metadata/social/circle/ui_category_tabs.yaml',
-    ),
-  ];
-  for (final f in candidates) {
-    if (f.existsSync()) {
-      return CircleCategoryTabsLoader.parseFromYamlString(f.readAsStringSync());
-    }
-  }
-  return Map<String, CircleCategoryTabConfigDto>.from(
-    CircleCategoryTabDefaults.remoteStyleFallback,
-  );
-}
-
-class _SearchNetworkCategoryFixtureRepo extends MockCircleRepository {
-  @override
-  Future<Map<String, CircleCategoryTabConfigDto>>
-  getCircleCategoryConfig() async {
-    return _searchNetworkCategoryTabsFixture();
-  }
-}
 
 Widget _buildApp({
   SearchLaunchContext launchContext = const SearchLaunchContext(
@@ -51,9 +18,7 @@ Widget _buildApp({
 }) {
   return ProviderScope(
     overrides: [
-      circleRepositoryProvider.overrideWithValue(
-        _SearchNetworkCategoryFixtureRepo(),
-      ),
+      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
     ],
     child: MaterialApp(
       home: SearchNetworkResultsPage(launchContext: launchContext),
@@ -67,9 +32,7 @@ Widget _buildAppWithSearchRepository({
 }) {
   return ProviderScope(
     overrides: [
-      circleRepositoryProvider.overrideWithValue(
-        _SearchNetworkCategoryFixtureRepo(),
-      ),
+      circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
       searchRepositoryProvider.overrideWithValue(repository),
     ],
     child: MaterialApp(
@@ -466,7 +429,6 @@ class _FakeNetworkSearchRepository implements SearchRepository {
         'coverUrl':
             'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
         'authorDisplayName': '街头摄影',
-        'circleName': '摄影影像',
         'categoryId': normalized.categoryId ?? 'photography',
         'subCategory': '影像',
         'likeCount': 32,
@@ -484,7 +446,7 @@ class _FakeNetworkSearchRepository implements SearchRepository {
                 objectType: SearchObjectType.contentPost,
                 objectId: item.postId,
                 title: item.title ?? item.postId,
-                subtitle: item.circleName,
+                subtitle: item.authorDisplayName,
                 snippet: item.summary,
                 resolvedFrom: SearchResolvedFrom.remote,
                 matchedField: item.matchedField,

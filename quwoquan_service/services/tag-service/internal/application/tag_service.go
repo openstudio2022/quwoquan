@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	model "quwoquan_service/services/tag-service/internal/domain/tag/model"
-	"quwoquan_service/services/tag-service/internal/domain/tag/repository"
+	"quwoquan_service/services/tag-service/internal/domain/tag/ports"
 )
 
 var ErrTagParentNotFound = errors.New("parent tagRef not found")
@@ -97,12 +97,12 @@ var tagDimensionCatalog = []TagDimensionView{
 
 // TagService 提供交集核心与创作打标只读用例。
 type TagService struct {
-	nodes   repository.TagNodeReader
-	objects repository.ObjectTagIndexReader
+	nodes   ports.TagNodeReader
+	objects ports.ObjectTagIndexReader
 }
 
 // NewTagService 注入只读存储依赖。
-func NewTagService(nodes repository.TagNodeReader, objects repository.ObjectTagIndexReader) *TagService {
+func NewTagService(nodes ports.TagNodeReader, objects ports.ObjectTagIndexReader) *TagService {
 	return &TagService{nodes: nodes, objects: objects}
 }
 

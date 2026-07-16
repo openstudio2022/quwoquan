@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Prompt snapshot",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "stage",
+    "executionId",
+    "executionBinding",
+    "templateFamily",
+    "templateRevision",
+    "templateRefs",
+    "systemHash",
+    "taskHash",
+    "partialsHash",
+    "varsHash",
+    "variables",
+    "promptBundleRevision",
+    "renderedHash",
+    "provider",
+    "model",
+    "runId",
+    "outputRefs"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.prompt_snapshot/1" },
+    "stage": { "enum": ["1.download", "2.quality", "3.compose", "4.draft", "5.review", "controller"] },
+    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
+    "executionBinding": { "enum": ["frozen", "standalone"] },
+    "templateFamily": { "type": "string", "minLength": 1 },
+    "templateRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "templateRefs": {
+      "type": "object",
+      "required": ["system", "task", "partials"],
+      "additionalProperties": false,
+      "properties": {
+        "system": { "type": "string", "pattern": "^(homepage|article|image|video|_shared)/.+\\.system\\.md$" },
+        "task": { "type": "string", "pattern": "^(homepage|article|image|video|_shared)/.+\\.task\\.md$" },
+        "partials": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^_shared/partials/.+\\.md$" }
+        }
+      }
+    },
+    "systemHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "taskHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "partialsHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "varsHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "variables": { "type": "object" },
+    "promptBundleRevision": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "renderedHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "provider": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "runId": { "type": "string", "minLength": 1 },
+    "outputRefs": { "type": "array", "items": { "type": "string" } }
+  }
+}

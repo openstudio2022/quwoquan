@@ -1,0 +1,28 @@
+version: 1
+domain: circle
+aggregate_root: CirclePostPlacement
+object_kind: aggregate_root
+description: Post 到 Circle 或其 Group 的唯一放置、下架和运营状态聚合。
+storage_backend: mongodb
+capabilities: [commandable, queryable, idempotent_commands, transactional_outbox]
+members: []
+business_rules:
+  - postId + circleId + groupId 在 active 生命周期内唯一
+  - groupId 非空时必须属于同一 circleId
+  - 只有 post owner 或 circle moderator 可以创建和移除放置
+  - pinned 与 featured 只能作用于 active placement
+  - 所有命令使用 expectedVersion 与 idempotency receipt
+lifecycle:
+  states: [active, removed]
+  transitions:
+    - { from: none, command: PlacePostInCircle, to: active }
+    - { from: active, command: RemovePostFromCircle, to: removed }
+  optimistic_concurrency: version
+  idempotency: command_receipt
+ddd_layer_mapping:
+  domain_model: internal/domain/circle/circle_post_placement/model
+  ports: internal/domain/circle/circle_post_placement/ports
+  application: internal/application/circle/circle_post_placement
+  persistence: internal/infrastructure/circle/circle_post_placement/persistence
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/adapters/mq

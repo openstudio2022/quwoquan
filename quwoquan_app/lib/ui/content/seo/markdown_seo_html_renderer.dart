@@ -69,7 +69,8 @@ class MarkdownSeoHtmlRenderer {
 
   SeoHtmlDocument render(MarkdownSeoRenderInput input) {
     final canonicalUrl = AppPublicContentLinks.postWebUrl(input.postId);
-    if (_visibility(input.visibility) == _SeoVisibility.private) {
+    final visibility = _visibility(input.visibility);
+    if (visibility == _SeoVisibility.private) {
       return SeoHtmlDocument(
         html: '',
         title: input.title.trim(),
@@ -102,35 +103,6 @@ class MarkdownSeoHtmlRenderer {
       _resolveAssetUrl(parsed.frontMatter.coverAssetId, assetsById),
       _resolveRawAssetUrl(parsed.frontMatter.coverImage),
     ]);
-    if (_visibility(input.visibility) == _SeoVisibility.circleVisible) {
-      final previewHtml = <String>[
-        '<h1>${_escape(title)}</h1>',
-        if (description.isNotEmpty) '<p>${_escape(description)}</p>',
-      ].join();
-      return SeoHtmlDocument(
-        html: '<article class="qwq-controlled-preview">$previewHtml</article>',
-        title: title,
-        description: description,
-        canonicalUrl: canonicalUrl,
-        openGraph: <String, String>{
-          'og:type': 'article',
-          'og:title': title,
-          'og:description': description,
-          'og:url': canonicalUrl,
-          if (cover.isNotEmpty) 'og:image': cover,
-          'twitter:card': cover.isNotEmpty ? 'summary_large_image' : 'summary',
-        },
-        jsonLd: <String, Object?>{
-          '@context': 'https://schema.org',
-          '@type': 'Article',
-          'headline': title,
-          'description': description,
-          'url': canonicalUrl,
-        },
-        referencedAssetUrls: const <String>[],
-        indexable: false,
-      );
-    }
     final buffer = StringBuffer();
     final referenced = <String>{};
     for (final block in parsed.blocks) {
@@ -173,7 +145,7 @@ class MarkdownSeoHtmlRenderer {
       openGraph: openGraph,
       jsonLd: jsonLd,
       referencedAssetUrls: referenced.toList(growable: false),
-      indexable: _visibility(input.visibility) == _SeoVisibility.public,
+      indexable: visibility == _SeoVisibility.public,
     );
   }
 
@@ -334,14 +306,18 @@ class MarkdownSeoHtmlRenderer {
 
   _SeoVisibility _visibility(String visibility) {
     final normalized = visibility.trim().toLowerCase();
-    if (normalized == 'private') return _SeoVisibility.private;
-    if (normalized == 'circle-visible' ||
-        normalized == 'circle_visible' ||
-        normalized == 'circle') {
-      return _SeoVisibility.circleVisible;
+    switch (normalized) {
+      case 'public':
+        return _SeoVisibility.public;
+      case 'private':
+        return _SeoVisibility.private;
     }
-    return _SeoVisibility.public;
+    throw ArgumentError.value(
+      visibility,
+      'visibility',
+      'Post visibility must be public or private',
+    );
   }
 }
 
-enum _SeoVisibility { public, circleVisible, private }
+enum _SeoVisibility { public, private }

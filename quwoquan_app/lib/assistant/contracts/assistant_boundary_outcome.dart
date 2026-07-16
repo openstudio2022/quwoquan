@@ -70,11 +70,15 @@ class AssistantBoundaryOutcome {
 Map<String, dynamic> _failureToJson(RuntimeFailureBase failure) {
   return <String, dynamic>{
     'code': failure.code,
+    'semanticReason': failure.semanticReason,
+    if (failure.transportStatus != null)
+      'transportStatus': failure.transportStatus,
     'origin': failure.origin.name,
     'kind': failure.kind.name,
     'nature': failure.nature.name,
     'location': failure.location.toJson(),
     'context': failure.context.toJson(),
+    'recovery': failure.recovery.toJson(),
   };
 }
 

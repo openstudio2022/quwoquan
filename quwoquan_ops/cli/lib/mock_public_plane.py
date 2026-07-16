@@ -2,14 +2,23 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 import hashlib
 import json
+import re
+import secrets
+import sys
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.cli.lib.output_paths import legal_static_release_dir
 
 
 class MockPublicPlaneHandler(BaseHTTPRequestHandler):
@@ -26,6 +35,14 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
     ops_events: list[dict[str, object]] = []
     ops_visits: list[dict[str, object]] = []
     ops_experiment_assignments: dict[str, dict[str, dict[str, object]]] = {}
+    otp_lock = threading.Lock()
+    otp_challenges: dict[str, dict[str, object]] = {}
+    otp_send_history: dict[str, list[float]] = {}
+    otp_fixed_code = "123456"
+    otp_expires_seconds = 300
+    otp_send_cooldown_seconds = 60
+    otp_hourly_limit = 10
+    otp_max_failures = 5
 
     def do_GET(self) -> None:
         path, query = self._split_path()
@@ -83,6 +100,8 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path, _query = self._split_path()
+        if self.mode == "api" and self._handle_auth_post(path):
+            return
         if self.mode == "api" and path == "/v1/user/sync":
             self._send_json(
                 {
@@ -98,6 +117,204 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
             if self._handle_ops_post(path):
                 return
         self.send_error(404, f"{self.mode} mock route is not ready")
+
+    def _handle_auth_post(self, path: str) -> bool:
+        if path not in {"/v1/auth/otp/send", "/v1/auth/login/phone"}:
+            return False
+        payload = self._read_json_body()
+        if path == "/v1/auth/otp/send":
+            status, response, headers = self._create_otp_challenge(payload)
+        else:
+            status, response, headers = self._consume_otp_challenge(payload)
+        self._send_json(response, status=status, headers=headers)
+        return True
+
+    def _create_otp_challenge(
+        self,
+        payload: object,
+        *,
+        now: float | None = None,
+    ) -> tuple[int, dict[str, object], dict[str, str]]:
+        body = payload if isinstance(payload, dict) else {}
+        phone = str(body.get("phone") or "").strip()
+        if re.fullmatch(r"1\d{10}", phone) is None:
+            return self._auth_error(
+                400,
+                "USER.USER.invalid_argument",
+                "请输入正确的手机号",
+            )
+        timestamp = time.time() if now is None else now
+        handler_cls = type(self)
+        with handler_cls.otp_lock:
+            history = [
+                sent_at
+                for sent_at in handler_cls.otp_send_history.get(phone, [])
+                if timestamp - sent_at < 3600
+            ]
+            if history and timestamp - history[-1] < handler_cls.otp_send_cooldown_seconds:
+                retry_after = max(
+                    1,
+                    int(handler_cls.otp_send_cooldown_seconds - (timestamp - history[-1])),
+                )
+                return self._auth_error(
+                    429,
+                    "USER.AUTH.otp_rate_limited",
+                    "发送过于频繁，请稍后再试",
+                    retry_after=retry_after,
+                )
+            if len(history) >= handler_cls.otp_hourly_limit:
+                return self._auth_error(
+                    429,
+                    "USER.AUTH.otp_rate_limited",
+                    "发送过于频繁，请稍后再试",
+                    retry_after=3600,
+                )
+            challenge_id = f"otp_{secrets.token_hex(12)}"
+            request_id = f"req_{secrets.token_hex(10)}"
+            expires_at = timestamp + handler_cls.otp_expires_seconds
+            code_digest = hashlib.sha256(
+                f"{challenge_id}:{handler_cls.otp_fixed_code}".encode("utf-8")
+            ).hexdigest()
+            handler_cls.otp_challenges[phone] = {
+                "challengeId": challenge_id,
+                "requestId": request_id,
+                "codeDigest": code_digest,
+                "expiresAt": expires_at,
+                "consumed": False,
+                "failureCount": 0,
+            }
+            history.append(timestamp)
+            handler_cls.otp_send_history[phone] = history
+        return (
+            200,
+            {
+                "maskedPhone": self._mask_phone(phone),
+                "expiresInSeconds": handler_cls.otp_expires_seconds,
+                "deliveryStatus": "delivered",
+                "requestId": request_id,
+                "challengeId": challenge_id,
+                "retryAfterSeconds": handler_cls.otp_send_cooldown_seconds,
+            },
+            {},
+        )
+
+    def _consume_otp_challenge(
+        self,
+        payload: object,
+        *,
+        now: float | None = None,
+    ) -> tuple[int, dict[str, object], dict[str, str]]:
+        body = payload if isinstance(payload, dict) else {}
+        phone = str(body.get("phone") or "").strip()
+        otp_code = str(body.get("otpCode") or "").strip()
+        agreement_version = str(body.get("agreementVersion") or "").strip()
+        privacy_version = str(body.get("privacyVersion") or "").strip()
+        if (
+            re.fullmatch(r"1\d{10}", phone) is None
+            or re.fullmatch(r"\d{6}", otp_code) is None
+        ):
+            return self._auth_error(
+                400,
+                "USER.USER.invalid_argument",
+                "手机号或验证码格式不正确",
+            )
+        if not agreement_version or not privacy_version:
+            return self._auth_error(
+                400,
+                "USER.AUTH.consent_required",
+                "请先阅读并同意用户协议与隐私政策",
+            )
+        timestamp = time.time() if now is None else now
+        handler_cls = type(self)
+        with handler_cls.otp_lock:
+            challenge = handler_cls.otp_challenges.get(phone)
+            if challenge is None or bool(challenge.get("consumed")):
+                return self._auth_error(
+                    400,
+                    "USER.AUTH.otp_expired",
+                    "验证码已过期，请重新获取",
+                )
+            if timestamp >= float(challenge.get("expiresAt") or 0):
+                return self._auth_error(
+                    400,
+                    "USER.AUTH.otp_expired",
+                    "验证码已过期，请重新获取",
+                )
+            failure_count = int(challenge.get("failureCount") or 0)
+            if failure_count >= handler_cls.otp_max_failures:
+                return self._auth_error(
+                    423,
+                    "USER.AUTH.login_locked",
+                    "账号因多次失败已暂时锁定，请30分钟后重试",
+                    retry_after=1800,
+                )
+            expected_digest = str(challenge.get("codeDigest") or "")
+            actual_digest = hashlib.sha256(
+                f"{challenge.get('challengeId')}:{otp_code}".encode("utf-8")
+            ).hexdigest()
+            if not hmac.compare_digest(expected_digest, actual_digest):
+                failure_count += 1
+                challenge["failureCount"] = failure_count
+                if failure_count >= handler_cls.otp_max_failures:
+                    return self._auth_error(
+                        423,
+                        "USER.AUTH.login_locked",
+                        "账号因多次失败已暂时锁定，请30分钟后重试",
+                        retry_after=1800,
+                    )
+                return self._auth_error(
+                    400,
+                    "USER.AUTH.otp_mismatch",
+                    "验证码错误，请重新输入",
+                )
+            challenge["consumed"] = True
+        owner_digest = hashlib.sha256(f"alpha-owner:{phone}".encode("utf-8")).hexdigest()
+        owner_id = f"owner_{owner_digest[:16]}"
+        session_nonce = secrets.token_hex(18)
+        return (
+            200,
+            {
+                "accessToken": f"alpha_access_{session_nonce}",
+                "refreshToken": f"alpha_refresh_{secrets.token_hex(18)}",
+                "ownerId": owner_id,
+                "accountState": "active",
+                "identityOrigin": "phone",
+                "logicalShard": int(owner_digest[:4], 16) % 128,
+                "anonymousRetentionPolicy": "merge_on_login",
+                "activeSub": None,
+                "subAccountCount": 0,
+                "sessionRememberTtlSeconds": 2592000,
+                "accountHint": {
+                    "displayName": "",
+                    "nicknameCustomized": False,
+                    "avatarUrl": "",
+                    "maskedPhone": self._mask_phone(phone),
+                    "identityOrigin": "phone",
+                },
+            },
+            {},
+        )
+
+    def _auth_error(
+        self,
+        status: int,
+        code: str,
+        user_message: str,
+        *,
+        retry_after: int = 0,
+    ) -> tuple[int, dict[str, object], dict[str, str]]:
+        return (
+            status,
+            {
+                "code": code,
+                "userMessage": user_message,
+                "recoveryAction": "retry",
+            },
+            {"Retry-After": str(retry_after)} if retry_after > 0 else {},
+        )
+
+    def _mask_phone(self, phone: str) -> str:
+        return f"{phone[:3]}****{phone[-4:]}"
 
     def do_OPTIONS(self) -> None:
         self.send_response(204)
@@ -136,15 +353,7 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         configured = type(self).legal_static_root.strip()
         if configured:
             return Path(configured).expanduser().resolve()
-        return (
-            ROOT
-            / ".qwq_output"
-            / "release"
-            / "legal-static"
-            / self.runtime_env
-            / "current"
-            / "public"
-        ).resolve()
+        return (legal_static_release_dir(self.runtime_env) / "current" / "public").resolve()
 
     def _resolve_legal_static_path(self, path: str) -> Path | None:
         root = self._legal_root()
@@ -540,12 +749,20 @@ class MockPublicPlaneHandler(BaseHTTPRequestHandler):
         bucket = dimensions.setdefault(dimension_key, {})
         bucket[value] = bucket.get(value, 0) + 1
 
-    def _send_json(self, payload: dict[str, object]) -> None:
+    def _send_json(
+        self,
+        payload: dict[str, object],
+        *,
+        status: int = 200,
+        headers: dict[str, str] | None = None,
+    ) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(body)
 

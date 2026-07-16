@@ -7,11 +7,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"quwoquan_service/runtime/reliabletask"
-	event "quwoquan_service/services/chat-service/internal/domain/conversation/event"
-	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
+	event "quwoquan_service/services/chat-service/internal/domain/chat/event"
 )
 
 const (
@@ -24,7 +24,7 @@ type ReliableGroupAvatarSchedulerOption func(*ReliableGroupAvatarTaskScheduler)
 type ReliableGroupAvatarTaskScheduler struct {
 	store         reliabletask.Store
 	catalog       reliabletask.Catalog
-	repo          persistence.ChatRepository
+	storage       ChatStoragePorts
 	publisher     EventPublisher
 	media         GroupAvatarAssetizer
 	syncPublisher UserSyncPublisher
@@ -43,6 +43,9 @@ type ReliableGroupAvatarTaskScheduler struct {
 	fanoutWorker       *ReliableAvatarNotificationFanoutWorker
 	readyIndex         reliabletask.ReadyIndex
 	dispatcherShardIDs []int
+	lifecycleMu        sync.Mutex
+	running            bool
+	done               chan struct{}
 }
 
 type ReliableTaskOutboxDispatcher struct {
@@ -56,6 +59,10 @@ type ReliableTaskOutboxDispatcher struct {
 	leaseTTL   time.Duration
 }
 
+type dueTaskShardLister interface {
+	ListDueTaskShardIDs(ctx context.Context, now time.Time, limit int) ([]int, error)
+}
+
 type ReliableGroupAvatarWorker struct {
 	scheduler *ReliableGroupAvatarTaskScheduler
 }
@@ -67,7 +74,7 @@ type ReliableAvatarNotificationFanoutWorker struct {
 func NewReliableGroupAvatarTaskScheduler(
 	store reliabletask.Store,
 	catalog reliabletask.Catalog,
-	repo persistence.ChatRepository,
+	storage ChatStoragePorts,
 	publisher EventPublisher,
 	media GroupAvatarAssetizer,
 	syncPublisher UserSyncPublisher,
@@ -77,15 +84,13 @@ func NewReliableGroupAvatarTaskScheduler(
 	if logger == nil {
 		logger = slog.Default()
 	}
-	if publisher == nil {
-		publisher = NoopEventPublisher()
-	}
+	publisher = requireEventPublisher(publisher)
 	taskSpec := catalog.Tasks[chatGroupAvatarRecomputeTaskType]
 	retryPolicy := taskSpec.RetryPolicyConfig()
 	scheduler := &ReliableGroupAvatarTaskScheduler{
 		store:          store,
 		catalog:        catalog,
-		repo:           repo,
+		storage:        storage,
 		publisher:      publisher,
 		media:          media,
 		syncPublisher:  syncPublisher,
@@ -209,8 +214,45 @@ func (s *ReliableGroupAvatarTaskScheduler) Start(ctx context.Context) error {
 	if s == nil || s.store == nil {
 		return reliabletask.ErrStoreRequired
 	}
-	go s.loop(ctx)
+	s.lifecycleMu.Lock()
+	if s.running {
+		s.lifecycleMu.Unlock()
+		return fmt.Errorf("reliable group avatar scheduler is already running")
+	}
+	s.running = true
+	s.done = make(chan struct{})
+	done := s.done
+	s.lifecycleMu.Unlock()
+	go func() {
+		defer func() {
+			s.lifecycleMu.Lock()
+			s.running = false
+			close(done)
+			s.lifecycleMu.Unlock()
+		}()
+		s.loop(ctx)
+	}()
 	return nil
+}
+
+// WaitForStop 等待由 Start 启动的 worker 完整退出，供 composition root 在关闭
+// Mongo/Redis 前建立确定的生命周期顺序。
+func (s *ReliableGroupAvatarTaskScheduler) WaitForStop(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	s.lifecycleMu.Lock()
+	done := s.done
+	s.lifecycleMu.Unlock()
+	if done == nil {
+		return nil
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (s *ReliableGroupAvatarTaskScheduler) loop(ctx context.Context) {
@@ -222,6 +264,9 @@ func (s *ReliableGroupAvatarTaskScheduler) loop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.DrainOnce(ctx); err != nil {
+				if ctx.Err() != nil {
+					return
+				}
 				s.logger.Error("reliable group avatar scheduler drain failed", "err", err)
 			}
 		}
@@ -263,6 +308,13 @@ func (d *ReliableTaskOutboxDispatcher) DispatchDue(ctx context.Context, limit in
 	}
 	now := time.Now().UTC()
 	shardIDs := normalizeReliableGroupAvatarShardIDs(d.shardIDs)
+	if lister, ok := d.store.(dueTaskShardLister); ok {
+		dueShardIDs, err := lister.ListDueTaskShardIDs(ctx, now, len(shardIDs))
+		if err != nil {
+			return fmt.Errorf("list due reliable task shards: %w", err)
+		}
+		shardIDs = intersectReliableTaskShardIDs(shardIDs, dueShardIDs)
+	}
 	remaining := limit
 	for _, shardID := range shardIDs {
 		if remaining <= 0 {
@@ -297,6 +349,24 @@ func (d *ReliableTaskOutboxDispatcher) DispatchDue(ctx context.Context, limit in
 		}
 	}
 	return nil
+}
+
+func intersectReliableTaskShardIDs(configured []int, due []int) []int {
+	if len(configured) == 0 || len(due) == 0 {
+		return nil
+	}
+	allowed := make(map[int]struct{}, len(configured))
+	for _, shardID := range configured {
+		allowed[shardID] = struct{}{}
+	}
+	out := make([]int, 0, len(due))
+	for _, shardID := range due {
+		if _, ok := allowed[shardID]; ok {
+			out = append(out, shardID)
+		}
+	}
+	sort.Ints(out)
+	return out
 }
 
 func (w *ReliableGroupAvatarWorker) DrainOnce(ctx context.Context) error {
@@ -393,32 +463,52 @@ func (s *ReliableGroupAvatarTaskScheduler) EnqueueRecompute(ctx context.Context,
 		return reliabletask.ErrStoreRequired
 	}
 	now := time.Now().UTC()
+	trigger := strings.TrimSpace(task.Trigger)
 	payload := map[string]string{
-		"triggers": strings.TrimSpace(task.Trigger),
+		"triggers": trigger,
 	}
 	if actorID := strings.TrimSpace(task.ActorID); actorID != "" {
 		payload["actorID"] = actorID
 	}
-	if conv, err := s.repo.FindConversationByID(ctx, task.ConversationID); err == nil {
+	if conv, err := s.storage.Conversations.FindConversationByID(ctx, task.ConversationID); err == nil {
 		payload["rosterRevision"] = strconv.FormatInt(conv.MembersRosterRevision, 10)
 	}
+	targetSourceHash, err := latestGroupAvatarSourceHash(
+		ctx,
+		s.storage.Members,
+		strings.TrimSpace(task.ConversationID),
+		0,
+	)
+	if err != nil {
+		return err
+	}
+	if targetSourceHash == "" {
+		targetSourceHash = "empty"
+	}
+	payload["targetSourceHash"] = targetSourceHash
+	idempotencyKey := strings.Join([]string{
+		chatGroupAvatarRecomputeTaskType,
+		strings.TrimSpace(task.ConversationID),
+		targetSourceHash,
+		trigger,
+	}, ":")
 	req := reliabletask.DeclareTaskRequest{
 		TaskType:        chatGroupAvatarRecomputeTaskType,
 		OwnerDomain:     "chat",
 		AggregateType:   "conversationId",
 		AggregateID:     strings.TrimSpace(task.ConversationID),
 		DedupeKey:       chatGroupAvatarRecomputeTaskType + ":" + strings.TrimSpace(task.ConversationID),
-		IdempotencyKey:  chatGroupAvatarRecomputeTaskType + ":" + strings.TrimSpace(task.ConversationID),
+		IdempotencyKey:  idempotencyKey,
 		PartitionKey:    strings.TrimSpace(task.ConversationID),
 		Payload:         payload,
-		PayloadAllow:    []string{"rosterRevision", "triggers", "actorID"},
-		Trigger:         strings.TrimSpace(task.Trigger),
+		PayloadAllow:    []string{"rosterRevision", "targetSourceHash", "triggers", "actorID"},
+		Trigger:         trigger,
 		StartAt:         now.Add(s.recomputeDelay),
 		MaxDelayUntil:   now.Add(s.maxDelay),
 		MergeWindow:     s.maxDelay,
 		CreatedByModule: "chat.task_outbox_dispatcher",
 	}
-	_, err := s.store.DeclareTask(ctx, req)
+	_, err = s.store.DeclareTask(ctx, req)
 	return err
 }
 
@@ -444,7 +534,7 @@ func (s *ReliableGroupAvatarTaskScheduler) EnqueueConversationAvatarPatch(ctx co
 func (s *ReliableGroupAvatarTaskScheduler) handleRecomputeTask(ctx context.Context, task reliabletask.ReliableAsyncTask) error {
 	err := RecomputeGroupAvatar(
 		ctx,
-		s.repo,
+		s.storage,
 		s.publisher,
 		s.media,
 		s.syncPublisher,
@@ -471,8 +561,8 @@ func (s *ReliableGroupAvatarTaskScheduler) handleNotification(ctx context.Contex
 	if s.syncPublisher == nil {
 		return s.store.CompleteNotification(ctx, notification.NotificationID, notification.LeaseToken)
 	}
-	if s.repo != nil {
-		conv, err := s.repo.FindConversationByID(ctx, notification.AggregateID)
+	if s.storage.Conversations != nil {
+		conv, err := s.storage.Conversations.FindConversationByID(ctx, notification.AggregateID)
 		if err == nil && conv != nil && strings.TrimSpace(conv.Status) != "active" {
 			return s.store.CompleteNotification(ctx, notification.NotificationID, notification.LeaseToken)
 		}
@@ -530,6 +620,12 @@ func stringifyPayload(payload map[string]any) map[string]string {
 func anyPayload(payload map[string]string) map[string]any {
 	out := make(map[string]any, len(payload))
 	for key, value := range payload {
+		if key == "groupAvatarVersion" {
+			if parsed, err := strconv.ParseInt(value, 10, 64); err == nil {
+				out[key] = parsed
+				continue
+			}
+		}
 		out[key] = value
 	}
 	return out

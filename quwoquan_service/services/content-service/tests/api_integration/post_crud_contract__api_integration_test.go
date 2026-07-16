@@ -4,6 +4,7 @@
 package api_integration
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 	postapp "quwoquan_service/services/content-service/internal/application/post"
 	"strings"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/v2/bson"
 
 	contenhttp "quwoquan_service/services/content-service/internal/adapters/http"
 	"quwoquan_service/services/content-service/internal/infrastructure/persistence"
@@ -27,6 +30,7 @@ func TestCreatePostAggregate(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_test_001")
+	ensureIdempotencyHeader(req, t.Name())
 	rec := httptest.NewRecorder()
 
 	testHandler.ServeHTTP(rec, req)
@@ -72,6 +76,7 @@ func TestCreatePostAllTypes(t *testing.T) {
 			payload := fmt.Sprintf(`{"contentType":%q,%s}`, tc.contentType, tc.extra)
 			req := httptest.NewRequest(http.MethodPost, "/v1/content/posts", strings.NewReader(payload))
 			req.Header.Set("Content-Type", "application/json")
+			ensureIdempotencyHeader(req, t.Name())
 			rec := httptest.NewRecorder()
 			testHandler.ServeHTTP(rec, req)
 			if rec.Code != http.StatusCreated {
@@ -125,8 +130,75 @@ func TestPublishPostContract(t *testing.T) {
 	}
 }
 
+// TestCreatePublishOutboxProjectionCommercialChain proves the first commercial
+// vertical slice: CreatePost + PublishPost commit stable facts, independent
+// consumers advance their own checkpoints, and Discovery converges from the
+// durable PostPublished event. Re-draining does not duplicate external facts.
+func TestCreatePublishOutboxProjectionCommercialChain(t *testing.T) {
+	t.Cleanup(func() { cleanPosts(t) })
+	eventSpy.Reset()
+
+	created := createDraftPostWithAuthor(t, "commercial_chain_author", `{
+		"contentType":"article",
+		"contentIdentity":"work",
+		"title":"端云对象闭环",
+		"articleMarkdown":"# 端云对象闭环\n\nDurable outbox first.",
+		"articleMarkdownVersion":"qwq-rich-md/1",
+		"articleAssetManifest":{"assets":[]}
+	}`)
+	postID, _ := created["_id"].(string)
+	if postID == "" {
+		t.Fatal("draft post missing _id")
+	}
+	publishPostWithAuthor(t, "commercial_chain_author", postID, `{"visibility":"public"}`)
+
+	createdEvents := eventSpy.EventsOfType("PostCreated")
+	publishedEvents := eventSpy.EventsOfType("PostPublished")
+	if len(createdEvents) != 1 || len(publishedEvents) != 1 {
+		t.Fatalf("durable lifecycle facts mismatch: created=%d published=%d", len(createdEvents), len(publishedEvents))
+	}
+	if createdEvents[0].EventID == "" || publishedEvents[0].EventID == "" ||
+		createdEvents[0].EventID == publishedEvents[0].EventID {
+		t.Fatalf("stable event identities missing or reused: created=%q published=%q", createdEvents[0].EventID, publishedEvents[0].EventID)
+	}
+
+	var projection struct {
+		PostID string `bson:"postId"`
+		Status string `bson:"status"`
+		Title  string `bson:"title"`
+	}
+	if err := mongoDB.Collection("rm_discovery_feed").FindOne(
+		context.Background(),
+		bson.M{"postId": postID},
+	).Decode(&projection); err != nil {
+		t.Fatalf("PostPublished discovery projection missing: %v", err)
+	}
+	if projection.Status != "published" || projection.Title != "端云对象闭环" {
+		t.Fatalf("discovery projection did not converge: %+v", projection)
+	}
+
+	checkpointCount, err := mongoDB.Collection("projection_checkpoints").CountDocuments(
+		context.Background(),
+		bson.M{"_id": bson.M{"$in": []string{
+			"post:api-integration-event-spy",
+			"post:api-integration-discovery-projection",
+		}}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if checkpointCount != 2 {
+		t.Fatalf("expected independent event/projection checkpoints, got %d", checkpointCount)
+	}
+
+	drainPostOutbox(t)
+	if got := len(eventSpy.EventsOfType("PostPublished")); got != 1 {
+		t.Fatalf("replay duplicated PostPublished event: got %d", got)
+	}
+}
+
 // TestDeletePostContract verifies deleting a published post tombstones the
-// aggregate and GET then returns conflict/deleted.
+// aggregate and GET then returns the metadata-defined non-disclosing not-found.
 func TestDeletePostContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
@@ -152,12 +224,12 @@ func TestDeletePostContract(t *testing.T) {
 	getReq.Header.Set("X-Client-User-Id", "delete_author")
 	getRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusConflict {
-		t.Fatalf("expected 409 after delete, got %d: %s", getRec.Code, getRec.Body.String())
+	if getRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 after delete, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 }
 
-func TestGetDeletedPostAfterServiceRestartStillReturnsConflict(t *testing.T) {
+func TestGetDeletedPostAfterServiceRestartStillReturnsNotFound(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := createPostWithAuthor(t, "delete_restart_author", `{
@@ -189,7 +261,14 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsConflict(t *testing.T) {
 		}
 		contenhttp.NewContentHandler(
 			nil,
-			postapp.NewPostService(restartedStore),
+			postapp.BindFacades(
+				postapp.NewPostService(postapp.BindDataPorts(restartedStore)),
+			),
+			postapp.NewPostQueryFacade(postapp.PostQueryDependencies{
+				Detail: persistence.NewMongoPostQueryReader(mongoDB.Collection("posts")),
+			}),
+			nil,
+			nil,
 			nil,
 			nil,
 		).Routes().ServeHTTP(w, r)
@@ -199,8 +278,8 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsConflict(t *testing.T) {
 	getReq.Header.Set("X-Client-User-Id", "delete_restart_author")
 	getRec := httptest.NewRecorder()
 	restartedHandler.ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusConflict {
-		t.Fatalf("expected 409 after restart for deleted post, got %d: %s", getRec.Code, getRec.Body.String())
+	if getRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 after restart for deleted post, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 }
 
@@ -269,6 +348,7 @@ func TestUpdatePostForbidden(t *testing.T) {
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-User-Id", "user_owner")
+	ensureIdempotencyHeader(req, t.Name())
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -288,16 +368,17 @@ func TestUpdatePostForbidden(t *testing.T) {
 	patchRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(patchRec, patchReq)
 
-	// Currently the handler does not enforce authorId — when enforcement is added,
-	// this should return 403. Until then we verify the update does not panic and
-	// returns a 2xx or 4xx (not 5xx).
-	if patchRec.Code >= 500 {
-		t.Errorf("update by non-owner: unexpected 5xx response: %d %s", patchRec.Code, patchRec.Body.String())
+	if patchRec.Code != http.StatusForbidden {
+		t.Fatalf(
+			"update by non-owner status = %d, want 403: %s",
+			patchRec.Code,
+			patchRec.Body.String(),
+		)
 	}
 }
 
-// TestPostCreatedEventPublished verifies that creating a post publishes a
-// PostCreated domain event captured by EventSpy.
+// TestPostCreatedEventPublished verifies that creating a post commits a
+// PostCreated fact and the durable outbox relay publishes it to EventSpy.
 // contract.yaml: create_post_event_published / go_func: TestPostCreatedEventPublished
 func TestPostCreatedEventPublished(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
@@ -310,12 +391,14 @@ func TestPostCreatedEventPublished(t *testing.T) {
 		strings.NewReader(`{"contentType":"micro","body":"event spy test post"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
+	ensureIdempotencyHeader(req, t.Name())
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
+	drainPostOutbox(t)
 
 	events := eventSpy.EventsOfType("PostCreated")
 	if len(events) == 0 {
@@ -331,6 +414,14 @@ func TestPostCreatedEventPublished(t *testing.T) {
 	if ev.Payload["contentType"] != "micro" {
 		t.Errorf("expected payload.contentType=micro, got %v", ev.Payload["contentType"])
 	}
+	if ev.EventID == "" {
+		t.Error("expected durable outbox event identity")
+	}
+
+	drainPostOutbox(t)
+	if got := len(eventSpy.EventsOfType("PostCreated")); got != 1 {
+		t.Fatalf("checkpoint replay published %d PostCreated events, want 1", got)
+	}
 }
 
 // TestCreatePostInvalidContentType verifies that submitting contentType="invalid_type"
@@ -344,6 +435,7 @@ func TestCreatePostInvalidContentType(t *testing.T) {
 		strings.NewReader(`{"contentType":"invalid_type","body":"test"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
+	ensureIdempotencyHeader(req, t.Name())
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 

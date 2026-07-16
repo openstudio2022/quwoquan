@@ -9,9 +9,14 @@ class RuntimeErrorResponse {
     this.debugMessage = '',
   });
 
-  factory RuntimeErrorResponse.fromJson(Map<String, dynamic> json) {
+  factory RuntimeErrorResponse.fromJson(
+    Map<String, dynamic> json, {
+    int? transportStatus,
+  }) {
     final failureJson = <String, dynamic>{
       'code': json['code'],
+      'semanticReason': json['reason'] ?? json['semanticReason'],
+      'transportStatus': transportStatus ?? json['transportStatus'],
       'origin': json['origin'],
       'kind': _camelKind(json['kind']),
       'nature': json['nature'],
@@ -37,6 +42,9 @@ class RuntimeErrorResponse {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'code': failure.code,
+      'reason': failure.semanticReason,
+      if (failure.transportStatus != null)
+        'transportStatus': failure.transportStatus,
       'origin': failure.origin.name,
       'kind': failure.kind.name,
       'nature': failure.nature.name,

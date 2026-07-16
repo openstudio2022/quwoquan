@@ -10,7 +10,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:quwoquan_app/app/app_startup_runtime.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_exception_telemetry_service.dart';
-import 'package:quwoquan_app/cloud/runtime/local_dev_https_trust.dart';
+import 'package:quwoquan_app/cloud/runtime/context/cloud_client_context.dart';
+import 'package:quwoquan_app/core/di/app_cloud_client_context_provider.dart';
+import 'package:quwoquan_app/core/platform/local_dev_https_trust.dart';
 import 'package:quwoquan_app/core/quwoquan_core.dart';
 import 'package:quwoquan_app/core/platform/platform_target.dart';
 import 'package:quwoquan_app/quwoquan_app_shell.dart';
@@ -27,6 +29,9 @@ Future<void> runQuwoquanApp({
   await runZonedGuarded(
     () async {
       WidgetsFlutterBinding.ensureInitialized();
+      CloudClientContextRegistry.configure(
+        const AppCloudClientContextProvider(),
+      );
       AppStartupRuntime.instance.markBootstrapStarted();
       assert(() {
         debugPaintSizeEnabled = false;
@@ -109,15 +114,9 @@ Future<void> runQuwoquanApp({
 }
 
 Future<void> _installLocalDevHttpsTrustBeforeMediaClients() async {
-  try {
-    await LocalDevHttpsTrust.installForCurrentRuntime();
-  } catch (error, stack) {
-    logQuwoquanAppException(
-      source: 'local_dev_https_trust',
-      exceptionText: error.toString(),
-      stackText: stack.toString(),
-    );
-  }
+  // Fail-fast on Android local HTTPS plane: swallowing CA install errors
+  // produces HandshakeException + canonical DNS fallback on physical devices.
+  await LocalDevHttpsTrust.installForCurrentRuntime();
 }
 
 void _installRootIsolateErrorListener() {

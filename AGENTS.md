@@ -91,6 +91,7 @@ Codex 在本仓库做任何增量，都必须同时用这些视角审视，不�
 
 - `quwoquan_service/contracts/metadata/**` 是字段、错误码、path、route、surface、operation、decoder context 的唯一真相源。
 - `quwoquan_service/contracts/metadata/**/errors.yaml` 是错误码、用户可见提示、恢复动作和端云错误语义的唯一真相源；稳定错误码使用 `MODULE.KIND.REASON`，上下文只进 string-only `context.attributes`。
+- `.qwq_output/` 只承载可删除的运行产物、派生发布包、证据与缓存。任何配置、schema、prompt、template、policy、reference、依赖声明或构建规则必须归仓库内领域目录；删除 `.qwq_output/` 后，仓库必须仍可只凭受版本控制的真相源和外部依赖重新构建。禁止让跨任务执行把 output 当作唯一输入或持久状态。
 - 先 metadata，后 verify/codegen，再写业务逻辑；禁止手改 codegen 产物。
 - 不维护第二套路由、错误码、UI IA、mock 数据或特性树。
 - 当前阶段按未上线处理：对不合理实现零兼容、零技术债容忍，优先替换为正确契约与正确架构；禁止为错误实现继续加 shim、fallback、allowlist 或旁路。

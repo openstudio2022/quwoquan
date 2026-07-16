@@ -1,5 +1,5 @@
-// Command import 把数据工程路径制 taxonomy（publish/tags 目录树）灌入 mongo tag_nodes。
-// 唯一标签真相源为 publish/tags（单一发布主线）；本工具只读消费其目录结构，幂等 upsert，可重跑。
+// Command import 把数据工程 control-plane 路径制 taxonomy 灌入 mongo tag_nodes。
+// 本工具只读消费 canonical taxonomy 目录结构，幂等 upsert，可重跑。
 package main
 
 import (
@@ -27,7 +27,7 @@ type definition struct {
 var validGroups = map[string]bool{"Topic": true, "Entity": true, "Audience": true, "Format": true}
 
 func main() {
-	tagsDir := flag.String("tags-dir", "../quwoquan_data/publish/tags", "path to publish/tags directory tree")
+	tagsDir := flag.String("tags-dir", "../quwoquan_data/control_plane/governance/taxonomy", "path to canonical control-plane taxonomy tree")
 	mongoURI := flag.String("mongo-uri", "mongodb://localhost:27017", "mongo connection uri")
 	dbName := flag.String("db", "quwoquan_tag", "target database")
 	releaseID := flag.String("release-id", "adhoc", "data release id")

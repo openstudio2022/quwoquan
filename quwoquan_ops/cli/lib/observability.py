@@ -7,9 +7,9 @@ from typing import Any
 
 from quwoquan_ops.cli.lib.common import ROOT, utc_now, write_json
 from quwoquan_ops.cli.lib.output_paths import (
-    data_observability_run_dir,
     env_observability_run_dir,
     normalize_env,
+    repo_root,
 )
 
 
@@ -73,10 +73,11 @@ RECORD_START_PATTERN = re.compile(
 
 
 def run_dir(env_name: str, run_id: str) -> Path:
-    env = normalize_env(env_name)
-    if env == "data":
-        return data_observability_run_dir(run_id)
-    return env_observability_run_dir(env, run_id)
+    if env_name == "data":
+        return repo_root() / "observability" / "data" / _safe_segment(run_id)
+    if env_name == "repo":
+        return repo_root() / "observability" / _safe_segment(run_id)
+    return env_observability_run_dir(normalize_env(env_name), run_id)
 
 
 def run_id_from_report_dir(report_dir: Path) -> str:

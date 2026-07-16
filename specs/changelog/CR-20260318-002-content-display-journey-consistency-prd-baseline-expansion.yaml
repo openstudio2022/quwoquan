@@ -99,7 +99,7 @@ entries:
           - 关键设计决策
           - metadata / codegen 方案
           - plan slice 与 T1~T4 证据矩阵映射
-      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/plan.yaml
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -112,7 +112,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract/plan.yaml
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/viewer-profile-state-sync-contract/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -123,7 +123,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - TDD / ATDD 策略
-      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract/plan.yaml
+      - path: specs/feature-tree/discovery-content/content-display-journey-consistency/circle-feed-viewer-handoff-contract/content.execution.planning.yaml
         sections:
           - P1
           - P2

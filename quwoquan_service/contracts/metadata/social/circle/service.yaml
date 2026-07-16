@@ -1,16 +1,56 @@
 version: 1
-aggregate: Circle
 
 service:
   name: circle-service
   domain: circle
   owner: backend-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: CIRCLE_CIRCLE_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
   description: 群组入口、圈子主页、组织主页、成员治理与群组协作
 
 api_routes:
   - method: GET
     path: /v1/circles
     operation: ListCircles
+    actor: none
+    commercial:
+      status: ready
+    authorization:
+      principal: public
+      ownership_policy: public_circle_discovery
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [CIRCLE.USER.invalid_argument, CIRCLE.SYSTEM.internal_error]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_list
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    application:
+      kind: query
+      facet: CircleDiscoveryQueryFacet
+      method: listCircles
+      reader: CircleDiscoveryReader
+      slice: CircleDiscoveryPageSlice
     description: 群组 / 主页列表（分类 + 推荐）
     query_params: [category, domainId, recommendFor, cursor, limit, sort]
     response_entity: Circle
@@ -18,6 +58,13 @@ api_routes:
   - method: GET
     path: /v1/circles/search
     operation: SearchCircles
+    actor: persona
+    application:
+      kind: query
+      facet: CircleSearchQueryFacet
+      method: searchCircles
+      reader: CircleSearchReader
+      slice: CircleSearchResultSlice
     description: 全局搜索群组结果与 facet buckets
     query_params: [query, categoryId, subCategory, cursor, limit]
     response_entity: CircleSearchResultView
@@ -26,6 +73,14 @@ api_routes:
   - method: POST
     path: /v1/circles
     operation: CreateCircle
+    actor: persona
+    application:
+      kind: command
+      facet: CircleLifecycleCommandFacet
+      method: createCircle
+      aggregate_owner: Circle
+      mutation_target: Circle
+      invariant_target: Circle
     description: 创建圈子 / 组织主页
     request_entity: Circle
     writable_fields: [name, description, coverUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
@@ -33,191 +88,125 @@ api_routes:
   - method: GET
     path: /v1/circles/{circleId}
     operation: GetCircle
+    actor: none
+    authorization:
+      principal: public
+      ownership_policy: public_circle_read
+    reliability:
+      timeout_ms: 1500
+      cancellation: supported
+      retry_mode: idempotent
+      max_attempts: 2
+      idempotency: none
+    error_codes: [CIRCLE.USER.not_found, CIRCLE.SYSTEM.internal_error]
+    privacy:
+      request_classification: PUBLIC
+      response_classification: PUBLIC
+      log_policy: metadata_only
+    telemetry:
+      metric: circle_detail_get
+      trace: true
+      attributes: [outcome]
+    slo:
+      latency_p95_ms: 500
+      availability_percent: 99.9
+    security:
+      auth_mode: optional
+      principal: public
+      token_transport: bearer
+      anonymous_policy: allow
+      visibility: public
+    application:
+      kind: query
+      facet: CircleQueryFacet
+      method: getCircle
+      reader: CircleDetailReader
+      slice: CircleDetailSlice
     description: 群组主页详情
     response_entity: Circle
 
   - method: PATCH
     path: /v1/circles/{circleId}
     operation: UpdateCircle
+    actor: persona
+    application:
+      kind: command
+      facet: CircleLifecycleCommandFacet
+      method: updateCircle
+      aggregate_owner: Circle
+      mutation_target: Circle
+      invariant_target: Circle
     description: 更新圈子 / 组织主页
     writable_fields: [name, description, coverUrl, category, subCategory, tags, visibility, joinPolicy, kind, displaySubjectType, followEnabled, linkedHomepageId, linkedHomepageType, linkedHomepageTitle]
 
   - method: DELETE
     path: /v1/circles/{circleId}
     operation: ArchiveCircle
+    actor: persona
+    application:
+      kind: command
+      facet: CircleLifecycleCommandFacet
+      method: archiveCircle
+      aggregate_owner: Circle
+      mutation_target: Circle
+      invariant_target: Circle
     description: 归档圈子
-
-  - method: GET
-    path: /v1/users/{userId}/circles
-    operation: ListUserCircles
-    description: |
-      查询用户已加入的圈子列表。列表项与 Circle 聚合根 wire 对齐；
-      App 端 UserProfileRepository 与 CircleRepository 均解析为 codegen CircleDto。
-    query_params: [query, cursor, limit]
-    response_entity: Circle
-
-  - method: POST
-    path: /v1/circles/{circleId}/join
-    operation: JoinCircle
-    description: 加入圈子
-    security:
-      auth_mode: required
-
-  - method: POST
-    path: /v1/circles/{circleId}/leave
-    operation: LeaveCircle
-    description: 退出圈子
-    security:
-      auth_mode: required
-
-  - method: GET
-    path: /v1/circles/{circleId}/members
-    operation: ListCircleMembers
-    description: 成员列表
-    response_entity: CircleMember
-
-  - method: PATCH
-    path: /v1/circles/{circleId}/members/{userId}/role
-    operation: UpdateMemberRole
-    description: 更新成员角色
-
-  # --- 群组 / 组织节点 ---
-  - method: GET
-    path: /v1/circles/{circleId}/groups
-    operation: ListCircleGroups
-    description: 列出圈内群组与组织节点
-    query_params: [groupType, visibility, parentGroupId, nodeType, cursor, limit]
-    response_entity: CircleGroup
-
-  - method: GET
-    path: /v1/circles/{circleId}/groups/search
-    operation: SearchCircleGroups
-    description: 圈内搜索群组与组织节点（私有群仅圈成员可命中）
-    query_params: [query, visibility, groupType, cursor, limit]
-    response_entity: CircleGroup
-    auth: required
-
-  - method: POST
-    path: /v1/circles/{circleId}/groups
-    operation: CreateCircleGroup
-    description: 创建公共群 / 自建群 / 组织节点
-    request_entity: CircleGroup
-    writable_fields: [parentGroupId, groupType, nodeType, name, description, visibility, joinPolicy, managerIds, storageEnabled, noticeEnabled]
-    auth: required
-
-  - method: GET
-    path: /v1/circles/{circleId}/groups/{groupId}
-    operation: GetCircleGroup
-    description: 群组 / 组织节点详情
-    response_entity: CircleGroup
-
-  - method: PATCH
-    path: /v1/circles/{circleId}/groups/{groupId}
-    operation: UpdateCircleGroup
-    description: 更新群组 / 组织节点
-    writable_fields: [parentGroupId, nodeType, name, description, visibility, joinPolicy, managerIds, storageEnabled, noticeEnabled, status]
-    auth: required
-
-  - method: POST
-    path: /v1/circles/{circleId}/groups/{groupId}/join-requests
-    operation: ApplyJoinCircleGroup
-    description: 申请加入公共群 / 公开自建群
-    auth: required
-
-  - method: GET
-    path: /v1/circles/{circleId}/groups/{groupId}/members
-    operation: ListCircleGroupMembers
-    description: 群组成员与申请列表
-    query_params: [status, cursor, limit]
-    response_entity: CircleGroupMember
-    auth: required
-
-  - method: POST
-    path: /v1/circles/{circleId}/groups/{groupId}/join-requests/{userId}:approve
-    operation: ApproveCircleGroupMember
-    description: 通过入群申请
-    auth: required
-
-  - method: POST
-    path: /v1/circles/{circleId}/groups/{groupId}/join-requests/{userId}:reject
-    operation: RejectCircleGroupMember
-    description: 拒绝入群申请
-    auth: required
 
   - method: GET
     path: /v1/circles/{circleId}/feed
     operation: GetCircleFeed
+    actor: none
+    application:
+      kind: query
+      facet: CircleFeedQueryFacet
+      method: getCircleFeed
+      reader: CircleFeedReader
+      slice: CircleFeedPageSlice
     description: 圈子动态流
     query_params: [identity, type, cursor, limit, sort]
 
   - method: GET
     path: /v1/circles/{circleId}/stats
     operation: GetCircleStats
+    actor: none
+    application:
+      kind: query
+      facet: CircleAnalyticsQueryFacet
+      method: getCircleStats
+      reader: CircleStatsReader
+      slice: CircleStatsSlice
     description: 圈子统计
 
   - method: GET
     path: /v1/circles/{circleId}/impact
     operation: GetCircleImpact
+    actor: persona
+    application:
+      kind: query
+      facet: CircleAnalyticsQueryFacet
+      method: getCircleImpact
+      reader: CircleImpactReader
+      slice: CircleImpactSlice
     description: 圈子影响摘要（连接型帮助结果，端侧圈子影响模块使用）
     response_entity: CircleImpactSummary
     auth: required
-
-  - method: POST
-    path: /v1/circles/behaviors
-    operation: ReportCircleBehavior
-    description: 圈子行为上报
-    request_entity: CircleBehaviorReport
 
   # --- 板块配置 ---
   - method: PATCH
     path: /v1/circles/{circleId}/sections
     operation: UpdateCircleSections
+    actor: persona
+    application:
+      kind: command
+      facet: CircleConfigurationCommandFacet
+      method: updateCircleSections
+      aggregate_owner: Circle
+      mutation_target: Circle
+      invariant_target: Circle
     description: 更新圈子主页板块配置（顺序+可见性）
     request_entity: CircleSectionConfig
 
   # --- 存储空间 ---
-  - method: GET
-    path: /v1/circles/{circleId}/files
-    operation: ListCircleFiles
-    description: 文件列表
-    query_params: [parentId, sort, cursor, limit]
-    response_entity: CircleFile
-
-  - method: POST
-    path: /v1/circles/{circleId}/files
-    operation: CreateCircleFile
-    description: 创建文件夹 / 获取上传预签名 URL
-    request_entity: CircleFile
-    writable_fields: [parentFolderId, name, fileType, mimeType, sizeBytes]
-
-  - method: GET
-    path: /v1/circles/{circleId}/files/{fileId}
-    operation: GetCircleFile
-    description: 文件详情 / 获取下载预签名 URL
-    response_entity: CircleFile
-
-  - method: PATCH
-    path: /v1/circles/{circleId}/files/{fileId}
-    operation: UpdateCircleFile
-    description: 重命名文件/文件夹 / 确认上传完成
-    writable_fields: [name, status]
-
-  - method: DELETE
-    path: /v1/circles/{circleId}/files/{fileId}
-    operation: DeleteCircleFile
-    description: 删除文件/文件夹
-
-  # --- Feed 管理 ---
-  - method: PATCH
-    path: /v1/circles/{circleId}/feed/{postId}/pin
-    operation: PinCirclePost
-    description: 置顶/取消置顶圈子内帖子
-
-  - method: PATCH
-    path: /v1/circles/{circleId}/feed/{postId}/feature
-    operation: FeatureCirclePost
-    description: 精选/取消精选圈子内帖子
-
 consumers:
   - name: app
     capabilities: [list_circles, create_circle, join, leave, read_feed, read_members, list_groups, search_groups, create_group, manage_group_members, report_behavior, manage_files, manage_sections, pin_post, feature_post]
@@ -243,11 +232,9 @@ contract_test:
           query_params: [category=interest]
           assertions: [status_200, items_match_schema, sorted_by_member_count]
 
-        - name: create_and_join_circle
-          routes:
-            - POST /v1/circles
-            - POST /v1/circles/{id}/join
-          assertions: [circle_created, member_added, member_count_incremented]
+        - name: create_circle
+          route: POST /v1/circles
+          assertions: [circle_created, no_hidden_membership_write, member_count_projection_initialized]
 
         - name: circle_feed
           route: GET /v1/circles/{id}/feed
@@ -261,56 +248,21 @@ contract_test:
       description: 使用真实测试数据库，不 mock 存储层
       real_engines:
         mongodb: testcontainers (mongo:7)
-        redis: miniredis/v2
+        redis: testcontainers (redis:7)
       spy_targets: [event_publisher]
-      mock_targets: [chat_service_client, cross_service_clients]
       data_management:
         seed: fixture 工厂预制到真实 MongoDB
-        cleanup: "DeleteMany for circles, circle_members"
-        redis_cleanup: miniredis.FlushAll()
+        cleanup: "DeleteMany for circles, circle_memberships, circle_membership_command_receipts, circle_membership_outbox, circle_membership_projection_checkpoints, circle_membership_projection_inbox"
+        redis_cleanup: real Redis FLUSHDB in isolated container
       scenarios:
-        - name: create_circle_with_owner
+        - name: create_circle_without_hidden_cross_aggregate_write
           command: CreateCircle
           seed: []
           assertions:
             - "db.circles.FindOne({_id}) → document exists with correct name/tags"
-            - "db.circle_members.FindOne({circleId, userId: ownerId}) → role='owner'"
-            - "db.circles.FindOne({_id}).memberCount → 1"
+            - "db.circle_memberships.CountDocuments({circleId}) → 0"
+            - "db.circles.FindOne({_id}).memberCount → 0 until CircleMembership projection"
             - "eventSpy.AssertPublished('CircleCreated', {name, ownerId, tags})"
-
-        - name: join_open_circle
-          command: JoinCircle (joinPolicy=open)
-          seed: [fixture.NewCircle(joinPolicy='open')]
-          assertions:
-            - "db.circle_members.FindOne({circleId, userId}) → role='member'"
-            - "db.circles.FindOne({_id}).memberCount → incremented"
-            - "eventSpy.AssertPublished('CircleMemberJoined')"
-            - "miniredis.Exists('cache:circle:{id}') → false (invalidated)"
-
-        - name: join_duplicate_idempotent
-          command: JoinCircle x2
-          seed: [fixture.NewCircle(), fixture.NewCircleMember()]
-          assertions:
-            - "db.circle_members.CountDocuments({circleId, userId}) → exactly 1"
-
-        - name: member_count_consistency
-          command: JoinCircle → LeaveCircle
-          seed: [fixture.NewCircle(memberCount=1)]
-          assertions:
-            - "db.circles.FindOne({_id}).memberCount → 2 after join"
-            - "db.circles.FindOne({_id}).memberCount → 1 after leave"
-            - "db.circle_members.CountDocuments({circleId}) → matches memberCount"
-
-        - name: storage_upload_flow
-          routes:
-            - POST /v1/circles/{id}/files
-            - PATCH /v1/circles/{id}/files/{fileId}
-          assertions: [presigned_url_returned, file_status_active_after_confirm, storage_used_updated]
-
-        - name: storage_quota_exceeded
-          route: POST /v1/circles/{id}/files
-          precondition: storageUsedBytes >= storageQuotaBytes
-          assertions: [status_413, error_code_storage_quota_exceeded]
 
         - name: section_config_update
           route: PATCH /v1/circles/{id}/sections
@@ -331,7 +283,6 @@ contract_test:
     - member role transitions (member → admin → owner) tested
     - circle default public group compatibility link tested
     - circle-group kernel and application flow tested
-    - storage CRUD + quota enforcement tested
     - section config CRUD + event tested
     - feed pin/feature operations tested
     - recommended circles API tested

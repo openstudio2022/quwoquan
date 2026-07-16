@@ -1,0 +1,15 @@
+version: 1
+aggregate: DeviceRegistration
+events:
+  - name: DeviceRegistered
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: UserDevice
+    payload_fields: [id]
+  - name: DeviceRegistrationRevoked
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: UserDevice
+    payload_fields: [id]

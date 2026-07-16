@@ -7,7 +7,7 @@ import (
 	embeddedpostgres "github.com/fergusstrange/embedded-postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"quwoquan_service/runtime/testinfra"
+	"quwoquan_service/internal/platform/testinfra"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
 )
 

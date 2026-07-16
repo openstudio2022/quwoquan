@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/components/media/shared/viewer/immersive_viewer_layout.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/ui/content/models/article_document_models.dart';
@@ -999,10 +1000,23 @@ ArticleCanvasMetrics resolveArticleCanvasMetrics(
   }
   final paperSpec = resolveUnifiedArticlePaperSpec();
   if (variant == ArticleCanvasVariant.immersive) {
+    // 与底部交集 / 互动栏共用 ImmersiveViewerLayout.bottomChromeHorizontalPadding，
+    // 避免正文与 chrome 左右对齐线漂移。
+    final horizontalInset =
+        ImmersiveViewerLayout.bottomChromeHorizontalPadding(
+          context,
+          layoutSpec: ImmersiveViewerStageLayoutSpec.articleStage,
+        );
+    final basePadding = paperSpec.contentPadding;
     return ArticleCanvasMetrics(
       aspectRatio: paperSpec.aspectRatio,
       outerPadding: paperSpec.outerPadding,
-      contentPadding: paperSpec.contentPadding,
+      contentPadding: EdgeInsets.fromLTRB(
+        horizontalInset,
+        basePadding.top,
+        horizontalInset,
+        basePadding.bottom,
+      ),
       headerReservedHeight: 0,
       footerReservedHeight: 0,
       wrapImageGap: width >= 430

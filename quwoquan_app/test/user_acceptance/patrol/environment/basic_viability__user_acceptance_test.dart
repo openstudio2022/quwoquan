@@ -5,7 +5,6 @@ library;
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
 import 'package:quwoquan_app/app/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -93,22 +92,7 @@ Future<void> _expectVideoFlow(PatrolIntegrationTester $) async {
 }
 
 Future<void> _goTo(PatrolIntegrationTester $, String location) async {
-  final router = _findGoRouter($);
-  router.go(location);
-  await $.pump();
-  await $.pump(const Duration(milliseconds: 300));
-  await $.pump(const Duration(seconds: 1));
-}
-
-GoRouter _findGoRouter(PatrolIntegrationTester $) {
-  for (final element in find.byType(Navigator).evaluate()) {
-    try {
-      return GoRouter.of(element);
-    } catch (_) {
-      continue;
-    }
-  }
-  throw StateError('GoRouter is not available in the current Patrol tree');
+  await patrolGoTo($, location);
 }
 
 Future<bool> _waitForAnyKey(

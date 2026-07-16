@@ -64,6 +64,27 @@ client_projection:
       aliases: [actorAvatarVersion, avatarVersion]
       default: "0"
 
+    - name: counterpartSubAccountId
+      dart_type: String
+      nullable: false
+      source: counterpartSubAccountId
+      aliases: [counterpartSubAccountId, targetSubAccountId]
+      default: "''"
+
+    - name: counterpartDisplayName
+      dart_type: String
+      nullable: false
+      source: counterpartDisplayName
+      aliases: [counterpartDisplayName]
+      default: "''"
+
+    - name: counterpartAvatarUrl
+      dart_type: String
+      nullable: false
+      source: counterpartAvatarUrl
+      aliases: [counterpartAvatarUrl]
+      default: "''"
+
     - name: targetSubAccountId
       dart_type: String
       nullable: false
@@ -91,6 +112,27 @@ client_projection:
       source: targetContentSummary
       aliases: [targetContentSummary, targetTitle]
       default: "''"
+
+    - name: targetKind
+      dart_type: String
+      nullable: false
+      source: targetKind
+      aliases: [targetKind]
+      default: "'record'"
+
+    - name: targetAvailability
+      dart_type: String
+      nullable: false
+      source: targetAvailability
+      aliases: [targetAvailability, availability]
+      default: "'active'"
+
+    - name: targetReplyCount
+      dart_type: int
+      nullable: false
+      source: targetReplyCount
+      aliases: [targetReplyCount, replyCount]
+      default: "0"
 
     - name: displaySubAccountId
       dart_type: String
@@ -183,6 +225,34 @@ client_projection:
       aliases: [previewRouteId]
       default: "''"
 
+    - name: outboundShareEventId
+      dart_type: String
+      nullable: false
+      source: outboundShareEventId
+      aliases: [outboundShareEventId]
+      default: "''"
+
+    - name: shareText
+      dart_type: String
+      nullable: false
+      source: shareText
+      aliases: [shareText]
+      default: "''"
+
+    - name: impactPrimaryText
+      dart_type: String
+      nullable: false
+      source: impactPrimaryText
+      aliases: [impactPrimaryText]
+      default: "''"
+
+    - name: impactDeepLink
+      dart_type: String
+      nullable: false
+      source: impactDeepLink
+      aliases: [impactDeepLink]
+      default: "''"
+
     - name: filterKeys
       dart_type: List<String>
       nullable: false
@@ -223,4 +293,25 @@ client_projection:
       nullable: true
       source: createdAt
       aliases: [createdAt]
+      default: "null"
+
+    - name: occurredAt
+      dart_type: DateTime
+      nullable: true
+      source: occurredAt
+      aliases: [occurredAt, createdAt]
+      default: "null"
+
+    - name: seenAt
+      dart_type: DateTime
+      nullable: true
+      source: seenAt
+      aliases: [seenAt]
+      default: "null"
+
+    - name: readAt
+      dart_type: DateTime
+      nullable: true
+      source: readAt
+      aliases: [readAt]
       default: "null"

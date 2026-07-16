@@ -1,0 +1,15 @@
+version: 1
+aggregate: CredentialBinding
+events:
+  - name: CredentialBound
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: CredentialBinding
+    payload_fields: [id]
+  - name: CredentialRevoked
+    producer: user-service
+    consumers: [projection-workers]
+    channel: event_store
+    payload_entity: CredentialBinding
+    payload_fields: [id]

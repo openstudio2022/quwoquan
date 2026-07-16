@@ -55,6 +55,17 @@ type CreateSkillSubscriptionInput struct {
 	Destination     SkillSubscriptionDestination     `json:"destination"`
 }
 
+type UpsertSkillSubscriptionInput struct {
+	SubscriptionID  string
+	SkillID         string
+	DomainID        string
+	TagRefs         []string
+	Status          string
+	SearchQueryPlan SkillSubscriptionSearchQueryPlan
+	Trigger         SkillSubscriptionTrigger
+	Destination     SkillSubscriptionDestination
+}
+
 type UpdateSkillSubscriptionStatusInput struct {
 	Status string `json:"status"`
 }

@@ -29,7 +29,7 @@ func NewGatewayClient(
 		direction:    DirectionOutbound,
 		configPrefix: "sys.gateway.http_client",
 		endpointMapping: map[string]string{
-			"GET:/v1/orch/discovery/feed": "orch.discovery_feed.list",
+			"GET:/v1/content/feed":        "content.feed.list",
 			"POST:/v1/chat/conversations": "chat.conversation.create",
 		},
 	})
@@ -49,9 +49,9 @@ func NewOrchestratorClient(
 		direction:    DirectionOutbound,
 		configPrefix: "sys.orchestrator.http_client",
 		endpointMapping: map[string]string{
-			"GET:/v1/content/feed":                     "content.feed.list",
-			"GET:/v1/circles/{circleId}/activities":   "orch.circle.activities.list",
-			"POST:/v1/ops/events":                      "ops.events.ingest",
+			"GET:/v1/content/feed":                  "content.feed.list",
+			"GET:/v1/circles/{circleId}/activities": "orch.circle.activities.list",
+			"POST:/v1/ops/events":                   "ops.events.ingest",
 		},
 	})
 }
@@ -161,4 +161,3 @@ func fallbackEndpointName(serviceName string, method string, path string) string
 	}
 	return svc + "." + strings.ToLower(method) + "." + strings.Join(parts, "_")
 }
-

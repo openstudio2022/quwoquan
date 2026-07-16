@@ -36,7 +36,7 @@ gwt_acceptance:
     edge_cases:
     - 无交集事实时三态降级不占位。
     contract_refs:
-    - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/model_release/projections/intersection_reason.yaml
     performance_points: []
     tests:
       planned:
@@ -192,7 +192,7 @@ gwt_acceptance:
     - 查看实体主页「相关圈子」Tab 与 fallback overview。
     then:
     - 相关圈子展示为可点击卡片，包含圈名、成员数、一句关联说明与「打开圈子」动作，点击进入圈子主页。
-    - 公开路径不展示「统一对象键/对象页模板/来源/认领状态/灰度 cohort/主页管理」等内部字段。
+    - 公开路径不展示「统一对象键/对象页模板/内部 sourceRefs/primaryEvidenceRef/认领状态/灰度 cohort/主页管理」等内部字段；介绍页允许展示 canonical HTTPS 百科来源卡。
     done_when:
     - owner/认领/上报动作仅从右上角更多菜单触达。
     edge_cases:

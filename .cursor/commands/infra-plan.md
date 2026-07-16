@@ -79,7 +79,7 @@ description: 基础设施 · 能力演进规划（基于自检或对标，生成
 #### L2.1 对象存储 SDK 落地
 - 替换 `oss_adapter.go` 的 URL 拼接 stub 为真实 S3 兼容 SDK
 - 抽象层：`MediaStore` interface 保持不变，适配器支持 AWS S3 / 阿里云 OSS / CloudFlare R2 / MinIO
-- 配置驱动切换：config.yaml 的 `media.provider` 字段
+- 配置驱动切换：config.yaml 的 `content.source.media.provider` 字段
 - 本地开发：MinIO 容器（docker-compose 已有 redis/mongo，加 minio）
 
 #### L2.2 图片处理管线

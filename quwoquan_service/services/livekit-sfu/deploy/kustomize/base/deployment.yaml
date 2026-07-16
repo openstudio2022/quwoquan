@@ -17,7 +17,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: livekit-sfu
-          image: livekit/livekit-server:v1.7.2
+          image: livekit/livekit-server:v1.7.2@sha256:27d72fa264baa4db4e635b3b6df12d185b4a95fee5f2ddce03e06d150d599e0e
           imagePullPolicy: IfNotPresent
           ports:
             - name: http

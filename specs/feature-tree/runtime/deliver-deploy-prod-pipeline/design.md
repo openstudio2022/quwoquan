@@ -53,7 +53,7 @@ repo verify/package
 对应约束：
 
 - workflow 可以复用 reusable workflow，但 reusable workflow 产出的 probe/evidence 必须能映射回 `stackctl` 同名能力。
-- `.qwq_output/runs/<env>/<run-id>/report.json` 与 `summary.md` 是环境证据的单一真相源。
+- `.qwq_output/env/<env>/runs/<run-id>/report.json` 与 `summary.md` 是环境证据的单一真相源。
 
 ### 3. profile 分层与主链轻重分离
 

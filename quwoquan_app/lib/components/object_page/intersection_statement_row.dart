@@ -176,7 +176,7 @@ class IntersectionStatementRow extends StatelessWidget {
               ? hint
               : best,
         );
-    final Widget primaryLine = hasSpans
+    final Widget primaryLineContent = hasSpans
         ? InteractiveIntersectionText(
             spans: item.spans,
             fallbackText: item.primaryText.trim(),
@@ -202,6 +202,7 @@ class IntersectionStatementRow extends StatelessWidget {
               letterSpacing: -0.08,
             ),
           );
+    final Widget primaryLine = primaryLineContent;
     // 槽④ 生命周期弱标（new/strengthened/reactivated 才渲染；其余零尺寸）。
     const lifecycleVisibleStates = <String>{
       'new',
@@ -314,11 +315,13 @@ class IntersectionStatementRow extends StatelessWidget {
     if (item.onTap == null) {
       return content;
     }
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: Size.square(AppSpacing.minInteractiveSize),
-      onPressed: item.onTap,
-      child: content,
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: item.onTap,
+        child: content,
+      ),
     );
   }
 }

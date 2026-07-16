@@ -260,6 +260,8 @@ def validate_environment_topology(
                 )
             if isinstance(public_bases, dict):
                 for field, role_name in LOCAL_PUBLIC_PORT_ROLES.items():
+                    if target_name == "gamma-local" and field == "mediaUpload":
+                        role_name = "object-storage-edge"
                     value = str(public_bases.get(field, "")).strip()
                     actual_port = _url_port(value)
                     expected_port = role_ports.get(role_name)
@@ -273,9 +275,18 @@ def validate_environment_topology(
                             f"{target_name}: publicBases.{field} must use a quwoquan-env.test host"
                         )
             origins = target.get("origins")
+            environment_flags = environments.get(env_name, {}).get("mockBoundaryFlags", {})
+            requires_media_origin = bool(
+                isinstance(environment_flags, dict)
+                and environment_flags.get("mediaOrigin")
+            )
+            if origins is None and not requires_media_origin:
+                origins = {}
             if not isinstance(origins, dict):
-                issues.append(f"{target_name}: local targets require origins mapping")
-            else:
+                issues.append(f"{target_name}: origins must be a mapping when declared")
+            elif requires_media_origin and not origins:
+                issues.append(f"{target_name}: mediaOrigin boundary requires origins mapping")
+            elif origins:
                 for field, role_name in LOCAL_ORIGIN_PORT_ROLES.items():
                     value = str(origins.get(field, "")).strip()
                     actual_port = _url_port(value)

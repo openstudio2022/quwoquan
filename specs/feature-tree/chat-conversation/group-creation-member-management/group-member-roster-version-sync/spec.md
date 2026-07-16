@@ -22,7 +22,7 @@
 - **成员展示名**：`ListMembers` / Mock 与云侧一致，返回**用户展示名**（可与联系人/资料一致）；**重名仅影响展示，身份以 `userId` 为准**（全应用唯一）。
 - **ListMembers 排序**：支持两种模式，由 query 参数 `sort` 指定，枚举 `MemberListSort`：`joined_asc`（**默认**，加入顺序，先加入在前）、`display_name_asc`（展示名字典序，**并列时按 `userId` 升序**）。
 - **云侧版本与时间戳**：`Conversation.membersRosterRevision`（单调递增）与 `Conversation.updatedAt` **仅在 chat-service 事务内**一并更新；客户端以二者与 `ListConversationTimestamps` / `GetConversation` 做增量判断。
-- **事件合并**：同一群内短时间多条成员/群资料变更，**对外实时通道优先合并为 `ConversationRosterUpdated`**（负载含 `membersRosterRevision`、`updatedAt`、`aspects`）；`MemberJoined`/`MemberLeft` 保留为域内/审计用途，**不作为客户端主消费路径**（迁移期可双发，以设计为准）。
+- **事件合并**：同一群内短时间多条成员/群资料变更，**对外实时通道优先合并为 `ConversationRosterUpdated`**（负载含 `membersRosterRevision`、`updatedAt`、`aspects`）；`ConversationMemberAdded`/`ConversationMemberRemoved` 保留为域内/审计用途，**不作为客户端主消费路径**，且不保留双发或旧事件兼容。
 - **拉取路径**：客户端收到合并事件或发现 revision 落后时，按 **时间戳/版本** 拉取 `GetConversation` + `ListMembers`（及必要群设置），避免依赖未合并的逐条事件。
 - **云侧事务边界**：
   - **创建群**（单端发起的 `CreateConversation`）：单事务内完成会话文档、群主成员、初始成员、`ConversationUserState`、**首版 `membersRosterRevision`/时间戳**；对外可发 `ConversationCreated` + **一条** `ConversationRosterUpdated`（或与 Created 合并策略在设计中选定，须唯一真相）。

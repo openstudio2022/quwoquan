@@ -14,11 +14,12 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+	rtmongodb "quwoquan_service/internal/platform/mongodb"
+	platformredis "quwoquan_service/internal/platform/redis"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
 	rthttp "quwoquan_service/runtime/http"
 	rtmetrics "quwoquan_service/runtime/metrics"
-	rtmongodb "quwoquan_service/runtime/mongodb"
 	robs "quwoquan_service/runtime/observability"
 	rtotel "quwoquan_service/runtime/otel"
 	rtredis "quwoquan_service/runtime/redis"
@@ -28,6 +29,7 @@ import (
 	"quwoquan_service/services/search-service/internal/infrastructure/feedbackstore"
 	"quwoquan_service/services/search-service/internal/infrastructure/queryheatstore"
 	"quwoquan_service/services/search-service/internal/infrastructure/searchbackend"
+	"quwoquan_service/services/search-service/internal/infrastructure/searchmetrics"
 	"quwoquan_service/services/search-service/internal/infrastructure/searchsignals"
 )
 
@@ -100,6 +102,7 @@ func main() {
 	}
 
 	logger := slog.Default()
+	metricsRecorder := searchmetrics.NewRecorder()
 	redisRouter := buildRedisRouter(cfg)
 	defer redisRouter.Close()
 	if err := redisRouter.PingAll(ctx); err != nil {
@@ -127,7 +130,8 @@ func main() {
 		// on the Mongo side under concurrency). Best-effort, read-through.
 		termHeat = application.NewCachedTermHeat(heatStore,
 			time.Duration(getenvInt("SEARCH_RELATED_TERMS_CACHE_TTL_MS", 2000))*time.Millisecond,
-			getenvInt("SEARCH_RELATED_TERMS_CACHE_MAX", 1024))
+			getenvInt("SEARCH_RELATED_TERMS_CACHE_MAX", 1024),
+			metricsRecorder)
 		startHeatRebuildLoop(ctx, heatStore, logger)
 		log.Printf("%s feedback/query-log + term-heat read model enabled (db=%s)", serviceName, cfg.Mongo.Database)
 	} else {
@@ -150,13 +154,13 @@ func main() {
 		log.Fatalf("%s exception logger init failed: %v", serviceName, err)
 	}
 
-	handler := httpadapter.NewHandler(searchSvc, decorator).Routes()
+	handler := httpadapter.NewHandler(searchSvc, decorator, metricsRecorder).Routes()
 	// Backpressure: cap concurrent in-flight searches so a slow ES sheds load
 	// (typed 503) instead of piling up and collapsing the instance. Aligned with
 	// search_slo.yaml#load_model.max_concurrency_per_instance; applied only to the
 	// search routes so /healthz and /metrics stay reachable while shedding.
 	inflightLimiter := rtgov.NewInflightLimiter(getenvInt("SEARCH_MAX_INFLIGHT", 256))
-	searchHandler := httpadapter.MaxInflightMiddleware(inflightLimiter)(handler)
+	searchHandler := httpadapter.MaxInflightMiddleware(inflightLimiter, metricsRecorder)(handler)
 	rootMux := http.NewServeMux()
 	healthChecker := rthealth.NewChecker()
 	if ping := built.HealthPing(); ping != nil {
@@ -369,7 +373,7 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 	base := rtredis.DefaultRouterConfig()
 	base.Scenes["general"] = toSceneConfig(cfg.Redis.General)
 	base.Scenes["rec"] = toSceneConfig(cfg.Redis.Rec)
-	return rtredis.MustNewRouter(base)
+	return platformredis.MustNewRouter(base)
 }
 
 func toSceneConfig(cfg redisSceneCfg) rtredis.SceneConfig {

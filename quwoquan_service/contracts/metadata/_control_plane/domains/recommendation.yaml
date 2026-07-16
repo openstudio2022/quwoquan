@@ -5,6 +5,7 @@ template_role: backlog_candidate
 rollout_group: wave_2_backfill
 acceptance_status: integration_pass
 metadata_paths:
+  - recommendation/model_release
   - recommendation/rec_model
 service_names:
   - recommendation-service
@@ -19,12 +20,12 @@ control_planes:
     config_prefixes: [ops.reco.]
 minimum_package:
   metadata_files:
-    - contracts/metadata/recommendation/rec_model/service.yaml
+    - contracts/metadata/recommendation/model_release/service.yaml
     - contracts/metadata/recommendation/rec_model/tests/e2e.yaml
   codegen_targets: [go_runtime, python_runtime, ops_portal]
   test_evidence:
     t1:
-      - contracts/metadata/recommendation/rec_model/service.yaml
+      - contracts/metadata/recommendation/model_release/service.yaml
     t2:
       - services/rec-model-service/tests/local_contract/model_contract/test_runtime_contract__runtime_payload__contract__local_contract_test.py
     t3:

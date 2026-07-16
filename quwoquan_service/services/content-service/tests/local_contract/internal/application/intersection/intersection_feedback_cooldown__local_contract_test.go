@@ -117,6 +117,9 @@ func TestBehaviorBatchIntersectionFeedbackWritesCooldownAndFiltersFeed(t *testin
 		nil,
 		nil,
 		nil,
+		nil,
+		nil,
+		nil,
 		behaviorService,
 		contenhttp.WithIntersectionService(intersectionService),
 	).Routes()

@@ -2,61 +2,102 @@
 
 单元/合约测试落盘隔离契约（数据输出规范）：
 - pytest 进程内所有 data-owned 运行期输出只允许写 tempfile 临时根，跑完即弃；
-- 仓内根（quwoquan_data/runtime、publish 等）与真实 data-owned 输出根
+- 仓内根（quwoquan_data/publish 等）与真实 data-owned 输出根
   在 pytest 全量跑完后不得出现新增文件；
 - conftest 导入期先于一切测试模块执行 → 在这里强制注入隔离根，
-  保证首个导入 `_common.paths` 的模块把常量冻结在临时根上
+  保证首个导入 `core.paths` 的模块把常量冻结在临时根上
   （历史缺陷：不设 env 的测试模块先导入 paths 会把常量冻结在真实根，
   之后整个 pytest 进程的落盘全部泄漏到真实输出根）。
 显式 opt-out：设 QWQ_PYTEST_ALLOW_ENV_ROOTS=1（仅限人工调试，门禁不放行）。
 """
+import importlib
 import os
 import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
+# Tests are disposable executions. Importing production modules must not create
+# bytecode caches inside the source tree, regardless of the caller's cwd or
+# shell environment.
+sys.dont_write_bytecode = True
+
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
+REPO_ROOT = DATA_ROOT.parent
 TESTS_ROOT = DATA_ROOT / "tests"
 SCRIPTS_ROOT = DATA_ROOT / "scripts"
-for _path in (DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
+for _path in (REPO_ROOT, DATA_ROOT, TESTS_ROOT, SCRIPTS_ROOT):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-REPO_ROOT = DATA_ROOT.parent
 _REAL_OUTPUT_ROOT = REPO_ROOT / ".qwq_output"
 _REAL_DATA_OUTPUT_ROOTS = (
-    _REAL_OUTPUT_ROOT / "data" / "local" / "runtime",
-    _REAL_OUTPUT_ROOT / "data" / "runs",
-    _REAL_OUTPUT_ROOT / "data" / "release",
+    _REAL_OUTPUT_ROOT / "data" / "tasks",
+    _REAL_OUTPUT_ROOT / "data" / "releases",
+    _REAL_OUTPUT_ROOT / "data" / "local",
 )
 
 if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     # 清除运行器/外部会话遗留的真实输出根声明，防止测试跟随其落盘。
     for _key in (
         "QWQ_OUTPUT_ROOT",
-        "QWQ_RUNTIME_ROOT",
         "QWQ_PUBLISH_ROOT",
-        "QWQ_RELEASE_ROOT",
-        "QWQ_OUTPUT_ARTIFACTS_ROOT",
-        "QWQ_COMMITTED_TASKS_ROOT",
-        "QWQ_BATCH_PHASE",
-        "QWQ_BATCH_CONTENT_TYPE",
-        "QWQ_BATCH_SUPPLY_MODE",
-        "QWQ_BATCH_SOURCE_KEY",
+        "QWQ_EXECUTION_PHASE",
+        "QWQ_EXECUTION_CONTENT_TYPE",
+        "QWQ_EXECUTION_SUPPLY_MODE",
+        "QWQ_EXECUTION_SOURCE_KEY",
     ):
         os.environ.pop(_key, None)
     # 强制隔离数据根：即使个别测试模块忘记自建 tempfile 根，
     # paths 常量也只会冻结在这里，绝不落真实根。
     _ISOLATED_ROOT = tempfile.mkdtemp(prefix="qwq_pytest_isolated_")
     os.environ["QWQ_DATA_ROOT"] = _ISOLATED_ROOT
-    os.environ["QWQ_RUNTIME_ROOT"] = str(Path(_ISOLATED_ROOT) / "data" / "local" / "runtime")
+    os.environ["QWQ_OUTPUT_ROOT"] = str(Path(_ISOLATED_ROOT) / "output")
     os.environ["QWQ_PUBLISH_ROOT"] = str(Path(_ISOLATED_ROOT) / "publish")
-    os.environ["QWQ_RELEASE_ROOT"] = str(Path(_ISOLATED_ROOT) / "data" / "release")
-    os.environ["QWQ_OUTPUT_ARTIFACTS_ROOT"] = str(Path(_ISOLATED_ROOT) / "data" / "runs")
-    os.environ["QWQ_COMMITTED_TASKS_ROOT"] = str(Path(_ISOLATED_ROOT) / "control_plane" / "tasks")
     # startup probe cache 是运行期降本缓存；pytest 默认关闭，避免环境预检类测试
     # 误把 cache 写入真实 .qwq_output/data/local/runtime/env。
     os.environ.setdefault("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "0")
+
+_ROOT_ENV_KEYS = (
+    "QWQ_DATA_ROOT",
+    "QWQ_OUTPUT_ROOT",
+    "QWQ_PUBLISH_ROOT",
+)
+_ISOLATED_ROOT_ENV = {
+    key: os.environ[key]
+    for key in _ROOT_ENV_KEYS
+    if key in os.environ
+}
+
+# Import before pytest collects test modules. This freezes every ``from
+# core.paths import ...`` binding against the canonical isolated test root,
+# rather than whichever test module happened to assign an environment value
+# first during collection.
+from core import paths as _paths  # noqa: E402
+
+
+def _restore_isolated_paths() -> None:
+    for key in _ROOT_ENV_KEYS:
+        value = _ISOLATED_ROOT_ENV.get(key)
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+    importlib.reload(_paths)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_data_paths_per_test():
+    """Prevent path/env mutation in one test from changing later tests."""
+    if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") == "1":
+        yield
+        return
+    _restore_isolated_paths()
+    try:
+        yield
+    finally:
+        _restore_isolated_paths()
 
 
 def _snapshot_files(root: Path) -> dict[str, tuple[int, int]]:
@@ -75,6 +116,10 @@ def _snapshot_files(root: Path) -> dict[str, tuple[int, int]]:
 
 
 def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "api_integration: requires a real or protocol-compatible external service",
+    )
     config._qwq_output_baseline = {
         str(root): _snapshot_files(root) for root in _REAL_DATA_OUTPUT_ROOTS
     }

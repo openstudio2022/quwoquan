@@ -33,7 +33,7 @@ entries:
       - app_behavior
       - documentation
     changed_documents:
-      - path: docs/recommendation-commercial-maturity-plan.md
+      - path: docs/recommendation-commercial-maturity-content.execution.planning.md
         sections:
           - P0/P0+ 到 P1d 完成复盘
           - 剩余风险

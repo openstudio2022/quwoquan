@@ -1,0 +1,15 @@
+version: 1
+aggregate: UserSettings
+backend: postgres
+tables:
+  user_settings:
+    entity: UserSetting
+    role: authoritative
+  user_settings_command_receipts:
+    entity: UserSetting
+    role: authoritative
+    description: 与 aggregate state 和 outbox 在同一 postgres transaction 提交的幂等回执。
+  user_settings_outbox:
+    entity: UserSetting
+    role: append_only
+    description: 按 aggregate version 幂等发布并支持 replay/checkpoint。

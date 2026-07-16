@@ -480,19 +480,23 @@ func TestIntersectionService_ObjectIntersectionsRanksByAnchorStrength(t *testing
 	now := time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 	// 单对象多证据组：内容(coCommented) 先给、人物(sharedFollowees) 后给，
 	// 期望 hydrate 后按锚强度（人物 > 内容）重排，事实在前、推荐殿后。
-	src := stubSource{object: []IntersectionReasonView{
-		{
-			IntersectionID:   "objix_user_u_lin",
-			Dimension:        "relationship",
-			ActionTargetID:   "u_lin",
-			RelationObjectID: "u_lin",
-			IntersectionPoints: []IntersectionPointView{
-				{PointID: "p_content", PointClass: "fact", Dimension: "content", SourceRef: "coCommented", Label: "共同讨论过", DisplayText: "共同讨论过", Count: 3},
-				{PointID: "p_aff", PointClass: "recommended", Dimension: "interest", SourceRef: "affinity", Label: "可能合得来", DisplayText: "可能合得来"},
-				{PointID: "p_friend", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", DisplayText: "共同关注的人", Count: 4},
-			},
-		},
-	}}
+	reason := displayReadyFactReason(
+		"objix_user_u_lin",
+		"relationship",
+		"sharedFollowees",
+		"u_lin",
+		"person",
+		"林清越",
+		4,
+		0.9,
+	)
+	reason.RelationObjectID = "u_lin"
+	reason.IntersectionPoints = []IntersectionPointView{
+		{PointID: "p_content", PointClass: "fact", Dimension: "content", SourceRef: "coCommented", Label: "共同讨论过", DisplayText: "共同讨论过", Count: 3, Visibility: "public"},
+		{PointID: "p_aff", PointClass: "recommended", Dimension: "interest", SourceRef: "affinity", Label: "可能合得来", DisplayText: "可能合得来", Visibility: "public"},
+		{PointID: "p_friend", PointClass: "fact", Dimension: "relationship", SourceRef: "sharedFollowees", Label: "共同关注的人", DisplayText: "共同关注的人", Count: 4, Visibility: "public"},
+	}
+	src := stubSource{object: []IntersectionReasonView{reason}}
 	svc := NewIntersectionService(newTestRouter(t), WithIntersectionSource(src))
 	fixedNow(svc, now)
 
@@ -801,6 +805,72 @@ func TestIntersectionDisplayStatementRecomputesBadRawStatsText(t *testing.T) {
 	}
 }
 
+func TestIntersectionDisplayContextHostImplicitRemovesCurrentPostObject(t *testing.T) {
+	raw := IntersectionReasonView{
+		IntersectionID:            "display_host_context",
+		IntersectionClass:         "fact",
+		Dimension:                 "content",
+		Strength:                  0.92,
+		ActionTargetID:            "post_1",
+		ObjectKind:                "content",
+		DisplayName:               "川西雪山和校园摄影路线",
+		AvatarURL:                 "https://static.quwoquan.test/post_1.jpg",
+		PointSummarySnapshotID:    "snap_display_host_context",
+		ActorEvidenceTotalCount:   2,
+		ActorEvidenceCompleteness: "complete",
+		IntersectionPoints: []IntersectionPointView{
+			{PointID: "actors", PointClass: "fact", Dimension: "content", SourceRef: "coCommented", Label: "共同评论", Count: 2, SampleText: "林清越、周屿", Visibility: "public"},
+		},
+		ActorEvidence: []IntersectionActorEvidenceView{
+			{
+				ActorID:           "u_lin",
+				DisplayName:       "林清越",
+				RelationLabel:     "联系人",
+				RelationSourceRef: "contact",
+				SourcePointID:     "actors",
+				SourceRef:         "commonContact",
+				ActionSummaryText: "点赞了这条记录",
+				LikeCount:         1,
+			},
+			{
+				ActorID:           "u_zhou",
+				DisplayName:       "周屿",
+				RelationLabel:     "你关注的人",
+				RelationSourceRef: "followee",
+				SourcePointID:     "actors",
+				SourceRef:         "sharedFollowees",
+				ActionSummaryText: "评论了这条记录",
+				CommentCount:      1,
+			},
+		},
+	}
+	explicit := hydratePointSummary(raw)
+	host := &IntersectionTargetView{ObjectType: "post", ObjectID: "post_1", ObjectKind: "content", RouteID: "contentDetail"}
+	if ValidateDisplayStatementWithContext(explicit, DisplayContext{Surface: DisplaySurfaceFeed, HostTarget: host, Binding: DisplayBindingExplicitLink}) {
+		t.Fatalf("explicit_link must reject clickable self-target on host surface: %+v", explicit.PrimarySpans)
+	}
+
+	got := ApplyDisplayContext(explicit, DisplayContext{
+		Surface:    DisplaySurfaceFeed,
+		HostTarget: host,
+		Binding:    DisplayBindingHostImplicit,
+	})
+	if got.DisplayBinding != DisplayBindingHostImplicit {
+		t.Fatalf("displayBinding = %q, want host_implicit", got.DisplayBinding)
+	}
+	if got.PrimaryText != "联系人林清越等2人赞过和评论过" {
+		t.Fatalf("host implicit must remove current post object, got %q", got.PrimaryText)
+	}
+	if !ValidateDisplayStatementWithContext(got, DisplayContext{Surface: DisplaySurfaceFeed, HostTarget: host, Binding: DisplayBindingHostImplicit}) {
+		t.Fatalf("host implicit statement should pass validation: text=%q spans=%+v", got.PrimaryText, got.PrimarySpans)
+	}
+	for _, span := range got.PrimarySpans {
+		if span.Target != nil && span.Target.ObjectType == "post" && span.Target.ObjectID == "post_1" {
+			t.Fatalf("host implicit must not keep clickable self-target span: %+v", got.PrimarySpans)
+		}
+	}
+}
+
 // ── D：Redis 不可用降级 / 持久兜底 ───────────────────────────────────────────
 
 // TestIntersectionService_MarkVisited_RedisDownPersistsDurable 验证 Redis 宕机时
@@ -1060,15 +1130,8 @@ func TestIntersectionService_ObjectSharedTagSampleVagueSubjectFailsClosed(t *tes
 			if err != nil {
 				t.Fatalf("object intersections: %v", err)
 			}
-			if len(items) != 1 {
-				t.Fatalf("want 1 reason, got %d", len(items))
-			}
-			got := items[0]
-			if strings.TrimSpace(got.PrimaryText) != "" {
-				t.Fatalf("vague sharedTagSample subject must fail closed, got primaryText=%q", got.PrimaryText)
-			}
-			if len(got.PrimarySpans) != 0 {
-				t.Fatalf("vague sharedTagSample subject must not expose spans, got %+v", got.PrimarySpans)
+			if len(items) != 0 {
+				t.Fatalf("vague sharedTagSample subject must be filtered before delivery, got %+v", items)
 			}
 		})
 	}

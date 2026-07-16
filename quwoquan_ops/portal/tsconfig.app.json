@@ -16,7 +16,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": "./src",
-    "tsBuildInfoFile": "../../.qwq_output/env/repo/local/ops-portal/tsconfig.app.tsbuildinfo"
+    "tsBuildInfoFile": "../../.qwq_output/env/repo/local/ops-portal/cache/tsconfig.app.tsbuildinfo"
   },
   "include": ["src"]
 }

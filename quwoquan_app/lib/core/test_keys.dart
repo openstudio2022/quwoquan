@@ -201,21 +201,6 @@ class TestKeys {
   static const commentHighlightedReply = ValueKey<String>(
     'comment_highlighted_reply',
   );
-  static const commentSortMenuButton = ValueKey<String>(
-    'comment_sort_menu_button',
-  );
-  static const commentSortMenuOverlay = ValueKey<String>(
-    'comment_sort_menu_overlay',
-  );
-  static const commentSortMenuItemRecommended = ValueKey<String>(
-    'comment_sort_menu_item_recommended',
-  );
-  static const commentSortMenuItemLatest = ValueKey<String>(
-    'comment_sort_menu_item_latest',
-  );
-  static const commentSortMenuItemMostLiked = ValueKey<String>(
-    'comment_sort_menu_item_most_liked',
-  );
   static const assistantChatInputField = ValueKey<String>(
     'assistant_chat_input_field',
   );
@@ -230,6 +215,8 @@ class TestKeys {
     'chat_input_at_xiaoqu_button',
   );
   static const chatInputMoreButton = ValueKey<String>('chat_input_more_button');
+  static const chatInputTextField = ValueKey<String>('chat_input_text_field');
+  static const chatInputSendButton = ValueKey<String>('chat_input_send_button');
   static const chatInputExpandButton = ValueKey<String>(
     'chat_input_expand_button',
   );

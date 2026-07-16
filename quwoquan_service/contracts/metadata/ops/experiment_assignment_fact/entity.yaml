@@ -1,0 +1,21 @@
+version: 1
+domain: ops
+entity: ExperimentAssignmentFact
+object_kind: append_only_fact
+
+description: |
+  A/B 实验的不可变确定性 assignment fact。Experiment 聚合拥有实验生命周期；
+  分配经 typed append sink 以 (experimentId, policyVersion, trustedSubjectKey) 幂等追加；
+  trustedSubjectKey 只能由已验签 Persona 或 Device Actor 派生，禁止客户端指定。
+
+storage_backend: postgres
+capabilities: [append_only, queryable]
+
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: internal/domain/product_ops/experiment/model
+  ports: internal/domain/product_ops/experiment/ports
+  application: internal/application/product_ops/experiment
+  persistence: internal/infrastructure/product_ops/experiment/persistence

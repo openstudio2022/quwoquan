@@ -84,7 +84,7 @@ func (s *PostStore) SetCommentCount(_ context.Context, id string, count int64) (
 	return true, nil
 }
 
-func (s *PostStore) ListAll(_ context.Context) []postmodel.Post {
+func (s *PostStore) ListAll(_ context.Context) ([]postmodel.Post, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	all := make([]postmodel.Post, 0, len(s.posts))
@@ -95,7 +95,7 @@ func (s *PostStore) ListAll(_ context.Context) []postmodel.Post {
 	sort.Slice(all, func(i, j int) bool {
 		return all[i].CreatedAt.After(all[j].CreatedAt)
 	})
-	return all
+	return all, nil
 }
 
 func (s *PostStore) ListPublished(_ context.Context, limit int, cursor string) []postmodel.Post {

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	commentmodel "quwoquan_service/services/content-service/internal/domain/comment/model"
 	postmodel "quwoquan_service/services/content-service/internal/domain/post/model"
 )
 
@@ -15,7 +16,7 @@ type profileInteractionProjectionInput struct {
 	ActorID            string
 	TargetSubAccountID string
 	Post               *postmodel.Post
-	Comment            *postmodel.Comment
+	Comment            *commentmodel.ReadModel
 	// ViewerReaction 是当前 viewer 对该互动评论的真实三态反应（none/like/dislike），
 	// 由调用方经 ReactionStore 批量解析后注入；非评论互动恒为 none。
 	ViewerReaction string
@@ -104,11 +105,11 @@ func buildProfileInteractionActivityView(input profileInteractionProjectionInput
 	}
 }
 
-func profileInteractionActorSnapshot(actorID string, post *postmodel.Post, comment *postmodel.Comment) (string, string) {
+func profileInteractionActorSnapshot(actorID string, post *postmodel.Post, comment *commentmodel.ReadModel) (string, string) {
 	actorID = strings.TrimSpace(actorID)
-	if comment != nil && strings.TrimSpace(comment.AuthorId) == actorID {
+	if comment != nil && strings.TrimSpace(comment.AuthorID) == actorID {
 		name := strings.TrimSpace(comment.AuthorDisplayNameSnapshot)
-		avatarURL := strings.TrimSpace(comment.AuthorAvatarUrlSnapshot)
+		avatarURL := strings.TrimSpace(comment.AuthorAvatarURLSnapshot)
 		return defaultString(name, actorID), avatarURL
 	}
 	if post != nil && strings.TrimSpace(post.AuthorId) == actorID {
@@ -172,11 +173,11 @@ func summarizeInteractionActivityFallback(commentText string) string {
 	return "互动了这条记录"
 }
 
-func profileInteractionContextText(comment *postmodel.Comment) string {
+func profileInteractionContextText(comment *commentmodel.ReadModel) string {
 	if comment == nil {
 		return ""
 	}
-	replyToUserID := strings.TrimSpace(comment.ReplyToUserId)
+	replyToUserID := strings.TrimSpace(comment.ReplyToUserID)
 	if replyToUserID == "" {
 		return ""
 	}
@@ -199,20 +200,20 @@ func normalizeProfileInteractionViewerReaction(raw string) string {
 // profileInteractionCommentIdentity 解析互动评论的稳定标识：
 // commentID 为本条评论/回复 id（用于深链精确定位），
 // parentCommentID 为其顶级评论 id（回复场景用于在评论区高亮父评论行）。
-func profileInteractionCommentIdentity(comment *postmodel.Comment) (string, string) {
+func profileInteractionCommentIdentity(comment *commentmodel.ReadModel) (string, string) {
 	if comment == nil {
 		return "", ""
 	}
-	return strings.TrimSpace(comment.ID), strings.TrimSpace(comment.ParentCommentId)
+	return strings.TrimSpace(comment.ID), strings.TrimSpace(comment.ParentCommentID)
 }
 
-func profileInteractionCommentKind(comment *postmodel.Comment) string {
+func profileInteractionCommentKind(comment *commentmodel.ReadModel) string {
 	if comment == nil {
 		return "none"
 	}
-	if strings.TrimSpace(comment.ParentCommentId) != "" ||
-		strings.TrimSpace(comment.ReplyToCommentId) != "" ||
-		strings.TrimSpace(comment.ReplyToUserId) != "" {
+	if strings.TrimSpace(comment.ParentCommentID) != "" ||
+		strings.TrimSpace(comment.ReplyToCommentID) != "" ||
+		strings.TrimSpace(comment.ReplyToUserID) != "" {
 		return "reply"
 	}
 	return "comment"

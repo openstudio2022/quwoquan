@@ -4,8 +4,6 @@ import 'package:camera/camera.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:photo_manager/photo_manager.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
-import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/components/media/camera/camera_capture_page.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_models.dart';
 import 'package:quwoquan_app/components/media/image/editor/filter/image_editor_filter_repository.dart';
@@ -18,6 +16,9 @@ import 'package:quwoquan_app/core/services/app_permission_coordinator.dart';
 import 'package:quwoquan_app/core/services/media_picker_service.dart';
 import 'package:quwoquan_app/ui/content/models/create_editor_models.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_page_remote_helpers.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
+import '../../../../support/recording_content_media_facet.dart';
 
 void main() {
   group('video creation publish roundtrip', () {
@@ -130,7 +131,7 @@ void main() {
     });
 
     test('录制视频继续走发布 payload：远端视频与自动首帧封面无本地路径泄漏', () async {
-      final repository = _RoundtripContentRepository();
+      final media = RecordingContentMediaFacet();
       final fileStorage = _RoundtripFileStorageGateway(<String, List<int>>{
         '/tmp/recorded.mp4': <int>[1, 2, 3, 4],
       });
@@ -150,21 +151,29 @@ void main() {
           );
 
       final prepared = await buildCreatePostPayloadWithRemoteImageMedia(
-        repository: repository,
+        media: media,
         fileStorageGateway: fileStorage,
         state: state,
-        uploadObject: (uri, bytes, {required contentType}) async {
-          uploads.add(contentType);
-        },
+        uploadObject:
+            (
+              uri,
+              bytes, {
+              required contentType,
+              required expectedSha256,
+            }) async {
+              uploads.add(contentType);
+            },
       );
-      await repository.bindMediaAssetsToPost(
-        postId: 'post_video_roundtrip',
-        assetIds: prepared.mediaAssetIds,
+      await media.bindPostMediaAssets(
+        BindContentPostMediaAssetsCommand(
+          postId: 'post_video_roundtrip',
+          assetIds: prepared.mediaAssetIds,
+        ),
       );
 
       expect(prepared.payload['contentType'], 'video');
       expect(uploads, <String>['video/mp4']);
-      expect(repository.autoCoverMediaIds, <String>['video_asset_1']);
+      expect(media.selectedAutoCoverMediaIds, <String>['video_asset_1']);
       expect(
         prepared.payload['videoUrl'],
         'https://cdn.quwoquan.test/video_asset_1.mp4',
@@ -172,17 +181,17 @@ void main() {
       expect(prepared.payload['coverStrategy'], 'first_frame');
       expect(
         prepared.payload['thumbnailUrl'],
-        'https://cdn.quwoquan.test/auto_cover_video_asset_1.jpg',
+        'https://cdn.quwoquan.test/video_asset_1_cover.jpg',
       );
       expect(
         prepared.payload['coverUrl'],
-        'https://cdn.quwoquan.test/auto_cover_video_asset_1.jpg',
+        'https://cdn.quwoquan.test/video_asset_1_cover.jpg',
       );
       expect(prepared.payload['durationMs'], 1600);
       expect(prepared.payload['width'], 1080);
       expect(prepared.payload['height'], 1920);
       expect(prepared.payload.values.toString(), isNot(contains('/tmp/')));
-      expect(repository.boundAssetIds, prepared.mediaAssetIds);
+      expect(media.boundAssetIds, prepared.mediaAssetIds);
     });
   });
 }
@@ -296,64 +305,6 @@ class _FakeMediaPickerService extends MediaPickerService {
   @override
   Future<Uint8List?> loadThumbnail(AssetEntity entity, {int size = 240}) async {
     return Uint8List.fromList(_transparentPngBytes);
-  }
-}
-
-class _RoundtripContentRepository extends MockContentRepository {
-  final List<String> autoCoverMediaIds = <String>[];
-  final List<String> boundAssetIds = <String>[];
-  int _videoIndex = 0;
-
-  @override
-  Future<ContentMediaInitUploadResponseDto> initMediaUpload({
-    String mediaType = 'image',
-    String assetScope = 'draft',
-  }) async {
-    final index = ++_videoIndex;
-    return ContentMediaInitUploadResponseDto(
-      sessionId: 'video_session_$index',
-      mediaId: 'video_asset_$index',
-      uploadUrl: 'https://upload.quwoquan.test/video_session_$index',
-      presignUrl: 'https://upload.quwoquan.test/video_session_$index',
-    );
-  }
-
-  @override
-  Future<ContentMediaCompleteUploadResponseDto> completeMediaUpload({
-    required String sessionId,
-  }) async {
-    final index = int.parse(sessionId.split('_').last);
-    return ContentMediaCompleteUploadResponseDto(
-      sessionId: sessionId,
-      status: 'ready',
-      cdnUrl: 'https://cdn.quwoquan.test/video_asset_$index.mp4',
-      assetId: 'video_asset_$index',
-    );
-  }
-
-  @override
-  Future<ContentVideoCoverSelectionWireDto> selectAutoVideoCover({
-    required String mediaId,
-  }) async {
-    autoCoverMediaIds.add(mediaId);
-    return ContentVideoCoverSelectionWireDto(
-      mediaId: mediaId,
-      coverStrategy: 'first_frame',
-      manualCoverAssetId: '',
-      thumbnailUrl: 'https://cdn.quwoquan.test/auto_cover_$mediaId.jpg',
-      coverUrl: 'https://cdn.quwoquan.test/auto_cover_$mediaId.jpg',
-      coverFrameTimeMs: 0,
-    );
-  }
-
-  @override
-  Future<void> bindMediaAssetsToPost({
-    required String postId,
-    required List<String> assetIds,
-  }) async {
-    boundAssetIds
-      ..clear()
-      ..addAll(assetIds);
   }
 }
 

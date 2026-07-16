@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go.opentelemetry.io/otel/attribute"
 	rtobs "quwoquan_service/runtime/observability"
+	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
 	"quwoquan_service/services/user-service/internal/generated"
 	"strings"
@@ -28,6 +29,9 @@ func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, ap
 	if s.otpChallenges == nil {
 		return nil, generated.AppErrorFromInternalError("otp challenge store unavailable")
 	}
+	if s.otpCodeSealer == nil {
+		return nil, generated.AppErrorFromInternalError("otp code reference sealer unavailable")
+	}
 	allowed, retryAfter, err := s.otp.AllowSend(ctx, normalized)
 	if err != nil {
 		return nil, generated.AppErrorFromInternalError(fmt.Sprintf("otp allow-send: %v", err))
@@ -36,7 +40,7 @@ func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, ap
 		return nil, generated.AppErrorFromOtpRateLimited("otp send throttled").
 			WithRecovery("retry", retryAfter)
 	}
-	code, err := generateOtpCode()
+	code, err := s.otpCodeGenerator()
 	if err != nil {
 		return nil, generated.AppErrorFromInternalError("otp generate")
 	}
@@ -70,47 +74,35 @@ func (s *AuthService) SendOtp(ctx context.Context, phone, deviceID, platform, ap
 		ChallengeID:      challenge.ChallengeID,
 		DeliveryStatus:   "queued",
 	}
-	now := time.Now().UTC()
-	passThroughAllowed := s.otpPassThrough.Allows(now)
-	// 受控放通：gamma 对接真实上游，但命中白名单的测试号跳过真实下发，回填真实验证码（仍可被严格校验）。
-	sandboxAllowed := s.otpSandbox.AllowsPhone(normalized, now)
-	switch {
-	case sandboxAllowed:
-		span.SetAttributes(attribute.Bool("otp.sandbox_pass_through", true))
-		result.DeliveryStatus = "sandbox"
-		_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
-	case s.externalClient != nil:
-		if _, err := s.externalClient.SubmitSMSOTP(ctx, SMSOTPDispatchRequest{
-			RequestID:      challenge.RequestID,
-			ChallengeID:    challenge.ChallengeID,
-			Phone:          normalized,
-			PhoneHash:      challenge.PhoneHash,
-			MaskedPhone:    result.MaskedPhone,
-			Code:           code,
-			IdempotencyKey: challenge.IdempotencyKey,
-			ExpiresAt:      expiresAt,
-		}); err != nil {
-			if !passThroughAllowed {
-				_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, err.Error())
-				return nil, generated.AppErrorFromOtpProviderFailed(fmt.Sprintf("otp integration submit: %v", err))
-			}
-			result.DeliveryStatus = "pass_through"
-			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
-		} else {
-			_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
-			result.DeliveryStatus = "queued"
-		}
-	case passThroughAllowed:
-		result.DeliveryStatus = "pass_through"
-		_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
-	default:
+	if s.externalClient == nil {
 		_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, "external interaction client unavailable")
 		return nil, generated.AppErrorFromOtpProviderFailed("otp external interaction client unavailable")
 	}
-	// 放通(alpha/beta) 与全局 debug reveal 回填明文；受控放通(gamma) 只对白名单回填。
-	if passThroughAllowed || sandboxAllowed || s.otpDebugReveal {
-		result.DebugCode = code
+	codeRef, err := s.otpCodeSealer.Seal(
+		otpseal.Secret{Phone: normalized, Code: code},
+		otpseal.Binding{
+			RequestID:   challenge.RequestID,
+			ChallengeID: challenge.ChallengeID,
+			ExpiresAt:   expiresAt,
+		},
+	)
+	if err != nil {
+		_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, "otp code reference sealing failed")
+		return nil, generated.AppErrorFromInternalError("otp code reference sealing failed")
 	}
+	if _, err := s.externalClient.SubmitSMSOTP(ctx, SMSOTPDispatchRequest{
+		RequestID:      challenge.RequestID,
+		ChallengeID:    challenge.ChallengeID,
+		PhoneHash:      challenge.PhoneHash,
+		MaskedPhone:    result.MaskedPhone,
+		CodeRef:        codeRef,
+		IdempotencyKey: challenge.IdempotencyKey,
+		ExpiresAt:      expiresAt,
+	}); err != nil {
+		_ = s.otpChallenges.MarkChallengeFailed(ctx, challenge.RequestID, err.Error())
+		return nil, generated.AppErrorFromOtpProviderFailed(fmt.Sprintf("otp integration submit: %v", err))
+	}
+	_ = s.otpChallenges.MarkChallengeDelivered(ctx, challenge.RequestID, OtpChallengeStatusActive)
 	return result, nil
 }
 
@@ -118,6 +110,43 @@ func buildPublicSubAccountProfileView(owner *model.UserProfile, persona *model.P
 	view := buildSubAccountProfileView(owner, persona)
 	delete(view, "ownerUserId")
 	return view
+}
+
+func buildCreatorRuntimeProfileView(creator *model.CreatorRuntimeProfile) map[string]any {
+	if creator == nil {
+		return map[string]any{}
+	}
+	identityTags := append([]string(nil), creator.PublicProfileTagRefs...)
+	identityTags = append(identityTags, creator.Roles...)
+	identityTags = append(identityTags, creator.Verticals...)
+	return map[string]any{
+		"subjectType":        "creator",
+		"subAccountId":       creator.SubAccountID,
+		"userId":             creator.CreatorID,
+		"userHandle":         creator.Handle,
+		"username":           creator.Handle,
+		"displayName":        creator.DisplayName,
+		"nickname":           creator.DisplayName,
+		"headline":           creator.Headline,
+		"nicknameCustomized": false,
+		"avatarUrl":          creator.AvatarURL,
+		"avatarVersion":      1,
+		"backgroundUrl":      creator.CoverURL,
+		"bio":                creator.Bio,
+		"identityTags":       identityTags,
+		"expertiseClaims":    append([]string(nil), creator.ExpertiseClaims...),
+		"disclosure":         creator.Disclosure,
+		"followerCount":      int64(0),
+		"followingCount":     int64(0),
+		"postCount":          int64(len(creator.Works)),
+		"circleCount":        int64(0),
+		"likeCount":          int64(0),
+		"isolationLevel":     defaultIsolationLevel,
+		"profileVisibility":  "public",
+		"inheritsFromOwner":  false,
+		"overriddenFields":   []string{},
+		"updatedAt":          creator.UpdatedAt.Format(time.RFC3339),
+	}
 }
 
 func hasPublicLeakage(view map[string]any) bool {

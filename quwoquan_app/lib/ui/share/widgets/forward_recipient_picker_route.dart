@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/components/settings_form/settings_inset_form_page.dart';
 import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
@@ -14,10 +14,17 @@ import 'package:quwoquan_app/ui/share/forward_share_models.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_confirm_sheet.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_recipient_widgets.dart';
 
+enum ForwardRecipientPickerMode { all, groups, messages }
+
 class ForwardRecipientPickerRoute extends ConsumerStatefulWidget {
-  const ForwardRecipientPickerRoute({super.key, required this.payload});
+  const ForwardRecipientPickerRoute({
+    super.key,
+    required this.payload,
+    this.mode = ForwardRecipientPickerMode.all,
+  });
 
   final AppForwardPayload payload;
+  final ForwardRecipientPickerMode mode;
 
   @override
   ConsumerState<ForwardRecipientPickerRoute> createState() =>
@@ -45,15 +52,25 @@ class _ForwardRecipientPickerRouteState
   Future<_ForwardPickerData> _load() async {
     final repo = ref.read(chatRepositoryProvider);
     final conversations = await repo.listConversations(limit: 50);
-    final contacts = await repo.listContactHome(filter: 'all', limit: 500);
+    final contacts = await repo.listContactHome(
+      filter: switch (widget.mode) {
+        ForwardRecipientPickerMode.all => 'all',
+        ForwardRecipientPickerMode.groups => 'group',
+        ForwardRecipientPickerMode.messages => 'all',
+      },
+      limit: 500,
+    );
     final recent = uniqueForwardRecipients(
       sortForwardRecipientsByRecent(
-        conversations.map(AppForwardRecipient.fromConversation),
+        conversations
+            .map(AppForwardRecipient.fromConversation)
+            .where(_matchesMode),
       ),
     );
     final contactRecipients = contacts
         .where((row) => row.kind.trim().toLowerCase() != 'circle')
-        .map(AppForwardRecipient.fromContactHome);
+        .map(AppForwardRecipient.fromContactHome)
+        .where(_matchesMode);
     return _ForwardPickerData(
       recent: recent,
       contacts: uniqueForwardRecipients(
@@ -62,12 +79,29 @@ class _ForwardRecipientPickerRouteState
     );
   }
 
+  bool _matchesMode(AppForwardRecipient recipient) {
+    return switch (widget.mode) {
+      ForwardRecipientPickerMode.all => true,
+      ForwardRecipientPickerMode.groups =>
+        recipient.kind == AppForwardRecipientKind.group,
+      ForwardRecipientPickerMode.messages =>
+        recipient.kind != AppForwardRecipientKind.group,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = ref.watch(isDarkProvider);
     return SettingsInsetMemberPickerPageScaffold(
       isDark: isDark,
-      title: UITextConstants.forwardSelectChatTitle,
+      title: switch (widget.mode) {
+        ForwardRecipientPickerMode.all =>
+          UITextConstants.forwardSelectChatTitle,
+        ForwardRecipientPickerMode.groups =>
+          UITextConstants.shareSelectGroupTitle,
+        ForwardRecipientPickerMode.messages =>
+          UITextConstants.shareSelectMessageTitle,
+      },
       onBack: () => Navigator.of(context).pop(false),
       body: Column(
         children: <Widget>[
@@ -255,19 +289,14 @@ class _ForwardPickerErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(AppSpacing.containerXl),
-        child: AppSectionErrorCard(
-          semantic: semantic,
-          onAction: (action) async {
-            if (action.type == UiErrorActionType.retry ||
-                action.type == UiErrorActionType.resubmit) {
-              onRetry();
-            }
-          },
-        ),
-      ),
+    return AppSectionErrorState(
+      semantic: semantic,
+      onAction: (action) async {
+        if (action.type == UiErrorActionType.retry ||
+            action.type == UiErrorActionType.resubmit) {
+          onRetry();
+        }
+      },
     );
   }
 }

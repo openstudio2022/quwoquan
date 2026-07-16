@@ -6,9 +6,9 @@ status: partial
 
 affected_nodes:
   - specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation
-  - docs/recommendation-commercial-maturity-plan.md
+  - docs/recommendation-commercial-maturity-content.execution.planning.md
   - docs/outstanding_risks_backlog.md
-  - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/premium_pool_projection.yaml
+  - quwoquan_service/contracts/metadata/recommendation/model_release/projections/premium_pool_projection.yaml
   - quwoquan_service/services/product-ops-service/cmd/api/premium_pool_handlers.go
   - quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_source.go
   - quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_projector.go
@@ -28,7 +28,7 @@ entries:
       - metadata
       - acceptance
     changed_documents:
-      - path: quwoquan_service/contracts/metadata/recommendation/rec_model/projections/premium_pool_projection.yaml
+      - path: quwoquan_service/contracts/metadata/recommendation/model_release/projections/premium_pool_projection.yaml
         sections:
           - rm_premium_pool projection metadata
       - path: quwoquan_service/services/content-service/internal/infrastructure/recommendation/premium_pool_source.go
@@ -50,7 +50,7 @@ entries:
       - path: specs/feature-tree/discovery-content/feed-orchestration-recommendation/premium-stream-recommendation/acceptance.yaml
         sections:
           - GWT2_premium_pool_readpath
-      - path: docs/recommendation-commercial-maturity-plan.md
+      - path: docs/recommendation-commercial-maturity-content.execution.planning.md
         sections:
           - continue-dev 当前开发切片
       - path: docs/outstanding_risks_backlog.md

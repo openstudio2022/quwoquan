@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "4.draft metadata",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "stage",
+    "executionId",
+    "executionBinding",
+    "objectRef",
+    "status",
+    "provider",
+    "model",
+    "agentRunId",
+    "promptSha256",
+    "draftSha256",
+    "selfCheck"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.draft_meta/1" },
+    "stage": { "const": "4.draft" },
+    "executionId": { "type": "string", "pattern": "^20[0-9]{6}--[a-z][a-z0-9-]*-(homepage|article|image|video)-[a-z][a-z0-9-]*--[a-z0-9][a-z0-9-]*--(canary|m1|m2|m3)-[0-9]{3,}$" },
+    "executionBinding": { "enum": ["frozen", "standalone"] },
+    "objectRef": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["pending_agent", "completed", "failed"] },
+    "provider": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "agentRunId": { "type": "string", "minLength": 1 },
+    "promptSha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "draftSha256": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      ]
+    },
+    "selfCheck": {
+      "type": "object",
+      "required": ["status", "issues"],
+      "properties": {
+        "status": { "enum": ["pending", "passed", "failed"] },
+        "issues": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

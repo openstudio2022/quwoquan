@@ -4,6 +4,9 @@
 # 端到端闭环见 quwoquan_ops/environments/ci_cd_end_to_end_design.md
 name: 03. Delivery Gate
 
+env:
+  QWQ_OUTPUT_ROOT: .qwq_output
+
 on:
   pull_request:
     branches:
@@ -44,6 +47,7 @@ jobs:
       app: ${{ steps.detect.outputs.app }}
       portal: ${{ steps.detect.outputs.portal }}
       topology: ${{ steps.detect.outputs.topology }}
+      data: ${{ steps.detect.outputs.data }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -135,6 +139,34 @@ jobs:
         run: |
           echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
 
+  quwoquan_data:
+    name: Delivery Gate — Data
+    runs-on: ubuntu-latest
+    needs: topology_regression
+    if: ${{ needs.topology_regression.outputs.data == 'true' }}
+    outputs:
+      duration_seconds: ${{ steps.finish.outputs.duration_seconds }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout_ref || github.sha }}
+      - id: start
+        name: Start timer
+        run: echo "started_at=$(date +%s)" >> "$GITHUB_OUTPUT"
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 安装 Data 依赖
+        run: pip install -r quwoquan_data/requirements.txt
+      - name: Gate (quwoquan_data)
+        run: bash quwoquan_ops/gate/gate_repo.sh --scope data
+      - id: finish
+        if: always()
+        name: Finish timer
+        run: |
+          echo "duration_seconds=$(( $(date +%s) - ${{ steps.start.outputs.started_at }} ))" >> "$GITHUB_OUTPUT"
+
   ops_portal:
     name: Delivery Gate — Ops Portal
     runs-on: ubuntu-latest
@@ -169,6 +201,7 @@ jobs:
       - topology_regression
       - quwoquan_service
       - quwoquan_app
+      - quwoquan_data
       - ops_portal
     if: always()
     runs-on: ubuntu-latest
@@ -185,14 +218,17 @@ jobs:
           TOPOLOGY_SECONDS: ${{ needs.topology_regression.outputs.duration_seconds }}
           SERVICE_SECONDS: ${{ needs.quwoquan_service.outputs.duration_seconds }}
           APP_SECONDS: ${{ needs.quwoquan_app.outputs.duration_seconds }}
+          DATA_SECONDS: ${{ needs.quwoquan_data.outputs.duration_seconds }}
           PORTAL_SECONDS: ${{ needs.ops_portal.outputs.duration_seconds }}
         run: |
           TOPOLOGY_SECONDS="${TOPOLOGY_SECONDS:-0}"
           SERVICE_SECONDS="${SERVICE_SECONDS:-0}"
           APP_SECONDS="${APP_SECONDS:-0}"
+          DATA_SECONDS="${DATA_SECONDS:-0}"
           PORTAL_SECONDS="${PORTAL_SECONDS:-0}"
           FANOUT_SECONDS="${SERVICE_SECONDS}"
           if [ "${APP_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${APP_SECONDS}"; fi
+          if [ "${DATA_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${DATA_SECONDS}"; fi
           if [ "${PORTAL_SECONDS}" -gt "${FANOUT_SECONDS}" ]; then FANOUT_SECONDS="${PORTAL_SECONDS}"; fi
           CRITICAL_PATH_SECONDS=$(( TOPOLOGY_SECONDS + FANOUT_SECONDS ))
           python3 quwoquan_ops/ci/render_ci_timing_summary.py \
@@ -202,8 +238,9 @@ jobs:
             --phase "topology_regression=${TOPOLOGY_SECONDS}" \
             --phase "quwoquan_service=${SERVICE_SECONDS}" \
             --phase "quwoquan_app=${APP_SECONDS}" \
+            --phase "quwoquan_data=${DATA_SECONDS}" \
             --phase "ops_portal=${PORTAL_SECONDS}" \
-            --write-json ".qwq_output/runs/ci-timing/delivery-gate-summary.json" \
+            --write-json "$QWQ_OUTPUT_ROOT/env/repo/runs/ci-timing/delivery-gate-summary.json" \
             --write-step-summary
           echo "critical_path_seconds=${CRITICAL_PATH_SECONDS}" >> "$GITHUB_OUTPUT"
       - name: 汇总并阻断失败项
@@ -212,6 +249,7 @@ jobs:
           TOPOLOGY: ${{ needs.topology_regression.result }}
           SERVICE: ${{ needs.quwoquan_service.result }}
           APP: ${{ needs.quwoquan_app.result }}
+          DATA: ${{ needs.quwoquan_data.result }}
           PORTAL: ${{ needs.ops_portal.result }}
         run: |
           set -euo pipefail
@@ -233,6 +271,7 @@ jobs:
           expect_success "topology_regression" "${TOPOLOGY}" "检查部署拓扑 / metadata 回归脚本"
           expect_success_or_skipped "quwoquan_service" "${SERVICE}" "检查 service scope gate 输出"
           expect_success_or_skipped "quwoquan_app" "${APP}" "检查 app scope gate 输出"
+          expect_success_or_skipped "quwoquan_data" "${DATA}" "检查 data scope gate 输出"
           expect_success_or_skipped "ops_portal" "${PORTAL}" "检查 portal scope gate 输出"
           if [ "${fail}" -ne 0 ]; then
             echo "result=failure" >> "$GITHUB_OUTPUT"
@@ -246,6 +285,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: delivery-gate-timing-summary
-          path: .qwq_output/runs/ci-timing/delivery-gate-summary.json
+          path: ${{ env.QWQ_OUTPUT_ROOT }}/env/repo/runs/ci-timing/delivery-gate-summary.json
           if-no-files-found: error
           compression-level: 0

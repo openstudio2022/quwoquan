@@ -1,5 +1,14 @@
 part of 'ui_text_constants.dart';
 
+String _objectIntroSourcePlatform(String sourceKind) =>
+    const {
+      'wikipedia': 'Wikipedia',
+      'baidu_baike': '百度百科',
+      'sogou_baike': '搜狗百科',
+      'toutiao_baike': '今日头条百科',
+    }[sourceKind] ??
+    '百科来源';
+
 String _homeChannelMoodCopy(String moodCopyKey) {
   switch (moodCopyKey) {
     case 'home_mood_following':

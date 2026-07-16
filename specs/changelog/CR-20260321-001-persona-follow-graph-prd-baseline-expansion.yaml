@@ -37,14 +37,14 @@ entries:
         sections:
           - A3
           - S1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/content.execution.planning.yaml
         sections:
           - P4
       - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
         sections:
           - J3
           - R1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/content.execution.planning.yaml
         sections:
           - P5
           - P6
@@ -90,7 +90,7 @@ entries:
           - A2
           - A3
           - S1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -102,7 +102,7 @@ entries:
           - A2
           - A3
           - S1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -161,7 +161,7 @@ entries:
           - A2
           - A3
           - S1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -210,14 +210,14 @@ entries:
         sections:
           - A2
           - S1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/content.execution.planning.yaml
         sections:
           - P4
       - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
         sections:
           - J3
           - R1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -269,7 +269,7 @@ entries:
           - A2
           - A3
           - S1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -410,7 +410,7 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     notes:
-      - 本次冻结的是 `/prd` baseline，不直接产出 design.md 或 plan.yaml。
+      - 本次冻结的是 `/prd` baseline，不直接产出 design.md 或 content.execution.planning.yaml。
       - 作者分身被明确为 user 域 Persona/SubAccount 的产品化表面，content/chat/circle/assistant 只消费其标识与快照。
       - "`profile-homepage-redesign/owner-subaccount-homepage-unification` 从本次开始视为 `ProfileSubject` 契约的消费方，而非主定义方。"
   - timestamp: "2026-03-21T16:40:00+08:00"
@@ -464,12 +464,12 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     notes:
-      - 本次仍属于 `/prd` 收口，不进入 `design.md / plan.yaml`。
+      - 本次仍属于 `/prd` 收口，不进入 `design.md / content.execution.planning.yaml`。
       - "`FollowEdge` 被明确为 user 域独立业务对象，使用 MongoDB；`UserProfile / Persona` 保持 PostgreSQL 聚合；`BlockEdge` 保持 PostgreSQL + Redis 门禁对象。"
       - "`GetRelationshipCapability` 被明确为 `FollowEdge + BlockEdge + ProfileSubject` 的读投影，而不是新的写对象。"
   - timestamp: "2026-03-21T18:10:00+08:00"
     summary: >
-      完成 persona-follow-graph Journey 及 5 个 L3 Scenario 的 `/design` 基线，补齐正式 `design.md + plan.yaml`，
+      完成 persona-follow-graph Journey 及 5 个 L3 Scenario 的 `/design` 基线，补齐正式 `design.md + content.execution.planning.yaml`，
       并执行 metadata verify/codegen/codegen-app 校验。
     reason: >
       `/prd` 已冻结领域边界、业务对象、数据分区与验收条件，但仍缺少可进入 `/dev` 的设计主轴、Scenario
@@ -487,7 +487,7 @@ entries:
           - 关键设计决策
           - metadata / codegen 方案
           - TDD / ATDD 策略
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -500,7 +500,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - metadata / codegen 方案
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -511,7 +511,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - 字段演进、迁移/回填与兼容
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-profile-subject-and-visibility/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -522,7 +522,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - 助手链路符合性
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-context-propagation/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -533,7 +533,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - 字段演进、迁移/回填与兼容
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/follow-relationship/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -544,7 +544,7 @@ entries:
           - 方案对比
           - 关键设计决策
           - 字段演进、迁移/回填与兼容
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/social-graph-read/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -561,7 +561,7 @@ entries:
       rollout_impact: medium
       breaking_contract: false
     notes:
-      - 本次 `/design` 已为 Journey 与 5 个 Scenario 补齐正式 `design.md + plan.yaml`，可作为 `/dev` 的唯一实施切片来源。
+      - 本次 `/design` 已为 Journey 与 5 个 Scenario 补齐正式 `design.md + content.execution.planning.yaml`，可作为 `/dev` 的唯一实施切片来源。
       - "`make -C quwoquan_service verify-metadata`、`make codegen`、`make codegen-app` 已执行通过。"
       - codegen 暴露出一批现有 app 侧生成物漂移（如 `app_route_paths.g.dart`、多域 `*_api_metadata.g.dart`、`app_ui_surfaces.g.dart`），本次仅记录并保留结果，不在设计文档中手工改写生成物。
   - timestamp: "2026-03-21T19:05:00+08:00"
@@ -569,7 +569,7 @@ entries:
       启动 `/dev` 第一组切片，先完成 persona-aware metadata 真相源收口，并同步刷新 user/content/chat/assistant
       相关 codegen 生成物。
     reason: >
-      `plan.yaml` 的首个实施顺序要求先落 `metadata -> codegen`。现有仓库虽然已经有 `SubAccountProfileView`、
+      `content.execution.planning.yaml` 的首个实施顺序要求先落 `metadata -> codegen`。现有仓库虽然已经有 `SubAccountProfileView`、
       `SubAccountProfileMutation`、`RelationshipCapabilityView` 等半成品契约，但 owner plane、active persona
       context、follow/block 的 profileSubject 路由、content/chat/assistant 的 persona-aware 上下文与快照字段
       仍未统一，不能直接进入应用逻辑层实现。
@@ -689,7 +689,7 @@ entries:
           - J2
           - J3
           - R1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -713,7 +713,7 @@ entries:
           - A2
           - A3
           - S1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/content.execution.planning.yaml
         sections:
           - P1
           - P2
@@ -779,7 +779,7 @@ entries:
           - A2
           - A3
           - S1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/persona-management/content.execution.planning.yaml
         sections:
           - P2
           - P3
@@ -850,7 +850,7 @@ entries:
       - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/acceptance.yaml
         sections:
           - R1
-      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/plan.yaml
+      - path: specs/feature-tree/user-identity-profile-relationship/persona-follow-graph/content.execution.planning.yaml
         sections:
           - P6
       - path: quwoquan_service/runtime/persona/rollout.go

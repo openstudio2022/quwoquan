@@ -5,47 +5,46 @@ import (
 	"fmt"
 
 	model "quwoquan_service/services/chat-service/internal/domain/conversation/model"
-	"quwoquan_service/services/chat-service/internal/infrastructure/persistence"
 )
 
 func BackfillMissingGroupAvatars(
 	ctx context.Context,
-	repo persistence.ChatRepository,
+	storage ChatStoragePorts,
 	publisher EventPublisher,
 	media GroupAvatarAssetizer,
 	syncPublisher UserSyncPublisher,
 	scheduler GroupAvatarTaskScheduler,
 	limit int,
 ) error {
-	if repo == nil {
-		return fmt.Errorf("chat repository is required")
+	if storage.Conversations == nil {
+		return fmt.Errorf("chat conversation store is required")
 	}
-	convs, err := repo.ListGroupConversationsNeedingAvatar(ctx, limit)
+	convs, err := storage.Conversations.ListGroupConversationsNeedingAvatar(ctx, limit)
 	if err != nil {
 		return err
 	}
 	for _, conv := range convs {
 		if conv.GroupAvatarVersion <= 0 || conv.GroupAvatarAssetId == "" {
-			if fallbackURL := resolveCreatorGroupAvatarFallback(ctx, repo, conv); fallbackURL != "" {
+			if fallbackURL := resolveCreatorGroupAvatarFallback(ctx, storage.Members, conv); fallbackURL != "" {
 				if conv.AvatarUrl != fallbackURL {
 					conv.AvatarUrl = fallbackURL
-					_ = repo.UpdateConversation(ctx, conv.ID, &conv)
+					_ = storage.Conversations.UpdateConversation(ctx, conv.ID, &conv)
 				}
 			} else if conv.AvatarUrl == "" {
 				if defaultURL := DefaultGroupAvatarURL(); defaultURL != "" {
 					conv.AvatarUrl = defaultURL
-					_ = repo.UpdateConversation(ctx, conv.ID, &conv)
+					_ = storage.Conversations.UpdateConversation(ctx, conv.ID, &conv)
 				}
 			}
 		} else if conv.AvatarUrl == "" {
 			if resolvedURL := ResolveGroupAvatarURL(conv); resolvedURL != "" {
 				conv.AvatarUrl = resolvedURL
-				_ = repo.UpdateConversation(ctx, conv.ID, &conv)
+				_ = storage.Conversations.UpdateConversation(ctx, conv.ID, &conv)
 			}
 		}
 		if err := RecomputeGroupAvatar(
 			ctx,
-			repo,
+			storage,
 			publisher,
 			media,
 			syncPublisher,
@@ -61,20 +60,20 @@ func BackfillMissingGroupAvatars(
 
 func resolveCreatorGroupAvatarFallback(
 	ctx context.Context,
-	repo persistence.ChatRepository,
+	membersStore MemberStore,
 	conv model.Conversation,
 ) string {
 	creatorID := conv.CreatorId
 	if creatorID == "" {
 		return ""
 	}
-	members, err := repo.ListMembers(
+	members, err := membersStore.ListMembers(
 		ctx,
 		conv.ID,
-		200,
-		"",
-		"",
-		persistence.SortMembersJoinedAsc,
+		ListMembersQuery{
+			Limit: 200,
+			Sort:  MemberListSortJoinedAsc,
+		},
 	)
 	if err != nil {
 		return ""

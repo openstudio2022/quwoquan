@@ -44,14 +44,18 @@ void main() {
       }
     });
 
-    test('shareText 在未支持平台上返回 unavailable', () async {
-      final result = await bridge.shareText(
-        target: NativeShareTarget.wechatFriend,
-        text: 'text',
-        subject: 'subject',
+    test('shareWebpageCard 在未支持平台上返回 unavailable', () async {
+      final result = await bridge.shareWebpageCard(
+        const NativeShareWebpageCard(
+          requestId: 'request-1',
+          target: NativeShareTarget.wechatFriend,
+          title: 'title',
+          description: 'description',
+          webpageUrl: 'https://www.quwoquan.cn/posts/1',
+        ),
       );
       expect(result.target, NativeShareTarget.wechatFriend);
-      expect(result.isDelivered, isFalse);
+      expect(result.outcome, NativeShareOutcome.unavailable);
       expect(result.reason, 'unsupported_platform');
     });
   });
@@ -87,31 +91,56 @@ void main() {
       expect(capability.reason, 'android_intent');
     });
 
-    test('shareText 解析原生投递状态', () async {
+    test('shareWebpageCard 只把 sendReq 接受解析为 accepted', () async {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
-            expect(call.method, 'shareText');
-            expect(call.arguments, <String, dynamic>{
-              'target': NativeShareTarget.wechatFriend.name,
-              'text': 'hello',
-              'subject': 'title',
-            });
+            expect(call.method, 'shareWebpageCard');
+            final arguments = (call.arguments as Map).cast<String, dynamic>();
+            expect(arguments['target'], NativeShareTarget.wechatFriend.name);
+            expect(arguments['requestId'], 'request-1');
+            expect(arguments['title'], 'title');
+            expect(arguments['description'], 'description');
+            expect(arguments['webpageUrl'], 'https://www.quwoquan.cn/posts/1');
             return <String, Object?>{
-              'delivered': true,
-              'reason': 'android_intent',
+              'target': NativeShareTarget.wechatFriend.name,
+              'requestId': 'request-1',
+              'outcome': 'accepted',
+              'reason': 'official_sdk',
             };
           });
       final bridge = MethodChannelNativeShareBridge(channel: channel);
 
-      final result = await bridge.shareText(
-        target: NativeShareTarget.wechatFriend,
-        text: 'hello',
-        subject: 'title',
+      final result = await bridge.shareWebpageCard(
+        const NativeShareWebpageCard(
+          requestId: 'request-1',
+          target: NativeShareTarget.wechatFriend,
+          title: 'title',
+          description: 'description',
+          webpageUrl: 'https://www.quwoquan.cn/posts/1',
+        ),
       );
 
       expect(result.target, NativeShareTarget.wechatFriend);
-      expect(result.isDelivered, isTrue);
-      expect(result.reason, 'android_intent');
+      expect(result.isAccepted, isTrue);
+      expect(result.isCompleted, isFalse);
+      expect(result.reason, 'official_sdk');
+    });
+
+    test('非 HTTPS 网页卡在 Dart 防腐层 fail closed', () async {
+      final bridge = MethodChannelNativeShareBridge(channel: channel);
+
+      final result = await bridge.shareWebpageCard(
+        const NativeShareWebpageCard(
+          requestId: 'request-2',
+          target: NativeShareTarget.wechatMoments,
+          title: 'title',
+          description: 'description',
+          webpageUrl: 'http://insecure.example.com/posts/1',
+        ),
+      );
+
+      expect(result.outcome, NativeShareOutcome.failed);
+      expect(result.reason, 'invalid_webpage_card');
     });
   });
 }

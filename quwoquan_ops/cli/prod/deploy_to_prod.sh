@@ -20,6 +20,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$ROOT"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT/.qwq_output}"
 
 ACCESS_MANIFEST="quwoquan_ops/environments/prod_plane_access_isolation.yaml"
 TOPOLOGY_MANIFEST="quwoquan_ops/environments/environment_topology_manifest.yaml"
@@ -202,14 +203,11 @@ deploy_plane() {
   fi
 
   if [[ "$plane" == "service" ]]; then
-    local render_dir=".qwq_output/env/prod/local/prod-plane-stack/service-${INSTANCE_SUFFIX}"
-    python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
-      --plane service \
-      --instance "$INSTANCE_SUFFIX" \
-      --config-version "$CONFIG_VERSION" \
-      --output-dir "$render_dir" >/dev/null
+    local render_dir="$QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/service-${INSTANCE_SUFFIX}"
     if [[ "$DRY_RUN" == "true" ]]; then
-      echo "[dry_run] service plane render ready: ${render_dir}"
+      # Dry-run 是源码配置的发布计划预览，不得依赖或生成可删除的发布输出。
+      # 真正渲染仍在下方非 dry-run 分支中校验 package/report/release provenance。
+      echo "[dry_run] service plane would render verified package into: ${render_dir}"
       python3 quwoquan_ops/cli/prod/load_prod_plane_images.py \
         --plane service \
         --host "$PROD_SSH_HOST" \
@@ -218,6 +216,11 @@ deploy_plane() {
         --platform linux/amd64 \
         --dry-run
     else
+      python3 quwoquan_ops/cli/prod/render_prod_plane_stack.py \
+        --plane service \
+        --instance "$INSTANCE_SUFFIX" \
+        --config-version "$CONFIG_VERSION" \
+        --output-dir "$render_dir" >/dev/null
       if [[ "$PROD_IMAGE_DELIVERY_MODE" == "skip" ]]; then
         echo "[skip] service plane image delivery skipped; assuming remote images are already prepared"
       elif [[ "$PROD_IMAGE_DELIVERY_MODE" == "remote-build" ]]; then

@@ -12,7 +12,6 @@ class _HomeRelationPostCard extends ConsumerStatefulWidget {
     required this.likeCount,
     required this.shareCount,
     required this.commentCount,
-    required this.sourceCircleName,
     required this.inlineImageCarousel,
     required this.videoScrollSignal,
     required this.isFocused,
@@ -33,7 +32,6 @@ class _HomeRelationPostCard extends ConsumerStatefulWidget {
   final int likeCount;
   final int shareCount;
   final int commentCount;
-  final String sourceCircleName;
   final bool inlineImageCarousel;
   final ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal;
   final bool isFocused;
@@ -104,9 +102,18 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
             widget.item.intersectionReasons?.isNotEmpty == true
             ? widget.item.intersectionReasons!.first
             : null;
+        final feedHostTarget = IntersectionTarget(
+          objectType: 'post',
+          objectId: item.id,
+          objectKind: 'content',
+          routeId: 'workBrowser',
+        );
         final profileSubjectId = item.subAccountId.trim().isNotEmpty
             ? item.subAccountId
             : item.authorId;
+        final hasPlayableVideo = resolveContentVideoUrlCandidates(
+          item.mediaVideoUrl,
+        ).isNotEmpty;
 
         return DecoratedBox(
           key: widget.cardContainerKey,
@@ -203,12 +210,12 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
 
                 const SizedBox(height: _feedCardSectionGap),
                 _HomeConnectionBadgesRow(
-                  sourceCircleName: widget.sourceCircleName,
                   primaryReason: primaryReason,
+                  contextObjectTarget: feedHostTarget,
                 ),
                 if (_HomeConnectionBadgesRow.hasAnyBadge(
-                  sourceCircleName: widget.sourceCircleName,
                   primaryReason: primaryReason,
+                  contextObjectTarget: feedHostTarget,
                 ))
                   const SizedBox(height: AppSpacing.intraGroupSm),
                 if (item.isArticleLike)
@@ -229,11 +236,11 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                             span,
                           ),
                   )
-                else if (item.isVideoLike)
+                else if (item.isVideoLike && hasPlayableVideo)
                   _HomeFeedVideoAutoPlayGate(
                     videoId: item.id,
                     scrollSignal: widget.videoScrollSignal,
-                    hasPlayableSource: item.mediaVideoUrl.trim().isNotEmpty,
+                    hasPlayableSource: hasPlayableVideo,
                     onFastScrollSuppressed: (attributes) => ref
                         .read(cacheTelemetrySinkProvider)
                         .record(
@@ -316,9 +323,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
   }
 
   String _buildMetaLine(BuildContext context) {
-    final time = _timeAgo(context, widget.item.createdAt);
-    if (widget.sourceCircleName.isEmpty) return time;
-    return '$time · ${UITextConstants.sourceFromPrefix}${widget.sourceCircleName}';
+    return _timeAgo(context, widget.item.createdAt);
   }
 
   void _openSpanIntersection(
@@ -407,6 +412,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
     navigator.open(
       context,
       IntersectionTarget(
+        objectType: 'dimension',
         objectId: dimension,
         objectKind: 'tag',
         routeId: 'myIntersections',
@@ -445,7 +451,6 @@ class _FollowingArticleCard extends StatelessWidget {
     required this.item,
     required this.isDark,
     required this.summaryLineLimit,
-    required this.sourceCircleName,
     required this.onTap,
     required this.onMoreTap,
   });
@@ -453,7 +458,6 @@ class _FollowingArticleCard extends StatelessWidget {
   final PostBaseDto item;
   final bool isDark;
   final int summaryLineLimit;
-  final String sourceCircleName;
   final VoidCallback onTap;
   final VoidCallback onMoreTap;
 
@@ -463,11 +467,7 @@ class _FollowingArticleCard extends StatelessWidget {
       isDark,
       ColorType.foregroundSecondary,
     );
-    final eyebrowSegments = <String>[
-      '文章',
-      _articleTemplateLabel,
-      if (sourceCircleName.isNotEmpty) sourceCircleName,
-    ];
+    final eyebrowSegments = <String>['文章', _articleTemplateLabel];
 
     return PostPreviewListTile(
       key: ValueKey<String>('following-article-card-${item.id}'),
@@ -552,20 +552,22 @@ class _FollowingArticleCard extends StatelessWidget {
 
 class _HomeConnectionBadgesRow extends StatelessWidget {
   const _HomeConnectionBadgesRow({
-    required this.sourceCircleName,
     required this.primaryReason,
+    required this.contextObjectTarget,
   });
 
-  final String sourceCircleName;
   final IntersectionReason? primaryReason;
+  final IntersectionTarget? contextObjectTarget;
 
   static bool hasAnyBadge({
-    required String sourceCircleName,
     required IntersectionReason? primaryReason,
+    IntersectionTarget? contextObjectTarget,
   }) {
-    final hasInlineIntersection = _shouldShowIntersection(primaryReason);
+    final hasInlineIntersection = _shouldShowIntersection(
+      primaryReason,
+      contextObjectTarget: contextObjectTarget,
+    );
     return (!hasInlineIntersection && _entityLabel(primaryReason) != null) ||
-        sourceCircleName.trim().isNotEmpty ||
         _showCompanionBadge(primaryReason);
   }
 
@@ -609,8 +611,8 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasAnyBadge(
-      sourceCircleName: sourceCircleName,
       primaryReason: primaryReason,
+      contextObjectTarget: contextObjectTarget,
     )) {
       return const SizedBox.shrink();
     }
@@ -618,7 +620,11 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
     final accent = AppColors.iosAccent(context);
     final chips = <Widget>[];
 
-    final entity = _shouldShowIntersection(primaryReason)
+    final entity =
+        _shouldShowIntersection(
+          primaryReason,
+          contextObjectTarget: contextObjectTarget,
+        )
         ? null
         : _entityLabel(primaryReason);
     if (entity != null) {
@@ -627,18 +633,6 @@ class _HomeConnectionBadgesRow extends StatelessWidget {
           context,
           label: entity,
           prefix: AppConceptConstants.feedBadgeEntity,
-          accent: accent,
-        ),
-      );
-    }
-
-    final circle = sourceCircleName.trim();
-    if (circle.isNotEmpty) {
-      chips.add(
-        _badgeChip(
-          context,
-          label: circle,
-          prefix: AppConceptConstants.feedBadgeCircle,
           accent: accent,
         ),
       );
@@ -801,7 +795,10 @@ class _PostIntersectionLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayReason = displayReadyIntersectionReason(reason);
+    final displayReason = displayReadyIntersectionReason(
+      reason,
+      contextObjectTarget: contextObjectTarget,
+    );
     if (displayReason == null) {
       return const SizedBox.shrink();
     }
@@ -875,8 +872,11 @@ Widget? _buildPostIntersectionRow({
   if (reason == null) {
     return null;
   }
-  final displayReason = displayReadyIntersectionReason(reason);
-  if (displayReason == null || !_shouldShowIntersection(displayReason)) {
+  final displayReason = displayReadyIntersectionReason(
+    reason,
+    contextObjectTarget: contextObjectTarget,
+  );
+  if (displayReason == null) {
     return null;
   }
   return KeyedSubtree(

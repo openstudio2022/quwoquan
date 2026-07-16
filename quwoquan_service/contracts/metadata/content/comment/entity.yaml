@@ -1,0 +1,40 @@
+version: 1
+domain: content
+entity: Comment
+object_kind: aggregate_root
+
+description: |
+  单条评论的独立生命周期聚合。评论仅通过 postId 引用 Post，绝不作为 Post 的无界成员；
+  创建、回复、删除、置顶与附件绑定均通过 CommentCommandFacade 提交自己的版本变更和 Mongo outbox。
+
+storage_backend: mongodb
+cache_layer: none
+capabilities: [commandable, queryable, evented]
+taggable: false
+vector_enabled: false
+relation_signal: true
+
+lifecycle:
+  states: [active, deleted]
+  optimistic_concurrency: version
+  idempotency: command_key
+
+ownership:
+  author_field: authorId
+  delete_policy: author_only
+  pin_policy: referenced_post_author_only
+  reply_policy: same_post_two_level_thread
+
+business_rules:
+  - Comment 只持有自身权威状态；Post.commentCount 是由 CommentCreated/CommentDeleted 事实异步重建的投影。
+  - replyToCommentId 必须引用同一 postId 的 active Comment；parentCommentId 永远归一为一级评论。
+  - Comment 删除与附件绑定仅允许 authorId；置顶仅允许被引用 Post 的作者，且一级评论之外禁止置顶。
+  - 读端只返回 named typed slices，禁止返回 Comment aggregate 或解码完整 Post。
+
+ddd_layer_mapping:
+  domain_model: internal/domain/comment/model
+  repository: internal/domain/comment/ports
+  repository_implementation: internal/infrastructure/persistence
+  application: internal/application/comment
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/infrastructure/messaging

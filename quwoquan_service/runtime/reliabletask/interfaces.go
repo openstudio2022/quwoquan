@@ -131,13 +131,14 @@ func (d Dispatcher) DispatchDue(ctx context.Context, limit int) ([]ReliableAsync
 type TaskHandler func(context.Context, ReliableAsyncTask) error
 
 type Worker struct {
-	Store     Store
-	Ready     ReadyIndex
-	TaskTypes []string
-	WorkerID  string
-	LeaseTTL  time.Duration
-	Retry     RetryPolicy
-	Now       func() time.Time
+	Store          Store
+	Ready          ReadyIndex
+	TaskTypes      []string
+	WorkerID       string
+	LeaseTTL       time.Duration
+	Retry          RetryPolicy
+	Now            func() time.Time
+	PendingMinIdle time.Duration
 }
 
 func (w Worker) Claim(ctx context.Context) (*ReliableAsyncTask, error) {
@@ -198,11 +199,8 @@ func (w Worker) ProcessOne(ctx context.Context, handler TaskHandler) (bool, erro
 		}, policy, now); failErr != nil {
 			return false, failErr
 		}
-		if w.Ready != nil && message != nil {
-			if ackErr := w.Ready.Ack(ctx, *message); ackErr != nil {
-				return false, ackErr
-			}
-		}
+		// Redis stream 消息保留 pending，待 retry backoff/lease 后由 XAUTOCLAIM
+		// 重新驱动；此处 ACK 会永久丢失 retry_wait 任务。
 		return true, nil
 	}
 	if err := w.Store.CompleteTask(ctx, task.TaskID, task.LeaseToken); err != nil {
@@ -248,6 +246,28 @@ func (w Worker) claimWithMessage(ctx context.Context) (*ReliableAsyncTask, *Read
 			continue
 		}
 		return task, &message, nil
+	}
+	if reclaimer, ok := w.Ready.(interface {
+		ReclaimPending(context.Context, string, time.Duration, int64) ([]ReadyIndexMessage, error)
+	}); ok {
+		minIdle := w.PendingMinIdle
+		if minIdle <= 0 {
+			minIdle = leaseTTL
+		}
+		pending, err := reclaimer.ReclaimPending(ctx, w.WorkerID, minIdle, 1)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, message := range pending {
+			task, err := w.Store.ClaimReadyTaskByID(ctx, message.TaskID, w.WorkerID, leaseTTL, now)
+			if err != nil {
+				return nil, nil, err
+			}
+			if task != nil {
+				return task, &message, nil
+			}
+			// 尚未到 NextAttemptAt，保留 pending 等待下次 reclaim。
+		}
 	}
 	return nil, nil, nil
 }

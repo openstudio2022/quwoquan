@@ -1,11 +1,16 @@
 version: 1
-entity: TagNode
 
 service:
   name: tag-service
   domain: tag
+  owner: tag-platform-team
+  commercial_defaults:
+    status: blocked
+    block_reason: canonical operation awaits object-centered commercial migration
+    gap_id: TAG_TAG_COMMERCIAL_EVIDENCE
+    target_story: app-cloud-business-object-commercial-closure
 
-# 唯一标签真相源为数据工程 publish/tags；tag-service 只读消费导入产物。
+# 唯一标签真相源为数据工程 control_plane/governance/taxonomy；tag-service 只读消费发布导入投影。
 # 交集核心新增：ResolveTag / SharedTags / InvertedObjects（V0.5 首发实现）。
 # 创作打标与搜索 API（dimensions/suggest/validate/search/related/search-by-tags/
 #   feedback/cooccurrence/related-objects）保留契约，端统一走 codegen path（消除硬编码）。
@@ -15,6 +20,13 @@ api_routes:
   - method: GET
     path: /v1/tag/resolve
     operation: ResolveTag
+    actor: none
+    application:
+      kind: query
+      facet: TagCatalogQueryFacade
+      method: resolve
+      reader: TagDefinitionReader
+      slice: TagDefinitionSlice
     description: 解析单个路径制 tagRef → 标签定义（label / 别名 / 祖先）
     query_params: [tagRef]
     response_entity: TagResolveView
@@ -23,6 +35,13 @@ api_routes:
   - method: GET
     path: /v1/tag/children
     operation: ListTagChildren
+    actor: none
+    application:
+      kind: query
+      facet: TagCatalogQueryFacade
+      method: listChildren
+      reader: TagHierarchyReader
+      slice: TagChildrenSlice
     description: 列出某个 tagRef 的 active 直接子节点；行政区选择使用该公共标签层级接口，不走 user-service 本地 catalog
     query_params: [parentTagRef, limit]
     response_entity: TagChildView
@@ -31,6 +50,13 @@ api_routes:
   - method: GET
     path: /v1/tag/shared-tags
     operation: SharedTags
+    actor: none
+    application:
+      kind: query
+      facet: TagGraphQueryFacade
+      method: findSharedTags
+      reader: ObjectTagIntersectionReader
+      slice: SharedTagsSlice
     description: 计算两个对象的共享 tagRef（交集锚点 + 强度 + 来源）
     query_params: [objectAId, objectAType, objectBId, objectBType, limit]
     response_entity: SharedTagView
@@ -39,6 +65,13 @@ api_routes:
   - method: GET
     path: /v1/tag/inverted
     operation: InvertedObjects
+    actor: none
+    application:
+      kind: query
+      facet: TagGraphQueryFacade
+      method: findInvertedObjects
+      reader: TagInvertedObjectReader
+      slice: InvertedObjectsSlice
     description: 反向索引——引用某 tagRef 的对象集合；includeDescendants=true 时按路径制子孙标签展开聚合（省/市级 geo 标签反查含全部区县级叶子对象，查询侧展开、存储不变）
     query_params: [tagRef, objectType, limit, includeDescendants]
     response_entity: InvertedObjectsView
@@ -48,6 +81,13 @@ api_routes:
   - method: GET
     path: /v1/tag/dimensions
     operation: ListDimensions
+    actor: none
+    application:
+      kind: query
+      facet: TagCatalogQueryFacade
+      method: listDimensions
+      reader: TagDimensionReader
+      slice: TagDimensionsSlice
     description: 列出全部维度及分组信息（创作标签面板）
     response_entity: TagDimensionView
     response_fields: [group, dimensionId, label, labelEn, maxDepth, pathPolicy]
@@ -55,6 +95,13 @@ api_routes:
   - method: GET
     path: /v1/tag/suggest
     operation: SuggestTags
+    actor: none
+    application:
+      kind: query
+      facet: TagCatalogQueryFacade
+      method: suggest
+      reader: TagSuggestionReader
+      slice: TagSuggestionsSlice
     description: 根据输入文本模糊匹配标签
     query_params: [q, group, limit]
     response_entity: TagSuggestionView
@@ -63,6 +110,13 @@ api_routes:
   - method: POST
     path: /v1/tag/validate
     operation: ValidateTagRefs
+    actor: none
+    application:
+      kind: query
+      facet: TagCatalogQueryFacade
+      method: validateRefs
+      reader: TagValidationReader
+      slice: TagValidationSlice
     description: 批量校验 tagRefs 有效性
     request_entity: TagValidateRequest
     request_fields: [tagRefs]
@@ -73,6 +127,13 @@ api_routes:
   - method: GET
     path: /v1/tag/search
     operation: SearchTags
+    actor: none
+    application:
+      kind: query
+      facet: TagCatalogQueryFacade
+      method: search
+      reader: TagSearchReader
+      slice: TagSearchResultsSlice
     description: 标签全文搜索
     query_params: [q, group, limit]
     response_entity: TagSearchResultView
@@ -81,6 +142,13 @@ api_routes:
   - method: GET
     path: /v1/tag/related
     operation: RelatedTags
+    actor: none
+    application:
+      kind: query
+      facet: TagCatalogQueryFacade
+      method: listRelatedTags
+      reader: RelatedTagReader
+      slice: RelatedTagsSlice
     description: 与指定标签共现度最高的相关标签
     query_params: [tagRef, limit]
     response_entity: RelatedTagView
@@ -89,25 +157,30 @@ api_routes:
   - method: POST
     path: /v1/tag/search-by-tags
     operation: SearchByTags
+    actor: none
+    application:
+      kind: query
+      facet: TagGraphQueryFacade
+      method: searchObjectsByTags
+      reader: TagObjectSearchReader
+      slice: TagObjectMatchesSlice
     description: 多标签联合搜索对象
     request_entity: SearchByTagsRequest
     request_fields: [tagRefs, objectType, limit]
     response_entity: TagObjectMatchView
     response_fields: [objectId, objectType, matchedTags, score]
 
-  - method: POST
-    path: /v1/tag/feedback
-    operation: TagFeedback
-    description: 用户对标签推荐的反馈（点击/忽略/修正）
-    request_entity: TagFeedbackRequest
-    request_fields: [tagRef, action, context]
-    response_entity: TagFeedbackResultView
-    response_fields: [accepted]
-
   # ── 关系图谱（场景4） ──
   - method: GET
     path: /v1/tag/graph/cooccurrence
     operation: TagCooccurrence
+    actor: none
+    application:
+      kind: query
+      facet: TagGraphQueryFacade
+      method: getCooccurrence
+      reader: TagCooccurrenceReader
+      slice: TagCooccurrenceSlice
     description: 查询标签对共现关系
     query_params: [tagRef, minCount, limit]
     response_entity: TagCooccurrenceView
@@ -116,6 +189,13 @@ api_routes:
   - method: GET
     path: /v1/tag/related-objects
     operation: RelatedObjects
+    actor: none
+    application:
+      kind: query
+      facet: TagGraphQueryFacade
+      method: listRelatedObjects
+      reader: RelatedObjectReader
+      slice: RelatedObjectsSlice
     description: 通过共享标签查找相关对象
     query_params: [objectId, objectType, limit]
     response_entity: RelatedObjectView

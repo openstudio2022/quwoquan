@@ -1,0 +1,63 @@
+id: CR-20260714-093-comment-thread-evidence-truthfulness
+title: 评论线程验收证据去伪与服务缺口显式化
+slug: comment-thread-evidence-truthfulness
+revision: 2
+status: in_progress
+
+affected_nodes:
+  - specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread
+
+entries:
+  - timestamp: "2026-07-14T18:00:00+08:00"
+    summary: |
+      将 Comment Story 升级为 Comment / ContentReaction 独立商用对象闭环：删除旧 DTO、
+      三档排序、PostService 评论第二通路和无生产消费者的 GetCommentCountsDelta；App
+      统一使用 generated client + typed Facet，Comment aggregate/outbox 与计数投影成为唯一主线。
+    reason: |
+      原验收把已删除测试、未落地 IP 属地/作者赞过和历史三档排序仍写成当前能力，且
+      count-delta 依赖应用墙钟却没有生产 UI 消费。继续兼容会形成第二真相源和长期门禁假阳性。
+    change_type: [contract, architecture, reliability, testing, breaking]
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/spec.md
+        sections: [domain boundary, interfaces, consistency, out of scope]
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/acceptance.yaml
+        sections: [GWT1, GWT2, GWT3, GWT4, GWT5, GWT6, GWT7, GWT8, GWT9, GWT10, GWT11, GWT12, GWT13, GWT14]
+      - path: quwoquan_service/contracts/metadata/content/comment/service.yaml
+        sections: [GetCommentCountsDelta removed]
+      - path: docs/outstanding_risks_backlog.md
+        sections: [R-CMT01, R-CMT02]
+    impact:
+      replan_required: false
+      redesign_required: true
+      retest_layers: [local_contract, api_integration, user_acceptance]
+      rollout_impact: high
+      breaking_contract: true
+    notes:
+      - ContractGraph breaking removal 已明确批准；不提供 alias、shim 或 fallback。
+      - Gamma 设备与四环境准出未完成前，相关 GWT 保持 partial/pending，Story 总状态仍为 GATE_BLOCK。
+
+  - timestamp: "2026-07-14T00:00:00+08:00"
+    summary: |
+      删除三条 GWT 对已不存在 comment_display_fields 本地测试的虚假 recorded 引用。
+      置顶场景改为现存的评论聚合 local contract；IP 属地和作者赞过场景降为
+      in_progress，只保留实际存在的端侧 DTO/UI 证据。
+    reason: |
+      acceptance standard gate 发现 recorded 测试文件不存在。进一步审计确认 IP 属地
+      写链路未接入 CommentService，authorLiked 也没有服务投影测试；继续标记
+      implemented 会让端云质量治理产生假阳性。
+    change_type:
+      - contract
+      - reliability
+      - testing
+      - breaking
+    changed_documents:
+      - path: specs/feature-tree/discovery-content/publish-comment-reaction/comment-thread/acceptance.yaml
+        sections: [GWT12, GWT13, GWT14]
+    impact:
+      replan_required: true
+      redesign_required: false
+      retest_layers: [local_contract, api_integration, user_acceptance]
+      rollout_impact: medium
+      breaking_contract: true
+    notes:
+      - 后续完成服务实现时，必须补 CommentService 写入/投影 local_contract、真实 HTTP/Mongo api_integration 与 Gamma UAT；不得重新引入虚构 recorded 文件。

@@ -34,7 +34,7 @@ gwt_acceptance:
     - action handler 测试覆盖 copy/system_share 默认输出 HTTPS。
     edge_cases:
     - private 内容不生成可分享 landing URL。
-    - circle_visible 内容保留受控分享提示。
+    - 已退役或未知 visibility 被严格拒绝，不得按 public 渲染。
     contract_refs:
     - specs/feature-tree/runtime/runtime-client-foundation/public-content-web-entry/spec.md
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml
@@ -71,7 +71,7 @@ gwt_acceptance:
     - 任意 HTML / script 注入被转义或阻断。
     done_when:
     - renderer snapshot 覆盖 heading、paragraph、figure、gallery、callout、HTML escape。
-    - private / circle_visible 权限边界有测试。
+    - private 与未知 visibility 权限边界有测试。
     edge_cases:
     - Markdown 中包含任意 HTML。
     - assetManifest 缺失图片。
@@ -113,7 +113,7 @@ gwt_acceptance:
     - 4 类对象 SEO 快照测试覆盖 canonical/OG/JSON-LD。
     - robots.txt 与分类型 sitemap.xml 生成。
     edge_cases:
-    - circle_visible 受控预览且不进 sitemap。
+    - 未知或已退役 visibility 被拒绝且不进 sitemap。
     - private/审核未过对象 noindex 且不渲染正文。
     contract_refs:
     - quwoquan_service/contracts/metadata/_shared/link_templates.yaml

@@ -202,7 +202,11 @@
                 "name": "契约摄影社",
                 "memberCount": 128,
                 "linkedHomepageId": "homepage_sight_west_lake",
-                "linkedHomepageTitle": "西湖景区"
+                "linkedHomepageTitle": "西湖景区",
+                "ownerUserId": "fixture_user_owner",
+                "ownerDisplayNameSnapshot": "契约摄影社主理人",
+                "ownerAvatarUrlSnapshot": "",
+                "evidenceSnapshotId": "circle:fixture_circle_photo:members:v1"
               }
             ],
             "sourceRefs": [

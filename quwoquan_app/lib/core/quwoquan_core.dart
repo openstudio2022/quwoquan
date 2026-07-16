@@ -61,9 +61,8 @@ export 'auth/auth_continuation.dart';
 export 'auth/auth_legal_config.dart';
 export 'auth/one_tap_login_channel.dart';
 export 'errors/ui_error_semantics.dart';
-export 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart'
+export 'package:quwoquan_app/core/errors/runtime_error_display.dart'
     show runtimeErrorDisplayMessage, runtimeErrorSemantic;
-export 'services/app_content_repository.dart';
 export 'services/assistant_chat_store.dart';
 
 // Utils

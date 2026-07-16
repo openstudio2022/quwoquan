@@ -8,7 +8,7 @@ import (
 func TestMarkAsRead_UnreadCountCorrectlyDecremented(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"group","title":"unread test"}`)
+	conv := createConversation(t, `{"type":"group","title":"unread test","initialMemberIds":["user_sender"]}`)
 	convId := conv["_id"].(string)
 
 	sendMessageAs(t, "user_sender", convId, `{"type":"text","content":"msg1","clientMsgId":"unread-1"}`)
@@ -83,7 +83,7 @@ func TestMarkAsRead_UnreadCountCorrectlyDecremented(t *testing.T) {
 func TestMarkAsRead_IdempotentOnSameMessage(t *testing.T) {
 	t.Cleanup(func() { cleanAll(t) })
 
-	conv := createConversation(t, `{"type":"direct","title":"idempotent read"}`)
+	conv := createConversation(t, `{"type":"direct","title":"idempotent read","initialMemberIds":["user_test_002"]}`)
 	convId := conv["_id"].(string)
 
 	msg := sendMessage(t, convId, `{"type":"text","content":"hello","clientMsgId":"idem-read-1"}`)

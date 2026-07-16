@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -99,7 +98,7 @@ func renderWireKeysClassDart(yamlBytes []byte, sourceRelPath string) (string, er
 
 func writeWireKeysGeneratedFile(appDir, postProjectionsDir, yamlName, outName string) error {
 	keysPath := filepath.Join(postProjectionsDir, yamlName)
-	keysBytes, err := os.ReadFile(keysPath)
+	keysBytes, err := readMetadataDocument(keysPath)
 	if err != nil {
 		return err
 	}
@@ -117,7 +116,7 @@ func writeWireKeysGeneratedFile(appDir, postProjectionsDir, yamlName, outName st
 
 func writePostReadPresentationArtifacts(appDir, postProjectionsDir string) error {
 	surfPath := filepath.Join(postProjectionsDir, "read_presentation_surfaces.yaml")
-	surfBytes, err := os.ReadFile(surfPath)
+	surfBytes, err := readMetadataDocument(surfPath)
 	if err != nil {
 		return err
 	}
@@ -148,7 +147,7 @@ func writePostReadPresentationArtifacts(appDir, postProjectionsDir string) error
 	}
 
 	presPath := filepath.Join(postProjectionsDir, "post_read_presentation.yaml")
-	presBytes, err := os.ReadFile(presPath)
+	presBytes, err := readMetadataDocument(presPath)
 	if err != nil {
 		return err
 	}

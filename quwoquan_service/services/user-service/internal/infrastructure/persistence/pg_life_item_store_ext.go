@@ -6,13 +6,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 // PgLifeItemStore extends pgLifeItemStoreBase with cursor-based pagination.
 type PgLifeItemStore struct{ pgLifeItemStoreBase }
 
-var _ repository.LifeItemRepository = (*PgLifeItemStore)(nil)
+var _ repository.UserLifeItemReader = (*PgLifeItemStore)(nil)
 
 func NewPgLifeItemStore(pool *pgxpool.Pool) *PgLifeItemStore {
 	return &PgLifeItemStore{pgLifeItemStoreBase{pool: pool}}

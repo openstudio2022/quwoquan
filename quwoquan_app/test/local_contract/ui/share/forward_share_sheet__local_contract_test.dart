@@ -1,7 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quwoquan_app/cloud/chat/models/send_message_response.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/chat_inbox_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/chat/contact_home_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
@@ -10,6 +9,7 @@ import 'package:quwoquan_app/core/constants/settings_semantic_constants.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/core/design_system/typography/app_typography.dart';
+import 'package:quwoquan_app/core/platform/native_bridge.dart';
 import 'package:quwoquan_app/core/platform/platform_capabilities.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/widgets/app_modal_surface.dart';
@@ -18,6 +18,7 @@ import 'package:quwoquan_app/ui/share/forward_share_models.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_confirm_sheet.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_recipient_widgets.dart';
 import 'package:quwoquan_app/ui/share/widgets/forward_share_sheet.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 const _payload = AppForwardPayload(
   kind: AppForwardSubjectKind.profileQr,
@@ -35,6 +36,7 @@ Widget _wrap({
   return ProviderScope(
     overrides: [
       chatRepositoryProvider.overrideWithValue(repository),
+      chatMessageCommandWriterProvider.overrideWithValue(repository.writer),
       if (externalShareService != null)
         forwardExternalShareServiceProvider.overrideWithValue(
           externalShareService,
@@ -67,17 +69,18 @@ void main() {
         extra: <String, Object?>{'source': kind.name},
       );
 
-      final cardPayload = payload.toCardPayload(message: '请看看');
+      final card = payload.toMessageCardCommand(message: '请看看');
 
-      expect(cardPayload['forwardKind'], kind.name);
-      expect(cardPayload['title'], payload.title);
-      expect(cardPayload['subtitle'], payload.subtitle);
-      expect(cardPayload['thumbnailUrl'], payload.thumbnailUrl);
-      expect(cardPayload['deeplink'], payload.deeplink);
-      expect(cardPayload['landingUrl'], payload.landingUrl);
-      expect(cardPayload['shareText'], payload.shareText);
-      expect(cardPayload['message'], '请看看');
-      expect(cardPayload['extra'], <String, Object?>{'source': kind.name});
+      expect(card.kind, kind.name);
+      expect(card.title, payload.title);
+      expect(card.subtitle, payload.subtitle);
+      expect(card.thumbnailUrl, payload.thumbnailUrl);
+      expect(card.deeplink, payload.deeplink);
+      expect(card.landingUrl, payload.landingUrl);
+      expect(card.shareText, payload.shareText);
+      expect(card.message, '请看看');
+      expect(card.attributes.single.name, 'source');
+      expect(card.attributes.single.value, kind.name);
     }
   });
 
@@ -128,7 +131,40 @@ void main() {
     );
     expect(find.text(UITextConstants.editProfileQrSaveAction), findsNothing);
     expect(find.text(UITextConstants.editProfileQrScanAction), findsNothing);
-    expect(find.text(UITextConstants.cancel), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('forward-share-close-button')),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.cancel), findsNothing);
+  });
+
+  testWidgets('最近聊天失败使用分区错误且重试后恢复列表', (tester) async {
+    final repository = _ForwardSheetChatRepository()
+      ..failListConversations = true;
+    await tester.pumpWidget(
+      _wrap(
+        repository: repository,
+        child: Builder(
+          builder: (context) => CupertinoButton(
+            child: const Text('open-error'),
+            onPressed: () => ForwardShareSheet.show(context, payload: _payload),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('open-error'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(UITextConstants.sectionLoadFailedTitleDefault),
+      findsOneWidget,
+    );
+    expect(find.text(UITextConstants.forwardActionAppContacts), findsOneWidget);
+
+    repository.failListConversations = false;
+    await tester.tap(find.text(UITextConstants.tryAgain));
+    await tester.pumpAndSettle();
+    expect(find.byType(ForwardRecentRecipientItem), findsNWidgets(10));
   });
 
   testWidgets('微信好友和朋友圈入口携带外部转发目标语义', (tester) async {
@@ -185,9 +221,11 @@ void main() {
     expect(gateway.subjects, <String>[_payload.title]);
   });
 
-  test('外部微信分享原生投递成功时不再打开系统分享', () async {
+  test('外部微信分享 SDK 接受请求时不再打开系统分享且不伪造完成', () async {
     final gateway = _RecordingSystemShareGateway();
-    final wechatGateway = _RecordingWechatShareGateway(delivered: true);
+    final wechatGateway = _RecordingWechatShareGateway(
+      outcome: NativeShareOutcome.accepted,
+    );
     final service = SharePlusForwardExternalShareService(
       capabilities: CapabilityProfile.mobile.copyWith(
         wechatTargetedShare: true,
@@ -201,7 +239,7 @@ void main() {
       target: ForwardExternalShareTarget.wechatMoments,
     );
 
-    expect(result.delivery, ForwardExternalShareDelivery.targetedWechat);
+    expect(result.delivery, ForwardExternalShareDelivery.wechatAccepted);
     expect(wechatGateway.targets, <ForwardExternalShareTarget>[
       ForwardExternalShareTarget.wechatMoments,
     ]);
@@ -210,7 +248,9 @@ void main() {
 
   test('外部微信分享原生投递失败时回落系统分享', () async {
     final gateway = _RecordingSystemShareGateway();
-    final wechatGateway = _RecordingWechatShareGateway(delivered: false);
+    final wechatGateway = _RecordingWechatShareGateway(
+      outcome: NativeShareOutcome.failed,
+    );
     final service = SharePlusForwardExternalShareService(
       capabilities: CapabilityProfile.mobile.copyWith(
         wechatTargetedShare: true,
@@ -330,26 +370,30 @@ void main() {
     expect(repository.lastConversationId, 'conv_0');
     expect(repository.lastType, 'card');
     expect(repository.lastContent, '一起看看');
-    expect(repository.lastCardPayload?['forwardKind'], 'profileQr');
-    expect(repository.lastCardPayload?['message'], '一起看看');
-    expect(repository.lastSenderSubAccountId, 'persona_forward');
+    expect(repository.lastCard?.kind, 'profileQr');
+    expect(repository.lastCard?.message, '一起看看');
+    expect(repository.writer.lastCommand?.senderDisplayNameSnapshot, '转发测试分身');
     await tester.pump(const Duration(seconds: 4));
   });
 }
 
 class _ForwardSheetChatRepository extends MockChatRepository {
-  int sendCallCount = 0;
-  String? lastConversationId;
-  String? lastType;
-  String? lastContent;
-  Map<String, dynamic>? lastCardPayload;
-  String? lastSenderSubAccountId;
+  final _ForwardSheetMessageWriter writer = _ForwardSheetMessageWriter();
+  bool failListConversations = false;
+  int get sendCallCount => writer.sendCallCount;
+  String? get lastConversationId => writer.lastCommand?.conversationId;
+  String? get lastType => writer.lastCommand?.type;
+  String? get lastContent => writer.lastCommand?.content;
+  ChatMessageCardCommand? get lastCard => writer.lastCommand?.card;
 
   @override
   Future<List<ChatInboxDto>> listConversations({
     String? cursor,
     int limit = 500,
   }) async {
+    if (failListConversations) {
+      throw StateError('recent conversations unavailable');
+    }
     final base = DateTime.utc(2026, 6, 27, 12);
     return List<ChatInboxDto>.generate(
       12,
@@ -397,31 +441,20 @@ class _ForwardSheetChatRepository extends MockChatRepository {
       ),
     ].take(limit).toList(growable: false);
   }
+}
+
+class _ForwardSheetMessageWriter implements ChatMessageCommandWriter {
+  int sendCallCount = 0;
+  ChatSendMessageCommand? lastCommand;
 
   @override
-  Future<SendMessageResponse> sendMessage({
-    required String conversationId,
-    required String type,
-    required String content,
-    String? mediaUrl,
-    Map<String, dynamic>? media,
-    Map<String, dynamic>? cardPayload,
-    String? replyToMessageId,
-    List<String>? mentions,
-    String? senderSubAccountId,
-    String? personaContextVersion,
-    String? senderDisplayNameSnapshot,
-    String? senderAvatarUrlSnapshot,
-    required String clientMsgId,
-  }) async {
+  Future<ChatSendMessageResult> sendMessage(
+    ChatSendMessageCommand command,
+  ) async {
     sendCallCount += 1;
-    lastConversationId = conversationId;
-    lastType = type;
-    lastContent = content;
-    lastCardPayload = cardPayload;
-    lastSenderSubAccountId = senderSubAccountId;
-    return SendMessageResponse(
-      id: 'msg_forward',
+    lastCommand = command;
+    return ChatSendMessageResult(
+      messageId: 'msg_forward',
       seq: 1,
       timestamp: DateTime.utc(2026, 6, 27, 12),
     );
@@ -441,7 +474,7 @@ class _RecordingExternalShareService implements ForwardExternalShareService {
     targets.add(target);
     return ForwardExternalShareResult(
       target: target,
-      delivery: ForwardExternalShareDelivery.targetedWechat,
+      delivery: ForwardExternalShareDelivery.wechatAccepted,
     );
   }
 }
@@ -458,17 +491,23 @@ class _RecordingSystemShareGateway implements ForwardSystemShareGateway {
 }
 
 class _RecordingWechatShareGateway implements ForwardWechatShareGateway {
-  _RecordingWechatShareGateway({required this.delivered});
+  _RecordingWechatShareGateway({required this.outcome});
 
-  final bool delivered;
+  final NativeShareOutcome outcome;
   final targets = <ForwardExternalShareTarget>[];
 
   @override
-  Future<bool> share({
+  Future<NativeShareResult> share({
     required AppForwardPayload payload,
     required ForwardExternalShareTarget target,
   }) async {
     targets.add(target);
-    return delivered;
+    return NativeShareResult(
+      target: target == ForwardExternalShareTarget.wechatFriend
+          ? NativeShareTarget.wechatFriend
+          : NativeShareTarget.wechatMoments,
+      outcome: outcome,
+      requestId: 'native-request-1',
+    );
   }
 }

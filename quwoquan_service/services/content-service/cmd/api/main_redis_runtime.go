@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	platformredis "quwoquan_service/internal/platform/redis"
 	rtredis "quwoquan_service/runtime/redis"
 	recinfra "quwoquan_service/services/content-service/internal/infrastructure/recommendation"
 )
@@ -53,8 +54,9 @@ func runDailyAffinityDecayOnce(ctx context.Context, agg *recinfra.InterestProfil
 	}
 }
 
-// buildRedisRouter creates a redis.Router from the YAML config.
-// Falls back to in-memory mode for scenes without addresses (local dev / tests).
+// buildRedisRouter creates the production redis.Router from YAML/env config.
+// preflightConfig rejects missing endpoints and memory mode before this point;
+// alpha fixtures use their physically separate runner instead of this root.
 func buildRedisRouter(cfg config) *rtredis.Router {
 	routerCfg := rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
@@ -65,7 +67,7 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
 		DefaultScene: rtredis.GeneratedDefaultScene,
 	}
-	return rtredis.MustNewRouter(routerCfg)
+	return platformredis.MustNewRouter(routerCfg)
 }
 
 // toSceneConfig converts the YAML redisSceneCfg to rtredis.SceneConfig.
@@ -73,12 +75,6 @@ func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {
 	mode := strings.ToLower(strings.TrimSpace(r.Mode))
 	if mode == "" {
 		mode = "standalone"
-	}
-	if mode == "standalone" && r.Addr == "" {
-		mode = "memory"
-	}
-	if mode == "cluster" && len(r.Addrs) == 0 {
-		mode = "memory"
 	}
 	return rtredis.SceneConfig{
 		Mode:         mode,

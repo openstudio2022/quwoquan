@@ -54,7 +54,7 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 1. 先确认 `stackctl verify --env prod --kind all` 通过。
 2. 使用 `stackctl deploy --target prod-hosted --service <svc> --from-image <old> --to-image <new> --from-config <old_cfg> --to-config <new_cfg> --step <step> --error-rate <rate> --p95-ms <ms> --redis-error-rate <rate>`。
 3. `prod-hosted` 走 `gray-initial / carry-on / full` rollout stage；真实远端集成与 curated 媒体路由复验在 `gray-initial` 阶段完成（不再有独立的远端 gamma-hosted 阶段）。
-4. 每步产物以 `.qwq_output/runs/prod/**` 和 `.qwq_output/local/release-state/<service>.state` 为准。
+4. 每步运行证据以 `.qwq_output/env/prod/runs/**` 为准；prod 发布状态固定为 `QWQ_OUTPUT_ROOT/env/prod/local/prod-hosted/process/release-state/<service>.state`。
 
 ## Stop Conditions
 
@@ -71,6 +71,6 @@ description: Use stackctl to package, start, verify, inspect, diagnose, repair, 
 
 优先引用这些产物：
 
-- `.qwq_output/runs/<env>/<run-id>/report.json`
-- `.qwq_output/runs/<env>/<run-id>/summary.md`
-- `.qwq_output/local/gamma-local/report.json`
+- `.qwq_output/env/<env>/runs/<run-id>/report.json`
+- `.qwq_output/env/<env>/runs/<run-id>/summary.md`
+- `.qwq_output/env/gamma/local/gamma-local/process/report.json`

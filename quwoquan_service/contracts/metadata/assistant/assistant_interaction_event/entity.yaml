@@ -1,0 +1,13 @@
+version: 1
+domain: assistant
+entity: AssistantInteractionEvent
+object_kind: append_only_fact
+description: AssistantRun 的用户交互反馈不可变事实，仅经 typed append sink 写入。
+storage_backend: mongodb
+capabilities: [append_only, deduplicated_append]
+business_rules:
+  - eventId 与 runId 创建后不可变
+  - actor persona 必须等于 trusted principal，禁止请求体覆盖
+  - 同一 eventId 只追加一次，事实不提供 update 或 delete
+lifecycle:
+  states: [recorded]

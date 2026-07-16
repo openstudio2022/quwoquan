@@ -94,6 +94,39 @@
   - `secondary_tab_inline_scroll`
 - App 侧 repository/provider/UI 必须改为消费新的 codegen 视图与常量，不再依赖手写 map 协议。
 
+### F9: 我的主页互动转发双向列表
+
+- 一级 Tab 保持 `记录 / 互动 / 足迹`；互动二级控制行固定为
+  `点赞 / 评论 / 转发 / 浏览 + 收到的 / 我发起的`，不提供“全部”、第三行筛选、
+  “互动明细”标题或独立转发页面。
+- 方向选择器属于互动二级控制行。移动该公共控制不改变点赞、评论、浏览的列表、
+  数据源和点击行为；只有选中 `type=share` 时进入本功能的专属列表状态。
+- `received` 表示别人转发当前分身的记录或讨论；`initiated` 表示当前分身转发
+  别人的记录或讨论。前台只使用“转发 / 记录 / 讨论”。
+- 每次转发按稳定 `interactionId` 独立成行，不做多人聚合。服务端可按同一 actor、
+  target、shareRecordId 与短时间窗口去重，App 不自行去重或计算影响结果。
+- received 行可显示未读与服务端完整返回的 `impactPrimaryText`；initiated 行不显示
+  未读、已读或传播影响。附言最多两行。
+- 点击头像/昵称进入方向对应的用户主页；点击行与预览统一按
+  `可用 shareRecord -> 可用原目标 -> 失效不跳转` 解析。传播结果仅在同时存在
+  `impactPrimaryText` 与可枚举 `impactDeepLink` 时可点击。
+- 图片、视频、长文/纯文本、讨论均使用 64pt 预览；deleted/private/reviewing/
+  author_deactivated 使用明确文本降级，保留时间与转发关系。
+- 两个方向分别保存 items、cursor、滚动位置、加载态、最近拉取时间和结构化错误；
+  缓存 TTL 为 5 分钟，过期先显示缓存再后台刷新，请求 generation 防止旧结果覆盖。
+- 首屏 4 条骨架，page size 20，距尾 5 条预加载；下拉刷新只刷新当前方向；
+  日期按用户时区分为今天、昨天、更早，同组按 occurredAt 倒序。
+- received 行达到可见面积 50% 且连续 1 秒后逐条上报 seen；打开详情后逐条 read，
+  切换方向不得批量标记。
+- 转发互动仅当前主页所有者可见。他人主页不显示转发筛选也不请求接口；服务端校验
+  owner 与 active sub-account，分身切换立即清空旧分身缓存，拉黑与匿名语义由服务端处理。
+- 观测事件固定为 `share_interaction_view`、`share_direction_change`、
+  `share_interaction_impression`、`share_interaction_open`、`share_actor_open`、
+  `share_impact_open`、`share_refresh`、`share_load_more`，公共来源为
+  `profile_interaction_share`。
+- 性能目标：缓存方向切换下一帧可见；20 条 API p95 不高于 500ms；App 首批数据
+  p95 不高于 1.5s；越权读取与 cursor 重复/遗漏为 0。
+
 ## 不做什么（Out of Scope）
 
 - **O1**: `subAccount` 管理页完整重构；本 Story 只定义同步提示与主页消费的身份模型。
@@ -101,6 +134,8 @@
 - **O3**: 旧扩展关系层级的完整产品化。
 - **O4**: 新增独立 BFF 或聚合网关层承接个人主页。
 - **O5**: Web/Desktop 端适配。
+- **O6**: 重构主页头部、一级 Tab 或点赞/评论/浏览列表。
+- **O7**: 将“我发起的”转发公开为主页资产、搜索索引、公开交集或影响数字。
 
 ## 约束
 

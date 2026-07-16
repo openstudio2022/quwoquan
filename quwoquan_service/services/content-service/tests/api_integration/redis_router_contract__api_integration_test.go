@@ -61,22 +61,22 @@ func TestRedisRouter_PrefixRoutingToCorrectScene(t *testing.T) {
 	}
 }
 
-func TestRedisRouter_RecSceneBacksMiniredis(t *testing.T) {
+func TestRedisRouter_RecSceneBacksRealRedis(t *testing.T) {
 	ctx := context.Background()
 	rec := requireTestRouter(t).Scene("rec")
 
 	if err := rec.Ping(ctx); err != nil {
-		t.Fatalf("rec scene Ping: %v (should be backed by miniredis)", err)
+		t.Fatalf("rec scene real Redis Ping: %v", err)
 	}
 
 	_ = rec.Set(ctx, "rec:test:ping", "alive", time.Second)
 	v, err := rec.Get(ctx, "rec:test:ping")
 	if err != nil || v != "alive" {
-		t.Errorf("rec scene Get/Set via miniredis: got %q err=%v", v, err)
+		t.Errorf("rec scene Get/Set via real Redis: got %q err=%v", v, err)
 	}
 }
 
-func TestRedisRouter_GeneralSceneBacksMemory(t *testing.T) {
+func TestRedisRouter_GeneralSceneBacksRealRedis(t *testing.T) {
 	ctx := context.Background()
 	gen := requireTestRouter(t).Scene("general")
 
@@ -87,6 +87,6 @@ func TestRedisRouter_GeneralSceneBacksMemory(t *testing.T) {
 	_ = gen.Set(ctx, "cache:test:ping", "alive", time.Second)
 	v, err := gen.Get(ctx, "cache:test:ping")
 	if err != nil || v != "alive" {
-		t.Errorf("general scene Get/Set via memory: got %q err=%v", v, err)
+		t.Errorf("general scene Get/Set via real Redis: got %q err=%v", v, err)
 	}
 }

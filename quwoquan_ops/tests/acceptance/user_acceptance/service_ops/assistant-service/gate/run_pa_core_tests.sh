@@ -18,7 +18,7 @@
 #
 # 自主修复指引（编程助手用）：
 #   ...tool_observation...          → react_runtime.dart / llm_provider.dart
-#   ...history_contamination...     → agent_loop.dart / session_manager.dart / chat_detail_page.dart
+#   ...history_contamination...     → agent_loop.dart / session_manager.dart / personal_assistant_conversation_page.dart
 #   ...assistant_answer_protocol... → assistant_repository / stream protocol / transcript payload
 #   ...assistant_message_history... → local timeline persistence / transcript rendering
 #   ...stream_controller...         → PersonalAssistantStreamController / resolver / provider
@@ -41,7 +41,7 @@ fi
 # ══════════════════════════════════════════════════════════════════════════════
 BUCKET_A_TESTS=(
   "test/local_contract/quality/shared/assistant/protocol/assistant_answer_protocol_leak_regression__local_contract_test.dart"
-  "test/local_contract/ui/assistant/contract/assistant_message_history_contract__local_contract_test.dart"
+  "test/local_contract/ui/assistant/personal_assistant_stream_controller__local_contract_test.dart"
   "test/local_contract/ui/assistant/assistant_context_scope_read_view__local_contract_test.dart"
   "test/local_contract/ui/assistant/assistant_structured_run_response_read_view__local_contract_test.dart"
 )

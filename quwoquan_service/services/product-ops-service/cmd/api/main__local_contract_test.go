@@ -6,13 +6,15 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"quwoquan_service/runtime/controlplane"
+	rtauth "quwoquan_service/runtime/auth"
+	controlplanetest "quwoquan_service/runtime/controlplane/testsupport"
 	rthealth "quwoquan_service/runtime/health"
-	"quwoquan_service/runtime/repository"
+	messaging "quwoquan_service/runtime/messaging"
+	"quwoquan_service/runtime/operation"
 	"quwoquan_service/services/product-ops-service/internal/application"
 	telemetrypersistence "quwoquan_service/services/product-ops-service/internal/infrastructure/persistence"
 )
@@ -20,31 +22,96 @@ import (
 func newTestProductService(t *testing.T) *productService {
 	t.Helper()
 	return newProductService(
-		controlplane.NewFileStore(filepath.Join(t.TempDir(), "product-ops-state.json")),
+		controlplanetest.NewFileStore(t.TempDir()+"/product-ops-state.json"),
 		application.NewTelemetryService(telemetrypersistence.NewMemoryTelemetryStore(), nil),
+		newTestExperimentFacade(t),
 	)
 }
 
-func newTestProductServiceWithPublisher(t *testing.T, publisher repository.EventPublisher) *productService {
+func newTestProductServiceWithPublisher(t *testing.T, publisher messaging.EventPublisher) *productService {
 	t.Helper()
 	return newProductService(
-		controlplane.NewFileStore(filepath.Join(t.TempDir(), "product-ops-state.json")),
+		controlplanetest.NewFileStore(t.TempDir()+"/product-ops-state.json"),
 		application.NewTelemetryService(telemetrypersistence.NewMemoryTelemetryStore(), nil),
+		newTestExperimentFacade(t),
 		publisher,
 	)
 }
 
 type capturePublisher struct {
-	events []repository.DomainEvent
+	events []messaging.DomainEvent
 }
 
-func (p *capturePublisher) Publish(_ context.Context, event repository.DomainEvent) error {
+func (p *capturePublisher) Publish(_ context.Context, event messaging.DomainEvent) error {
 	p.events = append(p.events, event)
 	return nil
 }
 
 func newTestServerMux(service *productService) *http.ServeMux {
 	return newServerMux(service, rthealth.NewChecker())
+}
+
+func withTestTelemetryPrincipal(request *http.Request) *http.Request {
+	principal := rtauth.Principal{
+		Actor: operation.ActorContext{PersonaID: "persona-test-telemetry"},
+	}
+	return request.WithContext(rtauth.WithPrincipal(request.Context(), principal))
+}
+
+func TestValidateRequiredRuntimeConfigRejectsMissingMongo(t *testing.T) {
+	cfg := config{}
+	cfg.Redis.Rec.Mode = "standalone"
+	cfg.Redis.Rec.Addr = "127.0.0.1:6379"
+	cfg.Redis.General.Mode = "standalone"
+	cfg.Redis.General.Addr = "127.0.0.1:6379"
+
+	err := validateRequiredRuntimeConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "mongodb.uri is required") {
+		t.Fatalf("expected missing mongodb uri failure, got %v", err)
+	}
+}
+
+func TestValidateRequiredRuntimeConfigRejectsMissingRedisEndpoint(t *testing.T) {
+	cfg := config{}
+	cfg.MongoDB.URI = "mongodb://127.0.0.1:27017"
+	cfg.MongoDB.Database = "product_ops"
+	cfg.Postgres.DSN = "postgres://quwoquan:quwoquan@127.0.0.1:5432/quwoquan?sslmode=disable"
+	cfg.Redis.Rec.Mode = "standalone"
+	cfg.Redis.Rec.Addr = "127.0.0.1:6379"
+	cfg.Redis.General.Mode = "standalone"
+
+	err := validateRequiredRuntimeConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "redis.general standalone addr is required") {
+		t.Fatalf("expected missing redis endpoint failure, got %v", err)
+	}
+}
+
+func TestValidateRequiredRuntimeConfigRejectsMissingPostgres(t *testing.T) {
+	cfg := config{}
+	cfg.MongoDB.URI = "mongodb://127.0.0.1:27017"
+	cfg.MongoDB.Database = "product_ops"
+	cfg.Redis.Rec.Mode = "standalone"
+	cfg.Redis.Rec.Addr = "127.0.0.1:6379"
+	cfg.Redis.General.Mode = "standalone"
+	cfg.Redis.General.Addr = "127.0.0.1:6379"
+
+	err := validateRequiredRuntimeConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "postgres.dsn is required") {
+		t.Fatalf("expected missing postgres dsn failure, got %v", err)
+	}
+}
+
+func TestBuildRedisSceneConfigUsesClusterAddressOverride(t *testing.T) {
+	scene, err := buildRedisSceneConfig("general", redisSceneCfg{
+		Mode: "cluster",
+		Addr: "redis-a:6379, redis-b:6379",
+	})
+	if err != nil {
+		t.Fatalf("build cluster redis scene: %v", err)
+	}
+	if scene.Mode != "cluster" || len(scene.Addrs) != 2 || scene.Addr != "" {
+		t.Fatalf("unexpected cluster redis scene: %+v", scene)
+	}
 }
 
 func TestExperimentEndpoints(t *testing.T) {
@@ -54,12 +121,13 @@ func TestExperimentEndpoints(t *testing.T) {
 	}
 	server := newTestServerMux(service)
 
-	assignReq := httptest.NewRequest(http.MethodPost, "/v1/ops/experiments/discovery_feed_v3/assign", bytes.NewBufferString(`{"subjectKey":"user-1"}`))
+	assignReq := httptest.NewRequest(http.MethodPost, "/v1/ops/experiments/discovery_feed_v3/assignment", nil)
 	assignReq.Header.Set("Content-Type", "application/json")
+	assignReq = withTestTelemetryPrincipal(assignReq)
 	assignResp := httptest.NewRecorder()
 	server.ServeHTTP(assignResp, assignReq)
-	if assignResp.Code != http.StatusOK {
-		t.Fatalf("assign bucket status=%d body=%s", assignResp.Code, assignResp.Body.String())
+	if assignResp.Code != http.StatusCreated {
+		t.Fatalf("assign experiment status=%d body=%s", assignResp.Code, assignResp.Body.String())
 	}
 
 	var assignment map[string]any
@@ -69,8 +137,42 @@ func TestExperimentEndpoints(t *testing.T) {
 	if assignment["experimentId"] != "discovery_feed_v3" {
 		t.Fatalf("unexpected experimentId: %v", assignment["experimentId"])
 	}
-	if assignment["bucket"] == "" {
-		t.Fatalf("bucket should not be empty: %v", assignment)
+	if assignment["subjectKey"] != "persona:persona-test-telemetry" {
+		t.Fatalf("assignment subject must derive from verified persona: %v", assignment)
+	}
+	if assignment["variant"] == "" {
+		t.Fatalf("variant should not be empty: %v", assignment)
+	}
+	assignedAt := assignment["assignedAt"]
+
+	replayReq := httptest.NewRequest(http.MethodPost, "/v1/ops/experiments/discovery_feed_v3/assignment", nil)
+	replayReq.Header.Set("Content-Type", "application/json")
+	replayReq = withTestTelemetryPrincipal(replayReq)
+	replayResp := httptest.NewRecorder()
+	server.ServeHTTP(replayResp, replayReq)
+	if replayResp.Code != http.StatusOK {
+		t.Fatalf("replay assignment status=%d body=%s", replayResp.Code, replayResp.Body.String())
+	}
+	var replayed map[string]any
+	if err := json.Unmarshal(replayResp.Body.Bytes(), &replayed); err != nil {
+		t.Fatalf("unmarshal replay response: %v", err)
+	}
+	if replayed["id"] != assignment["id"] || replayed["assignedAt"] != assignedAt {
+		t.Fatalf("idempotent replay changed immutable fact: first=%v replay=%v", assignment, replayed)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/v1/ops/experiments/discovery_feed_v3/assignment", nil)
+	getReq = withTestTelemetryPrincipal(getReq)
+	getResp := httptest.NewRecorder()
+	server.ServeHTTP(getResp, getReq)
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("get assignment status=%d body=%s", getResp.Code, getResp.Body.String())
+	}
+	unauthorizedGet := httptest.NewRequest(http.MethodGet, "/v1/ops/experiments/discovery_feed_v3/assignment", nil)
+	unauthorizedResp := httptest.NewRecorder()
+	server.ServeHTTP(unauthorizedResp, unauthorizedGet)
+	if unauthorizedResp.Code != http.StatusUnauthorized {
+		t.Fatalf("assignment without verified actor status=%d body=%s", unauthorizedResp.Code, unauthorizedResp.Body.String())
 	}
 
 	statsReq := httptest.NewRequest(http.MethodGet, "/v1/ops/experiments/discovery_feed_v3/stats", nil)
@@ -97,8 +199,9 @@ func TestVisitEndpoints(t *testing.T) {
 	server := newTestServerMux(service)
 
 	for range 2 {
-		recordReq := httptest.NewRequest(http.MethodPost, "/v1/ops/visits", bytes.NewBufferString(`{"targetType":"page","targetKey":"platform-onboarding","userId":"user-1"}`))
+		recordReq := httptest.NewRequest(http.MethodPost, "/v1/ops/visits", bytes.NewBufferString(`{"targetType":"page","targetKey":"platform-onboarding"}`))
 		recordReq.Header.Set("Content-Type", "application/json")
+		recordReq = withTestTelemetryPrincipal(recordReq)
 		recordResp := httptest.NewRecorder()
 		server.ServeHTTP(recordResp, recordReq)
 		if recordResp.Code != http.StatusOK {
@@ -141,6 +244,7 @@ func TestEventEndpoints(t *testing.T) {
 	body := bytes.NewBufferString(`{"events":[{"eventId":"evt-1","eventType":"experience","eventName":"page_open","eventVersion":"v1","priority":"P0","producer":"app","pageName":"home","surfaceId":"homeFeed","routeId":"home","occurredAt":"2026-04-01T00:00:00Z","payload":{"location":"/home"}},{"eventId":"evt-2","eventType":"analytics","eventName":"bottom_nav_tap","eventVersion":"v1","priority":"P1","producer":"app","pageName":"home","surfaceId":"homeFeed","routeId":"home","experimentBucket":"control","occurredAt":"2026-04-01T00:00:05Z"}]}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/ops/events", body)
 	req.Header.Set("Content-Type", "application/json")
+	req = withTestTelemetryPrincipal(req)
 	resp := httptest.NewRecorder()
 	server.ServeHTTP(resp, req)
 	if resp.Code != http.StatusOK {
@@ -440,7 +544,7 @@ func TestPremiumPoolControlPlaneEndpoints(t *testing.T) {
 	}
 }
 
-func premiumPoolEventTypes(events []repository.DomainEvent) []string {
+func premiumPoolEventTypes(events []messaging.DomainEvent) []string {
 	out := make([]string, 0, len(events))
 	for _, event := range events {
 		out = append(out, event.Type)
@@ -474,6 +578,7 @@ func TestL1L4MetricsEndpoint(t *testing.T) {
 		]
 	}`))
 	recordReq.Header.Set("Content-Type", "application/json")
+	recordReq = withTestTelemetryPrincipal(recordReq)
 	recordResp := httptest.NewRecorder()
 	server.ServeHTTP(recordResp, recordReq)
 	if recordResp.Code != http.StatusOK {
@@ -560,6 +665,7 @@ func TestProductTriageSummaryEndpoint(t *testing.T) {
 		]
 	}`))
 	recordReq.Header.Set("Content-Type", "application/json")
+	recordReq = withTestTelemetryPrincipal(recordReq)
 	recordResp := httptest.NewRecorder()
 	server.ServeHTTP(recordResp, recordReq)
 	if recordResp.Code != http.StatusOK {

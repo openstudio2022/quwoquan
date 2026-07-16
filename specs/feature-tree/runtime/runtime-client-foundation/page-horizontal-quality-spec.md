@@ -5,7 +5,7 @@
 > **全量清单**：[`page-horizontal-quality-matrix.md`](./page-horizontal-quality-matrix.md)（按 **领域 × 页面类型** 分列）。  
 > **L3 索引**：[`page-horizontal-quality/spec.md`](./page-horizontal-quality/spec.md)。  
 > **新增页面**：合入前必须 **新增一行** 并核对 **P1–Pn 当前列**；详见 [`page_horizontal_quality_pr_checklist.md`](../../../gates/page_horizontal_quality_pr_checklist.md)。  
-> **全量横向补齐**：按 **9 个独立会话** 执行（S1–S8 各对应 **P1–P8** 之一，**S9** 收口），见 [`page-horizontal-quality/nine-session-rollout-plan.md`](./page-horizontal-quality/nine-session-rollout-plan.md)。  
+> **全量横向补齐**：按 **9 个独立会话** 执行（S1–S8 各对应 **P1–P8** 之一，**S9** 收口），见 [`page-horizontal-quality/nine-session-rollout-content.execution.planning.md`](./page-horizontal-quality/nine-session-rollout-content.execution.planning.md)。  
 > **S8（P8）子 L3 /baseline**：[`s8-p8-semantic-token/spec.md`](./s8-p8-semantic-token/spec.md) · [`CR-20260330-012`](../../../changelog/CR-20260330-012-s8-p8-semantic-token-baseline.yaml)（W0–W5 代码波次见该目录 `树内计划文档`）。
 
 ## 页面类型（与矩阵列「类型」一致）

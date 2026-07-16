@@ -13,6 +13,7 @@ import 'package:quwoquan_app/ui/content/entry/providers/create_editor_provider.d
 import 'package:quwoquan_app/ui/content/entry/providers/create_draft_store_provider.dart';
 import 'package:quwoquan_app/ui/content/entry/services/create_draft_local_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 class _CreateHostApp extends StatelessWidget {
   const _CreateHostApp();
@@ -38,7 +39,7 @@ Widget _buildApp() {
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
-      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      ...mockContentFacetOverrides(MockContentRepository()),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
     ],
     child: ScreenUtilInit(
@@ -57,7 +58,7 @@ Widget _buildCreatePageApp({String? initialTabKey}) {
   return ProviderScope(
     overrides: [
       currentUserIdProvider.overrideWithValue('user_001'),
-      contentRepositoryProvider.overrideWithValue(MockContentRepository()),
+      ...mockContentFacetOverrides(MockContentRepository()),
       circleRepositoryProvider.overrideWithValue(MockCircleRepository()),
     ],
     child: ScreenUtilInit(
@@ -77,10 +78,7 @@ CreateDraft _buildDraft({
   required int updatedAtMs,
   String body = '',
 }) {
-  final state = CreateEditorState.initial().copyWith(
-    draftId: id,
-    body: body,
-  );
+  final state = CreateEditorState.initial().copyWith(draftId: id, body: body);
   return CreateDraft(id: id, updatedAtMs: updatedAtMs, state: state);
 }
 
@@ -88,11 +86,7 @@ Future<void> _seedExistingDraft(
   SharedPreferencesCreateDraftRepository repository,
 ) async {
   await repository.upsertDraft(
-    _buildDraft(
-      id: 'existing_draft',
-      updatedAtMs: 1000,
-      body: '已有草稿不能被误删',
-    ),
+    _buildDraft(id: 'existing_draft', updatedAtMs: 1000, body: '已有草稿不能被误删'),
     currentDraftId: 'existing_draft',
   );
 }
@@ -166,20 +160,14 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump();
 
-      await tester.enterText(
-        find.byType(EditableText).last,
-        '第一段草稿，补充到第二版',
-      );
+      await tester.enterText(find.byType(EditableText).last, '第一段草稿，补充到第二版');
       await tester.pump();
       await tester.pump(const Duration(seconds: 10));
       await tester.pump();
 
       final timerSaved = await repository.load();
       expect(timerSaved.drafts, hasLength(1));
-      expect(
-        timerSaved.drafts.single.state.body,
-        contains('补充到第二版'),
-      );
+      expect(timerSaved.drafts.single.state.body, contains('补充到第二版'));
       expect(timerSaved.drafts.single.updatedAtMs, greaterThan(firstSavedAt));
 
       final secondSavedAt = timerSaved.drafts.single.updatedAtMs;
@@ -201,56 +189,58 @@ void main() {
       expect(afterDiscard.currentDraftId, isNull);
     });
 
-    testWidgets('discard article editor only affects current unsaved editor scope', (
-      tester,
-    ) async {
-      await _expectDiscardDoesNotDeleteExistingDraft(
-        tester,
-        inputKey: TestKeys.createMomentInput,
-      );
-    });
+    testWidgets(
+      'discard article editor only affects current unsaved editor scope',
+      (tester) async {
+        await _expectDiscardDoesNotDeleteExistingDraft(
+          tester,
+          inputKey: TestKeys.createMomentInput,
+        );
+      },
+    );
 
-    testWidgets('discard photo editor only affects current unsaved editor scope', (
-      tester,
-    ) async {
-      await _expectDiscardDoesNotDeleteExistingDraft(
-        tester,
-        initialTabKey: 'photo',
-        inputKey: TestKeys.createPhotoBodyInput,
-        prepareEditor: (tester) async {
-          final container = ProviderScope.containerOf(
-            tester.element(find.byType(CreatePage)),
-          );
-          final notifier = container.read(createEditorProvider.notifier);
-          notifier.setImages(
-            <String>['/tmp/a.jpg'],
-            editorKind: CreateEditorKind.media,
-          );
-          await tester.pumpAndSettle();
-        },
-      );
-    });
+    testWidgets(
+      'discard photo editor only affects current unsaved editor scope',
+      (tester) async {
+        await _expectDiscardDoesNotDeleteExistingDraft(
+          tester,
+          initialTabKey: 'photo',
+          inputKey: TestKeys.createPhotoBodyInput,
+          prepareEditor: (tester) async {
+            final container = ProviderScope.containerOf(
+              tester.element(find.byType(CreatePage)),
+            );
+            final notifier = container.read(createEditorProvider.notifier);
+            notifier.setImages(<String>[
+              '/tmp/a.jpg',
+            ], editorKind: CreateEditorKind.media);
+            await tester.pumpAndSettle();
+          },
+        );
+      },
+    );
 
-    testWidgets('discard video editor only affects current unsaved editor scope', (
-      tester,
-    ) async {
-      await _expectDiscardDoesNotDeleteExistingDraft(
-        tester,
-        initialTabKey: 'video',
-        inputKey: TestKeys.createVideoBodyInput,
-        prepareEditor: (tester) async {
-          final container = ProviderScope.containerOf(
-            tester.element(find.byType(CreatePage)),
-          );
-          final notifier = container.read(createEditorProvider.notifier);
-          notifier.setVideo(
-            '/tmp/demo.mp4',
-            editorKind: CreateEditorKind.media,
-            thumbnail: '/tmp/demo_cover.jpg',
-          );
-          await tester.pumpAndSettle();
-        },
-      );
-    });
+    testWidgets(
+      'discard video editor only affects current unsaved editor scope',
+      (tester) async {
+        await _expectDiscardDoesNotDeleteExistingDraft(
+          tester,
+          initialTabKey: 'video',
+          inputKey: TestKeys.createVideoBodyInput,
+          prepareEditor: (tester) async {
+            final container = ProviderScope.containerOf(
+              tester.element(find.byType(CreatePage)),
+            );
+            final notifier = container.read(createEditorProvider.notifier);
+            notifier.setVideo(
+              '/tmp/demo.mp4',
+              editorKind: CreateEditorKind.media,
+              thumbnail: '/tmp/demo_cover.jpg',
+            );
+            await tester.pumpAndSettle();
+          },
+        );
+      },
+    );
   });
 }

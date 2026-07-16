@@ -25,6 +25,9 @@ REQUIRED_TESTS = (
     APP_DIR / "test/local_contract/app/startup_deferred_router__local_contract_test.dart",
     APP_DIR / "test/local_contract/app/app_startup_welcome__local_contract_test.dart",
     APP_DIR / "test/local_contract/app/startup_native_launch_screen__local_contract_test.dart",
+    APP_DIR / "test/local_contract/ui/welcome/welcome_screen__local_contract_test.dart",
+    APP_DIR / "test/local_contract/ui/welcome/welcome_motion_golden__local_contract_test.dart",
+    APP_DIR / "test/local_contract/app/startup_probe_parser__local_contract_test.py",
 )
 
 
@@ -48,6 +51,40 @@ def validate_baseline_shape(raw: dict) -> list[str]:
     return errors
 
 
+def validate_commercial_uat(raw: dict) -> list[str]:
+    errors: list[str] = []
+    samples = raw.get("samples")
+    if not isinstance(samples, list) or len(samples) < 20:
+        errors.append("commercial UAT requires at least 20 samples")
+        return errors
+    if raw.get("deviceKind") != "true_device":
+        errors.append("commercial mobile UAT requires deviceKind=true_device")
+
+    p95 = raw.get("p95") if isinstance(raw.get("p95"), dict) else {}
+    if not isinstance(p95.get("firstVisibleMs"), int) or p95["firstVisibleMs"] > 2000:
+        errors.append("p95.firstVisibleMs must be <= 2000")
+    if (
+        not isinstance(p95.get("shellFirstPaintMs"), int)
+        or p95["shellFirstPaintMs"] > 3000
+    ):
+        errors.append("p95.shellFirstPaintMs must be <= 3000")
+
+    valid_exit_reasons = {
+        "ready_primary",
+        "ready_replay",
+        "degraded",
+        "deadline",
+        "reduced_motion",
+    }
+    for index, sample in enumerate(samples, start=1):
+        welcome_exit = sample.get("welcomeExitMs")
+        if not isinstance(welcome_exit, int) or welcome_exit > 6000:
+            errors.append(f"sample {index} welcomeExitMs must be <= 6000")
+        if sample.get("exitReason") not in valid_exit_reasons:
+            errors.append(f"sample {index} exitReason missing or invalid")
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--baseline", default=str(DEFAULT_BASELINE))
@@ -59,6 +96,11 @@ def main() -> int:
         help="Fail when current P50 exceeds ratchet P50 times this ratio.",
     )
     parser.add_argument("--write-ratchet", action="store_true")
+    parser.add_argument(
+        "--commercial-uat",
+        action="store_true",
+        help="Require true-device 20-run TTID, 3s shell P95, and 6s hard exit evidence.",
+    )
     args = parser.parse_args()
 
     baseline_path = Path(args.baseline)
@@ -86,6 +128,13 @@ def main() -> int:
         for item in shape_errors:
             print(f"  - {item}", file=sys.stderr)
         return 1
+    if args.commercial_uat:
+        commercial_errors = validate_commercial_uat(baseline)
+        if commercial_errors:
+            print("FAIL: commercial startup UAT evidence incomplete:", file=sys.stderr)
+            for item in commercial_errors:
+                print(f"  - {item}", file=sys.stderr)
+            return 1
 
     current_p50 = baseline.get("p50", {}).get("firstVisibleMs")
     if current_p50 is None:

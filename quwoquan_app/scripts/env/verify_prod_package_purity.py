@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 
@@ -44,9 +45,16 @@ EXCLUDED_BASENAMES = frozenset(
 )
 
 
-def iter_text_files() -> list[Path]:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scope", choices=("app", "all"), default="all")
+    return parser.parse_args()
+
+
+def iter_text_files(*, scope: str) -> list[Path]:
     files = [path for path in PROD_SOURCES if path.is_file()]
-    for group in PROD_SOURCE_GLOBS + PROD_ARTIFACT_GLOBS:
+    artifact_groups = [PROD_ARTIFACT_GLOBS[0]] if scope == "app" else PROD_ARTIFACT_GLOBS
+    for group in PROD_SOURCE_GLOBS + artifact_groups:
         for path in group:
             if path.is_file() and path.name not in EXCLUDED_BASENAMES:
                 files.append(path)
@@ -55,8 +63,9 @@ def iter_text_files() -> list[Path]:
 
 
 def main() -> int:
+    args = parse_args()
     issues: list[str] = []
-    for path in iter_text_files():
+    for path in iter_text_files(scope=args.scope):
         text = path.read_text(encoding="utf-8", errors="replace")
         for token in FORBIDDEN_TOKENS:
             if token in text:

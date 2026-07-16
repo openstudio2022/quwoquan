@@ -2,10 +2,12 @@ package application
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"testing"
-	"time"
+
+	"quwoquan_service/runtime/otpseal"
 )
 
 type allowAllOtpRateLimiter struct{}
@@ -45,47 +47,20 @@ func (failingExternalClient) SubmitSMSOTP(ctx context.Context, req SMSOTPDispatc
 
 type acceptedExternalClient struct{}
 
+func testOTPCodeSealer(t *testing.T) *otpseal.Sealer {
+	t.Helper()
+	sealer, err := otpseal.NewFromBase64("test-k1", map[string]string{
+		"test-k1": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sealer
+}
+
 func (acceptedExternalClient) SubmitSMSOTP(ctx context.Context, req SMSOTPDispatchRequest) (ExternalInteractionAccepted, error) {
 	_ = ctx
 	return ExternalInteractionAccepted{RequestID: req.RequestID, Status: "accepted"}, nil
-}
-
-func TestSendOtpPassThroughSkipsCodeCorrectnessOnlyWhenConfigured(t *testing.T) {
-	store := NewMemoryOtpChallengeStore()
-	svc := NewAuthService(
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		WithOtpCodeStore(allowAllOtpRateLimiter{}),
-		WithOtpChallengeStore(store),
-		WithExternalInteractionClient(failingExternalClient{}),
-		WithSmsOtpPassThroughConfig(SmsOtpPassThroughConfig{
-			Mode:      SmsOtpPassThroughEnabled,
-			DebtID:    "TECHDEBT-SMS-OTP-PASSTHROUGH-001",
-			Owner:     "backend-team",
-			ExpiresAt: time.Now().UTC().Add(24 * time.Hour),
-		}),
-	)
-	result, err := svc.SendOtp(context.Background(), "+8618013813909", "ios-test", "ios", "1.0.0", "test")
-	if err != nil {
-		t.Fatalf("send otp: %v", err)
-	}
-	if result.DeliveryStatus != "pass_through" || result.DebugCode == "" {
-		t.Fatalf("unexpected otp result: %#v", result)
-	}
-	challenge, err := store.FindLatestChallenge(context.Background(), "+8618013813909", time.Now().UTC())
-	if err != nil {
-		t.Fatalf("find challenge: %v", err)
-	}
-	if challenge == nil || challenge.Status != OtpChallengeStatusActive {
-		t.Fatalf("challenge not active: %#v", challenge)
-	}
-	if err := svc.verifyOtp(context.Background(), "+8618013813909", "wrong-code"); err != nil {
-		t.Fatalf("verify otp should skip code correctness under pass-through: %v", err)
-	}
 }
 
 func TestSendOtpProviderFailureMapsStructuredError(t *testing.T) {
@@ -96,9 +71,9 @@ func TestSendOtpProviderFailureMapsStructuredError(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		nil,
 		WithOtpCodeStore(allowAllOtpRateLimiter{}),
 		WithOtpChallengeStore(store),
+		WithOTPCodeSealer(testOTPCodeSealer(t)),
 		WithExternalInteractionClient(failingExternalClient{}),
 	)
 
@@ -111,7 +86,7 @@ func TestSendOtpProviderFailureMapsStructuredError(t *testing.T) {
 	}
 }
 
-func TestOtpDebugRevealDoesNotSkipCodeCorrectness(t *testing.T) {
+func TestSendOtpNeverRevealsOrBypassesCodeCorrectness(t *testing.T) {
 	store := NewMemoryOtpChallengeStore()
 	svc := NewAuthService(
 		nil,
@@ -119,20 +94,81 @@ func TestOtpDebugRevealDoesNotSkipCodeCorrectness(t *testing.T) {
 		nil,
 		nil,
 		nil,
-		nil,
 		WithOtpCodeStore(allowAllOtpRateLimiter{}),
 		WithOtpChallengeStore(store),
+		WithOTPCodeSealer(testOTPCodeSealer(t)),
 		WithExternalInteractionClient(acceptedExternalClient{}),
-		WithOtpDebugReveal(true),
 	)
 	result, err := svc.SendOtp(context.Background(), "+8618013813909", "ios-test", "ios", "1.0.0", "test")
 	if err != nil {
 		t.Fatalf("send otp: %v", err)
 	}
-	if result.DeliveryStatus != "queued" || result.DebugCode == "" {
+	if result.DeliveryStatus != "queued" {
 		t.Fatalf("unexpected otp result: %#v", result)
 	}
 	if err := svc.verifyOtp(context.Background(), "+8618013813909", "wrong-code"); err == nil {
 		t.Fatal("debug reveal must not bypass OTP code correctness")
+	}
+}
+
+func TestFixedNonProductionOTPUsesChallengeExpiryAndOneTimeConsumption(t *testing.T) {
+	store := NewMemoryOtpChallengeStore()
+	svc := NewAuthService(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		WithOtpCodeStore(allowAllOtpRateLimiter{}),
+		WithOtpChallengeStore(store),
+		WithOTPCodeSealer(testOTPCodeSealer(t)),
+		WithOTPCodeGenerator(func() (string, error) { return "123456", nil }),
+		WithExternalInteractionClient(acceptedExternalClient{}),
+	)
+	if _, err := svc.SendOtp(context.Background(), "+8618013813909", "ios-test", "ios", "1.0.0", "test"); err != nil {
+		t.Fatalf("send fixed OTP: %v", err)
+	}
+	if err := svc.verifyOtp(context.Background(), "+8618013813909", "654321"); err == nil ||
+		!strings.Contains(err.Error(), "USER.AUTH.otp_mismatch") {
+		t.Fatalf("wrong fixed OTP must be rejected, got %v", err)
+	}
+	if err := svc.verifyOtp(context.Background(), "+8618013813909", "123456"); err != nil {
+		t.Fatalf("fixed OTP must verify once: %v", err)
+	}
+	if err := svc.verifyOtp(context.Background(), "+8618013813909", "123456"); err == nil ||
+		!strings.Contains(err.Error(), "USER.AUTH.otp_expired") {
+		t.Fatalf("consumed fixed OTP must not be reusable, got %v", err)
+	}
+}
+
+func TestFixedNonProductionOTPLocksChallengeAfterFiveMismatches(t *testing.T) {
+	store := NewMemoryOtpChallengeStore()
+	svc := NewAuthService(
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+		WithOtpCodeStore(allowAllOtpRateLimiter{}),
+		WithOtpChallengeStore(store),
+		WithOTPCodeSealer(testOTPCodeSealer(t)),
+		WithOTPCodeGenerator(func() (string, error) { return "123456", nil }),
+		WithExternalInteractionClient(acceptedExternalClient{}),
+	)
+	if _, err := svc.SendOtp(context.Background(), "+8618013813909", "ios-test", "ios", "1.0.0", "test"); err != nil {
+		t.Fatalf("send fixed OTP: %v", err)
+	}
+	for attempt := 1; attempt <= maxOTPFailCount; attempt++ {
+		err := svc.verifyOtp(context.Background(), "+8618013813909", "654321")
+		if attempt < maxOTPFailCount && (err == nil || !strings.Contains(err.Error(), "USER.AUTH.otp_mismatch")) {
+			t.Fatalf("attempt %d must return mismatch, got %v", attempt, err)
+		}
+		if attempt == maxOTPFailCount && (err == nil || !strings.Contains(err.Error(), "USER.AUTH.otp_attempts_exceeded")) {
+			t.Fatalf("attempt %d must lock challenge, got %v", attempt, err)
+		}
+	}
+	if err := svc.verifyOtp(context.Background(), "+8618013813909", "123456"); err == nil ||
+		!strings.Contains(err.Error(), "USER.AUTH.otp_expired") {
+		t.Fatalf("locked challenge must reject the correct code, got %v", err)
 	}
 }

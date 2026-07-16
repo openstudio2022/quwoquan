@@ -6,7 +6,7 @@ import (
 )
 
 func TestAssistantM2ContractSchemasGovernance(t *testing.T) {
-	metadataDir := filepath.Join("..", "..", "contracts", "metadata")
+	metadataDir := initializeTestContractGraph(t)
 	cases := []struct {
 		domain string
 		name   string
@@ -18,7 +18,6 @@ func TestAssistantM2ContractSchemasGovernance(t *testing.T) {
 		{domain: "assistant", name: "device_context"},
 		{domain: "assistant", name: "tool_use"},
 		{domain: "assistant", name: "assistant_stream_event"},
-		{domain: "notification", name: "app_message"},
 	}
 	allowedMapFields := map[string]bool{
 		"runtime_failure.context":                            true,

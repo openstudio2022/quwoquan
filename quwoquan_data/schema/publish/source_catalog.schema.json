@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Canonical object source catalog",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "policyRevision",
+    "primaryEvidenceRef",
+    "primarySource",
+    "sources"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "quwoquan_data.object_source_catalog/1" },
+    "policyRevision": { "const": "encyclopedia-primary-v2" },
+    "primaryEvidenceRef": { "type": "string", "minLength": 1 },
+    "primarySource": { "$ref": "#/$defs/source" },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/source" }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "required": [
+        "sourceUnitId",
+        "entityName",
+        "sourceKind",
+        "extractor",
+        "canonicalUrl",
+        "sourceUrl",
+        "title",
+        "fetchedAt",
+        "snapshotHash",
+        "policyRevision",
+        "sourceUseMode",
+        "evidenceRef"
+      ],
+      "properties": {
+        "sourceUnitId": { "type": "string", "minLength": 1 },
+        "entityName": { "type": "string", "minLength": 1 },
+        "sourceKind": {
+          "enum": ["wikipedia", "baidu_baike", "sogou_baike", "toutiao_baike"]
+        },
+        "extractor": {
+          "enum": ["wikipedia_api", "baidu_baike_html", "sogou_baike_html", "toutiao_baike_html"]
+        },
+        "canonicalUrl": { "type": "string", "pattern": "^https://" },
+        "sourceUrl": { "type": "string", "pattern": "^https://" },
+        "title": { "type": "string", "minLength": 1 },
+        "fetchedAt": { "type": "string", "minLength": 1 },
+        "snapshotHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "policyRevision": { "const": "encyclopedia-primary-v2" },
+        "sourceUseMode": {
+          "enum": ["licensed_adaptation", "factual_reference_only"]
+        },
+        "evidenceRef": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

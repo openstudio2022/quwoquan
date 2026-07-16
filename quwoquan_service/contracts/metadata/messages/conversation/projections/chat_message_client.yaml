@@ -8,136 +8,107 @@ client_projection:
   dart_class: ChatMessageDto
   base_class: ""
   output_path: cloud/runtime/generated/chat/chat_message_dto.g.dart
+  strict: true
+  dart_imports:
+    - chat_message_card_dto.g.dart
   fields:
     - name: id
       dart_type: String
       nullable: false
-      source: _id
-      aliases: [_id, id, messageId]
-      default: "''"
+      source: id
 
     - name: conversationId
       dart_type: String
       nullable: false
       source: conversationId
-      aliases: [conversationId]
-      default: "''"
 
     - name: seq
       dart_type: int
       nullable: false
       source: seq
-      aliases: [seq]
-      default: "0"
 
     - name: clientMsgId
       dart_type: String
       nullable: false
       source: clientMsgId
-      aliases: [clientMsgId]
-      default: "''"
 
     - name: senderId
       dart_type: String
       nullable: false
-      source: senderSubAccountId
-      aliases: [senderSubAccountId, senderId]
-      default: "''"
+      source: senderId
 
     - name: senderName
       dart_type: String
       nullable: true
       source: senderDisplayNameSnapshot
-      aliases: [senderDisplayNameSnapshot, senderName]
-      default: "null"
 
     - name: senderAvatar
       dart_type: String
       nullable: true
       source: senderAvatarUrlSnapshot
-      aliases: [senderAvatarUrlSnapshot, senderAvatar]
-      default: "null"
-
-    - name: senderSubAccountId
-      dart_type: String
-      nullable: true
-      source: senderSubAccountId
-      aliases: [senderSubAccountId]
-      default: "null"
 
     - name: type
       dart_type: String
       nullable: false
       source: type
-      aliases: [type]
-      default: "'text'"
 
     - name: content
       dart_type: String
       nullable: true
       source: content
-      aliases: [content]
-      default: "null"
 
-    - name: mediaUrl
+    - name: mediaAssetId
       dart_type: String
       nullable: true
-      source: mediaUrl
-      aliases: [mediaUrl]
-      default: "null"
+      source: mediaAssetId
 
-    - name: media
-      dart_type: Map<String, dynamic>
+    - name: mediaDeliveryUrl
+      dart_type: String
       nullable: true
-      source: media
-      aliases: [media]
-      default: "null"
+      source: mediaDeliveryUrl
 
-    - name: cardPayload
-      dart_type: Map<String, dynamic>
+    - name: mediaType
+      dart_type: String
       nullable: true
-      source: cardPayload
-      aliases: [cardPayload]
-      default: "null"
+      source: mediaType
+
+    - name: mediaContentType
+      dart_type: String
+      nullable: true
+      source: mediaContentType
+
+    - name: mediaFileSizeBytes
+      dart_type: int
+      nullable: true
+      source: mediaFileSizeBytes
+
+    - name: card
+      dart_type: ChatMessageCardDto
+      nullable: true
+      source: card
+      map_from_string_key_class: ChatMessageCardDto
 
     - name: replyToMessageId
       dart_type: String
       nullable: true
       source: replyToMessageId
-      aliases: [replyToMessageId]
-      default: "null"
 
     - name: mentions
       dart_type: List<String>
       nullable: true
       source: mentions
-      aliases: [mentions]
-      default: "null"
 
     - name: status
       dart_type: String
       nullable: false
       source: status
-      aliases: [status, messageStatus]
-      default: "'sent'"
 
     - name: recalledAt
       dart_type: DateTime
       nullable: true
       source: recalledAt
-      aliases: [recalledAt]
-      default: "null"
-
-    - name: metadata
-      dart_type: Map<String, dynamic>
-      nullable: true
-      source: metadata
-      aliases: [metadata]
-      default: "null"
 
     - name: timestamp
       dart_type: DateTime
       nullable: true
       source: timestamp
-      aliases: [timestamp, createdAt, sentAt]
-      default: "null"

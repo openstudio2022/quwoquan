@@ -6,6 +6,9 @@ rollout_group: wave_1_copy
 acceptance_status: integration_pass
 metadata_paths:
 - social/circle
+- social/circle_behavior_fact
+- social/circle_membership
+- social/circle_post_placement
 service_names:
 - seed-box
 control_planes:
@@ -37,7 +40,7 @@ minimum_package:
     - contracts/metadata/social/circle/service.yaml
     t2:
     - services/circle-service/tests/api_integration/circle_crud_contract__api_integration_test.go
-    - services/circle-service/tests/api_integration/circle_member_contract__api_integration_test.go
+    - services/circle-service/tests/api_integration/circle_membership__api_integration_test.go
     t3:
     - contracts/metadata/social/circle/tests/e2e.yaml
     t4: []

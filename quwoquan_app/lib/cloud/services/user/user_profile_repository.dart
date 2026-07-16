@@ -5,20 +5,19 @@ import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/cloud/runtime/contract_fixture_runtime_loader.dart';
 import 'package:quwoquan_app/cloud/runtime/models/cursor_page.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_api_metadata.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/cloud_api_defaults.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_summary.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_page.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_evidence_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/author_impact_item.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/recommendation/intersection_action_hint.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_api_metadata.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/search/search_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_create_request_dto.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/user/persona_dto.g.dart';
+import 'package:quwoquan_app/cloud/runtime/generated/user/persona_management_item_wire_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/persona_update_request_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/owner_credential_row_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/profile_edit_snapshot_wire_dto.g.dart';
@@ -50,6 +49,7 @@ part 'user_profile_contract_seed_helpers.dart';
 part 'user_profile_contract_seed_helpers_interactions.dart';
 part 'user_profile_repository_helpers.dart';
 part 'user_profile_repository_contract.dart';
+part 'user_profile_repository_relationship_normalization.dart';
 part 'user_profile_repository_remote.dart';
 
 typedef _ProfileEditSnapshotOverrideMap =
@@ -116,7 +116,7 @@ class MockUserProfileRepository extends UserProfileRepository {
     );
   }
 
-  /// Mock 本人态判定（开发态约定）：'me' / contract 当前用户 / archive alias 视为本人。
+  /// Mock 本人态判定（开发态约定）：'me' 或 contract 当前用户视为本人。
   static Set<String> get _ownerLikeSubAccountIds => {
     'me',
     'fixture_user_current',
@@ -351,60 +351,6 @@ class MockUserProfileRepository extends UserProfileRepository {
   @override
   Future<List<UserLifeItem>> listUserLifeItems(String userId) async {
     return UserProfileMockData.lifeItemsFor(userId);
-  }
-
-  @override
-  Future<CursorPage<CircleDto>> listUserCirclesPage(
-    String userId, {
-    String? query,
-    String? cursor,
-    int limit = CloudApiDefaults.userCirclesLimit,
-  }) async {
-    final contractCircles = _contractProfileWireByUserId.containsKey(userId)
-        ? _contractUserCircles()
-        : const <CircleDto>[];
-    if (contractCircles.isNotEmpty) {
-      final filtered = _filterCirclesByQuery(contractCircles, query: query);
-      return _paginateItems(filtered, cursor: cursor, limit: limit);
-    }
-    final t = DateTime.parse('2025-01-01T00:00:00Z');
-    final circles = <CircleDto>[
-      CircleDto(
-        id: 'c1',
-        name: '极简摄影俱乐部',
-        coverUrl:
-            'media/image/s/mock/seed/p_1506905925346-21bda4d32df4/v1/image.jpg',
-        ownerId: userId,
-        memberCount: 2340,
-        postCount: 128,
-        createdAt: t,
-        updatedAt: t,
-      ),
-      CircleDto(
-        id: 'c2',
-        name: '旅行手账',
-        coverUrl:
-            'media/image/s/mock/seed/p_1501785888041-af3ef285b470/v1/image.jpg',
-        ownerId: userId,
-        memberCount: 1280,
-        postCount: 56,
-        createdAt: t,
-        updatedAt: t,
-      ),
-      CircleDto(
-        id: 'c3',
-        name: '咖啡品鉴',
-        coverUrl:
-            'media/image/s/mock/seed/p_1495474472287-4d71bcdd2085/v1/image.jpg',
-        ownerId: userId,
-        memberCount: 890,
-        postCount: 34,
-        createdAt: t,
-        updatedAt: t,
-      ),
-    ];
-    final filtered = _filterCirclesByQuery(circles, query: query);
-    return _paginateItems(filtered, cursor: cursor, limit: limit);
   }
 
   @override
@@ -801,16 +747,79 @@ class MockUserProfileRepository extends UserProfileRepository {
   }
 
   @override
-  Future<List<PersonaDto>> listPersonas() async {
+  Future<CursorPage<ProfileInteractionActivityViewData>>
+  listProfileShareInteractions(
+    String subAccountId, {
+    required String direction,
+    String? cursor,
+    int limit = CloudApiDefaults.pageLimit,
+  }) async {
+    final seed = ContractFixtureRuntimeLoader.contentSeedSet(
+      'profile_share_interaction_core',
+    );
+    final rawItems = seed?['profileShareInteractions'];
+    if (rawItems is! List) {
+      return const CursorPage<ProfileInteractionActivityViewData>(
+        items: <ProfileInteractionActivityViewData>[],
+      );
+    }
+    final all =
+        rawItems
+            .whereType<Map>()
+            .map((item) => item.cast<String, dynamic>())
+            .where(
+              (item) =>
+                  item['ownerSubAccountId']?.toString() == subAccountId &&
+                  item['direction']?.toString() == direction,
+            )
+            .map(
+              (item) =>
+                  ProfileInteractionActivityViewData.fromProfileInteractionActivityWire(
+                    ProfileInteractionActivityWireDto.fromMap(item),
+                  ),
+            )
+            .toList(growable: false)
+          ..sort((a, b) {
+            final byTime = (b.occurredAt ?? b.createdAt ?? DateTime(1970))
+                .compareTo(a.occurredAt ?? a.createdAt ?? DateTime(1970));
+            return byTime != 0 ? byTime : b.activityId.compareTo(a.activityId);
+          });
+    final cursorIndex = cursor == null
+        ? -1
+        : all.indexWhere((item) => item.activityId == cursor);
+    final start = cursorIndex < 0 ? 0 : cursorIndex + 1;
+    final end = (start + limit).clamp(0, all.length);
+    final pageItems = start >= all.length
+        ? const <ProfileInteractionActivityViewData>[]
+        : all.sublist(start, end);
+    return CursorPage<ProfileInteractionActivityViewData>(
+      items: pageItems,
+      nextCursor: end < all.length && pageItems.isNotEmpty
+          ? pageItems.last.activityId
+          : null,
+    );
+  }
+
+  @override
+  Future<void> markProfileShareInteractionState(
+    String subAccountId,
+    String interactionId, {
+    required String state,
+  }) async {}
+
+  @override
+  Future<List<PersonaManagementItemWireDto>> listPersonas() async {
     final contractPersonas = _contractPersonaRows();
     if (contractPersonas.isNotEmpty) {
       return contractPersonas.map(_personaDtoFromWire).toList(growable: false);
     }
-    return const <PersonaDto>[];
+    return const <PersonaManagementItemWireDto>[];
   }
 
   @override
-  Future<PersonaDto> createPersona(PersonaCreateRequestDto request) async {
+  Future<PersonaManagementItemWireDto> createPersona(
+    PersonaCreateRequestDto request,
+  ) async {
     final wire = _omitNullMapValues(request.toMap());
     final isolation = request.isolationLevel;
     final isPrivate = isolation == 'strict';
@@ -880,18 +889,6 @@ class MockUserProfileRepository extends UserProfileRepository {
       date: post.createdAt.toIso8601String(),
       desc: post.normalizedBody,
     );
-  }
-
-  static List<CircleDto> _contractUserCircles() {
-    final seed = ContractFixtureRuntimeLoader.circleSeedSet();
-    final circles = seed?['circles'];
-    if (circles is! List) {
-      return const <CircleDto>[];
-    }
-    return circles
-        .whereType<Map>()
-        .map((item) => CircleDto.fromMap(item.cast<String, dynamic>()))
-        .toList(growable: false);
   }
 
   static final Map<String, Map<String, dynamic>>

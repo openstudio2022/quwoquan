@@ -1,13 +1,13 @@
 version: 1
 domain: notification
 display_name: Notification
-template_role: backlog_candidate
-rollout_group: wave_2_backfill
+template_role: replica_ready
+rollout_group: wave_1_copy
 acceptance_status: integration_pass
 metadata_paths:
 - notification/notification
 service_names:
-- seed-box
+- notification-service
 control_planes:
   platform:
     enabled: true
@@ -36,6 +36,8 @@ minimum_package:
     - contracts/metadata/notification/notification/service.yaml
     t2:
     - ../quwoquan_app/test/local_contract/cloud/notification/notification_metadata_contract__local_contract_test.dart
+    - services/notification-service/tests/api_integration/app_message_lifecycle__api_integration_test.go
+    - services/notification-service/tests/api_integration/notification_delivery_mongo_integration__reliability__api_integration_test.go
     t3:
     - contracts/metadata/notification/notification/tests/e2e.yaml
     t4:
@@ -48,6 +50,6 @@ replication:
   source_template: content
   next_copy_targets: []
   copy_notes:
-  - Notification lacks a dedicated service implementation, so onboarding stays declarative until the domain service is carved
-    out.
+  - Notification is the second object counterexample with a dedicated service, Mongo aggregate plus transactional outbox,
+    typed App facets, external delivery ledger, rate limiting, operator metrics, and dead-letter recovery.
 blocking_gaps: []

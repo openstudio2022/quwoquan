@@ -14,7 +14,7 @@ import (
 
 func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		op, ok := resolveGeneratedOperation(r.Method, r.URL.Path)
+		op, ok := resolveGeneratedOperation(r)
 		if !ok {
 			rterr.WriteHTTPError(
 				w,
@@ -34,28 +34,36 @@ func RegisterGeneratedRoutes(mux *http.ServeMux, h *ContentHandler) {
 func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.ResponseWriter, r *http.Request) {
 	switch operation {
 	case "AbortMediaUpload":
-		h.handleNotImplemented(w, r, operation)
+		h.handleAbortMediaUpload(w, r)
+	case "BeginReportReview":
+		h.handleBeginReportReview(w, r)
 	case "BindMediaAssetsToComment":
-		h.handleNotImplemented(w, r, operation)
+		h.handleBindMediaAssetsToComment(w, r, commentIDFromPath(r.URL.Path))
 	case "BindMediaAssetsToPost":
-		h.handleNotImplemented(w, r, operation)
+		h.handleBindMediaAssetsToPost(w, r)
 	case "CompleteMediaUpload":
-		h.handleNotImplemented(w, r, operation)
+		h.handleCompleteMediaUpload(w, r)
 	case "CreateComment":
-		h.handleNotImplemented(w, r, operation)
+		h.handleCreateComment(w, r, postIDFromPath(r.URL.Path))
+	case "CreateOutboundShare":
+		h.handleCreateOutboundShare(w, r)
 	case "CreatePost":
 		h.handleCreatePost(w, r)
-	case "DeleteComment":
+	case "CreateReport":
+		h.handleCreateReport(w, r)
+	case "DecidePostModeration":
 		h.handleNotImplemented(w, r, operation)
+	case "DeleteComment":
+		h.handleDeleteComment(w, r)
 	case "DeletePost":
 		h.handleNotImplemented(w, r, operation)
 	case "GenerateArticleSummary":
 		h.handleNotImplemented(w, r, operation)
 	case "GetAppConfig":
-		h.handleNotImplemented(w, r, operation)
+		h.handleGetAppConfig(w, r)
 	case "GetAuthorImpact":
 		h.handleGetAuthorImpact(w, r)
-	case "GetCommentCountsDelta":
+	case "GetContentReactionState":
 		h.handleNotImplemented(w, r, operation)
 	case "GetCounters":
 		h.handleNotImplemented(w, r, operation)
@@ -64,83 +72,107 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 	case "GetHelperRead":
 		h.handleNotImplemented(w, r, operation)
 	case "GetMediaAsset":
-		h.handleNotImplemented(w, r, operation)
+		h.handleGetMediaAsset(w, r)
+	case "GetMediaAssetDeliveryReference":
+		h.handleGetMediaAssetDeliveryReference(w, r)
+	case "GetMediaAssetReference":
+		h.handleGetMediaAssetReference(w, r)
+	case "GetMediaUploadSession":
+		h.handleGetMediaUploadSession(w, r)
 	case "GetMyFootprint":
 		h.handleNotImplemented(w, r, operation)
 	case "GetMyIntersectionSummary":
 		h.handleGetMyIntersectionSummary(w, r)
 	case "GetObjectIntersections":
 		h.handleGetObjectIntersections(w, r)
+	case "GetOwnedMediaAsset":
+		h.handleGetOwnedMediaAsset(w, r)
 	case "GetPost":
 		h.handleGetPost(w, r)
-	case "GetReactionState":
+	case "GetPostPublicationEligibility":
 		h.handleNotImplemented(w, r, operation)
+	case "GetReport":
+		h.handleGetReport(w, r)
 	case "InitMediaUpload":
-		h.handleNotImplemented(w, r, operation)
+		h.handleInitMediaUpload(w, r)
 	case "LikePost":
 		h.handleNotImplemented(w, r, operation)
 	case "ListAuthorImpactEvidence":
 		h.handleListAuthorImpactEvidence(w, r)
 	case "ListCommentReplies":
-		h.handleNotImplemented(w, r, operation)
+		h.handleListCommentReplies(w, r)
 	case "ListComments":
-		h.handleNotImplemented(w, r, operation)
+		h.handleListComments(w, r, postIDFromPath(r.URL.Path))
 	case "ListCommentsByAuthor":
-		h.handleNotImplemented(w, r, operation)
+		h.handleListCommentsByAuthor(w, r)
 	case "ListCommentsForPostAuthor":
-		h.handleNotImplemented(w, r, operation)
+		h.handleListCommentsForPostAuthor(w, r)
 	case "ListMyIntersections":
 		h.handleListMyIntersections(w, r)
 	case "ListProfileInteractionActivitiesReceived":
-		h.handleNotImplemented(w, r, operation)
+		h.handleListProfileInteractionActivitiesReceived(w, r)
 	case "ListProfileInteractionActivitiesSent":
-		h.handleNotImplemented(w, r, operation)
+		h.handleListProfileInteractionActivitiesSent(w, r)
+	case "ListReports":
+		h.handleListReports(w, r)
 	case "ListUserPosts":
+		h.handleListUserPosts(w, r)
+	case "OpenPostModerationCase":
 		h.handleNotImplemented(w, r, operation)
-	case "MarkIntersectionsVisited":
-		h.handleMarkIntersectionsVisited(w, r)
 	case "PinComment":
-		h.handleNotImplemented(w, r, operation)
+		h.handleSetCommentPinned(w, r, true)
 	case "PromotePostToWork":
 		h.handleNotImplemented(w, r, operation)
 	case "PublishPost":
 		h.handleNotImplemented(w, r, operation)
-	case "QuoteToCircle":
-		h.handleNotImplemented(w, r, operation)
 	case "ReactToComment":
-		h.handleNotImplemented(w, r, operation)
+		h.handleReactToComment(w, r, commentIDFromPath(r.URL.Path))
+	case "RecordMediaProcessingResult":
+		h.handleRecordMediaProcessingResult(w, r)
 	case "ReportBehaviors":
 		h.handleReportBehaviors(w, r)
-	case "RepostToCircle":
-		h.handleNotImplemented(w, r, operation)
 	case "RequestOriginalImageAccess":
+		h.handleRequestOriginalImageAccess(w, r)
+	case "ResolveReport":
+		h.handleResolveReport(w, r)
+	case "ReviewPostModerationCase":
 		h.handleNotImplemented(w, r, operation)
 	case "SearchPosts":
-		h.handleNotImplemented(w, r, operation)
+		h.handleSearchPosts(w, r)
 	case "SelectAutoVideoCover":
-		h.handleNotImplemented(w, r, operation)
+		h.handleSelectAutoVideoCover(w, r)
 	case "SelectManualVideoCover":
-		h.handleNotImplemented(w, r, operation)
-	case "SharePost":
+		h.handleSelectManualVideoCover(w, r)
+	case "SupersedePostModerationCase":
 		h.handleNotImplemented(w, r, operation)
 	case "UnlikePost":
 		h.handleNotImplemented(w, r, operation)
 	case "UnpinComment":
-		h.handleNotImplemented(w, r, operation)
-	case "UnsharePost":
-		h.handleNotImplemented(w, r, operation)
+		h.handleSetCommentPinned(w, r, false)
+	case "UpdateMediaAssetAccessPolicy":
+		h.handleUpdateMediaAssetAccessPolicy(w, r)
 	case "UpdatePost":
 		h.handleUpdatePost(w, r)
-	case "UpdatePostCircles":
-		h.handleNotImplemented(w, r, operation)
 	case "UpdatePostSettings":
 		h.handleNotImplemented(w, r, operation)
+	case "UpdateProfileInteractionState":
+		h.handleUpdateProfileInteractionState(w, r)
 	default:
 		h.handleNotImplemented(w, r, operation)
 	}
 }
 
 var generatedRouteTable = []generatedRouteDef{
+	{method: "GET", pathTemplate: "/internal/v1/content/media/{mediaId}", operation: "GetOwnedMediaAsset"},
+	{method: "PATCH", pathTemplate: "/internal/v1/content/media/{mediaId}:access-policy", operation: "UpdateMediaAssetAccessPolicy"},
+	{method: "GET", pathTemplate: "/internal/v1/content/media/{mediaId}:delivery-reference", operation: "GetMediaAssetDeliveryReference"},
+	{method: "POST", pathTemplate: "/internal/v1/content/media/{mediaId}:processing-result", operation: "RecordMediaProcessingResult"},
+	{method: "GET", pathTemplate: "/internal/v1/content/media/{mediaId}:reference", operation: "GetMediaAssetReference"},
+	{method: "GET", pathTemplate: "/internal/v1/content/posts/{postId}/publication-eligibility", operation: "GetPostPublicationEligibility"},
+	{method: "POST", pathTemplate: "/internal/v1/content/posts/{postId}:moderate", operation: "DecidePostModeration"},
+	{method: "POST", pathTemplate: "/internal/v1/content/posts/{postId}:open-moderation-case", operation: "OpenPostModerationCase"},
+	{method: "POST", pathTemplate: "/internal/v1/content/posts/{postId}:review-moderation", operation: "ReviewPostModerationCase"},
+	{method: "POST", pathTemplate: "/internal/v1/content/posts/{postId}:supersede-moderation", operation: "SupersedePostModerationCase"},
 	{method: "GET", pathTemplate: "/v1/config/app", operation: "GetAppConfig"},
 	{method: "POST", pathTemplate: "/v1/content/articles/summary:generate", operation: "GenerateArticleSummary"},
 	{method: "POST", pathTemplate: "/v1/content/behaviors", operation: "ReportBehaviors"},
@@ -152,7 +184,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "GET", pathTemplate: "/v1/content/intersections", operation: "ListMyIntersections"},
 	{method: "GET", pathTemplate: "/v1/content/intersections/object", operation: "GetObjectIntersections"},
 	{method: "GET", pathTemplate: "/v1/content/intersections/summary", operation: "GetMyIntersectionSummary"},
-	{method: "POST", pathTemplate: "/v1/content/intersections/visit", operation: "MarkIntersectionsVisited"},
+	{method: "GET", pathTemplate: "/v1/content/media/uploads/{sessionId}", operation: "GetMediaUploadSession"},
 	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:abort", operation: "AbortMediaUpload"},
 	{method: "POST", pathTemplate: "/v1/content/media/uploads/{sessionId}:complete", operation: "CompleteMediaUpload"},
 	{method: "POST", pathTemplate: "/v1/content/media/uploads:init", operation: "InitMediaUpload"},
@@ -165,10 +197,8 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}", operation: "DeletePost"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}", operation: "GetPost"},
 	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}", operation: "UpdatePost"},
-	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}/circles", operation: "UpdatePostCircles"},
 	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "ListComments"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/comments", operation: "CreateComment"},
-	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/comments/counts-delta", operation: "GetCommentCountsDelta"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}", operation: "DeleteComment"},
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/pin", operation: "UnpinComment"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/comments/{commentId}/pin", operation: "PinComment"},
@@ -177,22 +207,24 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/like", operation: "UnlikePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/like", operation: "LikePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/media:bind", operation: "BindMediaAssetsToPost"},
+	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/outbound-shares", operation: "CreateOutboundShare"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/publish", operation: "PublishPost"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/quote", operation: "QuoteToCircle"},
-	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetReactionState"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/repost", operation: "RepostToCircle"},
+	{method: "GET", pathTemplate: "/v1/content/posts/{postId}/reactions", operation: "GetContentReactionState"},
 	{method: "PATCH", pathTemplate: "/v1/content/posts/{postId}/settings", operation: "UpdatePostSettings"},
-	{method: "DELETE", pathTemplate: "/v1/content/posts/{postId}/share", operation: "UnsharePost"},
-	{method: "POST", pathTemplate: "/v1/content/posts/{postId}/share", operation: "SharePost"},
 	{method: "POST", pathTemplate: "/v1/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
+	{method: "GET", pathTemplate: "/v1/content/reports", operation: "ListReports"},
+	{method: "POST", pathTemplate: "/v1/content/reports", operation: "CreateReport"},
+	{method: "GET", pathTemplate: "/v1/content/reports/{reportId}", operation: "GetReport"},
+	{method: "PATCH", pathTemplate: "/v1/content/reports/{reportId}", operation: "ResolveReport"},
+	{method: "POST", pathTemplate: "/v1/content/reports/{reportId}/review", operation: "BeginReportReview"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/author-impact", operation: "GetAuthorImpact"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/author-impact/evidence", operation: "ListAuthorImpactEvidence"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/received", operation: "ListProfileInteractionActivitiesReceived"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/sent", operation: "ListProfileInteractionActivitiesSent"},
+	{method: "PATCH", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/interactions/{interactionId}/state", operation: "UpdateProfileInteractionState"},
 	{method: "GET", pathTemplate: "/v1/content/sub-accounts/{subAccountId}/posts", operation: "ListUserPosts"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/comments", operation: "ListCommentsByAuthor"},
 	{method: "GET", pathTemplate: "/v1/content/users/me/received-comments", operation: "ListCommentsForPostAuthor"},
-	{method: "GET", pathTemplate: "/v1/orch/discovery/feed", operation: "GetFeed"},
 }
 
 type generatedRouteDef struct {
@@ -201,50 +233,96 @@ type generatedRouteDef struct {
 	operation    string
 }
 
-func resolveGeneratedOperation(method, path string) (string, bool) {
-	m := strings.ToUpper(strings.TrimSpace(method))
+func resolveGeneratedOperation(r *http.Request) (string, bool) {
+	m := strings.ToUpper(strings.TrimSpace(r.Method))
+	bestScore := -1
+	bestOperation := ""
+	var bestValues map[string]string
 	for _, route := range generatedRouteTable {
 		if route.method != m {
 			continue
 		}
-		if generatedPathMatch(route.pathTemplate, path) {
-			return route.operation, true
+		pathValues, matched := generatedPathValues(route.pathTemplate, r.URL.Path)
+		if !matched {
+			continue
+		}
+		score := generatedPathSpecificity(route.pathTemplate)
+		if score == bestScore && bestOperation != "" && bestOperation != route.operation {
+			return "", false
+		}
+		if score > bestScore {
+			bestScore = score
+			bestOperation = route.operation
+			bestValues = pathValues
 		}
 	}
-	return "", false
+	if bestOperation == "" {
+		return "", false
+	}
+	for name, value := range bestValues {
+		r.SetPathValue(name, value)
+	}
+	return bestOperation, true
 }
 
-func generatedPathMatch(templatePath, requestPath string) bool {
+func generatedPathSpecificity(templatePath string) int {
+	score := 0
+	inParameter := false
+	for _, char := range templatePath {
+		switch char {
+		case '{':
+			inParameter = true
+		case '}':
+			inParameter = false
+		default:
+			if !inParameter {
+				score++
+			}
+		}
+	}
+	return score
+}
+
+func generatedPathValues(templatePath, requestPath string) (map[string]string, bool) {
 	tParts := generatedSplitPath(templatePath)
 	rParts := generatedSplitPath(requestPath)
 	if len(tParts) != len(rParts) {
-		return false
+		return nil, false
 	}
+	values := make(map[string]string)
 	for i := range tParts {
-		if !generatedSegmentMatch(tParts[i], rParts[i]) {
-			return false
+		name, value, matched := generatedSegmentValue(tParts[i], rParts[i])
+		if !matched {
+			return nil, false
+		}
+		if name != "" {
+			values[name] = value
 		}
 	}
-	return true
+	return values, true
 }
 
-func generatedSegmentMatch(templateSegment, requestSegment string) bool {
+func generatedSegmentValue(templateSegment, requestSegment string) (string, string, bool) {
 	paramStart := strings.Index(templateSegment, "{")
 	if paramStart < 0 {
-		return templateSegment == requestSegment
+		return "", "", templateSegment == requestSegment
 	}
 	paramEndOffset := strings.Index(templateSegment[paramStart:], "}")
 	if paramEndOffset < 0 {
-		return false
+		return "", "", false
 	}
 	paramEnd := paramStart + paramEndOffset
+	name := strings.TrimSpace(templateSegment[paramStart+1 : paramEnd])
+	if name == "" {
+		return "", "", false
+	}
 	prefix := templateSegment[:paramStart]
 	suffix := templateSegment[paramEnd+1:]
 	if !strings.HasPrefix(requestSegment, prefix) || !strings.HasSuffix(requestSegment, suffix) {
-		return false
+		return "", "", false
 	}
 	value := strings.TrimSuffix(strings.TrimPrefix(requestSegment, prefix), suffix)
-	return value != ""
+	return name, value, value != ""
 }
 
 func generatedSplitPath(raw string) []string {
@@ -321,9 +399,6 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"primaryHomepageType":       {},
 		"primaryHomepageSnapshot":   {},
 		"visibility":                {},
-		"circleIds":                 {},
-		"groupId":                   {},
-		"nodeId":                    {},
 		"assistantUsePolicy":        {},
 		"sourcePostId":              {},
 		"sourceType":                {},
@@ -347,9 +422,6 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"primaryHomepageType":     {},
 		"primaryHomepageSnapshot": {},
 		"visibility":              {},
-		"circleIds":               {},
-		"groupId":                 {},
-		"nodeId":                  {},
 		"assistantUsePolicy":      {},
 	},
 	"PublishPost": {
@@ -358,13 +430,13 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"primaryHomepageType":     {},
 		"primaryHomepageSnapshot": {},
 		"visibility":              {},
-		"circleIds":               {},
-		"groupId":                 {},
-		"nodeId":                  {},
 		"assistantUsePolicy":      {},
 	},
 	"ReactToComment": {
-		"viewerReaction": {},
+		"reaction": {},
+	},
+	"ResolveReport": {
+		"resolution": {},
 	},
 	"UpdatePost": {
 		"contentType":             {},
@@ -391,9 +463,6 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"primaryHomepageType":     {},
 		"primaryHomepageSnapshot": {},
 		"visibility":              {},
-		"circleIds":               {},
-		"groupId":                 {},
-		"nodeId":                  {},
 		"assistantUsePolicy":      {},
 	},
 	"UpdatePostSettings": {
@@ -401,9 +470,6 @@ var generatedWritableFieldSetByOperation = map[string]map[string]struct{}{
 		"primaryHomepageId":       {},
 		"primaryHomepageType":     {},
 		"primaryHomepageSnapshot": {},
-		"circleIds":               {},
-		"groupId":                 {},
-		"nodeId":                  {},
 		"assistantUsePolicy":      {},
 	},
 }

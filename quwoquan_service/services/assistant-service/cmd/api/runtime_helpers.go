@@ -12,6 +12,8 @@ import (
 
 	rtgov "quwoquan_service/runtime/governance"
 	rtredis "quwoquan_service/runtime/redis"
+	"quwoquan_service/services/assistant-service/internal/runtimeconfig"
+	"quwoquan_service/services/assistant-service/internal/runtimewiring"
 )
 
 func providerAPIKey(cfg providerCfg) (string, error) {
@@ -99,76 +101,16 @@ func parseSemver(raw string) [3]int {
 	return out
 }
 
-func buildRedisRouter(cfg config) *rtredis.Router {
-	generalScene := rtredis.SceneConfig{
-		Mode:         fallbackMode(cfg.Redis.General.Mode, cfg.Redis.General.Addr, cfg.Redis.General.Addrs),
-		Addr:         cfg.Redis.General.Addr,
-		Addrs:        cfg.Redis.General.Addrs,
-		Password:     cfg.Redis.General.Password,
-		DB:           cfg.Redis.General.DB,
-		TLS:          cfg.Redis.General.TLS,
-		PoolSize:     cfg.Redis.General.Pool.Size,
-		MinIdleConns: cfg.Redis.General.Pool.MinIdle,
-	}
-	return rtredis.MustNewRouter(rtredis.RouterConfig{
-		Scenes: map[string]rtredis.SceneConfig{
-			"rec": {
-				Mode:         fallbackMode(cfg.Redis.Rec.Mode, cfg.Redis.Rec.Addr, cfg.Redis.Rec.Addrs),
-				Addr:         cfg.Redis.Rec.Addr,
-				Addrs:        cfg.Redis.Rec.Addrs,
-				Password:     cfg.Redis.Rec.Password,
-				DB:           cfg.Redis.Rec.DB,
-				TLS:          cfg.Redis.Rec.TLS,
-				PoolSize:     cfg.Redis.Rec.Pool.Size,
-				MinIdleConns: cfg.Redis.Rec.Pool.MinIdle,
-			},
-			"general":  generalScene,
-			"realtime": generalScene,
-		},
-		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
-		DefaultScene: rtredis.GeneratedDefaultScene,
-	})
-}
-
-func fallbackMode(mode string, addr string, addrs []string) string {
-	if strings.TrimSpace(mode) != "" && (strings.TrimSpace(addr) != "" || len(addrs) > 0) {
-		return mode
-	}
-	return "memory"
-}
-
-func scenarioSeedRefsFromEnv() []string {
-	raw := strings.TrimSpace(os.Getenv("ASSISTANT_SCENARIO_SEED_REFS"))
-	if raw == "" {
-		return nil
-	}
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
+func buildRedisRouter(cfg config) (*rtredis.Router, error) {
+	return runtimewiring.BuildRedisRouter(cfg)
 }
 
 func isValidAppEnv(env string) bool {
-	switch env {
-	case "alpha", "beta", "gamma", "prod":
-		return true
-	default:
-		return false
-	}
+	return runtimeconfig.IsValidAppEnv(env)
 }
 
 func requiresConfigVersion(env string) bool {
-	switch env {
-	case "gamma", "prod":
-		return true
-	default:
-		return false
-	}
+	return runtimeconfig.RequiresConfigVersion(env)
 }
 
 func getenvOrDefault(key, fallback string) string {

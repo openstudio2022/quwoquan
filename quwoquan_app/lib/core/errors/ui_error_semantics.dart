@@ -26,7 +26,7 @@ enum UiErrorCategory {
   backgroundAction,
 }
 
-enum UiErrorScope { page, section, dialog, global, inlineField }
+enum UiErrorScope { page, section, form, dialog, global, inlineField }
 
 enum UiErrorPresentation {
   transientNotice,
@@ -35,6 +35,7 @@ enum UiErrorPresentation {
   sectionSoftCard,
   actionDialog,
   gateCard,
+  formInlineCard,
   inlineField,
 }
 
@@ -42,7 +43,7 @@ enum UiErrorTone { neutral, info, caution, critical }
 
 enum UiErrorAppearanceMode { inherit, light, dark }
 
-enum UiErrorActionType { retry, login, openSettings, back, dismiss, resubmit }
+enum UiErrorActionType { retry, login, openSettings, dismiss, resubmit }
 
 class UiErrorAction {
   const UiErrorAction({required this.type, required this.label});
@@ -277,6 +278,9 @@ class UiErrorSemanticResolver {
     if (scope == UiErrorScope.inlineField) {
       return UiErrorPresentation.inlineField;
     }
+    if (scope == UiErrorScope.form) {
+      return UiErrorPresentation.formInlineCard;
+    }
     if (category == UiErrorCategory.authRequired ||
         category == UiErrorCategory.permissionRequired) {
       return UiErrorPresentation.gateCard;
@@ -496,7 +500,15 @@ class UiErrorSemanticResolver {
         final integrationError = IntegrationLocationErrorCode.fromCode(code);
         if (integrationError != IntegrationLocationErrorCode.unknown) {
           if (l10n != null) {
-            return integrationError.toDisplayMessage(l10n);
+            return _localizedDefaultMessage(
+              l10n,
+              zh:
+                  IntegrationLocationErrorMessages.zh[integrationError] ??
+                  UITextConstants.contentLoadSoftFailed,
+              en:
+                  IntegrationLocationErrorMessages.en[integrationError] ??
+                  UITextConstants.contentLoadSoftFailed,
+            );
           }
           return IntegrationLocationErrorMessages.zh[integrationError] ??
               UITextConstants.contentLoadSoftFailed;
@@ -758,8 +770,7 @@ class UiErrorSemanticResolver {
     required UiErrorCategory category,
     required UiErrorScope scope,
   }) {
-    if (scope == UiErrorScope.dialog ||
-        category == UiErrorCategory.authRequired) {
+    if (scope == UiErrorScope.dialog) {
       return const UiErrorAction(
         type: UiErrorActionType.dismiss,
         label: UITextConstants.cancel,
@@ -810,12 +821,14 @@ class UiErrorSemanticResolver {
     }
     return switch (error.type) {
       CloudErrorType.timeout => RuntimeFailureKind.timeout,
+      CloudErrorType.cancelled => RuntimeFailureKind.cancelled,
       CloudErrorType.network => RuntimeFailureKind.network,
       CloudErrorType.unauthorized => RuntimeFailureKind.auth,
       CloudErrorType.forbidden => RuntimeFailureKind.permission,
       CloudErrorType.notFound => RuntimeFailureKind.notFound,
       CloudErrorType.invalidResponse => RuntimeFailureKind.contract,
       CloudErrorType.server => RuntimeFailureKind.unavailable,
+      CloudErrorType.rateLimited => RuntimeFailureKind.rateLimited,
       CloudErrorType.unknown => RuntimeFailureKind.internal,
     };
   }

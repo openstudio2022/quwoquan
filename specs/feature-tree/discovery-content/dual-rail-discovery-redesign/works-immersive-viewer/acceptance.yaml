@@ -129,15 +129,20 @@ gwt_acceptance:
     - 用户在各作品内部水平滑动。
     then:
     - 图片作品使用 `components/media/image/book/ImageBookCanvas` 与 `components/media/shared/pageflip/MediaPageFlipBook` 形成物理翻书体验，不回退为 rubber-band PageView 主体验。
-    - 图片作品横滑按住时出现同源动态翻页层，正面、背面、底页三面材质齐备，翻页边界与折线可见，背面不得采样黑屏、空纹理或 loading 模糊材质。
+    - '`components/pageflip/**` 与 `ui/content/article_reader/pageflip/**` 维持已验收文章基线零差异；图片适配不得新增 `StPageFlipDeckHost`、共享 painter/partition/texture result，也不得改写文章既有 Stack、BACK replacement 与同步 `completeAnimation` 时序。'
+    - 图片通过 `MediaPageFlipBook` 复用文章同一 `StPageFlipController` scene、`StPageFlipRenderFrame`、`fold(localPosition)`、release policy、动画帧取样与 visualAngle 面选择；媒体适配层不得新增几何主线。
+    - 图片作品横滑按住时出现同源动态翻页层，正面、背面、底页三面材质齐备，翻页边界与折线可见；moving sheet 每帧只有一个完整 `RawImage` 材质面，不得出现重叠的第二翻页平面。
     - 图片书默认仍提供原生翻书体验；普通图片左右淡入/页态更新只在系统 Reduce Motion / `MediaQueryData.disableAnimations` 开启时作为替代。
-    - 图片书连续前后翻 10 次时，动态层不得黑屏、loading、瞬间换纹理、自由边或 seam 异常跳变；前翻前 `120ms` 内当前页 front 必须仍在同一 moving sheet 随手指离场，后翻前 `120ms` 内上一页 front 必须仍在同一 moving sheet 可见。
-    - 图片书直接 page surface 材质生成器是 active 翻页的纹理真相源；外部图片 ready/precache 状态不得阻塞第一页中心左滑前翻，也不得在拖动中清空动态材质。
-    - 图片书前翻绑定为 `recto=current.front / verso=next.back / bottom=next.front`，后翻绑定为 `recto=prev.front / verso=prev.back / bottom=current.front`；back 必须是独立暗淡背面纹理，不得复用 front。
-    - 图片书 active sheet 的 `recto/verso` 必须在同一个 `media-pageflip-flipping-layer` 内分段/渐进呈现，不得一进入 curl 就把整张 moving sheet 离散替换为下一页/上一页背面。
+    - 图片书连续前后翻 10 次时，动态层不得黑屏、loading、瞬间换纹理、自由边或 seam 异常跳变；前翻时当前页正面连续离场，后翻时上一页正面连续进入，不得用第二张完整图片平面模拟正反面。
+    - 图片书直接 page surface 材质生成器是 active 翻页的纹理真相源；ready 输出同源 front/back pair，pending/failed 也输出无图标、无文字、无 spinner 的中性 front/back pair，不允许 failure overlay 进入 active curl。
+    - 图片书前翻绑定为 `recto=current.front / verso=current.back / bottom=next.front`，后翻绑定为 `recto=prev.front / verso=prev.back / bottom=current.front`；back 必须是对应 moving page 的独立暗淡背面纹理，不得复用 front 或绑定 `next.back`。
+    - 图片书 active sheet 只消费既有 `StPageFlipRenderFrame` 的 area、anchor、angle 与 shadow；同一个 `media-pageflip-flipping-layer` 每帧按文章 visualAngle 规则选择一张完整 front/back 材质，不得对子纹理重新布局、横向压缩或重复完整纹理起点。
     - 图片背面必须是低饱和、低对比、纸张 wash 的 photo backface，平均亮度需落在对应 front 的 `0.62..0.78`，不得保留高对比镜像图作为主要视觉。
     - 横图、竖图、极端比例图统一 rasterize 成同一书页 logicalSize，图片自然尺寸只影响 cover 裁剪，不改变翻页几何。
-    - 图片加载中只作为静态等待态；active 翻页中如图片尚未解码或加载失败，必须输出同尺寸 failure front/back page surface，表达“图片未正确加载”的状态而非黑屏、跳页或 loading 模糊页。
+    - 手势方向锁定时冻结 current、moving sheet、bottom 三面材质；拖动中 ready/failure 不得改变当前帧。目标页 pending 时翻到中性纸面，commit 后保持与 bottom 相同的冻结纸面，完全落平后才以 `160ms easeOut` 淡入已加载图片；cancel 同样延后异步更新到回弹结束。
+    - 加载超过 `300ms` 后才在静态页显示低对比 loading overlay；终态失败只在落平静态页显示 `image_not_supported`、`imageLoadFailed` 与重试。loading/failure overlay 不参与纹理捕获，失败图标不得随纸张翻动；重试成功走同一落平淡入路径。
+    - 静态页与纹理工厂必须消费同一已解码 `ui.Image` 和同一 `coverSourceRect`；当前页、翻页末帧与落页首帧的裁剪/像素一致，图片晚到不得造成落页换图、裁剪或亮度跳变。
+    - commit/cancel 到终点时必须与文章一样强制应用 animation plan 最后一帧，再同步执行 `completeAnimation` 与 page index 提交；terminal bottom 与目标静态页使用同一图片和 cover 裁剪。事务中晚到的图片状态在落平后的首个静态帧仍冻结，随后才应用并淡入。
     - 图片作品在内容下方、标题上方显示点状页态，最多 6 点且明确当前位置；单图无指示器。
     - 视频作品显示自绘极简控制行（播放态/当前时间/进度/总时长）与 `视频集 · n/m ↔` 胶囊（时间轴下、标题上）；无点状指示器；单视频无胶囊；无平台默认控制层。
     - 文章作品使用深色纸张阅读，页码 `n / m` 位于正文后、作者栏前，chevron 可切页；顶部无页码。
@@ -145,18 +150,21 @@ gwt_acceptance:
     - 图片书与文章浏览器的前/后翻方向只由累计横向位移决定：左滑前翻、右滑后翻；起手左右半区不得参与方向判定。
     - 图片书与文章浏览器必须共享同一 pointer 级手势采样层，统一单指追踪、delta、velocity 与 start/update/end/cancel 语义；Work Browser 父级是沉浸手势仲裁器的唯一坐标源，图片书/文章子级只能消费 intent 结果并用本地坐标驱动各自 pageflip fold，不得父子用不同 localPosition 同时 update 同一 controller。
     - 斜向手势在 preview 阶段不得冻结父级竖向作品流；只有锁定横向翻页或横向边界回弹后才阻断上下切作品。
-    - 图片书运动曲线默认使用舒适 profile：drag travel factor 为 `1.0`，前 `24px` 只做浅 edge lift；释放动画使用 ease-out 连续采样，不得通过线性 `round()` 离散跳帧。
+    - 图片书直接沿用文章的 `controller.fold(localPosition)` 拖动映射与按 animation plan index `round()` 的帧取样，不维护媒体专用 travel factor、edge-lift 映射或 release sampler。
     - 翻页释放动画统一走共享 release policy，提交翻页时长限制在 `320ms..520ms`，取消回弹时长限制在 `220ms..360ms`，高速 fling 不得闪缩，慢速释放不得拖沓。
     - 开启系统 Reduce Motion / `MediaQueryData.disableAnimations` 时，图片书不得启动 `media-pageflip-flipping-layer`，不得使用 3D curl、镜像背面或多轴深度模拟，只允许轻量页态更新并继续同步页码。
     - 图片书通过现有 `ContentBehaviorTracker` 记录 `works_image_pageflip_motion`，字段包含 `direction`、`motionProfile`、`settleMs`、`reducedMotion`、`committed`，不新增云 API。
     done_when:
-    - local_contract 覆盖 `MediaPageFlipBook` 全屏左滑 0→1、右滑 1→0、前翻/后翻 held dynamic layer 三面 face binding、斜向拖拽 rotation 与同尺寸、直接纹理路径不被 ready=false 或加载回调打断，且 `ImageBookCanvas` 会同步当前图片页码并在第一页中心左滑立即进入跟手层。
+    - local_contract 覆盖 `MediaPageFlipBook` 全屏左滑 0→1、右滑 1→0、前翻/后翻 held dynamic layer 三面 face binding、斜向拖拽 rotation 与同尺寸，且 `ImageBookCanvas` 会同步当前图片页码并在第一页中心左滑立即进入跟手层。
     - local_contract 覆盖共享 pointer 手势层对单指 start/update/end、累计 delta 与水平 velocity 的采样，图片书与文章宿主均通过该层接收拖动事件。
     - local_contract 覆盖 `ImmersiveGestureIntentController` 同一起手区域左滑/右滑分别锁定前/后翻、纵向优势锁上下切、preview 阶段不冻结父级竖向滚动。
     - pageflip release policy 测试覆盖不同 `progress/velocity` 的 commit settle duration 均在 `320ms..520ms`、cancel settle duration 均在 `220ms..360ms`，且图片书 release 后短时间内仍保留动态翻页层。
-    - local_contract 覆盖 `MediaPageFlipBook` forward/back 同一 moving sheet 内 recto/verso 分段可见，覆盖系统 Reduce Motion 下不启动 `media-pageflip-flipping-layer`，并覆盖图片书/文章宿主不再二次写入外部 `ImmersiveGestureIntentController.update(position:)`。
-    - local_contract 覆盖 `ImageBookPageSurfaceFactory` 横图、竖图、loading、failure 四类输入均输出同尺寸非空 front/back page surface，且 back 亮度为 front 的 `0.62..0.78` 并降低饱和度；同时覆盖 `ImageBookCanvas` active texture builder 不返回 loading 材质。
+    - local_contract 覆盖 forward 绑定 `current.front/current.back/next.front`、BACK 绑定 `prev.front/prev.back/current.front`；moving sheet 只有一个完整 `RawImage`，不含纹理用 `FractionallySizedBox`，不得重复完整纹理。
+    - local_contract 覆盖 pending/failed 中性纸面、拖动中 ready/failure 帧冻结、落平首个静态帧继续冻结、随后 `160ms` 淡入、重试成功与 Reduce Motion 无 flipping layer。
+    - frozen baseline 证据证明共享 `components/pageflip/**`、文章 `ui/content/article_reader/pageflip/**`、BACK 规则与既有测试相对恢复基线零差异；BACK 主线门禁继续保护文章 replacement、bottom clip 与 moving sheet。
+    - local_contract 覆盖静态页、翻页末帧、落页首帧使用同一 cover 裁剪与像素；失败 overlay 不进入 moving sheet，`ImageBookPageSurfaceFactory` ready back 亮度为 front 的 `0.62..0.78` 并降低饱和度。
     - local_contract 覆盖 `works_image_pageflip_motion` 字段进入现有 behavior payload；widget/几何回归覆盖连续前后翻 10 次 seam/free-edge 无异常跳变、动态层不黑屏、不 loading、不瞬间换纹理。
+    - user_acceptance 覆盖 390×844、430×932 与 iPad 视口的弱网/晚到图片连续前后翻旅程；每帧最多一条 free edge 与一条 seam，无第二折面、纹理重启、默认图片图标或瞬时换图，并保留真实设备 60fps 录屏证据。
     - widget 测试覆盖 Work Browser 图片书组件接入、首图中心小幅左滑 held curl 与翻到下一张、末图继续左滑不退出、三类媒体导航状态信息位置与上限断言。
     - pageflip 测试覆盖文章深色纸张正反面材质同源。
     edge_cases:
@@ -168,10 +176,13 @@ gwt_acceptance:
     tests:
       planned:
       - command: flutter test test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart
       recorded:
       - file: quwoquan_app/test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart
       - file: quwoquan_app/test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart
-    status: completed
+      - file: quwoquan_app/test/local_contract/ui/components/pageflip/pageflip_contract__local_contract_test.dart
+      - file: quwoquan_app/test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart
+    status: pending_evidence
     test_evidence:
       primary:
       - layer: local_contract
@@ -186,6 +197,23 @@ gwt_acceptance:
         - local_contract.discovery_content.dual_rail_discovery_redesign.works_immersive_viewer.contract
         envs: *id001
     notes:
+    - '[gate_block_2026-07-15] 既有 18 个相关 local_contract 只验证 Widget/纹理存在，未覆盖重叠平面、UV 连续性与落页换图；GWT3 在单纸面、显式纹理状态、异步事务和真实设备视觉证据补齐前保持 pending_evidence。'
+    - '[recorded_command_2026-07-15] cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/pageflip/sheet_face_frame__local_contract_test.dart test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart（23 过）'
+    - '[recorded_command_2026-07-15] cd quwoquan_app && flutter test --no-pub test/user_acceptance/journeys/discovery/post/works_image_book_pageflip_journey__user_acceptance_test.dart（3 个视口、30 次完整前后翻通过）'
+    - '[recorded_command_2026-07-15] cd quwoquan_app && flutter test --no-pub test/local_contract/ui/discovery/widgets/works_immersive_viewer_widget__local_contract_test.dart --name 图片书本轮相关用例（5 过）'
+    - '[recorded_command_2026-07-15] cd quwoquan_app && flutter test --no-pub test/local_contract/ui/content/article_reader（3 过）'
+    - '[recorded_command_2026-07-15] cd quwoquan_app && flutter analyze --no-fatal-infos <touched dart files>（No issues found）'
+    - '[recorded_command_2026-07-15] python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py（OK）；make verify-app-pageflip-back-mainline（71 过）；verify_content_ui_directory_boundaries.py（passed）；make verify-app-page-horizontal-quality（OK）；make verify-test-coverage-map（OK）；make verify-agent-context-contract（OK）'
+    - '[recorded_failure_unrelated_2026-07-15] python3 quwoquan_app/scripts/runtime/verify_file_line_budget.py 失败于 search_network_results_page_state.dart 1007 > 1000 与 intersection_hydration.go 1511 > 1361；本轮 media_page_flip_book.dart 为 1934 <= 1935。'
+    - '[recorded_failure_unrelated_2026-07-15] WorksImmersiveViewer 全文件 50 过 / 5 失败：4 个交集句 fixture/定位用例和 1 个 Android 左边缘返回 finder 用例；本轮图片翻书静态契约及 4 个图片横滑主旅程均单跑通过。'
+    - '[pending_real_device_evidence_2026-07-15] 三档 Flutter framebuffer user_acceptance 已通过；真实设备 60fps 录屏尚未落盘，因此 GWT3 保持 pending_evidence。'
+    - '[recorded_user_acceptance_failure_2026-07-16] 上轮共享 DeckHost/painter 重构虽通过结构测试，但真实浏览出现当前页正面黑屏、文章翻页回归与落页跳变；该结果证明结构测试全绿不能替代像素/真机验收，GWT3 继续 GATE_BLOCK。'
+    - '[recorded_baseline_restore_2026-07-16] 已恢复并冻结 components/pageflip/**、ui/content/article_reader/pageflip/**、BACK 规则与既有 pageflip 测试；相对当前 HEAD 零差异，且对应源码与 c7fdf2f9a 文章基线一致。'
+    - '[recorded_failure_fixed_2026-07-16] make verify-app-pageflip-back-mainline 恢复后首跑失败于 test/support/pageflip/src/widget/pageflip_widget.dart 仍引用已删除共享类型；恢复该支撑文件后复跑 71 过。'
+    - '[recorded_command_2026-07-16] 图片媒体宿主 local_contract 15 过（含前/后翻动态整页近黑像素占比 <= 0.1%）；图片材质/加载事务 local_contract 9 过（含等值 URL List 重建不释放已解码图片）；三档本地 framebuffer 连续前后翻 10 次旅程 3 过；完整 WorksImmersiveViewer 55 过；触达源码 analyze 为 No issues found。'
+    - '[recorded_failure_fixed_2026-07-16] 新增 framebuffer 像素测试首跑因直接在 fake-async 中调用 RenderRepaintBoundary.toImage 而未完成；改为仓库既有 tester.runAsync 截图/读像素方式后前后翻像素用例及全文件复跑通过。'
+    - '[pending_real_device_evidence_2026-07-16] 真实 iOS/Android 60fps 前翻、回翻、取消、快速释放及弱网晚到图片录屏尚未落盘，GWT3 保持 pending_evidence / GATE_BLOCK。'
+    - '[recorded_gate_fix_2026-07-15] acceptance standard 首跑拒绝 user_acceptance 使用 local env；已移除该正式 evidence 声明，不把本地 framebuffer 旅程冒充 gamma_local，待真实设备/gamma 证据后补录。'
     - '[recorded_command] cd quwoquan_app && flutter analyze lib/components/media/shared/pageflip/media_page_flip_book.dart lib/components/media/image/book/image_book_canvas.dart test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
     - '[recorded_command] cd quwoquan_app && flutter test --no-pub test/local_contract/ui/components/media/shared/pageflip/media_page_flip_book_widget__local_contract_test.dart test/local_contract/ui/components/media/image/book/image_book_canvas_widget__local_contract_test.dart test/ui/discovery/widgets/works_immersive_viewer_widget_test.dart'
     - '[recorded_command] python3 quwoquan_app/scripts/content/verify_pageflip_backward_mainline.py'
@@ -252,7 +280,7 @@ gwt_acceptance:
     - 无交集数据时摘要行隐藏。
     contract_refs:
     - quwoquan_service/contracts/metadata/content/post/projections/work_browser_item.yaml
-    - quwoquan_service/contracts/metadata/recommendation/rec_model/projections/intersection_reason.yaml
+    - quwoquan_service/contracts/metadata/recommendation/model_release/projections/intersection_reason.yaml
     performance_points: []
     tests:
       planned:

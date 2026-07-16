@@ -7,14 +7,18 @@
 ```mermaid
 flowchart TB
   detail["对象详情页(5类)"] --> panel["统一分享面板(share-channel-panel)"]
+  panel --> internal["站内分发(圈子/群聊/私信)"]
+  internal --> circlePlacement["circle.PlacePostInCircle"]
+  internal --> chatCard["chat card message"]
   panel --> seed["ObjectShareSeed(各领域只读视图)"]
   seed --> linkSrc["link_templates: web/deeplink/transfer/token"]
   seed --> cards["分享卡渲染(object-share-cards)"]
   cards --> wx["微信会话/朋友圈卡(WeChatLaunchBridge)"]
   cards --> poster["海报(二维码+口令)"]
   cards --> sys["系统分享/复制链接/复制口令"]
-  panel --> attr["分享归因(share-attribution-and-token)"]
-  attr --> persist["分享落库(各领域 SharePost/对应 operation)"]
+  panel --> external["站外分发(微信/朋友圈/复制/海报/更多)"]
+  external --> attr["分享归因(share-attribution-and-token)"]
+  attr --> persist["站外分享事实落库(各领域 append sink)"]
   attr --> track["埋点 shareIntent/shareClick/shareSuccess"]
 ```
 
@@ -27,7 +31,7 @@ flowchart TB
 - `title` / `subtitle` / `summary`
 - `coverUrl` / `avatarUrl`（缩略图源，按渠道裁剪比例）
 - `statsLine`（如「1.2万赞」「3.5万成员」「128 篇作品」）
-- `visibility`（public/circle_visible/private）
+- `visibility`（public/private）
 - `attributionBase`（referralSource、对象归属领域）
 
 字段来源：内容用 `ContentSurfaceView`/`PostBaseDto.primaryVisualUrl/normalizedTitle`；圈子用 `CircleDto`（name/coverUrl/description/memberCount）；用户用 `SubAccountProfileViewData`（displayName/avatarUrl/bio/postCount）；实体用 `HomepageDetail`（title/subtitle/coverUrl/categoryTags/averageRating）。
@@ -52,7 +56,16 @@ stateDiagram-v2
 ```
 
 - 微信能力位缺失（未集成 SDK/Web/鸿蒙未就绪）→ 自动降级「保存海报 + 系统分享」，面板不展示死按钮。
-- private 对象 → 渠道置灰并提示不可对外分享；circle_visible → 受控提示 + 仅生成受控预览链接。
+- private 对象 → 渠道置灰并提示不可对外分享；未知或已退役 visibility 必须严格拒绝，不能回退为 public。
+
+### 3.1 面板信息架构
+
+内容/Post 面板使用同一个底部模态，按意图分为两区：
+
+1. **分享到趣我圈**：先展示最近会话，再提供“圈子 / 群聊 / 私信”明确入口。圈子调用 `circle.circle_post_placement.PlacePostInCircle`；群聊和私信发送结构化 card message，不将圈子放置伪装成 Content 分享或聊天。
+2. **分享到其他平台**：微信好友、微信朋友圈、复制链接、保存海报和系统“更多”横向排列。微信能力位不可用时调起系统分享作为显式降级，并告知用户。
+
+面板顶部只保留标题和 X，紧凑预览卡用于确认当前分享对象；不再使用大面积模板说明和纵向设置列表占据主体。
 
 ## 4. 卡片/海报视觉系统（设计师口径，详规在 object-share-cards）
 
@@ -68,7 +81,7 @@ stateDiagram-v2
 
 ## 6. 端云一致性与测试分层
 
-- 各对象分享落库：内容复用 `content/post` 既有 `SharePost`；circle/user/entity_homepage 新增对齐 operation（在 metadata-cr 汇总）。
+- 站外成功分享经对象专属 append sink 记录不可变事实；Post 使用 `content.outbound_share_fact.RecordOutboundShare`，不修改 Post 聚合计数。圈内放置使用 CirclePostPlacement，群聊/私信使用 Chat Message。
 - Mock/Remote 一致（rule R12/R13）：分享面板与归因的 Mock 行为与 Remote 落库断言一一对应。
 - 测试层：local_contract（link_templates/口令/落库 operation 契约）、local_contract（面板/卡片/海报 widget+provider）、api_integration（分享落库端云）、user_acceptance（真机微信分享+回流端到端，planned）。
 
@@ -100,7 +113,7 @@ stateDiagram-v2
 
 - 体验矩阵 5 对象 × {已装/未装} × {微信(iOS/Android/鸿蒙)/系统浏览器/UGC平台/PC} 均有确定性路径，无静默失败。
 - 跨平台统一路由：链接/口令/中转页单一真相源 `link_templates.yaml`，能力位驱动差异（rule 14 R-XP1/R-XP2）。
-- 可见性与权限：private 不外分享、circle_visible 受控、public 完整，深链不绕过 App 权限判断。
+- 可见性与权限：private 不外分享、public 完整；未知或已退役 visibility default-deny，深链不绕过对象权限判断。
 
 ## 9. local_contract–user_acceptance 验收证据矩阵（一体性，rule R12）
 

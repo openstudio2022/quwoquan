@@ -12,7 +12,7 @@ enum TransportState {
 
 typedef RealtimeConnectionStateListener = void Function();
 
-/// Mock/Remote 共用的 realtime 连接生命周期接口。
+/// Production Remote 与 alpha/test composition 共用的连接生命周期端口。
 abstract interface class RealtimeConnectionDelegate {
   TransportState get state;
 
@@ -20,9 +20,9 @@ abstract interface class RealtimeConnectionDelegate {
 
   void onAppBackground();
 
-  void onEnterChatDetail(String conversationId);
+  void onEnterConversation(String conversationId);
 
-  void onLeaveChatDetail();
+  void onLeaveConversation();
 
   void dispose();
 }

@@ -134,23 +134,29 @@ type ReliableAsyncTask struct {
 }
 
 type NotificationOutboxRecord struct {
-	NotificationID string            `bson:"_id" json:"notificationId"`
-	EventType      string            `bson:"eventType" json:"eventType"`
-	OwnerDomain    string            `bson:"ownerDomain" json:"ownerDomain"`
-	AggregateType  string            `bson:"aggregateType" json:"aggregateType"`
-	AggregateID    string            `bson:"aggregateId" json:"aggregateId"`
-	DedupeKey      string            `bson:"dedupeKey" json:"dedupeKey"`
-	Payload        map[string]string `bson:"payload" json:"payload"`
-	RecipientIDs   []string          `bson:"recipientIds" json:"recipientIds"`
-	Status         string            `bson:"status" json:"status"`
-	Attempts       int               `bson:"attempts" json:"attempts"`
-	NextAttemptAt  time.Time         `bson:"nextAttemptAt" json:"nextAttemptAt"`
-	LeaseOwner     string            `bson:"leaseOwner,omitempty" json:"leaseOwner,omitempty"`
-	LeaseToken     string            `bson:"leaseToken,omitempty" json:"leaseToken,omitempty"`
-	LeaseUntil     time.Time         `bson:"leaseUntil,omitempty" json:"leaseUntil,omitempty"`
-	CreatedAt      time.Time         `bson:"createdAt" json:"createdAt"`
-	UpdatedAt      time.Time         `bson:"updatedAt" json:"updatedAt"`
-	LastFailure    *RuntimeFailure   `bson:"lastFailure,omitempty" json:"lastFailure,omitempty"`
+	NotificationID        string            `bson:"_id" json:"notificationId"`
+	SubjectNotificationID string            `bson:"notificationId,omitempty" json:"subjectNotificationId,omitempty"`
+	Channel               string            `bson:"channel,omitempty" json:"channel,omitempty"`
+	DestinationRef        string            `bson:"destinationRef,omitempty" json:"-"`
+	EventType             string            `bson:"eventType" json:"eventType"`
+	OwnerDomain           string            `bson:"ownerDomain" json:"ownerDomain"`
+	AggregateType         string            `bson:"aggregateType" json:"aggregateType"`
+	AggregateID           string            `bson:"aggregateId" json:"aggregateId"`
+	DedupeKey             string            `bson:"dedupeKey" json:"dedupeKey"`
+	Payload               map[string]string `bson:"payload" json:"payload"`
+	RecipientIDs          []string          `bson:"recipientIds" json:"recipientIds"`
+	Status                string            `bson:"status" json:"status"`
+	Attempts              int               `bson:"attempts" json:"attempts"`
+	NextAttemptAt         time.Time         `bson:"nextAttemptAt" json:"nextAttemptAt"`
+	LeaseOwner            string            `bson:"leaseOwner,omitempty" json:"leaseOwner,omitempty"`
+	LeaseToken            string            `bson:"leaseToken,omitempty" json:"leaseToken,omitempty"`
+	LeaseUntil            time.Time         `bson:"leaseUntil,omitempty" json:"leaseUntil,omitempty"`
+	ExternalInteractionID string            `bson:"externalInteractionId,omitempty" json:"externalInteractionId,omitempty"`
+	Version               int64             `bson:"version,omitempty" json:"version,omitempty"`
+	AttemptEpoch          int               `bson:"attemptEpoch,omitempty" json:"attemptEpoch,omitempty"`
+	CreatedAt             time.Time         `bson:"createdAt" json:"createdAt"`
+	UpdatedAt             time.Time         `bson:"updatedAt" json:"updatedAt"`
+	LastFailure           *RuntimeFailure   `bson:"lastFailure,omitempty" json:"lastFailure,omitempty"`
 }
 
 type NotificationDeliveryLedgerRecord struct {

@@ -13,6 +13,6 @@ artifacts:
   - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/spec.md
   - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/acceptance.yaml
   - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/design.md
-  - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/plan.yaml
+  - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/content.execution.planning.yaml
   - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/tasks.md
   - specs/feature-tree/runtime/runtime-client-foundation/dual-theme-page-coverage/page-dual-theme-matrix.md

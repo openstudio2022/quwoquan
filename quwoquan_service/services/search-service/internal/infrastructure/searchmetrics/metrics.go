@@ -11,12 +11,27 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
+
+	"quwoquan_service/services/search-service/internal/application"
 )
 
 const (
 	namespace = "search"
 	subsystem = "retrieve"
 )
+
+var (
+	_ application.SearchRequestObserver     = (*Recorder)(nil)
+	_ application.SearchLoadObserver        = (*Recorder)(nil)
+	_ application.RelatedTermsCacheObserver = (*Recorder)(nil)
+)
+
+// Recorder 通过 Prometheus collectors 实现应用层观测端口。
+type Recorder struct{}
+
+func NewRecorder() *Recorder {
+	return &Recorder{}
+}
 
 var (
 	// duration is the retrieve latency histogram (seconds). Buckets are tuned for
@@ -102,20 +117,9 @@ var (
 	}, []string{"result"})
 )
 
-// SearchObservation is one retrieve outcome to record across the SLI metrics.
-type SearchObservation struct {
-	Mode            string
-	Bucket          string
-	Seconds         float64
-	ResultCount     int
-	Degraded        bool
-	Err             bool
-	TermHeatApplied bool
-}
-
 // ObserveSearch records latency + request + zero-result/degrade/term-heat SLIs
 // for one search in a single call so the labels stay consistent.
-func ObserveSearch(o SearchObservation) {
+func (*Recorder) ObserveSearch(o application.SearchObservation) {
 	mode := normMode(o.Mode)
 	bucket := normLabel(o.Bucket)
 	status := "ok"
@@ -139,22 +143,22 @@ func ObserveSearch(o SearchObservation) {
 }
 
 // ObserveFeedback records one feedback intake event.
-func ObserveFeedback(eventType string) {
+func (*Recorder) ObserveFeedback(eventType string) {
 	feedback.WithLabelValues(normLabel(eventType)).Inc()
 }
 
 // ObserveLoadShed records a request shed by the backpressure boundary.
-func ObserveLoadShed(reason string) {
+func (*Recorder) ObserveLoadShed(reason string) {
 	loadShed.WithLabelValues(normLabel(reason)).Inc()
 }
 
 // SetInflight publishes the current in-flight concurrency for the saturation gauge.
-func SetInflight(n int) {
+func (*Recorder) SetInflight(n int) {
 	inflight.Set(float64(n))
 }
 
 // ObserveRelatedTermsCache records one related-terms cache lookup outcome.
-func ObserveRelatedTermsCache(hit bool) {
+func (*Recorder) ObserveRelatedTermsCache(hit bool) {
 	result := "miss"
 	if hit {
 		result = "hit"

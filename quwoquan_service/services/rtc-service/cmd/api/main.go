@@ -14,9 +14,12 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	operationsecurity "quwoquan_service/generated/operationsecurity"
+	rtmongo "quwoquan_service/internal/platform/mongodb"
+	platformredis "quwoquan_service/internal/platform/redis"
+	rtauth "quwoquan_service/runtime/auth"
 	rtgov "quwoquan_service/runtime/governance"
 	rthealth "quwoquan_service/runtime/health"
-	rtmongo "quwoquan_service/runtime/mongodb"
 	rtotel "quwoquan_service/runtime/otel"
 
 	rthttp "quwoquan_service/runtime/http"
@@ -133,9 +136,9 @@ func main() {
 	roomAdapter := livekit.NewLiveKitRoomAdapter(cfg.LiveKit.URL, cfg.LiveKit.APIKey, cfg.LiveKit.APISecret, livekit.WithHTTPClient(livekitClient))
 	domainSvc := callsession.NewCallSessionService()
 	roomSvc := application.NewRoomService(roomAdapter)
-	tokenSvc := application.NewTokenService(cfg.LiveKit.APIKey, cfg.LiveKit.APISecret)
+	tokenIssuer := livekit.NewParticipantTokenIssuer(cfg.LiveKit.APIKey, cfg.LiveKit.APISecret)
 
-	signalHandler := wsadapter.NewSignalHandler(callCache, logger)
+	signalHandler := wsadapter.NewSignalHandler(logger)
 	userServiceBaseURL := strings.TrimSpace(os.Getenv("USER_SERVICE_BASE_URL"))
 	relationshipGate := application.DenyRelationshipGate()
 	if userServiceBaseURL != "" {
@@ -148,7 +151,7 @@ func main() {
 		callCache,
 		domainSvc,
 		roomSvc,
-		tokenSvc,
+		tokenIssuer,
 		eventPublisher,
 		relationshipGate,
 		signalHandler,
@@ -165,7 +168,12 @@ func main() {
 	outerMux := http.NewServeMux()
 	outerMux.HandleFunc("/healthz", healthChecker.Handler())
 	outerMux.Handle("/metrics", rtmetrics.Handler())
-	outerMux.Handle("/", handler)
+	outerMux.Handle(
+		"/",
+		rtauth.RequireGeneratedOperationAuthorization(
+			operationsecurity.ForDomain("rtc"),
+		)(handler),
+	)
 
 	observedHandler := rthttp.NewHTTPServerMiddleware(outerMux, rthttp.HTTPServerMiddlewareConfig{
 		Service:           "rtc-service",
@@ -403,7 +411,7 @@ func buildRedisRouter(cfg config) *rtredis.Router {
 		PrefixRoutes: rtredis.GeneratedPrefixRoutes(),
 		DefaultScene: rtredis.GeneratedDefaultScene,
 	}
-	return rtredis.MustNewRouter(routerCfg)
+	return platformredis.MustNewRouter(routerCfg)
 }
 
 func toSceneConfig(r redisSceneCfg) rtredis.SceneConfig {

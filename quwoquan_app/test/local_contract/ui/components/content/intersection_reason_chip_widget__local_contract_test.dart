@@ -73,6 +73,7 @@ IntersectionReason _reason({
   String intersectionClass = 'fact',
   String actionTargetId = 'post_snow_route',
   String objectKind = 'content',
+  String displayBinding = 'explicit_link',
 }) {
   return IntersectionReason(
     dimension: dimension,
@@ -86,6 +87,7 @@ IntersectionReason _reason({
     intersectionClass: intersectionClass,
     actionTargetId: actionTargetId,
     objectKind: objectKind,
+    displayBinding: displayBinding,
     actorEvidenceTotalCount: 2,
     actorEvidenceCompleteness: 'complete',
     representativeActor: IntersectionRepresentativeActor(
@@ -183,6 +185,53 @@ void main() {
         IntersectionReasonChip.primaryText(<IntersectionReason>[
           IntersectionReason(dimension: 'relationship'),
         ]),
+        isNull,
+      );
+    });
+
+    test('host_implicit 内容卡省略当前内容宾语，但必须传入当前 post context', () {
+      final reason = _reason(
+        displayBinding: 'host_implicit',
+        primaryText: '联系人林清越等2人赞过',
+        primarySpans: <IntersectionTextSpan>[
+          IntersectionTextSpan(text: '联系人', role: 'plain'),
+          IntersectionTextSpan(
+            text: '林清越',
+            role: 'object',
+            target: _actorTarget(),
+          ),
+          IntersectionTextSpan(text: '等', role: 'plain'),
+          IntersectionTextSpan(
+            text: '2',
+            role: 'count',
+            target: IntersectionTarget(
+              objectType: 'dimension',
+              objectId: 'content',
+              objectKind: 'dimension',
+              routeId: 'myIntersections',
+            ),
+          ),
+          IntersectionTextSpan(text: '人赞过', role: 'plain'),
+        ],
+      );
+
+      expect(
+        IntersectionReasonChip.primaryText(<IntersectionReason>[reason]),
+        isNull,
+      );
+      expect(
+        IntersectionReasonChip.primaryText(<IntersectionReason>[
+          reason,
+        ], contextObjectTarget: _objectTarget()),
+        '联系人林清越等2人赞过',
+      );
+    });
+
+    test('explicit_link 不允许在宿主内容卡渲染可点击 self-target', () {
+      expect(
+        IntersectionReasonChip.primaryText(<IntersectionReason>[
+          _reason(),
+        ], contextObjectTarget: _objectTarget()),
         isNull,
       );
     });

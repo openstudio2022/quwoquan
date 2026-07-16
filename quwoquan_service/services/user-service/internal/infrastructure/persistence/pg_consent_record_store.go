@@ -7,14 +7,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	repository "quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 type PgConsentRecordStore struct {
 	pool *pgxpool.Pool
 }
 
-var _ repository.ConsentRepository = (*PgConsentRecordStore)(nil)
+var _ repository.ConsentRecordStore = (*PgConsentRecordStore)(nil)
 
 func NewPgConsentRecordStore(pool *pgxpool.Pool) *PgConsentRecordStore {
 	return &PgConsentRecordStore{pool: pool}

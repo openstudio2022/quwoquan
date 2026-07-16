@@ -70,9 +70,9 @@ func TestPost_WritableFields_UnknownFieldRejected(t *testing.T) {
 	}
 }
 
-// TestPost_NewFieldBackfill_OldRecordsStillReadable creates a post with minimal fields
-// and verifies it can still be retrieved. 这覆盖既有记录在收口后的可读性。
-func TestPost_NewFieldBackfill_OldRecordsStillReadable(t *testing.T) {
+// TestPost_MinimalCurrentRecordRemainsReadable verifies that a minimal payload
+// still receives every server-owned default during the current CreatePost command.
+func TestPost_MinimalCurrentRecordRemainsReadable(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := createPost(t, `{"contentType":"micro","body":"minimal post"}`)
 	postID, _ := created["_id"].(string)
@@ -85,7 +85,7 @@ func TestPost_NewFieldBackfill_OldRecordsStillReadable(t *testing.T) {
 	testHandler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("old minimal record should still be readable, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("minimal current record should be readable, got %d: %s", rec.Code, rec.Body.String())
 	}
 	var result map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
@@ -93,44 +93,6 @@ func TestPost_NewFieldBackfill_OldRecordsStillReadable(t *testing.T) {
 	}
 	if result["_id"] != postID {
 		t.Errorf("expected _id=%s, got %v", postID, result["_id"])
-	}
-}
-
-func TestPost_CurrentReadBackfillsIdentityAndAssistantUsePolicy(t *testing.T) {
-	t.Cleanup(func() { cleanPosts(t) })
-
-	now := time.Now().UTC()
-	_, err := mongoDB.Collection("posts").InsertOne(context.Background(), bson.M{
-		"_id":         "current_post_1",
-		"authorId":    "current_author",
-		"contentType": "micro",
-		"body":        "过往版本点滴",
-		"status":      "published",
-		"visibility":  "public",
-		"createdAt":   now,
-		"updatedAt":   now,
-		"publishedAt": now,
-	})
-	if err != nil {
-		t.Fatalf("insert current post: %v", err)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/content/posts/current_post_1", nil)
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var result map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if result["contentIdentity"] != "moment" {
-		t.Fatalf("expected contentIdentity=moment, got %v", result["contentIdentity"])
-	}
-	if result["assistantUsePolicy"] != "inherit" {
-		t.Fatalf("expected assistantUsePolicy=inherit, got %v", result["assistantUsePolicy"])
 	}
 }
 

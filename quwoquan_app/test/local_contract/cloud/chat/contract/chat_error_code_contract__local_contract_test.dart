@@ -1,11 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/chat/generated/chat_errors.g.dart';
 
-/// L1a 契约测试：ChatErrorCode — 覆盖 errors.yaml 中 10 个错误码
+/// L1a 契约测试：ChatErrorCode — 覆盖 errors.yaml 中 14 个稳定错误码
 ///
 /// 三维度覆盖：
 ///   常规契约  — 每个已知错误码正确解析，错误码解析与状态码正确
-///   兼容性契约 — 未知 code → unknown 降级；enum 数量稳定
+///   解析边界   — 未登记 code → unknown；稳定 code 集合与 metadata 对齐
 ///   异常/边界契约 — 空字符串/null-like 输入不崩溃
 void main() {
   // ──────────────────────────────────────────────────────────────────
@@ -28,6 +28,14 @@ void main() {
       final code = ChatErrorCode.fromCode('CHAT.USER.message_too_long');
       expect(code, ChatErrorCode.messageTooLong);
       expect(code.httpStatus, 400);
+    });
+
+    test('parse message_idempotency_conflict → messageIdempotencyConflict', () {
+      final code = ChatErrorCode.fromCode(
+        'CHAT.USER.message_idempotency_conflict',
+      );
+      expect(code, ChatErrorCode.messageIdempotencyConflict);
+      expect(code.httpStatus, 409);
     });
 
     test('parse rate_limited → rateLimited', () {
@@ -62,9 +70,9 @@ void main() {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // 兼容性契约
+  // 解析边界
   // ──────────────────────────────────────────────────────────────────
-  group('ChatErrorCode — 兼容性契约', () {
+  group('ChatErrorCode — 解析边界', () {
     test('unknown code string → ChatErrorCode.unknown', () {
       final code = ChatErrorCode.fromCode('CHAT.USER.nonexistent_error');
       expect(code, ChatErrorCode.unknown);
@@ -75,8 +83,15 @@ void main() {
       expect(code, ChatErrorCode.unknown);
     });
 
-    test('enum 总数 = 11 (10 已知 + 1 unknown)', () {
-      expect(ChatErrorCode.values.length, 11);
+    test('生成的稳定 code 唯一、非空且包含消息校验语义', () {
+      final stable = ChatErrorCode.values
+          .where((value) => value != ChatErrorCode.unknown)
+          .toList(growable: false);
+      final codes = stable.map((value) => value.code).toList(growable: false);
+
+      expect(codes, everyElement(isNotEmpty));
+      expect(codes.toSet(), hasLength(codes.length));
+      expect(ChatErrorCode.messageInvalid.httpStatus, 400);
     });
 
     test('每个 code 可以 round-trip：fromCode(code) == self', () {

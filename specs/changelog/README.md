@@ -34,7 +34,7 @@ CR-20260318-002-profile-chat-entry-alignment.yaml
 
 - 一个 CR 可以影响多个 `L2_journey / L3_scenario`
 - `affected_nodes` 必须显式列出受影响节点路径
-- CR 只能记录 delta，不能复制一份完整 `spec.md / design.md / acceptance.yaml / plan.yaml`
+- CR 只能记录 delta，不能复制一份完整 `spec.md / design.md / acceptance.yaml / content.execution.planning.yaml`
 - 本目录不能按 `L1/L2/L3` 重建第二套特性树
 
 ## 与节点文档的关系
@@ -42,7 +42,7 @@ CR-20260318-002-profile-chat-entry-alignment.yaml
 - `spec.md`：当前规格真相源
 - `design.md`：当前设计真相源
 - `acceptance.yaml`：当前验收真相源
-- `plan.yaml`：当前稳定实施计划真相源
+- `content.execution.planning.yaml`：当前稳定实施计划真相源
 - `CR-*.yaml`：变更过程与影响真相源
 
 ## 最小字段

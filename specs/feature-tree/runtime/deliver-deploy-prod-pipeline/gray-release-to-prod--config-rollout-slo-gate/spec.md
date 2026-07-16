@@ -6,7 +6,7 @@
 
 ## 范围
 
-- **config_release_gray_rollout.sh**：校验 step 顺序、写 `.qwq_output/local/release-state/<service>.state`
+- **config_release_gray_rollout.sh**：校验 step 顺序、写 `QWQ_STATE_ROOT/env/prod-hosted/release-state/<service>.state`
 - **config_release_slo_gate.sh**：输入 SLO 指标，输出 continue(0) / pause(10) / rollback(20)
 - **config_release_rollback.sh**：回滚到指定版本
 - **config_release_apply_stage.sh**：单步 = rollout + slo-gate + 可选回滚

@@ -1,0 +1,7 @@
+# post_author image 载体 checkpoint prompt 变量契约。
+system:
+  required: []
+  optional: []
+task:
+  required: [execution_id, content_ref, packet_path, prompt_path, draft_meta_path]
+  optional: []

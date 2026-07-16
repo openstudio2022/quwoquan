@@ -23,7 +23,7 @@ spec.md 已明确：content-service 需从"开发验证态"推进到"灰度/生�
 | 维度 | chat-service（参照） | content-service（目标） |
 |------|---------------------|----------------------|
 | 存储 | MongoDB（已启用） | MongoDB（待启用） |
-| 缓存 | — | Redis CacheableRepository |
+| 缓存 | — | PostDetailReader 的 Redis cache adapter |
 | 事件 | Redis Pub/Sub EventPublisher | Redis Pub/Sub EventPublisher |
 | 部署 | Kustomize base + 3 overlays + HPA + PDB | 复刻同结构 |
 | CI | 独立 test-chat-service Job + MongoDB service | 复刻同模式 |
@@ -35,46 +35,34 @@ spec.md 已明确：content-service 需从"开发验证态"推进到"灰度/生�
 
 ### 决策 1：存储切换策略
 
-#### 方案 A：Config-driven 条件切换（推荐）
+#### 固定方案：对象端口 + 显式 composition root
 
-main.go 检查 `mongo.uri` 配置项：有值则创建 `MongoPostStore`，无值则降级到 `PostStore`（InMemory）。保留现有 `PostRepository` 类型化接口不变。
-
-**优点**：改动最小（仅 main.go 10 行），向后兼容本地开发，无需改 PostService 签名。
-**缺点**：未使用 runtime `Factory`，缓存需手动适配。
-**适用条件**：PostRepository 接口稳定，不需要 runtime 的 generic `Repository[map[string]any]` 能力。
-
-#### 方案 B：EntityRegistry + Factory 全量迁移
-
-PostService 改为使用 `repository.Repository[map[string]any]`，通过 `Factory.Create("Post")` 获取带缓存的通用 Repository。
-
-**优点**：完全遵循 runtime 统一能力；Factory 自动装饰缓存和拦截器。
-**缺点**：需重写 PostService/FeedService/BehaviorService 的全部存储交互（从类型化 `*postmodel.Post` 改为 `map[string]any`），丧失编译时类型安全；改动量大（估算 20+ 文件）。
-**适用条件**：未来多聚合根需要统一治理时。
-
-#### 选型决策
-
-**选定方案 A**。理由：
-- `PostRepository` 接口已经正确抽象了存储，两种实现（InMemory/Mongo）可互换
-- 方案 B 的收益（Factory 自动装饰）可通过手动创建 typed 缓存适配器获得
-- 改动范围可控（仅 main.go + config + 缓存适配器），风险低
-- 方案 B 作为未来演进方向，当新增聚合根（如 Report）时再引入
+- Post command 绑定 `PostAggregateStore`，query 绑定业务命名 Reader/typed Slice。
+- `main.go` 显式创建 Mongo authoritative Store、投影 Reader 与缓存 Reader，再注入
+  Post command/query Facade。
+- 配置只提供已选 adapter 的连接参数，不能在运行期按 metadata 或存储类型选择实现。
+- local contract 可显式注入 test adapter；beta/gamma/prod 缺真实依赖时必须 fail-fast，
+  不允许自动降级到内存实现。
+- Report 等新聚合各自定义 Store/Reader 与 Facade，不抽取跨对象 CRUD 主线。
 
 ### 决策 2：缓存接入策略
 
 #### 方案 A：Typed 缓存适配器（推荐）
 
-创建 `PostCacheRepository` 实现 `PostRepository` 接口，内部持有底层 `PostRepository`（Mongo）和 `redis.Client`（general scene）。FindByID 走 read-through，Update/Delete 走 write-invalidate。
+创建 `PostDetailCacheReader` 实现 `PostDetailReader`，内部持有 authoritative
+`PostDetailReader` 与 `redis.Client`（general scene）。detail query 走 read-through，
+Update/Delete 事件触发精确失效。
 
 ```go
-type PostCacheRepository struct {
-    inner  PostRepository
+type PostDetailCacheReader struct {
+    inner  PostDetailReader
     redis  redis.Client
     ttl    int  // 300s, from storage.yaml
 }
 ```
 
-**优点**：类型安全，与现有 PostService 无缝集成，缓存 key 与 storage.yaml 一致。
-**缺点**：手动编写，不通过 runtime Factory 自动装饰。
+**优点**：类型安全，只服务 detail Slice，缓存 key 与 storage.yaml 一致。
+**缺点**：每个 Reader 需要显式实现与 conformance test。
 
 #### 方案 B：application 层手动缓存
 
@@ -161,8 +149,8 @@ Projector 通过 Redis Pub/Sub 订阅 PostCreated 事件，异步写入投影。
 
 | # | 决策 | 方案 | 理由 |
 |---|------|------|------|
-| D1 | 存储切换 | Config-driven 条件切换 | 改动小、向后兼容、PostRepository 接口已就绪 |
-| D2 | 缓存接入 | Typed PostCacheRepository | 类型安全、infrastructure 层职责、无侵入 |
+| D1 | 存储装配 | 对象端口 + 显式 composition root | owner/版本/幂等清晰，生产无自动 fallback |
+| D2 | 缓存接入 | Typed PostDetailCacheReader | 类型安全、infrastructure 层职责、精确 Slice |
 | D3 | 事件总线 | Redis Pub/Sub | 已验证、零新增依赖、当前规模适用 |
 | D4 | 投影模式 | 进程内同步投影 + 外部异步事件 | ≤100ms 延迟、无丢消息、catch 降级 |
 | D5 | 端侧补齐 | 批量一次性补齐 15 个方法 | 端点已实现、包装简单、避免多轮迭代 |
@@ -185,12 +173,10 @@ Projector 通过 Redis Pub/Sub 订阅 PostCreated 事件，异步写入投影。
 
 - **适用**：content-service Post 聚合在 dev/integration/prod 三环境的生产化运行
 - **约束**：
-  - `PostRepository` 保持类型化接口（`*postmodel.Post`），不迁移到 `Repository[map[string]any]`
-  - 缓存适配器在 infrastructure 层实现，PostService 无感知
-  - Redis 不可用时降级到直读 MongoDB（缓存适配器内 catch error）
+  - Post 写入只经 `PostAggregateStore.Load/Commit`，读取只经具名 `DetailReader/CollectionReader`，不存在 generic Repository
+  - Redis 只能作为可重建读加速器，不参与聚合正确性或形成第二写路径
   - 投影失败不阻塞创作请求（PostService 内 catch + log）
 - **局限性**：
-  - 未使用 runtime Factory 的自动装饰能力（需手动编写 PostCacheRepository）
   - Redis Pub/Sub 无持久化，subscriber 离线丢消息（可从 DB 重建投影）
   - 热点计数不在本次范围（GetCounters 直读 DB）
 

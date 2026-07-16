@@ -5,16 +5,15 @@ import (
 	"strings"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
-	"quwoquan_service/services/user-service/internal/infrastructure/cache"
+	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 type SettingService struct {
-	settings userrepo.SettingRepository
-	scache   *cache.SettingCache
+	settings userrepo.UserSettingsStore
+	scache   SettingCache
 }
 
-func NewSettingService(settings userrepo.SettingRepository, scache *cache.SettingCache) *SettingService {
+func NewSettingService(settings userrepo.UserSettingsStore, scache SettingCache) *SettingService {
 	return &SettingService{settings: settings, scache: scache}
 }
 

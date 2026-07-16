@@ -13,6 +13,34 @@
 - 用户需求到领域服务、业务能力、Story 的分解规则。
 - UAT、SLO/KPI、灰度、回滚、观测和发布治理。
 - 与代码工程、metadata、测试工程、部署工程的追踪关系。
+- 以业务对象为中心的端云 Object Facade、统一公共 URL、存储无关 Data Ports、页面 Query Slice、错误恢复和三层测试合同。
+- light/dark、多屏、多端 capability、语义 token、无障碍、性能、数据预制和持续运维运营的商用准出。
+
+## 商用对象基线
+
+应用根要求每个可发布业务对象都能沿下列链路双向追踪：
+
+```text
+Journey / Scenario
+  -> Page / Surface / Query Slice
+  -> App typed Repository / generated API client
+  -> Gateway OperationDescriptor
+  -> Object Application Facade
+  -> Aggregate command 或 named Query Reader
+  -> authoritative Store / Projection / ExternalDomainPort
+  -> Event / Behavior / Recommendation / Operations
+  -> local_contract / api_integration / user_acceptance
+  -> SLO / gray / rollback / runbook
+```
+
+准入原则：
+
+- command 必须经过唯一 write owner 的聚合根；query 直接读取强类型 Slice，不为形式统一加载聚合。
+- App 只访问统一 Gateway base URL 和 generated operation，不感知服务进程、存储或内部 URL。
+- 统一存储是对象专属 AggregateStore/Reader 的生成模式，不是万能 CRUD Repository。
+- 页面必须满足主题、语义 token、多屏、多端、状态恢复、无障碍、性能和观测合同。
+- alpha/beta/gamma/prod 的测试数据、真实依赖和证据分层；prod 禁止 fixture/Mock/Memory/Noop。
+- 当前阶段不保留旧 route、DTO、Repository、shim、Deprecated 或 dual-read/dual-write；错误实现以原子切换和删除取代兼容。
 
 ## Out of Scope
 
@@ -22,6 +50,8 @@
 - 单个接口字段、错误码、路径和 DTO 设计；这些以 `quwoquan_service/contracts/metadata/**` 为真相源。
 - 临时开发计划、会话 todo、PR checklist。
 - 领域内部状态机和策略细节；这些归属对应业务能力。
+- 物理表、集合、索引和 adapter 选择；这些由对象 metadata `storage.yaml` 与 service infrastructure 持有。
+- 用 AppRoot 设计复制 operation、route、surface、错误码或对象字段；这些继续以 metadata 为唯一真相源。
 
 ## 分解规则
 

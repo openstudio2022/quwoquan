@@ -31,7 +31,7 @@ gwt_acceptance:
       recorded:
       - file: quwoquan_app/test/user_acceptance/pages/chat/chat_list/chat_list_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/chat/start_group_chat/start_group_chat_page__user_acceptance_test.dart
-      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_detail/chat_detail_page__user_acceptance_test.dart
+      - file: quwoquan_app/test/user_acceptance/pages/chat/chat_conversation/chat_conversation_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/chat/chat_settings/chat_settings_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/chat/chat_manage/chat_manage_page__user_acceptance_test.dart
       - file: quwoquan_app/test/user_acceptance/pages/chat/chat_add_members/chat_add_members_page__user_acceptance_test.dart
@@ -77,7 +77,7 @@ gwt_acceptance:
       - file: quwoquan_service/services/chat-service/tests/api_integration/conversation_settings_contract__api_integration_test.go
       - file: quwoquan_service/services/chat-service/tests/api_integration/member_management_contract__api_integration_test.go
       - file: quwoquan_app/test/api_integration/cloud/assistant/assistant_scenario_simulator__api_integration_test.dart
-      - file: quwoquan_service/services/assistant-service/tests/api_integration/assistant_mentioned_chat_integration__api_integration_test.go
+      - file: quwoquan_service/services/assistant-service/tests/local_contract/assistant_mentioned_chat_contract__local_contract_test.go
       - file: quwoquan_app/test/api_integration/cloud/assistant/assistant_skill_comparison__api_integration_test.dart
       - file: quwoquan_service/services/search-service/tests/api_integration/search_contract__api_integration_test.go
       - file: quwoquan_service/services/search-service/tests/api_integration/storage_ttl_contract__api_integration_test.go
@@ -242,7 +242,9 @@ gwt_acceptance:
         - user_acceptance.page.myQrCode.trace_context
         envs:
         - gamma_local
-        - prod_gray_initial
+        - prod
+        rollout_stages:
+        - gray_initial
       supporting:
       - layer: local_contract
         suite: gwt1_local_contract

@@ -14,7 +14,7 @@
 - 云侧 alpha reset+seed 到 assistant-service 自身 store/cache 后测真实 service/handler。
 - 端侧 beta remote 调本地 assistant-service。
 - 云侧 beta 必须真实访问模型与搜索 provider。
-- 最终报告归入 `.qwq_output/env/repo/runs/**`，由 assistant runtime smoke 和 stackctl 证据聚合；不再保留独立 report verifier 脚本。
+- 最终报告归入 `QWQ_OUTPUT_ROOT/env/repo/runs/**`，由 assistant runtime smoke 和 stackctl 证据聚合；不再保留独立 report verifier 脚本。
 
 ## 会话二：业务对象 DB Seed
 

@@ -1,0 +1,242 @@
+version: 1
+aggregate: Message
+
+entities:
+  Message:
+    description: 消息（v2 新增 seq + clientMsgId）
+    fields:
+      - name: _id
+        type: ObjectId
+        constraints: [PK]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: conversationId
+        type: ObjectId
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: seq
+        type: int64
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: per-conversation 单调递增序号（Message Mongo transaction 内分配）
+
+      - name: clientMsgId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: 客户端生成的 UUID，用于幂等去重
+
+      - name: senderId
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发送者稳定公开主体 ID（subAccountId）
+
+      - name: senderDisplayNameSnapshot
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发送者显示名快照
+
+      - name: senderAvatarUrlSnapshot
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发送者头像快照
+
+      - name: personaContextVersion
+        type: int
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+        description: 发送消息时绑定的 subAccount 上下文版本
+
+      - name: type
+        type: enum
+        enum_ref: MessageType
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: content
+        type: string
+        constraints: [NULLABLE]
+        classification: SENSITIVE
+        log_policy: mask
+        api_exposure: read
+        ops_exposure: mask
+        search_field: true
+
+      - name: mediaAssetId
+        type: string
+        constraints: [NULLABLE]
+        classification: INTERNAL
+        log_policy: hash
+        api_exposure: read_write
+        ops_exposure: read
+        description: |
+          audio/image/video/file 消息必须引用发送者自己已 ready 的 MediaAsset。
+          Message 聚合只保存该稳定引用；URL、mime、size 等交付字段由 MediaAsset
+          named Reader 产生的 ChatMessageClient projection 提供。
+
+      - name: card
+        type: object
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+        description: Message 聚合拥有的强类型卡片值对象；只允许 card 类型消息携带。
+
+      - name: replyToMessageId
+        type: ObjectId
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: mentions
+        type: "[]string"
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+      - name: status
+        type: enum
+        enum_ref: MessageStatus
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: recalledAt
+        type: timestamp
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+      - name: timestamp
+        type: timestamp
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read
+        ops_exposure: read
+
+  MessageCard:
+    description: Message 聚合内的卡片值对象；不提供独立 Store、Facade 或跨上下文访问。
+    fields:
+      - name: kind
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: title
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: subtitle
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: thumbnailUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: deeplink
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: landingUrl
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: shareText
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: message
+        type: string
+        constraints: [NULLABLE]
+        classification: PUBLIC
+        log_policy: mask
+        api_exposure: read_write
+        ops_exposure: read
+      - name: attributes
+        type: embedded_list
+        item_entity: MessageCardAttribute
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+
+  MessageCardAttribute:
+    description: 卡片的有界强类型属性；同名属性在一个卡片内唯一。
+    fields:
+      - name: name
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read
+      - name: value
+        type: string
+        constraints: [NOT_NULL]
+        classification: PUBLIC
+        log_policy: allow
+        api_exposure: read_write
+        ops_exposure: read

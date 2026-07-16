@@ -1,0 +1,59 @@
+version: 1
+aggregate: ProfileUpdateProposal
+backend: postgres
+tables:
+  profile_update_proposals:
+    entity: ProfileUpdateProposal
+    role: authoritative
+    infrastructure_only: true
+    pk: id
+    columns:
+      - { name: id, type: VARCHAR(64), constraints: [PK, NOT_NULL] }
+      - { name: persona_id, type: VARCHAR(96), constraints: [NOT_NULL] }
+      - { name: source, type: VARCHAR(32), constraints: [NOT_NULL] }
+      - { name: proposed_changes, type: JSONB, constraints: [NOT_NULL] }
+      - { name: status, type: VARCHAR(16), constraints: [NOT_NULL], default: "'pending'" }
+      - { name: reviewed_by, type: VARCHAR(96) }
+      - { name: target_persona_expected_version, type: BIGINT }
+      - { name: version, type: BIGINT, constraints: [NOT_NULL], default: "1" }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: updated_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: resolved_at, type: TIMESTAMPTZ }
+    indexes:
+      - { name: idx_profile_proposals_persona_status, columns: [persona_id, status, created_at] }
+  profile_update_proposals_command_receipts:
+    entity: ProfileUpdateProposal
+    role: authoritative
+    infrastructure_only: true
+    description: 与 aggregate state 和 outbox 在同一 postgres transaction 提交的幂等回执。
+    pk: receipt_id
+    columns:
+      - { name: receipt_id, type: VARCHAR(64), constraints: [PK, NOT_NULL] }
+      - { name: proposal_id, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: idempotency_key, type: VARCHAR(160), constraints: [NOT_NULL] }
+      - { name: command_digest, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: aggregate_version, type: BIGINT, constraints: [NOT_NULL] }
+      - { name: result_json, type: JSONB, constraints: [NOT_NULL] }
+      - { name: created_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+    unique_constraints:
+      - { name: uq_profile_proposal_receipt_key, columns: [proposal_id, idempotency_key] }
+  profile_update_proposals_outbox:
+    entity: ProfileUpdateProposal
+    role: append_only
+    infrastructure_only: true
+    description: 按 aggregate version 幂等发布并支持 replay/checkpoint。
+    pk: event_id
+    columns:
+      - { name: event_id, type: VARCHAR(96), constraints: [PK, NOT_NULL] }
+      - { name: aggregate_id, type: VARCHAR(64), constraints: [NOT_NULL] }
+      - { name: aggregate_version, type: BIGINT, constraints: [NOT_NULL] }
+      - { name: event_type, type: VARCHAR(96), constraints: [NOT_NULL] }
+      - { name: payload_json, type: JSONB, constraints: [NOT_NULL] }
+      - { name: occurred_at, type: TIMESTAMPTZ, constraints: [NOT_NULL] }
+      - { name: published_at, type: TIMESTAMPTZ }
+      - { name: retry_count, type: INTEGER, constraints: [NOT_NULL], default: "0" }
+      - { name: next_attempt_at, type: TIMESTAMPTZ, constraints: [NOT_NULL], default: NOW() }
+      - { name: last_error, type: TEXT, constraints: [NOT_NULL], default: "''" }
+    indexes:
+      - { name: idx_profile_proposal_outbox_ready, columns: [published_at, next_attempt_at, occurred_at] }
+      - { name: idx_profile_proposal_outbox_version, columns: [aggregate_id, aggregate_version], unique: true }

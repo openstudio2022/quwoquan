@@ -7,13 +7,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 // PgUserAuthStore extends pgUserAuthStoreBase with refresh-token operations.
 type PgUserAuthStore struct{ pgUserAuthStoreBase }
 
-var _ repository.UserAuthRepository = (*PgUserAuthStore)(nil)
+var _ repository.AccountSessionStore = (*PgUserAuthStore)(nil)
 
 func NewPgUserAuthStore(pool *pgxpool.Pool) *PgUserAuthStore {
 	return &PgUserAuthStore{pgUserAuthStoreBase{pool: pool}}

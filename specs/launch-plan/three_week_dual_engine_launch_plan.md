@@ -1,7 +1,7 @@
 # 三周双引擎发布项目计划书（落实跟踪版）
 
 > 用途：本文件是「三周双引擎发布」的**落实状态唯一跟踪台账**，供逐任务跟踪与建立开发/排查对话使用。
-> 关联真相源：`.cursor/plans/三周双引擎发布_ddae7322.plan.md`（原始计划，不在本文件覆盖范围内修改）、`specs/launch-plan/launch_runbook.md`、`specs/launch-plan/release_scope_whitelist.md`、`specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md`。
+> 关联真相源：`.cursor/plans/三周双引擎发布_ddae7322.content.execution.planning.md`（原始计划，不在本文件覆盖范围内修改）、`specs/launch-plan/launch_runbook.md`、`specs/launch-plan/release_scope_whitelist.md`、`specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md`。
 > 最后更新：W?（按实际编辑日回填）。
 
 ## 0. 如何使用本计划书
@@ -95,7 +95,7 @@
 - 验收/verify：双端提交清单齐备；测试账号可登录走通主旅程。
 
 #### T2.4 治理入口闭合 — ✅
-- 已落地：资料页用户级举报/拉黑接 Remote（`profile_shell_builders.dart` 经 `blockRepositoryProvider`/`reportRepositoryProvider`，登录门 + 二次确认 + 举报原因面板 `_ProfileReportReason`），相关文案补全。
+- 已落地：资料页用户级举报/拉黑接 Remote（`profile_shell_builders.dart` 经 `blockRepositoryProvider`/`userProfileContentReportCommandWriterProvider`，登录门 + 二次确认 + 举报原因面板 `_ProfileReportReason`），相关文案补全。
 - 剩余：英文本地化逐步补齐（非阻断）。
 - 负责方：研发。
 - 验收/verify：用户级举报/拉黑可真实提交；登录门覆盖。
@@ -277,7 +277,7 @@
 
 ## 8. 发布后 backlog 与 Out of Scope
 
-- 发布后 backlog：`prototype_mock_data` 清理、`AppContentRepository` 上帝接口拆分、全域埋点补齐、超大文件强拆、第三方登录与运营商原生实现、英文本地化补齐。
+- 架构状态：`AppContentRepository` 已于 2026-07-15 删除；`prototype_mock_data`、全域埋点、超大文件、第三方登录凭据与国际化仍以正式 Runtime 商用闭环规格和唯一风险清单为准。
 - 显式 Out of Scope：复杂 RTC、深度助手增强、复杂运营后台、Creator Impact 复杂权重/收益/现金、所有非首发平台化重构。
 
 ## 9. 关键剩余阻断清单（建立对话优先级）

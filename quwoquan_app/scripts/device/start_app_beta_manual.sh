@@ -5,8 +5,19 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
 APP_DIR="$ROOT_DIR/quwoquan_app"
 ASSISTANT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/assistant-service"
 CHAT_SERVICE_DIR="$ROOT_DIR/quwoquan_service/services/chat-service"
-LOG_DIR="$ROOT_DIR/.qwq_output/env/beta/local/beta-local"
+QWQ_OUTPUT_ROOT="${QWQ_OUTPUT_ROOT:-$ROOT_DIR/.qwq_output}"
+QWQ_DEPLOY_WORK_ROOT="${QWQ_DEPLOY_WORK_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/quwoquan/deploy}"
+if [[ -z "${QWQ_OBSERVABILITY_RUN_ROOT:-}" || -z "${QWQ_RUN_ROOT:-}" ]]; then
+  eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/lib/local_run.py" \
+    --env beta --target beta-local --action up --output-root "$QWQ_OUTPUT_ROOT")"
+fi
+export QWQ_OUTPUT_ROOT QWQ_DEPLOY_WORK_ROOT QWQ_OBSERVABILITY_RUN_ROOT QWQ_RUN_ROOT
+RUNTIME_CONFIG_DIR="${QWQ_DEPLOY_WORK_ROOT}/beta-local/rendered"
+CACHE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/cache"
+LOG_DIR="${QWQ_OBSERVABILITY_RUN_ROOT}/logs/service"
+REPORT="${QWQ_RUN_ROOT}/app-beta-manual-report.json"
 MANIFEST="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/app_beta_seed_manifest.json"
+BETA_LEGAL_STATIC_ROOT="${QWQ_OUTPUT_ROOT}/env/beta/release/legal-static/current/public"
 
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile beta-local --format shell-defaults)"
 eval "$(python3 "$ROOT_DIR/quwoquan_ops/cli/print_local_port_profile.py" --profile gamma-local --format shell-defaults)"
@@ -68,14 +79,17 @@ MEDIA_PREP_MODE="${BETA_MEDIA_PREP_MODE:-symlink}"
 BETA_MANUAL_LABEL="app-beta-manual"
 BETA_MANUAL_STACK_NAME="beta-local"
 BETA_MANUAL_LOG_DIR="$LOG_DIR"
+BETA_MANUAL_STATE_DIR="${QWQ_OUTPUT_ROOT}/env/beta/local/beta-local/process"
+BETA_MANUAL_RUNTIME_LOG_PROCESS="$ROOT_DIR/quwoquan_ops/cli/lib/runtime_log_process.py"
 INSTANCE_NAMESPACE="${INSTANCE_NAMESPACE:-beta-local}"
 BETA_MANUAL_OWNER_ID="${BETA_MANUAL_STACK_NAME}-$$-$(date +%s)"
-export BETA_MANUAL_OWNER_ID
+export BETA_MANUAL_OWNER_ID BETA_MANUAL_RUNTIME_LOG_PROCESS
 source "$ROOT_DIR/quwoquan_ops/cli/lib/beta_manual_lifecycle.sh"
 TLS_PROXY_NAME="quwoquan_beta_tls_proxy"
-TLS_PROXY_CADDYFILE="$LOG_DIR/beta-public-plane.Caddyfile"
-TLS_PROXY_DATA_DIR="$LOG_DIR/caddy/data"
-TLS_PROXY_CONFIG_DIR="$LOG_DIR/caddy/config"
+TLS_PROXY_CADDYFILE="$RUNTIME_CONFIG_DIR/beta-public-plane.Caddyfile"
+TLS_PROXY_DATA_VOLUME="${TLS_PROXY_DATA_VOLUME:-quwoquan_beta_local_caddy_data}"
+TLS_PROXY_CONFIG_VOLUME="${TLS_PROXY_CONFIG_VOLUME:-quwoquan_beta_local_caddy_config}"
+TLS_PROXY_CA_EXPORT="$QWQ_DEPLOY_WORK_ROOT/beta-local/certificates/root.crt"
 CONTAINER_RUNTIME=""
 CONTAINER_HOST_ALIAS=""
 
@@ -374,19 +388,17 @@ RESTARTED_FROM_PREVIOUS=0
 if [[ -f "$BETA_MANUAL_STATE_DIR/stack.env" ]] || [[ -n "$(beta_manual_port_pids "$GATEWAY_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$MEDIA_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$ASSISTANT_PORT")" ]] || [[ -n "$(beta_manual_port_pids "$CHAT_PORT")" ]]; then
   RESTARTED_FROM_PREVIOUS=1
 fi
-ASSISTANT_LOG="$LOG_DIR/assistant-service-beta.log"
-CHAT_LOG="$LOG_DIR/chat-service-beta.log"
-CHAT_SEED_LOG="$LOG_DIR/chat-seed.log"
-GATEWAY_LOG="$LOG_DIR/app-beta-gateway.log"
-MEDIA_LOG="$LOG_DIR/app-beta-media.log"
-MEDIA_DIR="$LOG_DIR/media"
+ASSISTANT_LOG="$LOG_DIR/assistant-service/local/runtime.log"
+CHAT_LOG="$LOG_DIR/chat-service/local/runtime.log"
+CHAT_SEED_LOG="$LOG_DIR/chat-seed/local/runtime.log"
+GATEWAY_LOG="$LOG_DIR/api-edge/local/runtime.log"
+MEDIA_LOG="$LOG_DIR/media-origin/local/runtime.log"
+MEDIA_DIR="$CACHE_DIR/media"
 SOURCE_MEDIA_ROOT="$ROOT_DIR/quwoquan_service/contracts/metadata/_shared/test_fixtures/media"
 CANONICAL_SOURCE_MEDIA_ROOT="$SOURCE_MEDIA_ROOT"
 if [[ -d "$SOURCE_MEDIA_ROOT/media" ]]; then
   CANONICAL_SOURCE_MEDIA_ROOT="$SOURCE_MEDIA_ROOT/media"
 fi
-REPORT="$LOG_DIR/app-beta-manual-report.json"
-
 detect_device_kind() {
   local device_id="$1"
   if [[ -z "$device_id" ]]; then
@@ -454,6 +466,12 @@ esac
 python3 "$ROOT_DIR/quwoquan_app/scripts/env/verify_app_seed_manifests.py"
 bash "$ROOT_DIR/quwoquan_app/scripts/env/build_app_env_package.sh" --env beta >/dev/null
 bash "$ROOT_DIR/quwoquan_service/scripts/runtime/build_service_env_package.sh" --service assistant-service --env beta >/dev/null
+python3 "$ROOT_DIR/quwoquan_ops/cli/stackctl.py" package --env beta --kind legal-static >/dev/null
+if [[ ! -f "$BETA_LEGAL_STATIC_ROOT/legal/user-agreement" ]]; then
+  echo "GATE_BLOCK: beta legal-static package is missing user-agreement at $BETA_LEGAL_STATIC_ROOT" >&2
+  exit 2
+fi
+mkdir -p "$RUNTIME_CONFIG_DIR" "$CACHE_DIR" "$LOG_DIR" "$QWQ_RUN_ROOT"
 
 if [[ "$RESTART_STACK" == "1" || "$CLEAN_ENV" == "1" ]]; then
   echo "[app-beta-manual] restarting managed beta stack before launch"
@@ -503,7 +521,7 @@ resolve_container_runtime() {
 
 beta_manual_prepare_tls_caddyfile() {
   resolve_container_runtime
-  mkdir -p "$TLS_PROXY_DATA_DIR" "$TLS_PROXY_CONFIG_DIR"
+  mkdir -p "$(dirname "$TLS_PROXY_CADDYFILE")"
   cat >"$TLS_PROXY_CADDYFILE" <<EOF
 {
 	admin off
@@ -526,7 +544,26 @@ beta_manual_prepare_tls_caddyfile() {
 ${PUBLIC_API_HOST},
 ${LOCAL_API_HOST} {
 	import local_tls
-	reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+	handle /legal/manifest.json {
+		header {
+			Cache-Control "public, max-age=300"
+			X-Content-Type-Options "nosniff"
+		}
+		root * /srv/legal
+		file_server
+	}
+	handle /legal/* {
+		header {
+			Cache-Control "public, max-age=300"
+			X-Content-Type-Options "nosniff"
+			Content-Type "text/html; charset=utf-8"
+		}
+		root * /srv/legal
+		file_server
+	}
+	handle {
+		reverse_proxy ${CONTAINER_HOST_ALIAS}:${CONTENT_PORT}
+	}
 }
 
 ${PUBLIC_PRODUCT_OPS_HOST},
@@ -566,8 +603,9 @@ beta_manual_start_tls_proxy() {
   "$CONTAINER_RUNTIME" run -d \
     --name "$TLS_PROXY_NAME" \
     -v "$TLS_PROXY_CADDYFILE:/etc/caddy/Caddyfile:ro" \
-    -v "$TLS_PROXY_DATA_DIR:/data" \
-    -v "$TLS_PROXY_CONFIG_DIR:/config" \
+    -v "$BETA_LEGAL_STATIC_ROOT:/srv/legal:ro" \
+    -v "$TLS_PROXY_DATA_VOLUME:/data" \
+    -v "$TLS_PROXY_CONFIG_VOLUME:/config" \
     -p "${GATEWAY_PORT}:443" \
     -p "${PRODUCT_OPS_PORT}:443" \
     -p "${MEDIA_PORT}:443" \
@@ -590,6 +628,35 @@ beta_manual_wait_https_ok() {
     fi
     sleep 0.5
   done
+}
+
+beta_manual_verify_legal_document() {
+  local host="$1"
+  local port="$2"
+  local path="$3"
+  local expected_title="$4"
+  local content_type=""
+  local body=""
+  content_type="$(
+    curl -kfsSI \
+      --resolve "${host}:${port}:127.0.0.1" \
+      "https://${host}:${port}${path}" \
+      | tr -d '\r' \
+      | awk -F ': ' 'tolower($1) == "content-type" { print tolower($2); exit }'
+  )"
+  if [[ "$content_type" != "text/html; charset=utf-8" ]]; then
+    echo "GATE_BLOCK: ${path} must return text/html; charset=utf-8, got ${content_type:-missing}" >&2
+    return 1
+  fi
+  body="$(
+    curl -kfsS \
+      --resolve "${host}:${port}:127.0.0.1" \
+      "https://${host}:${port}${path}"
+  )"
+  if [[ "$body" != *"$expected_title"* ]]; then
+    echo "GATE_BLOCK: ${path} is missing expected UTF-8 title ${expected_title}" >&2
+    return 1
+  fi
 }
 
 beta_manual_wait_https_range_ok() {
@@ -669,7 +736,7 @@ if not source.is_file():
     raise SystemExit(f"playable sample video missing: {source}")
 target.write_bytes(source.read_bytes())
 PY
-MEDIA_EDGE_LOG="$LOG_DIR/media-edge.log"
+MEDIA_EDGE_LOG="$LOG_DIR/media-edge/local/runtime.log"
 echo "[app-beta-manual] starting local media origin on :$MEDIA_ORIGIN_PORT"
 beta_manual_start_process \
   "media-origin" \
@@ -819,6 +886,9 @@ with urlopen(req, timeout=30) as resp:
 PY
 beta_manual_start_tls_proxy
 beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/healthz" "gateway public health" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_wait_https_ok "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/legal/user-agreement" "legal static user agreement" 30 || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_verify_legal_document "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/legal/user-agreement" "趣我圈用户协议" || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
+beta_manual_verify_legal_document "$PUBLIC_API_HOST" "$GATEWAY_PORT" "/legal/privacy-policy" "趣我圈隐私政策" || { echo "gateway log: $GATEWAY_LOG" >&2; exit 1; }
 beta_manual_wait_https_ok "$PUBLIC_IMAGE_HOST" "$MEDIA_PORT" "/media/image/s/archived-image/post/fixture_photo_001/v1/cover.png" "public media image route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_https_range_ok "$PUBLIC_VIDEO_HOST" "$MEDIA_PORT" "/media/video/s/archived-video/beta-sample.mp4" "public media video route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
 beta_manual_wait_https_ok "$PUBLIC_AVATAR_HOST" "$MEDIA_PORT" "/media/avatar/s/archived-avatar/user/fixture_user_current/v1/avatar.png" "public media avatar route" 30 || { echo "media edge log: $MEDIA_EDGE_LOG" >&2; echo "media origin log: $MEDIA_LOG" >&2; exit 1; }
@@ -941,17 +1011,20 @@ fi
 
 echo "[app-beta-manual] starting Flutter app on device: $FLUTTER_DEVICE_ID"
 if [[ "$DEVICE_KIND" == android_* ]]; then
-  if [[ ! -f "$TLS_PROXY_DATA_DIR/caddy/pki/authorities/local/root.crt" ]]; then
-    echo "GATE_BLOCK: beta local Android debug CA missing: $TLS_PROXY_DATA_DIR/caddy/pki/authorities/local/root.crt" >&2
+  mkdir -p "$(dirname "$TLS_PROXY_CA_EXPORT")"
+  "$CONTAINER_RUNTIME" cp "$TLS_PROXY_NAME:/data/caddy/pki/authorities/local/root.crt" "$TLS_PROXY_CA_EXPORT" >/dev/null 2>&1 || true
+  if [[ ! -f "$TLS_PROXY_CA_EXPORT" ]]; then
+    echo "GATE_BLOCK: beta local Android debug CA is not available from Caddy deployment volume" >&2
     exit 2
   fi
-  export QWQ_ANDROID_LOCAL_ENV_CA_PATH="$TLS_PROXY_DATA_DIR/caddy/pki/authorities/local/root.crt"
+  export QWQ_ANDROID_LOCAL_ENV_CA_PATH="$TLS_PROXY_CA_EXPORT"
   export QWQ_ANDROID_LOCAL_ENV_CA_REQUIRED=1
 fi
 bash "$ROOT_DIR/quwoquan_app/scripts/device/start_app_instance.sh" \
   --env beta \
   --device-id "$FLUTTER_DEVICE_ID" \
   --gateway-base-url "$GATEWAY_BASE_URL" \
+  --legal-base-url "$GATEWAY_BASE_URL/legal" \
   --media-avatar-base-url "$MEDIA_AVATAR_CDN_BASE_URL" \
   --media-image-base-url "$MEDIA_IMAGE_CDN_BASE_URL" \
   --media-video-base-url "$MEDIA_VIDEO_CDN_BASE_URL" \

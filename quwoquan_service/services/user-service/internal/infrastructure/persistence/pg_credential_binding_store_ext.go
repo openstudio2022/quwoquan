@@ -7,13 +7,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	"quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 // PgCredentialBindingStore extends pgCredentialBindingStoreBase with domain-specific queries.
 type PgCredentialBindingStore struct{ pgCredentialBindingStoreBase }
 
-var _ repository.CredentialRepository = (*PgCredentialBindingStore)(nil)
+var _ repository.CredentialBindingStore = (*PgCredentialBindingStore)(nil)
 
 func NewPgCredentialBindingStore(pool *pgxpool.Pool) *PgCredentialBindingStore {
 	return &PgCredentialBindingStore{pgCredentialBindingStoreBase{pool: pool}}

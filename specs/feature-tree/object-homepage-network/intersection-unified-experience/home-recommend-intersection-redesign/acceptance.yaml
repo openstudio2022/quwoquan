@@ -67,7 +67,7 @@ gwt_acceptance:
     - spotlight 文案口径与 intersection-definition §17 一致。
     edge_cases: []
     contract_refs:
-    - recommendation/rec_model/projections/intersection_reason.yaml
+    - recommendation/model_release/projections/intersection_reason.yaml
     performance_points: []
     tests:
       planned:

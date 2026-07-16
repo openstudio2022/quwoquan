@@ -7,32 +7,29 @@ import (
 	"strings"
 	"time"
 
-	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.opentelemetry.io/otel/attribute"
 
 	rterr "quwoquan_service/runtime/errors"
 	rtimpact "quwoquan_service/runtime/impact"
+	messaging "quwoquan_service/runtime/messaging"
 	rtobs "quwoquan_service/runtime/observability"
-	"quwoquan_service/runtime/repository"
 	rtsearch "quwoquan_service/runtime/search"
 	model "quwoquan_service/services/circle-service/internal/domain/circle/model"
-	"quwoquan_service/services/circle-service/internal/infrastructure/persistence"
 )
 
 // EventPublisher is the runtime-compatible event publisher interface.
-type EventPublisher = repository.EventPublisher
+type EventPublisher = messaging.EventPublisher
 
 type noopPublisher struct{}
 
-func (noopPublisher) Publish(_ context.Context, _ repository.DomainEvent) error { return nil }
+func (noopPublisher) Publish(_ context.Context, _ messaging.DomainEvent) error { return nil }
 
-// CircleService encapsulates circle CRUD, membership, stats, and behavior use cases.
+// CircleService encapsulates the Circle aggregate CRUD/read surface.
 type CircleService struct {
-	circles   persistence.CircleStore
-	members   persistence.MemberStore
-	files     persistence.FileStore
-	groups    persistence.GroupStore
-	feedStore persistence.FeedStore
+	records   CircleRecordStore
+	sections  CircleSectionStore
+	feedStore CircleFeedStore
+	ids       EntityIDGenerator
 	events    EventPublisher
 }
 
@@ -42,25 +39,17 @@ func WithEventPublisher(ep EventPublisher) CircleServiceOption {
 	return func(s *CircleService) { s.events = ep }
 }
 
-func WithFeedStore(fs persistence.FeedStore) CircleServiceOption {
+func WithFeedStore(fs CircleFeedStore) CircleServiceOption {
 	return func(s *CircleService) { s.feedStore = fs }
 }
 
-func WithGroupStore(gs persistence.GroupStore) CircleServiceOption {
-	return func(s *CircleService) { s.groups = gs }
-}
-
 func NewCircleService(
-	circles persistence.CircleStore,
-	members persistence.MemberStore,
-	files persistence.FileStore,
+	storage CircleStoragePorts,
 	opts ...CircleServiceOption,
 ) *CircleService {
 	s := &CircleService{
-		circles: circles,
-		members: members,
-		files:   files,
-		events:  noopPublisher{},
+		records: storage.Records, sections: storage.Sections,
+		ids: storage.IDs, events: noopPublisher{},
 	}
 	for _, o := range opts {
 		o(s)
@@ -69,7 +58,7 @@ func NewCircleService(
 }
 
 func (s *CircleService) publishEvent(ctx context.Context, eventType string, aggregateID string, payload map[string]any) {
-	s.events.Publish(ctx, repository.DomainEvent{
+	s.events.Publish(ctx, messaging.DomainEvent{
 		Type:          eventType,
 		AggregateType: "Circle",
 		AggregateID:   aggregateID,
@@ -102,7 +91,10 @@ func (s *CircleService) CreateCircle(ctx context.Context, req CreateCircleReques
 	}
 
 	now := time.Now()
-	id := bson.NewObjectID().Hex()
+	id, err := generateEntityID(s.ids)
+	if err != nil {
+		return nil, err
+	}
 
 	visibility := model.CircleVisibilityPublic
 	if req.Visibility == "private" {
@@ -124,7 +116,7 @@ func (s *CircleService) CreateCircle(ctx context.Context, req CreateCircleReques
 		OwnerID:           req.OwnerID,
 		Category:          req.Category,
 		Tags:              req.Tags,
-		MemberCount:       1,
+		MemberCount:       0,
 		Status:            model.CircleStatusActive,
 		Visibility:        visibility,
 		JoinPolicy:        joinPolicy,
@@ -141,19 +133,8 @@ func (s *CircleService) CreateCircle(ctx context.Context, req CreateCircleReques
 		UpdatedAt: now,
 	}
 
-	if err := s.circles.Create(ctx, circle); err != nil {
+	if err := s.records.Create(ctx, circle); err != nil {
 		return nil, fmt.Errorf("create circle: %w", err)
-	}
-
-	ownerMember := &model.CircleMember{
-		ID:       bson.NewObjectID().Hex(),
-		CircleID: id,
-		UserID:   req.OwnerID,
-		Role:     model.CircleMemberRoleOwner,
-		JoinedAt: now,
-	}
-	if err := s.members.Create(ctx, ownerMember); err != nil {
-		return nil, fmt.Errorf("create owner member: %w", err)
 	}
 
 	s.publishEvent(ctx, "CircleCreated", id, map[string]any{
@@ -170,7 +151,7 @@ func (s *CircleService) GetCircle(ctx context.Context, circleID string) (*model.
 	var err error
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	c, ok := s.circles.FindByID(ctx, circleID)
+	c, ok := s.records.FindByID(ctx, circleID)
 	if !ok {
 		err = rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
@@ -201,7 +182,7 @@ func (s *CircleService) ListCircles(ctx context.Context, req ListCirclesRequest)
 		attribute.Int("list.limit", req.Limit))
 	defer func() { rtobs.EndSpan(span, nil) }()
 
-	circles, cursor := s.circles.List(ctx, persistence.ListCirclesOpts{
+	circles, cursor := s.records.List(ctx, ListCirclesQuery{
 		Category:     req.Category,
 		DomainID:     req.DomainID,
 		RecommendFor: req.RecommendFor,
@@ -213,50 +194,6 @@ func (s *CircleService) ListCircles(ctx context.Context, req ListCirclesRequest)
 		circles = []model.Circle{}
 	}
 	return ListCirclesResponse{Items: circles, Cursor: cursor}
-}
-
-type ListCircleGroupsRequest struct {
-	CircleID      string
-	GroupType     string
-	Visibility    string
-	ParentGroupID string
-	NodeType      string
-	Cursor        string
-	Limit         int
-}
-
-type ListCircleGroupsResponse struct {
-	Items  []model.CircleGroup `json:"items"`
-	Cursor string              `json:"cursor,omitempty"`
-}
-
-func (s *CircleService) ListGroups(ctx context.Context, req ListCircleGroupsRequest) (_ ListCircleGroupsResponse, err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ListGroups",
-		attribute.String("circle.id", req.CircleID),
-		attribute.String("group.type", req.GroupType))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	if _, ok := s.circles.FindByID(ctx, req.CircleID); !ok {
-		return ListCircleGroupsResponse{}, rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found",
-		)
-	}
-	if s.groups == nil {
-		return ListCircleGroupsResponse{Items: []model.CircleGroup{}}, nil
-	}
-	groups, cursor := s.groups.ListByCircle(ctx, req.CircleID, persistence.ListGroupsOpts{
-		GroupType:     req.GroupType,
-		Visibility:    req.Visibility,
-		ParentGroupID: req.ParentGroupID,
-		NodeType:      req.NodeType,
-		Cursor:        req.Cursor,
-		Limit:         req.Limit,
-	})
-	if groups == nil {
-		groups = []model.CircleGroup{}
-	}
-	return ListCircleGroupsResponse{Items: groups, Cursor: cursor}, nil
 }
 
 type SearchCirclesRequest struct {
@@ -398,7 +335,7 @@ func (s *CircleService) UpdateCircle(ctx context.Context, circleID string, data 
 		attribute.String("circle.id", circleID))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	c, ok := s.circles.FindByID(ctx, circleID)
+	c, ok := s.records.FindByID(ctx, circleID)
 	if !ok {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
@@ -419,7 +356,7 @@ func (s *CircleService) UpdateCircle(ctx context.Context, circleID string, data 
 		c.Category = v
 	}
 
-	if !s.circles.Update(ctx, circleID, c) {
+	if !s.records.Update(ctx, circleID, c) {
 		return nil, fmt.Errorf("update circle failed")
 	}
 
@@ -435,148 +372,13 @@ func (s *CircleService) ArchiveCircle(ctx context.Context, circleID string) (err
 		attribute.String("circle.id", circleID))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	if !s.circles.Archive(ctx, circleID) {
+	if !s.records.Archive(ctx, circleID) {
 		return rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
 			"圈子不存在", "circle not found",
 		)
 	}
 	s.publishEvent(ctx, "CircleArchived", circleID, map[string]any{"_id": circleID, "status": "archived"})
-	return nil
-}
-
-// --- Membership ---
-
-func (s *CircleService) JoinCircle(ctx context.Context, circleID, userID string) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.JoinCircle",
-		attribute.String("circle.id", circleID),
-		attribute.String("user.id", userID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	c, ok := s.circles.FindByID(ctx, circleID)
-	if !ok {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"圈子不存在", "circle not found",
-		)
-	}
-
-	if _, exists := s.members.FindByCircleAndUser(ctx, circleID, userID); exists {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "conflict"),
-			"您已经是该圈子成员", "already a member",
-		)
-	}
-
-	if c.JoinPolicy == model.CircleJoinPolicyApproval {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "forbidden"),
-			"该圈子需要审批才能加入", "join approval required",
-		)
-	}
-
-	member := &model.CircleMember{
-		ID:       bson.NewObjectID().Hex(),
-		CircleID: circleID,
-		UserID:   userID,
-		Role:     model.CircleMemberRoleMember,
-		JoinedAt: time.Now(),
-	}
-	if err := s.members.Create(ctx, member); err != nil {
-		return fmt.Errorf("create member: %w", err)
-	}
-
-	if err := s.circles.IncrementMemberCount(ctx, circleID, 1); err != nil {
-		return fmt.Errorf("increment member count: %w", err)
-	}
-
-	s.publishEvent(ctx, "CircleMemberJoined", circleID, map[string]any{
-		"circleId": circleID, "userId": userID, "role": "member",
-	})
-	return nil
-}
-
-func (s *CircleService) LeaveCircle(ctx context.Context, circleID, userID string) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.LeaveCircle",
-		attribute.String("circle.id", circleID),
-		attribute.String("user.id", userID))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	member, ok := s.members.FindByCircleAndUser(ctx, circleID, userID)
-	if !ok {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "forbidden"),
-			"您不是该圈子成员", "not a member",
-		)
-	}
-
-	if member.Role == model.CircleMemberRoleOwner {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "forbidden"),
-			"圈主不能退出圈子", "owner cannot leave",
-		)
-	}
-
-	if !s.members.Delete(ctx, circleID, userID) {
-		return fmt.Errorf("delete member failed")
-	}
-
-	if err := s.circles.IncrementMemberCount(ctx, circleID, -1); err != nil {
-		return fmt.Errorf("decrement member count: %w", err)
-	}
-
-	s.publishEvent(ctx, "CircleMemberLeft", circleID, map[string]any{
-		"circleId": circleID, "userId": userID,
-	})
-	return nil
-}
-
-func (s *CircleService) ListMembers(ctx context.Context, circleID string, limit int, cursor string) ([]model.CircleMember, string) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ListMembers",
-		attribute.String("circle.id", circleID),
-		attribute.Int("list.limit", limit))
-	defer func() { rtobs.EndSpan(span, nil) }()
-
-	return s.members.ListByCircle(ctx, circleID, limit, cursor)
-}
-
-func (s *CircleService) ListUserCircles(ctx context.Context, userID string, limit int, cursor string) ([]model.Circle, string) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ListUserCircles",
-		attribute.String("user.id", userID),
-		attribute.Int("list.limit", limit))
-	defer func() { rtobs.EndSpan(span, nil) }()
-
-	memberships, _ := s.members.ListByUser(ctx, userID, limit, cursor)
-	var circles []model.Circle
-	for _, m := range memberships {
-		if c, ok := s.circles.FindByID(ctx, m.CircleID); ok {
-			circles = append(circles, *c)
-		}
-	}
-	var nextCursor string
-	if len(memberships) == limit && len(memberships) > 0 {
-		nextCursor = memberships[len(memberships)-1].ID
-	}
-	return circles, nextCursor
-}
-
-func (s *CircleService) UpdateMemberRole(ctx context.Context, circleID, userID string, role string) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.UpdateMemberRole",
-		attribute.String("circle.id", circleID),
-		attribute.String("member.role", role))
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	memberRole := model.CircleMemberRole(role)
-	if memberRole != model.CircleMemberRoleAdmin && memberRole != model.CircleMemberRoleMember {
-		return rterr.NewInvalidArgument(rterr.ModuleCircle, "无效的角色", "invalid role: "+role)
-	}
-
-	if !s.members.UpdateRole(ctx, circleID, userID, memberRole) {
-		return rterr.NewAppError(
-			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
-			"成员不存在", "member not found",
-		)
-	}
 	return nil
 }
 
@@ -587,7 +389,7 @@ func (s *CircleService) GetCircleStats(ctx context.Context, circleID string) (_ 
 		attribute.String("circle.id", circleID))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	c, ok := s.circles.FindByID(ctx, circleID)
+	c, ok := s.records.FindByID(ctx, circleID)
 	if !ok {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
@@ -609,58 +411,63 @@ func (s *CircleService) GetCircleImpact(ctx context.Context, circleID string) (_
 		attribute.String("circle.id", circleID))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	c, ok := s.circles.FindByID(ctx, circleID)
+	c, ok := s.records.FindByID(ctx, circleID)
 	if !ok {
 		return nil, rterr.NewAppError(
 			rterr.NewCode(rterr.ModuleCircle, rterr.KindUser, "not_found"),
 			"圈子不存在", "circle not found",
 		)
 	}
-	items := make([]map[string]any, 0, 3)
-	if c.MemberCount > 0 {
-		items = append(items, map[string]any{
-			"helpType":              rtimpact.HelpRelationship,
-			"action":                "establish_connection",
-			"intersectionDimension": "relationship",
-			"tagRef":                "",
-			"source":                "circle_members",
-			"count":                 c.MemberCount,
-			"primaryText":           rtimpact.PrimaryText(rtimpact.HelpRelationship, "establish_connection", c.MemberCount, rtimpact.ActorTA),
-		})
+	items := make([]rtimpact.Statement, 0, 1)
+	if item, complete := buildCircleMemberImpact(c); complete {
+		items = append(items, item)
 	}
-	if c.PostCount > 0 {
-		items = append(items, map[string]any{
-			"helpType":              rtimpact.HelpCommunity,
-			"action":                "start_discussion",
-			"intersectionDimension": "content",
-			"tagRef":                "",
-			"source":                "circle_posts",
-			"count":                 c.PostCount,
-			"primaryText":           rtimpact.PrimaryText(rtimpact.HelpCommunity, "start_discussion", c.PostCount, rtimpact.ActorTA),
-		})
-	}
-	if c.WeeklyActiveCount > 0 {
-		items = append(items, map[string]any{
-			"helpType":              rtimpact.HelpSpread,
-			"action":                "active_participation",
-			"intersectionDimension": "interest",
-			"tagRef":                "",
-			"source":                "circle_weekly_active",
-			"count":                 c.WeeklyActiveCount,
-			"primaryText":           rtimpact.PrimaryText(rtimpact.HelpSpread, "active_participation", c.WeeklyActiveCount, rtimpact.ActorTA),
-		})
-	}
-	total := 0
+	total := int64(0)
 	for _, item := range items {
-		if n, ok := item["count"].(int); ok {
-			total += n
-		}
+		total += item.Count
 	}
 	return map[string]any{
 		"circleId": circleID,
 		"total":    total,
 		"items":    items,
 	}, nil
+}
+
+// buildCircleMemberImpact only publishes the member fact because the owner is
+// part of that persisted member set. PostCount and WeeklyActiveCount do not
+// carry an actor evidence snapshot and therefore cannot be converted into a
+// user-facing sentence on this read path.
+func buildCircleMemberImpact(c *model.Circle) (rtimpact.Statement, bool) {
+	if c == nil {
+		return rtimpact.Statement{}, false
+	}
+	ownerID := strings.TrimSpace(c.OwnerID)
+	ownerName := strings.TrimSpace(c.OwnerDisplayNameSnapshot)
+	circleID := strings.TrimSpace(c.ID)
+	circleName := strings.TrimSpace(c.Name)
+	snapshotID := "circle:" + circleID + ":members:v1"
+	return rtimpact.BuildStatement(rtimpact.StatementEvidence{
+		HelpType:              rtimpact.HelpCommunity,
+		Action:                "join_circle",
+		IntersectionDimension: "relationship",
+		Source:                "circle_members",
+		Count:                 c.MemberCount,
+		SubtitleText:          "成员事实来自圈子成员读模型快照。",
+		ImpactID:              circleID + "_members",
+		EvidenceSnapshotID:    snapshotID,
+		RepresentativeActor: rtimpact.RepresentativeActor{
+			ActorID:         ownerID,
+			DisplayName:     ownerName,
+			RelationLabel:   "圈子主理人",
+			PrivacyState:    "visible",
+			Target:          &rtimpact.Target{ObjectType: "user", ObjectID: ownerID, ObjectKind: "person", RouteID: "profile"},
+			EvidenceRank:    1,
+			SnapshotVersion: snapshotID,
+		},
+		ObjectName:      circleName,
+		ObjectTarget:    rtimpact.Target{ObjectType: "circle", ObjectID: circleID, ObjectKind: "circle", RouteID: "circleDetail"},
+		ObjectVisualURL: strings.TrimSpace(c.IconUrl),
+	})
 }
 
 // --- Feed ---
@@ -674,7 +481,7 @@ func (s *CircleService) GetCircleFeed(ctx context.Context, circleID string, limi
 	if s.feedStore == nil {
 		return []map[string]any{}, ""
 	}
-	return s.feedStore.ListCirclePosts(ctx, circleID, persistence.ListCirclePostsOpts{
+	return s.feedStore.ListCirclePosts(ctx, circleID, ListCirclePostsQuery{
 		Sort:   sort,
 		Cursor: cursor,
 		Limit:  limit,
@@ -747,33 +554,11 @@ func (s *CircleService) UpdateSections(ctx context.Context, circleID string, sec
 		attribute.Int("sections.count", len(sections)))
 	defer func() { rtobs.EndSpan(span, err) }()
 
-	if err = s.circles.UpdateSections(ctx, circleID, sections); err != nil {
+	if err = s.sections.UpdateSections(ctx, circleID, sections); err != nil {
 		return err
 	}
 	s.publishEvent(ctx, "CircleSectionsUpdated", circleID, map[string]any{
 		"circleId": circleID, "sectionConfig": sections,
 	})
-	return nil
-}
-
-// --- Behavior ---
-
-func (s *CircleService) ReportBehavior(ctx context.Context, report map[string]any) (err error) {
-	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.ReportBehavior")
-	defer func() { rtobs.EndSpan(span, err) }()
-
-	circleID := strings.TrimSpace(fmt.Sprint(report["circleId"]))
-	userID := strings.TrimSpace(fmt.Sprint(report["userId"]))
-	if circleID != "" && userID != "" && s.members.TouchActivity(ctx, circleID, userID) {
-		activeSince := time.Now().UTC().Add(-7 * 24 * time.Hour)
-		activeCount, countErr := s.members.CountActiveSince(ctx, circleID, activeSince)
-		if countErr != nil {
-			return fmt.Errorf("count weekly active members: %w", countErr)
-		}
-		if err := s.circles.UpdateWeeklyActiveCount(ctx, circleID, activeCount); err != nil {
-			return fmt.Errorf("update weekly active count: %w", err)
-		}
-	}
-	s.publishEvent(ctx, "CircleBehaviorReported", "", report)
 	return nil
 }

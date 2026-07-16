@@ -68,8 +68,6 @@ Map<String, dynamic> postSearchItemViewToSearchHitWire(
     'authorId': item.authorId,
     'authorDisplayName': item.authorDisplayName,
     'authorAvatarUrl': item.authorAvatarUrl,
-    'circleId': item.circleId,
-    'circleName': item.circleName,
     'categoryId': item.categoryId,
     'subCategory': item.subCategory,
     'likeCount': item.likeCount,

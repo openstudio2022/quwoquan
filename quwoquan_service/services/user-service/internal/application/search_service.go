@@ -9,7 +9,7 @@ import (
 
 	rtredis "quwoquan_service/runtime/redis"
 	"quwoquan_service/services/user-service/internal/domain/user/model"
-	userrepo "quwoquan_service/services/user-service/internal/domain/user/repository"
+	userrepo "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 const (
@@ -19,14 +19,14 @@ const (
 )
 
 type SearchService struct {
-	profiles    userrepo.ProfileRepository
-	personas    userrepo.PersonaRepository
+	profiles    userrepo.UserProfileStore
+	personas    userrepo.PersonaReader
 	recentStore rtredis.Client
 }
 
 func NewSearchService(
-	profiles userrepo.ProfileRepository,
-	personas userrepo.PersonaRepository,
+	profiles userrepo.UserProfileStore,
+	personas userrepo.PersonaReader,
 	recentStore rtredis.Client,
 ) *SearchService {
 	return &SearchService{

@@ -28,7 +28,27 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_OUT = ROOT / ".qwq_output/env/gamma/local/gamma-local/search_r_s06_s1_local_gamma_report.json"
+OUTPUT_ROOT = Path(os.environ.get("QWQ_OUTPUT_ROOT", ROOT / ".qwq_output"))
+DEFAULT_OUT = (
+    OUTPUT_ROOT
+    / "env"
+    / "gamma"
+    / "observability"
+    / "search-capacity"
+    / "search_r_s06_s1_local_gamma_report.json"
+)
+DEFAULT_LOAD_DIR = OUTPUT_ROOT / "env" / "gamma" / "observability" / "search-load" / "local-gamma"
+DEFAULT_ROLLBACK_JSON = (
+    OUTPUT_ROOT
+    / "env"
+    / "gamma"
+    / "observability"
+    / "search-rollback"
+    / "search_rollback_rehearsal_report.json"
+)
+DEFAULT_ROLLBACK_MARKDOWN = (
+    OUTPUT_ROOT / "env" / "gamma" / "runs" / "search_rollback_rehearsal.md"
+)
 SEARCH_BASE = "http://127.0.0.1:19280"
 ES_BASE = "http://127.0.0.1:19430"
 
@@ -177,7 +197,7 @@ def main() -> int:
 
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    load_dir = ROOT / ".qwq_output/env/repo/runs/search-load/local-gamma"
+    load_dir = DEFAULT_LOAD_DIR
 
     report: dict = {
         "kind": "search_r_s06_s1_local_gamma_capacity",
@@ -223,8 +243,8 @@ def main() -> int:
     report["load_summary"] = load_latest_json(load_dir)
     report["repeatability"] = repeatability("成都", args.repeat)
 
-    rollback_json = ROOT / ".qwq_output/env/gamma/local/gamma-local/search_rollback_rehearsal_report.json"
-    rollback_md = ROOT / ".qwq_output/env/gamma/runs/search_rollback_rehearsal.md"
+    rollback_json = DEFAULT_ROLLBACK_JSON
+    rollback_md = DEFAULT_ROLLBACK_MARKDOWN
     report["rollback_evidence"] = {
         "json_exists": rollback_json.exists(),
         "json_path": str(rollback_json),

@@ -2,6 +2,7 @@
 // ignore_for_file: constant_identifier_names
 
 enum EntityErrorCode {
+  invalidArgument('ENTITY.USER.invalid_argument', '请求参数有误，请检查后重试', 400),
   homepageNotFound('ENTITY.USER.homepage_not_found', '主页不存在或已下线', 404),
   homepageAttachRequired('ENTITY.USER.homepage_attach_required', '口碑必须绑定一个主页', 400),
   claimMaterialMissing('ENTITY.USER.claim_material_missing', '认领材料不完整，请补充后重试', 400),
@@ -31,6 +32,7 @@ class EntityErrorMessages {
   const EntityErrorMessages._();
 
   static const Map<EntityErrorCode, String> zh = <EntityErrorCode, String>{
+    EntityErrorCode.invalidArgument: '请求参数有误，请检查后重试',
     EntityErrorCode.homepageNotFound: '主页不存在或已下线',
     EntityErrorCode.homepageAttachRequired: '口碑必须绑定一个主页',
     EntityErrorCode.claimMaterialMissing: '认领材料不完整，请补充后重试',
@@ -42,6 +44,7 @@ class EntityErrorMessages {
   };
 
   static const Map<EntityErrorCode, String> en = <EntityErrorCode, String>{
+    EntityErrorCode.invalidArgument: 'Request parameters are invalid',
     EntityErrorCode.homepageNotFound: 'Homepage not found or offline',
     EntityErrorCode.homepageAttachRequired: 'A review must be attached to one homepage',
     EntityErrorCode.claimMaterialMissing: 'Claim materials are incomplete',

@@ -6,7 +6,7 @@
     "label": { "type": "string", "description": "实体显示名（与目录第三段 name 一致）" },
     "domain": { "type": "string", "description": "实体领域（目录第一段），如 地点" },
     "type": { "type": "string", "description": "主类型单值（目录第二段）= Entity/{domain} 树一级节点名，按裁决 6 优先级表判定，如 景区" },
-    "sourceTaskId": { "type": "string", "description": "生产任务 id（control_plane/tasks 路径式 id）" },
+    "executionId": { "type": "string", "description": "生成该对象的 execution id" },
     "entityRef": { "type": "string", "description": "全路径引用 /entity/{domain}/{type}/{name}（唯一归一键，与目录路径同构）" },
     "summary": { "type": "string", "description": "事实摘要（源自底稿，不编造）" },
     "aliases": {
@@ -29,9 +29,50 @@
       "description": "可选：跨省/跨市全量地理归属（必须包含 geoTagRef 主归属）；非跨界实体缺省。物化时全量并进 tagRefs，index 分片与 geo_bucket 仍只消费 geoTagRef 单值"
     },
     "sourceRefs": { "type": "array", "items": { "type": "string" }, "description": "来源单元引用（证据链回查）" },
+    "sourceUrls": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^https://" },
+      "description": "公开、安全、规范化的直接来源 URL；不得放内部 ref"
+    },
+    "primarySource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceKind",
+        "entityName",
+        "extractor",
+        "canonicalUrl",
+        "sourceUrl",
+        "title",
+        "fetchedAt",
+        "snapshotHash",
+        "policyRevision",
+        "sourceUseMode"
+      ],
+      "properties": {
+        "sourceKind": {
+          "enum": ["wikipedia", "baidu_baike", "sogou_baike", "toutiao_baike"]
+        },
+        "entityName": { "type": "string", "minLength": 1 },
+        "extractor": {
+          "enum": ["wikipedia_api", "baidu_baike_html", "sogou_baike_html", "toutiao_baike_html"]
+        },
+        "canonicalUrl": { "type": "string", "pattern": "^https://" },
+        "sourceUrl": { "type": "string", "pattern": "^https://" },
+        "title": { "type": "string", "minLength": 1 },
+        "fetchedAt": { "type": "string", "minLength": 1 },
+        "snapshotHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "policyRevision": { "const": "encyclopedia-primary-v2" },
+        "sourceUseMode": {
+          "enum": ["licensed_adaptation", "factual_reference_only"]
+        }
+      }
+    },
     "textSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文来源单元引用" },
     "imageSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "图片来源单元引用" },
-    "authorId": { "type": "string", "description": "虚拟作者 id（creator pool 契约）" },
+    "authorId": { "type": "string", "description": "仓内 creator profile 的稳定 id" },
     "creatorProfileId": { "type": "string" },
     "creatorArchetype": { "type": "string" },
     "creatorProfileVersion": { "type": "string" },
@@ -40,5 +81,15 @@
     "authorQualitySignals": { "type": "object" },
     "updatedAt": { "type": "string" }
   },
-  "required": ["label", "domain", "type", "sourceTaskId", "entityRef", "tagRefs", "geoTagRef"]
+  "required": [
+    "label",
+    "domain",
+    "type",
+    "executionId",
+    "entityRef",
+    "tagRefs",
+    "geoTagRef",
+    "primarySource",
+    "sourceUrls"
+  ]
 }

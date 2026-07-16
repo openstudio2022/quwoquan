@@ -28,6 +28,7 @@ class _HomeImagePostCard extends StatelessWidget {
     final body = item.normalizedBody;
     final contextObjectName = title.isNotEmpty ? title : body;
     final contextObjectTarget = IntersectionTarget(
+      objectType: 'post',
       objectId: item.id,
       objectKind: 'content',
       routeId: 'workBrowser',
@@ -216,6 +217,7 @@ class _HomeVideoPostCard extends StatelessWidget {
     final body = item.normalizedBody;
     final contextObjectName = title.isNotEmpty ? title : body;
     final contextObjectTarget = IntersectionTarget(
+      objectType: 'post',
       objectId: item.id,
       objectKind: 'content',
       routeId: 'workBrowser',
@@ -340,6 +342,7 @@ class _HomeArticlePostCard extends StatelessWidget {
     final body = item.normalizedBody;
     final contextObjectName = title.isNotEmpty ? title : body;
     final contextObjectTarget = IntersectionTarget(
+      objectType: 'post',
       objectId: item.id,
       objectKind: 'content',
       routeId: 'workBrowser',
@@ -434,6 +437,7 @@ class _ArticleTextBlock extends StatelessWidget {
     final body = item.normalizedBody;
     final contextObjectName = title.isNotEmpty ? title : body;
     final contextObjectTarget = IntersectionTarget(
+      objectType: 'post',
       objectId: item.id,
       objectKind: 'content',
       routeId: 'workBrowser',
@@ -701,9 +705,16 @@ double _momentGridAspectRatio(int total) {
   return columns / rows;
 }
 
-bool _shouldShowIntersection(IntersectionReason? reason) {
+bool _shouldShowIntersection(
+  IntersectionReason? reason, {
+  IntersectionTarget? contextObjectTarget,
+}) {
   if (reason == null) return false;
-  return displayReadyIntersectionReason(reason) != null;
+  return displayReadyIntersectionReason(
+        reason,
+        contextObjectTarget: contextObjectTarget,
+      ) !=
+      null;
 }
 
 Widget _mediaPlaceholder(bool isDark) {

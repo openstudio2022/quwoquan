@@ -40,13 +40,16 @@ class ProfileInteractionDirectionSwitch extends StatelessWidget {
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: selected ? null : () => onSelected(direction),
-        child: SizedBox(
-          width: AppSpacing.minInteractiveSize,
-          height: AppSpacing.buttonHeightSmCompact - AppSpacing.two,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            minWidth: AppSpacing.profileShareDirectionSegmentMinWidth,
+            minHeight: AppSpacing.minInteractiveSize,
+          ),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
             alignment: Alignment.center,
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.xs),
             decoration: BoxDecoration(
               color: selected ? selectedFill : AppColors.transparent,
               borderRadius: BorderRadius.circular(AppSpacing.radiusNinetyNine),

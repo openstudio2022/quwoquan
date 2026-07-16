@@ -142,7 +142,7 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
         label: UITextConstants.tryAgain,
       ),
       secondaryAction: const UiErrorAction(
-        type: UiErrorActionType.back,
+        type: UiErrorActionType.dismiss,
         label: UITextConstants.back,
       ),
     );
@@ -162,10 +162,6 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       primaryAction: const UiErrorAction(
         type: UiErrorActionType.openSettings,
         label: UITextConstants.openSettings,
-      ),
-      secondaryAction: const UiErrorAction(
-        type: UiErrorActionType.back,
-        label: UITextConstants.back,
       ),
     );
   }
@@ -747,7 +743,6 @@ class _CameraCapturePageState extends State<CameraCapturePage> {
       case UiErrorActionType.resubmit:
         await _initCamera();
         return;
-      case UiErrorActionType.back:
       case UiErrorActionType.dismiss:
         if (mounted) {
           Navigator.of(context).pop();

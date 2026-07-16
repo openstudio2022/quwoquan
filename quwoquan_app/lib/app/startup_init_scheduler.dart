@@ -44,6 +44,20 @@ final class StartupInitScheduler {
     scheduleMicrotask(() {
       _bestEffort('startup_sync_window', syncWindow);
       _bestEffort('startup_theme', syncTheme);
+      // Kick local HTTPS CA install as early as the first frame so Dart
+      // HttpClient / cached_network_image trust loopback before feed media.
+      final prerequisites = startupPrerequisites;
+      if (prerequisites != null) {
+        unawaited(
+          prerequisites.catchError((Object e, StackTrace stack) {
+            logException(
+              source: 'startup_prerequisites_first_frame',
+              exceptionText: e.toString(),
+              stackText: stack.toString(),
+            );
+          }),
+        );
+      }
     });
   }
 
@@ -54,7 +68,6 @@ final class StartupInitScheduler {
     }
     _welcomeWindowStarted = true;
     AppStartupRuntime.instance.markWelcomeWindowInitStarted();
-    unawaited(AppStartupRuntime.instance.hydrateNativeProcessSegments());
     scheduleMicrotask(() {
       ref.read(startupAuthRestoreGateProvider.notifier).open();
       _bestEffort('startup_auth_session', () {
@@ -74,7 +87,7 @@ final class StartupInitScheduler {
               }),
         );
       });
-      _completeStartupPrerequisitesThenReady(onShellReady);
+      _markShellReadyAndObserveStartupPrerequisites(onShellReady);
     });
   }
 
@@ -98,12 +111,13 @@ final class StartupInitScheduler {
     });
   }
 
-  void _completeStartupPrerequisitesThenReady(
+  void _markShellReadyAndObserveStartupPrerequisites(
     void Function(bool ready) onShellReady,
   ) {
+    // 安全 Shell 不依赖本地证书、认证或业务数据；这些任务仅做后台观测。
+    onShellReady(true);
     final prerequisites = startupPrerequisites;
     if (prerequisites == null) {
-      onShellReady(true);
       return;
     }
     unawaited(() async {
@@ -115,8 +129,6 @@ final class StartupInitScheduler {
           exceptionText: e.toString(),
           stackText: stack.toString(),
         );
-      } finally {
-        onShellReady(true);
       }
     }());
   }

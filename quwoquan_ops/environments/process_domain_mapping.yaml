@@ -10,8 +10,8 @@ version: 1
 #   每个 Redis scene (rec / general / realtime) 可独立部署为 standalone 或 cluster。
 #   scene 归属由服务自身 config.yaml redis.scenes 声明，不在此文件管理。
 #   典型部署：
-#     dev       → 三个 scene 共用 1 个 standalone（或 in-memory）
-#     alpha/beta → 本地 standalone（或 in-memory）
+#     dev/alpha → 三个 scene 共用 1 个本地 standalone；禁止服务进程内 memory Redis
+#     beta      → 独立真实 standalone，禁止 memory/noop/mock
 #     gamma      → rec cluster + general standalone + realtime cluster
 #     prod → 三个 scene 各自 cluster，独立扩缩容
 environments:
@@ -44,10 +44,6 @@ environments:
       domains: [realtime]
     rtc-service:
       domains: [rtc]
-    livekit-sfu:
-      domains: [media]
-    coturn:
-      domains: [turn]
 
   alpha:
     content-service:
@@ -78,18 +74,10 @@ environments:
       domains: [realtime]
     rtc-service:
       domains: [rtc]
-    livekit-sfu:
-      domains: [media]
-    coturn:
-      domains: [turn]
 
   beta:
     search-service:
       domains: [search]
-    entity-service:
-      domains: [entity]
-    tag-service:
-      domains: [tag]
     product-ops-service:
       domains: [ops]
     recommendation-service:
@@ -98,22 +86,12 @@ environments:
       domains: [realtime]
     rtc-service:
       domains: [rtc]
-    livekit-sfu:
-      domains: [media]
-    coturn:
-      domains: [turn]
-    assistant-service:
-      domains: [assistant]
     seed-box:
-      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+      domains: [content, integration, chat, user, circle, entity, tag, assistant, notification]
 
   gamma:
     search-service:
       domains: [search]
-    entity-service:
-      domains: [entity]
-    tag-service:
-      domains: [tag]
     product-ops-service:
       domains: [ops]
     recommendation-service:
@@ -122,22 +100,12 @@ environments:
       domains: [realtime]
     rtc-service:
       domains: [rtc]
-    livekit-sfu:
-      domains: [media]
-    coturn:
-      domains: [turn]
-    assistant-service:
-      domains: [assistant]
     seed-box:
-      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+      domains: [content, integration, chat, user, circle, entity, tag, assistant, notification]
 
   prod:
     search-service:
       domains: [search]
-    entity-service:
-      domains: [entity]
-    tag-service:
-      domains: [tag]
     product-ops-service:
       domains: [ops]
     recommendation-service:
@@ -146,11 +114,5 @@ environments:
       domains: [realtime]
     rtc-service:
       domains: [rtc]
-    livekit-sfu:
-      domains: [media]
-    coturn:
-      domains: [turn]
-    assistant-service:
-      domains: [assistant]
     seed-box:
-      domains: [content, integration, chat, user, circle, notification, gateway, orchestrator]
+      domains: [content, integration, chat, user, circle, entity, tag, assistant, notification]

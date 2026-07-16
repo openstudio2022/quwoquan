@@ -1,0 +1,122 @@
+version: 1
+entity: MediaUploadSession
+
+fields:
+  - name: id
+    type: string
+    constraints: [PK]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: version
+    type: int
+    constraints: [NOT_NULL, DEFAULT_1]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: ownerId
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: objectKey
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: read
+    ops_exposure: read
+
+  - name: mediaType
+    type: string
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: contentType
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: fileSize
+    type: int64
+    constraints: [NOT_NULL, POSITIVE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: expectedSha256
+    type: string
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: hash
+    api_exposure: drop
+    ops_exposure: read
+
+  - name: status
+    type: enum
+    enum_ref: MediaUploadSessionStatus
+    constraints: [NOT_NULL]
+    classification: PUBLIC
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: createdAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: updatedAt
+    type: timestamp
+    constraints: [NOT_NULL]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: expiresAt
+    type: timestamp
+    constraints: [NOT_NULL, TTL_INDEX]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: completedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+  - name: abortedAt
+    type: timestamp
+    constraints: [NULLABLE]
+    classification: INTERNAL
+    log_policy: allow
+    api_exposure: read
+    ops_exposure: read
+
+state_machine:
+  field: status
+  transitions:
+    - from: pending
+      to: [completed, aborted]

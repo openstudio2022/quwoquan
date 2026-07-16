@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_contract.g.dart';
-import 'package:quwoquan_app/cloud/runtime/generated/integration/location_poi_dto.g.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/search/search_registry.g.dart';
 import 'package:quwoquan_app/cloud/services/chat/chat_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/circle/circle_dtos.dart';
@@ -11,12 +11,12 @@ import 'package:quwoquan_app/cloud/services/circle/mock/circle_mock_data.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/services/entity/entity_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/entity/homepage_models.dart';
-import 'package:quwoquan_app/cloud/services/integration/integration_repository.dart';
 import 'package:quwoquan_app/cloud/services/user/profile_homepage_models.dart';
 import 'package:quwoquan_app/cloud/services/user/user_profile_repository.dart';
 import 'package:quwoquan_app/core/services/cache/conversation_cache_service.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_chat_search_sync_service.dart';
+import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_record.dart';
 import 'package:quwoquan_app/core/services/cache/local_circle_group_snapshot_store.dart';
 import 'package:quwoquan_app/core/services/cache/local_search_namespace.dart';
 import 'package:quwoquan_app/core/services/search_repository.dart';
@@ -77,9 +77,10 @@ void main() {
     test('uses local contact filtering for suggest search', () async {
       final repo = AppSearchRepository(
         circleRepository: MockCircleRepository(),
-        contentRepository: MockContentRepository(),
+        circleGroupQuery: const _FixtureCircleGroupQuery(),
+        contentPostSearchRepository: MockContentRepository(),
         homepageRepository: MockHomepageRepository(),
-        integrationRepository: const MockIntegrationRepository(),
+        locationSearchReader: const _FixtureLocationSearchReader(),
         userProfileRepository: const MockUserProfileRepository(),
         localChatSearchStore: chatStore,
         localChatSearchSyncService: chatSyncService,
@@ -120,25 +121,22 @@ void main() {
       'falls back to local group results when remote returns empty',
       () async {
         final seedCircleId = CircleMockData.catalogCircleDtos.first.id;
-        final seedGroup = (await _EmptyCircleRepository().listCircleGroups(
-          seedCircleId,
-          limit: 1,
-        )).first;
+        final seedGroup = _fixtureCircleGroup(seedCircleId);
         await circleStore.upsertGroups(
           namespace: namespace,
-          groups: <Map<String, dynamic>>[
-            <String, dynamic>{
-              ...seedGroup.toMap(),
-              'circleId': seedCircleId,
-              'circleName': '本地回退圈子',
-            },
+          groups: <LocalCircleGroupSnapshotRecord>[
+            LocalCircleGroupSnapshotRecord.fromGroupSlice(
+              seedGroup,
+              circleName: '本地回退圈子',
+            ),
           ],
         );
         final repo = AppSearchRepository(
-          circleRepository: _EmptyCircleRepository(),
-          contentRepository: MockContentRepository(),
+          circleRepository: MockCircleRepository(),
+          circleGroupQuery: const _FixtureCircleGroupQuery(empty: true),
+          contentPostSearchRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
-          integrationRepository: const MockIntegrationRepository(),
+          locationSearchReader: const _FixtureLocationSearchReader(),
           userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
@@ -183,25 +181,22 @@ void main() {
       'falls back to persisted local group snapshot when remote search fails',
       () async {
         final seedCircleId = CircleMockData.catalogCircleDtos.first.id;
-        final seedGroup = (await MockCircleRepository().listCircleGroups(
-          seedCircleId,
-          limit: 1,
-        )).first;
+        final seedGroup = _fixtureCircleGroup(seedCircleId);
         await circleStore.upsertGroups(
           namespace: namespace,
-          groups: <Map<String, dynamic>>[
-            <String, dynamic>{
-              ...seedGroup.toMap(),
-              'circleId': seedCircleId,
-              'circleName': CircleMockData.catalogCircleDtos.first.name,
-            },
+          groups: <LocalCircleGroupSnapshotRecord>[
+            LocalCircleGroupSnapshotRecord.fromGroupSlice(
+              seedGroup,
+              circleName: CircleMockData.catalogCircleDtos.first.name,
+            ),
           ],
         );
         final repo = AppSearchRepository(
           circleRepository: _ThrowingCircleRepository(),
-          contentRepository: MockContentRepository(),
+          circleGroupQuery: const _FixtureCircleGroupQuery(),
+          contentPostSearchRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
-          integrationRepository: const MockIntegrationRepository(),
+          locationSearchReader: const _FixtureLocationSearchReader(),
           userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
@@ -246,9 +241,10 @@ void main() {
       () async {
         final repo = AppSearchRepository(
           circleRepository: _ThrowingCircleRepository(),
-          contentRepository: MockContentRepository(),
+          circleGroupQuery: const _FixtureCircleGroupQuery(),
+          contentPostSearchRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
-          integrationRepository: const MockIntegrationRepository(),
+          locationSearchReader: const _FixtureLocationSearchReader(),
           userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
@@ -294,9 +290,10 @@ void main() {
       () async {
         final repo = AppSearchRepository(
           circleRepository: MockCircleRepository(),
-          contentRepository: _ThrowingContentRepository(),
+          circleGroupQuery: const _FixtureCircleGroupQuery(),
+          contentPostSearchRepository: _ThrowingContentRepository(),
           homepageRepository: _ThrowingHomepageRepository(),
-          integrationRepository: _ThrowingIntegrationRepository(),
+          locationSearchReader: _ThrowingLocationSearchReader(),
           userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
@@ -349,9 +346,10 @@ void main() {
     test('returns circle.circle hits through groups section', () async {
       final repo = AppSearchRepository(
         circleRepository: MockCircleRepository(),
-        contentRepository: MockContentRepository(),
+        circleGroupQuery: const _FixtureCircleGroupQuery(),
+        contentPostSearchRepository: MockContentRepository(),
         homepageRepository: MockHomepageRepository(),
-        integrationRepository: const MockIntegrationRepository(),
+        locationSearchReader: const _FixtureLocationSearchReader(),
         userProfileRepository: const MockUserProfileRepository(),
         localChatSearchStore: chatStore,
         localChatSearchSyncService: chatSyncService,
@@ -391,9 +389,10 @@ void main() {
       () async {
         final repo = AppSearchRepository(
           circleRepository: MockCircleRepository(),
-          contentRepository: MockContentRepository(),
+          circleGroupQuery: const _FixtureCircleGroupQuery(),
+          contentPostSearchRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
-          integrationRepository: const MockIntegrationRepository(),
+          locationSearchReader: const _FixtureLocationSearchReader(),
           userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
@@ -432,9 +431,10 @@ void main() {
       () async {
         final repo = AppSearchRepository(
           circleRepository: MockCircleRepository(),
-          contentRepository: MockContentRepository(),
+          circleGroupQuery: const _FixtureCircleGroupQuery(),
+          contentPostSearchRepository: MockContentRepository(),
           homepageRepository: MockHomepageRepository(),
-          integrationRepository: const MockIntegrationRepository(),
+          locationSearchReader: const _FixtureLocationSearchReader(),
           userProfileRepository: const MockUserProfileRepository(),
           localChatSearchStore: chatStore,
           localChatSearchSyncService: chatSyncService,
@@ -471,54 +471,53 @@ void main() {
       },
     );
 
-    test(
-      'returns location.place hits through locations section',
-      () async {
-        final repo = AppSearchRepository(
-          circleRepository: MockCircleRepository(),
-          contentRepository: MockContentRepository(),
-          homepageRepository: MockHomepageRepository(),
-          integrationRepository: const MockIntegrationRepository(),
-          userProfileRepository: const MockUserProfileRepository(),
-          localChatSearchStore: chatStore,
-          localChatSearchSyncService: chatSyncService,
-          localCircleGroupSnapshotStore: circleStore,
-          personaContextLoader: () async {
-            return ActivePersonaContextViewData.fallback(
-              subAccountId: namespace.subAccountId,
-              ownerUserId: namespace.ownerUserId,
-              subjectType: namespace.subjectType,
-              displayName: '测试用户',
-              avatarUrl: '',
-              personaContextVersion: namespace.personaContextVersion,
-            );
-          },
-        );
+    test('returns location.place hits through locations section', () async {
+      final repo = AppSearchRepository(
+        circleRepository: MockCircleRepository(),
+        circleGroupQuery: const _FixtureCircleGroupQuery(),
+        contentPostSearchRepository: MockContentRepository(),
+        homepageRepository: MockHomepageRepository(),
+        locationSearchReader: const _FixtureLocationSearchReader(),
+        userProfileRepository: const MockUserProfileRepository(),
+        localChatSearchStore: chatStore,
+        localChatSearchSyncService: chatSyncService,
+        localCircleGroupSnapshotStore: circleStore,
+        personaContextLoader: () async {
+          return ActivePersonaContextViewData.fallback(
+            subAccountId: namespace.subAccountId,
+            ownerUserId: namespace.ownerUserId,
+            subjectType: namespace.subjectType,
+            displayName: '测试用户',
+            avatarUrl: '',
+            personaContextVersion: namespace.personaContextVersion,
+          );
+        },
+      );
 
-        final response = await repo.search(
-          const SearchRequest(
-            query: '西湖',
-            mode: SearchMode.result,
-            objectTypes: <SearchObjectType>{SearchObjectType.locationPlace},
-          ),
-        );
+      final response = await repo.search(
+        const SearchRequest(
+          query: '西湖',
+          mode: SearchMode.result,
+          objectTypes: <SearchObjectType>{SearchObjectType.locationPlace},
+        ),
+      );
 
-        expect(response.sections, isNotEmpty);
-        expect(response.sections.first.id, equals('locations'));
-        expect(
-          response.sections.first.hits.first.objectType,
-          equals(SearchObjectType.locationPlace),
-        );
-        expect(response.sections.first.hits.first.title, contains('西湖'));
-      },
-    );
+      expect(response.sections, isNotEmpty);
+      expect(response.sections.first.id, equals('locations'));
+      expect(
+        response.sections.first.hits.first.objectType,
+        equals(SearchObjectType.locationPlace),
+      );
+      expect(response.sections.first.hits.first.title, contains('西湖'));
+    });
 
     test('isolates local chat results by namespace', () async {
       final repo = AppSearchRepository(
         circleRepository: MockCircleRepository(),
-        contentRepository: MockContentRepository(),
+        circleGroupQuery: const _FixtureCircleGroupQuery(),
+        contentPostSearchRepository: MockContentRepository(),
         homepageRepository: MockHomepageRepository(),
-        integrationRepository: const MockIntegrationRepository(),
+        locationSearchReader: const _FixtureLocationSearchReader(),
         userProfileRepository: const MockUserProfileRepository(),
         localChatSearchStore: chatStore,
         localChatSearchSyncService: chatSyncService,
@@ -573,19 +572,6 @@ void main() {
   });
 }
 
-class _EmptyCircleRepository extends MockCircleRepository {
-  @override
-  Future<List<CircleGroupDto>> searchCircleGroups(
-    String circleId, {
-    required String query,
-    String? visibility,
-    String? groupType,
-    int limit = 20,
-  }) async {
-    return const <CircleGroupDto>[];
-  }
-}
-
 class _ThrowingCircleRepository extends MockCircleRepository {
   @override
   Future<List<CircleDto>> listCircles({
@@ -598,6 +584,55 @@ class _ThrowingCircleRepository extends MockCircleRepository {
     String? sort,
   }) async {
     throw StateError('circle unavailable');
+  }
+}
+
+CircleGroupSlice _fixtureCircleGroup(String circleId) => CircleGroupSlice(
+  groupId: '${circleId}_group_default',
+  version: 1,
+  circleId: circleId,
+  parentGroupId: null,
+  groupType: CircleGroupType.publicGroup,
+  nodeType: null,
+  name: '默认公开群',
+  description: '圈子默认群组',
+  visibility: CircleGroupVisibility.public,
+  joinPolicy: CircleGroupJoinPolicy.applyOnly,
+  conversationId: 'conversation_$circleId',
+  storageEnabled: true,
+  noticeEnabled: true,
+  isDefaultPublicGroup: true,
+  status: CircleGroupStatus.active,
+  memberCount: 1,
+  createdAt: DateTime.utc(2026, 7, 14),
+  updatedAt: DateTime.utc(2026, 7, 14),
+);
+
+final class _FixtureCircleGroupQuery implements CircleGroupQueryReader {
+  const _FixtureCircleGroupQuery({this.empty = false});
+  final bool empty;
+
+  @override
+  Future<CircleGroupSlice> get(CircleGroupQuery query) async =>
+      _fixtureCircleGroup(query.circleId);
+
+  @override
+  Future<CircleGroupPageSlice> list(CircleGroupListQuery query) async =>
+      CircleGroupPageSlice(
+        items: empty
+            ? const <CircleGroupSlice>[]
+            : <CircleGroupSlice>[_fixtureCircleGroup(query.circleId)],
+      );
+
+  @override
+  Future<CircleGroupPageSlice> search(CircleGroupSearchQuery query) async {
+    if (empty) return const CircleGroupPageSlice(items: <CircleGroupSlice>[]);
+    final group = _fixtureCircleGroup(query.circleId);
+    return CircleGroupPageSlice(
+      items: group.name.contains(query.query)
+          ? <CircleGroupSlice>[group]
+          : const <CircleGroupSlice>[],
+    );
   }
 }
 
@@ -628,15 +663,42 @@ class _ThrowingHomepageRepository extends MockHomepageRepository {
   }
 }
 
-class _ThrowingIntegrationRepository extends MockIntegrationRepository {
+class _FixtureLocationSearchReader implements LocationSearchReader {
+  const _FixtureLocationSearchReader();
+
   @override
-  Future<List<LocationPoiDto>> searchLocations({
-    required String query,
-    String? cityCode,
-    double? latitude,
-    double? longitude,
-    int limit = 20,
-  }) async {
+  Future<LocationPoiListSlice> searchLocations(
+    LocationSearchQueryParams query,
+  ) async {
+    final items = <LocationPoiDto>[
+      LocationPoiDto(
+        id: 'fixture_poi_west_lake',
+        name: '杭州西湖',
+        latitude: 30.2431,
+        longitude: 120.1505,
+        address: '浙江省杭州市西湖区',
+      ),
+    ];
+    final normalized = query.query.trim();
+    return LocationPoiListSlice(
+      items
+          .where(
+            (item) =>
+                normalized.isEmpty ||
+                item.name.contains(normalized) ||
+                (item.address ?? '').contains(normalized),
+          )
+          .take(query.limit)
+          .toList(growable: false),
+    );
+  }
+}
+
+class _ThrowingLocationSearchReader implements LocationSearchReader {
+  @override
+  Future<LocationPoiListSlice> searchLocations(
+    LocationSearchQueryParams query,
+  ) async {
     throw StateError('location unavailable');
   }
 }

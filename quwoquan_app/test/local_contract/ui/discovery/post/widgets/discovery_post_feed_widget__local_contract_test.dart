@@ -4,13 +4,16 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/content/content_dtos.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/ui/discovery/providers/discovery_feed_provider.dart';
+import '../../../../../support/cloud_services/content_facet_overrides.dart';
+import '../../../../../support/cloud_services/test_content_post_reaction_facet.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
-ProviderContainer _container(ContentRepository repo) {
+ProviderContainer _container(MockContentRepository repo) {
   return ProviderContainer(
     overrides: [
-      contentRepositoryProvider.overrideWithValue(repo),
+      ...mockContentFacetOverrides(repo),
       postInteractionStateProvider.overrideWith(
         _NoopPostInteractionStateNotifier.new,
       ),
@@ -68,10 +71,7 @@ void main() {
       final feed = container.read(discoveryFeedMapProvider)['photo']?.value;
       expect(feed, isNotNull);
       expect(feed!.error, isNotNull);
-      expect(
-        feed.error,
-        '操作失败，请稍后重试',
-      );
+      expect(feed.error, '操作失败，请稍后重试');
       expect(feed.blockingError, isNotNull);
       expect(feed.staleDataError, isNull);
       expect(feed.appendError, isNull);
@@ -82,110 +82,96 @@ void main() {
       addTearDown(container.dispose);
 
       await container.read(discoveryFeedMapProvider.notifier).load('photo');
-      final beforeFeed = container.read(discoveryFeedMapProvider)['photo']?.value;
-      final beforeCount =
-          beforeFeed?.items.length ?? 0;
+      final beforeFeed = container
+          .read(discoveryFeedMapProvider)['photo']
+          ?.value;
+      final beforeCount = beforeFeed?.items.length ?? 0;
       expect(beforeFeed?.hasMore, isTrue);
 
       await container
           .read(discoveryFeedMapProvider.notifier)
           .appendNextPage('photo');
-      final afterFeed = container.read(discoveryFeedMapProvider)['photo']?.value;
-      final afterCount =
-          afterFeed?.items.length ?? 0;
+      final afterFeed = container
+          .read(discoveryFeedMapProvider)['photo']
+          ?.value;
+      final afterCount = afterFeed?.items.length ?? 0;
 
       expect(afterCount, greaterThan(beforeCount));
       expect(afterFeed?.hasMore, isFalse);
       expect(afterFeed?.error, isNull);
     });
 
-    test('load with cached items keeps staleDataError and preserves items', () async {
-      final container = _container(MockContentRepository());
-      addTearDown(container.dispose);
+    test(
+      'load with cached items keeps staleDataError and preserves items',
+      () async {
+        final container = _container(MockContentRepository());
+        addTearDown(container.dispose);
 
-      await container.read(discoveryFeedMapProvider.notifier).load('photo');
-      final seeded = container.read(discoveryFeedMapProvider)['photo']!.value!;
-      expect(seeded.items, isNotEmpty);
+        await container.read(discoveryFeedMapProvider.notifier).load('photo');
+        final seeded = container
+            .read(discoveryFeedMapProvider)['photo']!
+            .value!;
+        expect(seeded.items, isNotEmpty);
 
-      final notifier = container.read(discoveryFeedMapProvider.notifier);
-      notifier.state = <String, AsyncValue<DiscoveryFeedState>>{
-        'photo': AsyncData(
-          seeded.copyWith(
-            nextCursor: 'cursor_1',
-            blockingError: null,
-            staleDataError: null,
-            appendError: null,
+        final notifier = container.read(discoveryFeedMapProvider.notifier);
+        notifier.state = <String, AsyncValue<DiscoveryFeedState>>{
+          'photo': AsyncData(
+            seeded.copyWith(
+              nextCursor: 'cursor_1',
+              blockingError: null,
+              staleDataError: null,
+              appendError: null,
+            ),
           ),
-        ),
-      };
+        };
 
-      container.updateOverrides([
-        contentRepositoryProvider.overrideWithValue(_FailingContentRepository()),
-        postInteractionStateProvider.overrideWith(_NoopPostInteractionStateNotifier.new),
-      ]);
-      addTearDown(container.pump);
-      await container.pump();
+        container.updateOverrides([
+          ...mockContentFacetOverrides(_FailingContentRepository()),
+          postInteractionStateProvider.overrideWith(
+            _NoopPostInteractionStateNotifier.new,
+          ),
+        ]);
+        addTearDown(container.pump);
+        await container.pump();
 
-      await notifier.load('photo', force: true);
-      final after = container.read(discoveryFeedMapProvider)['photo']!.value!;
-      expect(after.items, isNotEmpty);
-      expect(after.staleDataError, isNotNull);
-      expect(after.blockingError, isNull);
-      expect(after.appendError, isNull);
-    });
+        await notifier.load('photo', force: true);
+        final after = container.read(discoveryFeedMapProvider)['photo']!.value!;
+        expect(after.items, isNotEmpty);
+        expect(after.staleDataError, isNotNull);
+        expect(after.blockingError, isNull);
+        expect(after.appendError, isNull);
+      },
+    );
   });
 
-  group('MockContentRepository', () {
-    test('likePost increments likePostCallCount', () async {
-      final mock = MockContentRepository();
-      await mock.likePost(postId: 'p1');
-      expect(mock.likePostCallCount, equals(1));
-      await mock.likePost(postId: 'p2');
-      expect(mock.likePostCallCount, equals(2));
-    });
-
-    test('likePost throws when throwOnLike is set', () async {
-      final mock = MockContentRepository()
-        ..throwOnLike = Exception('rate_limited');
-      expect(() => mock.likePost(postId: 'p1'), throwsException);
-    });
-
-    test('createComment tracks call and returns comment DTO', () async {
-      final mock = MockContentRepository();
-      final result = await mock.createComment(postId: 'p1', content: '好图！');
-      expect(mock.createCommentCallCount, equals(1));
-      expect(mock.lastCommentText, equals('好图！'));
-      expect(mock.lastCommentPostId, equals('p1'));
-      expect(result.content, equals('好图！'));
-      expect(result.id, isNotEmpty);
-    });
-
-    test('createComment throws when throwOnCreateComment is set', () async {
-      final mock = MockContentRepository()
-        ..throwOnCreateComment = Exception('forbidden');
+  group('ContentPostReactionFacet', () {
+    test('like/unlike command 与 query 使用同一 typed Facet', () async {
+      final reactions = TestContentPostReactionFacet();
+      await reactions.likePost(LikeContentPostCommand(postId: 'p1'));
+      expect(reactions.commandCallCount, equals(1));
       expect(
-        () => mock.createComment(postId: 'p1', content: 'test'),
+        (await reactions.getReactionState(
+          GetContentPostReactionStateQuery(postId: 'p1'),
+        )).liked,
+        isTrue,
+      );
+      await reactions.unlikePost(UnlikeContentPostCommand(postId: 'p1'));
+      expect(reactions.commandCallCount, equals(2));
+    });
+
+    test('command 失败不伪造成功状态', () async {
+      final reactions = TestContentPostReactionFacet()
+        ..throwOnCommand = Exception('rate_limited');
+      expect(
+        () => reactions.likePost(LikeContentPostCommand(postId: 'p1')),
         throwsException,
       );
-    });
-
-    test('getReactionState returns reactionStateStub', () async {
-      final mock = MockContentRepository()
-        ..reactionStateStub = {'liked': true};
-      final state = await mock.getReactionState(postId: 'p1');
-      expect(state.liked, isTrue);
-      expect(state.postId, 'p1');
-    });
-
-    test('listComments reflects comments added via createComment', () async {
-      final mock = MockContentRepository();
-      await mock.createComment(postId: 'p1', content: 'first');
-      await mock.createComment(postId: 'p1', content: 'second');
-      final comments = await mock.listComments(postId: 'p1');
-      expect(comments.items.length, equals(2));
+      expect(reactions.commandCallCount, 1);
       expect(
-        comments.items.map((comment) => comment.content),
-        unorderedEquals(<String>['first', 'second']),
+        (await reactions.getReactionState(
+          GetContentPostReactionStateQuery(postId: 'p1'),
+        )).liked,
+        isFalse,
       );
     });
   });
@@ -230,9 +216,6 @@ class _NoopPostInteractionStateNotifier extends PostInteractionStateNotifier {
     final nextConfirmedShareCounts = Map<String, int>.from(
       state.confirmedShareCounts,
     );
-    final nextPendingShareDeltas = Map<String, int>.from(
-      state.pendingShareDeltas,
-    );
     final nextConfirmedCommentCounts = Map<String, int>.from(
       state.confirmedCommentCounts,
     );
@@ -244,13 +227,11 @@ class _NoopPostInteractionStateNotifier extends PostInteractionStateNotifier {
         continue;
       }
       nextConfirmedShareCounts[post.id] = post.shareCount;
-      nextPendingShareDeltas.remove(post.id);
       nextConfirmedCommentCounts[post.id] = post.commentCount;
       nextPendingCommentDeltas.remove(post.id);
     }
     state = state.copyWith(
       confirmedShareCounts: nextConfirmedShareCounts,
-      pendingShareDeltas: nextPendingShareDeltas,
       confirmedCommentCounts: nextConfirmedCommentCounts,
       pendingCommentDeltas: nextPendingCommentDeltas,
     );

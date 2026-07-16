@@ -1,0 +1,19 @@
+version: 1
+domain: user
+entity: CreatorRuntimeProfile
+object_kind: projection
+storage_backend: mongodb
+description: |
+  immutable release desired-state 引用的 canonical creator package 只读运行时投影。
+  归属 user-service，复用既有 creator/profile/works API；不创建可登录用户，不复制作品正文。
+
+service:
+  name: user-service
+  domain: user
+
+ownership:
+  owner_team: user-platform
+  lifecycle: active
+
+storage:
+  backend: mongodb

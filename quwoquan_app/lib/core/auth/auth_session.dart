@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:quwoquan_app/app/providers/startup_auth_restore_gate_provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:quwoquan_app/assistant/observability/logging/app_trace_context_store.dart';
@@ -10,14 +11,18 @@ import 'package:quwoquan_app/cloud/runtime/auth/cloud_auth_token_provider.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_request_headers.dart';
 import 'package:quwoquan_app/cloud/runtime/cloud_runtime_config.dart';
 import 'package:quwoquan_app/cloud/runtime/errors/cloud_exception.dart';
-import 'package:quwoquan_app/cloud/runtime/errors/runtime_error_display.dart';
+import 'package:quwoquan_app/core/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/auth_login_result_dto.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_api_metadata.g.dart';
 import 'package:quwoquan_app/cloud/runtime/generated/user/user_request_page_ids.g.dart';
 import 'package:quwoquan_app/cloud/runtime/http/cloud_http_client.dart';
 import 'package:quwoquan_app/core/auth/mock_session_identity.dart';
+import 'package:quwoquan_app/core/design_system/spacing/app_spacing.dart';
+import 'package:quwoquan_app/core/media/app_image_cache_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+part "auth_session_controller.dart";
 
 /// 派生隐私安全的设备 actor 标识（installId hash 派生，非原始设备 ID）。
 ///
@@ -64,7 +69,12 @@ enum AuthRememberedLoginMethod {
 }
 
 typedef AuthSessionRefreshExecutor =
-    Future<AuthLoginResultDto> Function(String refreshToken);
+    Future<AuthLoginResultDto> Function(
+      String refreshToken, {
+      Future<void>? abortTrigger,
+    });
+
+final Future<void> _neverAuthRefreshAbort = Completer<void>().future;
 
 class AuthSessionState {
   const AuthSessionState({
@@ -81,6 +91,7 @@ class AuthSessionState {
     this.rememberedLoginMaskedIdentifier = '',
     this.rememberedDisplayName = '',
     this.rememberedAvatarUrl = '',
+    this.rememberedNicknameCustomized = false,
     this.errorMessage,
   });
 
@@ -100,6 +111,7 @@ class AuthSessionState {
   final String rememberedLoginMaskedIdentifier;
   final String rememberedDisplayName;
   final String rememberedAvatarUrl;
+  final bool rememberedNicknameCustomized;
   final String? errorMessage;
 
   bool get isAuthenticated =>
@@ -126,6 +138,7 @@ class AuthSessionState {
     String? rememberedLoginMaskedIdentifier,
     String? rememberedDisplayName,
     String? rememberedAvatarUrl,
+    bool? rememberedNicknameCustomized,
     String? Function()? errorMessage,
   }) {
     return AuthSessionState(
@@ -146,6 +159,8 @@ class AuthSessionState {
       rememberedDisplayName:
           rememberedDisplayName ?? this.rememberedDisplayName,
       rememberedAvatarUrl: rememberedAvatarUrl ?? this.rememberedAvatarUrl,
+      rememberedNicknameCustomized:
+          rememberedNicknameCustomized ?? this.rememberedNicknameCustomized,
       errorMessage: errorMessage != null ? errorMessage() : this.errorMessage,
     );
   }
@@ -167,6 +182,7 @@ class StoredAuthSession {
     this.rememberedLoginIdentifier = '',
     this.rememberedDisplayName = '',
     this.rememberedAvatarUrl = '',
+    this.rememberedNicknameCustomized = false,
     this.quickLoginExpiresAtEpochMs = 0,
     this.sessionRememberTtlSeconds = kDefaultSessionRememberTtlSeconds,
     required this.manualLoggedOut,
@@ -192,6 +208,7 @@ class StoredAuthSession {
   final String rememberedLoginIdentifier;
   final String rememberedDisplayName;
   final String rememberedAvatarUrl;
+  final bool rememberedNicknameCustomized;
 
   /// 软退出后快速登录凭证的过期时间戳（epoch ms）。0 表示未设置（非软退出态）。
   final int quickLoginExpiresAtEpochMs;
@@ -215,8 +232,7 @@ class StoredAuthSession {
       return nowMs < quickLoginExpiresAtEpochMs;
     }
     if (lastRefreshAtEpochMs > 0) {
-      return nowMs <
-          lastRefreshAtEpochMs + sessionRememberTtlSeconds * 1000;
+      return nowMs < lastRefreshAtEpochMs + sessionRememberTtlSeconds * 1000;
     }
     return true;
   }
@@ -247,6 +263,8 @@ class AuthSessionStore {
       'auth.remembered_login_identifier';
   static const _rememberedDisplayNameKey = 'auth.remembered_display_name';
   static const _rememberedAvatarUrlKey = 'auth.remembered_avatar_url';
+  static const _rememberedNicknameCustomizedKey =
+      'auth.remembered_nickname_customized';
   static const _manualLoggedOutKey = 'auth.manual_logged_out';
   static const _launchPromptDismissedKey = 'auth.launch_prompt_dismissed';
   static const _quickLoginExpiresAtKey = 'auth.quick_login_expires_at_epoch_ms';
@@ -278,6 +296,8 @@ class AuthSessionStore {
           await _secureStorage.read(key: _rememberedLoginIdentifierKey) ?? '',
       rememberedDisplayName: prefs.getString(_rememberedDisplayNameKey) ?? '',
       rememberedAvatarUrl: prefs.getString(_rememberedAvatarUrlKey) ?? '',
+      rememberedNicknameCustomized:
+          prefs.get(_rememberedNicknameCustomizedKey) == true,
       manualLoggedOut: prefs.getBool(_manualLoggedOutKey) ?? false,
       launchPromptDismissed: prefs.getBool(_launchPromptDismissedKey) ?? false,
       quickLoginExpiresAtEpochMs: prefs.getInt(_quickLoginExpiresAtKey) ?? 0,
@@ -312,6 +332,10 @@ class AuthSessionStore {
       'displayName',
     );
     final normalizedAvatarUrl = _hintString(result.accountHint, 'avatarUrl');
+    final normalizedNicknameCustomized = _hintBool(
+      result.accountHint,
+      'nicknameCustomized',
+    );
     await _secureStorage.write(key: _accessTokenKey, value: result.accessToken);
     await _secureStorage.write(
       key: _refreshTokenKey,
@@ -346,6 +370,10 @@ class AuthSessionStore {
     }
     await prefs.setString(_rememberedDisplayNameKey, normalizedDisplayName);
     await prefs.setString(_rememberedAvatarUrlKey, normalizedAvatarUrl);
+    await prefs.setBool(
+      _rememberedNicknameCustomizedKey,
+      normalizedNicknameCustomized,
+    );
     await prefs.setBool(_manualLoggedOutKey, false);
     await prefs.setBool(_launchPromptDismissedKey, false);
     // 缓存云端下发的快速登录有效期（缺省/<=0 用默认 30 天兜底），软退出时据此推算过期戳。
@@ -373,6 +401,31 @@ class AuthSessionStore {
     // 刷新成功代表会话仍活跃，清除残留的软退出过期戳；沿用登录时缓存的快速登录 TTL。
     await prefs.remove(_quickLoginExpiresAtKey);
     await _ensureInstallId(prefs);
+  }
+
+  Future<void> saveRefreshedAccountHint(
+    Map<String, dynamic>? accountHint,
+  ) async {
+    if (accountHint == null) {
+      return;
+    }
+    final prefs = await _prefsFactory();
+    await prefs.setString(
+      _rememberedLoginMaskedIdentifierKey,
+      _hintString(accountHint, 'maskedPhone'),
+    );
+    await prefs.setString(
+      _rememberedDisplayNameKey,
+      _hintString(accountHint, 'displayName'),
+    );
+    await prefs.setString(
+      _rememberedAvatarUrlKey,
+      _hintString(accountHint, 'avatarUrl'),
+    );
+    await prefs.setBool(
+      _rememberedNicknameCustomizedKey,
+      _hintBool(accountHint, 'nicknameCustomized'),
+    );
   }
 
   int _normalizedRememberTtl(int ttlSeconds) {
@@ -409,6 +462,8 @@ class AuthSessionStore {
 
   Future<void> clearSession({required bool manualLogout}) async {
     final prefs = await _prefsFactory();
+    final rememberedAvatarUrl =
+        prefs.getString(_rememberedAvatarUrlKey)?.trim() ?? '';
     await _secureStorage.delete(key: _accessTokenKey);
     await _secureStorage.delete(key: _refreshTokenKey);
     // 彻底退出清除本机完整手机号，避免他人沿用快速重登。
@@ -421,6 +476,17 @@ class AuthSessionStore {
     await prefs.remove(_lastForegroundAuthCheckAtKey);
     await prefs.remove(_quickLoginExpiresAtKey);
     await prefs.remove(_sessionRememberTtlKey);
+    if (manualLogout) {
+      await prefs.remove(_rememberedLoginMethodKey);
+      await prefs.remove(_rememberedLoginMaskedIdentifierKey);
+      await prefs.remove(_rememberedDisplayNameKey);
+      await prefs.remove(_rememberedAvatarUrlKey);
+      await prefs.remove(_rememberedNicknameCustomizedKey);
+      await AppImageCacheController.evictAvatar(
+        rememberedAvatarUrl,
+        size: AppSpacing.loginAvatarSize,
+      );
+    }
     await prefs.setBool(_manualLoggedOutKey, manualLogout);
     await prefs.setBool(_launchPromptDismissedKey, false);
     await _ensureInstallId(prefs);
@@ -500,359 +566,12 @@ class AuthSessionStore {
   static String _hintString(Map<String, dynamic>? accountHint, String key) {
     return accountHint?[key]?.toString().trim() ?? '';
   }
-}
 
-class AuthSessionController extends Notifier<AuthSessionState> {
-  static const Duration _staleRestoreRefreshThreshold = Duration(hours: 12);
-  static const Duration _foregroundAuthCheckThreshold = Duration(hours: 24);
-
-  bool _restoreStarted = false;
-  Future<bool>? _refreshInFlight;
-
-  AuthSessionStore get _store => ref.read(authSessionStoreProvider);
-
-  @override
-  AuthSessionState build() {
-    final restoreGateOpen = ref.watch(startupAuthRestoreGateProvider);
-    if (restoreGateOpen && !_restoreStarted) {
-      _restoreStarted = true;
-      unawaited(restore());
-    }
-    return const AuthSessionState.restoring();
-  }
-
-  Future<void> restore() async {
-    try {
-      final stored = await _store.read();
-      _syncDeviceActorId(stored.installId);
-      if (!ref.mounted) {
-        return;
-      }
-      if (stored.accessToken.isNotEmpty &&
-          stored.refreshToken.isNotEmpty &&
-          stored.ownerId.isNotEmpty) {
-        final authenticatedState = AuthSessionState(
-          status: AuthSessionStatus.authenticated,
-          accessToken: stored.accessToken,
-          refreshToken: stored.refreshToken,
-          ownerId: stored.ownerId,
-          activeSubAccountId: stored.activeSubAccountId,
-          accountState: stored.accountState,
-          identityOrigin: stored.identityOrigin,
-          installId: stored.installId,
-          rememberedLoginMethod: stored.rememberedLoginMethod,
-          rememberedLoginMaskedIdentifier:
-              stored.rememberedLoginMaskedIdentifier,
-          rememberedDisplayName: stored.rememberedDisplayName,
-          rememberedAvatarUrl: stored.rememberedAvatarUrl,
-        );
-        state = authenticatedState;
-        if (_shouldRefreshDuringRestore(stored)) {
-          await refreshSessionIfNeeded(force: true);
-        }
-        return;
-      }
-      state = AuthSessionState(
-        status: AuthSessionStatus.guest,
-        promptReason: stored.launchPromptDismissed
-            ? null
-            : stored.manualLoggedOut
-            ? AuthPromptReason.manualLoggedOut
-            : AuthPromptReason.firstRun,
-        installId: stored.installId,
-        rememberedLoginMethod: stored.rememberedLoginMethod,
-        rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-        rememberedDisplayName: stored.rememberedDisplayName,
-        rememberedAvatarUrl: stored.rememberedAvatarUrl,
-      );
-    } catch (e) {
-      if (!ref.mounted) {
-        return;
-      }
-      state = AuthSessionState(
-        status: AuthSessionStatus.guest,
-        promptReason: AuthPromptReason.sessionExpired,
-        rememberedLoginMethod: state.rememberedLoginMethod,
-        rememberedLoginMaskedIdentifier: state.rememberedLoginMaskedIdentifier,
-        rememberedDisplayName: state.rememberedDisplayName,
-        rememberedAvatarUrl: state.rememberedAvatarUrl,
-        errorMessage: runtimeErrorDisplayMessage(e),
-      );
-    }
-  }
-
-  Future<void> applyLoginResult(AuthLoginResultDto result) async {
-    await _store.saveLoginResult(result);
-    final stored = await _store.read();
-    _syncDeviceActorId(stored.installId);
-    if (!ref.mounted) {
-      return;
-    }
-    state = AuthSessionState(
-      status: AuthSessionStatus.authenticated,
-      accessToken: stored.accessToken,
-      refreshToken: stored.refreshToken,
-      ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
-      accountState: stored.accountState,
-      identityOrigin: stored.identityOrigin,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-      rememberedDisplayName: stored.rememberedDisplayName,
-      rememberedAvatarUrl: stored.rememberedAvatarUrl,
-    );
-  }
-
-  Future<void> applyRememberedLoginResult(
-    AuthLoginResultDto result, {
-    required AuthRememberedLoginMethod rememberedLoginMethod,
-    String? rememberedLoginMaskedIdentifier,
-    String? rememberedLoginIdentifier,
-  }) async {
-    await _store.saveLoginResult(
-      result,
-      rememberedLoginMethod: rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: rememberedLoginMaskedIdentifier,
-      rememberedLoginIdentifier: rememberedLoginIdentifier,
-    );
-    final stored = await _store.read();
-    _syncDeviceActorId(stored.installId);
-    if (!ref.mounted) {
-      return;
-    }
-    state = AuthSessionState(
-      status: AuthSessionStatus.authenticated,
-      accessToken: stored.accessToken,
-      refreshToken: stored.refreshToken,
-      ownerId: stored.ownerId,
-      activeSubAccountId: stored.activeSubAccountId,
-      accountState: stored.accountState,
-      identityOrigin: stored.identityOrigin,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-      rememberedDisplayName: stored.rememberedDisplayName,
-      rememberedAvatarUrl: stored.rememberedAvatarUrl,
-    );
-  }
-
-  Future<void> applyRefreshResult(AuthLoginResultDto result) async {
-    final current = state;
-    final accessToken = result.accessToken.trim();
-    final refreshToken = result.refreshToken.trim();
-    if (accessToken.isEmpty || refreshToken.isEmpty) {
-      throw StateError('refresh result missing tokens');
-    }
-    await _store.saveRefreshedTokens(
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-    );
-    final stored = await _store.read();
-    _syncDeviceActorId(stored.installId);
-    if (!ref.mounted) {
-      return;
-    }
-    state = AuthSessionState(
-      status: AuthSessionStatus.authenticated,
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-      ownerId: current.ownerId.isNotEmpty ? current.ownerId : stored.ownerId,
-      activeSubAccountId: current.activeSubAccountId.isNotEmpty
-          ? current.activeSubAccountId
-          : stored.activeSubAccountId,
-      accountState: current.accountState.isNotEmpty
-          ? current.accountState
-          : stored.accountState,
-      identityOrigin: current.identityOrigin.isNotEmpty
-          ? current.identityOrigin
-          : stored.identityOrigin,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-      rememberedDisplayName: stored.rememberedDisplayName,
-      rememberedAvatarUrl: stored.rememberedAvatarUrl,
-    );
-  }
-
-  Future<bool> refreshSessionIfNeeded({bool force = false}) async {
-    final current = state;
-    if (!current.isAuthenticated || current.refreshToken.trim().isEmpty) {
-      return false;
-    }
-    if (!force && _refreshInFlight != null) {
-      return _refreshInFlight!;
-    }
-    final future = _performRefresh();
-    _refreshInFlight = future;
-    try {
-      return await future;
-    } finally {
-      if (identical(_refreshInFlight, future)) {
-        _refreshInFlight = null;
-      }
-    }
-  }
-
-  Future<bool> refreshIfSessionLooksStale() async {
-    final stored = await _store.read();
-    if (!_shouldRefreshForForegroundCheck(stored)) {
-      return false;
-    }
-    return refreshSessionIfNeeded(force: true);
-  }
-
-  Future<void> markForegroundAuthCheck() async {
-    await _store.markForegroundAuthCheckNow();
-  }
-
-  Future<void> continueAsGuest({AuthPromptReason? reason}) async {
-    await _store.markLaunchPromptDismissed();
-    final stored = await _store.read();
-    _syncDeviceActorId(stored.installId);
-    if (!ref.mounted) {
-      return;
-    }
-    state = AuthSessionState(
-      status: AuthSessionStatus.guest,
-      promptReason: reason,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-    );
-  }
-
-  /// 软退出（默认）：仅失效当前活跃会话，保留快速登录凭证与账号摘要。
-  ///
-  /// 有效期内（云端下发，默认 30 天）再次打开登录页可一键免验证码快速登录。
-  /// 调用方（settings）须保证不向远端吊销 refresh token。
-  Future<void> softLogout() async {
-    await _store.softLogout();
-    final stored = await _store.read();
-    if (!ref.mounted) {
-      return;
-    }
-    state = AuthSessionState(
-      status: AuthSessionStatus.guest,
-      promptReason: AuthPromptReason.manualLoggedOut,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-      rememberedDisplayName: stored.rememberedDisplayName,
-      rememberedAvatarUrl: stored.rememberedAvatarUrl,
-    );
-  }
-
-  /// 彻底退出：清除本机全部登录凭证。调用方负责向远端吊销 refresh token。
-  /// 下次登录必须重新验证（无可用快速登录凭证）。
-  Future<void> hardLogout() async {
-    await _store.clearSession(manualLogout: true);
-    final stored = await _store.read();
-    if (!ref.mounted) {
-      return;
-    }
-    state = AuthSessionState(
-      status: AuthSessionStatus.guest,
-      promptReason: AuthPromptReason.manualLoggedOut,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-    );
-  }
-
-  /// 兼容旧调用：等价于彻底退出。新代码应显式使用 softLogout / hardLogout。
-  Future<void> clearForLogout() => hardLogout();
-
-  Future<void> clearForExpiredSession() async {
-    await _store.clearSession(manualLogout: false);
-    final stored = await _store.read();
-    if (!ref.mounted) {
-      return;
-    }
-    state = AuthSessionState(
-      status: AuthSessionStatus.guest,
-      promptReason: AuthPromptReason.sessionExpired,
-      installId: stored.installId,
-      rememberedLoginMethod: stored.rememberedLoginMethod,
-      rememberedLoginMaskedIdentifier: stored.rememberedLoginMaskedIdentifier,
-    );
-  }
-
-  Future<void> updateActiveSubAccount(String subAccountId) async {
-    await _store.updateActiveSubAccount(subAccountId);
-    state = state.copyWith(activeSubAccountId: subAccountId.trim());
-  }
-
-  Future<bool> _performRefresh() async {
-    final current = state;
-    final refreshToken = current.refreshToken.trim();
-    if (!current.isAuthenticated || refreshToken.isEmpty) {
-      return false;
-    }
-    try {
-      final result = await ref.read(authSessionRefreshExecutorProvider)(
-        refreshToken,
-      );
-      await applyRefreshResult(result);
-      return true;
-    } catch (e) {
-      if (_shouldClearSessionForRefreshFailure(e)) {
-        await clearForExpiredSession();
-        if (!ref.mounted) {
-          return false;
-        }
-        state = state.copyWith(
-          errorMessage: () => runtimeErrorDisplayMessage(e),
-        );
-        return false;
-      }
-      await _store.markForegroundAuthCheckNow();
-      if (!ref.mounted) {
-        return false;
-      }
-      state = state.copyWith(errorMessage: () => runtimeErrorDisplayMessage(e));
-      return false;
-    }
-  }
-
-  bool _shouldClearSessionForRefreshFailure(Object error) {
-    if (error is CloudException) {
-      return error.type == CloudErrorType.unauthorized ||
-          error.type == CloudErrorType.forbidden;
-    }
-    if (error is StateError) {
-      return true;
-    }
-    return false;
-  }
-
-  bool _shouldRefreshDuringRestore(StoredAuthSession stored) {
-    return _isOlderThan(
-      stored.lastRefreshAtEpochMs,
-      _staleRestoreRefreshThreshold,
-    );
-  }
-
-  bool _shouldRefreshForForegroundCheck(StoredAuthSession stored) {
-    if (stored.accessToken.isEmpty ||
-        stored.refreshToken.isEmpty ||
-        stored.ownerId.isEmpty) {
-      return false;
-    }
-    return _isOlderThan(
-      stored.lastForegroundAuthCheckAtEpochMs,
-      _foregroundAuthCheckThreshold,
-    );
-  }
-
-  bool _isOlderThan(int epochMs, Duration threshold) {
-    if (epochMs <= 0) {
-      return true;
-    }
-    final now = DateTime.now().millisecondsSinceEpoch;
-    return now - epochMs >= threshold.inMilliseconds;
+  static bool _hintBool(Map<String, dynamic>? accountHint, String key) {
+    return accountHint?[key] == true;
   }
 }
+
 
 class ProviderBackedCloudAuthTokenProvider implements CloudAuthTokenProvider {
   const ProviderBackedCloudAuthTokenProvider(this._readAccessToken);
@@ -879,13 +598,18 @@ final authSessionRefreshExecutorProvider = Provider<AuthSessionRefreshExecutor>(
   ref,
 ) {
   if (_shouldUseRemoteAuthRefreshEndpoint()) {
-    return (String refreshToken) async {
+    return (String refreshToken, {Future<void>? abortTrigger}) async {
       final client = CloudHttpClient();
-      final response = await client.postJson(
-        Uri.parse(
+      final gatewayOrigin = Uri.parse(CloudRuntimeConfig.gatewayBaseUrl);
+      final response = await client.sendOperationJson(
+        method: 'POST',
+        uri: Uri.parse(
           '${CloudRuntimeConfig.gatewayBaseUrl}${UserApiMetadata.refreshTokenPath}',
         ),
+        gatewayOrigin: gatewayOrigin,
         headers: CloudRequestHeaders.forPage(UserRequestPageIds.refreshToken),
+        requireAuth: false,
+        abortTrigger: abortTrigger ?? _neverAuthRefreshAbort,
         body: <String, dynamic>{'refreshToken': refreshToken},
       );
       return AuthLoginResultDto.fromMap(
@@ -893,7 +617,7 @@ final authSessionRefreshExecutorProvider = Provider<AuthSessionRefreshExecutor>(
       );
     };
   }
-  return (String refreshToken) async {
+  return (String refreshToken, {Future<void>? abortTrigger}) async {
     return AuthLoginResultDto.fromMap(<String, dynamic>{
       'accessToken': 'mock_refreshed_token_${refreshToken.hashCode}',
       'refreshToken': 'mock_refreshed_refresh',

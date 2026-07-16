@@ -2,53 +2,69 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/providers/app_providers.dart';
-import 'package:quwoquan_app/core/services/app_content_repository.dart';
+import 'package:quwoquan_app/core/di/app_data_source_mode.dart';
 
 void main() {
-  group('ContentRepository 子接口拆分契约 (D2a/D2b)', () {
-    test('Mock 实现同时满足全部 6 个 ≤10 方法子接口', () {
+  group('Content facets 装配契约 (D2a/D2b)', () {
+    test('Post Mock 只实现非 Comment 细粒度 Facet', () {
       final repo = MockContentRepository();
       expect(repo, isA<ContentReadRepository>());
+      expect(repo, isA<ContentPostDetailReader>());
+      expect(repo, isA<ContentAuthorPostsReader>());
       expect(repo, isA<ContentWriteRepository>());
-      expect(repo, isA<ContentReactionRepository>());
-      expect(repo, isA<ContentCommentRepository>());
-      expect(repo, isA<ContentMediaRepository>());
+      expect(repo, isA<ContentEngagementRepository>());
+      expect(repo, isNot(isA<ContentCommentFacet>()));
       expect(repo, isA<ContentConfigRepository>());
-      expect(repo, isA<ContentRepository>());
     });
 
-    test('子接口 Provider 复用同一 contentRepository 实例', () {
+    test('组合根按 facet 装配缓存与直连 adapter', () {
       final container = ProviderContainer();
       addTearDown(container.dispose);
       // 测试环境（非 release、非 beta/gamma）默认数据源为 mock。
       expect(container.read(appDataSourceModeProvider), AppDataSourceMode.mock);
 
-      final root = container.read(contentRepositoryProvider);
-      expect(container.read(contentReadRepositoryProvider), same(root));
-      expect(container.read(contentWriteRepositoryProvider), same(root));
-      expect(container.read(contentReactionRepositoryProvider), same(root));
-      expect(container.read(contentCommentRepositoryProvider), same(root));
-      expect(container.read(contentMediaRepositoryProvider), same(root));
-      expect(container.read(contentConfigRepositoryProvider), same(root));
+      final read = container.read(contentReadRepositoryProvider);
+      final write = container.read(contentWriteRepositoryProvider);
+      final engagement = container.read(contentEngagementRepositoryProvider);
+      final config = container.read(contentConfigRepositoryProvider);
+      final workBrowserDetail = container.read(
+        workBrowserContentPostDetailReaderProvider,
+      );
+      final userProfilePosts = container.read(
+        userProfileContentAuthorPostsReaderProvider,
+      );
+
+      expect(write, same(read));
+      expect(engagement, same(config));
+      expect(engagement, isNot(same(read)));
+      expect(workBrowserDetail, isA<ContentPostDetailReader>());
+      expect(userProfilePosts, isA<ContentAuthorPostsReader>());
+      expect(
+        () => container.read(workBrowserContentCommentFacetProvider),
+        throwsA(
+          predicate<Object>(
+            (error) => error.toString().contains(
+              'ContentCommentFacet is Remote-only in production composition',
+            ),
+          ),
+        ),
+      );
     });
   });
 
   group('DiscoveryPresentationWire 强类型封装 (R04 de-Map)', () {
-    test('typed getter: tags / circleName / visibility', () {
+    test('typed getter: tags / visibility', () {
       const wire = DiscoveryPresentationWire(<String, dynamic>{
         'tagRefs': <dynamic>[' 校园 ', '', '摄影'],
-        'circleName': '  新东方校友圈 ',
-        'visibility': 'circle',
+        'visibility': 'private',
       });
       expect(wire.tagRefs, <String>['校园', '摄影']);
-      expect(wire.circleName, '新东方校友圈');
-      expect(wire.visibility, 'circle');
+      expect(wire.visibility, 'private');
     });
 
-    test('缺省值: 空 row → 空标签/空圈名/public', () {
+    test('缺省值: 空 row → 空标签/public', () {
       const wire = DiscoveryPresentationWire(<String, dynamic>{});
       expect(wire.tagRefs, isEmpty);
-      expect(wire.circleName, '');
       expect(wire.visibility, 'public');
     });
 
@@ -63,7 +79,7 @@ void main() {
     });
 
     test('toWireMap 透传底层 canonical wire row 给统一映射器', () {
-      final row = <String, dynamic>{'shareCount': 9, 'circleName': 'c'};
+      final row = <String, dynamic>{'shareCount': 9};
       final wire = DiscoveryPresentationWire(row);
       expect(wire.toWireMap()['shareCount'], 9);
       expect(identical(wire.toWireMap(), row), isTrue);

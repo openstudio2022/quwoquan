@@ -1,13 +1,7 @@
 part of 'user_profile_repository.dart';
 
-PersonaDto _personaDtoFromWire(Map<String, dynamic> json) {
-  final m = Map<String, dynamic>.from(json);
-  m.putIfAbsent('id', () => '');
-  m.putIfAbsent('userId', () => '');
-  m.putIfAbsent('displayName', () => '');
-  m.putIfAbsent('createdAt', () => '');
-  m.putIfAbsent('updatedAt', () => '');
-  return PersonaDto.fromJson(m);
+PersonaManagementItemWireDto _personaDtoFromWire(Map<String, dynamic> json) {
+  return PersonaManagementItemWireDto.fromMap(json);
 }
 
 List<ProfileInteractionActivityViewData> _interactionViewDataListFromWires(
@@ -230,24 +224,6 @@ List<Map<String, dynamic>> _filterRelationWiresByQuery(
         return displayName.contains(normalizedQuery) ||
             username.contains(normalizedQuery) ||
             userHandle.contains(normalizedQuery);
-      })
-      .toList(growable: false);
-}
-
-List<CircleDto> _filterCirclesByQuery(
-  Iterable<CircleDto> circles, {
-  String? query,
-}) {
-  final normalizedQuery = _normalizeSearchQuery(query);
-  if (normalizedQuery.isEmpty) {
-    return circles.toList(growable: false);
-  }
-  return circles
-      .where((circle) {
-        final name = circle.name.toLowerCase();
-        final description = (circle.description ?? '').toLowerCase();
-        return name.contains(normalizedQuery) ||
-            description.contains(normalizedQuery);
       })
       .toList(growable: false);
 }

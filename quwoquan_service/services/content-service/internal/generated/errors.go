@@ -27,205 +27,282 @@ var (
 	ErrContentTooLong                      = errors.New("CONTENT.USER.content_too_long")
 	ErrForbiddenDelete                     = errors.New("CONTENT.USER.forbidden_delete")
 	ErrForbiddenEdit                       = errors.New("CONTENT.USER.forbidden_edit")
+	ErrIdempotencyConflict                 = errors.New("CONTENT.USER.idempotency_conflict")
+	ErrInteractionCursorInvalid            = errors.New("CONTENT.USER.interaction_cursor_invalid")
+	ErrInteractionOwnerForbidden           = errors.New("CONTENT.USER.interaction_owner_forbidden")
+	ErrInteractionReadModelUnavailable     = errors.New("CONTENT.SYSTEM.interaction_read_model_unavailable")
+	ErrInteractionTypeInvalid              = errors.New("CONTENT.USER.interaction_type_invalid")
 	ErrInternalError                       = errors.New("CONTENT.SYSTEM.internal_error")
 	ErrInvalidArgument                     = errors.New("CONTENT.USER.invalid_argument")
 	ErrInvalidContentType                  = errors.New("CONTENT.USER.invalid_content_type")
 	ErrInvalidMomentPayload                = errors.New("CONTENT.USER.invalid_moment_payload")
 	ErrMediaNotFound                       = errors.New("CONTENT.USER.media_not_found")
 	ErrMediaNotReady                       = errors.New("CONTENT.USER.media_not_ready")
+	ErrModerationApprovalRequired          = errors.New("CONTENT.USER.moderation_approval_required")
+	ErrModerationDecisionStale             = errors.New("CONTENT.USER.moderation_decision_stale")
 	ErrOriginalAccessDenied                = errors.New("CONTENT.USER.original_access_denied")
 	ErrOriginalAccessRateLimited           = errors.New("CONTENT.USER.original_access_rate_limited")
 	ErrPostImmutableAfterPublish           = errors.New("CONTENT.USER.post_immutable_after_publish")
 	ErrPostNotFound                        = errors.New("CONTENT.USER.post_not_found")
 	ErrPublicRequiredForCircleDistribution = errors.New("CONTENT.USER.public_required_for_circle_distribution")
 	ErrRateLimited                         = errors.New("CONTENT.USER.rate_limited")
+	ErrReportNotFound                      = errors.New("CONTENT.USER.report_not_found")
+	ErrRequiredDependencyUnavailable       = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
+	ErrStorageReadFailed                   = errors.New("CONTENT.SYSTEM.storage_read_failed")
 	ErrStorageWriteFailed                  = errors.New("CONTENT.SYSTEM.storage_write_failed")
 	ErrUnauthorized                        = errors.New("CONTENT.USER.unauthorized")
 	ErrUpstreamTimeout                     = errors.New("CONTENT.MIDDLEWARE.upstream_timeout")
+	ErrVersionConflict                     = errors.New("CONTENT.USER.version_conflict")
 )
 
 // AppErrorFromAssistantMentionContextMissing returns *AppError for CONTENT.USER.assistant_mention_context_missing (user_message from errors.yaml).
 func AppErrorFromAssistantMentionContextMissing(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "小趣暂时无法识别这条评论的上下文", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.assistant_mention_context_missing")
+	return rterr.NewAppError(code, "小趣暂时无法识别这条评论的上下文", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCircleDistributionForbidden returns *AppError for CONTENT.USER.circle_distribution_forbidden (user_message from errors.yaml).
 func AppErrorFromCircleDistributionForbidden(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden")
-	return rterr.NewAppError(code, "无权修改圈子分发关系", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.circle_distribution_forbidden")
+	return rterr.NewAppError(code, "无权修改圈子分发关系", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCommentAttachmentLimitExceeded returns *AppError for CONTENT.USER.comment_attachment_limit_exceeded (user_message from errors.yaml).
 func AppErrorFromCommentAttachmentLimitExceeded(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "评论图片数量超出限制", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_attachment_limit_exceeded")
+	return rterr.NewAppError(code, "评论图片数量超出限制", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCommentAttachmentNotReady returns *AppError for CONTENT.USER.comment_attachment_not_ready (user_message from errors.yaml).
 func AppErrorFromCommentAttachmentNotReady(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "评论图片正在处理中，请稍后重试", debugMessage).WithRecovery("retry", 3)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_attachment_not_ready")
+	return rterr.NewAppError(code, "评论图片正在处理中，请稍后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("retry", 3)
 }
 
 // AppErrorFromCommentForbiddenDelete returns *AppError for CONTENT.USER.comment_forbidden_delete (user_message from errors.yaml).
 func AppErrorFromCommentForbiddenDelete(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden")
-	return rterr.NewAppError(code, "无权删除此评论", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_forbidden_delete")
+	return rterr.NewAppError(code, "无权删除此评论", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCommentLikeDuplicate returns *AppError for CONTENT.USER.comment_like_duplicate (user_message from errors.yaml).
 func AppErrorFromCommentLikeDuplicate(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "conflict")
-	return rterr.NewAppError(code, "已经点过赞了", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_like_duplicate")
+	return rterr.NewAppError(code, "已经点过赞了", debugMessage).WithMetadata("conflict", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCommentNotFound returns *AppError for CONTENT.USER.comment_not_found (user_message from errors.yaml).
 func AppErrorFromCommentNotFound(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found")
-	return rterr.NewAppError(code, "评论不存在或已删除", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_not_found")
+	return rterr.NewAppError(code, "评论不存在或已删除", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCommentPinForbidden returns *AppError for CONTENT.USER.comment_pin_forbidden (user_message from errors.yaml).
 func AppErrorFromCommentPinForbidden(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden")
-	return rterr.NewAppError(code, "仅内容作者可置顶评论", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_pin_forbidden")
+	return rterr.NewAppError(code, "仅内容作者可置顶评论", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCommentPinInvalidTarget returns *AppError for CONTENT.USER.comment_pin_invalid_target (user_message from errors.yaml).
 func AppErrorFromCommentPinInvalidTarget(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "只能置顶一级评论", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_pin_invalid_target")
+	return rterr.NewAppError(code, "只能置顶一级评论", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCommentRateLimited returns *AppError for CONTENT.USER.comment_rate_limited (user_message from errors.yaml).
 func AppErrorFromCommentRateLimited(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "rate_limited")
-	return rterr.NewAppError(code, "评论太频繁，请稍后重试", debugMessage).WithRecovery("retry", 60)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_rate_limited")
+	return rterr.NewAppError(code, "评论太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 60)
 }
 
 // AppErrorFromCommentReactionForbidden returns *AppError for CONTENT.USER.comment_reaction_forbidden (user_message from errors.yaml).
 func AppErrorFromCommentReactionForbidden(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden")
-	return rterr.NewAppError(code, "当前无法评价这条评论", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_reaction_forbidden")
+	return rterr.NewAppError(code, "当前无法评价这条评论", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
 }
 
 // AppErrorFromCommentTooLong returns *AppError for CONTENT.USER.comment_too_long (user_message from errors.yaml).
 func AppErrorFromCommentTooLong(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "评论超出字数限制", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.comment_too_long")
+	return rterr.NewAppError(code, "评论超出字数限制", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromContentDeleted returns *AppError for CONTENT.USER.content_deleted (user_message from errors.yaml).
 func AppErrorFromContentDeleted(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "gone")
-	return rterr.NewAppError(code, "内容已删除", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.content_deleted")
+	return rterr.NewAppError(code, "内容已删除", debugMessage).WithMetadata("gone", 410).WithRecovery("surface", 0)
 }
 
 // AppErrorFromContentTooLong returns *AppError for CONTENT.USER.content_too_long (user_message from errors.yaml).
 func AppErrorFromContentTooLong(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "内容超出长度限制", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.content_too_long")
+	return rterr.NewAppError(code, "内容超出长度限制", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromForbiddenDelete returns *AppError for CONTENT.USER.forbidden_delete (user_message from errors.yaml).
 func AppErrorFromForbiddenDelete(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden")
-	return rterr.NewAppError(code, "无权删除此内容", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.forbidden_delete")
+	return rterr.NewAppError(code, "无权删除此内容", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
 }
 
 // AppErrorFromForbiddenEdit returns *AppError for CONTENT.USER.forbidden_edit (user_message from errors.yaml).
 func AppErrorFromForbiddenEdit(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden")
-	return rterr.NewAppError(code, "无权编辑此内容", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.forbidden_edit")
+	return rterr.NewAppError(code, "无权编辑此内容", debugMessage).WithMetadata("forbidden", 403).WithRecovery("surface", 0)
+}
+
+// AppErrorFromIdempotencyConflict returns *AppError for CONTENT.USER.idempotency_conflict (user_message from errors.yaml).
+func AppErrorFromIdempotencyConflict(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.idempotency_conflict")
+	return rterr.NewAppError(code, "重复请求与原操作不一致，请刷新后重试", debugMessage).WithMetadata("idempotency_conflict", 409).WithRecovery("refresh", 0)
+}
+
+// AppErrorFromInteractionCursorInvalid returns *AppError for CONTENT.USER.interaction_cursor_invalid (user_message from errors.yaml).
+func AppErrorFromInteractionCursorInvalid(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.interaction_cursor_invalid")
+	return rterr.NewAppError(code, "列表状态已更新，请刷新后重试", debugMessage).WithMetadata("interaction_cursor_invalid", 400).WithRecovery("refresh", 0)
+}
+
+// AppErrorFromInteractionOwnerForbidden returns *AppError for CONTENT.USER.interaction_owner_forbidden (user_message from errors.yaml).
+func AppErrorFromInteractionOwnerForbidden(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.interaction_owner_forbidden")
+	return rterr.NewAppError(code, "无权查看该互动记录", debugMessage).WithMetadata("interaction_owner_forbidden", 403).WithRecovery("surface", 0)
+}
+
+// AppErrorFromInteractionReadModelUnavailable returns *AppError for CONTENT.SYSTEM.interaction_read_model_unavailable (user_message from errors.yaml).
+func AppErrorFromInteractionReadModelUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.interaction_read_model_unavailable")
+	return rterr.NewAppError(code, "互动记录暂时不可用，请稍后重试", debugMessage).WithMetadata("interaction_read_model_unavailable", 503).WithRecovery("retry", 3)
+}
+
+// AppErrorFromInteractionTypeInvalid returns *AppError for CONTENT.USER.interaction_type_invalid (user_message from errors.yaml).
+func AppErrorFromInteractionTypeInvalid(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.interaction_type_invalid")
+	return rterr.NewAppError(code, "不支持的互动类型", debugMessage).WithMetadata("interaction_type_invalid", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInternalError returns *AppError for CONTENT.SYSTEM.internal_error (user_message from errors.yaml).
 func AppErrorFromInternalError(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "internal_error")
-	return rterr.NewAppError(code, "服务异常，请稍后重试", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.internal_error")
+	return rterr.NewAppError(code, "服务异常，请稍后重试", debugMessage).WithMetadata("internal_error", 500).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInvalidArgument returns *AppError for CONTENT.USER.invalid_argument (user_message from errors.yaml).
 func AppErrorFromInvalidArgument(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "请求参数有误，请检查后重试", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.invalid_argument")
+	return rterr.NewAppError(code, "请求参数有误，请检查后重试", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInvalidContentType returns *AppError for CONTENT.USER.invalid_content_type (user_message from errors.yaml).
 func AppErrorFromInvalidContentType(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "不支持的内容类型", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.invalid_content_type")
+	return rterr.NewAppError(code, "不支持的内容类型", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromInvalidMomentPayload returns *AppError for CONTENT.USER.invalid_moment_payload (user_message from errors.yaml).
 func AppErrorFromInvalidMomentPayload(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "微趣内容为空，正文/图片/视频至少填写一项", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.invalid_moment_payload")
+	return rterr.NewAppError(code, "微趣内容为空，正文/图片/视频至少填写一项", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromMediaNotFound returns *AppError for CONTENT.USER.media_not_found (user_message from errors.yaml).
 func AppErrorFromMediaNotFound(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "media_not_found")
-	return rterr.NewAppError(code, "媒体资源不存在或已过期", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.media_not_found")
+	return rterr.NewAppError(code, "媒体资源不存在或已过期", debugMessage).WithMetadata("media_not_found", 404).WithRecovery("surface", 0)
 }
 
 // AppErrorFromMediaNotReady returns *AppError for CONTENT.USER.media_not_ready (user_message from errors.yaml).
 func AppErrorFromMediaNotReady(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "媒体文件正在处理中，请稍后发布", debugMessage).WithRecovery("retry", 3)
+	code, _ := rterr.ParseCode("CONTENT.USER.media_not_ready")
+	return rterr.NewAppError(code, "媒体文件正在处理中，请稍后发布", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("retry", 3)
+}
+
+// AppErrorFromModerationApprovalRequired returns *AppError for CONTENT.USER.moderation_approval_required (user_message from errors.yaml).
+func AppErrorFromModerationApprovalRequired(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.moderation_approval_required")
+	return rterr.NewAppError(code, "内容尚未通过当前版本审核", debugMessage).WithMetadata("moderation_approval_required", 409).WithRecovery("retry", 3)
+}
+
+// AppErrorFromModerationDecisionStale returns *AppError for CONTENT.USER.moderation_decision_stale (user_message from errors.yaml).
+func AppErrorFromModerationDecisionStale(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.moderation_decision_stale")
+	return rterr.NewAppError(code, "内容已编辑，请基于最新版本重新审核", debugMessage).WithMetadata("moderation_decision_stale", 409).WithRecovery("refresh", 0)
 }
 
 // AppErrorFromOriginalAccessDenied returns *AppError for CONTENT.USER.original_access_denied (user_message from errors.yaml).
 func AppErrorFromOriginalAccessDenied(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "original_access_denied")
-	return rterr.NewAppError(code, "当前内容不支持查看或保存原图", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.original_access_denied")
+	return rterr.NewAppError(code, "当前内容不支持查看或保存原图", debugMessage).WithMetadata("original_access_denied", 403).WithRecovery("surface", 0)
 }
 
 // AppErrorFromOriginalAccessRateLimited returns *AppError for CONTENT.USER.original_access_rate_limited (user_message from errors.yaml).
 func AppErrorFromOriginalAccessRateLimited(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "original_access_rate_limited")
-	return rterr.NewAppError(code, "原图访问过于频繁，请稍后再试", debugMessage).WithRecovery("retry", 60)
+	code, _ := rterr.ParseCode("CONTENT.USER.original_access_rate_limited")
+	return rterr.NewAppError(code, "原图访问过于频繁，请稍后再试", debugMessage).WithMetadata("original_access_rate_limited", 429).WithRecovery("retry", 60)
 }
 
 // AppErrorFromPostImmutableAfterPublish returns *AppError for CONTENT.USER.post_immutable_after_publish (user_message from errors.yaml).
 func AppErrorFromPostImmutableAfterPublish(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "forbidden")
-	return rterr.NewAppError(code, "内容发布后不可修改", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.post_immutable_after_publish")
+	return rterr.NewAppError(code, "内容发布后不可修改", debugMessage).WithMetadata("forbidden", 409).WithRecovery("surface", 0)
 }
 
 // AppErrorFromPostNotFound returns *AppError for CONTENT.USER.post_not_found (user_message from errors.yaml).
 func AppErrorFromPostNotFound(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "not_found")
-	return rterr.NewAppError(code, "内容不存在或已删除", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.post_not_found")
+	return rterr.NewAppError(code, "内容不存在或已删除", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
 }
 
 // AppErrorFromPublicRequiredForCircleDistribution returns *AppError for CONTENT.USER.public_required_for_circle_distribution (user_message from errors.yaml).
 func AppErrorFromPublicRequiredForCircleDistribution(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "invalid_argument")
-	return rterr.NewAppError(code, "发布到圈子前需设置为公开", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.public_required_for_circle_distribution")
+	return rterr.NewAppError(code, "发布到圈子前需设置为公开", debugMessage).WithMetadata("invalid_argument", 400).WithRecovery("surface", 0)
 }
 
 // AppErrorFromRateLimited returns *AppError for CONTENT.USER.rate_limited (user_message from errors.yaml).
 func AppErrorFromRateLimited(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "rate_limited")
-	return rterr.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithRecovery("retry", 60)
+	code, _ := rterr.ParseCode("CONTENT.USER.rate_limited")
+	return rterr.NewAppError(code, "操作太频繁，请稍后重试", debugMessage).WithMetadata("rate_limited", 429).WithRecovery("retry", 60)
+}
+
+// AppErrorFromReportNotFound returns *AppError for CONTENT.USER.report_not_found (user_message from errors.yaml).
+func AppErrorFromReportNotFound(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.report_not_found")
+	return rterr.NewAppError(code, "举报不存在", debugMessage).WithMetadata("not_found", 404).WithRecovery("surface", 0)
+}
+
+// AppErrorFromRequiredDependencyUnavailable returns *AppError for CONTENT.SYSTEM.required_dependency_unavailable (user_message from errors.yaml).
+func AppErrorFromRequiredDependencyUnavailable(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.required_dependency_unavailable")
+	return rterr.NewAppError(code, "内容服务依赖暂时不可用，请稍后重试", debugMessage).WithMetadata("required_dependency_unavailable", 503).WithRecovery("retry", 5)
+}
+
+// AppErrorFromStorageReadFailed returns *AppError for CONTENT.SYSTEM.storage_read_failed (user_message from errors.yaml).
+func AppErrorFromStorageReadFailed(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.storage_read_failed")
+	return rterr.NewAppError(code, "读取内容失败，请稍后重试", debugMessage).WithMetadata("storage_read_failed", 500).WithRecovery("retry", 5)
 }
 
 // AppErrorFromStorageWriteFailed returns *AppError for CONTENT.SYSTEM.storage_write_failed (user_message from errors.yaml).
 func AppErrorFromStorageWriteFailed(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindSystem, "internal_error")
-	return rterr.NewAppError(code, "操作失败，请稍后重试", debugMessage).WithRecovery("retry", 5)
+	code, _ := rterr.ParseCode("CONTENT.SYSTEM.storage_write_failed")
+	return rterr.NewAppError(code, "操作失败，请稍后重试", debugMessage).WithMetadata("storage_write_failed", 500).WithRecovery("retry", 5)
 }
 
 // AppErrorFromUnauthorized returns *AppError for CONTENT.USER.unauthorized (user_message from errors.yaml).
 func AppErrorFromUnauthorized(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindUser, "unauthorized")
-	return rterr.NewAppError(code, "请先登录", debugMessage).WithRecovery("surface", 0)
+	code, _ := rterr.ParseCode("CONTENT.USER.unauthorized")
+	return rterr.NewAppError(code, "请先登录", debugMessage).WithMetadata("unauthorized", 401).WithRecovery("surface", 0)
 }
 
 // AppErrorFromUpstreamTimeout returns *AppError for CONTENT.MIDDLEWARE.upstream_timeout (user_message from errors.yaml).
 func AppErrorFromUpstreamTimeout(debugMessage string) *rterr.AppError {
-	code := rterr.NewCode(rterr.ModuleContent, rterr.KindMiddleware, "timeout")
-	return rterr.NewAppError(code, "请求超时，请检查网络后重试", debugMessage).WithRecovery("retry", 10)
+	code, _ := rterr.ParseCode("CONTENT.MIDDLEWARE.upstream_timeout")
+	return rterr.NewAppError(code, "请求超时，请检查网络后重试", debugMessage).WithMetadata("timeout", 504).WithRecovery("retry", 10)
+}
+
+// AppErrorFromVersionConflict returns *AppError for CONTENT.USER.version_conflict (user_message from errors.yaml).
+func AppErrorFromVersionConflict(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.version_conflict")
+	return rterr.NewAppError(code, "内容已更新，请刷新后重试", debugMessage).WithMetadata("version_conflict", 409).WithRecovery("refresh", 0)
 }

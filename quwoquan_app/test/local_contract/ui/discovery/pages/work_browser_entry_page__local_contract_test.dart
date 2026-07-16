@@ -10,10 +10,10 @@ import 'package:quwoquan_app/cloud/services/content/content_repository.dart';
 import 'package:quwoquan_app/core/constants/ui_text_constants.dart';
 import 'package:quwoquan_app/core/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/core/models/media_viewer_extra.dart';
-import 'package:quwoquan_app/core/providers/app_providers.dart';
 import 'package:quwoquan_app/core/test_keys.dart';
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/ui/discovery/pages/work_browser_entry_page.dart';
+import '../../../../support/cloud_services/content_facet_overrides.dart';
 
 void main() {
   Future<String> firstReadablePostId(MockContentRepository repo) async {
@@ -36,7 +36,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+        overrides: [...mockContentFacetOverrides(repo)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp(
@@ -75,7 +75,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+        overrides: [...mockContentFacetOverrides(repo)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp(
@@ -101,7 +101,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+        overrides: [...mockContentFacetOverrides(repo)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp(
@@ -135,7 +135,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+        overrides: [...mockContentFacetOverrides(repo)],
         child: const CupertinoApp(
           theme: CupertinoThemeData(brightness: Brightness.dark),
           home: WorkBrowserEntryPage(
@@ -165,7 +165,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+        overrides: [...mockContentFacetOverrides(repo)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp(
@@ -220,7 +220,7 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [contentRepositoryProvider.overrideWithValue(repo)],
+        overrides: [...mockContentFacetOverrides(repo)],
         child: ScreenUtilInit(
           designSize: const Size(375, 812),
           builder: (context, _) => MaterialApp.router(
@@ -239,9 +239,15 @@ void main() {
       find.text(ContentErrorMessages.zh[ContentErrorCode.postNotFound]!),
       findsOneWidget,
     );
-    expect(find.text(UITextConstants.back), findsOneWidget);
+    expect(find.text(UITextConstants.back), findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('work-browser-entry-error-back')),
+      findsOneWidget,
+    );
 
-    await tester.tap(find.text(UITextConstants.back));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('work-browser-entry-error-back')),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('HOME'), findsOneWidget);

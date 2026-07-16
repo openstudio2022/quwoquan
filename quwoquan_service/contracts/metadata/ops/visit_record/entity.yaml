@@ -1,11 +1,11 @@
 version: 1
 domain: ops
 entity: VisitRecord
-is_aggregate: false
+object_kind: append_only_fact
 
 description: |
-  访问记录。用户页面/内容访问追踪。
-  MongoDB 存储，极高写入量。
+  用户页面或内容访问的只追加事实。MongoDB 承担极高写入量；
+  统计结果由具名 Reader 投影，不在事实对象上维护可变计数。
 
 storage_backend: mongodb
 cache_layer: none

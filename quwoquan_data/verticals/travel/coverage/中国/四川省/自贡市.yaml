@@ -1,11 +1,10 @@
 # 全国地点主清单 · 四川省自贡市（discovery_seed/2，WP2 区县级全量枚举）
-# schema: quwoquan_data/schema/coverage/master_list.schema.json
-# 门禁: qwq-data verify coverage-master-list
+# schema: quwoquan_data/schema/governance/master_list.schema.json
+# 门禁: qwq-data verify coverage-static-identity
 schemaVersion: quwoquan_data.discovery_seed/2
 country: 中国
 province: 四川省
 city: 自贡市
-generatedBy: wp2_enumeration_20260708
 districts:
 - district: 大安区
   leaves:
@@ -19,9 +18,6 @@ districts:
     aliases:
     - 大山铺恐龙化石群遗址
     selectionPriority: 1
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:53:43Z'
-    sourceScreenEvidence: zh.wikipedia.org:大山铺恐龙化石群遗址 extract=224ch
   - name: 燊海井
     canonicalName: 自贡燊海井
     entityType: 地点/遗址
@@ -29,10 +25,7 @@ districts:
     - Entity/地点/遗址/文化遗产
     - Entity/地点/景区/4A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/大安区
-    selectionPriority: 1
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:53:48Z'
-    sourceScreenEvidence: zh.wikipedia.org:燊海井 extract=317ch
+    selectionPriority: 2
   - name: 中华彩灯大世界
     canonicalName: 自贡中华彩灯大世界
     entityType: 地点/主题乐园
@@ -42,56 +35,49 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/大安区
     aliases:
     - 自贡灯会园区
-    selectionPriority: 2
-    sourceReadiness: pending
+    selectionPriority: 3
   - name: 中和灝
     canonicalName: 中和灝
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/大安区
-    sourceReadiness: pending
-    selectionPriority: 3
+    selectionPriority: 4
   - name: 吉成井鹽作坊遺址
     canonicalName: 吉成井鹽作坊遺址
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/大安区
-    sourceReadiness: pending
-    selectionPriority: 4
+    selectionPriority: 5
   - name: 大安萬壽宮
     canonicalName: 大安萬壽宮
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/大安区
-    sourceReadiness: pending
-    selectionPriority: 5
+    selectionPriority: 6
   - name: 李亨祠堂
     canonicalName: 李亨祠堂
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/大安区
-    sourceReadiness: pending
-    selectionPriority: 6
+    selectionPriority: 7
   - name: 涼高山牌坊群
     canonicalName: 涼高山牌坊群
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/大安区
-    sourceReadiness: pending
-    selectionPriority: 7
+    selectionPriority: 8
   - name: 賀樂堂
     canonicalName: 賀樂堂
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/大安区
-    sourceReadiness: pending
-    selectionPriority: 8
+    selectionPriority: 9
 - district: 自流井区
   leaves:
   - name: 自贡市盐业历史博物馆
@@ -104,7 +90,6 @@ districts:
     aliases:
     - 西秦会馆
     selectionPriority: 1
-    sourceReadiness: ready
   - name: 中国彩灯博物馆
     canonicalName: 中国彩灯博物馆
     entityType: 地点/博物馆
@@ -113,7 +98,6 @@ districts:
     - Entity/地点/景区/3A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/自流井区
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 尖山风景区
     canonicalName: 自贡尖山风景区
     entityType: 地点/景区
@@ -122,14 +106,12 @@ districts:
     - Entity/地点/自然景观/水体
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/自流井区
     selectionPriority: 3
-    sourceReadiness: pending
   - name: 富臺山炎帝宮
     canonicalName: 富臺山炎帝宮
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/自流井区
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 李倪氏節孝坊
     canonicalName: 李倪氏節孝坊
@@ -137,7 +119,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/自流井区
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 玉川公祠
     canonicalName: 玉川公祠
@@ -145,7 +126,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/自流井区
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 王爷庙 (自贡)
     canonicalName: 王爷庙 (自贡)
@@ -153,7 +133,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/自流井区
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 自贡桓侯宫
     canonicalName: 自贡桓侯宫
@@ -161,7 +140,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/自流井区
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 舒坪牌坊群
     canonicalName: 舒坪牌坊群
@@ -169,7 +147,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/自流井区
-    sourceReadiness: pending
     selectionPriority: 9
 - district: 贡井区
   leaves:
@@ -181,96 +158,84 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
     aliases:
     - 艾叶滩
-    selectionPriority: 3
-    sourceReadiness: pending
+    selectionPriority: 1
   - name: 五彩荷园景区
     canonicalName: 自贡五彩荷园景区
     entityType: 地点/景区
     typeTagRefs:
     - Entity/地点/景区/3A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    selectionPriority: 3
-    sourceReadiness: pending
+    selectionPriority: 2
   - name: 中壩鍾氏莊園
     canonicalName: 中壩鍾氏莊園
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 4
+    selectionPriority: 3
   - name: 夏洞寺
     canonicalName: 夏洞寺
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 5
+    selectionPriority: 4
   - name: 天祿堂
     canonicalName: 天祿堂
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 6
+    selectionPriority: 5
   - name: 張伯卿公館
     canonicalName: 張伯卿公館
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 7
+    selectionPriority: 6
   - name: 東源井古鹽場
     canonicalName: 東源井古鹽場
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 8
+    selectionPriority: 7
   - name: 自貢陳家祠堂
     canonicalName: 自貢陳家祠堂
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 9
+    selectionPriority: 8
   - name: 貢井南華宮
     canonicalName: 貢井南華宮
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 10
+    selectionPriority: 9
   - name: 貢井胡氏民居
     canonicalName: 貢井胡氏民居
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 11
+    selectionPriority: 10
   - name: 貢井貴州廟
     canonicalName: 貢井貴州廟
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 12
+    selectionPriority: 11
   - name: 雷公坡崖墓群
     canonicalName: 雷公坡崖墓群
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/贡井区
-    sourceReadiness: pending
-    selectionPriority: 13
+    selectionPriority: 12
 - district: 沿滩区
   leaves:
   - name: 仙市古镇
@@ -281,31 +246,27 @@ districts:
     - Entity/地点/古镇/历史古镇
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/沿滩区
     selectionPriority: 1
-    sourceReadiness: pending
   - name: 瑞鑫火箭湖旅游景区
     canonicalName: 沿滩瑞鑫火箭湖旅游景区
     entityType: 地点/景区
     typeTagRefs:
     - Entity/地点/景区/3A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/沿滩区
-    selectionPriority: 3
-    sourceReadiness: pending
+    selectionPriority: 2
   - name: 仙市陳家祠
     canonicalName: 仙市陳家祠
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/沿滩区
-    sourceReadiness: pending
-    selectionPriority: 4
+    selectionPriority: 3
   - name: 閤樂祠
     canonicalName: 閤樂祠
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/沿滩区
-    sourceReadiness: pending
-    selectionPriority: 5
+    selectionPriority: 4
 - district: 荣县
   leaves:
   - name: 荣县大佛
@@ -319,9 +280,6 @@ districts:
     aliases:
     - 荣县大佛文化旅游区
     selectionPriority: 1
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:53:56Z'
-    sourceScreenEvidence: zh.wikipedia.org:荣县大佛 extract=478ch
   - name: 玉章故里景区
     canonicalName: 荣县玉章故里景区
     entityType: 地点/景区
@@ -331,88 +289,77 @@ districts:
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
     aliases:
     - 吴玉章故居
-    selectionPriority: 3
-    sourceReadiness: pending
+    selectionPriority: 2
   - name: 來牟黎氏墓
     canonicalName: 來牟黎氏墓
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 4
+    selectionPriority: 3
   - name: 吳玉章故居
     canonicalName: 吳玉章故居
     entityType: 地点/景区
     typeTagRefs:
     - Entity/地点/景区/4A景区
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 5
+    selectionPriority: 4
   - name: 呂仙崖摩崖造像
     canonicalName: 呂仙崖摩崖造像
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 6
+    selectionPriority: 5
   - name: 建國起義紀念碑
     canonicalName: 建國起義紀念碑
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 7
+    selectionPriority: 6
   - name: 後龍山摩崖造像
     canonicalName: 後龍山摩崖造像
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 8
+    selectionPriority: 7
   - name: 旭水酒作坊遺址
     canonicalName: 旭水酒作坊遺址
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 9
+    selectionPriority: 8
   - name: 榮縣二佛
     canonicalName: 榮縣二佛
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 10
+    selectionPriority: 9
   - name: 荣县军政府旧址
     canonicalName: 荣县军政府旧址
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 11
+    selectionPriority: 10
   - name: 蟠龍劉氏家族墓
     canonicalName: 蟠龍劉氏家族墓
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 12
+    selectionPriority: 11
   - name: 镇南塔
     canonicalName: 镇南塔
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/文化遗产
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/荣县
-    sourceReadiness: pending
-    selectionPriority: 13
+    selectionPriority: 12
 - district: 富顺县
   leaves:
   - name: 富顺文庙
@@ -425,9 +372,6 @@ districts:
     aliases:
     - 富顺文庙·西湖景区
     selectionPriority: 1
-    sourceReadiness: ready
-    sourceScreenedAt: '2026-07-09T11:53:57Z'
-    sourceScreenEvidence: zh.wikipedia.org:富顺文庙 extract=217ch
   - name: 赵化古镇
     canonicalName: 富顺赵化古镇
     entityType: 地点/景区
@@ -436,14 +380,12 @@ districts:
     - Entity/地点/古镇/历史古镇
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/富顺县
     selectionPriority: 2
-    sourceReadiness: pending
   - name: 刘光第墓
     canonicalName: 刘光第墓
     entityType: 地点/遗址
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/富顺县
-    sourceReadiness: pending
     selectionPriority: 3
   - name: 劉光第故居
     canonicalName: 劉光第故居
@@ -451,7 +393,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/富顺县
-    sourceReadiness: pending
     selectionPriority: 4
   - name: 富順文光塔
     canonicalName: 富順文光塔
@@ -459,7 +400,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/富顺县
-    sourceReadiness: pending
     selectionPriority: 5
   - name: 富順迴瀾塔
     canonicalName: 富順迴瀾塔
@@ -467,7 +407,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/富顺县
-    sourceReadiness: pending
     selectionPriority: 6
   - name: 熙和居民居
     canonicalName: 熙和居民居
@@ -475,7 +414,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/富顺县
-    sourceReadiness: pending
     selectionPriority: 7
   - name: 獅市袁家大院
     canonicalName: 獅市袁家大院
@@ -483,7 +421,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/富顺县
-    sourceReadiness: pending
     selectionPriority: 8
   - name: 福源灝民居
     canonicalName: 福源灝民居
@@ -491,7 +428,6 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/富顺县
-    sourceReadiness: pending
     selectionPriority: 9
   - name: 臨江寺石坊群
     canonicalName: 臨江寺石坊群
@@ -499,5 +435,4 @@ districts:
     typeTagRefs:
     - Entity/地点/遗址/历史建筑
     geoTagRef: Topic/地理/行政区/中国/四川省/自贡市/富顺县
-    sourceReadiness: pending
     selectionPriority: 10

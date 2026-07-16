@@ -1,0 +1,22 @@
+version: 1
+domain: content
+entity: DeletedPostTombstone
+object_kind: append_only_fact
+
+description: |
+  删除保留期内用于传播删除与重建的只追加事实。隐私删除先脱敏 Post 与关联对象；
+  事实仅允许 append/dedupe，保留期结束后由 MongoDB TTL 自动清理。
+
+storage_backend: mongodb
+cache_layer: none
+capabilities: [queryable]
+taggable: false
+vector_enabled: false
+
+ddd_layer_mapping:
+  domain_model: internal/domain/deletion
+  repository: internal/domain/deletion/ports
+  repository_implementation: internal/infrastructure/persistence
+  application: internal/application/deletion
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/infrastructure/messaging

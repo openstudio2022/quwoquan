@@ -16,9 +16,8 @@
 	}
 }
 
-# 注意：local-gamma 运行栈真相源是 `quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh`
-# 内联生成的 `.qwq_output/env/gamma/local/gamma-local/Caddyfile`（compose 实际挂载该产物）。本文件是该路由表的
-# 静态参照副本，须与生成器逐路由一致；新增/调整领域路由时两处同步，避免第二真相源漂移。
+# Ops owns the single immutable local-gamma route table. Compose mounts this
+# file directly; runtime output contains evidence and process state only.
 gamma-api.quwoquan-env.test,
 gamma-api.localhost {
 	import local_gamma_tls
@@ -42,13 +41,17 @@ gamma-api.localhost {
 	handle @api_chat {
 		reverse_proxy chat-service:18081
 	}
-	@api_user path /v1/user* /v1/me /v1/me/*
+	@api_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*
 	handle @api_user {
 		reverse_proxy user-service:18082
 	}
 	@api_assistant path /v1/assistant*
 	handle @api_assistant {
 		reverse_proxy assistant-service:18087
+	}
+	@api_notification path /v1/app-messages /v1/app-messages/*
+	handle @api_notification {
+		reverse_proxy notification-service:18087
 	}
 	@api_tag path /v1/tag*
 	handle @api_tag {
@@ -69,10 +72,19 @@ gamma-api.localhost {
 	handle /v1/ops/* {
 		reverse_proxy product-ops-service:18086
 	}
+	handle /legal/manifest.json {
+		header {
+			Cache-Control "public, max-age=300"
+			X-Content-Type-Options "nosniff"
+		}
+		root * /srv/legal
+		file_server
+	}
 	handle /legal/* {
 		header {
 			Cache-Control "public, max-age=300"
 			X-Content-Type-Options "nosniff"
+			Content-Type "text/html; charset=utf-8"
 		}
 		root * /srv/legal
 		file_server
@@ -111,6 +123,9 @@ gamma-video.localhost,
 gamma-upload.localhost {
 	import local_gamma_tls
 	import media_cors
+	handle /healthz {
+		respond "ok" 200
+	}
 	root * /srv/media
 	file_server
 }
@@ -130,13 +145,17 @@ gamma-upload.localhost {
 	handle @pub_chat {
 		reverse_proxy chat-service:18081
 	}
-	@pub_user path /v1/user* /v1/me /v1/me/*
+	@pub_user path /v1/auth* /v1/owner* /v1/user* /v1/me /v1/me/*
 	handle @pub_user {
 		reverse_proxy user-service:18082
 	}
 	@pub_assistant path /v1/assistant*
 	handle @pub_assistant {
 		reverse_proxy assistant-service:18087
+	}
+	@pub_notification path /v1/app-messages /v1/app-messages/*
+	handle @pub_notification {
+		reverse_proxy notification-service:18087
 	}
 	@pub_tag path /v1/tag*
 	handle @pub_tag {

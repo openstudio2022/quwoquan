@@ -88,6 +88,5 @@ ChatMessageDisplayItem _message({
     thumbnailUrl: '',
     audioDurationMs: 0,
     audioWaveform: const <double>[],
-    tasks: const <ChatTaskCardEntry>[],
   );
 }

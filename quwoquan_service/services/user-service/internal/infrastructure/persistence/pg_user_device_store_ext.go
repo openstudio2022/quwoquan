@@ -8,12 +8,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	model "quwoquan_service/services/user-service/internal/domain/user/model"
-	repository "quwoquan_service/services/user-service/internal/domain/user/repository"
+	repository "quwoquan_service/services/user-service/internal/domain/user/ports"
 )
 
 type PgUserDeviceStore struct{ pgUserDeviceStoreBase }
 
-var _ repository.UserDeviceRepository = (*PgUserDeviceStore)(nil)
+var _ repository.DeviceRegistrationStore = (*PgUserDeviceStore)(nil)
 
 func NewPgUserDeviceStore(pool *pgxpool.Pool) *PgUserDeviceStore {
 	return &PgUserDeviceStore{pgUserDeviceStoreBase{pool: pool}}

@@ -2,6 +2,7 @@ package api_integration
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,64 +11,103 @@ import (
 	"testing"
 	"time"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/jackc/pgx/v5/pgxpool"
 	mongomod "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	mongoopts "go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	platformredis "quwoquan_service/internal/platform/redis"
+	"quwoquan_service/internal/platform/testinfra"
 	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/otpseal"
 	rtredis "quwoquan_service/runtime/redis"
 	runtimesync "quwoquan_service/runtime/sync"
 	httpadapter "quwoquan_service/services/user-service/internal/adapters/http"
 	"quwoquan_service/services/user-service/internal/adapters/mq"
 	"quwoquan_service/services/user-service/internal/application"
+	personaapp "quwoquan_service/services/user-service/internal/application/persona/persona"
+	proposalapp "quwoquan_service/services/user-service/internal/application/persona/profile_update_proposal"
+	relationshipapp "quwoquan_service/services/user-service/internal/application/relationship/persona_relationship"
 	"quwoquan_service/services/user-service/internal/infrastructure/cache"
 	"quwoquan_service/services/user-service/internal/infrastructure/persistence"
+	personapersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/persona/persistence"
+	proposalpersistence "quwoquan_service/services/user-service/internal/infrastructure/persona/profile_update_proposal/persistence"
 	"quwoquan_service/services/user-service/internal/infrastructure/projection"
+	relationshippersistence "quwoquan_service/services/user-service/internal/infrastructure/relationship/persona_relationship/persistence"
 )
 
 var (
-	testHandler    http.Handler
-	pgPool         *pgxpool.Pool
-	mongoDB        *mongo.Database
-	mr             *miniredis.Miniredis
-	redisClient    rtredis.Client
-	mongoClient    *mongo.Client
-	mongoContainer *mongomod.MongoDBContainer
-	mongoRuntimeMu sync.Mutex
+	testHandler                http.Handler
+	pgPool                     *pgxpool.Pool
+	mongoDB                    *mongo.Database
+	integrationRedis           *testinfra.RealRedis
+	redisRouter                *rtredis.Router
+	redisClient                rtredis.Client
+	mongoClient                *mongo.Client
+	mongoContainer             *mongomod.MongoDBContainer
+	mongoRuntimeMu             sync.Mutex
+	externalProviderRuntime    *externalProviderContractRuntime
+	externalInteractionRuntime *externalInteractionContractRuntime
+	chatContractRuntime        *chatServiceContractRuntime
+	conversationGateway        application.ConversationGateway
+	relationshipRelayCancel    context.CancelFunc
 
-	testAccessSecret   = []byte("test-user-service-access-secret")
-	testAccessSigner   = rtauth.NewHS256Signer(testAccessSecret, 30*time.Minute)
-	testAccessVerifier = rtauth.NewHS256Verifier(testAccessSecret)
+	testAccessConfig = rtauth.TokenConfig{
+		Secret:       []byte("test-user-service-access-secret-v1"),
+		Issuer:       "https://auth.quwoquan.test",
+		Audience:     "quwoquan-api",
+		Type:         rtauth.TokenTypeAccess,
+		TokenVersion: 1,
+		TTL:          30 * time.Minute,
+		ClockSkew:    30 * time.Second,
+	}
+	testAccessSigner   = mustAccessSigner(testAccessConfig)
+	testAccessVerifier = mustAccessVerifier(testAccessConfig)
+	testOTPCodeSealer  = mustOTPCodeSealer()
 )
 
-type acceptedExternalClient struct{}
+func mustOTPCodeSealer() *otpseal.Sealer {
+	sealer, err := otpseal.NewFromBase64("test-k1", map[string]string{
+		"test-k1": base64.StdEncoding.EncodeToString([]byte("0123456789abcdef0123456789abcdef")),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return sealer
+}
 
-func (acceptedExternalClient) SubmitSMSOTP(
-	ctx context.Context,
-	req application.SMSOTPDispatchRequest,
-) (application.ExternalInteractionAccepted, error) {
-	_ = ctx
-	return application.ExternalInteractionAccepted{
-		RequestID: req.RequestID,
-		Status:    "accepted",
-	}, nil
+func mustAccessSigner(config rtauth.TokenConfig) *rtauth.Signer {
+	signer, err := rtauth.NewHS256Signer(config)
+	if err != nil {
+		panic(err)
+	}
+	return signer
+}
+
+func mustAccessVerifier(config rtauth.TokenConfig) *rtauth.Verifier {
+	verifier, err := rtauth.NewHS256Verifier(config)
+	if err != nil {
+		panic(err)
+	}
+	return verifier
 }
 
 func TestMain(m *testing.M) {
 	ctx := context.Background()
 
-	// 1. miniredis
+	// 1. 真实 Redis 协议实现。
 	var err error
-	mr, err = miniredis.Run()
+	integrationRedis, err = testinfra.StartRealRedis(ctx)
 	if err != nil {
-		panic("failed to start miniredis: " + err.Error())
+		panic("user-service api_integration requires real Redis: " + err.Error())
+	}
+	if err := integrationRedis.FlushDBs(ctx, 0); err != nil {
+		panic("flush user-service integration Redis: " + err.Error())
 	}
 
-	redisRouter := rtredis.MustNewRouter(rtredis.RouterConfig{
+	redisRouter = platformredis.MustNewRouter(rtredis.RouterConfig{
 		Scenes: map[string]rtredis.SceneConfig{
-			"general": {Mode: "standalone", Addr: mr.Addr()},
+			"general": {Mode: "standalone", Addr: integrationRedis.Addr, Password: integrationRedis.Password, DB: 0, TLS: integrationRedis.TLS},
 		},
 		DefaultScene: "general",
 	})
@@ -86,19 +126,19 @@ func TestMain(m *testing.M) {
 	// Run migrations
 	runTestMigrations(ctx, pgPool)
 
-	// 3. MongoDB best-effort bootstrap. Local runs keep non-Mongo tests runnable,
-	// while Mongo-backed tests can explicitly upgrade the runtime on demand.
-	if err := bootstrapMongoRuntime(ctx, true); err != nil {
-		if configuredMongoURI() != "" || isCIEnvironment() {
-			panic("mongo bootstrap: " + err.Error())
-		}
-		fmt.Fprintf(
-			os.Stderr,
-			"\n[L2] WARN: Docker unavailable, MongoDB-dependent tests will self-bootstrap or fail when exercised.\n"+
-				"  Set QWQ_TEST_MONGO_URI or TEST_MONGO_URI to run them without Docker.\n"+
-				"  Error: %v\n\n",
-			err,
-		)
+	externalProviderRuntime, err = startExternalProviderContractRuntime()
+	if err != nil {
+		panic("external provider contract runtime: " + err.Error())
+	}
+	externalInteractionRuntime, err = startExternalInteractionContractRuntime()
+	if err != nil {
+		panic("external interaction contract runtime: " + err.Error())
+	}
+	chatContractRuntime, conversationGateway = startChatServiceContractRuntime()
+
+	// 3. MongoDB 是 api_integration 必需依赖，不得部分启动或动态降级。
+	if err := bootstrapMongoRuntime(ctx, false); err != nil {
+		panic("mongo bootstrap: " + err.Error())
 	}
 	if err := rebuildTestHandler(ctx); err != nil {
 		panic("build user-service test handler: " + err.Error())
@@ -107,6 +147,9 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	// Teardown
+	if relationshipRelayCancel != nil {
+		relationshipRelayCancel()
+	}
 	pgPool.Close()
 	if mongoClient != nil {
 		_ = mongoClient.Disconnect(ctx)
@@ -114,8 +157,11 @@ func TestMain(m *testing.M) {
 	if mongoContainer != nil {
 		_ = mongoContainer.Terminate(ctx)
 	}
+	chatContractRuntime.Close()
+	externalInteractionRuntime.Close()
+	externalProviderRuntime.Close()
 	_ = redisRouter.Close()
-	mr.Close()
+	_ = integrationRedis.Close(ctx)
 	if embeddedPG != nil {
 		_ = embeddedPG.Stop()
 	}
@@ -128,7 +174,7 @@ func tryRunMongoContainer(ctx context.Context) (c *mongomod.MongoDBContainer, er
 			err = fmt.Errorf("testcontainers panic: %v", r)
 		}
 	}()
-	c, err = mongomod.Run(ctx, "mongo:7-jammy")
+	c, err = mongomod.Run(ctx, "mongo:7-jammy", mongomod.WithReplicaSet("rs0"))
 	return
 }
 
@@ -165,10 +211,14 @@ func bootstrapMongoRuntime(ctx context.Context, allowLocalUnavailable bool) erro
 		if err != nil {
 			return fmt.Errorf("mongo connection string: %w", err)
 		}
-		mongoURI = uri
+		mongoURI = uri + "&directConnection=true"
 	}
 
-	client, err := mongo.Connect(mongoopts.Client().ApplyURI(mongoURI))
+	clientOptions := mongoopts.Client().ApplyURI(mongoURI)
+	if mongoContainer != nil {
+		clientOptions.SetDirect(true)
+	}
+	client, err := mongo.Connect(clientOptions)
 	if err != nil {
 		return fmt.Errorf("mongo connect: %w", err)
 	}
@@ -181,29 +231,30 @@ func rebuildTestHandler(ctx context.Context) error {
 	profileStore := persistence.NewPgProfileStore(pgPool)
 	personaStore := persistence.NewPgPersonaStore(pgPool).WithMongoDatabase(mongoDB)
 	settingStore := persistence.NewPgSettingStore(pgPool)
-	blockStore := persistence.NewPgBlockStore(pgPool)
+	relationshipStore := relationshippersistence.NewPgPersonaRelationshipStore(pgPool)
 	greetingStore := persistence.NewPgGreetingStore(pgPool)
 	workStore := persistence.NewPgWorkStore(pgPool)
 	lifeItemStore := persistence.NewPgLifeItemStore(pgPool)
-	var followStore *persistence.MongoFollowStore
-	if mongoDB != nil {
-		followStore = persistence.NewMongoFollowStore(mongoDB)
-		if err := followStore.EnsureIndexes(ctx); err != nil {
-			return fmt.Errorf("ensure follow indexes: %w", err)
-		}
-	}
 	credentialStore := persistence.NewPgCredentialBindingStore(pgPool)
 	userAuthStore := persistence.NewPgUserAuthStore(pgPool)
 	userDeviceStore := persistence.NewPgUserDeviceStore(pgPool)
 	consentRecordStore := persistence.NewPgConsentRecordStore(pgPool)
+	otpChallengeStore := persistence.NewPgOtpChallengeStore(pgPool)
 	anonymousDeviceBindingStore := persistence.NewPgAnonymousDeviceBindingStore(pgPool)
 	profileQrTokenStore := persistence.NewPgProfileQrTokenStore(pgPool)
 	contactDiscoveryStore := persistence.NewPgContactDiscoveryStore(pgPool)
 	inviteStore := persistence.NewPgInviteStore(pgPool)
+	personaProfileProposalStore, err := personapersistence.NewProfileProposalPostgresStore(pgPool)
+	if err != nil {
+		return err
+	}
+	profileProposalStore, err := proposalpersistence.NewPostgresStore(pgPool)
+	if err != nil {
+		return err
+	}
 
 	profileCache := cache.NewProfileCache(redisClient)
 	settingCache := cache.NewSettingCache(redisClient)
-	blockCache := cache.NewBlockCache(redisClient)
 	userEventPublisher := mq.NewEventPublisher(redisClient)
 	userSyncService := runtimesync.NewService(redisClient, redisClient)
 	shardDirectory, err := application.LoadDefaultShardDirectory()
@@ -216,30 +267,32 @@ func rebuildTestHandler(ctx context.Context) error {
 		personaStore,
 		settingStore,
 		profileCache,
-		settingCache,
 		userEventPublisher,
 		userSyncService,
-		application.WithProfileQrTokenRepository(profileQrTokenStore),
+		application.WithProfileQrTokenStore(profileQrTokenStore),
 	)
 	searchService := application.NewSearchService(profileStore, personaStore, redisClient)
-	followService := application.NewFollowService(
-		followStore,
+	relationshipService := relationshipapp.NewPersonaRelationshipService(
+		relationshipStore,
 		profileStore,
 		personaStore,
 		profileCache,
-		blockStore,
-		userEventPublisher,
+		greetingStore,
 	)
-	conversationGateway := application.NewMemoryConversationGateway()
+	if relationshipRelayCancel != nil {
+		relationshipRelayCancel()
+	}
+	relationshipRelayContext, cancelRelationshipRelay := context.WithCancel(context.Background())
+	relationshipRelayCancel = cancelRelationshipRelay
+	relationshipRelay := relationshipapp.NewOutboxRelay(relationshipStore, userEventPublisher)
+	go func() { _ = relationshipRelay.Run(relationshipRelayContext, 10*time.Millisecond) }()
 	greetingService := application.NewGreetingService(
 		greetingStore,
-		followStore,
-		blockStore,
+		relationshipService,
 		conversationGateway,
 		userEventPublisher,
 	)
-	blockService := application.NewBlockService(blockStore, followStore, blockCache, userEventPublisher, greetingStore)
-	personaService := application.NewPersonaService(personaStore, pgPool, profileCache)
+	personaService := application.NewPersonaService(personaStore, personaStore, profileCache)
 	workService := application.NewWorkService(workStore)
 	lifeItemService := application.NewLifeItemService(lifeItemStore)
 	settingService := application.NewSettingService(settingStore, settingCache)
@@ -248,35 +301,62 @@ func rebuildTestHandler(ctx context.Context) error {
 		personaStore,
 		credentialStore,
 		anonymousDeviceBindingStore,
-		profileCache,
 		shardDirectory,
-		application.WithUserAuthRepository(userAuthStore),
-		application.WithUserDeviceRepository(userDeviceStore),
-		application.WithConsentRepository(consentRecordStore),
+		application.WithAccountSessionStore(userAuthStore),
+		application.WithDeviceRegistrationStore(userDeviceStore),
+		application.WithConsentRecordStore(consentRecordStore),
 		application.WithOtpCodeStore(cache.NewOtpCodeCache(redisClient)),
-		application.WithOtpDebugReveal(true),
-		application.WithExternalInteractionClient(acceptedExternalClient{}),
+		application.WithOtpChallengeStore(otpChallengeStore),
+		application.WithOTPCodeSealer(testOTPCodeSealer),
+		application.WithExternalInteractionClient(externalInteractionRuntime.client),
+		application.WithExternalAuthProviderClient(externalProviderRuntime.client),
 		application.WithAccessTokenSigner(testAccessSigner),
 		application.WithOneTapPhoneResolver(application.StaticOneTapPhoneResolver{
 			"carrier_token_new":      "+8618013813901",
 			"carrier_token_existing": "+8618013813902",
 		}),
 	)
-	subAccountService := application.NewSubAccountService(personaStore, profileStore, profileCache)
+	subAccountService := application.NewSubAccountService(
+		personaStore,
+		personaStore,
+		personaStore,
+		profileStore,
+		profileCache,
+	)
 	contactDiscoveryService := application.NewContactDiscoveryService(contactDiscoveryStore)
-	inviteService := application.NewInviteService(inviteStore, personaStore)
+	inviteService := application.NewInviteService(inviteStore, inviteStore)
 	var interestReader application.InterestProfileReader
 	if mongoDB != nil {
 		interestReader = projection.NewMongoInterestProfileReader(mongoDB)
 	}
 	interestProfileService := application.NewInterestProfileService(interestReader)
+	personaProfileProposalFacade, err := personaapp.NewProfileProposalFacade(personaProfileProposalStore)
+	if err != nil {
+		return err
+	}
+	profileProposalFacade, err := proposalapp.NewFacade(
+		profileProposalStore,
+		profileProposalStore,
+		personaProfileProposalFacade,
+		personaProfileProposalStore,
+	)
+	if err != nil {
+		return err
+	}
 
-	testHandler = rtauth.Middleware(testAccessVerifier)(httpadapter.NewUserHandler(
-		profileService, searchService, followService, blockService, greetingService,
+	userHandler, err := httpadapter.NewUserHandler(
+		profileService, searchService, relationshipService, greetingService,
 		personaService, workService, lifeItemService, settingService,
 		authService, subAccountService, contactDiscoveryService, inviteService,
 		interestProfileService,
-	).Routes())
+		profileProposalFacade,
+	)
+	if err != nil {
+		return err
+	}
+	testHandler = rtauth.Middleware(rtauth.MiddlewareConfig{
+		AccessTokenVerifier: testAccessVerifier,
+	})(userHandler.Routes())
 	return nil
 }
 

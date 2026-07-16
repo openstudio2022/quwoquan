@@ -42,9 +42,10 @@ HTML 必须包含：
 | visibility / 状态 | 输出 |
 |---|---|
 | `public` + 审核通过 | 完整可索引 HTML |
-| `circle_visible` | 受控预览：标题、封面、摘要、安装/打开 App CTA，不输出完整正文 |
 | `private` | 不生成公开正文；返回 noindex 或 404/403 策略页 |
 | 未审核通过 / 下架 | 不进入 sitemap，不输出完整正文 |
+
+Post 不存在圈内可见性；CirclePostPlacement 是 Circle 上下文的分发事实，不参与公开 HTML 权限判断。
 
 ## Sitemap
 
@@ -72,7 +73,7 @@ Sitemap: ${PUBLIC_WEB_BASE_URL}/sitemap.xml
 
 - 缓存 key：`postId + articleMarkdownDigest + visibility + reviewState + renderProfile`。
 - Markdown 或 asset manifest 变化后失效。
-- visibility 从 public 改为 private/circle_visible 后必须立即清理公开缓存并从 sitemap 移除。
+- visibility 从 public 改为 private 后必须立即清理公开缓存并从 sitemap 移除。
 
 ## 测试
 

@@ -30,6 +30,14 @@ flutter_ios_podfile_setup
 target 'Runner' do
   use_frameworks!
 
+  pod 'WechatOpenSDK-XCFramework', '2.0.5'
+  pod 'QWQVendorQQOpenSDK', :path => '../vendor/commercial_auth/qq/ios'
+  pod 'QWQVendorAlipaySDK', :path => '../vendor/commercial_auth/alipay/ios'
+  aliyun_pnvs_dir = File.expand_path('../vendor/commercial_auth/aliyun/ios', __dir__)
+  if Dir.glob(File.join(aliyun_pnvs_dir, '*.{framework,xcframework}')).any?
+    pod 'QWQVendorAliyunPNVS', :path => aliyun_pnvs_dir
+  end
+
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
     inherit! :search_paths

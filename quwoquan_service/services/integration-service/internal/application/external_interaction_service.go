@@ -1,32 +1,107 @@
 package application
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
+	"reflect"
+	"sort"
 	"strings"
 	"time"
 
+	"quwoquan_service/runtime/otpseal"
 	"quwoquan_service/runtime/reliabletask"
 )
 
+type ExternalInteractionStore interface {
+	reliabletask.Store
+	reliabletask.ProviderAttemptLedgerStore
+	reliabletask.DLQRecoveryStore
+	reliabletask.RetentionCleanupStore
+	reliabletask.MetricsStore
+}
+
 type ExternalInteractionService struct {
-	store      reliabletask.Store
+	store      ExternalInteractionStore
 	dispatcher reliabletask.ExternalInteractionDispatcher
 	worker     reliabletask.ExternalInteractionWorker
+	policies   map[string]reliabletask.ProviderPolicy
+	references otpseal.ReferenceStore
 	now        func() time.Time
 }
 
 func NewExternalInteractionService(
-	store reliabletask.Store,
+	store ExternalInteractionStore,
 	providers map[string]reliabletask.ExternalProvider,
+	policies map[string]reliabletask.ProviderPolicy,
 	callback reliabletask.ExternalInteractionCallbackSender,
-) *ExternalInteractionService {
-	if store == nil {
-		store = reliabletask.NewMemoryStore()
+	referenceStores ...otpseal.ReferenceStore,
+) (*ExternalInteractionService, error) {
+	if isNilDependency(store) {
+		return nil, fmt.Errorf("external interaction store is required")
 	}
+	if len(providers) == 0 {
+		return nil, fmt.Errorf("external interaction providers are required")
+	}
+	if len(policies) == 0 {
+		return nil, fmt.Errorf("external interaction provider policies are required")
+	}
+	if isNilDependency(callback) {
+		return nil, fmt.Errorf("external interaction callback sender is required")
+	}
+	var references otpseal.ReferenceStore
+	if len(referenceStores) > 0 {
+		references = referenceStores[0]
+	}
+	if _, smsEnabled := policies[reliabletask.ExternalInteractionOperationSmsOTP]; smsEnabled &&
+		isNilDependency(references) {
+		return nil, fmt.Errorf("otp code reference store is required for sms_otp.send")
+	}
+	taskTypes := make([]string, 0, len(policies))
+	normalizedPolicies := make(map[string]reliabletask.ProviderPolicy, len(policies))
+	for operation, policy := range policies {
+		operation = strings.TrimSpace(operation)
+		if !supportedExternalOperation(operation) {
+			return nil, fmt.Errorf("external interaction operation %q is not supported", operation)
+		}
+		if len(policy.Providers) == 0 {
+			return nil, fmt.Errorf("external interaction operation %s has no provider policy", operation)
+		}
+		if policy.Timeout <= 0 {
+			return nil, fmt.Errorf("external interaction operation %s timeout must be positive", operation)
+		}
+		normalizedProviders := make([]string, 0, len(policy.Providers))
+		for _, rawProviderName := range policy.Providers {
+			providerName := strings.TrimSpace(rawProviderName)
+			if providerName == "" {
+				return nil, fmt.Errorf("external interaction operation %s has an empty provider name", operation)
+			}
+			if strings.Contains(strings.ToLower(providerName), "mock") {
+				return nil, fmt.Errorf(
+					"external interaction operation %s cannot use mock provider %s",
+					operation,
+					providerName,
+				)
+			}
+			if isNilDependency(providers[providerName]) {
+				return nil, fmt.Errorf(
+					"external interaction provider %s for operation %s is unavailable",
+					providerName,
+					operation,
+				)
+			}
+			normalizedProviders = append(normalizedProviders, providerName)
+		}
+		policy.Providers = normalizedProviders
+		if policy.RetryPolicy.MaxAttempts <= 0 {
+			return nil, fmt.Errorf(
+				"external interaction operation %s retry policy is required",
+				operation,
+			)
+		}
+		normalizedPolicies[operation] = policy
+		taskTypes = append(taskTypes, reliabletask.TaskTypeForExternalInteraction(operation))
+	}
+	sort.Strings(taskTypes)
 	now := func() time.Time { return time.Now().UTC() }
 	return &ExternalInteractionService{
 		store: store,
@@ -37,35 +112,59 @@ func NewExternalInteractionService(
 		worker: reliabletask.ExternalInteractionWorker{
 			Worker: reliabletask.Worker{
 				Store:     store,
-				TaskTypes: []string{reliabletask.TaskTypeForExternalInteraction(reliabletask.ExternalInteractionOperationSmsOTP), reliabletask.TaskTypeForExternalInteraction(reliabletask.ExternalInteractionOperationPush)},
+				TaskTypes: taskTypes,
 				WorkerID:  "integration-external-worker",
 				LeaseTTL:  30 * time.Second,
 				Retry:     reliabletask.DefaultRetryPolicy(),
 				Now:       now,
 			},
 			Providers: providers,
-			Policies: map[string]reliabletask.ProviderPolicy{
-				reliabletask.ExternalInteractionOperationSmsOTP: {
-					Providers:   []string{"mock_sms"},
-					Timeout:     2 * time.Second,
-					RetryPolicy: reliabletask.DefaultRetryPolicy(),
-				},
-				reliabletask.ExternalInteractionOperationPush: {
-					Providers:   []string{"mock_push"},
-					Timeout:     2 * time.Second,
-					RetryPolicy: reliabletask.DefaultRetryPolicy(),
-				},
-			},
-			Ledger:   providerAttemptLedger(store),
-			Callback: callback,
-			Now:      now,
+			Policies:  normalizedPolicies,
+			Ledger:    store,
+			Callback:  callback,
+			Now:       now,
 		},
-		now: now,
-	}
+		policies:   normalizedPolicies,
+		now:        now,
+		references: references,
+	}, nil
 }
 
 func (s *ExternalInteractionService) Submit(ctx context.Context, req reliabletask.ExternalInteractionRequest) (reliabletask.ExternalInteractionAccepted, error) {
-	return s.dispatcher.Submit(ctx, req)
+	if _, enabled := s.policies[req.Operation]; !enabled {
+		return reliabletask.ExternalInteractionAccepted{}, fmt.Errorf(
+			"external interaction operation %s is disabled",
+			req.Operation,
+		)
+	}
+	if req.Operation != reliabletask.ExternalInteractionOperationSmsOTP {
+		return s.dispatcher.Submit(ctx, req)
+	}
+	if isNilDependency(s.references) {
+		return reliabletask.ExternalInteractionAccepted{}, fmt.Errorf("otp code reference store is required")
+	}
+	payload := reliabletask.CloneStringMap(req.Payload)
+	codeRef := strings.TrimSpace(payload["codeRef"])
+	challengeID := strings.TrimSpace(payload["challengeId"])
+	if codeRef == "" || challengeID == "" {
+		return reliabletask.ExternalInteractionAccepted{}, fmt.Errorf("sms otp codeRef and challengeId are required")
+	}
+	if err := s.references.Put(ctx, otpseal.StoredReference{
+		RequestID:   req.RequestID,
+		ChallengeID: challengeID,
+		CodeRef:     codeRef,
+		ExpiresAt:   req.ExpiresAt,
+	}); err != nil {
+		return reliabletask.ExternalInteractionAccepted{}, fmt.Errorf("store otp code reference: %w", err)
+	}
+	delete(payload, "codeRef")
+	req.Payload = payload
+	accepted, err := s.dispatcher.Submit(ctx, req)
+	if err != nil {
+		_ = s.references.Delete(ctx, req.RequestID, challengeID)
+		return reliabletask.ExternalInteractionAccepted{}, err
+	}
+	return accepted, nil
 }
 
 func (s *ExternalInteractionService) DispatchDue(ctx context.Context, limit int) error {
@@ -81,11 +180,7 @@ func (s *ExternalInteractionService) ProcessOne(ctx context.Context) (bool, erro
 }
 
 func (s *ExternalInteractionService) ListAttempts(ctx context.Context, requestID string) ([]reliabletask.ProviderAttemptRecord, error) {
-	ledger := providerAttemptLedger(s.store)
-	if ledger == nil {
-		return nil, nil
-	}
-	return ledger.ListProviderAttempts(ctx, requestID)
+	return s.store.ListProviderAttempts(ctx, requestID)
 }
 
 type ExternalDeadLetter struct {
@@ -120,122 +215,43 @@ func (s *ExternalInteractionService) ListDeadLetters(ctx context.Context, reques
 }
 
 func (s *ExternalInteractionService) RecoverDeadTask(ctx context.Context, taskID string) error {
-	recovery, ok := s.store.(reliabletask.DLQRecoveryStore)
-	if !ok {
-		return nil
-	}
-	return recovery.RecoverDeadTask(ctx, taskID, s.now())
+	return s.store.RecoverDeadTask(ctx, taskID, s.now())
 }
 
 func (s *ExternalInteractionService) CleanupRetention(ctx context.Context, policy reliabletask.RetentionPolicy) (reliabletask.RetentionCleanupResult, error) {
-	cleanup, ok := s.store.(reliabletask.RetentionCleanupStore)
-	if !ok {
-		return reliabletask.RetentionCleanupResult{}, nil
-	}
-	return cleanup.CleanupReliableTaskRetention(ctx, policy, s.now())
+	return s.store.CleanupReliableTaskRetention(ctx, policy, s.now())
 }
 
 func (s *ExternalInteractionService) Metrics(ctx context.Context) (reliabletask.MetricsSnapshot, error) {
-	metrics, ok := s.store.(reliabletask.MetricsStore)
-	if !ok {
-		return reliabletask.MetricsSnapshot{}, nil
-	}
-	return metrics.ReliableTaskMetrics(ctx)
+	return s.store.ReliableTaskMetrics(ctx)
 }
 
-type MockSMSProvider struct{}
-
-func (MockSMSProvider) Send(ctx context.Context, req reliabletask.ExternalInteractionRequest, task reliabletask.ReliableAsyncTask) (reliabletask.ExternalInteractionResult, error) {
-	_ = ctx
-	if task.Payload["forceProviderFailure"] == "true" {
-		return reliabletask.ExternalInteractionResult{
-			RequestID:       req.RequestID,
-			Operation:       req.Operation,
-			Status:          reliabletask.ExternalInteractionStatusFailed,
-			Provider:        "mock_sms",
-			NormalizedError: "mock_sms_forced_failure",
-			Retryable:       task.Payload["forceRetryable"] != "false",
-		}, fmt.Errorf("mock sms provider failure")
+func supportedExternalOperation(operation string) bool {
+	switch operation {
+	case reliabletask.ExternalInteractionOperationSmsOTP,
+		reliabletask.ExternalInteractionOperationPush,
+		reliabletask.ExternalInteractionOperationOneTapPhone,
+		reliabletask.ExternalInteractionOperationWebhook:
+		return true
+	default:
+		return false
 	}
-	return reliabletask.ExternalInteractionResult{
-		RequestID:         req.RequestID,
-		Operation:         req.Operation,
-		Status:            reliabletask.ExternalInteractionStatusDelivered,
-		Provider:          "mock_sms",
-		ProviderRequestID: "mock-sms-" + req.RequestID,
-		Retryable:         false,
-	}, nil
 }
 
-type MockPushProvider struct{}
-
-func (MockPushProvider) Send(ctx context.Context, req reliabletask.ExternalInteractionRequest, task reliabletask.ReliableAsyncTask) (reliabletask.ExternalInteractionResult, error) {
-	_ = ctx
-	_ = task
-	return reliabletask.ExternalInteractionResult{
-		RequestID:         req.RequestID,
-		Operation:         req.Operation,
-		Status:            reliabletask.ExternalInteractionStatusDelivered,
-		Provider:          "mock_push",
-		ProviderRequestID: "mock-push-" + req.RequestID,
-		Retryable:         false,
-	}, nil
-}
-
-type HTTPCallbackSender struct {
-	Client *http.Client
-	Secret string
-}
-
-func (s HTTPCallbackSender) SendExternalInteractionResult(ctx context.Context, result reliabletask.ExternalInteractionResult) error {
-	if strings.TrimSpace(result.RequestID) == "" || strings.TrimSpace(result.CallbackURL) == "" {
-		return nil
+func isNilDependency(value any) bool {
+	if value == nil {
+		return true
 	}
-	callbackURL := strings.TrimSpace(result.CallbackURL)
-	if strings.HasPrefix(callbackURL, "https://") {
-		return s.post(ctx, callbackURL, result)
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
+	case reflect.Chan,
+		reflect.Func,
+		reflect.Interface,
+		reflect.Map,
+		reflect.Pointer,
+		reflect.Slice:
+		return reflected.IsNil()
+	default:
+		return false
 	}
-	return nil
-}
-
-func (s HTTPCallbackSender) post(ctx context.Context, callbackURL string, result reliabletask.ExternalInteractionResult) error {
-	client := s.Client
-	if client == nil {
-		client = http.DefaultClient
-	}
-	body, err := json.Marshal(map[string]any{
-		"requestId":         result.RequestID,
-		"operation":         result.Operation,
-		"status":            result.Status,
-		"provider":          result.Provider,
-		"providerMessageId": result.ProviderRequestID,
-		"normalizedError":   result.NormalizedError,
-		"retryable":         result.Retryable,
-		"timestamp":         result.OccurredAt.Format(time.RFC3339),
-	})
-	if err != nil {
-		return err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, callbackURL, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if s.Secret != "" {
-		req.Header.Set("X-QWQ-Callback-Signature", s.Secret)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("callback status %d", resp.StatusCode)
-	}
-	return nil
-}
-
-func providerAttemptLedger(store reliabletask.Store) reliabletask.ProviderAttemptLedgerStore {
-	ledger, _ := store.(reliabletask.ProviderAttemptLedgerStore)
-	return ledger
 }

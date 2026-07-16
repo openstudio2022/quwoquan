@@ -1,0 +1,39 @@
+version: 1
+domain: content
+entity: ContentReaction
+object_kind: aggregate_root
+
+description: |
+  由 targetKind + targetId + actorDimension + actorId 唯一确定的内容互动关系聚合。
+  targetKind 是 post/comment 封闭集合；persona 与 device 是不相交的身份维度。
+  Post 只允许 none/like，Comment 允许 none/like/dislike。所有计数均由事件或权威
+  成员关系派生，目标对象不保存用户关系集合，也不充当互动关系真相。
+
+storage_backend: mongodb
+cache_layer: none
+capabilities: [queryable, idempotent_commands, event_sourced_outbox]
+taggable: false
+vector_enabled: false
+
+business_rules:
+  - identity 固定为 targetKind + targetId + actorDimension + actorId
+  - targetKind 仅允许 post 或 comment，actorDimension 仅允许 persona 或 device
+  - Post 仅允许 none/like，Comment 允许 none/like/dislike
+  - 同一 identity 的重复命令按 idempotency receipt 返回，不重复产生副作用
+  - reaction 变化只发布事件，目标聚合不保存关系或计数真相
+
+lifecycle:
+  states: [none, like, dislike]
+  optimistic_concurrency: version
+  idempotency: command_receipt
+  identity:
+    fields: [targetKind, targetId, actorDimension, actorId]
+    uniqueness: target_actor_dimension
+
+ddd_layer_mapping:
+  domain_model: internal/domain/reaction
+  ports: internal/domain/content/content_reaction/ports
+  persistence: internal/infrastructure/content/content_reaction/persistence
+  application: internal/application/reaction
+  adapter_rest: internal/adapters/http
+  adapter_event: internal/infrastructure/messaging

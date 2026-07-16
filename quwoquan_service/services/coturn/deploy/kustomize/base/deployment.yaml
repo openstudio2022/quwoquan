@@ -19,7 +19,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: coturn
-          image: coturn/coturn:4.6-alpine
+          image: coturn/coturn:4.6-alpine@sha256:e2bca2f79a4269d7240de5872ab60a9305013ad37296d2acf14f9510874346be
           imagePullPolicy: IfNotPresent
           args:
             - "-n"

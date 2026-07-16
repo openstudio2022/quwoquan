@@ -112,60 +112,6 @@ class ChatMessageBubble extends StatelessWidget {
           ),
         ),
       );
-    } else if (type == 'task_card') {
-      final tasks = message.tasks;
-      contentWidget = Container(
-        constraints: BoxConstraints(maxWidth: effectiveMaxWidth),
-        decoration: BoxDecoration(
-          color: bubbleColor.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(AppSpacing.largeBorderRadius),
-          border: Border.all(color: bubbleColor.withValues(alpha: 0.3)),
-        ),
-        padding: EdgeInsets.all(AppSpacing.sm),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '今日待办提醒',
-              style: TextStyle(
-                fontSize: AppTypography.sm,
-                fontWeight: FontWeight.w600,
-                color: textColor,
-              ),
-            ),
-            SizedBox(height: AppSpacing.sm),
-            ...tasks.map<Widget>((task) {
-              final title = task.title;
-              final time = task.time;
-              final status = task.status;
-              return Padding(
-                padding: EdgeInsets.only(bottom: AppSpacing.xs),
-                child: Row(
-                  children: [
-                    Icon(
-                      status == 'completed'
-                          ? Icons.check_circle
-                          : Icons.radio_button_unchecked,
-                      size: AppSpacing.iconSmall,
-                      color: textColor,
-                    ),
-                    SizedBox(width: AppSpacing.intraGroupSm),
-                    Expanded(
-                      child: Text(
-                        '$title · $time',
-                        style: TextStyle(
-                          fontSize: AppTypography.sm,
-                          color: textColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
-        ),
-      );
     } else if (type == 'image') {
       final imageUrl = message.imageUrl.isNotEmpty
           ? message.imageUrl
@@ -365,6 +311,97 @@ class ChatMessageBubble extends StatelessWidget {
                       ),
                     ],
                   ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else if (type == 'card' && message.card != null) {
+      final card = message.card!;
+      final title = card.title.trim().isEmpty
+          ? UITextConstants.chatPreviewCard
+          : card.title.trim();
+      final subtitle = card.subtitle?.trim() ?? '';
+      final thumbnailUrl = card.thumbnailUrl?.trim() ?? '';
+      contentWidget = _BubbleWithTail(
+        isRight: isRight,
+        color: bubbleColor.withValues(alpha: 0.94),
+        tailShadowColor: AppColorsFunctional.getColor(
+          isDark,
+          ColorType.dropShadow,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: effectiveMaxWidth * 0.92,
+            minWidth: AppSpacing.twoHundredTwenty,
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.containerSm),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (thumbnailUrl.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(
+                      AppSpacing.largeBorderRadius,
+                    ),
+                    child: AppCachedNetworkImage(
+                      imageUrl: thumbnailUrl,
+                      width: AppSpacing.avatarUserXl,
+                      height: AppSpacing.avatarUserXl,
+                      fit: BoxFit.cover,
+                      cdnPreset: CdnImagePreset.thumbnail,
+                      errorWidget: Container(
+                        width: AppSpacing.avatarUserXl,
+                        height: AppSpacing.avatarUserXl,
+                        color: bubbleColor.withValues(alpha: 0.3),
+                        child: Icon(
+                          Icons.link_rounded,
+                          color: textColor.withValues(alpha: 0.8),
+                        ),
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.intraGroupSm),
+                ],
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTypography.iosBody,
+                          color: textColor,
+                          height: AppTypography.lineHeightCompact,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty) ...[
+                        SizedBox(height: AppSpacing.xs),
+                        Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: AppTypography.iosFootnote,
+                            color: textColor.withValues(alpha: 0.72),
+                            height: AppTypography.lineHeightCompact,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                SizedBox(width: AppSpacing.intraGroupXs),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: textColor.withValues(alpha: 0.64),
+                  size: AppSpacing.iconMedium,
                 ),
               ],
             ),

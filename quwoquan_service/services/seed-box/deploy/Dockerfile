@@ -12,15 +12,7 @@ ENV GOPROXY=${GOPROXY}
 ENV GOSUMDB=${GOSUMDB}
 WORKDIR /build/quwoquan_service
 COPY quwoquan_service/go.mod quwoquan_service/go.sum ./
-COPY quwoquan_service/services/integration-service/go.mod quwoquan_service/services/integration-service/go.sum ./services/integration-service/
-COPY quwoquan_service/services/entity-service/go.mod quwoquan_service/services/entity-service/go.sum ./services/entity-service/
-COPY quwoquan_service/services/assistant-service/go.mod quwoquan_service/services/assistant-service/go.sum ./services/assistant-service/
-COPY quwoquan_service/services/notification-service/go.mod quwoquan_service/services/notification-service/go.sum ./services/notification-service/
-RUN go mod download && \
-    cd services/integration-service && go mod download && \
-    cd ../entity-service && go mod download && \
-    cd ../assistant-service && go mod download && \
-    cd ../notification-service && go mod download
+RUN go mod download
 COPY quwoquan_service/ ./
 RUN mkdir -p /out/bin && \
     CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
@@ -29,22 +21,18 @@ RUN mkdir -p /out/bin && \
       go build ${GO_BUILD_FLAGS} -o /out/bin/chat-service ./services/chat-service/cmd/api && \
     CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
       go build ${GO_BUILD_FLAGS} -o /out/bin/user-service ./services/user-service/cmd/api && \
-    (cd services/integration-service && \
-      CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-        go build ${GO_BUILD_FLAGS} -o /out/bin/integration-service ./cmd/api) && \
+    CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+      go build ${GO_BUILD_FLAGS} -o /out/bin/integration-service ./services/integration-service/cmd/api && \
     CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
       go build ${GO_BUILD_FLAGS} -o /out/bin/circle-service ./services/circle-service/cmd/api && \
-    (cd services/entity-service && \
-      CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-        go build ${GO_BUILD_FLAGS} -o /out/bin/entity-service ./cmd/api) && \
+    CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+      go build ${GO_BUILD_FLAGS} -o /out/bin/entity-service ./services/entity-service/cmd/api && \
     CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
       go build ${GO_BUILD_FLAGS} -o /out/bin/tag-service ./services/tag-service/cmd/api && \
-    (cd services/assistant-service && \
-      CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-        go build ${GO_BUILD_FLAGS} -o /out/bin/assistant-service ./cmd/api) && \
-    (cd services/notification-service && \
-      CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
-        go build ${GO_BUILD_FLAGS} -o /out/bin/notification-service ./cmd/api)
+    CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+      go build ${GO_BUILD_FLAGS} -o /out/bin/assistant-service ./services/assistant-service/cmd/api && \
+    CGO_ENABLED=0 GOMAXPROCS=1 GOGC=20 GOMEMLIMIT=1536MiB \
+      go build ${GO_BUILD_FLAGS} -o /out/bin/notification-service ./services/notification-service/cmd/api
 
 FROM ${PYTHON_BASE_IMAGE}
 ARG PIP_INDEX_URL

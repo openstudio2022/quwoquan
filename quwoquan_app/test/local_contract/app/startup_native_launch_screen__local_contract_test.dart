@@ -3,30 +3,43 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('native launch screen contract', () {
-    test(
-      'Android native launch background is content-free transition only',
-      () {
-        for (final path in const [
-          'android/app/src/main/res/drawable/launch_background.xml',
-          'android/app/src/main/res/drawable-v21/launch_background.xml',
-          'android/app/src/main/res/drawable-night/launch_background.xml',
-          'android/app/src/main/res/drawable-night-v21/launch_background.xml',
-        ]) {
-          final xml = _readAppFile(path);
-          expect(xml, contains('<shape'));
-          expect(xml, contains('<gradient'));
-          expect(xml, isNot(contains('<layer-list')));
-          expect(xml, isNot(contains('<bitmap')));
-          expect(xml, isNot(contains('@drawable/launch_splash_icon')));
-          expect(xml, isNot(contains('@drawable/launch_brand_cluster')));
-          expect(xml, isNot(contains('@drawable/launch_background_full')));
-          expect(xml, isNot(contains('android:gravity="center"')));
-        }
-      },
-    );
+  group('startup native/Flutter handoff contract', () {
+    test('Android 使用自适应渐变背景和同源透明品牌簇，不拉伸整屏截图', () {
+      for (final path in const <String>[
+        'android/app/src/main/res/drawable/launch_background.xml',
+        'android/app/src/main/res/drawable-v21/launch_background.xml',
+        'android/app/src/main/res/drawable-night/launch_background.xml',
+        'android/app/src/main/res/drawable-night-v21/launch_background.xml',
+      ]) {
+        final xml = _readAppFile(path);
+        expect(xml, contains('<gradient'));
+        expect(xml, contains('@drawable/launch_brand_cluster'));
+        expect(xml, contains('android:width="393dp"'));
+        expect(xml, contains('android:height="500dp"'));
+        expect(xml, isNot(contains('@drawable/launch_welcome_final')));
+      }
 
-    test('Android native layer does not implement a mirrored welcome page', () {
+      for (final path in const <String>[
+        'android/app/src/main/res/drawable-nodpi/launch_brand_cluster.png',
+        'assets/brand/launch_welcome_background_master.png',
+        'assets/brand/launch_brand_cluster_full_master.png',
+      ]) {
+        final file = _appFile(path);
+        expect(file.existsSync(), isTrue, reason: path);
+        expect(file.lengthSync(), greaterThan(10 * 1024), reason: path);
+      }
+
+      final generator = _readAppFile(
+        'tool/generate_native_launch_welcome_final_test.dart',
+      );
+      expect(generator, contains('WelcomeBrandCluster'));
+      expect(generator, contains('WelcomeFlowerMark'));
+      expect(generator, contains('petalBloomAmounts: _fullBloom'));
+      expect(generator, contains('_centerCrop'));
+      expect(generator, contains("FontLoader('Noto Sans SC')"));
+    });
+
+    test('Android launcher 直达 MainActivity，原生层没有第二套动态欢迎页', () {
       expect(
         _appFile(
           'android/app/src/main/java/com/quwoquan/quwoquan_app/NativeWelcomeView.java',
@@ -40,59 +53,34 @@ void main() {
         isFalse,
       );
 
+      final manifest = _readAppFile('android/app/src/main/AndroidManifest.xml');
+      expect(manifest, contains('android:name=".MainActivity"'));
+      expect(manifest, contains('android.intent.category.LAUNCHER'));
+      expect(manifest, isNot(contains('.StartupActivity')));
+
       final java = _readAppFile(
         'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
       );
-      for (final forbidden in const [
+      for (final forbidden in const <String>[
         'NativeWelcomeView',
         'StartupActivity',
         'addContentView',
         'FlutterUiDisplayListener',
-        'quwoquan/startup/native',
-        'nativeStartupElapsedMs',
+        'drawFlower',
         'flutterWelcomeReady',
         'flutterWelcomeCompleted',
-        'android_native_welcome',
-        'android_startup_welcome_first_draw',
-        'drawFlower',
-        '趣我圈',
-        '遇见同趣',
         '启动中',
       ]) {
         expect(java, isNot(contains(forbidden)), reason: forbidden);
       }
+      expect(java, contains('elapsedSinceProcessStartMs'));
+      expect(java, contains('android_process'));
     });
 
-    test('Android launcher enters MainActivity directly', () {
-      final manifest = _readAppFile('android/app/src/main/AndroidManifest.xml');
-      expect(manifest, isNot(contains('android:name=".StartupActivity"')));
-      expect(manifest, contains('android:name=".MainActivity"'));
-      expect(manifest, contains('android:exported="true"'));
-      expect(manifest, contains('android:theme="@style/LaunchTheme"'));
-      expect(manifest, contains('android.intent.category.LAUNCHER'));
-      expect(manifest, isNot(contains('@style/FlutterStartupTheme')));
-      expect(manifest, isNot(contains('nativeStartupStartedElapsedRealtime')));
-    });
-
-    test('Android themes do not use transparent startup overlay host', () {
-      for (final path in const [
+    test('Android 12 使用同源静态花瓣 icon，Launch/Normal 使用同一背景', () {
+      for (final path in const <String>[
         'android/app/src/main/res/values/styles.xml',
         'android/app/src/main/res/values-night/styles.xml',
-      ]) {
-        final xml = _readAppFile(path);
-        expect(xml, contains('<style name="LaunchTheme"'));
-        expect(xml, contains('<style name="NormalTheme"'));
-        expect(xml, contains('@drawable/launch_background'));
-        expect(xml, isNot(contains('FlutterStartupTheme')));
-        expect(xml, isNot(contains('Theme.Translucent.NoTitleBar')));
-        expect(xml, isNot(contains('android:windowIsTranslucent')));
-        expect(xml, isNot(contains('@android:color/transparent')));
-        expect(xml, isNot(contains('Theme.SplashScreen')));
-        expect(xml, isNot(contains('windowSplashScreenAnimatedIcon')));
-        expect(xml, isNot(contains('windowSplashScreenBackground')));
-      }
-
-      for (final path in const [
         'android/app/src/main/res/values-v31/styles.xml',
         'android/app/src/main/res/values-night-v31/styles.xml',
       ]) {
@@ -100,151 +88,203 @@ void main() {
         expect(xml, contains('<style name="LaunchTheme"'));
         expect(xml, contains('<style name="NormalTheme"'));
         expect(xml, contains('@drawable/launch_background'));
-        expect(xml, contains('android:windowSplashScreenBackground'));
-        expect(xml, contains('@drawable/launch_empty_icon'));
         expect(xml, isNot(contains('FlutterStartupTheme')));
-        expect(xml, isNot(contains('Theme.Translucent.NoTitleBar')));
-        expect(xml, isNot(contains('android:windowIsTranslucent')));
-        expect(xml, isNot(contains('@android:color/transparent')));
         expect(xml, isNot(contains('Theme.SplashScreen')));
-        expect(xml, isNot(contains('@drawable/launch_splash_icon')));
-        expect(xml, isNot(contains('@mipmap/ic_launcher')));
+        expect(xml, isNot(contains('android:windowIsTranslucent')));
       }
-
-      final emptyIcon = _readAppFile(
-        'android/app/src/main/res/drawable/launch_empty_icon.xml',
-      );
-      expect(emptyIcon, contains('android:width="1dp"'));
-      expect(emptyIcon, contains('android:height="1dp"'));
-      expect(emptyIcon, contains('#00000000'));
-      expect(emptyIcon, isNot(contains('@drawable')));
-      expect(emptyIcon, isNot(contains('@mipmap')));
+      for (final path in const <String>[
+        'android/app/src/main/res/values-v31/styles.xml',
+        'android/app/src/main/res/values-night-v31/styles.xml',
+      ]) {
+        final xml = _readAppFile(path);
+        expect(xml, contains('@mipmap/ic_launcher'));
+        expect(xml, contains('windowSplashScreenIconBackgroundColor'));
+        expect(xml, isNot(contains('@drawable/launch_empty_icon')));
+      }
     });
 
-    test('Flutter welcome screen is the only branded welcome implementation', () {
-      final runtime = _readAppFile('lib/app/app_startup_runtime.dart');
-      final bridge = _readAppFile('lib/core/platform/native_bridge.dart');
+    test('Flutter 是唯一动效所有者，生产没有最少等待 6 秒', () {
       final welcome = _readAppFile('lib/ui/welcome/pages/welcome_screen.dart');
+      final timeline = _readAppFile(
+        'lib/ui/welcome/welcome_motion_timeline.dart',
+      );
+      final flower = _readAppFile(
+        'lib/ui/welcome/widgets/welcome_flower_mark.dart',
+      );
       final shell = _readAppFile('lib/quwoquan_app_shell.dart');
 
-      for (final source in [runtime, bridge, welcome, shell]) {
-        expect(source, isNot(contains('nativeStartupElapsed')));
-        expect(source, isNot(contains('nativeStartupElapsedMs')));
-        expect(source, isNot(contains('flutterWelcomeReady')));
-        expect(source, isNot(contains('flutterWelcomeCompleted')));
-        expect(source, isNot(contains('completeNativeWelcomeOverlay')));
-        expect(source, isNot(contains('quwoquan/startup/native')));
-      }
-
-      expect(bridge, isNot(contains('StartupNativeBridge')));
-      expect(welcome, isNot(contains('initialSequenceElapsed')));
-      expect(welcome, isNot(contains('sequenceEnabled')));
-      expect(welcome, isNot(contains('onFlutterWelcomeReady')));
-      expect(welcome, contains('_beginAnimatedSequence'));
-      expect(welcome, contains('waitUntilFirstFrameRasterized'));
-      expect(welcome, contains('_visibleFrameGuard'));
-      expect(shell, contains('_maxStartupWelcomeReplayCount = 2'));
-      expect(shell, contains('startupStillStartingInline'));
-      expect(shell, contains("_buildStartupFallbackApp"));
-      expect(shell, contains("'result': degraded ? 'degraded' : 'entered'"));
-
-      final deferredRegistry = _readAppFile(
-        'android/app/src/main/java/com/quwoquan/quwoquan_app/StartupDeferredPluginRegistry.java',
+      expect(timeline, contains('StartupWelcomeTiming production'));
+      expect(timeline, contains('Duration(seconds: 3)'));
+      expect(timeline, contains('Duration(seconds: 6)'));
+      expect(timeline, contains('maxReplayCount: 2'));
+      expect(timeline, contains('minimumCompressionRatio = 0.65'));
+      expect(timeline, contains("motionSpecVersion = 'petal_bloom_v2'"));
+      expect(
+        timeline,
+        contains('gatheringOrder = <int>[7, 6, 5, 4, 3, 2, 1, 0]'),
       );
-      expect(deferredRegistry, contains('ensureLocation'));
-      expect(deferredRegistry, contains('geolocator_android'));
-
-      final gradle = _readAppFile('android/app/build.gradle.kts');
-      expect(gradle, contains('patch_android_plugin_registrant.sh'));
-      expect(gradle, contains('JavaWithJavac'));
-
-      final patchScript = _readAppFile(
-        'scripts/patch_android_plugin_registrant.sh',
+      expect(
+        timeline,
+        contains('bloomingOrder = <int>[0, 1, 2, 3, 4, 5, 6, 7]'),
       );
-      expect(patchScript, contains('com.baseflow.geolocator.GeolocatorPlugin'));
+      expect(welcome, contains('SingleTickerProviderStateMixin'));
+      expect(welcome, contains('_terminal'));
+      expect(welcome, contains('WelcomeExitReason.deadline'));
+      expect(welcome, contains('WelcomeFlowMode.startup'));
+      expect(welcome, isNot(contains('waitUntilFirstFrameRasterized')));
+      expect(welcome, isNot(contains('WidgetsBinding.instance.endOfFrame')));
+      expect(welcome, isNot(contains('minEnterDelay')));
+      expect(welcome, isNot(contains('maxWaitingBloomCycles')));
+      expect(welcome, isNot(contains('List<AnimationController>')));
+      expect(flower, contains('historicalBudVisualFactor = 0.561024'));
+      expect(flower, contains('canvas.scale(visualFactor)'));
+      expect(flower, isNot(contains('Matrix4')));
+      expect(flower, isNot(contains('rotateX')));
+      expect(flower, isNot(contains('scaleY')));
+      expect(shell, contains('ensureAppRouterLibraryLoaded'));
+      expect(shell, contains('WelcomeFlowMode.frozen'));
+      expect(shell, contains('Duration(milliseconds: 120)'));
+      expect(shell, contains("phase: 'welcome_overlay_removed'"));
+      expect(shell, contains("'overlayRemovedMs': removedMs"));
+      expect(shell, contains("trigger: 'deadline_fallback'"));
+      expect(shell, contains('_buildStartupFallbackApp'));
     });
 
-    test(
-      'startup first-frame probe launches MainActivity and forbids native welcome',
-      () {
-        final probe = _readAppFile(
-          'scripts/device/verify_startup_first_frame.py',
-        );
-        expect(
-          probe,
-          contains(
-            'DEFAULT_ANDROID_ACTIVITY = "com.quwoquan.quwoquan_app/.MainActivity"',
-          ),
-        );
-        expect(probe, contains('nativeWelcomeDetected'));
-        expect(probe, contains('FORBIDDEN_NATIVE_WELCOME_LOG_PATTERNS'));
-        expect(probe, contains('"install", "-r", "-d"'));
-        expect(probe, contains('"uninstall", args.android_package'));
-        expect(probe, contains('android-install.txt'));
-        expect(probe, isNot(contains('.StartupActivity')));
-        expect(probe, isNot(contains('startupWelcomeFirstDrawMs')));
-        expect(probe, contains('"android_flutter_welcome_ready"'));
-        expect(
-          probe,
-          contains(
-            'parser.add_argument("--android-visible-by-ms", type=int, default=2000)',
-          ),
-        );
-      },
-    );
+    test('三端从平台最早时钟计算 6 秒预算，只传时间不传动画状态', () {
+      final bridge = _readAppFile(
+        'lib/core/platform/startup_native_bridge.dart',
+      );
+      final runtime = _readAppFile('lib/app/app_startup_runtime.dart');
+      final android = _readAppFile(
+        'android/app/src/main/java/com/quwoquan/quwoquan_app/MainActivity.java',
+      );
+      final ios = _readAppFile('ios/Runner/AppDelegate.swift');
+      final web = _readAppFile('web/index.html');
 
-    test('iOS launch storyboard does not mirror the welcome page', () {
+      expect(bridge, contains('elapsedSinceProcessStartMs'));
+      expect(bridge, contains('deadlineOrigin'));
+      expect(runtime, contains('elapsedSinceProcessStart'));
+      expect(runtime, contains("'fallbackDart'"));
+      final welcome = _readAppFile('lib/ui/welcome/pages/welcome_screen.dart');
+      expect(welcome, contains('hydrateNativeProcessSegments'));
+      expect(welcome, contains('unawaited('));
+      expect(welcome, contains('_armDeadline();'));
+      expect(welcome, isNot(contains('await AppStartupRuntime.instance')));
+      expect(android, contains('SystemClock.elapsedRealtime()'));
+      expect(android, contains('android_process'));
+      expect(android, contains('recordStartupEvent'));
+      expect(android, contains('startup_event'));
+      expect(
+        android.indexOf('registerStartupTimingsChannel(flutterEngine);'),
+        lessThan(
+          android.indexOf('super.configureFlutterEngine(flutterEngine);'),
+        ),
+      );
+      expect(ios, contains('ProcessInfo.processInfo.systemUptime'));
+      expect(ios, contains('ios_process'));
+      expect(ios, contains('recordStartupEvent'));
+      expect(
+        ios.indexOf('registerStartupTimingsChannel('),
+        lessThan(ios.indexOf('GeneratedPluginRegistrant.register')),
+      );
+      expect(web, contains('__qwqStartupStartedAtMs'));
+      expect(web, contains('__qwqStartupElapsedMs'));
+      for (final source in <String>[android, ios, bridge]) {
+        expect(source, isNot(contains('animationProgress')));
+        expect(source, isNot(contains('replayCount')));
+        expect(source, isNot(contains('petal')));
+      }
+    });
+
+    test('iOS LaunchScreen 使用自适应背景与独立同源品牌簇', () {
       final plist = _readAppFile('ios/Runner/Info.plist');
       final storyboard = _readAppFile(
         'ios/Runner/Base.lproj/LaunchTransitionScreen.storyboard',
       );
-      final mainStoryboard = _readAppFile(
-        'ios/Runner/Base.lproj/Main.storyboard',
-      );
-      final xcodeProject = _readAppFile('ios/Runner.xcodeproj/project.pbxproj');
       expect(plist, contains('<string>LaunchTransitionScreen</string>'));
-      expect(
-        _appFile('ios/Runner/Base.lproj/LaunchScreen.storyboard').existsSync(),
-        isFalse,
-      );
-      expect(xcodeProject, contains('LaunchTransitionScreen.storyboard'));
-      expect(xcodeProject, isNot(contains('LaunchScreen.storyboard')));
-      expect(storyboard, isNot(contains('image="LaunchImage"')));
-      expect(storyboard, isNot(contains('QWQ-LAUNCH-IMAGE')));
-      expect(storyboard, isNot(contains('<image name="LaunchImage"')));
       expect(storyboard, contains('image="LaunchTransitionBackground"'));
-      expect(storyboard, contains('QWQ-LAUNCH-TRANSITION-BACKGROUND'));
-      expect(storyboard, contains('backgroundColor'));
-      expect(mainStoryboard, contains('red="0.0196078431"'));
-      expect(storyboard, contains('red="0.0392156863"'));
-      expect(storyboard, contains('green="0.5176470588"'));
-      expect(storyboard, contains('blue="1"'));
+      expect(storyboard, contains('image="LaunchBrandCluster"'));
+      expect(storyboard, contains('QWQ-LAUNCH-BRAND-CENTER-X'));
+      expect(storyboard, contains('QWQ-LAUNCH-BRAND-CENTER-Y'));
+      expect(storyboard, contains('constant="393"'));
+      expect(storyboard, contains('constant="500"'));
+
+      final adaptiveBackgrounds = <String, (int, int)>{
+        'ios/Runner/Assets.xcassets/LaunchTransitionBackground.imageset/LaunchTransitionBackground.png':
+            (1, 3),
+        'ios/Runner/Assets.xcassets/LaunchTransitionBackground.imageset/LaunchTransitionBackground@2x.png':
+            (2, 6),
+        'ios/Runner/Assets.xcassets/LaunchTransitionBackground.imageset/LaunchTransitionBackground@3x.png':
+            (3, 9),
+      };
+      for (final entry in adaptiveBackgrounds.entries) {
+        final file = _appFile(entry.key);
+        expect(file.existsSync(), isTrue, reason: entry.key);
+        expect(_pngSize(file), entry.value, reason: entry.key);
+      }
+
+      for (final path in const <String>[
+        'ios/Runner/Assets.xcassets/LaunchBrandCluster.imageset/LaunchBrandCluster.png',
+        'ios/Runner/Assets.xcassets/LaunchBrandCluster.imageset/LaunchBrandCluster@2x.png',
+        'ios/Runner/Assets.xcassets/LaunchBrandCluster.imageset/LaunchBrandCluster@3x.png',
+      ]) {
+        final file = _appFile(path);
+        expect(file.existsSync(), isTrue, reason: path);
+        expect(file.lengthSync(), greaterThan(5 * 1024), reason: path);
+      }
     });
 
-    test(
-      'Flutter bootstrap starts local HTTPS trust before runApp without blocking first frame',
-      () {
-        final dart = _readAppFile('lib/app_bootstrap.dart');
-        final beforeRunApp = dart.substring(0, dart.indexOf('runApp('));
-        expect(beforeRunApp, contains('startupPrerequisites ='));
-        expect(beforeRunApp, isNot(contains('await startupPrerequisites')));
-        expect(
-          dart,
-          contains('await LocalDevHttpsTrust.installForCurrentRuntime();'),
-        );
-        expect(dart, contains('startupPrerequisites: startupPrerequisites'));
-        expect(
-          dart,
-          isNot(contains('_installLocalDevHttpsTrustAfterFirstFrame')),
-        );
+    test('设备 probe 明确检查原生镜像、可见时限和 Flutter 欢迎事件', () {
+      final probe = _readAppFile(
+        'scripts/device/verify_startup_first_frame.py',
+      );
+      final motionProbe = _readAppFile(
+        'scripts/device/verify_welcome_motion_frames.py',
+      );
+      expect(
+        probe,
+        contains(
+          'DEFAULT_ANDROID_ACTIVITY = "com.quwoquan.quwoquan_app/.MainActivity"',
+        ),
+      );
+      expect(probe, contains('nativeWelcomeDetected'));
+      expect(probe, contains('FORBIDDEN_NATIVE_WELCOME_LOG_PATTERNS'));
+      expect(probe, contains('--android-visible-by-ms'));
+      expect(probe, contains('--skip-screenshots'));
+      expect(probe, contains('firstVisibleMs'));
+      expect(probe, contains('startupSequenceMotionCurrent'));
+      expect(probe, contains('petal_bloom_v2'));
+      expect(probe, contains('android_flutter_welcome_ready'));
+      expect(probe, isNot(contains('.StartupActivity')));
+      expect(
+        motionProbe,
+        contains('GATHERING_ORDER = (7, 6, 5, 4, 3, 2, 1, 0)'),
+      );
+      expect(
+        motionProbe,
+        contains('BLOOMING_ORDER = (0, 1, 2, 3, 4, 5, 6, 7)'),
+      );
+      expect(motionProbe, contains('oriented_minor'));
+      expect(motionProbe, contains('center_radius'));
+      expect(motionProbe, contains('frame_displacement'));
+    });
 
-        final shell = _readAppFile('lib/quwoquan_app_shell.dart');
-        final scheduler = _readAppFile('lib/app/startup_init_scheduler.dart');
-        expect(shell, contains('startupPrerequisites'));
-        expect(shell, contains('_startupPrerequisiteBudget'));
-        expect(scheduler, contains('_completeStartupPrerequisitesThenReady'));
-      },
-    );
+    test('启动 prerequisites 首帧后并行且失败不阻断 Shell readiness', () {
+      final bootstrap = _readAppFile('lib/app_bootstrap.dart');
+      final scheduler = _readAppFile('lib/app/startup_init_scheduler.dart');
+      final beforeRunApp = bootstrap.substring(0, bootstrap.indexOf('runApp('));
+      expect(beforeRunApp, isNot(contains('await startupPrerequisites')));
+      expect(beforeRunApp, isNot(contains('hydrateNativeProcessSegments')));
+      expect(
+        scheduler,
+        contains('_markShellReadyAndObserveStartupPrerequisites'),
+      );
+      expect(scheduler, contains('onShellReady(true)'));
+      expect(
+        scheduler.indexOf('onShellReady(true)'),
+        lessThan(scheduler.indexOf('await prerequisites.timeout')),
+      );
+    });
   });
 }
 
@@ -257,4 +297,15 @@ File _appFile(String relativePath) {
     return direct;
   }
   return File('quwoquan_app/$relativePath');
+}
+
+(int, int) _pngSize(File file) {
+  final bytes = file.readAsBytesSync();
+  expect(bytes.length, greaterThanOrEqualTo(24), reason: file.path);
+  int uint32(int offset) =>
+      (bytes[offset] << 24) |
+      (bytes[offset + 1] << 16) |
+      (bytes[offset + 2] << 8) |
+      bytes[offset + 3];
+  return (uint32(16), uint32(20));
 }

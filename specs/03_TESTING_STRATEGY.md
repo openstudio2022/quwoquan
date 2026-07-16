@@ -40,7 +40,7 @@ env / rollout_stage / case_id / source_file / recorded_artifact
 - `performance`
 - `data_consistency`
 
-`rollout_stage` 只用于生产发布阶段，例如 `gray_initial`。它不能替代环境；生产灰度必须表达为 `env=prod` + `rollout_stage=gray_initial`，不得写成 `prod_gray_initial` 或 `prod-gray` 环境。
+`rollout_stage` 只用于生产发布阶段，例如 `gray_initial`。它不能替代环境；生产灰度必须表达为 `env=prod` + `rollout_stage=gray_initial`，不得写成派生环境名。
 
 `test_object` 闭集：
 
@@ -65,6 +65,10 @@ env / rollout_stage / case_id / source_file / recorded_artifact
 | 可靠性/可用性 | retry/backoff、timeout、offline queue、幂等状态机 | 依赖失败、MQ/outbox、回滚、健康检查 | 断网、恢复、降级路径 |
 | 数据一致性 | schema、投影、去重、稳定 ID | 真实存储读写、导入/发布、事件最终一致 | 用户看到的数据与发布、推荐、行为归因一致 |
 
+Data 离线阶段异常必须断言稳定 `DataIssue.code/recovery/ref/lane`，不得断言或解析
+`message` 来驱动重试、回退或目标替补；进入 importer/API 后再验证其到 metadata
+错误码与 `RuntimeErrorResponse` 的显式边界映射。
+
 性能阈值必须来自 `spec.md`、`acceptance.yaml` 或 SLO 文档，不能在测试中自造第二真相源。日志、指标、trace、audit 继续遵守瘦身后的 observability 合同。
 
 ## 4. 目录合同
@@ -76,6 +80,9 @@ quwoquan_app/test/
   local_contract/
     ui/
     cloud/
+      runtime/
+      generated/
+      <domain>/adapter_conformance/
     core/
     app/
     quality/
@@ -92,6 +99,18 @@ quwoquan_app/test/
     quality/
   support/
 ```
+
+App Cloud 的合同包、Mock 包和 production/alpha composition 使用同一三层目录，
+不新增 `package_test` 第四层：
+
+- `local_contract/cloud/generated` 验证固定 ContractGraph hash、output manifest、
+  clean rebuild 和 pure Dart package DAG。
+- `local_contract/cloud/<domain>/adapter_conformance` 对同一 BehaviorSpec 跑
+  Mock 与 RemoteStub，验证字段、分页、权限、错误和 actor 语义。
+- `api_integration/cloud/<domain>` 必须直接构造 generated client/Remote adapter
+  连接已预制环境；裸 HTTP 请求不能替代客户端集成证据。
+- production/alpha dependency reachability、kernel/AOT 与 SBOM 归
+  `local_contract/quality` 的 package contract，真实构建结果作为 artifact 记录。
 
 ### Service
 
@@ -155,7 +174,7 @@ Case ID 必须匹配层级：
 `tests.recorded` 只允许：
 
 - canonical 三层测试文件
-- `.qwq_output/env/repo/runs/tests/**/report.json`
+- `QWQ_OUTPUT_ROOT/env/repo/runs/tests/**/report.json`
 
 禁止把 shell command、Markdown 报告、历史路径或桥接文件作为当前执行证据。需要保留背景信息时，只能进入 `notes` 或 changelog。
 
@@ -167,20 +186,59 @@ Case ID 必须匹配层级：
 - `quwoquan_service/contracts/metadata/_shared/app_routes.yaml`
 - `specs/gates/user_acceptance_page_inventory.yaml`
 
-每个 surface 至少覆盖：
+每个 surface 必须在 inventory 中逐项声明 applicable/not_applicable，适用项至少覆盖：
 
 - `load_success`
-- `empty_permission_error`
+- `empty`
+- `auth_required`
+- `permission_denied`
+- `runtime_error`
+- `offline`
+- `retry_recovered`
 - `primary_cta`
 - `trace_context`
+- `theme_tokens`
+- `responsive_layout`
+- `accessibility`
+
+禁止再用 `empty_permission_error` 把空态、权限态和错误态合并为一个路径型用例。
 
 API 覆盖以 metadata / OpenAPI operation 为边界，至少要求：
 
 - 服务 `api_integration` 覆盖 request/response、错误码、幂等与副作用。
 - App `cloud` 或 `ui` 证据覆盖 decoder、mapper、用户可见错误和 trace/request 透传。
 - 对敏感能力补 `security` 与 `data_consistency` facet。
+- App Remote 证据必须经过 generated operation descriptor、统一 executor 和
+  Remote adapter；测试内自 seed、失败后 fallback Mock/空集合、动态 skip 均失败。
+- user_acceptance 必须启动真实页面并断言 CTA/状态/恢复；`File.existsSync` 或
+  仅核验历史证据路径只能作 traceability 辅助，不能作为 UAT 主证据。
 
-## 8. 门禁
+## 8. 对象级测试矩阵
+
+每个 ContractGraph object 的测试合同按对象类型生成期望，禁止仅检查测试路径存在：
+
+- Aggregate：invariant、state transition、version conflict、idempotency、authz、aggregate+outbox transaction。
+- Command：success、validation、permission、conflict、duplicate、dependency failure、event side effect。
+- Query：filter/sort/cursor、field policy、freshness、cache hit/miss、projection lag/rebuild、remote ACL。
+- Slice/ReadModel：source mapping、schema、ordering、dedup、tombstone、replay。
+- Adapter：authoritative role、real engine、transaction、unique/index/TTL、timeout、failure mapping。
+- App Repository/Provider/Page：generated request/decoder、Mock/Remote parity、structured error/recovery、主题/多屏/无障碍/性能/trace。
+- Journey：至少两个真实对象，覆盖用户结果、跨域 handoff、失败补偿、行为/推荐/运营回流。
+
+测试报告必须输出结构化 `CaseResult`，包含 case id、object/operation/surface、layer、env、quality facet、assertion count、duration、artifact 和 pass/fail。路径存在、动态 skip、Memory adapter 或 `os.Exit(0)` 不构成通过证据。
+
+## 9. 四环境数据预制合同
+
+每个对象维护由 metadata/fixture 引用生成的 `ObjectTestDataManifest`：
+
+- alpha：contract fixture + MockRepository；离线、确定、可重复。
+- beta：RemoteRepository + gateway seed；多主体、权限、状态机、错误和边界数据齐全。
+- gamma：API importer/release + 真实 Mongo/PG/Redis/ES/MQ；每次 run 独立 namespace 并可回放清理。
+- prod：禁止 fixture、seed、Mock、Memory、Noop 和默认 secret；只允许脱敏合成探针和受控实时验收。
+
+Manifest 至少声明 dataset/release id、schema version、actor set、object refs、状态覆盖、敏感级别、seed/import/cleanup command、TTL、预期 operation/page/Journey 和证据绑定。测试失败时必须保留可重放的 run id，成功后按环境策略清理。
+
+## 10. 门禁
 
 ```bash
 make verify-test-specs

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/components/media/shared/gesture/immersive_gesture_intent_controller.dart';
 import 'package:quwoquan_app/components/media/shared/pageflip/media_page_flip_book.dart';
@@ -115,6 +116,22 @@ double _rotationZForTransform(WidgetTester tester, Key key) {
   return math.atan2(matrix.entry(1, 0), matrix.entry(0, 0));
 }
 
+Future<double> _nearBlackPixelRatio(ui.Image image) async {
+  final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+  final bytes = data!.buffer.asUint8List();
+  var nearBlackPixels = 0;
+  var pixelCount = 0;
+  for (var offset = 0; offset < bytes.length; offset += 4) {
+    if (bytes[offset] <= 2 &&
+        bytes[offset + 1] <= 2 &&
+        bytes[offset + 2] <= 2) {
+      nearBlackPixels += 1;
+    }
+    pixelCount += 1;
+  }
+  return nearBlackPixels / pixelCount;
+}
+
 void main() {
   test('图片书与文章宿主只消费父级 gesture intent 坐标源', () {
     final mediaSource = File(
@@ -162,6 +179,7 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-static-page-0')),
       findsOneWidget,
+      reason: 'idle 首帧没有 moving sheet，必须只展示当前静态页。',
     );
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
@@ -537,7 +555,7 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('MediaPageFlipBook 前翻绑定 current.front、next.back、next.front', (
+  testWidgets('MediaPageFlipBook 前翻绑定 current.front、current.back、next.front', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -576,6 +594,7 @@ void main() {
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-static-page-0')),
       findsOneWidget,
+      reason: '前翻必须沿用文章基线，让当前静态正面在 moving sheet 下连续离场。',
     );
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-bottom-layer')),
@@ -601,29 +620,71 @@ void main() {
       reason: '下一页正面必须停留在底页，不应替换 moving sheet。',
     );
     expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
-        matching: find.byKey(
-          const ValueKey<String>('media-pageflip-surface-0-front'),
-        ),
-      ),
+      find.byKey(const ValueKey<String>('media-pageflip-moving-face-0-back')),
       findsOneWidget,
-      reason: '前翻前 120ms 内当前页正面必须仍在 moving sheet 随手指离场。',
+      reason: '前翻 moving sheet 只能使用当前页背面。',
     );
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-surface-1-back')),
+      findsNothing,
+      reason: '下一页背面不得贴到当前页 moving sheet。',
+    );
+
+    await gesture.up();
+    await tester.pump();
+  });
+
+  testWidgets('MediaPageFlipBook moving sheet 只有一个完整 RawImage 材质面', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        SizedBox(
+          width: 320,
+          height: 480,
+          child: MediaPageFlipBook(
+            pageCount: 2,
+            textureSnapshotBuilder: _solidTextureBuilder,
+            pageBuilder: (context, index) => ColoredBox(
+              color: index.isEven
+                  ? const Color(0xFF2E5FAA)
+                  : const Color(0xFFAA6B2E),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    for (var i = 0; i < 8; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    final gestureLayer = find.byKey(
+      const ValueKey<String>('media-pageflip-gesture-layer'),
+    );
+    final gesture = await tester.startGesture(
+      tester.getRect(gestureLayer).center,
+    );
+    await gesture.moveBy(const Offset(-140, 0));
+    for (var i = 0; i < 8; i += 1) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+
+    final movingSheet = find.byKey(
+      const ValueKey<String>('media-pageflip-flipping-layer'),
+    );
+    expect(
+      find.descendant(of: movingSheet, matching: find.byType(RawImage)),
       findsOneWidget,
-      reason: '前翻翻动纸张背面必须是下一页背面。',
+      reason: 'moving sheet 只能绘制一张完整页面材质。',
     );
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
-        matching: find.byKey(
-          const ValueKey<String>('media-pageflip-surface-1-back'),
-        ),
+        of: movingSheet,
+        matching: find.byType(FractionallySizedBox),
       ),
-      findsOneWidget,
-      reason: '前翻背面必须作为同一 moving sheet 的 verso 渐进出现。',
+      findsNothing,
+      reason: 'moving sheet 不得用两个 FractionallySizedBox 重叠压缩完整纹理。',
     );
 
     await gesture.up();
@@ -668,56 +729,119 @@ void main() {
     }
 
     expect(
-      find.byKey(const ValueKey<String>('media-pageflip-backward-front-layer')),
-      findsNothing,
-      reason: '后翻上一页正面不得再作为独立 positioned layer 跳入画面。',
+      find.byKey(
+        const ValueKey<String>(
+          'media-pageflip-backward-previous-front-replacement',
+        ),
+      ),
+      findsOneWidget,
+      reason: '后翻必须复刻文章的上一页正面 replacement 层。',
     );
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-bottom-layer')),
       findsOneWidget,
+      reason: '后翻必须保留文章基线中的 current bottom clip。',
     );
     expect(
       find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
       findsOneWidget,
     );
+    final movingSheet = find.byKey(
+      const ValueKey<String>('media-pageflip-flipping-layer'),
+    );
     expect(
-      find.byKey(const ValueKey<String>('media-pageflip-surface-0-front')),
+      find.descendant(of: movingSheet, matching: find.byType(RawImage)),
       findsOneWidget,
-      reason: '后翻上一页正面必须进入可见层。',
+      reason: '后翻 moving sheet 每帧只能选择上一页正面或背面之一。',
     );
     expect(
       find.descendant(
-        of: find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
+        of: movingSheet,
         matching: find.byKey(
-          const ValueKey<String>('media-pageflip-surface-0-front'),
+          const ValueKey<String>('media-pageflip-surface-1-front'),
         ),
       ),
-      findsOneWidget,
-      reason: '后翻上一页正面必须在同一 moving sheet 内连续离场/入场。',
+      findsNothing,
+      reason: '当前页正面只能属于静态页和 bottom，不得贴到上一页 moving sheet。',
     );
     expect(
-      find.byKey(const ValueKey<String>('media-pageflip-surface-0-back')),
+      find.byKey(const ValueKey<String>('media-pageflip-static-page-1')),
       findsOneWidget,
-      reason: '后翻翻动纸张背面必须是上一页背面。',
-    );
-    expect(
-      find.descendant(
-        of: find.byKey(const ValueKey<String>('media-pageflip-flipping-layer')),
-        matching: find.byKey(
-          const ValueKey<String>('media-pageflip-surface-0-back'),
-        ),
-      ),
-      findsOneWidget,
-      reason: '后翻背面必须作为同一 moving sheet 的 verso 渐进出现。',
-    );
-    expect(
-      find.byKey(const ValueKey<String>('media-pageflip-surface-1-front')),
-      findsOneWidget,
-      reason: '后翻底层仍需保留当前页正面。',
+      reason: '后翻 L0 必须是唯一的 current 静态 underlay。',
     );
 
     await gesture.up();
     await tester.pump();
+  });
+
+  testWidgets('MediaPageFlipBook 前后翻动态帧整页材质无黑色漏绘区域', (tester) async {
+    const captureKey = ValueKey<String>('media-pageflip-pixel-capture');
+    for (final scenario in <({int initialPage, Offset delta, String label})>[
+      (initialPage: 0, delta: const Offset(-128, -26), label: 'FORWARD'),
+      (initialPage: 1, delta: const Offset(128, -26), label: 'BACK'),
+    ]) {
+      await tester.pumpWidget(
+        _host(
+          SizedBox(
+            width: 320,
+            height: 480,
+            child: RepaintBoundary(
+              key: captureKey,
+              child: MediaPageFlipBook(
+                pageCount: 2,
+                initialPage: scenario.initialPage,
+                textureSnapshotBuilder: _solidTextureBuilder,
+                pageBuilder: (context, index) => ColoredBox(
+                  color: index.isEven
+                      ? const Color(0xFF2E5FAA)
+                      : const Color(0xFFAA6B2E),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      for (var i = 0; i < 8; i += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      final gestureLayer = find.byKey(
+        const ValueKey<String>('media-pageflip-gesture-layer'),
+      );
+      final gesture = await tester.startGesture(
+        tester.getRect(gestureLayer).center,
+      );
+      await gesture.moveBy(scenario.delta);
+      for (var i = 0; i < 8; i += 1) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+
+      final boundary = tester.renderObject<RenderRepaintBoundary>(
+        find.byKey(captureKey),
+      );
+      final frame = await tester.runAsync<ui.Image>(
+        () => boundary.toImage(pixelRatio: 1),
+      );
+      if (frame == null) {
+        fail(
+          'failed to capture MediaPageFlipBook ${scenario.label} framebuffer',
+        );
+      }
+      final nearBlackRatio = await tester.runAsync<double>(
+        () => _nearBlackPixelRatio(frame),
+      );
+      frame.dispose();
+      expect(nearBlackRatio, isNotNull);
+      expect(
+        nearBlackRatio!,
+        lessThanOrEqualTo(0.001),
+        reason: '非黑测试材质的 ${scenario.label} 动态合成不应暴露舞台底色或背面漏绘黑区。',
+      );
+
+      await gesture.cancel();
+      await tester.pump();
+    }
   });
 
   testWidgets('MediaPageFlipBook 减弱动态时只更新页态不启动 curl layer', (tester) async {

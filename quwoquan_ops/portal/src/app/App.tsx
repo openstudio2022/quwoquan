@@ -55,7 +55,6 @@ export function App() {
             <Route path="/product/entity-homepages" element={<ProductScenarioOpsPage kind="entityHomepages" />} />
             <Route path="/product/circles-ops" element={<ProductScenarioOpsPage kind="circlesOps" />} />
             <Route path="/product/xiaoqu-comments" element={<ProductScenarioOpsPage kind="xiaoquComments" />} />
-            <Route path="/product/campus-bootstrap" element={<ProductScenarioOpsPage kind="campusBootstrap" />} />
             <Route path="/product/experiments" element={<ExperimentsPage />} />
             <Route path="/product/segments" element={<SegmentsPage />} />
             <Route path="/audit" element={<AuditPage />} />

@@ -85,7 +85,7 @@ entries:
       - path: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
         sections:
           - quwoquan_rec_model
-      - path: docs/recommendation-commercial-maturity-plan.md
+      - path: docs/recommendation-commercial-maturity-content.execution.planning.md
         sections:
           - 反馈状态闭集与并发容量下一轮
     impact:
