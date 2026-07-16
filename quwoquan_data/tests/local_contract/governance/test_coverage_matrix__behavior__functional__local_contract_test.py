@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from governance.coverage.coverage_matrix import (  # noqa: E402
+    CoverageMatrixGuardrails,
     DISCOVERY_SOURCES,
     ENTITY_TYPES,
     _runtime_root,
@@ -21,6 +23,16 @@ from governance.coverage.coverage_matrix import (  # noqa: E402
     prepare_coverage_matrix,
     record_cell_page,
 )
+from core.runtime_policy import active_runtime_policy  # noqa: E402
+
+
+def _guardrails(**overrides: object) -> CoverageMatrixGuardrails:
+    base = CoverageMatrixGuardrails.from_runtime_policy(
+        active_runtime_policy(),
+        safe_pool_minimum=1,
+        until_saturated=True,
+    )
+    return replace(base, **overrides)
 
 
 def test_matrix_runtime_root_uses_canonical_data_runtime(monkeypatch, tmp_path: Path) -> None:
@@ -42,7 +54,7 @@ def test_matrix_is_city_sharded_and_resume_preserves_terminal_cells(tmp_path: Pa
         sources=list(DISCOVERY_SOURCES),
         admin_tree=admin_tree,
         runtime_root=tmp_path,
-        guardrails={"requestBudget": 20000, "maxPagesPerCell": 20},
+        guardrails=_guardrails(),
     )
     assert report["cityCheckpointCount"] == 2
     assert report["cellCount"] == 3 * len(ENTITY_TYPES) * len(DISCOVERY_SOURCES)
@@ -68,8 +80,6 @@ def test_matrix_is_city_sharded_and_resume_preserves_terminal_cells(tmp_path: Pa
         next_cursor=None,
         request_succeeded=True,
         exhausted=True,
-        saturation_threshold=0.05,
-        saturation_rounds=2,
     )
     intermediate = record_cell_page(
         checkpoint_path=checkpoint_path,
@@ -82,8 +92,6 @@ def test_matrix_is_city_sharded_and_resume_preserves_terminal_cells(tmp_path: Pa
         next_cursor=None,
         request_succeeded=True,
         exhausted=True,
-        saturation_threshold=0.05,
-        saturation_rounds=2,
     )
     assert intermediate["status"] == "exhausted"
     cell = record_cell_page(
@@ -97,8 +105,6 @@ def test_matrix_is_city_sharded_and_resume_preserves_terminal_cells(tmp_path: Pa
         next_cursor=None,
         request_succeeded=True,
         exhausted=True,
-        saturation_threshold=0.05,
-        saturation_rounds=2,
     )
     assert cell["status"] == "saturated"
     assert cell["saturationEvidence"]["driverComplete"] is True
@@ -110,7 +116,7 @@ def test_matrix_is_city_sharded_and_resume_preserves_terminal_cells(tmp_path: Pa
         admin_tree=admin_tree,
         runtime_root=tmp_path,
         resume=True,
-        guardrails={"requestBudget": 20000, "maxPagesPerCell": 20},
+        guardrails=_guardrails(),
     )
     assert resumed["resumedCellCount"] == resumed["cellCount"]
     after = json.loads(checkpoint_path.read_text(encoding="utf-8"))
@@ -128,6 +134,7 @@ def test_failed_or_truncated_page_never_counts_as_empty_or_saturated(tmp_path: P
         sources=["osm_poi"],
         admin_tree={"四川省": {"成都市": ["锦江区"]}},
         runtime_root=tmp_path,
+        guardrails=_guardrails(),
     )
     checkpoint_path = tmp_path / "matrix-r2" / "checkpoint_四川省_成都市.json"
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
@@ -172,12 +179,12 @@ def test_resume_rejects_guardrail_drift(tmp_path: Path) -> None:
         "admin_tree": {"浙江省": {"杭州市": ["西湖区"]}},
         "runtime_root": tmp_path,
     }
-    prepare_coverage_matrix(**kwargs, guardrails={"maxPagesPerCell": 20})
+    prepare_coverage_matrix(**kwargs, guardrails=_guardrails())
     with pytest.raises(ValueError, match="guardrail drift"):
         prepare_coverage_matrix(
             **kwargs,
             resume=True,
-            guardrails={"maxPagesPerCell": 21},
+            guardrails=_guardrails(max_pages_per_cell=21),
         )
 
 
@@ -188,6 +195,7 @@ def test_page_checkpoint_keeps_typed_counts_cursor_retry_and_hash(tmp_path: Path
         sources=["wikidata_geo"],
         admin_tree={"浙江省": {"杭州市": ["西湖区"]}},
         runtime_root=tmp_path,
+        guardrails=_guardrails(),
     )
     checkpoint_path = tmp_path / "matrix-r3" / "checkpoint_浙江省_杭州市.json"
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
@@ -269,6 +277,7 @@ def test_saturation_requires_driver_completion_empty_pages_and_decay(tmp_path: P
         sources=["wiki_category"],
         admin_tree={"四川省": {"成都市": ["锦江区"]}},
         runtime_root=tmp_path,
+        guardrails=_guardrails(),
     )
     checkpoint_path = tmp_path / "matrix-r4" / "checkpoint_四川省_成都市.json"
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
@@ -284,9 +293,6 @@ def test_saturation_requires_driver_completion_empty_pages_and_decay(tmp_path: P
         next_cursor="next",
         request_succeeded=True,
         exhausted=False,
-        saturation_threshold=0.05,
-        saturation_rounds=2,
-        required_empty_pages=2,
     )
     assert first["status"] == "running"
     second = record_cell_page(
@@ -300,9 +306,6 @@ def test_saturation_requires_driver_completion_empty_pages_and_decay(tmp_path: P
         next_cursor="last",
         request_succeeded=True,
         exhausted=False,
-        saturation_threshold=0.05,
-        saturation_rounds=2,
-        required_empty_pages=2,
     )
     assert second["status"] == "running"
     final = record_cell_page(
@@ -316,9 +319,6 @@ def test_saturation_requires_driver_completion_empty_pages_and_decay(tmp_path: P
         next_cursor=None,
         request_succeeded=True,
         exhausted=True,
-        saturation_threshold=0.05,
-        saturation_rounds=2,
-        required_empty_pages=2,
     )
     assert final["status"] == "saturated"
     assert final["stopReason"] == "driver_exhausted_and_decay_saturated"
@@ -340,9 +340,6 @@ def test_saturation_requires_driver_completion_empty_pages_and_decay(tmp_path: P
                 next_cursor=None if exhausted else "next",
                 request_succeeded=True,
                 exhausted=exhausted,
-                saturation_threshold=0.05,
-                saturation_rounds=2,
-                required_empty_pages=2,
             )
     status = coverage_matrix_status(run_dir=tmp_path / "matrix-r4")
     assert status["provinces"]["四川省"]["saturated"] is True

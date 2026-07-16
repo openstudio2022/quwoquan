@@ -108,9 +108,9 @@ DEFAULT_CODEX_AGENT_MODEL = os.environ.get("QWQ_CODEX_AGENT_MODEL", "").strip()
 DEFAULT_MANAGED_AGENT_PROVIDER = AgentProvider.CURSOR_SDK
 MANAGED_AGENT_PROVIDERS = {item.value for item in AgentProvider}
 def _normalize_managed_agent_provider(raw: str | None) -> str:
-    provider = str(raw or DEFAULT_MANAGED_AGENT_PROVIDER or "cursor_sdk").strip()
+    provider = str(raw or DEFAULT_MANAGED_AGENT_PROVIDER.value).strip()
     if provider not in MANAGED_AGENT_PROVIDERS:
-        return "cursor_sdk"
+        return DEFAULT_MANAGED_AGENT_PROVIDER.value
     return provider
 
 
@@ -150,10 +150,10 @@ class ExecutionContext:
     until: str | None = None
     completed: list[str] = field(default_factory=list)
     managed: bool = False
-    runtime: str = RuntimeEnvironment.LOCAL
+    runtime: str = RuntimeEnvironment.LOCAL.value
     max_workers: int = _RUNTIME_POLICY.author_workers
     model: str = DEFAULT_CURSOR_AGENT_MODEL
-    agent_provider: str = AgentProvider.CURSOR_SDK
+    agent_provider: str = AgentProvider.CURSOR_SDK.value
     release_only: bool = False
     agent_runner: Callable[[str], dict[str, Any]] | None = None
     force_clean_workspace_agent_state: bool = False
@@ -176,7 +176,7 @@ def _managed_local_cursor_worker_cap(
     if local_cursor_max_workers is not None:
         return max(1, int(local_cursor_max_workers))
     base = max(1, int(ctx.max_workers or 1))
-    if str(ctx.runtime) != "local":
+    if str(ctx.runtime) != RuntimeEnvironment.LOCAL.value:
         return base
     try:
         state = load_workflow_state(ctx.execution_id)

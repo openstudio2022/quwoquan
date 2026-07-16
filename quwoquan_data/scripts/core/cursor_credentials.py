@@ -123,13 +123,17 @@ def is_cursor_auth_error(
     return any(marker in lowered for marker in _AUTH_MESSAGE_MARKERS)
 
 
-def probe_cursor_key_ready(*, timeout_seconds: float = 20.0) -> bool:
+def probe_cursor_key_ready(*, timeout_seconds: float | None = None) -> bool:
     """探测当前单一真相源 key 是否已恢复可用（HTTP 200 on /v1/me）。
 
     key 生命周期内置能力（替代家目录守护脚本）：403/limit 暂停后由调用方
     轮询本函数；keyfile 被运营原子轮换出新 key 时立即返回 True，长跑进程
     据此自动续跑。探测失败（网络/非 200）一律返回 False，由调用方退避。
     """
+    if timeout_seconds is None:
+        from core.runtime_policy import active_runtime_policy
+
+        timeout_seconds = float(active_runtime_policy().preflight_network_timeout_seconds)
     key = resolve_cursor_api_key()
     if not key:
         return False

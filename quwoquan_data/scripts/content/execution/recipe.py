@@ -399,7 +399,7 @@ def _env_ready_argv(recipe: dict[str, Any], execution_id: str) -> list[str]:
         "task",
         "preflight",
         "--model",
-        str(execution.get("model") or "composer"),
+        str(execution.get("model") or policy.cursor_model),
         "--runtime",
         str(execution.get("runtime") or RuntimeEnvironment.LOCAL),
         "--startup-timeout-seconds",

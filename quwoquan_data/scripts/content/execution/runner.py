@@ -186,7 +186,7 @@ def run_execution(
             runtime=str(execution.get("runtime") or RuntimeEnvironment.LOCAL),
             max_workers=policy.author_workers,
             agent_provider=AgentProvider.CURSOR_SDK.value,
-            model=str(execution.get("model") or "composer"),
+            model=str(execution.get("model") or policy.cursor_model),
             startup_timeout_seconds=float(policy.startup_timeout_seconds),
             force_clean_workspace_agent_state=bool(execution.get("forceCleanWorkspaceAgentState", True)),
             release_only=False,

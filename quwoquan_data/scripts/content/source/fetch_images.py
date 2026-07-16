@@ -291,7 +291,9 @@ def fetch_page_image_payload(
     """
 
     requested_url = str(url or "").strip()
-    resolved_timeout_seconds = max(3, int(timeout_seconds))
+    resolved_timeout_seconds = int(timeout_seconds)
+    if resolved_timeout_seconds < 1:
+        raise ValueError("page image download timeout must be positive")
     if not requested_url:
         return PageImageFetchResult(
             requested_url="missing-url",

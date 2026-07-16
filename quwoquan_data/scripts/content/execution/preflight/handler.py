@@ -12,7 +12,6 @@ from core.cursor_startup_probe import cursor_startup_probe_suite
 from core.paths import DATA_EXECUTIONS_ROOT, DATA_LOCAL_ROOT
 from core.python_environment import (
     DEFAULT_CURSOR_STARTUP_MODEL,
-    DEFAULT_CURSOR_STARTUP_TIMEOUT_SECONDS,
     prepare_data_runtime_cache,
     resolve_cursor_startup_timeout_seconds,
     runtime_report,
@@ -249,7 +248,15 @@ def _preflight_in_python(args: argparse.Namespace, python: Path) -> dict:
         str(getattr(args, "runtime", "local") or "local"),
     ]
     if _cursor_startup_enabled(args):
-        cmd.extend(["--model", str(getattr(args, "model", "composer") or "composer")])
+        cmd.extend(
+            [
+                "--model",
+                str(
+                    getattr(args, "model", None)
+                    or active_runtime_policy().cursor_model
+                ),
+            ]
+        )
         cmd.extend(["--startup-timeout-seconds", str(_startup_timeout_seconds(args))])
     else:
         cmd.append("--no-cursor-startup")

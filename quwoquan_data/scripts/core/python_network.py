@@ -156,7 +156,11 @@ def _cursor_cloud_api_probe_with_curl(key: str, *, timeout_seconds: float) -> di
     }
 
 
-def _cursor_cloud_api_probe(*, timeout_seconds: float = 5.0) -> dict:
+def _cursor_cloud_api_probe(*, timeout_seconds: float | None = None) -> dict:
+    if timeout_seconds is None:
+        from core.runtime_policy import active_runtime_policy
+
+        timeout_seconds = float(active_runtime_policy().preflight_network_timeout_seconds)
     key = str(os.environ.get("CURSOR_API_KEY") or "").strip()
     if not key:
         return {
@@ -251,15 +255,18 @@ def _probe_endpoint_with_curl(url: str, *, timeout_seconds: float) -> dict:
     if not curl:
         row["error"] = "curl not found"
         return row
+    from core.runtime_policy import active_runtime_policy
+
+    policy = active_runtime_policy()
     proc = subprocess.run(
         [
             curl,
             "-I",
             "-L",
             "--retry",
-            "2",
+            str(policy.curl_retries),
             "--retry-delay",
-            "1",
+            str(policy.curl_retry_delay_seconds),
             "--retry-all-errors",
             "--max-time",
             str(max(1, int(timeout_seconds))),
@@ -291,9 +298,13 @@ def _probe_endpoint_with_curl(url: str, *, timeout_seconds: float) -> dict:
 def check_network_endpoints(
     endpoints: Iterable[str] | None = None,
     *,
-    timeout_seconds: float = 5.0,
+    timeout_seconds: float | None = None,
 ) -> dict:
     """Probe Cursor and source-network reachability without exposing credentials."""
+    if timeout_seconds is None:
+        from core.runtime_policy import active_runtime_policy
+
+        timeout_seconds = float(active_runtime_policy().preflight_network_timeout_seconds)
     configured = os.environ.get("QWQ_ENV_NETWORK_ENDPOINTS")
     if endpoints is None and configured:
         endpoints = [part.strip() for part in configured.split(",") if part.strip()]
@@ -320,5 +331,4 @@ def check_network_endpoints(
         "endpoints": rows,
         "issues": issues,
     }
-
 
